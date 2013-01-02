@@ -1,0 +1,5 @@
+#account .textField{width:270px;}
+#login .textField{width:270px;}
+#login .textFieldSmall{width:120px;}
+#account h4,#login h4{font-size:18px;margin-bottom:2px;margin-top:10px;}
+.fieldTitle {padding: 0px; margin-bottom: 0px;}

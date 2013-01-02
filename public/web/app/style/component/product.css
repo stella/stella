@@ -1,0 +1,73 @@
+#productTitle {
+    overflow:hidden;
+    text-indent:-9999px;
+    width:809px;
+    height:96px;
+    background:transparent url(/img/productsv2-heading.png) no-repeat top left;
+    margin:75px auto 40px;
+}
+
+#productHook {
+ font-size:24px;
+ line-height:1.4;
+ color:#888;
+ text-align:center;
+}
+
+#productHook > .blue {
+    color:#00cccc;
+}
+
+#functionality {
+    background:url(/img/productv2-starburst.jpg) no-repeat 270px 0px;
+}
+
+#functionality .cell {
+    text-align:center;
+    color:#999;
+    margin-top:40px;
+}
+
+#functionality h2 {
+    font:200 italic 24px/1.5 Georgia, serif;
+    padding:10px 0;
+    border-bottom:1px dotted #b2b2b2;
+    color:#000;
+}
+
+#functionality p > strong {
+    font-weight:400;
+    color:#555;
+}
+
+#functionality a.look {
+    font:400 italic 14px/1.5 Georgia, serif;
+}
+
+.cell > img {
+    display:block;
+    margin:0 auto;
+}
+
+.button > a {
+font-size: 22px;
+padding: 16px 10px 10px;
+width: 150px;
+}
+
+#signupButton {
+    margin-top:120px;
+    margin-left:20px;
+}
+
+#footer .tagline {
+margin: 0 25px;
+font-size: 11px;
+font-family: Georgia, serif;
+font-style: italic;
+color: black;
+}
+#footer small {
+    color: #999;
+font-size: 10px;
+}

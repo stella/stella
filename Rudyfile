@@ -1,0 +1,211 @@
+
+# ----------------------------------------------------------- ROUTINES --------
+# The routines block describes the repeatable processes for each machine group.
+# To run a routine, specify its name on the command-line: rudy startup
+routines do
+  #promote do
+  #  local do
+  #    # TODO: can do a fetch without a release using:
+  #    # git describe --tags HEAD
+  #    $build = ruby './bin/stella', 'build'
+  #  end
+  #  remote do |argv|
+  #    rel = argv.first || $build
+  #    cd 'blamestella.com'
+  #    git 'fetch', '--tags', 'origin'
+  #    git 'checkout', "rel-#{rel}"
+  #  end
+  #end
+
+  thin_vars do
+    remote do
+      $user = Rudy::Huxtable.current_machine_user
+      $sock = "/var/run/stella/thin_#{$user}.sock"
+      $pid = "/var/run/stella/thin_#{$user}.pid"
+      $log = "/var/log/stella/thin_#{$user}.log"
+    end
+  end
+
+  bundle_install do
+    remote do
+      cd 'blamestella.com'
+      bundle :install, '--deployment', '--frozen', '--without', 'profiling'
+    end
+  end
+
+  update_static_files do
+    remote do
+      rsync :r, :p, 'blamestella.com/public/web', '/var/www/public/'  #
+    end
+  end
+
+  env :prod, :stage do
+    start_workers do
+      remote do |args|
+        count = args.first || worker_count
+        puts "Starting #{count} workers"
+        cd 'blamestella.com'
+        count.to_i.times do
+          stella 'start-worker', :l, :d
+        end
+      end
+    end
+    start_remote_workers do
+      remote do |args|
+        count = args.first || worker_count
+        puts "Starting #{count} workers"
+        cd 'blamestella.com'
+        count.to_i.times do
+          stella 'start-worker', :d
+        end
+      end
+    end
+    restart_thin do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :S, $sock, :l, $log, :s, thin_instances, :d, :e, config_env, :O, 'restart'
+      end
+    end
+    restart_thin_tcp do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :p, 3114, :l, $log, :s, thin_instances, :d, :e, config_env, :O, 'restart'
+      end
+    end
+    upload_certs do
+      remote do
+        env = $global.environment
+        base_path = "/Users/delano/Projects/private/business-papers/2011-q2/certs"
+        file_upload "#{base_path}/www.blamestella.com.key", "./"
+        file_upload "#{base_path}/www.blamestella.com.crt", "./"
+      end
+    end
+    upload_keys  do
+      remote :stella do
+        #base_path = "/Users/delano/Projects/private/business-papers/2010-q4/stella-#{config_env}-keys"
+        #file_upload "#{base_path}/id_rsa",     '.ssh/'
+        #file_upload "#{base_path}/id_rsa.pub",  '.ssh/'
+        file_upload "etc/known_hosts", '.ssh/'
+        wildly { chmod :R, 600, '.ssh/*' }
+      end
+    end
+  end
+
+  env :prod, :stage do
+    start_thin do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :S, $sock, :l, $log, :s, thin_instances, :d, :e, config_env, 'start'
+      end
+    end
+    stop_thin do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :S, $sock, :l, $log, :s, thin_instances, :d, :e, config_env, 'stop'
+      end
+    end
+    start_thin_tcp do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :p, 3114, :l, $log, :s, thin_instances, :d, :e, config_env, 'start'
+      end
+    end
+    stop_thin_tcp do
+      before :thin_vars
+      remote do
+        cd 'blamestella.com'
+        thin :R, "./config.ru", :P, $pid, :p, 3114, :l, $log, :s, thin_instances, :d, :e, config_env, 'stop'
+      end
+    end
+    install_site do
+      remote :stella do
+        #raise "Already installed" if file_exists?('blamestella.com')
+        git 'clone', 'git@github.com:delano/blamestella.git', 'blamestella.com'
+        cd 'blamestella.com'
+        git 'checkout', :b, config_env
+        git "pull", :origin, current_branch
+      end
+    end
+  end
+
+  role :fe do
+
+    quick_deploy do
+      before :release
+      after :deploy
+    end
+
+    deploy do
+      before :promote, :update_static_files
+      after :restart_thin
+    end
+
+    upgrade do
+      before :promote
+      after :bundle_install
+    end
+
+    promote do
+      local do
+        # TODO: can do a fetch without a release using:
+        # git describe --tags HEAD
+        $build = ruby './bin/stella', 'build'
+        $branch = git 'rev-parse', '--abbrev-ref', 'HEAD'
+        git 'co', config_env
+        git 'merge', "rel-#{$build}"
+        git 'push', 'origin', config_env
+        git 'co', $branch
+      end
+      remote do |argv|
+        rel = argv.first || $build
+        cd 'blamestella.com'
+        git 'fetch', '--tags', 'origin'
+        git 'checkout', config_env
+        git 'pull', 'origin', config_env
+      end
+    end
+
+    release do
+      local do |argv|
+        $branch = git 'rev-parse', '--abbrev-ref', 'HEAD'
+        raise "Cannot release from master" if $branch == 'master'
+        git 'fetch', '--tags', :origin
+        msg = argv.first
+        $build = ruby './bin/stella', 'register-build', msg
+        $build_tag = "rel-#{$build}"
+        msg_ci = "RUDY PRESENTS: #{$build}"
+        msg_ci << " (#{msg})" if msg
+        git 'commit', :m, msg_ci, 'BUILD.yml'
+        git 'co', 'master'
+        git 'merge', $branch
+        git 'tag', $build_tag
+        git 'push', :origin, '--tags'
+        git 'push', :origin
+        git 'co', $branch
+      end
+    end
+
+    installdeps do
+      remote :root do
+        puts "Depends on the OS : ] (see this Rudy config)"
+        #apt_get 'update'
+        #apt_get 'install', 'joe', 'ntp', 'libmagick++5', 'libmagick++-dev', 'postgresql-9.1', 'postgresql-client-9.1', 'postgresql-client-common', 'postgresql-common'
+        #yum_install 'gcc', 'make', 'libtool', 'git', 'ntp', 'gcc-c++'
+        yum_install 'postgresql91.x86_64', 'postgresql91-server.x86_64', 'postgresql91-devel.x86_64', 'postgresql91-libs.x86_64', 'libpqxx.x86_64', 'libpqxx-devel.x86_64'
+        yum_install 'openssl-devel', 'readline-devel', 'ncurses-devel', 'libyaml-devel', 'libffi-devel'
+        yum_install 'sqlite.x86_64', 'sqlite-devel.x86_64'
+        #yum_install 'ImageMagick-c++.x86_64', 'ImageMagick-c++-devel.x86_64'
+        # SEE: https://github.com/kongregate/ruby-1.9.3-rpm
+        #gem_update '--system'
+        #gem_sources :a, "https://rubygems.org/"
+        #gem_install "bundler", "sysinfo", "gibbler"
+      end
+    end
+  end
+
+end

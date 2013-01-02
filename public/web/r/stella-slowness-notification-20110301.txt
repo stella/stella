@@ -1,0 +1,49 @@
+Subject: [S] 2729ms: up 717% for https://www.blamestella.com/info/company
+Date: Tue, Mar 1st, 2011 at 10:07 AM
+
+Good day, delano! 
+
+One of your monitors has detected some slowness for:
+https://www.blamestella.com/info/company 
+
+  ------------------------------------ Incident ID 0e545ac9 ---
+
+                  This monitor:  2729ms (2578ms   73ms   75ms)
+                                            net    app    d/l   
+   The Past Hour:
+
+                  This monitor:   380ms ( 143ms  139ms   96ms) +717%
+             All solutious.com:   380ms ( 143ms  139ms   96ms) +717%
+           All monitored sites:  1482ms ( 342ms 1034ms  102ms) +184%
+
+  --------------------------------- 15:07:05 2011-03-01 UTC ---
+
+More detail:
+http://www.blamestella.com/checkup/0e545ac9bb7fdd37dd9e
+
+Full report:
+http://www.blamestella.com/plan/0ff678b893adab9bb9ae/report
+
+Legend:
+[rt]  Response Time: this is the full amount of time it took
+      to send a request and receive a response. The sum of
+      network latency, app latency, and download time.
+
+[net] Network Latency: the amount of time it took to open a
+      connect to the server being tested.
+
+[app] Application Latency: the amount of time it took for 
+       the server to send 1 byte of data after the 
+       connection was created (aka "first byte").
+
+[d/l] Download Time: the amount of time it took to receive 
+      all remaining data from the server (aka "last byte").
+
+
+Please reply if you have any questions.
+
+Sincerely,
+Tucker
+Blamey & Stella Information Co. Ltd
+
+Sent from my Royal 10

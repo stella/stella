@@ -1,0 +1,205 @@
+#checkupSummary {
+  color: #999;
+  background: url("/img/checkupResultsTuckerGrey.png") no-repeat;
+  display: inline-block;
+  font-style: italic;
+  font-size: 18px;
+  min-height: 48px;
+  margin:0px 0 30px;
+  padding: 28px 15px 0 90px;
+  text-align: center;
+  width: 350px;
+  vertical-align: top;
+}
+#checkupSummaryBottom {
+  background: url("/img/checkupResultsTuckerBottomGrey.png") no-repeat;
+  display: block;
+  height: 19px;
+  width: 388px;
+  right: 0;
+  bottom: -19px;
+  position: absolute;
+}
+#checkup strong {
+color: #000;
+font-weight: bold;
+}
+
+
+#checkup .value {
+font-size: 24px;
+}
+
+
+#checkup .stats  li {
+  text-align: right;
+  margin-bottom: 0px;
+}
+
+#checkup .stats li.advice {
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-style: italic;
+}
+
+
+#checkup .stats li.rt .value {
+font-size: 48px;
+font-weight: bold;
+}
+
+#checkup .stats li.rt {
+  margin-bottom: 0px;
+}
+
+#checkup .stats li.rt .suffix {
+color: #00cccc;
+font-size: 20px;
+font-style: italic;
+font-weight: normal;
+}
+
+#checkup .stats ul {
+  list-style: none;
+}
+
+#checkup .stats  .value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#checkup .stats  .time {
+  color: #999;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+#checkup .stats  .description {
+color: #999;
+font-size: 12px;
+text-transform: uppercase;
+}
+
+#checkup .stats {
+  border: 2px solid #ddd;
+}
+#checkup .stats img.screenshot {
+  border: 1px solid #ccc;
+  float: left;
+}
+
+#checkup #advice {
+font-family: Georgia;
+font-size: 26px;
+line-height: 36px;
+margin: 0 0 30px;
+text-align: center;
+}
+
+.page-header {
+  padding: 0px !important;
+}
+
+/* *********** */
+
+/* Bootstrap Override */
+
+.page-header {
+  padding-bottom: 0px !important;
+}
+
+#checkup-uri {
+  border: 4px #333 solid !important;
+  font-size: 20px;
+  color: #666;
+}
+
+#form-signup {
+  display: none;
+  margin-bottom: 31px !important;
+}
+
+#signup-email {
+  height: 28px;
+  font-size: 16px;
+  border: 2px #0cc solid;
+}
+
+#signup-password {
+  height: 28px;
+  font-size: 16px;
+  border: 2px #0cc solid;
+}
+
+#checkupResultsFor {
+background: url("/img/resultsForGrey.png") no-repeat;
+border: 0px;
+color: #666;
+font-family: Georgia,serif;
+font-size: 18px;
+margin: 0;
+padding: 18px 20px 22px 18px;
+display: inline-block;
+width: 427px;
+}
+#checkupResultsFor:focus{outline:none !important;}
+.checkupStartMonitoring em {
+text-transform: lowercase !important;
+font-size: 18px;
+color: #99ffff;
+}
+.checkupMonitoringIcon {
+margin: -4px 0 -5px 20px;
+position: relative;
+}
+#request{height:80px;}
+#property #request{background:none;padding:5px 0 0;}
+
+#checkupMonitor {
+display: none;
+height:80px;
+}
+#checkupMonitorEmail {
+color: #333;
+display: inline-block;
+background-color: #DDD;
+border-left: 1px solid #999;
+border-top: 1px solid #999;
+border-right: 1px solid white;
+border-bottom: 1px solid white;
+border-radius: 8px;
+-moz-border-radius: 8px;
+-webkit-border-radius: 8px;
+box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.25);
+-webkit-box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.25);
+padding: 8px 0;
+text-transform: uppercase;
+font-size: 18px;
+}
+#checkupMonitorEmail .label {
+margin: 20px;
+vertical-align: middle;
+}
+#checkupMonitorEmailInput {
+background-color: white;
+border-left: 1px solid #CCC;
+border-top: 1px solid #CCC;
+border-right: 1px solid white;
+border-bottom: 1px solid white;
+border-radius: 8px;
+-moz-border-radius: 8px;
+-webkit-border-radius: 8px;
+color: #000;
+font-family: georgia,serif;
+font-size: 14px;
+vertical-align: middle;
+padding: 7px 5px 7px 15px;
+width: 235px;
+}
+.checkupMonitorAmp {
+font-size: 18px;
+font-weight: bold;
+padding: 10px;
+margin-left: -27px;
+}
+

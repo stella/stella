@@ -1,0 +1,104 @@
+{{> docs/header }}
+
+    <div class="line" style="margin-top: 20px;"></div>
+
+    <div id="container">
+      <div id="docsContent" class="contentContainer">
+
+        <h2 class="cufon"><a href="/docs/" class="black">Developer Documentation</a></h2>
+
+        <p class="quiet">
+        <em>PRIVATE BETA - Updated 2012-12-30 (<a href="#feedback">Tucker is available</a> if you need anything.)</em>
+        </p>
+
+        <ul id="docnav">
+          {{#docnav}}
+          <li class="{{css}}"><a href="{{uri}}" title="{{title}}">{{text}}</a></li>
+          {{/docnav}}
+        </ul>
+
+        <div id="topicContent">
+        {{^colonels_only}}
+          <h3 class="cufon">The API is in private beta<em>!</em></h3>
+          <p>Build Stella's world-class monitoring technology into your scripts and applications.</p>
+          {{#authenticated}}
+          <p><a href="#feedback">Let Tucker know</a> you want access.</p>
+          {{/authenticated}}
+          {{^authenticated}}
+          <p>If you want to have a look-see, <a href="/signup">signup</a> and <a href="#feedback">let Tucker know</a> you want access.</p>
+          {{/authenticated}}
+          <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/>
+        {{/colonels_only}}
+
+        {{#colonels_only}}
+        {{^docs}}
+        <p><em>Select a topic.</em></p>
+        {{/docs}}
+
+        {{#docs}}
+        <h3 class="cufon">{{title}}</h3>
+
+        <p>{{{intro}}}</p>
+
+        {{#endpoints}}
+        <h4 class="cufon docTitle dotted">{{title}}</h4>
+        <span class="docSubtext">{{http_method}} {{prototype}}</span>
+        <div class="">This endpoint is <strong>
+        {{#public}}public.{{/public}}
+        {{^public}}private.{{/public}}
+        </strong></div>
+
+        <p>{{{intro}}}</p>
+
+        <div class="options">
+          <strong>Parameters</strong>
+          <ul>
+
+          {{#has_params}}
+          {{#params}}
+            <li><span class="name">{{name}}</span> ({{mandatory}}): {{{desc}}}</li>
+          {{/params}}
+          {{/has_params}}
+          </ul>
+          {{^has_params}}
+          <em>None</em>
+          {{/has_params}}
+        </div>
+
+        {{#http_method}}
+        <pre class="colourize">$ curl {{curl_args}} {{^public}}-u '{{api_custid}}:{{api_key}}'{{/public}} {{config.site_scheme}}://{{config.site_host}}:{{config.site_port}}/api{{prototype}}</pre>
+        {{/http_method}}
+
+        {{#example}}
+        <pre class="colourize">{{{to_s}}}</pre>
+        {{/example}}
+
+        <p></p>
+
+        <div class="options">
+          <strong>Attributes</strong>
+          <ul>
+          {{#attributes}}
+            <li><span class="name">{{name}}</span>: {{{desc}}}</li>
+          {{/attributes}}
+          </ul>
+          {{^attributes}}
+          <em>None</em>
+          {{/attributes}}
+        </div>
+
+
+        <p>{{{outro}}}</p>
+
+        {{/endpoints}}
+        <br/><br/><br/>
+        {{/docs}}
+        {{/colonels_only}}
+        </div>
+
+        <hr/>
+      </div>
+    </div>
+    <div class="line"></div>
+
+{{> docs/footer }}

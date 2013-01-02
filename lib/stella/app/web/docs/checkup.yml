@@ -1,0 +1,110 @@
+---
+:title: Checkups
+:endpoints:
+  - :title: Run a new checkup
+    :http_method: POST
+    :prototype: /v3/checkup
+    :intro: Check to see how a URI is responding. This is equivalent to running a checkup from <a href="https://www.blamestella.com/">blamestella.com</a>.
+    :outro: ""
+    :curl_args: -F 'uri=http://stellaaahhhh.com/'
+    :example: |
+      {
+        "runid": "5701337d7ecd913389b9992bc8f1d59ca0debc51",
+        "planid": "931e1a312871eade0919cae027fdfe5f4b27757c",
+        "statusuri": "/v3/checkup/5701337d7ecd913389b9992bc8f1d59ca0debc51?field=status",
+        "planuri": "/v3/testplan/931e1a312871eade0919cae027fdfe5f4b27757c?"
+      }
+    :params:
+    - :name: uri
+      :desc: a fully qualified URI to run a checkup on.
+      :mandatory: required
+  - :title: Retrieve a checkup
+    :http_method: GET
+    :prototype: /v3/checkup/RUNID
+    :public: true
+    :intro: Where RUNID is the checkup ID. It should be a SHA-1 hash.
+    :outro: 'If you are waiting for the checkup to complete, you can use specify <tt>field=status</tt> to retrieve just the status field (reduces output).'
+    :params:
+    :example: |
+      {
+        "created": 1306206143,
+        "updated": 1306206143,
+        "id": "4d725e20a62b23799e311e4b7568db47a46b953d",
+        "status": "done",
+        "options": {
+          "repetitions": 1,
+          "concurrency": 2,
+          "wait": 0,
+          "hard_timeout": 30
+        },
+        "mode": "checkup",
+        "hosts": null,
+        "ctime": 1306206143.362754,
+        "stime": 1306206143.823764,
+        "etime": 1306206143.95198,
+        "planid": "931e1a312871eade0919cae027fdfe5f4b27757c",
+        "runid": "4d725e20a62b23799e311e4b7568db47a46b953d",
+        "hostid": "stellaaahhhh.com",
+        "report": {
+          "errors": {
+            "processed": true,
+            "exceptions": [],
+            "timeouts": [],
+            "fubars": []
+          },
+          "content": {
+            "processed": true,
+            "request_body": "",
+            "response_body": "<a href=\"/stella.mp3\" style=\"font-family:courier,courier-new,monospace; text-decoration:none; color:black\">Stella! Stella! Can't you hear me yell-a, you're puttin' me through hell-a, Stella, Stellaaahhhh!</a>",
+            "request_body_digest": "ccac16c9145e52561adc65fc9bf61d2b114c9a1b",
+            "response_body_digest": "0fec1d43116798f152c871236aa8e6883489009f",
+            "keywords": null,
+            "title": null,
+            "favicon": null,
+            "author": null,
+            "lede": null,
+            "description": null,
+            "is_binary": null,
+            "is_image": null
+          },
+          "statuses": {
+            "processed": true,
+            "values": [
+              200,
+              200
+            ]
+          },
+          "headers": {
+            "processed": true,
+            "request_headers": "GET / HTTP/1.1\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (compatible; Stella/2.0.0; +http://solutious.com/projects/stella)\r\nDate: Tue, 24 May 2011 03:02:23 GMT\r\nHost: stellaaahhhh.com\r\n",
+            "response_headers": "Status: 200 OK\r\nServer: nginx/0.7.67\r\nDate: Tue, 24 May 2011 03:02:23 GMT\r\nContent-Type: text/html\r\nConnection: keep-alive\r\nX-Varnish: 1853919877\r\nAge: 0\r\nVia: 1.1 varnish\r\nContent-Length: 0\r\n",
+            "request_headers_digest": "39ed154b94871ab4e8d459dd5b40ea851e303312",
+            "response_headers_digest": "c68a5d340513974e1e386ba5c05da8b1cd5eaaae"
+          },
+          "metrics": {
+            "processed": true,
+            "response_time": {
+              "mean": 0.07291249999999999,
+              "sd": 0.007507352695857677,
+              "sum": 0.14582499999999998,
+              "sumsq": 0.010688825656999999,
+              "n": 2,
+              "min": 0.067604,
+              "max": 0.078221,
+              "time": null
+            },
+            "socket_connect": {"...same format as response_time..."},
+            "first_byte": {"..."},
+            "last_byte": {"..."},
+            "send_request": {"..."},
+            "request_headers_size": {"..."},
+            "request_content_size": {"..."},
+            "response_headers_size": {"..."},
+            "response_content_size": {"..."},
+            "requests": 2
+          },
+          "processed": true
+        },
+        "source_location": null
+      }
+

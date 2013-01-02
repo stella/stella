@@ -1,0 +1,77 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  <div class="span11">
+    <ul class="breadcrumb">
+      {{#authenticated}}
+      <li><h2 class="cufon"><a href="/site/{{host.hostname}}">{{host.hostname}}</a> <span class="divider">&gt;</span></h2></li>
+      <li class="active"><h2 class="cufon"><a href="/plan/{{plan.planid}}">{{plan.shortpath}}</a></h2></li>
+      {{/authenticated}}
+
+      <div style="float: right; margin-top: 4px" class="">
+        {{#host.monitored}}<button href="/site/{{host.hostid}}/stop" class="btn host-stop">Stop Monitoring</button>{{/host.monitored}}
+        {{^host.monitored}}<button href="/site/{{host.hostid}}/start" class="btn btn-primary host-start">Start Monitoring for ${{site_price}}/month</button>{{/host.monitored}}
+      </div>
+    </ul>
+  </div>
+
+  <div id="stats" class="span8 offset1 well row">
+    {{#plan.screenshot}}
+    <a href="/t/{{plan.screenshot.filename}}"><img style="float: left" src="/t/{{plan.screenshot.thumbnail}}" alt="{{host.hostname}} thumbnail"></a>
+    {{/plan.screenshot}}
+    {{^plan.screenshot}}
+    <img src="/img/thumbnail-host.png"  style="float: left" alt="Generating thumbnail...">
+    {{/plan.screenshot}}
+    <ul class="span4">
+      <li class="rt rt-summary-header">
+        <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->
+        <span class="value cufon">{{summary.on_load}}</span>
+        <span class="suffix cufon">milliseconds</span>
+        <!--<span class="description">Response Time</span>-->
+      </li>
+      <li class="advice cufon">
+        "<strong class="slowish">Not so fast.</strong> Slower than most sites."
+      </li>
+      <li>
+        <span class="value cufon">{{summary.initial_offset}}ms</span>
+        <span class="description ">Page Content</span>
+      </li>
+      <li>
+        <span class="value cufon ">{{summary.total_bytes}}</span>
+        <span class="description ">Total Bytes</span>
+      </li>
+      <li>
+        <span class="value cufon">{{summary.requests}}</span>
+        <span class="description ">Requests</span>
+      </li>
+      <li>
+        <span class="value cufon">{{summary.error_count}}</span>
+        <span class="description ">Errors</span>
+      </li>
+      <li class="time">
+        <span class="cufon">updated {{ran_at_natural}}</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="span11 offset1">
+    <div class="page-header span10">
+      <h2><span class="cufon">Latest Checks</span> &nbsp;<small class="cufon">Updated every few minutes.</small></h2>
+      <div class="line"></div>
+    </div>
+  </div>
+  <div class="span11 offset1">
+
+    <ul class="">
+      {{#testruns}}
+      <li><a href="/testrun/{{runid}}"><strong>{{summary.on_load}}</strong>ms <em title="{{updated_at}}"> @ {{updated_at.utc}}</em></a></li>
+      {{/testruns}}
+      {{^testruns}}
+      <div class="span6"><h4><em>No checks run yet</em></h4></div>
+      {{/testruns}}
+    </ul>
+
+  </div>
+
+{{>_layout/footer}}

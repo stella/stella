@@ -1,0 +1,148 @@
+Subject: Weekly Stella Report for ypg [2011-W11]
+
+  Date: Mon, March 21 2011
+  RE: Weekly Report
+
+  BLAMEY & STELLA INFORMATION CO LTD
+
+    Contents:
+          1. Your monitoring summaries
+          A. Legend and other info
+
+===========================================================
+SECTION 1. YOUR MONITORING SUMMARIES
+===========================================================
+
+I've prepared a report for you that details the performance
+of each of your hosts over the previous 7 days. Herein, you
+will find the response time, standard deviation, as well as
+the number of incidents for each:
+
+  --- Mar 14 to Mar 20 [2011-W11] -----------------------
+
+                www.canada411.ca  2137ms   11%    0
+                    mobile.yp.ca  1768ms   98%    8
+              www.yellowpages.ca  1472ms   44%   25
+             mobile.canada411.ca   283ms  120%    0
+                                    [rt] [+/-]   [I]
+
+      Your monitored sites (avg)  1415ms 
+       All monitored sites (avg)   581ms
+
+  -------------------------------------------------------
+
+I have also been maintaining daily summaries. I've broken
+down the response times into network latency, app latency,
+and download time. See EXHIBIT A for descriptions.
+
+  -------------------------------------------------------
+
+   www.canada411.ca (2 monitors)
+     (03/14) MON  2123ms (102ms 1610ms   406ms)     0
+     (03/15) TUE  2230ms (123ms 1644ms   459ms)     0
+     (03/16) WED  2117ms (102ms 1609ms   402ms)     0
+     (03/17) THU  2116ms (98ms  1596ms   417ms)     0
+     (03/18) FRI  2126ms (100ms 1611ms   410ms)     0
+     (03/19) SAT  2125ms (107ms 1604ms   409ms)     0
+     (03/20) SUN  2125ms (105ms 1608ms   408ms)     0
+                    [rt]  [net]   [app]   [d/l]    [I]
+
+         Average  2134ms (106ms 1612ms   412ms)
+   All fusepoint  1802ms (101ms  974ms   723ms)
+
+      More Info:
+      https://www.blamestella.com/host/www.canada411.ca
+
+
+   mobile.yp.ca (3 monitors)
+     (03/14) MON  2074ms (47ms  2022ms     2ms)     0
+     (03/15) TUE  4068ms (48ms  4015ms     1ms)     0
+     (03/16) WED  1504ms (44ms  1455ms     2ms)     0
+     (03/17) THU  1398ms (46ms  1347ms     2ms)     0
+     (03/18) FRI  1452ms (47ms  1388ms    14ms)     8
+     (03/19) SAT  1014ms (93ms   917ms     2ms)     0
+     (03/20) SUN   954ms (46ms   903ms     2ms)     0
+                    [rt]  [net]   [app]   [d/l]    [I]
+
+         Average  1675ms (52ms  1616ms     3ms)
+         All ec2   344ms (76ms   238ms    26ms)
+
+      More Info:
+      https://www.blamestella.com/host/mobile.yp.ca
+
+
+   www.yellowpages.ca (5 monitors)
+     (03/14) MON  1587ms (96ms   439ms  1048ms)     4
+     (03/15) TUE  1723ms (99ms   521ms  1098ms)    20
+     (03/16) WED  1429ms (95ms   329ms  1002ms)     1
+     (03/17) THU  1435ms (96ms   311ms  1024ms)     0
+     (03/18) FRI  1396ms (95ms   296ms  1001ms)     0
+     (03/19) SAT  1382ms (100ms  247ms  1031ms)     0
+     (03/20) SUN  1356ms (96ms   234ms  1021ms)     0
+                    [rt]  [net]   [app]   [d/l]    [I]
+
+         Average  1456ms (97ms   325ms  1030ms)
+   All fusepoint  1802ms (101ms  974ms   723ms)
+
+      More Info:
+      https://www.blamestella.com/host/www.yellowpages.ca
+
+
+   mobile.canada411.ca (3 monitors)
+     (03/14) MON   254ms (24ms   227ms  0.14ms)     0
+     (03/15) TUE   251ms (27ms   222ms  0.14ms)     0
+     (03/16) WED   255ms (31ms   222ms  0.28ms)     0
+     (03/17) THU   248ms (26ms   219ms  0.14ms)     0
+     (03/18) FRI   475ms (40ms   432ms  0.17ms)     0
+     (03/19) SAT   251ms (28ms   221ms  0.12ms)     0
+     (03/20) SUN   247ms (27ms   217ms  0.17ms)     0
+                    [rt]  [net]   [app]   [d/l]    [I]
+
+         Average   276ms (29ms   245ms  0.17ms)
+         All ec2   344ms (76ms   238ms    26ms)
+
+      More Info:
+      https://www.blamestella.com/host/mobile.canada411.ca
+
+
+  -------------------------------------------------------
+
+You can access the most recent data from your dashboard:
+https://www.blamestella.com/dashboard
+
+
+  
+===========================================================
+EXHIBIT A - LEGEND AND OTHER INFO
+===========================================================
+
+[rt]  Response Time: this is the full amount of time it took
+      to send a request and receive a response. The sum of
+      network latency, app latency, and download time.
+
+[net] Network Latency: the amount of time it took to open a
+      connect to the server being tested.
+
+[app] Application Latency: the amount of time it took for
+      the server to send 1 byte of data after the
+      connection was created (aka "first byte").
+
+[d/l] Download Time: the amount of time it took to receive
+      all remaining data from the server (aka "last byte").
+
+[+/-] Standard Deviation: the amount of variance in the
+      response time. Higher values mean there were requests
+      that took much longer than usual. Lower is better.
+
+[I]   Incident: a downtime or "browntime" event such as a
+      slowdown, timeout or exception.
+
+
+As always, please feel free to reply to this message with
+any inquiries.
+
+Sincerely,
+Tucker
+Blamey & Stella Information Co. Ltd
+
+Sent from my Royal 10

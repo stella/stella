@@ -1,0 +1,41 @@
+
+#favorites {
+float: left;
+width: 480px; 
+}
+
+#favorites ol {
+padding-top: 12px;
+}
+
+#favorites li {
+font-family: Georgia, serif;
+font-style: italic;
+margin-left: 24px;
+margin-bottom: 12px;
+font-size: 125%;
+}
+#favorites span.reply {
+font-style: normal;
+}
+
+#helloChart {
+  margin-left: 60px;
+}
+
+
+.infoPageRight .hello { 
+  font-size: 125%;
+  font-style: italic;
+  margin: 36px;
+  font-family: Georgia, serif;
+}
+
+
+
+.feedback p { 
+  color: #657e7e;
+  display: block;
+  margin: 0px 12px 12px 12px;
+  width: 500px; 
+  }

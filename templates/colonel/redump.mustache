@@ -1,0 +1,54 @@
+{{>_layout/header}}
+
+{{>_partial/session_messages}}
+
+<div class="span11">
+  <ul class="breadcrumb">
+    <li><h2 class="cufon"><a href="/colonel">Colonel</a> <span class="divider">&gt;</span></h2></li>
+    <li class="active">
+      <h2 class="cufon"><a href="/colonel/redump">Redump</a></h2>
+    </li>
+
+    <div style="float: right; margin-top: 0px" class="">
+      <form method="get" action="/colonel/redump">
+        <input type="text" name="q" class="input-large" id="input01" style="margin-top: 4px" value="{{query}}" placeholder="Find">
+      </form>
+    </div>
+    
+  </ul>
+</div>
+    
+<div class="span11">
+  Database:<strong>
+  {{#databases}}
+    <a href="/colonel/redump/{{client.db}}?q={{query}}">{{client.db}}</a> - 
+  {{/databases}}</strong>
+  
+  <div class="" style="background-color: #fff; margin-top: -18px; padding: 20px">
+    
+    <h3>
+      Keys ({{selected_db.keys.size}})
+      {{#query}}
+      for "{{to_s}}" <a href="/colonel/redump" class="small">(clear)</a>
+      {{/query}}
+    </h3>
+    
+    {{#key}}
+    <input value="{{to_s}}" class="span8"/> {{type}} {{realttl}}s<br/>
+    <textarea rows="10" class="span10">{{display_value}}</textarea>
+    {{/key}}
+    
+    <ul>
+    {{#keys}}
+    <li>
+      <a href="/colonel/redump/{{selected_db.client.db}}/{{to_s}}?q={{query}}">{{to_s}}</a>
+    </li>
+    {{/keys}}
+    </ul>
+  </div>
+  
+  <code><pre>{{redisinfo}}</pre></code>
+</div>
+
+
+{{>_layout/footer}}

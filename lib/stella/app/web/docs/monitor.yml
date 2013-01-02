@@ -1,0 +1,180 @@
+---
+:title: Monitors
+:intro: A monitor runs a specific testplan at regular intervals all day, every day. This part of the API gives you access to the performance data it generates.
+:endpoints:
+  - :title: Retrieve a specific monitor
+    :http_method: GET
+    :prototype: /v3/monitor/PLANID
+    :public: true
+    :intro: Returns metadata for a single monitor.
+    :params:
+    - :name: testplan
+      :desc: 'true/false. Include tesplan data. Default: false.'
+      :mandatory: optional
+    :attributes:
+    - :name: enabled
+      :desc: true/false. Tells you whether the monitor is active and running.
+    - :name: interval
+      :desc: 'The reporting frequency (in seconds).'
+    :example: |
+      {
+        "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+        "hostid": "solutious.com",
+        "enabled": true,
+        "interval": 300,
+        "created": 1288894686,
+        "updated": 1299116253,
+        "testplan": {
+            "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+            "..."
+        }
+      }
+  - :title: Metrics Summary
+    :http_method: GET
+    :prototype: /v3/monitor/PLANID/summary
+    :public: true
+    :intro: Where HOSTID is the hostname for the given host.
+    :params:
+    :attributes:
+    - :name: :active_monitors
+      :desc: The number of pages monitored for this host.
+    - :name: :epoint
+      :desc: The unix time in seconds when the data was generated.
+    - :name: :summaries
+      :desc: Averages for the given time period. See <a href="/docs/api/overview">Overview</a> for a description of the summary content (we call them MetricsPacks).
+    :example: |
+      {
+        "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+        "epoint": 1306248740,
+        "summaries": {
+          "past_1hour": {
+            "stamp": 1306241795.0,
+            "uid": "duration:3750",
+            "n": 24,
+            "rt": 0.197843,
+            "sc": 0.113235,
+            "sr": 0.000379,
+            "fb": 0.040227,
+            "lb": 0.04235,
+            "rqhs": 178,
+            "rqcs": 0,
+            "rshs": 281,
+            "rscs": 6588,
+            "score": 0.0,
+            "errors": 0,
+            "rtsd": 0.033
+          },
+
+          "past_4hours": {"...same as past 1 hour..."},
+          "past_24hours": {"..."},
+          "past_7days":  {"..."},
+          "past_14days":  {"..."}
+        }
+      }
+  - :title: Metrics
+    :http_method: GET
+    :prototype: /v3/monitor/PLANID/metrics
+    :public: true
+    :intro: Data samples broken down by the reporting interval.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    - :name: :interval
+      :desc: The reporting interval in seconds. e.g. A value of 300 means the statistics are generated every 5 minutes.
+    - :name: :metrics
+      :desc: A hash containing the timestamp and response time metrics broken down into component values (in milliseconds). See Overview for more details.
+    :outro: 'A note about the timestamp values: min and max correspond to start time and end time, respectively. The values in the list plus the min value gives you the appropriate timestamp (in seconds).'
+    :example: |
+      {
+        "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+        "epoint": 1306248827,
+        "duration": 3600,
+        "metrics": {
+          "stamp": {
+            "max": 1306245545,
+            "min": 1306241665,
+            "values": [
+              0,
+              430,
+              579,
+              880,
+              1180,
+              1479,
+              1778,
+              2080,
+              2380,
+              2679,
+              2979,
+              3277,
+              3578
+            ]
+          },
+          "rt": {
+            "max": 0.243847,
+            "min": 0.102723,
+            "values": [
+              0.106251,
+              0.243847,
+              0.102723,
+              0.204188,
+              0.210721,
+              0.191213,
+              0.204198,
+              0.202769,
+              0.202654,
+              0.19969,
+              0.205432,
+              0.198388,
+              0.20829
+            ]
+          },
+          "sc": {"...same fields as rt..."},
+          "fb": {"..."},
+          "lb": {"..."}
+        }
+      }
+  - :title: Incidents
+    :http_method: GET
+    :prototype: /v3/monitor/PLANID/incidents
+    :public: true
+    :intro: Returns the incident data for all monitored pages on this host.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    :example: |
+      {
+        "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+        "epoint": 1306248895,
+        "duration": 3600,
+        "incidents": [
+          {
+            "kind": "timeout",
+            "msg": "Stella::TimeoutError (20)",
+            "runid": "31766251dfd623669066124781bf543f7088f4ee",
+            "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+            "hostid": "solutious.com",
+            "status": "resolved",
+            "interval": 300,
+            "detected_count": 2,
+            "detected_at": 1306165507,
+            "verified_at": 1306165829,
+            "notified_at": 1306165838,
+            "resolved_at": 1306166064,
+            "created": 1306165507,
+            "updated": 1306166064
+          }
+        ]
+
+      }
+
+

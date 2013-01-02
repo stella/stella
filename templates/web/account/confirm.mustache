@@ -1,0 +1,21 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+  
+  <div class="span8 offset2">
+    {{#success}}
+    <h1 class="cufon title">Your account has been confirmed</h1>
+    <p>Thank you and enjoy your day <em>!</em></p>
+    {{/success}}
+    {{^success}}
+    <h1 class="cufon title">Not a valid confirmation</h1>
+    <p>Feel free to contact us if you have any questions.</p>
+    {{/success}}    
+  </div>
+  
+
+  <div class="span12">
+    &nbsp;
+  </div>
+
+{{>_layout/footer}}

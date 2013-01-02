@@ -1,0 +1,115 @@
+#!/usr/bin/env ruby
+
+base_path = File.expand_path File.join(File.dirname(__FILE__), '..')
+$:.unshift File.join(base_path, 'lib')
+
+require 'stella'
+require 'stella/cli'
+require 'stella/worker'
+
+# Command-line interface for bin/stella
+class Stella::CLI::Definition
+  extend Drydock
+
+  global :Y, :auto, "Skip manual confirmation"
+  global :D, :debug, "Enable debug output" do
+    Stella.debug = true
+  end
+  global :V, :version, "Display version" do
+    puts Stella::VERSION.inspect
+    exit 0
+  end
+
+  option :l, :local, "Local worker"
+  option :d, :daemon, "Daemonize"
+  command :start_worker => Stella::CLI
+  option :f, :force
+  command :stop_workers => Stella::CLI
+  option :f, :force
+  command :stop_worker => Stella::CLI
+
+  usage "stella start-timingbelt [INDEX] [COUNT]"
+  option :d, :daemon, "Daemonize"
+  command :start_timingbelt => Stella::CLI
+
+  usage "stella run-timingbelt [INDEX] [COUNT]"
+  command :run_timingbelt => Stella::CLI
+
+  option :d, :daemon, "Daemonize"
+  command :start_scheduler => Stella::CLI
+
+  option :P, :phantom, String, "PhantomJS version"
+  command :checkup => Stella::CLI
+
+  command :check_ssl_cert => Stella::CLI
+
+  action :S, :start
+  action :L, :load_scripts
+  action :F, :flush_scripts
+  command :redis => Stella::CLI
+
+  option :d, :data, "Remove data"
+  action :R, :recreate, "Recreate database schema (destroys data!)"
+  action :U, :update, "Update database schema without destroying data"
+  command :db => Stella::CLI
+
+  command :config => Stella::CLI
+
+  command :first_run => Stella::CLI
+  command_alias :first_run, :init
+
+  option :u, :customer, String, "Customer email"
+  usage "stella checkup <HOSTNAME>"
+  command :checkup => Stella::CLI
+
+  usage "stella testrun <HOSTNAME>"
+  command :testrun => Stella::CLI
+
+  option :u, :customer, String, "Customer email"
+  usage "stella screenshot <HOSTNAME>"
+  usage "stella screenshot [-u EMAIL] <HOSTNAME>"
+  command :screenshot => Stella::CLI
+
+  usage "stella create-testplans <INFILE>"
+  command :load_testplans => Stella::CLI
+
+  option :w, :width, Integer
+  option :h, :height, Integer
+  command :resize => Stella::CLI
+
+  usage "stella register-build [msg]"
+  command :register_build do |obj|
+    Stella::VERSION.increment! obj.argv.first
+    puts Stella::VERSION
+  end
+
+  command :build do
+    puts Stella::VERSION
+  end
+
+end
+
+begin
+  Drydock.run!(ARGV, STDIN) if Drydock.run? && !Drydock.has_run?
+rescue Drydock::ArgError, Drydock::OptError => ex
+  STDERR.puts ex.message
+  STDERR.puts ex.usage
+  exit 1
+rescue Drydock::InvalidArgument => ex
+  STDERR.puts ex.message
+  exit 1
+rescue Drydock::UnknownCommand => ex
+  STDERR.puts "Unknown command: %s" % ex.name
+  exit 1
+rescue Stella::Problem => ex
+  STDERR.puts ex.message
+  STDERR.puts ex.backtrace if Stella.debug
+  exit 1
+rescue Interrupt
+  puts $/, "Exiting... "
+  exit 1
+rescue => ex
+  STDERR.puts "ERROR (#{ex.class.to_s}): #{ex.message}"
+  STDERR.puts ex.backtrace if Stella.debug
+  exit 1
+end

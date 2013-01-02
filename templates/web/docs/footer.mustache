@@ -1,0 +1,46 @@
+  <hr/>
+  <a name="feedback"></a>
+  <div id="footer" style="width: 960px; margin: auto" class="dotted">
+    <form id="feedback" action="/feedback" method="post">
+      <input name="msg" size="60" value="Have a question about the API? {{^authenticated}}(include your twitter, email, or phone for a reply){{/authenticated}}" class="textField textFieldLarge clearDefault" />
+      <span class="greyButton cufon"><button name="" type="submit">Ask Tucker</button></span>
+    </form>
+    <div id="sitenav">
+      <!--<a href="{{baseuri}}/report" title="Status page for all monitored sites - Stella">Global Report</a>-->
+      <!--<a href="{{baseuri}}/docs" title="API Documentation">API</a>-->
+      <a href="{{baseuri}}/info/company" title="About the Blamey &amp; Stella Information Co Ltd">About</a>
+      <a href="{{baseuri}}/docs">API</a>
+      <a href="{{baseuri}}/info/terms">Terms of Use</a>
+      <a href="{{baseuri}}/info/refund">Refund Policy</a>
+      <a href="{{baseuri}}/info/privacy">Privacy Policy</a>
+      <!--<a href="http://status.blamestella.com/" title="Status page for blamestella.com - Stella">Status</a>-->
+    </div>
+    <a href="https://www.blamestella.com/info/company" class="big">Blamey &amp; Stella Information Co</a>.
+    <span class="solutiousTagline">The Future of Web Monitoring.</span>
+    <span class="copyright">Copyright 2008-{{current_time.year}}.</span>
+    <br/><br/>
+    <img src="/img/RS_PoweredByLogo-wht.png" />
+  </div>
+
+</div>
+
+{{#is_prod}}
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-23142033-1']);
+  _gaq.push(['_setSiteSpeedSampleRate', 5]);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+<script type="text/javascript">
+  Cufon.refresh()
+</script>
+{{/is_prod}}
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+---
+:title: Testplans
+:endpoints:
+  - :title: Retreive a testplan
+    :http_method: GET
+    :prototype: /v3/plan/PLANID
+    :public: false
+    :intro: Where PLANID is the checkup ID. It should be a SHA-1 hash.
+    :example: |
+      {
+        "id": "82d7e5025edcaceba2c0673b560e48807044fcee",
+        "custid": "delano",
+        "usecases": [
+          {
+            "id": "c28b47605424e05381f65ecc5aef0e5ee29954ec",
+            "desc": null,
+            "ratio": null,
+            "requests": [
+              {
+                "id": "6cabc47dbcf69a0cefe896d7d25e4fe5388bfb72",
+                "protocol": "http",
+                "http_method": "get",
+                "http_version": null,
+                "http_auth": null,
+                "uri": "http://stellaaahhhh.com/",
+                "params": {
+                },
+                "headers": {
+                },
+                "body": null,
+                "desc": null,
+                "rtid": "6cabc47dbcf69a0cefe896d7d25e4fe5388bfb72`",
+                "wait": null,
+                "response_handler": {
+                },
+                "follow": false
+              }
+            ],
+            "http_auth": null,
+            "ucid": "c28b47605424e05381f65ecc5aef0e5ee29954ec"
+          }
+        ],
+        "desc": null,
+        "privacy": false,
+        "favicon": null,
+        "last_run": 1302764782,
+        "planid": "82d7e5025edcaceba2c0673b560e48807044fcee",
+        "notify": false,
+        "created": 1296518586,
+        "updated": 1302764782
+      }
+

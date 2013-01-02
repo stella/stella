@@ -1,0 +1,58 @@
+---
+:title: API Overview
+:intro:
+:endpoints:
+  - :title: Base URI
+    :public: true
+    :prototype: https://www.blamestella.com/api
+    :intro: All API access occurs over HTTPS and starts with <tt>/api</tt>. All responses are JSON. The following parameters and attributes are common across the API.
+    :params:
+    - :name: field
+      :desc: 'if specified, returns the content for this field only.'
+      :mandatory: optional
+    :attributes:
+    - :name: ANY TIMESTAMP FIELD
+      :desc: "All timestamp attributes are returned in unix time (in seconds) UTC. In Ruby you can get the correct the value like this: Time.at(TIMESTAMP).utc"
+    - :name: summaries
+      :desc: |
+        A collection of MetricsPack objects, usually organized by pre-determined time range
+        (the past hour, past 7 days, etc). Each MetricsPack contains performance data for one or
+        more HTTP requests in a compact format. The keys are as follows:
+        <ul>
+          <li><strong>stamp</strong>: unix timestamp</li>
+          <li><strong>uid</strong>: unique ID</li>
+          <li><strong>n</strong>: number of HTTP requests</li>
+          <li><strong>rt</strong>: response time</li>
+          <li><strong>sc</strong>: socket connect</li>
+          <li><strong>sr</strong>: send request</li>
+          <li><strong>fb</strong>: first byte</li>
+          <li><strong>lb</strong>: last byte</li>
+          <li><strong>rqhs</strong>: request header size</li>
+          <li><strong>rqcs</strong>: request content size</li>
+          <li><strong>rshs</strong>: response header size</li>
+          <li><strong>rscs</strong>: response content size</li>
+          <li><strong>score</strong>: this response time compared to the previous hour</li>
+          <li><strong>errors</strong>: number of request errors</li>
+          <li><strong>rtsd</strong>: resposne time standard deviation.</li>
+        </ul>
+    - :name: :metrics
+      :desc: |
+        A hash containing the timestamp and response time metrics broken down into (in milliseconds):
+        <ul>
+          <li><strong>rt</strong>: response time, the full time taken for a request (sc + fb + lb)</li>
+          <li><strong>sc</strong>: socket connect or "network latency", the time taken to open a socket connection.</li>
+          <li><strong>fb</strong>: first byte or "application latency", the time it took the server to start returning data (after the connection was opened).</li>
+          <li><strong>lb</strong>: last byte or "download time", the amount of time it took to transfer the remaining data.</li>
+        </ul>
+
+  - :title: System Status
+    :http_method: GET
+    :prototype: /v3/status
+    :intro:
+    :public: true
+    :attributes:
+    - :name: :status
+      :desc: 'The current system status. One of: nominal, offline.'
+    :example: |
+      {"status":"nominal"}
+

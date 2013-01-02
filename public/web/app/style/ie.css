@@ -1,0 +1,17 @@
+.menu,
+#checkupTimes div .label { background-image: none !important; }
+	
+#login .button { width: 150px; }
+
+#news li { zoom: 1; }
+
+#reportIncidents {
+	margin-left: -47px;
+	padding: 12px 0px 8px 5px;
+	top: -10px;
+	}
+	
+#reportMs {
+	top: -20px;
+	}
+	

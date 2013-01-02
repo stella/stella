@@ -1,0 +1,11 @@
+<!--<div class="row alert alert-info">{{to_s}}</div>-->
+<script type="text/javascript"> 
+  {{#messages.info}}
+  alertify.log( "{{to_s}}" ); {{! https://github.com/fabien-d/alertify.js }}
+  {{/messages.info}}
+  {{#messages.error}}
+  alertify.error( "{{to_s}}" );
+  {{/messages.error}}
+</script>
+
+

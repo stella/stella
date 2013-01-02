@@ -1,0 +1,158 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  <div class="row offset1" style="background-color: #eee">
+    <form id="request" action="/checkup" method="post" class="form-inline">
+      {{{add_shrimp}}}
+        {{#checkup_uri}}
+        <input id="checkup-uri" type="text" name="uri" value="{{checkup_uri}}" class="span8" />
+        {{/checkup_uri}}
+        {{^checkup_uri}}
+        <input id="checkup-uri" type="text" name="uri" class="clearDefault span8" value="Enter a site to test (e.g. www.stellaaahhhh.com)" />
+        {{/checkup_uri}}
+        <button type="submit" class="btn btn-large btn-inverse cufon" style="margin-top: 6px; margin-left: 6px">RUN CHECKUP</button>
+    </form>
+  </div>
+
+  <div class="span11 line">
+    <div class=""></div>
+  </div>
+
+
+  <div class="row">
+    <div class="span11" style="padding-left: 40px; ">
+      <ul id="pageTabs" class="nav nav-tabs">
+        <li class="active">
+          <a href="#home" data-toggle="tab"><h4 class="cufon">Your Sites ({{your_monitored_count}})</h4></a>
+        </li>
+        <li>
+          <a href="#checkups" data-toggle="tab"><h4 class="cufon">Checkups ({{recent_checkups.size}})</h4></a>
+        </li>
+      </ul>
+
+      <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+        <div id="home" class=" tab-pane active in">
+          {{#bogus}}
+          <p><em>You are monitoring <strong>{{your_monitored_count}} of {{your_sites_count}}</strong> sites</em>.</p>
+          {{/bogus}}
+          <div class="host-list">
+          {{#your_sites}}
+
+            <div class="host {{#monitored}}monitored{{/monitored}} {{^monitored}}notmonitored{{/monitored}}">
+              {{#monitored}}<a href="/site/{{hostname}}" title="{{screenshot.age}}">{{/monitored}}
+              {{#screenshot.thumbnail}}<i class="screenshot" style="background-image: url('/t/{{screenshot.thumbnail}}');"></i>{{/screenshot.thumbnail}}
+              {{^screenshot.thumbnail}}<i class="screenshot" style="background-image: url('/img/thumbnail-host.png');"></i>{{/screenshot.thumbnail}}
+              {{#monitored}}</a>{{/monitored}}
+
+              <div class="btn-group settings">
+                {{#monitored}}
+                  <button class="btn btn-mini btn-inverse dropdown-toggle" data-toggle="dropdown"><i class="icon-pencil icon-white"></i> <span class="caret"></span></button>
+                  <ul class="dropdown-menu pull-right">
+                    <li><a href="/site/{{hostname}}/settings"><i class="icon-wrench"></i> Monitor &amp; Notification Settings</a></li>
+                    <li><a href="/site/{{hostid}}/screenshot" class="host-stop"><i class="icon-eye-open"></i> Update screenshot</a></li>
+                    {{#bogus}}
+                    <li><a href="/site/{{hostname}}/settings"><i class="icon-envelope"></i> </a></li>
+                    <li class="divider"></li>
+                    <li><a href="/site/{{hostid}}/upgrade" class="host-upgrade"><i class="icon-asterisk"></i> About our premium plan ($15/month)</a></li>
+                    {{/bogus}}
+                    <li class="divider"></li>
+                    <li class=""><a href="/site/{{hostid}}/stop" class="host-stop"><i class="icon-stop"></i> Stop Monitoring</a></li>
+                  </ul>
+                {{/monitored}}
+                {{^monitored}}
+                  <button href="/site/{{hostid}}/start" class="btn-large btn btn-primary host-start">Monitor for $2/month</button>
+                {{/monitored}}
+              </div>
+              <div class="description">
+                <a href="http://{{hostname}}">{{hostname}}</a>
+                {{#monitored}}
+                <div class="stat">
+                  <a href="/site/{{hostname}}/report">{{rangemetrics.past_1h.on_load_avg.to_i}}ms</a>
+                </div>
+                {{/monitored}}
+              </div>
+            </div>
+
+            {{/your_sites}}
+            {{^your_sites}}
+            <div class="alert">
+              <em>You have not specified any pages to monitor.</em>
+              <h4 class="alert-heading"><a href="/?uri=http://stellaaahhhh.com/">Run a checkup!</a></h4>
+            </div>
+          {{/your_sites}}
+          </div>
+          <br/><br/><br/><br/><br/>
+        </div>
+
+        <div id="checkups" class="hidden">
+          <p><em>These are the checkups you have run in the past 14 days.</em></p>
+
+          {{#recent_checkups}}
+          <div class="stats span8 well row {{#host.monitored}}monitored{{/host.monitored}}">
+            <div  class="tag">
+              {{#host.monitored}}
+              <!--<a href="/site/{{testplan.host.hostname}}"><span class="label label" >monitored</span></a>-->
+              {{/host.monitored}}
+              {{^testplan.host.monitored}}
+                <button href="/site/{{testplan.host.hostid}}/start" class="btn btn-primary host-start">Start Monitoring for ${{site_price}}/month</button>
+              {{/testplan.host.monitored}}
+            </div>
+            <p class="title">
+              <a href="/checkup/{{checkid}}" class="checkuplink">{{testplan.uri}}</a>
+            </p>
+            <a href="/checkup/{{checkid}}" title="View checkup">
+            {{#testplan.screenshot}}
+            <img src="/t/{{thumbnail}}" alt="{{testplan.uri}} thumbnail" style="float: left">
+            {{/testplan.screenshot}}
+            {{^testplan.screenshot}}
+            <img src="/img/thumbnail-host.png" alt="Generating thumbnail..." style="float: left">
+            {{/testplan.screenshot}}
+            </a>
+            <ul class="span4">
+              <li class="rt">
+                <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
+              </li>
+              <li class="advice cufon">
+                "<strong class="slowish">Not so fast.</strong> Slower than most sites."
+              </li>
+              <li>
+                <span class="value cufon">{{summary.initial_offset}}ms</span>
+                <span class="description ">Page Content</span>
+              </li>
+              <li>
+                <span class="value cufon ">{{summary.total_bytes}}</span>
+                <span class="description ">Total Bytes</span>
+              </li>
+              <li>
+                <span class="value cufon">{{summary.requests}}</span>
+                <span class="description ">Requests</span>
+              </li>
+              <li>
+                <span class="value cufon">{{summary.error_count}}</span>
+                <span class="description ">Errors</span>
+              </li>
+              <li class="time">
+                <span class="prettyDate cufon" title="{{updated_at.utc.to_i}}">{{updated_at.utc}}</span>
+              </li>
+            </ul>
+
+          </div>
+          {{/recent_checkups}}
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+{{>_layout/footer}}
+
+<script type="text/javascript">
+$(function() {
+  {{#highlight_button}}
+  $('#request button').hiliteSlow();
+  {{/highlight_button}}
+});
+</script>

@@ -1,0 +1,89 @@
+
+##########################################################################  SITE
+GET   /                                               Stella::App::Homepage#index
+GET   /feedback                                       Stella::App::Homepage#feedback
+POST  /feedback                                       Stella::App::Homepage#send_feedback
+
+##########################################################################  WEBHOOKS
+GET   /hooks/stripe                                   Stella::App::Hooks#stripe
+POST  /hooks/stripe                                   Stella::App::Hooks#stripe
+
+GET   /hooks/twilio                                   Stella::App::Hooks#twilio
+POST  /hooks/twilio                                   Stella::App::Hooks#twilio
+
+
+##########################################################################  CHECKUP
+POST  /checkup                                        Stella::App::Checkup#run
+GET   /checkup/:checkid                               Stella::App::Checkup#get
+GET   /checkup/:checkid/status                        Stella::App::Checkup#status
+POST  /checkup/:checkid                               Stella::App::Checkup#signup_express
+
+
+##########################################################################  HOST
+#NOTE: Add redirect from /host/* to /site/* in nginx
+
+GET   /site/:hostname                                 Stella::App::Host#index
+GET   /site/:hostname/:tabid                          Stella::App::Host#index
+
+POST  /site/:hostid/settings                          Stella::App::Host#settings
+POST  /site/:hostid/notify/:mode                      Stella::App::Host#notify
+
+
+POST  /site/:hostid/hide                              Stella::App::Host#hide
+POST  /site/:hostid/show                              Stella::App::Host#show
+POST  /site/:hostid/screenshot                        Stella::App::Host#screenshot
+POST  /site/:hostid/stop                              Stella::App::Host#stop
+POST  /site/:hostid/start                             Stella::App::Host#start
+POST  /site/:hostid/upgrade                           Stella::App::Host#upgrade
+POST  /site/:hostid/destroy                           Stella::App::Host#destroy
+
+GET   /testrun/:runid                                 Stella::App::Host#testrun
+GET   /plan/:planid                                   Stella::App::Host#plan
+POST  /plan/:planid/hide                              Stella::App::Host#hide_plan
+POST  /plan/:planid/enable                            Stella::App::Host#enable_plan
+POST  /plan/:planid/disable                           Stella::App::Host#disable_plan
+
+
+##########################################################################  ACCOUNT
+GET   /account                                        Stella::App::Account#index
+GET   /account/:tabid                                 Stella::App::Account#index
+GET   /account/api                                    Stella::App::Account#api
+GET   /account/billing                                Stella::App::Account#billing
+GET   /account/billing/:tabid                         Stella::App::Account#billing
+
+POST  /account/token                                  Stella::App::Account#receive_token
+
+GET   /account/confirm/:secret                        Stella::App::Account#confirm
+GET   /login                                          Stella::App::Account#login
+POST  /login                                          Stella::App::Account#login
+GET   /logout                                         Stella::App::Account#logout
+
+GET   /signup                                         Stella::App::Account#signup
+POST  /signup                                         Stella::App::Account#signup
+
+GET   /login/reset                                    Stella::App::Account#login_reset_secret_request
+POST  /login/reset                                    Stella::App::Account#login_reset_secret_request
+GET   /login/reset/:secret                            Stella::App::Account#login_reset_secret_request
+POST  /login/reset/:secret                            Stella::App::Account#login_reset_pword_change
+
+
+##########################################################################  INFO
+GET   /info/company                                   Stella::App::Info#company
+GET   /info/privacy                                   Stella::App::Info#privacy
+GET   /info/terms                                     Stella::App::Info#terms
+GET   /info/refund                                    Stella::App::Info#refund
+GET   /about                                          Stella::App::Info#about
+
+
+##########################################################################  DOCS
+GET   /docs                                           Stella::App::Docs#index
+GET   /docs/api/:topic                                Stella::App::Docs#topic
+
+
+##########################################################################  MISCELLANEOUS
+GET   /404                                            Stella::App::Homepage#not_found
+GET   /500                                            Stella::App::Homepage#server_error
+
+GET   /slow                                           Stella::App::Homepage#slow
+GET   /timeout                                        Stella::App::Homepage#timeout
+GET   /error                                          Stella::App::Homepage#error

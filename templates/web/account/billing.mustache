@@ -1,0 +1,135 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  <!--
+  <div class="span11">
+    <ul class="breadcrumb">
+      <li class="active"><a href="/account">Account</a></li>
+    </ul>
+  </div>
+  <div class="span11">
+    <div class="line"></div>
+  </div>
+  -->
+
+  <div class="span10 offset1">
+    <div class="tabbable tabs-left">
+      <ul id="pageTabs" class="nav nav-tabs">
+        {{#tabs}}
+        <li {{#active}}class="active"{{/active}}><a href="#{{tab}}" data-toggle="tab">{{text}}</a></li>
+        {{/tabs}}
+      </ul>
+      <div class="tab-content">
+
+        <div class="tab-pane active" id="products">
+          <div class="row well static">
+          <div class="span8">
+            <h2 class="cufon">Your Products</h2>
+            <div class="line"></div>
+            <p>${{monthly_bill}}/month</p>
+            <table class="table table-condensed table-striped">
+              <thead>
+                <tr>
+                  <th>product</th>
+                  <th>price (USD)</th>
+                  <th>updated</th>
+                  <th>&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#active_products}}
+                <tr>
+                  <td>{{name}}</td>
+                  <td>${{calculated_price}}</td>
+                  <td>{{updated_at.to_date}}</td>
+                  <td>{{#active}}<em>active</em>{{/active}}</td>
+                </tr>
+                {{/active_products}}
+              </tbody>
+            </table>
+
+          </div>
+          </div>
+        </div>
+
+
+        <div class="tab-pane" id="payment">
+          <div class="row well static">
+          <div class="span8">
+
+            <form class=" form-horizontal" action="https://spreedlycore.com/v1/payment_methods" method="post">
+              <input name="redirect_url" type="hidden" value="{{baseuri}}/account" />
+              <input name="api_login" type="hidden" value="{{spreedlycore_key}}" />
+              <fieldset>
+                <legend><h2 class="cufon">Add Payment Method</h2></legend>
+                <div class="control-group">
+                  <label class="control-label" for="input01">First Name</label>
+                  <div class="controls">
+                    <input type="text" class="input-large selectable" id="input01" name="credit_card[first_name]" value="">
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label class="control-label" for="input03">Last Name</label>
+                  <div class="controls">
+                    <input type="text" class="input-xlarge span3 selectable" id="input03" name="credit_card[last_name]" value="">
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label class="control-label" for="input04">Card Number</label>
+                  <div class="controls">
+                    <input type="text" class="input-xlarge span3 selectable" id="input04" name="credit_card[number]" value="">
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label class="control-label" for="input05">Security Code</label>
+                  <div class="controls">
+                    <input type="text" class="input-xlarge span3 selectable" id="input05" name="credit_card[verification_value]" value="">
+                    <p class="help-block">e.g. The 3 or 4 digit security code on your card.</p>
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label class="control-label" for="input05">Expiration Date</label>
+                  <div class="controls">
+                    <input type="text" class="input-small span1 selectable" id="input06" name="credit_card[month]" value="" placeholder="Month">
+                    <input type="text" class="input-small span1 selectable" id="input06" name="credit_card[year]" value="" placeholder="Year">
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Add Credit Card</button>
+                  <button class="btn">Cancel</button>
+                </div>
+                <div class="control-group">
+                  <div class="controls">
+                    <p class="help-block">Need to change your email address? Just ask Tucker.</p>
+                  </div>
+                </div>
+              </fieldset>
+            </form>
+          </div>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="history">
+          <div class="row well static">
+          <div class="span8">
+            <h2 class="cufon">Billing History</h2>
+
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+  {{#selected_tabid}}
+  <script type="text/javascript">
+    $(function() {
+      $('#pageTabs li a[href$="#{{to_s}}"]').tab('show');
+    });
+  </script>
+  {{/selected_tabid}}
+
+{{>_layout/footer}}

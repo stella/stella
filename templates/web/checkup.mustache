@@ -1,0 +1,178 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  {{#authenticated}}
+  <div class="span11 offset1">
+    <form action="/checkup" method="post" class="form-inline">
+      {{{add_shrimp}}}
+      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+    </form>
+  </div>
+  {{/authenticated}}
+
+  {{^authenticated}}
+  <form id="request" action="/checkup" method="post" class="span12">
+    {{{add_shrimp}}}
+    <div class="row">
+      <div class="span6">
+        <input id="checkupResultsFor" class="" type="text" name="uri" value="{{this_uri}}" />
+      </div>
+      <div class="span6">
+        <button id="fire" class="btn btn-huge btn-primary" type="submit"><span class="cufon">Start monitoring <em class="forFree">for free!</em><img class="checkupMonitoringIcon" src="/img/checkupStartMonitoring.png"></span></button>
+      </div>
+    </div>
+    <div class="row">
+      <!--<div class="span2 offset10"><em style="color: #999;">No signup required.</em></div>-->
+    </div>
+  </form>
+
+  <form id="form-signup" method="post" action="/checkup/{{checkup.checkid}}" class="span12 form-inline">
+    {{{add_shrimp}}}
+    <div class="row">
+      <div class="span12">
+        <input id="signup-email" type="text" class="span4" placeholder="Email" name="email">
+        <input id="signup-password" type="password" class="span3" placeholder="Password" name="password">
+        <button id="fire" class="btn btn-large btn-inverse" type="submit"><strong class="cufon" style="color:#fff">Start Monitoring <em class="forFree">{{host.shortname}}</em></strong></button>
+        <p class="help-block cufon">
+          We use your email address for notifications and reports. Nothing else<em>!</em>
+        </p>
+      </div>
+    </div>
+  </form>
+  {{/authenticated}}
+
+  <div class="span11">
+    {{^is_done}}<div class="line"></div>{{/is_done}}
+    {{#is_done}}<h1 class="cufon section">Results</h1>{{/is_done}}
+  </div>
+
+  <div class="span12">
+    <div class="stats span8 offset1 well row">
+      <a href="/site/{{host.hostname}}">
+      {{#testplan.screenshot}}
+      <img src="/t/{{thumbnail}}" alt="{{testplan.uri}} thumbnail" class="screenshot">
+      {{/testplan.screenshot}}
+      {{^testplan.screenshot}}
+      <img src="/img/thumbnail-host.png" alt="Generating thumbnail..." class="screenshot">
+      {{/testplan.screenshot}}
+      </a>
+      {{#is_done}}
+      <ul class="span4">
+        <li class="rt">
+          <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->
+          <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
+          <!--<span class="description">Response Time</span>-->
+        </li>
+        <li class="advice cufon">
+          <!-- "<strong class="slowish">Not so fast.</strong> Slower than most sites." -->
+        </li>
+        <li>
+          <span class="value cufon">{{summary.initial_offset}}ms</span>
+          <span class="description ">Page Content</span>
+        </li>
+        <li>
+          <span class="value cufon ">{{summary.total_bytes}}</span>
+          <span class="description ">Total Bytes</span>
+        </li>
+        <li>
+          <span class="value cufon">{{summary.requests}}</span>
+          <span class="description ">Requests</span>
+        </li>
+        <li>
+          <span class="value cufon">{{summary.error_count}}</span>
+          <span class="description ">Errors</span>
+        </li>
+        <li class="time cufon">
+          <span class="prettyDate cufon" title="{{checkup.updated_at.to_i}}">{{ran_at_natural}}</span>
+        </li>
+      </ul>
+      {{/is_done}}
+      {{#is_running}}
+      <div class="span3 offset1" style="padding-top: 60px">
+        <h3 class="cufon tuckerProgress">Test in progress</h3>
+        <img src="/img/progress.gif"/>
+      </div>
+      <script type="text/javascript">
+       setInterval(function(){
+         checkCheckupStatus("{{checkup.checkid}}");
+       }, 2000);
+       setInterval(function(){
+          $('.tuckerProgress').progressDots();
+          Cufon.replace('.tuckerProgress')
+        }, 1000);
+      </script>
+
+      {{/is_running}}
+    </div>
+  </div>
+
+  {{#bogus}}
+  <div class="span11 offset1">
+    <p id="checkupSummary" class="columnHalf cufon"><strong class="tuckerProgress">Just a moment...</strong><br/>
+    {{#authenticated}}Our dynamos and doohickies are warming up.{{/authenticated}}<span id="checkupSummaryBottom"></span></p>
+    <br/><br/><br/>
+  </div>
+  {{/bogus}}
+
+  {{#is_done}}
+  <div class="span11 offset1">
+    <div class="page-header span10">
+      <h2><span class="cufon">Network Performance</span> &nbsp;<small class="cufon">All page requests including images, javascript, and CSS.</small></h2>
+      <div class="line"></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="span10 offset1">
+      <ul id="pageTabs" class="nav nav-tabs">
+        <li class="active">
+          <a href="#location1" data-toggle="tab"><h4 class="cufon">Page Assets</h4></a>
+        </li>
+      </ul>
+      <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+
+        <div id="location1" class=" tab-pane active in">
+
+          <div class="static span9">
+            <table class="table table-condensed table-striped" style="font-size: 90%">
+              <thead>
+                <tr>
+                  <th>&nbsp;&nbsp;&nbsp;&nbsp;</th>
+                  <th>host</th>
+                  <th>file</th>
+                  <th style="text-align: right">status</th>
+                  <th style="text-align: right">bytes</th>
+                  <th style="text-align: right">offset</th>
+                  <th style="text-align: right">time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#summary.assets}}
+                <tr>
+                  <td>{{meth}}</td>
+                  <td title="{{host}}">{{host_short}}</td>
+                  <td>
+                    <a href="{{scheme}}://{{host}}{{path}}" title="{{uri}}" rel="nofollow">{{path_short}}</a>
+                  </td>
+                  <td style="text-align: right">{{code}}</td>
+                  <td style="text-align: right">{{size}}</td>
+                  <td style="text-align: right">
+                    {{#offset}}{{to_s}}s{{/offset}}
+                    {{^offset}}--{{/offset}}
+                  </td>
+                  <td class="rt" style="text-align: right" rel="tooltip" title="Waiting: {{fb}}ms, Receiving: {{lb}}ms">{{rt}}ms</td>
+                </tr>
+                {{/summary.assets}}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {{/is_done}}
+
+
+{{>_layout/footer}}

@@ -1,0 +1,93 @@
+
+#Model-C { margin: 0 45px; }
+
+#pricing .vitals {
+  display: block;
+  clear: both;
+  }   
+  .pricingName {
+    color: #999;
+    float: left;
+    font-size: 36px;
+    font-weight: normal;
+    margin: 36px 0;
+    }
+    
+  .pricingMonth {
+    color: #00CCCC;
+    font-style: italic;
+    font-family: Georgia, serif;
+    float: right;
+    margin: 28px 0;
+    margin-top: 49px;
+    }
+  .pricingPrice {
+    color: #000;
+    float: right;
+    font-size: 48px;
+    font-weight: bold;
+    margin: 28px 0;
+    } 
+
+#pricing .cell { background: url("/img/pricing-lines.png") no-repeat scroll 0 100px; }
+#pricing .features {
+  margin:0;
+  padding:10px 0
+  }
+#Model-A .features { background: url("/img/pricing-free.png") no-repeat 136px bottom; }
+#Model-C .features { background: url("/img/pricing-modelA.png") no-repeat 148px bottom; }
+#Model-E .features { background: url("/img/pricing-modelC.png") no-repeat 134px bottom; }
+  
+#pricing dt {
+  font-family: Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  margin: 6px 0;
+  }
+  
+#pricing dd {
+  color: #ff6666;
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0;
+  position: relative;
+  width: 160px;
+  }
+  #pricing .pricingInfo {
+    background: url("/img/pricing-info.png") no-repeat;
+    display: none;
+    height: 20px;
+    top: 0px;
+    position: absolute;
+    right: 0;
+    width: 20px;
+    }
+    
+  #pricing .pricingInfo .foo { display: block; }
+  #pricing .pricingInfo:hover .foo { 
+    background: #ccc;
+    border-radius: 8px;
+    -moz-border-radius: 8px;
+    -webkit-border-radius: 8px;
+    color: #666;
+    display: none !important;
+    font-family: Verdana, Aria, sans-serif;
+    font-size: 12px;
+    margin: 10px;
+    padding: 25px;
+    position: absolute;
+    width: 200px;
+    z-index: 999;
+    } 
+  
+#pricing .upTo { 
+  font-size: 12px;
+  line-height:8px
+  }
+
+#pricing .cell .button {
+  margin: 30px auto 15px;
+  display: block;
+  position: relative;
+  width: 230px;
+  }

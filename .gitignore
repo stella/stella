@@ -2,6 +2,7 @@
 *.rbc
 .bundle
 .config
+.rudy
 coverage
 InstalledFiles
 lib/bundler/man
@@ -15,4 +16,4 @@ tmp
 # YARD artifacts
 .yardoc
 _yardoc
-doc/
+

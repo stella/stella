@@ -1,0 +1,322 @@
+# 2010-02-16 STELLA OUTPUT EXAMPLE -- VERIFY MODE
+
+$ stella verify -p examples/essentials/plan.rb stellaaahhhh.com
+ Product Finder  (d8c7b0)                                           
+ Simple search  (b557f9)                                           
+  GET    http://stellaaahhhh.com/                                200
+  GET    http://stellaaahhhh.com/search                          200
+  GET    http://stellaaahhhh.com/listing/1005                    200
+ YAML API  (e34a6f)                                                
+  GET    http://stellaaahhhh.com/listings.yaml                   200
+  GET    http://stellaaahhhh.com/listing/1000.yaml               200
+  GET    http://stellaaahhhh.com/listing/1001.yaml               200
+  GET    http://stellaaahhhh.com/listing/1002.yaml               200
+  GET    http://stellaaahhhh.com/listing/1003.yaml               200
+  GET    http://stellaaahhhh.com/listing/1004.yaml               200
+  GET    http://stellaaahhhh.com/listing/1005.yaml               200
+  GET    http://stellaaahhhh.com/listing/1006.yaml               200
+  GET    http://stellaaahhhh.com/listing/1007.yaml               200
+ Self-serve API  (63e799)                                          
+  POST   http://stellaaahhhh.com/listing/add                     302
+  POST   http://stellaaahhhh.com/listing/add                     302
+  POST   http://stellaaahhhh.com/listing/add                     302
+  POST   http://stellaaahhhh.com/listing/add                     302
+
+
+# The same testplan with more verbose output
+$ stella -vv verify -p examples/essentials/plan.rb stellaaahhhh.com
+
+Product Finder  (d8c7b0656705b02f87f3a7ded5d1c7a612695ffe)         
+Simple search  (b557f9f2320854e558b210bccfa545ec896cb9d4)         
+ Homepage  (67cc8304600160268b34673e1e3c459eaf315dfc)                   
+ GET    http://stellaaahhhh.com/                                
+
+  Params:
+
+  GET / HTTP/1.1
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ Search Results  (aaadf9df2c11ba9cd553dfe726ac695e309f2e09)                   
+ GET    http://stellaaahhhh.com/search                          
+
+  Params:
+    what: op
+    where: Toronto
+
+  GET /search?what=op&where=Toronto HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 404 Not Found
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%0A-+op%0A%3Alocation%3A+Toronto%0A
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ QUIT   No results
+YAML API  (e34a6f572bc007c5db357cd1969380624d513f52)              
+ View All  (25a8d1d8b19722e6c0f17946f181986c0d312070)                   
+ GET    http://stellaaahhhh.com/listings.yaml                   
+
+  Params:
+
+  GET /listings.yaml HTTP/1.1
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)                   
+ GET    http://stellaaahhhh.com/listing/1000.yaml               
+
+  Params:
+
+  GET /listing/1000.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   1 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 1 
+ GET    http://stellaaahhhh.com/listing/1001.yaml               
+
+  Params:
+
+  GET /listing/1001.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   2 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 2 
+ GET    http://stellaaahhhh.com/listing/1002.yaml               
+
+  Params:
+
+  GET /listing/1002.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   3 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 3 
+ GET    http://stellaaahhhh.com/listing/1003.yaml               
+
+  Params:
+
+  GET /listing/1003.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   4 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 4 
+ GET    http://stellaaahhhh.com/listing/1004.yaml               
+
+  Params:
+
+  GET /listing/1004.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   5 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 5 
+ GET    http://stellaaahhhh.com/listing/1005.yaml               
+
+  Params:
+
+  GET /listing/1005.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   6 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 6 
+ GET    http://stellaaahhhh.com/listing/1006.yaml               
+
+  Params:
+
+  GET /listing/1006.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   7 of 8
+ Select Listing  (bf26cda5475787f3b681669ad7c0cf093fdd8630)         repeat: 7 
+ GET    http://stellaaahhhh.com/listing/1007.yaml               
+
+  Params:
+
+  GET /listing/1007.yaml HTTP/1.1
+  Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 200 OK
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Content-Type: text/yaml
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   8 of 8
+Self-serve API  (63e799ba5aa274c87d3c8a17f5689ae3ebaeddc2)        
+ Add a listing  (dd1782cae9a48a17512baf662a64a9e4ba1c31ef)                   
+ POST   http://stellaaahhhh.com/listing/add                     
+
+  Params:
+    name: t7rwnwat
+    city: Montreal
+    logo: #<File:0x000001010ff110>
+
+  POST /listing/add HTTP/1.1
+  Content-Type: application/x-www-form-urlencoded
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Content-Length: 65
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 302 Moved Temporarily
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Location: /listings
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   1 of 4
+ Add a listing  (dd1782cae9a48a17512baf662a64a9e4ba1c31ef)         repeat: 1 
+ POST   http://stellaaahhhh.com/listing/add                     
+
+  Params:
+    name: gk66k4yk
+    city: Toronto
+    logo: #<File:0x000001028e5c70>
+
+  POST /listing/add HTTP/1.1
+  Content-Type: application/x-www-form-urlencoded
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Content-Length: 64
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 302 Moved Temporarily
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Location: /listings
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   2 of 4
+ Add a listing  (dd1782cae9a48a17512baf662a64a9e4ba1c31ef)         repeat: 2 
+ POST   http://stellaaahhhh.com/listing/add                     
+
+  Params:
+    name: yrkvrrfw
+    city: Montreal
+    logo: #<File:0x00000101570be8>
+
+  POST /listing/add HTTP/1.1
+  Content-Type: application/x-www-form-urlencoded
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Content-Length: 65
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 302 Moved Temporarily
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Location: /listings
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   3 of 4
+ Add a listing  (dd1782cae9a48a17512baf662a64a9e4ba1c31ef)         repeat: 3 
+ POST   http://stellaaahhhh.com/listing/add                     
+
+  Params:
+    name: x6e3xpfk
+    city: Toronto
+    logo: #<File:0x0000010158c130>
+
+  POST /listing/add HTTP/1.1
+  Content-Type: application/x-www-form-urlencoded
+  Date: Tue, 16 Feb 2010 18:16:20 GMT
+  Content-Length: 64
+  Host: stellaaahhhh.com
+
+  HTTP/1.1 302 Moved Temporarily
+  Content-Type: text/html
+  Set-Cookie: bff-history=---+%0A%3Ahistory%3A+%5B%5D%0A%0A
+  Location: /listings
+  Connection: keep-alive
+  Server: thin 1.2.5 codename This Is Not A Web Server
+  Content-Length: 0
+
+ REPEAT   4 of 4
+
+Elapsed: 1.01 seconds

@@ -1,0 +1,47 @@
+#aboutIntro{background:url("/img/aboutFactoryBackground.jpg") no-repeat right bottom;margin:0 auto;position:relative;width:795px;}
+#aboutTagline{position:absolute;width:100%;text-align:center;margin-top:50px;font-weight:normal;color:#999;}
+#aboutTaglineRight{margin-left:110px;margin-right:-10px;}
+#aboutFactory{margin:0 auto;display:block;clear:both;}
+#aboutBannerTagline{color:#fff;font-size:70px;font-style:italic;font-weight:normal;top:140px;text-shadow:1px 1px 10px black;text-align:center;line-height:92px;position:absolute;display:block;clear:both;width:100%;}
+#aboutBannerTagline em{clear:both;display:block;font-style:normal;font-weight:bold;}
+#aboutFirst,
+#aboutSecond{color:#999;display:inline-block;}
+#aboutFirst{margin-right:30px;width:340px;}
+#aboutSecond{width:280px;}
+#aboutMorton,
+#aboutTucker{padding-left:150px;}
+#aboutMorton{background:url("/img/morton-s.jpg") no-repeat 0 0;margin-bottom:40px;}
+#aboutTucker{background:url("/img/aboutTucker.jpg") no-repeat 0 0;}
+#aboutEmployees{margin:40px 0;}
+.aboutTitle{color:#009999;font-style:italic;margin-top:0;}
+#aboutNews{vertical-align:top;}
+#aboutNewsMore{position:absolute;right:0;top:-10px;}
+#aboutNews .news{float:right;width:430px;}
+#aboutNews .news ol{float:left;padding:0;}
+.news li{font-family:Georgia,serif;font-style:italic;margin-bottom:40px;position:relative;width:280px;}
+.news p{color:#657e7e;display:block;margin:12px 12px 0;position:relative;z-index:1;}
+.news .date{color:#999;position:absolute;padding-top:20px;}
+#aboutNews .dateHeading{margin-bottom:25px;}
+.tucker{background:url("/img/news-tuckerTop.png") no-repeat;float:left;padding:0 15px 0 35px;}
+#aboutNews .tucker{background-position:50px 0;padding:0 5px 0 130px;}
+.tucker .date{background:url("/img/news-tuckerBottom.png") no-repeat ;bottom:0;height:17px;margin:0 0 -35px -64px;width:347px;}
+.morton{background:url("/img/news-mortonTop.png") no-repeat;float:right;padding:0 115px 0 15px;}
+.morton .date{background:url("/img/news-mortonBottom.png") no-repeat ;bottom:0;height:15px;margin:0 0 -35px -15px;text-align:right;width:347px;}
+.mugshot{background:url("/img/news-morton.png") no-repeat;background-size:40px;position:absolute;height:40px;width:40px;}
+.mugshot:hover{margin-top:1px;}
+.morton .mugshot{background:url("/img/news-morton.png") no-repeat;right:0;top:0px;}
+#aboutNews .tucker .mugshot{background:url("/img/news-tucker.png") no-repeat;left:0;top:0px;}
+#quarterlies{float:right;width:400px;font-family:courier,monospace,serif;}
+#quarterlies img{padding:10px;}
+#follow{margin:0 auto;width:260px;}
+.tuckerFollow,
+.mortonFollow{float:left;font-family:Georgia,italic;font-style:italic;width:120px;}
+.tuckerFollow{text-align:right;margin-right:20px;}
+.mortonFollow{text-align:left;}
+.mugshotFollow{border:none;}
+.mugshotFollow:hover{margin-top:1px}
+#founders{margin-top:40px;}
+#founders img{position:absolute;margin-top:28px;}
+#founders h3,
+#founders p{margin-left:140px;}
+#founders .columnHalf{margin-top:20px;}

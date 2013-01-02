@@ -1,0 +1,155 @@
+/* Bootstrap Overrides */
+#home input, #home textarea {box-shadow: none !important;-webkit-box-shadow: none !important;moz-box-shadow: none !important;}
+#home form {margin: 0px;}
+
+
+/* ELEMENTARY,MY DEAR */
+ul,ol,li{list-style:none;margin:0;padding:0;}
+a{color:#00cccc;text-decoration:none;outline:none;}
+p { 
+	color: #666; 
+	font-family: Georgia, serif;
+	font-size: 14px;
+	}
+p a {border-bottom: 1px solid #00cccc;}
+a:hover{color:#000 !important;}
+a.black{color:#000;}
+hr,.reset{clear:both;height:1px !important;margin:0 !important;visibility:hidden;}
+
+  /* THE ID */
+  #uri:focus{outline:none;}
+
+  /* LAY IT ALL OUT */
+  
+  #request{height:70px;}
+  #home #logo-separator {background: url("/img/line.png") no-repeat;height: 10px;margin-top:10px;padding-bottom: 10px}
+  #home #logo,
+  #pricing #logo{background:url("/img/header.png") no-repeat center 5px;display:block;position:relative;height:160px;width:100%;text-indent:-9999px;z-index:-100;margin-top:-40px;}
+  #navigation{margin-top:-64px;position:relative;z-index:1;}
+  #home #navigation,
+  #pricing #navigation{margin-top:-162px;}
+  #hello{background: url("/img/headerInterior.png");clear:both;color:#999;float:right;white-space:nowrap;}
+  #default #hello {background: url("/img/headerInterior.png");clear: both;color: #999;float: right;white-space: nowrap;width: 100%;display: block;text-align: right;height: 89px;top: -20px;position: relative;padding-top: 8px;}
+  
+  #hello img{border:2px solid #ccc;display:inline-block;margin:-5px 10px 0;height:24px;width:24px;vertical-align: middle;}
+  .cell{display:block;float:left;position:relative;width:290px;}
+  .cellCenter{margin-left:25px;margin-right:25px;}
+  .cellSamples{width:300px;}
+
+
+  #mini #uri{background:url("/img/uri.png") no-repeat;margin-right:3px;padding:18px;width:731px;}
+  #home #uri{background:url("/img/home-uri.png") no-repeat;border:0px;color:#339999;float:left;font-family:Georgia,serif;font-size:18px;font-style:italic;margin:0;padding:21px;width:731px;float:left;padding-left:302px;width:448px;}
+  
+  #homepageRequest{background:url("/img/line.png") no-repeat;height:90px;padding:35px 0 0;}
+  #property #request{background:none;padding:5px 0 0;}
+
+  .center{text-align:center;}
+
+  .monitorToggle { font-style: italic }
+  .notifyToggle { font-style: italic }
+  
+#functionality h2 {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-style: italic;
+  font-weight: lighter;
+  } 
+  
+  #headingMonitoring,
+  #headingCheckups,
+  #headingNotifications,
+  #headingAPI,
+  #headingBookmarklet {
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    -border-bottom: 1px dotted #999;
+    height: 150px;
+    padding-bottom: 30px;
+    }
+    #functionality h2,
+    #functionality p { margin-left: 120px; }
+    #functionality p { color: #999; } 
+    #functionality .em { 
+      color: #666;
+      font-weight: bold;
+      font-style: normal;
+      } 
+    #functionality a { 
+		background-repeat: no-repeat;
+	    display: block;
+	    font-family: Georgia,serif;
+	    font-size: 14px;
+	    font-style: italic;
+	    height: 60px;
+	    margin-top: -30px;
+	    padding-top: 138px;
+	    position: absolute;
+	    top: 30px;
+	    width: 100px;
+      }   
+	#functionality a:hover { background-position: 0 1px; } 
+  
+  #headingMonitoring a { background-image: url("/img/home-monitoring.png"); }
+  #headingCheckups a { background-image: url("/img/home-checkups.png"); }
+  #headingNotifications a { background-image: url("/img/home-notifications.png"); }
+  #headingAPI a { background-image: url("/img/home-api.png"); }
+  #headingBookmarklet a { background-image: url("/img/home-bookmarklet.png"); }
+  
+  #about {    
+    background: url("/img/line.png") no-repeat scroll 0 0 transparent;
+    display: block;
+    height: 200px;
+    padding-top:35px;
+    }
+  
+    #about .cell { height: 200px; width: 295px }
+    #runningAWebsite { background: url("/img/home-runningAWebsite2.png") no-repeat; }
+    #stellaLoves { background: url("/img/home-typewriter.png") no-repeat 75px 15px; }
+      #stellaLoves p {
+        color: #999;
+        font-family: Georgia, serif;
+        font-size: 18px;
+        font-style: italic;
+        text-shadow: 1px 1px 0 #fff;
+        }
+        #stellaLoves a { 
+          font-size: 22px;
+          padding: 16px 10px 10px;
+          width: 150px;
+          }
+    #stellaIs { background: url("/img/home-stellaIs.png") no-repeat; }
+
+  #functionality {
+    background: url("/img/home-lineFlourish.png") no-repeat;
+    height: 190px;
+    padding-top: 45px;
+    }
+    
+	#home #assemblyline { 
+		background: url("/img/home-assemblyLine.png") no-repeat;
+	    display: block;
+		float: left;
+	    height: 295px;
+		margin-top: 50px;
+	    text-indent: -9909px;
+	    width: 296px;
+		}
+		#home #assemblyline:hover { margin-top: 51px; }
+			
+    .news h2 { 
+      display: inline;
+      font-family: Georgia, serif;
+      font-weight: lighter;
+      font-style: italic;
+      font-size: 26px;
+      }
+
+    #newsMore { margin-left: 15px; }  
+      
+    #home .news ol { 
+	    display: block;
+	    float: left;
+	    padding: 65px 0 0 10px;
+	    width: 620px;
+		}
+		

@@ -1,0 +1,80 @@
+# 2010-02-16 STELLA OUTPUT EXAMPLE -- GENERATE MODE
+
+
+$ stella -v generate -c 20 -d 30m -p edit-project.rb stellaaahhhh.com
+
+Running...
+
+Processing...
+ Test plan  (324b14)                                                       
+  Create Project  (2f70ba)                                              100% 
+   Homepage  (f090b3)                                                       
+    GET /
+      do_request                     0.286 <= 0.569s >= 2.411; 0.267(SD) 1042(N)
+      connect                        0.097 <= 0.169s >= 1.048; 0.110(SD) 1042(N)
+      query                          0.098 <= 0.186s >= 1.201; 0.138(SD) 1042(N)
+      socket_gets_first_byte         0.002 <= 0.162s >= 1.427; 0.114(SD) 1042(N)
+      get_body                       0.001 <= 0.219s >= 1.763; 0.166(SD) 1042(N)
+
+   Login  (e6d601)                                                        
+    POST /accounts/login/
+      do_request                     0.163 <= 0.293s >= 1.091; 0.143(SD) 1042(N)
+      connect                        0.097 <= 0.157s >= 0.660; 0.080(SD) 1042(N)
+      query                          0.098 <= 0.174s >= 0.833; 0.102(SD) 1042(N)
+      socket_gets_first_byte         0.000 <= 0.116s >= 0.862; 0.092(SD) 1042(N)
+      get_body                       0.000 <= 0.000s >= 0.010; 0.000(SD) 1042(N)
+
+   View Dashboard  (b9d88d)                                                        
+    GET /dashboard/
+      do_request                     0.716 <= 2.969s >= 17.528; 3.130(SD) 1042(N)
+      connect                        0.098 <= 0.156s >= 1.218; 0.086(SD) 1042(N)
+      query                          0.098 <= 0.171s >= 1.230; 0.106(SD) 1042(N)
+      socket_gets_first_byte         0.197 <= 2.537s >= 17.013; 3.116(SD) 1042(N)
+      get_body                       0.001 <= 0.259s >= 1.517; 0.161(SD) 1042(N)
+
+   View Edit Project  (c9c82e)                                                        
+    GET :edit_uri
+      do_request                     0.252 <= 1.026s >= 7.640; 1.075(SD) 1042(N)
+      connect                        0.097 <= 0.161s >= 0.937; 0.094(SD) 1042(N)
+      query                          0.098 <= 0.179s >= 1.063; 0.113(SD) 1042(N)
+      socket_gets_first_byte         0.001 <= 0.714s >= 6.718; 1.065(SD) 1042(N)
+      get_body                       0.001 <= 0.130s >= 1.252; 0.107(SD) 1042(N)
+
+   Submit Edit Project  (2cdee4)                                                        
+    POST :edit_uri
+      do_request                     0.243 <= 1.714s >= 13.275; 2.001(SD) 6252(N)
+      connect                        0.097 <= 0.160s >= 3.295; 0.131(SD) 6252(N)
+      query                          0.098 <= 0.188s >= 3.296; 0.159(SD) 6252(N)
+      socket_gets_first_byte         0.002 <= 1.520s >= 13.164; 2.016(SD) 6252(N)
+      get_body                       0.000 <= 0.003s >= 0.497; 0.016(SD) 6252(N)
+
+   Sub Total:
+      Total requests                 10420 (200: 9378, 302: 1042)
+       success                       10420
+       failed                        0
+      do_request                     1.514s 2.001(SD)
+      connect                        0.161s 0.118(SD)
+      query                          0.184s 0.143(SD)
+      socket_gets_first_byte         1.265s 2.002(SD)
+      get_body                       0.063s 0.126(SD)
+      request_header_size            3.19MB       (avg:306.00B)
+      request_content_size           1.68MB       (avg:161.29B)
+      response_headers_size          3.00MB       (avg:287.50B)
+      response_content_size          52.88MB      (avg:5.08KB)
+
+  Total:                                                             
+      Total requests                 10420
+       success                       10420 (req/s: 5.79)
+       failed                        0
+      do_request                     1.514s     2.001(SD)
+      query                          0.184s     0.143(SD)
+      connect                        0.161s     0.118(SD)
+      socket_gets_first_byte         1.265s     2.002(SD)
+      get_body                       0.063s     0.126(SD)
+      request_header_size            3.19MB       (avg:306.00B)
+      request_content_size           1.68MB       (avg:161.29B)
+      response_headers_size          3.00MB       (avg:287.50B)
+      response_content_size          52.88MB      (avg:5.08KB)
+
+
+Elapsed: 1819.63 seconds

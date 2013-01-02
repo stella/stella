@@ -1,0 +1,190 @@
+---
+:title: Hosts
+:intro: Stella keeps track of all pages monitored for a specific host so the data can be combined and aggregated.
+:endpoints:
+  - :title: Retrieve a specific host
+    :http_method: GET
+    :prototype: /v3/host/HOSTID
+    :public: true
+    :intro: Returns metadata for a single host.
+    :params:
+    - :name: whois
+      :desc: 'true/false. Include whois data for the host (if available). Default: false.'
+      :mandatory: optional
+    :attributes:
+    - :name: subdomain
+      :desc: The blamestella.com subdomain associated to this host.
+    - :name: interval
+      :desc: 'The reporting frequency (in seconds).'
+    :example: |
+      {
+        "hostid": "stellaaahhhh.com",
+        "interval": 300,
+        "created": 1288201072,
+        "updated": 1305914405,
+        "subdomain": "stellaaahhhh",
+        "ipaddresses": [
+          "184.73.171.204",
+          "50.16.233.102",
+          "184.73.173.41"
+        ],
+        "cname": [
+          "proxy.heroku.com"
+        ],
+        "vendors": [
+          "ec2",
+          "heroku"
+        ],
+        "whois": {
+          "hostid": "stellaaahhhh.com",
+          "content": "...whois content...",
+          "created": 1305914404,
+          "updated": 1305914404
+        }
+
+      }
+  - :title: Metrics Summary
+    :http_method: GET
+    :prototype: /v3/host/HOSTID/summary
+    :public: true
+    :intro: Where HOSTID is the hostname for the given host.
+    :params:
+    :attributes:
+    - :name: :active_monitors
+      :desc: The number of pages monitored for this host.
+    - :name: :epoint
+      :desc: The unix time in seconds when the data was generated.
+    - :name: :summaries
+      :desc: Averages for the given time period. See <a href="/docs/api/overview">Overview</a> for a description of the summary content (we call them MetricsPacks).
+    :example: |
+      {"hostid": "www.blamestella.com",
+      "active_monitors": 3,
+      "total_monitors": 4,
+      "epoint": 1306242876,
+      "summaries": {
+        "past_1hour": {
+          "stamp": 1306239036.0,
+          "uid": "duration:3750",
+          "n": 70,
+          "rt": 0.663106,
+          "sc": 0.457572,
+          "sr": 0.000382,
+          "fb": 0.192801,
+          "lb": 0.01057,
+          "rqhs": 200,
+          "rqcs": 0,
+          "rshs": 368,
+          "rscs": 24007,
+          "score": 0.0,
+          "errors": 0,
+          "rtsd": 0.325
+        },
+        "past_4hours": {"...same as past 1 hour..."},
+        "past_24hours": {"..."},
+        "past_7days":  {"..."},
+        "past_14days":  {"..."}
+        }
+      }
+  - :title: Metrics
+    :http_method: GET
+    :prototype: /v3/host/HOSTID/metrics
+    :public: true
+    :intro: Data samples broken down by the reporting interval.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    - :name: :interval
+      :desc: The reporting interval in seconds. e.g. A value of 300 means the statistics are generated every 5 minutes.
+    - :name: :metrics
+      :desc: A hash containing the timestamp and response time metrics broken down into component values (in milliseconds). See Overview for more details.
+    :outro: 'A note about the timestamp values: min and max correspond to start time and end time, respectively. The values in the list plus the min value gives you the appropriate timestamp (in seconds).'
+    :example: |
+      {
+        "hostid": "twtvite.com",
+        "epoint": 1306201597,
+        "duration": 3600,
+        "interval": 300,
+        "metrics": {
+          "stamp": {
+            "max": 1306242900,
+            "min": 1306239900,
+            "values": [
+              0,
+              300,
+              600,
+              900,
+              1200,
+              1500,
+              1800,
+              2100,
+              2400,
+              2700,
+              3000
+            ]
+          },
+          "rt": {
+            "max": 1.361336,
+            "min": 0.440805,
+            "values": [
+              0.440805,
+              0.515705,
+              0.445942,
+              1.361336,
+              0.464583,
+              0.51998,
+              1.328015,
+              0.61802,
+              0.627653,
+              0.611149,
+              0.719393
+            ]
+          },
+          "sc": {"...same fields as rt..."},
+          "fb": {"..."},
+          "lb": {"..."}
+        }
+      }
+  - :title: Incidents
+    :http_method: GET
+    :prototype: /v3/host/HOSTID/incidents
+    :public: true
+    :intro: Returns the incident data for all monitored pages on this host.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    :example: |
+      {
+        "hostid": "solutious.com",
+        "epoint": 1306246251,
+        "duration": 86000,
+        "incidents": [
+          {
+            "kind": "timeout",
+            "msg": "Stella::TimeoutError (20)",
+            "runid": "31766251dfd623669066124781bf543f7088f4ee",
+            "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+            "hostid": "solutious.com",
+            "status": "resolved",
+            "interval": 300,
+            "detected_count": 2,
+            "detected_at": 1306165507,
+            "verified_at": 1306165829,
+            "notified_at": 1306165838,
+            "resolved_at": 1306166064,
+            "created": 1306165507,
+            "updated": 1306166064
+          }
+        ]
+      }
+
+

@@ -1,0 +1,164 @@
+/* ELEMENTARY,MY DEAR */
+ul,ol,li{list-style:none;margin:0;padding:0;}
+a{color:#00cccc;text-decoration:none;outline:none;}
+a:hover{color:#000 !important;}
+a.black{color:#000;}
+hr,.reset{clear:both;height:1px !important;margin:0 !important;visibility:hidden;}
+hr.line,
+body{background: #eee url("/img/background.png") repeat;font-family:Verdana,Arial,sans-serif;font-size:12px;line-height:18px;margin:0;}
+h2{font-size:36px;margin:0;}
+h2.section{background:url("/img/lineBroken.png") no-repeat center;text-align:center;}
+
+h2.section2{background:url("/img/lineBroken.png") no-repeat center;text-align:center;}
+h3{font-size:28px;}
+h3.section{text-align:center;}
+h3.section2{text-align:center;}
+h4.section{margin-top: 20px}
+h4{font-size:18px; margin:0px}
+h4.admin{margin-bottom:0px;}
+#colonel h4{font-size:18px; margin-top:15px}
+pre{overflow:auto;padding:20px;white-space:pre;}
+/* CLASS OF '82 */
+.err,.msg{color:#fff;font-size:150%;font-style:normal;font-weight:normal;line-height:150%;padding:5px 10px;}
+.err{background-color:#ff6666;}
+.msg{background-color:#00cccc;}
+.err a{color:#fff;text-decoration:underline;}
+.msg a{color:#fff;text-decoration:underline;}
+.subtext{font-family:Georgia,serif;font-style:italic;color:#999;border-bottom:1px solid #999;}
+.dotted{border-top:1px dotted #666;}
+/* THE ID */
+#uri:focus{outline:none;}
+/* LAY IT ALL OUT */
+#corset{margin:0 auto;overflow:hidden;position:relative;width:960px;}
+.topCareful{position:relative;width:960px;border-top:3px solid #ff6666;}
+.top{position:relative;width:960px;border-top:3px solid #00cccc;}
+.topDots{display:block;text-align:right;margin-top:4px;padding:5px 10px 2px 0;border-top:1px dotted #cccccc;color:#00cccc;font-size:11px;}
+#logo{background:url("/img/headerSmall-s.png") no-repeat;display:block;position:relative;height:62px;margin-top:10px;text-indent:-9999px;width:368px;z-index:1;}
+#home #logo,
+#pricing #logo{background:url("/img/header.png") no-repeat center 5px;height:160px;width:100%;}
+#navigation{margin-top:-64px;position:relative;z-index:1;}
+#home #navigation,
+#pricing #navigation{margin-top:-162px;}
+#hello{clear:both;color:#999;float:right;white-space:nowrap;}
+#colonelLink{display:block;float:left;height:20px;width:20px;}
+#hello img{border:2px solid #ccc;float:left;margin:-5px 10px 0;height:24px;width:24px;}
+.cell{display:block;float:left;position:relative;width:290px;}
+.cellCenter{margin-left:25px;margin-right:25px;}
+.cellSamples{width:300px;}
+#feedback .textField{color:#999;float:left;height:20px;padding:16px;width:750px !important;}
+#feedback .button{float:right;width:163px;}
+#feedback .greyButton{float:right;width:163px;}
+#footer{padding:10px 0;color:#999;font-size:12px;text-align:center;margin-top:25px;padding-bottom:60px;}
+#sitenav{clear:both;padding:10px 0;}
+#sitenav a{margin:0 5px;}
+#footer a{font-family:Georgia,serif;font-style:italic;color:#999;border-bottom:1px solid #999;}
+#footer a:hover{border-bottom:1px solid #000;color:#000;}
+#footer a:active{border-bottom:1px solid #00cccc;color:#00cccc;}
+#footer .solutiousTagline{margin:0 25px;font-size:11px;font-family:Georgia,serif;font-style:italic;color:#000;}
+#footer .copyright{font-size:11px;font-family:Georgia,serif;font-style:italic;color:#000;}
+#footer .wonderproxy{margin-top:6px;font-size:11px;font-family:Georgia,serif;color:#666}
+.userinfo{display:block;margin:10px 0;}
+/* AD HOC (TBR) */
+.infoPageSubHeader{width:100%;background-color:;float:left;}
+.infoPageLeft{width:45%;margin:5px;float:left;}
+.infoPageRight{width:45%;margin:5px;float:right;}
+.infoPageHeader{background-color:;width:100%;height:50px;clear:both;margin-top:20px;}
+.infoPageEmptyHeader{background-color:;width:100%;padding-top:10px;clear:both;}
+.small{font-size:.9em;}
+.smaller{font-size:.8em;}
+.smallest{font-size:.75em;}
+.large{font-size:1.1em;}
+.large{font-size:1.2em;}
+.quiet{color:#999;}
+.hide{display:none;}
+form.cname{width:400px;margin-left:200px;padding:20px;padding-left:40px;border:#0CC 2px solid;background-color:azure;}
+form.cname h4{margin-top:0px;margin-bottom:10px;}
+.hiddenHelpBox{text-align:left;color:#000;display:none;background-color:azure;padding:20px;margin-top:10px;-border-bottom:3px solid #0CC;font-size:90%;line-height:1.2em;}
+.hiddenHelpBox h4{margin:0px;}
+.hiddenHelpBox ul{margin-bottom:20px;}
+li.bullet{margin-left:20px;margin-bottom:10px;list-style:bullet;}
+.dialogBox{margin-left:20%;margin-right:20%;background-color:azure;padding:10px;border:#0CC 4px solid;margin-bottom:20px;}
+.dialogBox2{margin-left:20%;margin-right:20%;background-color:azure;padding:10px;border:#0CC 2px solid;margin-bottom:20px;}
+.subNote{color:#999;text-decoration:underline;font-family:Georgia,serif;font-style:italic;}
+.modal{background-color:#fff;display:none;width:350px;padding:15px;text-align:left;border:2px solid #333;margin-top:20%;-moz-border-radius:6px;-webkit-border-radius:6px;-moz-box-shadow:0 0 50px #ccc;-webkit-box-shadow:0 0 50px #ccc;}
+.modal textarea{width:300px;height:100px;}
+.smallDarkTooltip{display:none;background:transparent url(/img/black_arrow.png);font-size:12px;height:70px;width:160px;padding:25px;color:#fff;}
+#demo img{border:0;cursor:pointer;margin:0 8px;}
+#addCommentPrompt{}
+.incidentRow td:hover{}
+.incidentComments{display:none;}
+.incidentComments .convo{margin-top:10px;line-height:1.21em;}
+.editableInput{color:#000;font-style:italic;outline:none;}
+.editableInput:hover{color:#000 !important;}
+/* UNSORTED */
+.textField{border-left:1px solid #bfbfbf;border-top:1px solid #bfbfbf;border-right:1px solid #f5f5f5;border-bottom:1px solid #f5f5f5;border-radius:4px;-moz-border-radius:4px;-webkit-border-radius:4px;font-family:Georgia,serif;font-size:14px;font-style:italic;padding:5px;}
+.textFieldSmall{border-left:1px solid #bfbfbf;border-top:1px solid #bfbfbf;border-right:1px solid #f5f5f5;border-bottom:1px solid #f5f5f5;border-radius:4px;-moz-border-radius:4px;-webkit-border-radius:4px;font-family:Georgia,serif;font-size:11px;padding:2px;}
+.textFieldLarge{border-left:1px solid #bfbfbf;border-top:1px solid #bfbfbf;border-right:1px solid #f5f5f5;border-bottom:1px solid #f5f5f5;border-radius:4px;-moz-border-radius:4px;-webkit-border-radius:4px;font-family:Georgia,serif;font-size:18px;padding:10px;}
+.menu{background:#dedede url("/img/shadow.png") no-repeat;border-left:1px solid #bfbfbf;border-top:1px solid #bfbfbf;border-right:1px solid #f5f5f5;border-bottom:1px solid #f5f5f5;border-radius:8px;-moz-border-radius:8px;-webkit-border-radius:8px;float:right;font-size:16px;padding:0 15px;text-transform:uppercase;}
+.menu .on,
+.ui-tabs-selected a{border-bottom:5px solid #00cccc;}
+.menu li{float:left;padding:8px 0;}
+.menu a{color:#666666;margin:0 15px;padding:4px 0;text-transform:capitalize;}
+.menuLabel{font-weight:bold;}
+#uri{background:url("/img/uri.png") no-repeat;border:0px;color:#339999;float:left;font-family:Georgia,serif;font-size:18px;font-style:italic;margin:0;padding:18px;width:731px;}
+#mini #uri{background:url("/img/uri.png") no-repeat;margin-right:3px;padding:18px;width:731px;}
+#home #uri{background:url("/img/home-uri.png") no-repeat;float:left;padding-left:302px;width:448px;}
+#uri .private{background}
+#fire{float:right;}
+#mini #fire{float:none;}
+#fire button{width:176px;}
+.highlight{background:#ff0;padding:10px;margin:5px;}
+.button{border-left:1px solid #00cccc;border-top:1px solid #00cccc;border-bottom:1px solid #006666;border-right:1px solid #006666;-webkit-border-radius:3px 3px 3px 3px;-moz-border-radius:3px 3px 3px 3px;padding:0;position:relative;display:inline-block;text-align:center;}
+.redButton{color:#fff;border-left:1px solid #f99;border-top:1px solid #f99;border-bottom:1px solid #933;border-right:1px solid #933;-webkit-border-radius:3px 3px 3px 3px;-moz-border-radius:3px 3px 3px 3px;padding:0;position:relative;display:inline-block;text-align:center;}
+.redButton button,
+.redButton span,
+.redButton a{background:#ff6666;border-left:1px solid #f99;border-top:1px solid #f99;border-right:1px solid #933;border-bottom:1px solid #933;-webkit-border-radius:2px 2px 2px 2px;-moz-border-radius:2px 2px 2px 2px;color:#fff;cursor:pointer;display:block;font-family:Georgia,serif;font-weight:bold;font-size:20px;padding:12px 10px;overflow:visible;margin:0;text-shadow:1px 1px 0 #666;width:100%;}
+.redButton:hover{border-left:1px solid #933;border-top:1px solid #933;border-bottom:1px solid #933;border-right:1px solid #933;}
+.redButton button:hover,
+.redButton span:hover,
+.redButton a:hover{border-left:1px solid #933;border-top:1px solid #933;border-right:1px solid #f99;border-bottom:1px solid #f99;color:#fff;text-shadow:-1px -1px 0 #333;}
+.greyButton:active{margin:1px 0 -1px;}
+.greyButton{color:#333;border-left:1px solid #ccc;border-top:1px solid #ccc;border-bottom:1px solid #999;border-right:1px solid #999;-webkit-border-radius:3px 3px 3px 3px;-moz-border-radius:3px 3px 3px 3px;padding:0;position:relative;display:inline-block;text-align:center;}
+.tabFire{-webkit-border-radius:3px 3px 3px 3px;-moz-border-radius:3px 3px 3px 3px;padding:0px;margin:0px;}
+.greyButton button,
+.greyButton span,
+.greyButton a{background:#ccc;border-left:1px solid #eee;border-top:1px solid #eee;border-right:1px solid #999;border-bottom:1px solid #999;-webkit-border-radius:2px 2px 2px 2px;-moz-border-radius:2px 2px 2px 2px;color:#fff;cursor:pointer;display:block;font-family:Georgia,serif;font-weight:bold;font-size:20px;padding:12px 10px;overflow:visible;margin:0;text-shadow:1px 1px 0 #666;width:100%;}
+.greyButton:hover{border-left:1px solid #999;border-top:1px solid #999;border-bottom:1px solid #999;border-right:1px solid #999;}
+.greyButton button:hover,
+.greyButton span:hover,
+.greyButton a:hover{border-left:1px solid #999;border-top:1px solid #999;border-right:1px solid #eee;border-bottom:1px solid #eee;color:#fff;text-shadow:-1px -1px 0 #666;}
+.greyButton:active{margin:1px 0 -1px;}
+.button button,
+.button span,
+.button a{background:url("/img/fire.png") #00CCCC;border-left:1px solid #00FFFF;border-top:1px solid #00FFFF;border-right:1px solid #00cccc;border-bottom:1px solid #00cccc;-webkit-border-radius:2px 2px 2px 2px;-moz-border-radius:2px 2px 2px 2px;color:#fff;cursor:pointer;display:block;font-family:Georgia,serif;font-weight:bold;font-size:20px;padding:12px 10px;overflow:visible;margin:0;text-shadow:1px 1px 0 #006666;width:100%;}
+.button:hover{border-left:1px solid #00cccc;border-top:1px solid #00cccc;border-bottom:1px solid #00cccc;border-right:1px solid #00cccc;}
+.button button:hover,
+.button span:hover,
+.button a:hover{border-left:1px solid #006666;border-top:1px solid #006666;border-right:1px solid #00FFFF;border-bottom:1px solid #00FFFF;color:#fff;text-shadow:-1px -1px 0 #006666;}
+.button:active{margin:1px 0 -1px;}
+.ui-tabs-hide{display:none;}
+/* Switch Toggles */ 
+.iPhoneCheckContainer{font-style:normal;position:relative;height:27px;cursor:pointer;overflow:hidden;}
+.iPhoneCheckContainer input{opacity:0;-ms-filter:progid:DXImageTransform.Microsoft.Alpha(Opacity=0);filter:progid:DXImageTransform.Microsoft.Alpha(Opacity=0);}
+.iPhoneCheckContainer label{white-space:nowrap;font-size:17px;line-height:17px;font-weight:bold;font-family:"Helvetica Neue",Arial,Helvetica,sans-serif;text-transform:uppercase;cursor:pointer;display:block;height:27px;position:absolute;width:auto;top:0;padding-top:5px;overflow:hidden;}
+.iPhoneCheckContainer,.iPhoneCheckContainer label{user-select:none;-moz-user-select:none;-khtml-user-select:none;}
+.iPhoneCheckDisabled{opacity:0.5;-ms-filter:progid:DXImageTransform.Microsoft.Alpha(Opacity=50);filter:progid:DXImageTransform.Microsoft.Alpha(Opacity=50);}
+label.iPhoneCheckLabelOn{color:white;background:url('/img/iphone-style-checkboxes/on.png?1282083753') no-repeat;text-shadow:0px 0px 2px rgba(0,0,0,0.6);left:0;padding-top:5px;}
+label.iPhoneCheckLabelOn span{padding-left:8px;}
+label.iPhoneCheckLabelOff{color:#8b8b8b;background:url('/img/iphone-style-checkboxes/off.png?1282083753') no-repeat right 0;text-shadow:0px 0px 2px rgba(255,255,255,0.6);text-align:right;right:0;}
+label.iPhoneCheckLabelOff span{padding-right:8px;}
+.iPhoneCheckHandle{display:block;height:27px;cursor:pointer;position:absolute;top:0;left:0;width:0;background:url('/img/iphone-style-checkboxes/slider_left.png?1282083753') no-repeat;padding-left:3px;}
+.iPhoneCheckHandleRight{height:100%;width:100%;padding-right:3px;background:url('/img/iphone-style-checkboxes/slider_right.png?1282083753') no-repeat right 0;}
+.iPhoneCheckHandleCenter{height:100%;width:100%;background:url('/img/iphone-style-checkboxes/slider_center.png?1282083753');}
+
+.jstemplate {
+  display: none;
+}
+#homepageRequest{background:url("/img/line.png") no-repeat;height:90px;padding:35px 0 0;}
+#request{background:url("/img/line.png") no-repeat;height:80px;padding:35px 0 0;}
+#property #request{background:none;padding:5px 0 0;}
+
+.center{text-align:center;}
+
+.monitorToggle { font-style: italic }
+.notifyToggle { font-style: italic

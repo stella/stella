@@ -1,0 +1,92 @@
+{{> _layout/header }}
+
+    <div id="logo">
+      <h1><a href="/">Stella - The Future of Web Monitoring</a></h1>
+    </div>
+
+    <div id="logo-separator"></div>
+
+    {{>_partial/session_messages}}
+
+    <form id="request" action="/checkup" method="post">
+      {{{add_shrimp}}}
+      {{#checkup_uri}}
+      <input id="uri" type="text" name="uri" value="{{checkup_uri}}" />
+      {{/checkup_uri}}
+      {{^checkup_uri}}
+      <input id="uri" type="text" name="uri" class="clearDefault" value="http://yoursite.com/" />
+      {{/checkup_uri}}
+      <button type="submit" class="btn btn-huge btn-inverse cufon" style="margin-top: 6px; margin-left: 6px">CHECK IT <em>!</em></button>
+      <br/><br/>
+    </form>
+
+    <div id="functionality">
+      <div id="headingNotifications" class="cell">
+        <h2>Get Notified!</h2>
+        <p>We tell you when your site is down by <strong>EMAIL, SMS, AND WEBHOOKS</strong>. We monitor thousands of sites and have generated over 150 million checks and counting.</p>
+        <a href="#">Good grief!</a>
+      </div>
+
+      <div id="headingAPI" class="cell cellCenter">
+        <h2>Powerful API</h2>
+        <p>Incorporate our world class monitoring technology into your own scripts and applications. <strong>MANAGE DOWNTIME DYNAMICALLY</strong> using our API callbacks.</p>
+        <a href="/docs">My word!</a>
+      </div>
+
+      <div id="headingMonitoring" class="cell">
+        <h2>Historicals</h2>
+        <p>We check your site using real browsers (WebKit via PhantomJS). That means we <strong>PARSE YOUR JAVASCRIPT AND CSS</strong> and render screenshots.</p>
+        <a href="#">Best know!</a>
+      </div>
+    </div>
+
+    <hr/>
+
+    <div id="about">
+      <span id="runningAWebsite" class="cell"></span>
+      <span id="stellaLoves" class="cell cellCenter">
+        <p><br/></p>
+        {{#bogus}}
+        {{^authenticated}}
+        <button class="btn btn-huge btn-info cufon" href="/monitoring">Learn More <em>!</em></button>
+        {{/authenticated}}
+        {{/bogus}}
+      </span>
+      <span id="stellaIs" class="cell"></span>
+    </div>
+
+    {{#bogus}}
+    <div class="news">
+      <h2><a href="/news" title="Stella News - Conversations with Morton and Tucker" class="black">News from the Assembly Line</a></h2>
+      <a id="newsMore" href="{{config.scheme}}://{{config.site.host}}/news.atom" title="Stella News - Conversations with Morton and Tucker">atom feed</a> -
+      <a href="/news" title="News Archive">archive</a>
+      <hr/>
+      <a href="{{tucker.twitter_uri}}" id="assemblyline">Tucker</a>
+      <div id="latestNews" class="jstemplate">
+        {{{ partialsrc.convo }}}
+      </div>
+      <hr/>
+    </div>
+
+    <div id="follow">
+      <a href="{{tucker.twitter_uri}}" class="tuckerFollow">
+        <img src="/img/news-tucker.png" alt="Tucker" class="mugshotFollow" />
+        <p>Follow Tucker on Twitter</p>
+      </a>
+      <a href="{{morton.twitter_uri}}" class="mortonFollow">
+        <img src="/img/news-morton.png" alt="Morton" class="mugshotFollow" />
+        <p>Follow Morton on Twitter</p>
+      </a>
+    </div>
+    <hr/>
+    {{/bogus}}
+
+{{> _layout/footer }}
+
+<script type="text/javascript">
+$(function() {
+  {{#highlight_button}}
+  $('#request button').hiliteSlow();
+  {{/highlight_button}}
+});
+</script>

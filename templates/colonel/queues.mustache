@@ -1,0 +1,43 @@
+{{>_layout/header}}
+
+{{>_partial/session_messages}}
+
+<div class="span11">
+  <ul class="breadcrumb">
+    <li><h2 class="cufon"><a href="/colonel">Colonel</a> <span class="divider">&gt;</span></h2></li>
+    <li class="active">
+      <h2 class="cufon"><a href="/colonel/queues">Queues</a></h2>
+    </li>
+
+    <div style="float: right; margin-top: 0px" class="">
+      <form method="get" action="/colonel/queues">
+        <input type="text" name="q" class="input-large" id="input01" style="margin-top: 4px" value="{{query}}" placeholder="Find">
+      </form>
+    </div>
+
+  </ul>
+</div>
+
+<div class="span11">
+  <br/>
+  <div class="" style="background-color: #fff; margin-top: -18px; padding: 20px">
+    <p>
+      <a href="?q=montreal">montreal</a> - <a href="?">clear</a>
+    </p>
+    <h3>Notches</h3>
+    <ul>
+    {{#notches}}
+      <li>{{list.key}} ({{list.size}}/{{set.size}})</li>
+    {{/notches}}
+    </ul>
+    <h3>Queues</h3>
+    <ul>
+    {{#queues}}
+      <li>{{list.key}} ({{list.size}}/{{set.size}})</li>
+    {{/queues}}
+    </ul>
+  </div>
+</div>
+
+
+{{>_layout/footer}}

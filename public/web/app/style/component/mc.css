@@ -1,0 +1,32 @@
+/* #mcnav{background:url("/img/line.png") no-repeat top; padding-left: 15px} */
+#property h3 {background:url("/img/lineBroken.png") no-repeat center; margin: 0px; padding: 0px; text-align: center}
+#property .infoPageSubHeader {
+  margin: 30px;
+}
+#mcnav {
+    background: #fff;
+    -moz-border-radius: 10px;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 20px;
+}
+#mcnav h2 a {}
+#mcnav div.info { color: #999; font-style: italic }
+#mcnav div a { color: #999; text-decoration: underline; }
+
+/* Same size as cells on report page 
+#navincidents {font-size:28px;color:#fff;display:block;height:22px;padding:12px 0;text-align:center;width:45px;font-weight: bold}
+*/
+#navincidents {font-size:16px;color:#fff;display:block;height:18px;padding:12px 0;text-align:center;width:45px;font-weight: bold}
+#navincidents.pass {background:url("/img/report-incident-pass-w.png") center no-repeat;}
+#navincidents.fail {background:url("/img/report-incident-fail-w.png") center no-repeat;}
+#navincidents.warn {background:url("/img/report-incident-warn-w.png") center no-repeat;}
+
+#navrt { font-size: 60px; line-height: 60px; font-weight: bold; }
+#navms { font-size: 20px;  line-height: 20px; position:relative;top:32px;}
+#mcnav .mcsummary span { float: right; }
+
+#historicals { margin-left: 20px; display: block}
+#reportUpdated.finePrint{color:#999;display:block;font-size:11px;margin-top: -20px}
+#reportUpdated{clear:left;float: right; padding-right: 20px; margin: 0px}

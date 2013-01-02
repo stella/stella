@@ -1,0 +1,102 @@
+---
+:title: Global Data
+:intro: The global report data is generated from all public data from the sites we monitor. It gives you an a baseline average for how fast web applications are responding. Or, in other words, this data tells you how fast internet websites are right now.
+:endpoints:
+  - :title: Summary
+    :http_method: GET
+    :prototype: /v3/global/summary
+    :public: true
+    :intro: All API access occurs over HTTPS and starts with <tt>/api/v2</tt>. All responses are JSON.
+    :params:
+    :attributes:
+    - :name: :total_hosts
+      :desc: The total number of hosts monitored.
+    - :name: :epoint
+      :desc: The unix time in seconds when the data was generated.
+    - :name: :summaries
+      :desc: Averages for the given time period. See <a href="/docs/api/overview">Overview</a> for a description of the summary content (we call them MetricsPacks).
+    :example: |
+      {"vendorid": "GLOBAL",
+       "total_hosts": 655,
+       "epoint": 1306198883,
+       "summaries":  {
+         "past_1hour": {
+               "stamp": 1306194907.0,
+               "uid": "duration:3600",
+               "n": 147,
+               "rt": 0.355391,
+               "sc": 0.254283,
+               "sr": 0.000294,
+               "fb": 0.084049,
+               "lb": 0.014041,
+               "rqhs": 183,
+               "rqcs": 0,
+               "rshs": 277,
+               "rscs": 11215,
+               "score": 0.0,
+               "errors": 25,
+               "rtsd": 0.113
+          },
+         "past_4hours": {"...same as past 1 hour..."},
+         "past_24hours": {"..."},
+         "past_7days":  {"..."},
+         "past_14days":  {"..."}
+         }
+      }
+  - :title: Metrics
+    :http_method: GET
+    :prototype: /v3/global/metrics
+    :public: true
+    :intro: Data samples broken down by the reporting interval.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    - :name: :interval
+      :desc: The reporting interval in seconds. e.g. A value of 600 means the statistics are generated every 10 minutes.
+    - :name: :metrics
+      :desc: A hash containing the timestamp and response time metrics broken down into component values (in milliseconds). See Overview for more details.
+    :outro: 'A note about the timestamp values: min and max correspond to start time and end time, respectively. The values in the list plus the min value gives you the appropriate timestamp (in seconds).'
+    :example: |
+      {
+        "vendorid": "GLOBAL",
+        "epoint": 1306201597,
+        "duration": 3600,
+        "interval": 600,
+        "metrics": {
+          "stamp": {
+            "max": 1306198200,
+            "min": 1306194600,
+            "values": [
+              0,
+              600,
+              1200,
+              1800,
+              2400,
+              3000,
+              3600
+            ]
+          },
+          "rt": {
+            "max": 0.52645,
+            "min": 0.22469,
+            "values": [
+              0.50476,
+              0.42598,
+              0.22469,
+              0.38786,
+              0.52645,
+              0.25952,
+              0.30784
+            ]
+          },
+          "sc": {"...same fields as rt..."},
+          "fb": {"..."},
+          "lb": {"..."}
+        }
+      }
+

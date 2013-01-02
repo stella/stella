@@ -1,0 +1,24 @@
+pre.example{max-height:100px;}
+div#container{margin-left:auto;margin-right:auto;position:relative;background-color:white;}
+div.line{border-bottom:4px solid #0cc;font-weight:bold;padding:0px;margin:0px;}
+div#docsContent{padding-top:20px;}
+.docTitle{margin-bottom:4px;padding-top:10px;}
+.docSubtext{font-style:italic;margin-bottom:12px;background:#ff0;}
+.params{}
+.options ul li{margin-left:12px;}
+.options ul li .name{font-style:italic; text-decoration: underline}
+#docnav { display:block; float: left; width: 140px; margin-top: 30px; }
+#docnav li { padding-left: 10px }
+#docnav li.selected {
+  font-weight: bold;  padding-top: 5px; padding-bottom: 5px; font-style: italic;
+  padding-left: 10px;
+  background: #3cc;
+  color: white;
+  display: block;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  border-radius: 10px;
+}
+#docnav .selected a { color: #fff;}
+#topicContent {float: left; width: 620px; padding-left: 40px; margin-top: 0px; padding-top: 0px}
+body#docs .contentContainer{margin-left:52px;}

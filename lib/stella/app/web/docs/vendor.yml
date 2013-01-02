@@ -1,0 +1,198 @@
+---
+:title: Vendors
+:intro: Stella keeps track of the hosting vendors for the sites that we monitor. This allows us to collect all of the data for a given vendor.
+:endpoints:
+  - :title: Retrieve all vendors
+    :http_method: GET
+    :prototype: /v3/vendors
+    :public: true
+    :intro: Returns a list of known vendors. (Tucker adds more all the time. Find one missing? Let him know.)
+    :params:
+    :attributes:
+    - :name: vendorid
+      :desc: A unique ID. Use this value to query for more data for this vendor.
+    - :name: regexp
+      :desc: This regular expression is one of the ways we figure out what vendor a particular site belongs to.
+    - :name: name
+      :desc: The name that appears on the site.
+    - :name: interval
+      :desc: "The reporting interval (in seconds). This is how often we generate meterics for the given vendor."
+    :example: |
+      {
+        "count": 31,
+        "vendors": [
+          {
+            "vendorid": "rackspace",
+            "name": "Rackspace",
+            "email": null,
+            "website": "http://rackspace.com/",
+            "location": null,
+            "pubsubping": null,
+            "regexp": "Rackspace Hosting RSPC",
+            "kind": null,
+            "blurb": null,
+            "interval": 600.0,
+            "created": 1291594261,
+            "updated": 1291594261
+          },
+          ...
+        ]
+      }
+
+  - :title: Retrieve a specific Vendor
+    :http_method: GET
+    :prototype: /v3/vendor/VENDORID
+    :public: true
+    :intro: Returns a single vendor.
+    :example: |
+      {
+        "vendorid": "ec2",
+        "name": "Amazon EC2",
+        "email": null,
+        "website": "http://aws.amazon.com/",
+        "location": null,
+        "pubsubping": true,
+        "regexp": "amazon.ec2|ec2.+amazonaws.com",
+        "kind": null,
+        "blurb": null,
+        "interval": 600.0,
+        "created": 1291361020,
+        "updated": 1294042703
+      }
+
+  - :title: Metrics Summary
+    :http_method: GET
+    :prototype: /v3/vendor/VENDORID/summary
+    :public: true
+    :intro: Where VENDORID is the unique identifier for the given vendor.
+    :params:
+    :attributes:
+    - :name: :total_hosts
+      :desc: The total number of hosts monitored.
+    - :name: :epoint
+      :desc: The unix time in seconds when the data was generated.
+    - :name: :summaries
+      :desc: Averages for the given time period. See <a href="/docs/api/overview">Overview</a> for a description of the summary content (we call them MetricsPacks).
+    :example: |
+      {"vendorid": "joyent",
+       "total_hosts": 12,
+       "epoint": 1306198883,
+       "summaries":  {
+         "past_1hour":
+           "stamp": 1306194903.0,
+           "uid": "duration:3900",
+           "n": 119,
+           "rt": 0.466434,
+           "sc": 0.353287,
+           "sr": 0.000316,
+           "fb": 0.104136,
+           "lb": 0.005005,
+           "rqhs": 185,
+           "rqcs": 0,
+           "rshs": 277,
+           "rscs": 13584,
+           "score": 0.0,
+           "errors": 23,
+           "rtsd": 0.191
+         },
+         "past_4hours": {"...same as past 1 hour..."},
+         "past_24hours": {"..."},
+         "past_7days":  {"..."},
+         "past_14days":  {"..."}
+         }
+      }
+  - :title: Metrics
+    :http_method: GET
+    :prototype: /v3/vendor/VENDORID/metrics
+    :public: true
+    :intro: Data samples broken down by the reporting interval.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    - :name: :interval
+      :desc: The reporting interval in seconds. e.g. A value of 600 means the statistics are generated every 10 minutes.
+    - :name: :metrics
+      :desc: A hash containing the timestamp and response time metrics broken down into component values (in seconds). See Overview for more details.
+    :outro: 'A note about the timestamp values: min and max correspond to start time and end time, respectively. The values in the list plus the min value gives you the appropriate timestamp (in seconds).'
+    :example: |
+      {
+        "vendorid": "dreamhost",
+        "epoint": 1306201597,
+        "duration": 3600,
+        "interval": 600,
+        "metrics": {
+          "stamp": {
+            "max": 1306198200,
+            "min": 1306194600,
+            "values": [
+              0,
+              600,
+              1200,
+              1800,
+              2400,
+              3000,
+              3600
+            ]
+          },
+          "rt": {
+            "max": 0.52645,
+            "min": 0.22469,
+            "values": [
+              0.50476,
+              0.42598,
+              0.22469,
+              0.38786,
+              0.52645,
+              0.25952,
+              0.30784
+            ]
+          },
+          "sc": {"...same fields as rt..."},
+          "fb": {"..."},
+          "lb": {"..."}
+        }
+      }
+  - :title: Incidents
+    :http_method: GET
+    :prototype: /v3/vendor/VENDORID/incidents
+    :public: true
+    :intro: Returns the incident data for all hosts associate to this vendor.
+    :params:
+    - :name: duration
+      :desc: 'the length of time (in seconds) to return data for. Default: 4 hours.'
+      :mandatory: optional
+    - :name: epoint
+      :desc: 'the end point in time (in unix time) to return metrics for. e.g. epoint - duration = start time. Default: the time the request is made.'
+      :mandatory: optional
+    :attributes:
+    :example: |
+      {
+        "vendorid": "heroku",
+        "epoint": 1306210858,
+        "duration": 3600,
+        "incidents": [
+          {
+            "kind": "exception",
+            "msg": "500 error",
+            "runid": "0a21e0feadd2e01612651afb18f42e2129ce6738",
+            "planid": "82d7e5025edcaceba2c0673b560e48807044fcee",
+            "hostid": "bff.heroku.com",
+            "status": "verified",
+            "viewed": null,
+            "interval": 300,
+            "detected_count": 82,
+            "detected_at": 1306174526,
+            "verified_at": 1306174808,
+            "notified_at": 1306174818,
+            "resolved_at": 1306175401,
+            "created": 1306174526,
+            "updated": 1306198803
+          }
+        ]
+      }
+

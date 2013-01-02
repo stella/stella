@@ -1,0 +1,49 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  <div class="span7 offset2">
+    
+    <form class="well form-horizontal" method="POST">
+      <fieldset>
+        <legend><h2><span class="cufon">Sign Up</span> &nbsp;
+          {{#host}}<small class="cufon">Start monitoring <strong>{{host.hostname}}</strong> for free <em>!</em></small>{{/host}}
+          {{^host}}<small class="cufon">Create your account at no cost <em>!</em></small>{{/host}}
+        </h2></legend>
+        <div class="control-group">
+          <label class="control-label" for="input01">Email</label>
+          <div class="controls">
+            <div class="input-prepend">
+              <span class="add-on"><i class="icon-envelope"></i></span><input type="text" name="email" class="input-large selectable" id="input01" value="{{email}}" placeholder="Your Email">
+            </div>
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="control-label" for="input03">Password</label>
+          <div class="controls">
+            <input type="password" name="password" class="input-xlarge span3 selectable" id="input03"  placeholder="Password">
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="control-label" for="input04">Confirm Password</label>
+          <div class="controls">
+            <input type="password" name="password2" class="input-xlarge span3 selectable" id="input04"  placeholder="Confirm">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-inverse">Create Account</button>
+          <a href="/" class="btn">Cancel</a>
+        </div>
+        <div class="control-group">
+          <div class="controls">
+            <p class="help-block"></p>
+          </div>
+        </div>
+      </fieldset>
+      
+      <p>If you have an account, <a href="/login"><em>sign in</em></a>.</p>
+    </form>
+    
+  </div>
+
+{{>_layout/footer}}

@@ -1,0 +1,49 @@
+
+
+
+#host .page {
+  background: #fff url('/t/9a233e85d28b1321f56c6382485356f6e4dcd890-260x180.png') no-repeat !important;
+  width: 640px;
+  height: 180px;
+  border: 2px solid #0cc;
+}
+
+#host .page  .time {
+  color: #999;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+#pages .title {
+font-size: 16px;
+margin: 4px;
+padding: 4px;
+margin-bottom: 20px;
+background-color: #f9f9f9;
+}
+
+#pages .rt {
+  float: right;
+}
+
+#pages .ms {
+  font-size: 18px;
+  font-weight: bolder;
+}
+
+#pages .units {
+  font-size: 14px;
+}
+
+#pages a.tag:hover {
+  text-decoration: none;
+}
+
+#host #screenshots .thumbnail {
+  border: 1px solid #ddd;
+}
+#host .thumbnail .date {
+  text-align: center;
+  font-style: italic;
+  color: #999;
+}

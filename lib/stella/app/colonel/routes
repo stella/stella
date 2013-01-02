@@ -1,0 +1,15 @@
+# https://www.blamestella.com/colonel/
+
+##########################################################################  COLONEL
+GET   /                                               Stella::App::Colonel#index
+
+GET   /debug                                          Stella::App::Colonel#debug
+
+GET   /customers                                      Stella::App::Colonel#customers
+GET   /hosts                                          Stella::App::Colonel#hosts
+
+GET   /redump                                         Stella::App::Colonel#redump
+GET   /redump/:db                                     Stella::App::Colonel#redump
+GET   /redump/:db/:key                                Stella::App::Colonel#redump
+
+GET   /queues                                         Stella::App::Colonel#queues

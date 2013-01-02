@@ -1,0 +1,181 @@
+{{>_layout/header}}
+
+  {{>_partial/session_messages}}
+
+  <!--
+  <div class="span11">
+    <ul class="breadcrumb">
+      <li class="active"><a href="/account">Account</a></li>
+    </ul>
+  </div>
+  <div class="span11">
+    <div class="line"></div>
+  </div>
+  -->
+
+  <div class="span10 offset1">
+    <div class="tabbable tabs-left">
+      <ul  id="pageTabs" class="nav nav-tabs">
+        {{#tabs}}
+        <li {{#active}}class="active"{{/active}}><a href="#{{tab}}" data-toggle="tab">{{text}}</a></li>
+        {{/tabs}}
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane active" id="profile">
+          <form class="well form-horizontal">
+            <fieldset>
+              <legend><h2 class="cufon">Your Account - {{cust.email}}</h2></legend>
+              <div class="control-group">
+                <label class="control-label" for="input01">Name</label>
+                <div class="controls">
+                  <input type="text" class="input-large selectable" id="input01" value="{{cust.name}}" placeholder="Your Name">
+                  <p class="help-block">e.g. Morton Blamey</p>
+                </div>
+              </div>
+              <div class="control-group">
+                <label class="control-label" for="input03">Location</label>
+                <div class="controls">
+                  <input type="text" class="input-xlarge span3 selectable" id="input03" value="{{cust.location}}" placeholder="City">
+                </div>
+              </div>
+              <div class="control-group">
+                <label class="control-label" for="input04">Company</label>
+                <div class="controls">
+                  <input type="text" class="input-xlarge span3 selectable" id="input04" value="{{cust.company}}" placeholder="Your Fine Establishment">
+                </div>
+              </div>
+              <div class="control-group">
+                <label class="control-label" for="input05">Website</label>
+                <div class="controls">
+                  <input type="text" class="input-xlarge span3 selectable" id="input05" value="{{cust.website}}" placeholder="http://yourcompany.com/">
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save changes</button>
+                <button class="btn">Cancel</button>
+              </div>
+              <div class="control-group">
+                <div class="controls">
+                  <p class="help-block">Need to change your email address? Just ask Tucker.</p>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+        </div>
+
+        <div class="tab-pane" id="api">
+          <div class="row well static">
+            <div class="span8">
+              <h2 class="cufon">API Credentials</h2>
+              <div class="line"></div>
+              <div class="row control-group">
+                <div class="span2 control-label">Customer ID</div>
+                <div class="span4">
+                  <span><strong>{{cust.email}}</strong></span>
+                  <p class="help-block">e.g. STELLA_CUSTID=[your_apikey]</p>
+                </div>
+              </div>
+              <div class="row control-group">
+                <div class="span2 control-label">API Key</div>
+                <div class="span4">
+                  <span><strong>{{cust.apikey}}</strong></span>
+                  <p class="help-block">e.g. STELLA_APIKEY=[your_apikey]</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="sites">
+          <div class="row well static">
+          <div class="span8">
+            <h2 class="cufon">Your Sites</h2>
+            <div class="line"></div>
+            <table class="table table-condensed table-striped">
+              <thead>
+                <tr>
+                  <th>&nbsp;</th>
+                  <th>&nbsp;</th>
+                  <th>&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#hosts}}
+                <tr>
+                  <td>{{hostname}}</td>
+                  <td>{{#hidden}}<em>hidden</em>{{/hidden}}</td>
+                  <td>
+                    <!--<a href="/site/{{hostid}}/hide" class="machine-hide"><i class="icon icon-pause"></i></a>-->
+                    {{^hidden}}
+                    <a href="/site/{{hostid}}/hide" class="host-hide"><i class="icon icon-remove-sign"></i></a>
+                    {{/hidden}}
+                    {{#hidden}}
+                    <a href="/site/{{hostid}}/show" class="host-show"><i class="icon icon-plus-sign"></i></a>
+                    {{/hidden}}
+                  </td>
+                </tr>
+                {{/hosts}}
+              </tbody>
+            </table>
+          </div>
+          </div>
+        </div>
+
+        {{#colonels_only}}
+        <div class="tab-pane" id="machines">
+          <div class="row well static">
+          <div class="span8">
+            <h2 class="cufon">Remote Machines</h2>
+            <div class="line"></div>
+            <table class="table table-condensed table-striped">
+              <thead>
+                <tr>
+                  <th>hostname</th>
+                  <th>ip address</th>
+                  <th>region</th>
+                  <th>nation</th>
+                  <th>city</th>
+                  <th>area</th>
+                  <th>status</th>
+                  <th>&nbsp;</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#cust.remote_machines}}
+                <tr>
+                  <td>{{hostname}}</td>
+                  <td>{{ipaddress}}</td>
+                  <td>{{region}}</td>
+                  <td>{{nation}}</td>
+                  <td>{{area}}</td>
+                  <td>{{city}}</td>
+                  <td>{{status}}</td>
+                  <td>
+                    <!--<a href="/site/{{hostid}}/hide" class="machine-hide"><i class="icon icon-pause"></i></a>-->
+                    <a href="/machine/{{machineid}}/hide" class="machine-hide"><i class="icon icon-remove-sign"></i></a>
+                  </td>
+                </tr>
+                {{/cust.remote_machines}}
+              </tbody>
+            </table>
+          </div>
+          </div>
+        </div>
+        {{/colonels_only}}
+
+      </div>
+    </div>
+
+  </div>
+
+
+  {{#selected_tabid}}
+  <script type="text/javascript">
+    $(function() {
+      $('#pageTabs li a[href$="#{{to_s}}"]').tab('show');
+    });
+  </script>
+  {{/selected_tabid}}
+
+{{>_layout/footer}}

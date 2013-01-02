@@ -1,0 +1,48 @@
+{{>_layout/header}}
+
+<div class="infoPageEmptyHeader">
+  <h3 class="cufon" style="margin-bottom: 0px">Sorry, that checkup has expired!</h3>
+</div>
+
+<div class="infoPageSubHeader">
+  {{#cust.paying?}}
+  <em>If you would like to keep checkups for longer, just ask Tucker.</em>
+  {{/cust.paying?}}
+
+  {{^cust.paying?}}
+  {{#show_plan_message}}
+  <em>Monitoring details are available for only a few hours with a free account.</em>
+  {{/show_plan_message}}
+  {{#show_generic_message}}
+  <em>Checkups created with a free account expire after 7 days.</em>
+  {{/show_generic_message}}
+  <div style="margin-top: 20px; padding-left: 40px; padding-top: 30px; width: 340px" class="dialogBox">
+    <h4 class="cufon" style="margin: 0px">Can we offer you a paid plan?</h4>
+    {{#is_anonymous}}
+    <p><a class="monitorButton button" href="/signup"><span>Signup today<em>!</em></span></a></p>
+    {{/is_anonymous}}
+    {{#sess.authorized}}
+    <p><a class="monitorButton button" href="/upgrade"><span>Upgrade today<em>!</em></span></a></p>
+    {{/sess.authorized}}
+
+    <p><em>As a paying customer...</em></p>
+    <ul>
+      <li class="bullet">You keep your checkups for as long as you like<em>!</em></li>
+      <li class="bullet">You can run as many as you like<em>!</em></li>
+      <li class="bullet">Your monitors run up to every 5 minutes<em>!</em></li>
+      <li class="bullet">You get 24 hours of monitoring details<em>!</em></li>
+      <li class="bullet">And you'll put a smile on Tucker's face<em>!</em></li>
+    </ul>
+  </div>
+  {{/cust.paying?}}
+</div>
+
+<div class="infoPageLeft">
+</div>
+
+
+<div class="infoPageRight">
+
+</div>
+
+{{>_layout/footer}}

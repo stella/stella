@@ -1,0 +1,174 @@
+---
+:title: Customers
+:intro: <strong>Note that it's only possible to fetch data for the account your authorized for.</strong>
+:endpoints:
+  - :title: Retrieve a customer
+    :http_method: GET
+    :prototype: /v3/customer/CUSTID
+    :intro: Where CUSTID is the account username.
+    :example: |
+      {
+        "custid": "tucker",
+        "email": "tucker@blamestella.com",
+        "fname": "Tucker",
+        "website": "https://www.blamestella.com",
+        "company": "Blamey & Stella Information Co Ltd",
+        "location": "Wisconsin",
+        "role": "customer",
+        "created": 1286916236,
+        "updated": 1306207305
+      }
+  - :title: Recent checkups
+    :prototype: GET /v3/customer/CUSTID/checkups
+    :intro: Where CUSTID is the account username.
+    :params:
+    - :name: duration
+      :desc: 'the amount of time (in seconds) to fetch checkups for. Default: 48 hours.'
+      :mandatory: optional
+    :example: |
+     {
+       "custid": "tucker",
+       "duration": 172800,
+       "checkups": [
+         {
+           "runid": "a5d561efd64f13661ee6da9d62eebe3d2afb1ca4",
+           "...see Checkups docs for the structure..."
+         },
+         ...
+       ]
+     }
+  - :title: Recent hosts
+    :prototype: GET /v3/customer/CUSTID/hosts
+    :intro: Stella keeps track of the hosts you run checkups for. This API call returns the recent ones.
+    :params:
+    - :name: duration
+      :desc: 'the amount of time (in seconds) to fetch hosts for. Default: 48 hours.'
+      :mandatory: optional
+    :example: |
+      {
+        "custid": "tucker",
+        "duration": 172800,
+        "hosts": [
+          {
+            "hostid": "www.blamestella.com",
+            "...see Hosts docs for the structure..."
+          },
+          ...
+        ]
+      }
+  - :title: Authorized Hosts
+    :prototype: GET /v3/customer/CUSTID/authorized_hosts
+    :intro: Returns the list of hosts that you have authorized.
+    :params:
+    :example: |
+      {
+        "custid": "tucker",
+        "duration": 172800,
+        "hosts": [
+          {
+            "hostid": "www.blamestella.com",
+            "...see Hosts docs for the structure..."
+          },
+          ...
+        ]
+      }
+  - :title: Recent testplans
+    :prototype: GET /v3/customer/CUSTID/testplans
+    :intro: Stella keeps track of the testplans you run checkups for. This API call returns the recent ones.
+    :params:
+    - :name: duration
+      :desc: 'the amount of time (in seconds) to fetch checkups for. Default: 48 hours.'
+      :mandatory: optional
+    :example: |
+      {
+        "custid": "tucker",
+        "duration": 172800,
+        "hosts": [
+          {
+            "planid": "931e1a312871eade0919cae027fdfe5f4b27757c",
+            "...see Testplan docs for the structure..."
+          },
+          ...
+        ]
+      }
+  - :title: Recent Incidents
+    :prototype: GET /v3/customer/CUSTID/incidents
+    :intro: Recent incidents from any of the monitors you have enabled.
+    :params:
+    - :name: duration
+      :desc: 'the amount of time (in seconds) to fetch checkups for. Default: 48 hours.'
+      :mandatory: optional
+    :example: |
+      {
+        "custid": "tucker",
+        "duration": 86000,
+        "incidents": [
+          {
+            "kind": "timeout",
+            "msg": "Stella::TimeoutError (20)",
+            "runid": "31766251dfd623669066124781bf543f7088f4ee",
+            "planid": "0ff678b893adab9bb9ae8ef6f5a41618e9d95d34",
+            "hostid": "solutious.com",
+            "status": "resolved",
+            "interval": 300,
+            "detected_count": 2,
+            "detected_at": 1306165507,
+            "verified_at": 1306165829,
+            "notified_at": 1306165838,
+            "resolved_at": 1306166064,
+            "created": 1306165507,
+            "updated": 1306166064
+          }
+        ]
+      }
+  - :title: Monitors
+    :prototype: GET /v3/customer/CUSTID/monitors
+    :intro: All of your monitors
+    :params:
+    - :name: duration
+      :desc: 'the amount of time (in seconds) to fetch checkups for. Default: 48 hours.'
+      :mandatory: optional
+    :example: |
+      {
+        "custid": "tucker",
+        "duration": 86400,
+        "monitors": [
+          {
+            "planid": "ca9c15e687ff29efa1ccc10344d1ebfd1ac3cc46",
+            "custid": "delano",
+            "hostid": "stellaaahhhh.com",
+            "privacy": null,
+            "enabled": true,
+            "interval": 1800,
+            "created": 1288736305,
+            "updated": 1294653822
+          },
+          '...'
+        ]
+      }
+  - :title: Subdomains
+    :prototype: GET /v3/customer/CUSTID/monitors
+    :intro: All of your subdomains for your authorized hosts.
+    :params:
+    :example: |
+      {
+        "custid": "delano",
+        "subdomains": [
+          {
+            "subdomid": "status",
+            "custid": "delano",
+            "hostid": "www.blamestella.com",
+            "homepage": "www.blamestella.com",
+            "created": 1302204830,
+            "updated": 1302204830
+          },
+          {
+            "subdomid": "bff",
+            "custid": "delano",
+            "hostid": "bff.heroku.com",
+            "homepage": "bff.blamestella.com",
+            "created": 1302379305,
+            "updated": 1302379305
+          }
+        ]
+      }

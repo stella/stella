@@ -1,0 +1,9 @@
+---
+:title: API Overview
+:intro:
+:endpoints:
+  - :title: Authentication
+    :prototype: "*"
+    :curl_args: "-u 'USERNAME:API_TOKEN'"
+    :intro: "We use HTTP Basic Authentication. The username is the same as your Stella account login. The password is the API KEY which you can find on your account page (the API is in private beta so if you don't see your key, let us know and we'll enable it for you)."
+    :outro: "Note that all requests that need authentication should include the Authentication header. Unauthenticated requests will return 404 to prevent any sort of private information leakage."

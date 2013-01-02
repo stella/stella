@@ -1,0 +1,145 @@
+{{>_layout/header}}
+
+{{>_partial/session_messages}}
+
+<div class="span11">
+  <ul class="breadcrumb">
+    <li><h2 class="cufon"><a href="/colonel">Colonel</a> <span class="divider">&gt;</span></h2></li>
+    <li class="active">
+      <h2 class="cufon"><a href="/colonel/customers">Customers</a></h2>
+    </li>
+
+    <div style="float: right; margin-top: 0px" class="">
+      <form method="get">
+        <input type="text" name="q" class="input-large" id="input01" style="margin-top: 4px" value="{{req.params.poop}}" placeholder="Find 1 in {{customer_count}}">
+      </form>
+      <!--<span class="cufon" style="font-size: 36px; font-weight: bold; padding-top: 2px"></span>-->
+    </div>
+  </ul>
+</div>
+
+  {{^thiscust}}
+  <div class="span11">
+    <ul id="pageTabs" class="nav nav-tabs">
+      <li class="active">
+        <a href="#recent" data-toggle="tab"><h4 class="cufon">New Signups ({{recent_customers.size}})</h4></a>
+      </li>
+      <li class="">
+        <a href="#feedback" data-toggle="tab"><h4 class="cufon">Feedback ({{feedbacks.size}})</h4></a>
+      </li>
+    </ul>
+    <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+      <div id="recent" class=" tab-pane active in">
+        <ul>
+        {{#recent_customers}}
+          <li><a href="?q={{email}}">{{email}}</a>/{{nickname}} <em class="light">{{created_at.to_natural}}</em></li>
+        {{/recent_customers}}
+        </ul>
+      </div>
+      <div id="feedback" class=" tab-pane in">
+        <ul>
+        {{#feedbacks}}
+          <li>
+            <a href="?q={{customer.email}}">{{customer.email}}</a>: <strong>{{message}}</strong> {{replied_at}}
+            {{#replied_at}}<em class="light">{{replied_at.to_natural}}</em>{{/replied_at}}
+            {{^replied_at}}<em class="light">{{created_at.to_natural}}</em> <a href="/colonel/feedback/{{id}}">reply</a>{{/replied_at}}
+          </li>
+        {{/feedbacks}}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {{/thiscust}}
+  {{#thiscust}}
+  <div class="span11">
+    <ul id="pageTabs" class="nav nav-tabs">
+      <li class="active">
+        <a href="#profile" data-toggle="tab"><h4 class="cufon">Profile</h4></a>
+      </li>
+      {{#host.monitored}}
+      <li>
+        <a href="#recent" data-toggle="tab"><h4 class="cufon">Recent Checks <span class="badge2">({{incident_count}})</span></h4></a>
+      </li>
+      <li>
+        <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
+      </li>
+      {{/host.monitored}}
+      <li>
+        <a href="#feedback" data-toggle="tab"><h4 class="cufon">Feedback ({{feedbacks.size}})</h4></a>
+      </li>
+      <li>
+        <a href="#dump" data-toggle="tab"><h4 class="cufon">Dump</h4></a>
+      </li>
+    </ul>
+
+    <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+      <div id="profile" class=" tab-pane active in">
+          <h3>{{thiscust.email}} - {{thiscust.created_at.to_natural}}</h3>
+          <br/>
+          {{#has_sites}}
+          <p><em>They are monitoring <strong>{{their_monitored_count}} of {{their_sites_count}}</strong> sites</em>.</p>
+          {{/has_sites}}
+          <ul class="thumbnails">
+            {{#their_sites}}
+            <li class="span3">
+              <div class="thumbnail {{^monitored}}notmonitored{{/monitored}}">
+                <a href="/site/{{hostid}}" title="{{hostname}} @ {{screenshot.age}}">
+                  <div class="hostname">{{shortname}}</div>
+                  {{#screenshot.thumbnail}}
+                  <img src="/t/{{screenshot.thumbnail}}" alt="{{hostname}} @ {{screenshot.age}}">
+                  {{/screenshot.thumbnail}}
+                  {{^screenshot.thumbnail}}
+                  <img src="/img/thumbnail-host.png" alt="Generating thumbnail...">
+                  {{/screenshot.thumbnail}}
+                </a>
+                <div class="btn-group">
+                  {{#monitored}}
+                    <button class="btn dropdown-toggle" data-toggle="dropdown">Monitoring Settings <span class="caret"></span></button>
+                    <ul class="dropdown-menu">
+                      <li><a href="/site/{{hostname}}/settings"><i class="icon-wrench"></i> Monitor &amp; Notification Settings</a></li>
+                      <li><a href="/site/{{hostid}}/screenshot" class="host-stop"><i class="icon-eye-open"></i> Update screenshot</a></li>
+                      {{#bogus}}
+                      <li><a href="/site/{{hostname}}/settings"><i class="icon-envelope"></i> </a></li>
+                      <li class="divider"></li>
+                      <li><a href="/site/{{hostid}}/upgrade" class="host-upgrade"><i class="icon-asterisk"></i> About our premium plan ($15/month)</a></li>
+                      {{/bogus}}
+                      <li class="divider"></li>
+                      <li class=""><a href="/site/{{hostid}}/stop" class="host-stop"><i class="icon-stop"></i> Stop Monitoring</a></li>
+                    </ul>
+                  {{/monitored}}
+                </div>
+              </div>
+            </li>
+            {{/their_sites}}
+            {{^their_sites}}
+            <div class="span6"><h4><em>They have no hosts.</em></h4></div>
+            {{/their_sites}}
+          </ul>
+
+      </div>
+
+      <div id="feedback" class=" tab-pane in">
+        <ul>
+        {{#feedbacks}}
+          <li>
+            <a href="?q={{customer.email}}">{{customer.email}}</a>: <strong>{{message}}</strong> {{replied_at}}
+            {{#replied_at}}<em class="light">{{replied_at.to_natural}}</em>{{/replied_at}}
+            {{^replied_at}}<em class="light">{{created_at.to_natural}}</em> <a href="/colonel/feedback/{{id}}">reply</a>{{/replied_at}}
+          </li>
+        {{/feedbacks}}
+        </ul>
+      </div>
+
+      <div id="dump" class=" tab-pane in">
+        <textarea class="span10" rows="30">{{thiscust.to_yaml}}</textarea>
+      </div>
+
+    </div>
+
+
+  </div>
+
+{{/thiscust}}
+
+{{>_layout/footer}}

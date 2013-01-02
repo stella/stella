@@ -1,0 +1,12 @@
+<!--<div class="row alert alert-info">{{to_s}}</div>-->
+<script type="text/javascript">
+  {{#messages.info}}
+  alertify.log( "{{to_s}}" ); {{! https://github.com/fabien-d/alertify.js }}
+  {{/messages.info}}
+</script>
+
+{{#messages.error}}
+<div class="row alert alert-error">{{to_s}}</div>
+{{/messages.error}}
+
+<div class="row alert alert-info center">We launched our new site for the New Year! The old one is still around at <a href="http://old.blamestella.com">old.blamestella.com</a>.</div>

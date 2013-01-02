@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!--
+
+            (        )   (                  (        )          (
+            )\ )  ( /(   )\ )         *   ) )\ )  ( /(          )\ )
+           (()/(  )\()) (()/(    (  ` )  /((()/(  )\())     (  (()/(
+            /(_))((_)\   /(_))   )\  ( )(_))/(_))((_)\      )\  /(_))
+           (_))    ((_) (_))  _ ((_)(_(_())(_))    ((_)  _ ((_)(_))
+           / __|  / _ \ | |  | | | ||_   _||_ _|  / _ \ | | | |/ __|
+           \__ \ | (_) || |__| |_| |  | |   | |  | (_) || |_| |\__ \
+           |___/  \___/ |____|\___/   |_|  |___|  \___/  \___/ |___/
+
+  -->
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>{{title}} - {{title_subtext}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{description}}">
+    <meta name="keywords" content="{{keywords}}">
+
+    <link href="/etc/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/etc/alertify.css" rel="stylesheet">
+    <link href="/app/style/common.css?bs3" media="screen" rel="Stylesheet" type="text/css">
+
+    {{#css}}
+    <link href="{{to_s}}" media="screen" rel="Stylesheet" type="text/css" />
+    {{/css}}
+
+    <style type="text/css">
+      {{#with_navbar}}
+      .navbar { background: #eee url("/img/background.png") !important; }
+      {{/with_navbar}}
+    </style>
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <!-- favicon and touch icons -->
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="apple-touch-icon-precomposed" href="/img/ios.png" />
+    <!--
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="../assets/ico/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="../assets/ico/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="../assets/ico/apple-touch-icon-57-precomposed.png">
+    -->
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/jquery-ui.min.js"></script>
+    <!-- <script src="/etc/jquery/jquery-1.8.min.js"></script> -->
+    <script src="/etc/alertify.min.js"></script>
+
+  </head>
+
+  <body id="{{body_class}}">
+    <div class="container navbar {{#with_navbar}}navbar-fixed-top{{/with_navbar}}">
+      <div class="navbar-inner">
+        <div class="container navbar-line">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          {{#with_navbar}}
+          <a href="/" class="brand" title="The Future of Web Monitoring">Stella</a>
+          {{/with_navbar}}
+          {{#authenticated}}
+          <div class="btn-group pull-right">
+            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+              <img src="{{gravatar_uri}}?s=18&amp;r=g" class="avatar"/>
+              {{cust.email}}
+              <span class="caret"></span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a href="/account">Account</a></li>
+              <li><a href="/account/billing">Billing (<em>${{monthly_bill}}/month</em>)</a></li>
+              <li><a href="/docs">API Docs</a></li>
+              {{#colonels_only}}
+              <li class="divider"></li>
+              <li class=""><a href="/colonel">Colonel</a></li>
+              {{/colonels_only}}
+              <li class="divider"></li>
+              <li><a href="/logout">Sign Out</a></li>
+            </ul>
+          </div>
+          <ul class="nav nav-pills pull-right">
+            <li class="dropdown active">
+              <a class="dropdown-toggle" data-toggle="dropdown" href="#">Your Sites ({{your_monitored_count}})<b class="caret"></b></a>
+              <ul class="dropdown-menu">
+                {{#your_sites}}
+                <li class="{{#bogus}}active{{/bogus}} {{^monitored}}not{{/monitored}}monitored"><a href="/site/{{hostname}}">{{hostname}}</a></li>
+                {{/your_sites}}
+              </ul>
+            </li>
+            {{#bogus}}
+            <li class="dropdown">
+              <a class="dropdown-toggle" data-toggle="dropdown" href="#">Navigation <b class="caret"></b></a>
+              <ul class="dropdown-menu">
+                <li class=""><a href="#navs">Nav, tabs, pills</a></li>
+                <li class=""><a href="#navbar">Navbar</a></li>
+                <li><a href="#breadcrumbs">Breadcrumbs</a></li>
+                <li><a href="#pagination">Pagination</a></li>
+              </ul>
+            </li>
+            <li><a href="#misc">Miscellaneous</a></li>
+            {{/bogus}}
+          </ul>
+          {{/authenticated}}
+          {{^authenticated}}
+          <div id="nav-hideable">
+            <div class="btn-group pull-right">
+              <a href="/login" class="btn btn-large cufon" id="toggle-signin">Sign In</a>
+            </div>
+            <ul class="nav pull-right">
+              {{#topnav}}
+                <li><a href="{{uri}}" class="{{css}}">{{{text}}}</a></li>
+              {{/topnav}}
+            </ul>
+          </div>
+          <form id="form-signin" class="form-inline hidden pull-right" method="post" action="/login">
+            <div class="input-prepend">
+              <span class="add-on"><i class="icon-envelope"></i></span><input id="input-email" name="email" type="text" class="input" placeholder="Email">
+            </div>
+            <input type="password" name="password" class="input-small" placeholder="Password">
+            <button type="submit" class="btn btn-large cufon btn-inverse">Sign in</button>
+          </form>
+          {{/authenticated}}
+        </div>
+      </div>
+    </div>
+
+    {{#with_navbar}}
+    <hr class="reset">
+    {{/with_navbar}}
+
+    <div class="container">
+      {{#with_navbar}}
+      <span id="{{hello_style}}"></span>
+      {{/with_navbar}}

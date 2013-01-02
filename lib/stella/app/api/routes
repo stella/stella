@@ -1,0 +1,26 @@
+
+##########################################################################  CORE
+GET   /v3/status                               Stella::App::API::Core#status
+GET   /v3/authtest                             Stella::App::API::Core#authtest
+POST  /v3/status                               Stella::App::API::Core#status
+POST  /v3/authtest                             Stella::App::API::Core#authtest
+
+
+##########################################################################  CHECKUPS
+POST  /v3/checkup                              Stella::App::API::Checkup#run
+GET   /v3/checkup/:checkid                     Stella::App::API::Checkup#get
+GET   /v3/checkup/:checkid/status              Stella::App::API::Checkup#status
+
+
+##########################################################################  WORKERS
+POST  /v3/worker/register                      Stella::App::API::Worker#register
+POST  /v3/worker/deregister                    Stella::App::API::Worker#deregister
+POST  /v3/worker/pull                          Stella::App::API::Worker#pull
+POST  /v3/worker/push                          Stella::App::API::Worker#push
+
+GET   /v3/worker/:wid                          Stella::App::API::Worker#info
+
+GET   /v3/checkup/:checkid                     Stella::App::API::Checkup#get
+
+GET   /404                                     Stella::App::API::Core.not_found
+GET   /500                                     Stella::App::API::Core.server_error

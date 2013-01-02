@@ -1,0 +1,8 @@
+---
+:MAJOR: 3
+:MINOR: 1
+:PATCH: 0
+:BUILD: '005'
+:OWNER: delano
+:STAMP: 1357090801
+:STORY: Stella::Host#destroy! and /site/:hostid/destroy

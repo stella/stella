@@ -1,0 +1,55 @@
+      <footer>
+          <a name="feedback"></a>
+          <div id="footer" class="dotted"> 
+            <div id="sitenav">
+              <!--<a href="{{baseuri}}/report" title="Status page for all monitored sites - Stella">Global Report</a>-->
+              <!--<a href="{{baseuri}}/docs" title="API Documentation">API</a>-->
+              <a href="{{baseuri}}/info/company" title="About the Blamey &amp; Stella Information Co Ltd">About</a>
+              <a href="{{baseuri}}/docs">API</a> 
+              <a href="{{baseuri}}/info/terms">Terms of Use</a> 
+              <a href="{{baseuri}}/info/refund">Refund Policy</a> 
+              <a href="{{baseuri}}/info/privacy">Privacy Policy</a>
+              <!--<a href="http://status.blamestella.com/" title="Status page for blamestella.com - Stella">Status</a>-->
+            </div>
+            <a href="https://www.blamestella.com/info/company" class="big">Blamey &amp; Stella Information Co</a>.
+            <span class="stellaTagline">The Future of Web Monitoring.</span>
+            <span class="copyright">Copyright 2008-{{current_time.year}}.</span>
+          </div>
+        
+      </footer>
+
+    </div><!--/container-->
+    
+    <script src="/etc/bootstrap/bootstrap.min.js"></script>
+    <script src="/etc/date.js" type="text/javascript"></script> 
+    <script src="/etc/cufon/cufon-yui.js" type="text/javascript"></script>
+    <script src="/etc/cufon/officina.font.js" type="text/javascript"></script>
+    <script type="text/javascript">
+    {{#jsvars}}
+      var {{name}} = {{{value}}};
+    {{/jsvars}}
+    </script>
+    <script src="/app/common.js" type="text/javascript"></script>
+    {{#js}}
+    <script src="{{to_s}}" type="text/javascript"></script>
+    {{/js}}
+    
+    {{#is_production}}
+    <script type="text/javascript"> 
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-23142033-1']);
+      _gaq.push(['_trackPageview']);
+      _gaq.push(['_trackPageLoadTime']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+    </script>
+    <script type="text/javascript"> 
+      Cufon.refresh()
+    </script>
+    {{/is_production}}
+  </body>
+</html>

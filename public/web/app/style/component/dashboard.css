@@ -1,0 +1,89 @@
+
+#dashboard .stats  li {
+  text-align: right;
+  margin-bottom: 0px;
+}
+
+#dashboard .stats li.advice {
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-style: italic;
+}
+
+
+#dashboard .stats li.rt .value {
+font-size: 36px;
+font-weight: bold;
+}
+
+#dashboard .stats li.rt {
+  margin-bottom: 0px;
+}
+
+#dashboard .stats li.rt .suffix {
+color: #00cccc;
+font-size: 20px;
+font-style: italic;
+font-weight: normal;
+}
+
+#dashboard .stats ul {
+  list-style: none;
+}
+
+#dashboard .stats  .value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#dashboard .stats  .time {
+  color: #999;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+#dashboard .stats  .description {
+color: #999;
+font-size: 12px;
+text-transform: uppercase;
+}
+
+#dashboard .stats img {
+  border: 1px solid #ccc;
+}
+
+#dashboard #advice {
+font-family: Georgia;
+font-size: 26px;
+line-height: 36px;
+margin: 0 0 30px;
+text-align: center;
+}
+
+#checkups p .divider {
+  color: #aaa;
+}
+#checkups p.title {
+font-size: 16px;
+margin-top: 0px;
+padding-top: 0px;
+margin-bottom: 20px;
+}
+
+#checkups .tag {
+  float: right;
+}
+
+#checkups p a.tag:hover {
+  text-decoration: none;
+}
+
+
+#checkups a.hostname {
+  color: #000;
+}
+
+#checkups a.checkuplink {
+  -color: #000;
+  font-style: italic;
+}

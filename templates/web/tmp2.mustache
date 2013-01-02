@@ -1,0 +1,41 @@
+<ul class="thumbnails">
+  {{#your_sites}}
+  <li class="span3">
+    <div class="thumbnail {{^monitored}}notmonitored{{/monitored}}">
+      <a href="/site/{{hostid}}/hide" class="host-hide"><i class="icon icon-star"></i></a>
+      <a href="/site/{{hostname}}" title="{{hostname}} @ {{screenshot.age}}">
+        <div class="hostname">{{shortname}}</div>
+        {{#screenshot.thumbnail}}
+        <img src="/t/{{screenshot.thumbnail}}" alt="{{hostname}} @ {{screenshot.age}}">
+        {{/screenshot.thumbnail}}
+        {{^screenshot.thumbnail}}
+        <img src="/img/thumbnail-host.png" alt="Generating thumbnail...">
+        {{/screenshot.thumbnail}}
+      </a>
+      <div class="btn-group">
+        {{#monitored}}
+          <button class="btn dropdown-toggle" data-toggle="dropdown">Monitoring Settings <span class="caret"></span></button>
+          <ul class="dropdown-menu">
+            <li><a href="/site/{{hostid}}/screenshot" class="host-stop"><i class="icon-eye-open"></i> Update screenshot</a></li>
+            <li><a href="/site/{{hostname}}/settings"><i class="icon-wrench"></i> Monitor &amp; Notification Settings</a></li>
+            {{#bogus}}
+            <li><a href="/site/{{hostname}}/settings"><i class="icon-envelope"></i> </a></li>
+            <li class="divider"></li>
+            <li><a href="/site/{{hostid}}/upgrade" class="host-upgrade"><i class="icon-asterisk"></i> About our premium plan ($15/month)</a></li>
+            {{/bogus}}
+            <li class="divider"></li>
+            <li class=""><a href="/site/{{hostid}}/stop" class="host-stop"><i class="icon-stop"></i> Stop Monitoring</a></li>
+          </ul>
+        {{/monitored}}
+        {{^monitored}}<button href="/site/{{hostid}}/start" class="btn btn-primary host-start">Monitor for Downtime</button>{{/monitored}}
+      </div>
+    </div>
+  </li>
+  {{/your_sites}}
+  {{^your_sites}}
+  <div class="alert">
+    <em>You have not specified any pages to monitor.</em>
+    <h4 class="alert-heading"><a href="/">Run a checkup!</a></h4>
+  </div>
+  {{/your_sites}}
+</ul>

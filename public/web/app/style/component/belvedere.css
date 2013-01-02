@@ -1,0 +1,17 @@
+#belvedere .statbox{width:100px;background-color:#fff;float:left;padding-left:20px;padding-right:40px;font-size:80%;padding-bottom:20px;margin:2px;}
+#belvedere h3{font-size:16px;font-style:italic;}
+#belvedere .statbox .active{font-weight:bold;}
+#belvedere .statbox .amount{font-size:150%;color:black;}
+#belvedere .statbox .record{color:#999;}
+#belvedere .sessions{padding-top:10px;}
+#belvedere .session{background-color:#fff;margin:2px;padding-left:20px;padding-right:40px;font-size:80%;}
+#belvedere .session li{margin-left:20px;}
+#belvedere .session .cid{font-weight:bold;width:80px;float:left;}
+#belvedere .session .sid{width:140px;float:left;}
+#belvedere .session .nid{width:100px;float:left;}
+#belvedere .session .t{width:120px;float:left;}
+#belvedere .session .ref{width:240px;float:left;}
+#belvedere .session .ua{color:#999;clear:both;}
+#belvedere .session .meth{float:left;width:30px;}
+#belvedere .session .stamp{color:#999;}
+#belvedere .pages{}
