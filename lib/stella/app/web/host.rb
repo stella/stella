@@ -159,7 +159,7 @@ class Stella::App::Host
     publically do
       plan = Stella::Testplan.first :planid => req.params[:planid]
       @host = plan.host if plan
-      if is_owner? || host.custid == Stella::Customer.anonymous.custid
+      if is_owner? || (host && host.custid == Stella::Customer.anonymous.custid)
         view = Stella::App::Views::Plan.new req, sess, cust, plan
         res.body = view.render
       else
