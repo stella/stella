@@ -70,6 +70,13 @@ class Stella::CLI::Definition
   usage "stella screenshot [-u EMAIL] <HOSTNAME>"
   command :screenshot => Stella::CLI
 
+  option :t, :test, "Test run (don't email)"
+  option :a, :all, "Send to all customers"
+  option :u, :customer, String, "Customer email"
+  usage "stella email -u customer-email EMAILCLASS"
+  usage "e.g. stella email -u delano@blamestella.com Account::ExpressConfirmation"
+  command :email => Stella::CLI
+
   usage "stella create-testplans <INFILE>"
   command :load_testplans => Stella::CLI
 

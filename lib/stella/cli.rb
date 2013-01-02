@@ -168,6 +168,44 @@ class Stella
       Stella.li Stella.config.to_yaml
     end
 
+    def email
+      email_klass = argv.shift
+      raise "No email class provided" unless email_klass
+      if @option.all && (@global.auto || Annoy.are_you_sure?)
+        customers = Stella::Customer.all
+      elsif @option.customer
+        customers = [Stella::Customer.first(:email => @option.customer)]
+      else
+        raise "No customer provided."
+      end
+      Stella.li "Loaded %d customers" % customers.size
+      klass = eval "Stella::Email::#{email_klass}"
+      Stella.ld klass
+      cnt = 0
+      had_errors = []
+      customers.each do |cust|
+        Stella.ld " -> %s" % cust.email
+        begin
+          msg = klass.new cust, *argv
+          if @option.test
+            puts cust.email
+            puts msg.subject
+            puts msg.render
+          else
+            msg.send_email
+          end
+          cnt += 1
+        rescue => ex
+          had_errors << cust.email
+        end
+      end
+      Stella.li "Sent %d emails" % cnt
+      unless had_errors.empty?
+        Stella.li "%d were not emailed:" % had_errors.size
+        puts had_errors.join(", ")
+      end
+    end
+
     def checkup
       uri = argv.first
       sess, cust = Stella::Session.new, Stella::Customer.anonymous
