@@ -237,10 +237,10 @@ class Stella
       @parsed_uri ||= Stella::Utils.uri(self.uri)
     end
     def path
-      parsed_uri.path
+      parsed_uri.path if parsed_uri
     end
     def shortpath
-      path == '/' ? "/ (Homepage)" : path.shorten(18)
+      path == '/' ? "/ (Homepage)" : path.shorten(18) if path
     end
     def normalize
       update_timestamps
