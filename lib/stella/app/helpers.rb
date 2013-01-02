@@ -67,6 +67,13 @@ class Stella::App
     def message() "Have we met?" end
   end
 
+  class PasswordUpdateRequired < Stella::App::Problem
+    attr_reader :email
+    def initialize(e)
+      @email = e
+    end
+  end
+
   class SignupError < Stella::App::Problem
     def report
       "signup-failed: #{message}"
@@ -116,6 +123,9 @@ class Stella::App
       req.params.delete "password2"
       sess.request_params.update req.params
       res.redirect redirect
+
+    rescue Stella::App::PasswordUpdateRequired => ex
+      res.redirect "#{redirect}?pwreset=1&email=#{ex.email}"
 
     rescue Stella::App::Unauthorized => ex
       Stella.li ex.message

@@ -126,6 +126,10 @@ class Stella::Logic::Login < Stella::Logic::Base
     potential = Stella::Customer.first :email => email
     potential ||= Stella::Customer.first :nickname => email
 
+    if potential && potential.outdated_password?
+      raise Stella::App::PasswordUpdateRequired.new potential.email
+    end
+
     if @colonelemail && potential
       Stella.li "[login-as-attempt] #{@colonelemail} as #{@email} #{@sess[:ipaddress]}"
       colonel = Stella::Customer.first :email => @colonelemail

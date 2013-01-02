@@ -11,6 +11,15 @@ class Stella
       colonel? || comped || !monthly_bill.zero?
     end
 
+    def monitored_hosts
+      self.hosts :monitored => true
+    end
+
+    def outdated_password
+      self.passhashv < 3
+    end
+    alias_method :outdated_password?, :outdated_password
+
     def normalize
       update_timestamps
       self.entropy ||= Stella::Entropy.pop
