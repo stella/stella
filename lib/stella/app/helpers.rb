@@ -117,6 +117,10 @@ class Stella::App
       sess.request_params.update req.params
       res.redirect redirect
 
+    rescue Stella::App::Problem => ex
+      sess.add_error_message! ex.message
+      res.redirect redirect
+
     rescue Stella::App::FailedAuthorization => ex
       sess.add_error_message! ex.message
       req.params.delete "password"

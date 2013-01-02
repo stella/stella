@@ -180,17 +180,17 @@ class Stella::Logic::UpdatePassword < Stella::Logic::Base
   def raise_concerns(event=:change_password)
     #check_rate_limits! event
     if !skip_password_check && !@cust.password?(params[:old])
-      raise Stella::Problem.new("Old password does not match.")
+      raise Stella::App::Problem.new("Old password does not match.")
     elsif @new_password.to_s.size < 6
-      raise Stella::Problem.new("Your short password frightens me. Go long!")
+      raise Stella::App::Problem.new("Your short password frightens me. Go long!")
     elsif @new_password.to_s == "password"
-      raise Stella::Problem.new("Your password cannot literally be 'password'.")
+      raise Stella::App::Problem.new("Your password cannot literally be 'password'.")
     elsif @new_password.to_s != @new_password_repeat
-      raise Stella::Problem.new("The repeated password doesn't match.")
+      raise Stella::App::Problem.new("The repeated password doesn't match.")
     elsif @cust.password?(@new_password)
-      raise Stella::Problem.new("New password cannot be the same as the previous one.")
+      raise Stella::App::Problem.new("Please try another password.")
     else
-      #raise Stella::Problem.new("That password is weird. Please try another.")
+      #raise Stella::App::Problem.new("That password is weird. Please try another.")
     end
   end
 

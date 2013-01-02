@@ -118,15 +118,14 @@ class Stella::App::Account
       end
       if secret && secret.type?('password-reset')
         secret_cust = secret.load_customer
-        secret.destroy!
         Stella.li " changing password for: #{secret_cust.email}"
         logic = Stella::Logic::UpdatePassword.new sess, secret_cust, req.params
         logic.skip_password_check = true
         logic.raise_concerns :change_password
         logic.update_customer
+        secret.destroy!
         sess.add_info_message! "Password changed. You can now login."
         res.redirect '/login'
-
       else
         sess.add_info_message! "Password was not changed."
         res.redirect '/'
