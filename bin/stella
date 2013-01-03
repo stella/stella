@@ -20,6 +20,10 @@ class Stella::CLI::Definition
     exit 0
   end
 
+  command :irb do
+    Kernel.exec 'irb -I %s -rstella/irb' % [File.join(Stella::HOME, 'lib')]
+  end
+
   option :l, :local, "Local worker"
   option :d, :daemon, "Daemonize"
   command :start_worker => Stella::CLI
