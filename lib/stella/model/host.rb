@@ -184,14 +184,8 @@ class Stella
   class Contact
     alias_method :objid, :contactid
     def normalize
+      self.contactid ||= gibbler
       update_timestamps
-      self.custid ||= customer.custid if self.custid.nil? && customer
-      self.hostid ||= host.hostid if self.hostid.nil? && host
-    end
-    def update_customer cust
-      self.custid = cust.custid
-      self.customer = cust
-      self.save
     end
     def customer? cust
       customer == cust
