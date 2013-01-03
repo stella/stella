@@ -25,9 +25,13 @@
         <div class="tab-pane active" id="products">
           <div class="row well static">
           <div class="span8">
+
             <h2 class="cufon">Your Products</h2>
             <div class="line"></div>
-            <p>${{monthly_bill}}/month</p>
+            <p><h4 class="cufon">Your monthly bill is ${{monthly_bill}}/month.</h4></p>
+            {{#cust.comped}}
+            <p><em>Note: You have a complimentary account and will not be charged.</em></p>
+            {{/cust.comped}}
             <table class="table table-condensed table-striped">
               <thead>
                 <tr>
