@@ -19,6 +19,17 @@ class Stella::App::Host
     host && (cust.colonel? || host.customer?(cust))
   end
 
+  def add_contact
+    authenticated do
+      enforce_method! :POST
+      if is_owner?
+        p [req.params]
+      else
+        not_found_response "No such host"
+      end
+    end
+  end
+
   def destroy
     authenticated do
       enforce_method! :POST

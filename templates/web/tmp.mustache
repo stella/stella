@@ -107,19 +107,35 @@
               </div>
 
               <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Save changes</button>
+                <button type="submit" class="btn btn-primary">Save settings</button>
                 <button type="button" class="btn">Cancel</button>
               </div>
 
-              <div class="control-group">
-                <div class="controls">
-                  <p class="help-block"></p>
-                </div>
-              </div>
             </fieldset>
-
           </form>
 
+          <form class="form-horizontal">
+            <legend><h3><span class="cufon">Contacts</span> &nbsp;<small class="cufon"></small></h3></legend>
+            <div class="control-group">
+              <label class="control-label" for="inputEmail">N<sup>o</sup> 1</label>
+              <div class="controls">
+                <input type="text" id="inputEmail" value="{{cust.email}}" placeholder="Email"> <input type="text" id="inputEmail" value="{{cust.mobile}}" placeholder="Mobile (+1-555-1111)">
+              </div>
+            </div>
+            <div class="control-group">
+              <label class="control-label" for="inputEmail"></label>
+              <div class="controls">
+                <i class="icon icon-plus"></i> <a href="#">Add contact</a>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Update contacts</button>
+              <button type="button" class="btn">Cancel</button>
+            </div>
+          </form>
+
+          <br/>
+          <legend><h3><span class="cufon">Danger Zone</span> &nbsp;<small class="cufon"></small></h3></legend>
           {{#host.monitored}}
           <div class="span5">
             <div class="alert alert-info">

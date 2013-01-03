@@ -20,14 +20,11 @@ POST  /checkup/:checkid                               Stella::App::Checkup#signu
 
 
 ##########################################################################  HOST
-#NOTE: Add redirect from /host/* to /site/* in nginx
-
 GET   /site/:hostname                                 Stella::App::Host#index
 GET   /site/:hostname/:tabid                          Stella::App::Host#index
 
 POST  /site/:hostid/settings                          Stella::App::Host#settings
 POST  /site/:hostid/notify/:mode                      Stella::App::Host#notify
-
 
 POST  /site/:hostid/hide                              Stella::App::Host#hide
 POST  /site/:hostid/show                              Stella::App::Host#show
@@ -36,6 +33,7 @@ POST  /site/:hostid/stop                              Stella::App::Host#stop
 POST  /site/:hostid/start                             Stella::App::Host#start
 POST  /site/:hostid/upgrade                           Stella::App::Host#upgrade
 POST  /site/:hostid/destroy                           Stella::App::Host#destroy
+POST  /site/:hostid/contact/add                       Stella::App::Host#add_contact
 
 GET   /testrun/:runid                                 Stella::App::Host#testrun
 GET   /plan/:planid                                   Stella::App::Host#plan
