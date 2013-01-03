@@ -7,6 +7,7 @@ class Stella
     alias_method :exists?, :saved?
     alias_method :objid, :custid
 
+
     def paying?
       colonel? || comped || !monthly_bill.zero?
     end
@@ -26,6 +27,10 @@ class Stella
       self.custid ||=
       self.apikey ||= Gibbler.new(Stella.now.to_f, custid, entropy, :apikey)
       self.external_id ||= Gibbler.new(custid, entropy, :external_id).base(36).shorten(20)
+    end
+
+    def contact
+      contacts.first
     end
 
     def load_session
@@ -115,7 +120,12 @@ class Stella
         cust = first opts
         cust && cust.destroy!
       end
-
+      def create *args
+        cust = super
+        # Make sure the first contact is always themself.
+        Stella::Contact.create :email => cust.email, :name => cust.name || cust.nickname, :customer => cust
+        cust
+      end
     end
 
   end

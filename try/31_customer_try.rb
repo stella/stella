@@ -1,17 +1,17 @@
 require 'stella'
 
-Stella.debug = true
+#Stella.debug = true
 Stella.load! :tryouts
 
 @custid = rand.gibbler.short
 @password = rand.gibbler.shorten(10)
 
-## Customer doesn't exist 
+## Customer doesn't exist
 Stella::Customer.exists? "#{@custid}@blamestella.com"
 #=> false
 
 ## Can instantiate customer
-@cust = Stella::Customer.new :custid => @custid, :email => "#{@custid}@blamestella.com"
+@cust = Stella::Customer.new :custid => @custid, :email => "#{@custid}@blamestella.com", :testing => true
 @cust.custid
 #=> @custid
 
@@ -43,6 +43,15 @@ Stella::Customer.exists? "#{@custid}@blamestella.com"
 ## Customer does exist
 Stella::Customer.exists? "#{@custid}@blamestella.com"
 #=> true
+
+## Has no contacts by default
+@cust.contacts
+#=> []
+
+## When using create, will have a default contact
+@cust2 = Stella::Customer.create :custid => "#{@custid}2", :email => "#{@custid}2@blamestella.com", :testing => true
+@cust2.contact.email
+#=> @cust2.email
 
 ## Customer can be destroyed
 @cust.destroy!

@@ -6,7 +6,7 @@
 # NOTE: This script assumes no customers have contact records (that's
 # why we don't define a downward migration).
 #
-# Jan 03 @ 12:30:
+# Jan 03 @ 13:30:
 
 #Stella.debug = true
 
