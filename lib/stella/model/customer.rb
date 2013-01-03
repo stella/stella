@@ -85,7 +85,7 @@ class Stella
     end
 
     def monthly_bill
-      active_products.collect { |prod| prod.calculated_price }.sum
+      self.comped ? 0 : active_products.collect { |prod| prod.calculated_price }.sum
     end
 
     class << self

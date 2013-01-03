@@ -290,7 +290,7 @@ class Stella
       attr_reader :products
       def create cust, prodid, discount=0
         opts = product(prodid)
-        super :customer => cust, :prodid => normalize(prodid), :discount => discount, :price => opts['price'], :options => opts
+        super :customer => cust, :name => opts['name'], :prodid => normalize(prodid), :discount => discount, :price => opts['price'], :options => opts
       end
       def add_product prodid, options={}
         @products ||= {}
@@ -322,6 +322,18 @@ class Stella
       end
       def default
         normalize(:site_free_v1)
+      end
+    end
+    def name
+      # This is a fix for records that don't have a name.
+      # TODO: Update Product records in the database that don't have name
+      super || case self.prodid
+      when 'site_free_v1'
+        'Free Monitoring'
+      when 'site_basic_v1'
+        'Basic Monitoring'
+      when 'site_premium_v1'
+        'Premium Monitoring'
       end
     end
     def prodid? guess
