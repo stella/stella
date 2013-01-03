@@ -206,13 +206,11 @@ class Stella
     include Gibbler::Complex
     property :id,           Serial, :key => true
     property :contactid,    String, :required => true, :unique_index => true
-    property :custid,       String, :required => true
-    property :hostid,       String, :required => true
-    property :name,         String, :length => 100, :required => true
-    property :email,        String, :length => 64
+    property :name,         String, :length => 100
+    property :email,        String, :length => 64, :required => true
     property :phone,        String, :length => 24
     property :hidden,       Boolean, :default => false
-    gibbler :custid, :hostid, :name, :email, :phone
+    gibbler :id, :name, :email, :phone
     before :valid?, :normalize
     include Stella::Model::TimeStamps
     include Stella::Model::DataField
@@ -444,7 +442,7 @@ class Stella
   end
   class Contact
     belongs_to :customer, :required => true
-    belongs_to :host, :required => true
+    belongs_to :host, :required => false
   end
   class RemoteMachine
     has n, :worker_profiles
