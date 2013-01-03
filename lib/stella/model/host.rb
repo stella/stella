@@ -54,7 +54,8 @@ class Stella
       self.testplans.checkups.screenshots.destroy!
       self.testplans.checkups.destroy!
       self.testplans.destroy!
-      self.products.destroy!
+      self.product.active = false
+      self.product.save
       super
     end
     def customer? cust
