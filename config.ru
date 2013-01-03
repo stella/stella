@@ -67,7 +67,10 @@ if Otto.env?(:dev)
 else
   Stella.load! :app
   apps.each_pair do |path,app|
-    map(path) { use Rack::CommonLogger; run app }
+    map(path) {
+      #use Rack::CommonLogger
+      run app
+    }
   end
   #$SAFE = 1  # http://www.rubycentral.com/pickaxe/taint.html
 end
