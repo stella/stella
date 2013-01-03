@@ -89,15 +89,20 @@
                 <label class="control-label" for="input03"><strong>Screenshots</strong></label>
               </div>
               {{/bogus}}
-              <div class="control-group">
+              <div class="control-group {{#host.settings.disable_ga}}{{^host.settings.gaid}}warning{{/host.settings.gaid}}{{/host.settings.disable_ga}}">
                 <label class="control-label" for="input01"><strong>Google Analytics</strong></label>
                 <div class="controls">
                   <input href="/site/{{host.hostid}}/gaid" type="text" name="gaid" class="input-large selectable" id="input01" value="{{host.settings.gaid}}" placeholder="UA-XXXXXXX-N">
-                  <span class="help-block"></span>
+                    {{#host.settings.disable_ga}}{{^host.settings.gaid}}
+                    <span class="help-inline">Please enter your tracking code</span>
+                    {{/host.settings.gaid}}{{/host.settings.disable_ga}}
+                  <span class="help-block">
                   <label class="checkbox">
                     <input href="/site/{{host.hostid}}/ga/disable" type="checkbox" name="disable_ga" value="true" {{#host.settings.disable_ga}}checked="checked"{{/host.settings.disable_ga}}>
-                    Disable analytics (otherwise you'll see stella requests in your analytics).
+                    Don't count stella requests in Google Analytics.
                   </label>
+
+                  </span>
                 </div>
               </div>
 
