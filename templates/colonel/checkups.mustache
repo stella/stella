@@ -1,0 +1,70 @@
+{{>_layout/header}}
+
+{{>_partial/session_messages}}
+
+<div class="span11">
+  <ul class="breadcrumb">
+    <li><h2 class="cufon"><a href="/colonel">Colonel</a> <span class="divider">&gt;</span></h2></li>
+    <li class="active">
+      <h2 class="cufon"><a href="/colonel/checkups">Checkups</a></h2>
+    </li>
+
+    <div style="float: right; margin-top: 0px" class="">
+      <form method="get">
+        <input type="text" name="q" class="input-large" id="input01" style="margin-top: 4px" value="{{req.params.q}}" placeholder="Find 1 in {{checkups_count}}">
+      </form>
+      <!--<span class="cufon" style="font-size: 36px; font-weight: bold; padding-top: 2px"></span>-->
+    </div>
+  </ul>
+</div>
+
+  {{^thishost}}
+  <div class="span11">
+    <ul id="pageTabs" class="nav nav-tabs">
+      <li class="active">
+        <a href="#recent" data-toggle="tab"><h4 class="cufon">Checkups ({{recent_checkups.size}})</h4></a>
+      </li>
+    </ul>
+    <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+      <div id="recent" class=" tab-pane active in">
+        <ul>
+        {{#recent_checkups}}
+          <li><a href="/checkup/{{checkid}}">{{host.hostname}}</a> - {{status}}: {{summary.on_load}}ms  ({{customer.email}}) <em class="light">{{updated_at.to_natural}}</em></li>
+        {{/recent_checkups}}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {{/thishost}}
+  {{#thishost}}
+  <div class="span11">
+
+    <ul id="pageTabs" class="nav nav-tabs">
+      <li class="">
+        <a href="#info" data-toggle="tab"><h4 class="cufon">Info</h4></a>
+      </li>
+      <li class="active">
+        <a href="#dump" data-toggle="tab"><h4 class="cufon">Dump</h4></a>
+      </li>
+    </ul>
+
+    <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+      <div id="info" class=" tab-pane  in">
+
+      </div>
+
+      <div id="dump" class=" tab-pane active in">
+        <textarea class="span10" rows="20">{{thishost.to_yaml}}</textarea>
+        <textarea class="span10" rows="20">{{thishost.testplans.to_yaml}}</textarea>
+        <textarea class="span10" rows="20">{{thishost.product.to_yaml}}</textarea>
+      </div>
+
+    </div>
+
+
+  </div>
+
+{{/thishost}}
+
+{{>_layout/footer}}

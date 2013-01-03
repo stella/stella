@@ -59,6 +59,18 @@ class Stella::App
       end
     end
 
+    def checkups
+      colonels do
+        if req.params[:q]
+          q = req.params[:q].strip
+          @thishost = Stella::Host.first :hostname.like => q
+          @thishost ||= Stella::Host.first :hostid => q
+        end
+        view = Stella::App::Colonel::Views::Checkups.new req, sess, cust, @thishost
+        res.body = view.render
+      end
+    end
+
     def redump
       colonels do
         if req.params[:db]
@@ -143,7 +155,6 @@ module Stella::App::Colonel::Views
   end
 
   class Customers < Stella::App::Colonel::View
-    attr_reader :duration
     attr_accessor :feedbacks
     def init thisobj
       @title = "Customers"
@@ -164,13 +175,24 @@ module Stella::App::Colonel::Views
   end
 
   class Hosts < Stella::App::Colonel::View
-    attr_reader :duration
-    attr_accessor :feedbacks
     def init thisobj
       @title = "Hosts"
       colonel_vars if respond_to?(:colonel_vars)
       self[:hosts_count] = Stella::Host.count
       self[:recent_hosts] = Stella::Host.all :updated_at.gt => Time.now-30.days, :order => [:updated_at.desc], :limit => 25
+      if thisobj
+        self[:thishost] = thisobj
+      else
+      end
+    end
+  end
+
+  class Checkups < Stella::App::Colonel::View
+    def init thisobj
+      @title = "Checkups"
+      colonel_vars if respond_to?(:colonel_vars)
+      self[:checkups_count] = Stella::Checkup.count
+      self[:recent_checkups] = Stella::Checkup.all :updated_at.gt => Time.now-30.days, :order => [:updated_at.desc], :limit => 25
       if thisobj
         self[:thishost] = thisobj
       else

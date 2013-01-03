@@ -6,6 +6,7 @@ GET   /                                               Stella::App::Colonel#index
 GET   /debug                                          Stella::App::Colonel#debug
 
 GET   /customers                                      Stella::App::Colonel#customers
+GET   /checkups                                       Stella::App::Colonel#checkups
 GET   /hosts                                          Stella::App::Colonel#hosts
 
 GET   /redump                                         Stella::App::Colonel#redump
