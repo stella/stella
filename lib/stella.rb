@@ -143,7 +143,7 @@ class Stella
       end
       Gibbler.secret = Stella.config['site.secret'] if Stella.config['site.secret']
       Stella.li "You need to update site.secret" if Gibbler.secret == "PLEASECHANGEMESTELLA"
-
+      Stella.config['site.ssl_ca_file'] ||= File.join(Stella::HOME, 'certs', 'stella-master.crt')
       if Stella.config['redis.uri']
         Stella::Session.redis = Stella.redis(1)
         Stella::Job.redis = Stella.redis(11)
@@ -154,6 +154,10 @@ class Stella
       SendGrid.api_key = Stella.config['vendor.sendgrid.key']
       SendGrid.hostname = Stella.sysinfo.hostname
       Twilio.connect(Stella.config['vendor.twilio.sid'], Stella.config['vendor.twilio.token'])
+      # If we don't specify a cert authority file, the Twilio lib can raise
+      # "certificate verify failed" errors on some machines.
+      Twilio.ssl_ca_file Stella.config['site.ssl_ca_file']
+      SendGrid.ssl_ca_file Stella.config['site.ssl_ca_file']
       if Stella.debug
         SendGrid.debug_output $stderr
         Twilio.debug_output $stderr

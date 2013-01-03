@@ -10,6 +10,8 @@ site.allow_local: false
 # [OSX] shasum -a 1 /path/to/inputfile
 site.secret: PLEASECHANGEMESTELLA
 
+#site.ssl_ca_file:
+
 db.uri: 'postgres://stella:stellapass@127.0.0.1/stella'
 redis.uri: 'redis://127.0.0.1/0?timeout=5&thread_safe=false&logging=false'
 
