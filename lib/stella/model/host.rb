@@ -54,6 +54,7 @@ class Stella
       self.testplans.checkups.screenshots.destroy!
       self.testplans.checkups.destroy!
       self.testplans.destroy!
+      self.products.destroy!
       super
     end
     def customer? cust
