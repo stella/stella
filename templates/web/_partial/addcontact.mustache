@@ -1,0 +1,89 @@
+
+{{!
+  <a href="#contactsModal" role="button" class="btn" data-toggle="modal">TOGGLE</a>
+}}
+
+<div class="hide hidden modal" id="contactsModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+    <h3 id="myModalLabel">Add Contact</h3>
+  </div>
+  <div class="modal-body">
+    <form id="contactUpdateForm" class="form-horizontal" method="POST" action="/account/addcontact">
+      <div class="control-group">
+        <label class="control-label" for="inputEmail">Email</label>
+        <div class="controls">
+          <input type="text" id="inputEmail" name="email" placeholder="you@example.com">
+          <span class="help-block">For notifications only.</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="inputPhone">Phone (optional)</label>
+        <div class="controls">
+          <input type="text" id="inputPhone" name="phone" placeholder="+1-414-555-1111">
+          <span class="help-block">We will send SMS alerts to this number.</span>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="inputName">Name  (optional)</label>
+        <div class="controls">
+          <input type="text" id="inputName" name="name" placeholder="Full name or Nickname">
+        </div>
+      </div>
+      {{#cust.data.ui_alpha}}
+      <div class="control-group">
+        <label class="control-label" for="inputRole1">Role <br/><span class="label label-info">alpha feature</span></label>
+        <div class="controls">
+          <label class="radio">
+            <input type="radio" name="profile" id="inputRole1" value="tech" checked>
+            Tehcnical
+          </label>
+          <label class="radio">
+            <input type="radio" name="profile" id="inputRole2" value="biz">
+            Less technical
+          </label>
+        </div>
+      </div>
+      {{/cust.data.ui_alpha}}
+      <input type="submit" style="position:absolute ; margin-top: 2000px"></input>
+    </form>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" data-dismiss="modal" aria-hidden="true">Close</button>
+    <button id="contact-form-submit" type="submit" class="btn btn-primary">Add Contact</button>
+  </div>
+</div>
+<script>
+$(function() {
+  // http://jquery.malsup.com/form/#ajaxForm
+  var options = {
+      // other available options:
+      //url:       url         // override for form's 'action' attribute
+      //type:      type        // 'get' or 'post', override for form's 'method' attribute
+      //dataType:  null        // 'xml', 'script', or 'json' (expected server response type)
+      clearForm: true,        // clear all form fields after successful submit
+      //resetForm: true        // reset the form after successful submit
+
+      // $.ajax options can be used here too, for example:
+      //timeout:   3000
+      error:  genericError,  // error callback
+      success:  function(res) {
+        $('#contactsModal').modal('hide');
+        window.location.reload();
+      }
+    };  // post-submit callback
+
+  $('#contactUpdateForm').ajaxForm(options);
+  $('#contact-form-submit').on('click', function(e){
+    // We don't want this to act as a link so cancel the link action
+    //e.preventDefault();
+    // Find form and submit it
+    $('#contactUpdateForm').submit();
+  });
+  $('.contact-add').click(function(e) {
+    $('#contactsModal').modal({
+      keyboard: true
+    })
+  });
+});
+</script>

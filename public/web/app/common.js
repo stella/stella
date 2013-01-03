@@ -269,16 +269,9 @@ $(function() {
 });
 
 
-function displayErr(msg) {
-  if (msg != undefined)
-    $('.infoPageSubHeader').prepend('<p><span class="err">' + msg + '</span></p>');
+function genericError() {
+  alertify.error("Ooops! There was an error.");
 }
-
-function displayMsg(msg) {
-  if (msg != undefined)
-    $('.infoPageSubHeader').prepend('<p><span class="msg">' + msg + '</span></p>');
-}
-
 
 // COMMON BEHAVIORS
 $(function() {

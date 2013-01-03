@@ -1,1 +1,325 @@
-{{>tmp}}
+{{>_layout/header}}
+
+  <div class="span11">
+    <ul class="breadcrumb">
+      <li><h2 class="cufon"><a href="/">Home</a> <span class="divider">&gt;</span></h2></li>
+      <li class="active">
+        <h2 class="cufon"><a href="/site/{{host.hostname}}">{{host.hostname}}</a></h2>
+      </li>
+
+      <div style="float: right; margin-top: 4px" class="">
+        {{^host.monitored}}
+        {{#authenticated}}<button href="/site/{{host.hostid}}/start" class="btn btn-primary host-start">Start Monitoring for ${{site_price}}/month</button>{{/authenticated}}
+        {{^authenticated}}<a href="/signup?hostid={{host.hostid}}" class="btn btn-primary">Start Monitoring for Free <em>!</em></a>{{/authenticated}}
+        {{/host.monitored}}
+        {{#host.monitored}}<span class="cufon" style="font-size: 36px; font-weight: bold">{{host.rangemetrics.past_1h.on_load_avg.to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>{{/host.monitored}}
+      </div>
+    </ul>
+  </div>
+
+  {{#bogus}}
+  <div class="span11 offset1">
+    <div class="page-header span10">
+      <h2><span class="cufon">Pages</span> &nbsp;<small class="cufon">Run checkups to add new ones.</small></h2>
+      <div class="line"></div>
+    </div>
+  </div>
+  {{/bogus}}
+
+  <div class="row">
+    <div class="span10 offset1">
+      <div style="margin-left: 20px">{{>_partial/session_messages}}</div>
+
+      <ul id="pageTabs" class="nav nav-tabs">
+        {{#owner_only}}
+        <li class="active">
+          <a href="#settings" data-toggle="tab"><h4 class="cufon">Settings</h4></a>
+        </li>
+        <li>
+          <a href="#pages" data-toggle="tab"><h4 class="cufon">Pages</h4></a>
+        </li>
+        {{#host.monitored}}
+        <li>
+          <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
+        </li>
+        <li>
+          <a href="#recent" data-toggle="tab"><h4 class="cufon">Recent Checks</h4></a>
+        </li>
+        {{/host.monitored}}
+        {{/owner_only}}
+      </ul>
+
+      <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+
+        {{#owner_only}}
+        <div id="settings" class=" tab-pane in active">
+
+          <form action="/site/{{host.hostid}}/settings" class="form-horizontal" method="POST">
+            <legend><h3><span class="cufon">Monitoring &amp; Notifications</span> &nbsp;<small class="cufon"></small></h3></legend>
+            <fieldset>
+              <div class="control-group">
+                <label class="control-label" for="input01"><strong>Check Every</strong></label>
+                <div class="controls">
+                  <label class="radio inline">
+                    <input type="radio" name="interval" id="interval1" value="300" {{#checked_5m}}checked{{/checked_5m}}>
+                    5min
+                  </label>
+                  <label class="radio inline">
+                    <input type="radio" name="interval" id="interval2" value="1800" {{#checked_30m}}checked{{/checked_30m}}>
+                    30min
+                  </label>
+                  <label class="radio inline">
+                    <input type="radio" name="interval" id="interval3" value="3600" {{#checked_60m}}checked{{/checked_60m}}>
+                    60min
+                  </label>
+                </div>
+              </div>
+              {{#bogus}}
+              <div class="control-group">
+                <label class="control-label" for="input03"><strong>Screenshots</strong></label>
+              </div>
+              {{/bogus}}
+              <div class="control-group {{#host.settings.disable_ga}}{{^host.settings.gaid}}warning{{/host.settings.gaid}}{{/host.settings.disable_ga}}">
+                <label class="control-label" for="input01"><strong>Google Analytics</strong></label>
+                <div class="controls">
+                  <input href="/site/{{host.hostid}}/gaid" type="text" name="gaid" class="input-large selectable" id="input01" value="{{host.settings.gaid}}" placeholder="UA-XXXXXXX-N">
+                    {{#host.settings.disable_ga}}{{^host.settings.gaid}}
+                    <span class="help-inline">Please enter your tracking code</span>
+                    {{/host.settings.gaid}}{{/host.settings.disable_ga}}
+                  <span class="help-block">
+                  <label class="checkbox">
+                    <input href="/site/{{host.hostid}}/ga/disable" type="checkbox" name="disable_ga" value="true" {{#host.settings.disable_ga}}checked="checked"{{/host.settings.disable_ga}}>
+                    Don't count stella requests in Google Analytics.
+                  </label>
+
+                  </span>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="input03"><strong>Notifications</strong></label>
+                <div class="controls">
+                  <div class="btn-group" data-toggle="buttons-radio">
+                    <a class="btn host-notify {{#host.notify}}active disabled {{/host.notify}}{{^host.notify}}btn-danger{{/host.notify}}" href="/site/{{host.hostid}}/notify/enable">Enable</a>
+                    <a class="btn host-notify {{^host.notify}}btn-danger active disabled{{/host.notify}}" href="/site/{{host.hostid}}/notify/disable">Disable</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="input03"><strong>Contacts</strong></label>
+                <div class="controls contacts">
+                  <div id="insertContactsHere" class="btn-group contactsModal" data-toggle="buttons-radio">
+                    <label class="checkbox contactField hide">
+                      <input type="checkbox" name="contactid[]" value="">
+                      <img src="#" class="avatar"/>
+                      <span>some text</span>
+                    </label>
+                    {{#host.contacts}}
+                    <label class="checkbox">
+                      <input type="checkbox" name="contactid[]" value="{{contactid}}" checked>
+                      <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
+                      {{email}} {{#phone}}({{to_s}}){{/phone}}{{^phone}}(<em>No phone</em>){{/phone}}
+                    </label>
+                    {{/host.contacts}}
+
+                    {{^host.contacts}}
+                    {{/host.contacts}}
+                  </div>
+                </div>
+                                  <div class="controls">
+                    <a href="#contactsModal" role="button" class="" data-toggle="modal"><i class="icon  icon-plus"></i> Add contact</a><br/>
+                  </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save settings</button>
+                <button type="button" class="btn">Cancel</button>
+              </div>
+
+            </fieldset>
+          </form>
+
+          <div class="hide hidden modal" id="contactsModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+            <div class="modal-header">
+              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+              <h3 id="myModalLabel">Choose Contact</h3>
+            </div>
+            <div class="modal-body">
+              {{#cust.contacts}}
+              <label class="checkbox">
+              <a href="#" style="text-decoration: none" class="listed-contact" data-contactid="{{contactid}}">
+                <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
+                <span>{{email}} {{#phone}}({{to_s}}){{/phone}}{{^phone}}(<em>No phone</em>){{/phone}}</span>
+              </a>
+              </label>
+              {{/cust.contacts}}
+            </div>
+            <div class="modal-footer">
+            <a href="/account/contacts"><i class="icon icon-edit"></i> Manage contacts</a>
+            </div>
+          </div>
+          <script>
+            $(function() {
+              $('.listed-contact').click(function(e) {
+                var obj = $(this);
+                log(obj.find('img'))
+                log(obj.data('contactid'))
+                e.preventDefault();
+                var templateElem = $('.contacts').find('label.contactField.hide').first();
+                var nowElem = templateElem.clone();
+                var input = nowElem.find('input');
+                var img = nowElem.find('img');
+                var span = nowElem.find('span');
+                img.attr('src', obj.find('img').attr('src'));
+                input.val(obj.data('contactid'));
+                input.attr('checked', 'checked');
+                span.text(obj.find('span').text())
+                nowElem.show();
+                nowElem.insertAfter($('.contacts').find('label.contactField').last())
+                $('#contactsModal').modal('hide');
+              });
+
+            });
+          </script>
+
+          <br/>
+          <legend><h3><span class="cufon">Danger Zone</span> &nbsp;<small class="cufon"></small></h3></legend>
+          {{#host.monitored}}
+          <div class="span5">
+            <div class="alert alert-info">
+              <h4 class="alert-heading">Stop monitoring {{host.hostname}}</h4>
+              You will no longer receive downtime notifications.
+              <div><a href="/site/{{host.hostid}}/stop" class="btn host-stop">Stop Monitoring</a></div>
+            </div>
+          </div>
+          {{/host.monitored}}
+
+          <div class="span5">
+            <div class="alert alert-block">
+              <h4 class="alert-heading">Delete {{host.hostname}}</h4>
+              All data will be deleted and this is not reversable.
+              <div><a href="/site/{{host.hostid}}/destroy" class="btn host-destroy">Delete this site</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pages" class=" hidden">
+
+            {{#owner_only}}
+            <p class="">
+              <em>You are monitoring <strong>{{enabled_pages_count}} of {{max_enabled_pages}}</strong> available pages.</em>
+              {{#bogus}}
+              {{#is_free_plan}}<a href="/site/{{host.hostid}}/upgrade" class="btn btn-primary host-upgrade">Monitor more for $5/month</a>{{/is_free_plan}}
+              {{/bogus}}
+            </p>
+            {{/owner_only}}
+
+            <ul class="thumbnails">
+              {{#testplans}}
+              <li class="span3">
+                <div class="thumbnail {{^enabled}}notmonitored{{/enabled}}">
+                  <a href="/plan/{{planid}}/hide" class="host-hide close"><i class="icon icon-remove-sign"></i></a>
+                  <div class="hostname">{{shortpath}}</div>
+                  {{#screenshot}}
+                  <img src="/t/{{screenshot.thumbnail}}" alt="{{hostname}} thumbnail">
+                  {{/screenshot}}
+                  {{^screenshot}}
+                  <img src="/img/thumbnail-host.png" alt="Generating thumbnail...">
+                  {{/screenshot}}
+                  <p>
+                    {{#host.monitored}}
+                    {{^enabled}}
+                    {{^has_max_pages}}<button href="/plan/{{planid}}/enable" class="btn btn-primary plan-enable">Monitor this page</button>{{/has_max_pages}}
+                    {{#has_max_pages}}<br/><span class="label">not monitored</span>{{/has_max_pages}}
+                    {{/enabled}}
+                    {{#enabled}}<button href="/plan/{{planid}}/disable" class="btn plan-disable">Stop Monitoring This Page</button>{{/enabled}}
+                    {{/host.monitored}}
+                  </p>
+                </div>
+              </li>
+              {{/testplans}}
+            </ul>
+
+            {{#owner_only}}
+              {{#has_pages}}
+              <p>
+              <em>Pages you run checkups on appear here. Click <i class="icon icon-remove-sign"></i> to remove.</em>
+              </p>
+              {{/has_pages}}
+              {{^has_pages}}
+              <div class="alert">
+                <em>You have not specified any pages to monitor.</em>
+                <h4 class="alert-heading"><a href="/?uri=http://{{host.hostname}}">Run a checkup!</a></h4>
+              </div>
+              {{/has_pages}}
+              <br/><br/><br/>
+            {{/owner_only}}
+
+        </div>
+
+        <div id="screenshots" class="hidden">
+
+          <p><em>Screenshot history for monitored pages.</em></p>
+          {{#enabled_pages}}
+          <h3><span class="cufon">{{host.hostname}}{{path}}</span> &nbsp;<small class="cufon"></small></h3>
+            <ul class="thumbnails">
+            {{#host.screenshots.reverse}}
+            <li class="span3 screenshot">
+              <div class="thumbnail">
+                <img src="/t/{{thumbnail}}"/>
+                <div class="date tsbasic" title="{{created_at.to_i}}">{{created_at.to_datetime}}</div>
+              </div>
+            </li>
+            {{/host.screenshots.reverse}}
+          </ul>
+          {{^host.screenshots}}
+          <p><em>No screenshots yet</em></p>
+          {{/host.screenshots}}
+          {{/enabled_pages}}
+        </div>
+
+        <div id="recent" class="hidden">
+
+          <p><em>Recent checks for monitored pages.</em></p>
+          {{#enabled_pages}}
+          <h3><span class="cufon">{{host.hostname}}{{path}}</span> &nbsp;<small class="cufon"></small></h3>
+            <ul class="">
+            {{#recent_testruns}}
+            <li class="">
+              <a href="/testrun/{{runid}}">{{summary.on_load}}ms @ <span class="tsbasic" title="{{created_at.to_i}}">{{created_at}}</span></a>
+            </li>
+            {{/recent_testruns}}
+          </ul>
+          {{^testruns}}
+          <p><em>No checks yet</em></p>
+          {{/testruns}}
+          {{/enabled_pages}}
+        </div>
+
+        {{/owner_only}}
+
+      </div>
+
+    </div>
+
+  </div>
+
+  {{#bogus}}
+  '#pageTabs li a[href$="VALUE"]'
+   = is exactly equal
+  != is not equal
+  ^= is starts with
+  $= is ends with
+  *= is contains
+  {{/bogus}}
+
+  {{#selected_tabid}}
+  <script type="text/javascript">
+    $(function() {
+      $('#pageTabs li a[href$="#{{to_s}}"]').tab('show');
+    });
+  </script>
+  {{/selected_tabid}}
+
+{{>_layout/footer}}

@@ -19,17 +19,6 @@ class Stella::App::Host
     host && (cust.colonel? || host.customer?(cust))
   end
 
-  def add_contact
-    authenticated do
-      enforce_method! :POST
-      if is_owner?
-        p [req.params]
-      else
-        not_found_response "No such host"
-      end
-    end
-  end
-
   def destroy
     authenticated do
       enforce_method! :POST
@@ -91,14 +80,31 @@ class Stella::App::Host
   def settings
     authenticated do
       enforce_method! :POST
+      #assert_params :contactid #, :disable_ga, :gaid, :interval
       if is_owner?
+
         host.settings['disable_ga'] = (req.params[:disable_ga] == 'true')
         host.settings['gaid'] = req.params[:gaid]
         seconds = req.params["interval"].to_i
         if seconds > 0 && seconds >= host.product.options["interval"].to_i
           host.settings['interval'] = seconds
         end
+        host.contacts.each do |contact|
+          Stella.ld "[contact-delete] #{contact.email}"
+          host.contacts.delete contact
+        end
+        Stella::Host.transaction do
+          if req.params[:contactid]
+            contacts = req.params[:contactid].collect do |cid|
+              contact = Stella::Contact.first :contactid => cid
+              next unless contact
+              Stella.ld "[contact-add] #{contact.email}"
+              host.contacts << contact
+            end
+          end
+        end
         host.save
+
         sess.add_info_message! "Settings saved for #{host.hostname}."
         res.redirect "/site/#{host.hostname}" unless req.ajax?
       else

@@ -110,8 +110,12 @@ module Stella::App::Views::Helpers
   end
   module ThirdParty
 
+    def gravatar_prefix
+      prefix = 'https://secure'
+      [prefix, '.gravatar.com/avatar/'].join
+    end
     def gravatar(email)
-      return '/img/stella.png' if email.nil? || email.empty?
+      return '/img/stella.png' if email.to_s.empty?
       suffix = Digest::MD5.hexdigest email.downcase
       prefix = 'https://secure'
       [prefix, '.gravatar.com/avatar/', suffix].join

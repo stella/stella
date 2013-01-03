@@ -183,6 +183,9 @@ class Stella
 
   class Contact
     alias_method :objid, :contactid
+    def gravatar
+      Digest::MD5.hexdigest email.downcase if email
+    end
     def normalize
       self.contactid ||= gibbler
       update_timestamps

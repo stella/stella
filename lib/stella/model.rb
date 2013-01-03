@@ -414,7 +414,7 @@ class Stella
   end
   class Host
     has n, :testplans
-    has n, :contacts
+    has n, :contacts, :through => Resource
     has n, :checkups
     has n, :testruns
     has n, :screenshots
@@ -441,8 +441,8 @@ class Stella
     belongs_to :testplan, :required => false
   end
   class Contact
+    has n, :hosts, :through => Resource
     belongs_to :customer, :required => true
-    belongs_to :host, :required => false
   end
   class RemoteMachine
     has n, :worker_profiles

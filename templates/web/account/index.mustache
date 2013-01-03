@@ -61,8 +61,30 @@
               </div>
             </fieldset>
           </form>
-
         </div>
+
+        <div class="tab-pane" id="contacts">
+          <div class="row well static">
+            <div class="span8">
+              <h2 class="cufon">Contacts</h2>
+              <div class="line"></div>
+
+              {{#cust.contacts}}
+              <label class="checkbox">
+                <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
+                {{email}} {{#phone}}({{to_s}}){{/phone}}
+              </label>
+              {{/cust.contacts}}
+
+              <div class="control-group">
+                <div class="controls">
+                  <a href="#contactsModal" role="button" class="btn" data-toggle="modal"><i class="icon icon-plus"></i> Add contact</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {{>_partial/addcontact}}
 
         <div class="tab-pane" id="api">
           <div class="row well static">

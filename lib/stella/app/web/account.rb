@@ -3,6 +3,21 @@ require 'stripe'
 class Stella::App::Account
   include Stella::App::Base
 
+  def addcontact
+    authenticated do
+      enforce_method! :POST
+      assert_params :email
+      opts = {:email => req.params[:email], :customer => cust}
+      opts[:name] = req.params[:name] if !req.params[:name].to_s.empty?
+      opts[:phone] = req.params[:phone] if !req.params[:phone].to_s.empty?
+      contact = Stella::Contact.create opts
+      res.body = json({
+        :name => contact.name, :email => contact.email, :phone => contact.phone, :contactid => contact.contactid
+      })
+      res.redirect "/account/contacts" unless req.ajax?
+    end
+  end
+
   def logout
     publically do
       if sess.authenticated?
@@ -237,6 +252,7 @@ module Stella::App::Views
         #self[:hello_style] = :mustache_hello
         self[:tabs] = [
           {:tab => :profile, :text => "Account", :active => true },
+          {:tab => :contacts,:text => "Contacts" },
           {:tab => :api,     :text => "API Credentials" },
           {:tab => :sites,   :text => "Sites" }
         ]
