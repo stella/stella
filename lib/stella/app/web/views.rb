@@ -59,6 +59,7 @@ class Stella
         else
           #@topnav << ahref('/info/company', 'How it Works')
           @topnav << ahref('/signup', 'Signup', 'highlight')
+          @topnav << ahref('/blog', 'Blog')
           @topnav << ahref('/docs', 'API')
           @topnav << ahref('/info/company', 'About Us')
         end
