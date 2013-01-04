@@ -9,10 +9,18 @@ Stella.load! :tryouts
 Stella.config['vendor.stathat.user'].to_s.empty?
 #=> false
 
-## Can add a count
-Stella::Analytics.stathat_count 'tryouts-count', 2
+## Can add a count directly
+Stella::Analytics::StatHat.count 'tryouts-count', 2
 #=> true
 
-## Can add a value
-Stella::Analytics.stathat_value 'tryouts-value', rand*10000
+## Can add a value directly
+Stella::Analytics::StatHat.value 'tryouts-value', rand*10000
+#=> true
+
+## Stella::Analytics.event knows to use stathat
+Stella::Analytics.event 'tryouts-count', 2
+#=> true
+
+## Stella::Analytics.value knows to use stathat
+Stella::Analytics.value 'tryouts-value', rand*10000
 #=> true

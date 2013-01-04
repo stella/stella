@@ -673,21 +673,41 @@ end
 require "stathat"
 module Stella::Analytics
   extend self
-  def stathat_count name, count=1, wait=0.500
-    safely(wait) do
-      StatHat::API.ez_post_count(name, Stella.config['vendor.stathat.user'], count)
+
+  module StatHat
+    extend self
+    def count name, count=1
+      ::StatHat::API.ez_post_count(name, Stella.config['vendor.stathat.user'], count)
+    end
+    def value name, value
+      ::StatHat::API.ez_post_value(name, Stella.config['vendor.stathat.user'], value)
     end
   end
-  def stathat_value name, value, wait=0.500
+
+  def event name, count=1, wait=0.5
     safely(wait) do
-      StatHat::API.ez_post_value(name, Stella.config['vendor.stathat.user'], value)
+      if vendor? :stathat
+        Stella::Analytics::StatHat.count name, count
+     end
+   end
+  end
+
+  def value name, value, wait=0.5
+    safely(wait) do
+      if vendor? :stathat
+        Stella::Analytics::StatHat.value name, value
+      end
     end
   end
-  def stathat?
-    !Stella.config['vendor.stathat.user'].to_s.empty?
+
+  def vendor? guess
+    if !Stella.config['vendor.stathat.user'].to_s.empty?
+      guess.to_s == 'stathat'
+    end
   end
+
   def safely(wait, &blk)
-    return unless stathat?
+    wait = 0.5 if wait < 0.5
     begin
       Timeout.timeout(wait) do
         blk.call
