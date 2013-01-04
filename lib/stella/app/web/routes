@@ -48,6 +48,8 @@ GET   /account/api                                    Stella::App::Account#api
 GET   /account/billing                                Stella::App::Account#billing
 GET   /account/billing/:tabid                         Stella::App::Account#billing
 
+POST  /account/:custid/delete                         Stella::App::Account#delete
+
 POST  /account/addcontact                             Stella::App::Account#addcontact
 
 POST  /account/token                                  Stella::App::Account#receive_token

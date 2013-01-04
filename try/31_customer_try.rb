@@ -53,6 +53,11 @@ Stella::Customer.exists? "#{@custid}@blamestella.com"
 @cust2.contact.email
 #=> @cust2.email
 
-## Customer can be destroyed
-@cust.destroy!
-#=> true
+## When a customer is destroyed it's left in an unusable state.
+[@cust.destroy!, @cust.passhash, @cust.deleted_at.nil?]
+#=> [true, nil, false]
+
+## When a customer is destroyed it's children are deleted
+p @cust2.contacts
+[@cust2.destroy!, @cust2.contacts]
+#=> [true, []]

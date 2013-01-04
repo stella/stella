@@ -6,9 +6,9 @@
 require 'dm-migrations/migration_runner'
 
 begin
-  
+
   Stella.load_db
-  
+
   migration 1, :create_people_table do
     up do
       create_table :people do
@@ -22,8 +22,8 @@ begin
       drop_table :people
     end
   end
-  
-  
+
+
   migration 2, :make_desc_text do
     up do
       modify_table :people do
@@ -32,17 +32,17 @@ begin
       end
     end
   end
-  
+
+  case ARGV.first.to_s.upcase
+  when "DOWN"
+    migrate_down!
+  when "UP"
+    migrate_up!
+  else
+    Stella.li "Skipping"
+  end
+
 rescue => ex
   puts "#{ex.class} #{ex.message}", ex.backtrace
   exit 1
-end
-
-
-if $0 == __FILE__
-  if ARGV.first.to_s.downcase == "down"
-    migrate_down!
-  else
-    migrate_up!
-  end
 end

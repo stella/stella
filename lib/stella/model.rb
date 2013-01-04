@@ -103,6 +103,7 @@ class Stella
     property :nickname, String, :unique_index => true
     property :migration_profile, String, :length => 32
     property :legacy, Json, :default => {}
+    property :deleted_at, Time
   end
 
   class Host

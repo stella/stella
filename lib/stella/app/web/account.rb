@@ -3,6 +3,24 @@ require 'stripe'
 class Stella::App::Account
   include Stella::App::Base
 
+  def delete
+    authenticated('/account') do
+      enforce_method! :POST
+       assert_params :confirm, :custid
+       if req.params[:confirm] && cust.custid == req.params[:custid]
+         cust.destroy!
+         res.delete_cookie :sess
+         sess.destroy! :all
+         @cust = Stella::Customer.anonymous
+         @sess = Stella::Session.new
+         res.redirect '/'
+       else
+        sess.add_info_message! "Account was not deleted. You must click confirm."
+        res.redirect '/account'
+      end
+    end
+  end
+
   def addcontact
     authenticated do
       enforce_method! :POST

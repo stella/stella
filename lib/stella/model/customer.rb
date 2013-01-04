@@ -7,6 +7,18 @@ class Stella
     alias_method :exists?, :saved?
     alias_method :objid, :custid
 
+    def destroy!
+      self.contacts.destroy!
+      self.hosts.each { |host| host.destroy! }
+      self.deleted_at = Stella.now
+      self.passhash = nil
+      self.email = "%s-DELETED" % self.email # so we don't accidentally email
+      self.products.each do |product|
+        product.active = false
+        product.save
+      end
+      self.save
+    end
 
     def paying?
       colonel? || comped || !monthly_bill.zero?

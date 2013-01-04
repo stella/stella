@@ -1,7 +1,7 @@
 # 2013-01-03
 # * Create customer contacts
 #
-# ruby -Ilib -rstella migrate/2013-01-03-1-create-contacts.rb
+# ruby -Ilib -rstella migrate/2013-01-03-2-create-contacts.rb
 #
 # NOTE: This script assumes no customers have contact records.
 #
