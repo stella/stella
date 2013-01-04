@@ -60,6 +60,7 @@ module Stella::Logic
         checkup.save
         checkup
       end
+      Stella::Analytics.event "Run Checkup"
       checkup
     end
 

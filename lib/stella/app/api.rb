@@ -93,6 +93,7 @@ class Stella
             worker = Stella::WorkerProfile.new opts
             worker.remote_machine = machine
             Stella::Logic.safedb { worker.save }
+            Stella::Analytics.event "Remote Worker Register"
             if worker.saved?
               res.body = content(:workerid => worker.workerid, :interval => opts[:interval])
             else
@@ -112,6 +113,7 @@ class Stella
             else
               worker.status = :offline
               worker.save
+              Stella::Analytics.event "Remote Worker Deregister"
               res.body = content(:workerid => worker.workerid, :status => worker.status)
             end
           end
@@ -127,6 +129,7 @@ class Stella
             output = jobs.collect { |job|
               self.class.prepare_job_output(worker, job)
             }
+            Stella::Analytics.event "Remote Worker Pull"
             res.body = content(:workerid => worker.workerid, :jobs => output)
           end
         end
@@ -140,6 +143,7 @@ class Stella
             result = if req.params[:result]
               Hash.from_json(Zlib::Inflate.inflate(req.params[:result]))
             end
+            Stella::Analytics.event "Remote Worker Push"
             # p [req.params[:result].to_s.size, req.params[:screenshot].to_s.size]
             job = Stella::Job.load req.params[:jobid]
             if job.nil?

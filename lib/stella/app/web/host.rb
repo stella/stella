@@ -39,6 +39,7 @@ class Stella::App::Host
       if is_owner?
         host.hidden = true
         host.stop!
+        Stella::Analytics.event "Stop Monitor"
         sess.add_info_message! "Removed #{host.hostname}"
         # TODO: Also stop monitoring.
         res.body = json(:status => :success)
@@ -56,6 +57,7 @@ class Stella::App::Host
         #Stella::Job::RenderPlan.enqueue :planid => plan.planid
         Stella::Job::RenderHost.enqueue :hostid => host.hostid
         sess.add_info_message! "Updating screenshot for #{host.hostname}"
+        Stella::Analytics.event "Update Screenshot"
         res.body = json(:status => :success)
       else
         not_found_response "No such host"
@@ -105,6 +107,8 @@ class Stella::App::Host
         end
         host.save
 
+        Stella::Analytics.event "Update Host Settings"
+
         sess.add_info_message! "Settings saved for #{host.hostname}."
         res.redirect "/site/#{host.hostname}" unless req.ajax?
       else
@@ -136,6 +140,7 @@ class Stella::App::Host
       enforce_method! :POST
       if is_owner?
         host.start! :site_basic_v1
+        Stella::Analytics.event "Start Monitor"
         sess.add_info_message! "Started monitoring #{host.hostname}"
         res.redirect '/' unless req.ajax?
       else
@@ -149,6 +154,7 @@ class Stella::App::Host
       enforce_method! :POST
       if is_owner?
         host.stop!
+        Stella::Analytics.event "Stop Monitor"
         if Stella::Logic.safedb { host.save }
           sess.add_info_message! "Stopped monitoring #{host.hostname}"
         else
@@ -229,6 +235,7 @@ class Stella::App::Host
         plan.hidden = false
         plan.save
         host.start!
+        Stella::Analytics.event "Start Monitor"
         sess.add_info_message! "Enable monitoring for #{plan.parsed_uri}"
         res.redirect '/' unless req.ajax?
       else
@@ -247,6 +254,7 @@ class Stella::App::Host
         plan.save
         if host.monitored && host.testplans(:hidden => false, :enabled => true).size == 0
           host.stop!
+          Stella::Analytics.event "Stop Monitor"
           sess.add_info_message! "Stopped monitoring #{plan.host.hostname}!"
         end
         sess.add_info_message! "Disabled monitoring for #{plan.parsed_uri}"

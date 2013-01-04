@@ -56,6 +56,7 @@ class Stella::Logic::Signup < Stella::Logic::Base
         host.testplans << testplan
       end
       host.start! :site_free_v1
+      Stella::Analytics.event "Start Monitor"
       @hostname = host.hostname
       if host.screenshots.empty?
         Stella::Job::RenderHost.enqueue :hostid => host.hostid
@@ -72,6 +73,7 @@ class Stella::Logic::Signup < Stella::Logic::Base
     Stella.li "signup-success: #{cust.custid} #{cust.role}"
     sess[:custid] = cust.custid
     sess[:authenticated] = true
+    Stella::Analytics.event "New Customers"
   end
 
   protected
@@ -93,6 +95,7 @@ class Stella::Logic::Login < Stella::Logic::Base
     check_rate_limits! :login
     if @cust.nil?
       args = [email, password.gibbler.short, sess[:ipaddress]]
+      Stella::Analytics.event "Login (failed)"
       raise Stella::App::FailedAuthorization.new(*args)
     end
   end
@@ -109,6 +112,7 @@ class Stella::Logic::Login < Stella::Logic::Base
     #Stella::Customer.active.add Stella.now.to_i, @cust if @cust && @sess.authenticated?
     cust.role = :colonel if Stella.colonel?(cust.email)
     cust.save
+    Stella::Analytics.event "Login (success)"
   end
 
   protected

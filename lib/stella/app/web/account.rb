@@ -13,6 +13,7 @@ class Stella::App::Account
          sess.destroy! :all
          @cust = Stella::Customer.anonymous
          @sess = Stella::Session.new
+         Stella::Analytics.event "Delete account"
          res.redirect '/'
        else
         sess.add_info_message! "Account was not deleted. You must click confirm."
@@ -32,6 +33,7 @@ class Stella::App::Account
       res.body = json({
         :name => contact.name, :email => contact.email, :phone => contact.phone, :contactid => contact.contactid
       })
+      Stella::Analytics.event "Add Contact"
       res.redirect "/account/contacts" unless req.ajax?
     end
   end

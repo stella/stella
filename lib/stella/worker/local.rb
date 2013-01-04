@@ -14,6 +14,7 @@ class Stella
       @current_job = find_job
       return if current_job.nil?
       Stella.li "[#{current_job.type}] #{current_job.jobid} #{}"
+      Stella::Analytics.event "#{current_job.type}"
       current_job.perform
       current_job.status! :done
     rescue => ex
