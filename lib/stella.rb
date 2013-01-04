@@ -15,6 +15,7 @@ autoload :SendGrid, 'sendgrid'
 autoload :Twilio, 'twilio'
 autoload :Base64, 'base64'
 autoload :Zlib, 'zlib'
+autoload :Timeout, "timeout"
 
 require 'gibbler/mixins'
 Gibbler.secret = 'PLEASECHANGEMESTELLA'
@@ -667,7 +668,30 @@ class Stella
     end
 
   end
+end
 
+require "stathat"
+module Stella::Analytics
+  extend self
+  def stathat_count name, count, wait=0.500
+    safely(wait) do
+      StatHat::API.ez_post_count(name, Stella.config['vendor.stathat.user'], count)
+    end
+  end
+  def stathat_value name, value, wait=0.500
+    safely(wait) do
+      StatHat::API.ez_post_value(name, Stella.config['vendor.stathat.user'], value)
+    end
+  end
+  def safely(wait, &blk)
+    begin
+      Timeout.timeout(wait) do
+        blk.call
+      end
+    rescue Timeout::Error
+      Stella.li "timeout calling stathat"
+    end
+  end
 end
 
 at_exit {

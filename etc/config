@@ -36,6 +36,8 @@ vendor.twilio.sid: CHANGEME
 vendor.twilio.token: CHANGEME
 vendor.twilio.phone: CHANGEME
 
+vendor.stathat.user: CHANGEME
+
 location.city: montreal
 
 render.path: /path/2/dir
