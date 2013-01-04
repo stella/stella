@@ -117,9 +117,8 @@ class Stella::App
       sess.request_params.update req.params
       res.redirect redirect
 
-    rescue Stella::App::Problem => ex
-      sess.add_error_message! ex.message
-      res.redirect redirect
+    rescue Stella::App::PasswordUpdateRequired => ex
+      res.redirect "#{redirect}?pwreset=1&email=#{ex.email}"
 
     rescue Stella::App::FailedAuthorization => ex
       sess.add_error_message! ex.message
@@ -127,9 +126,6 @@ class Stella::App
       req.params.delete "password2"
       sess.request_params.update req.params
       res.redirect redirect
-
-    rescue Stella::App::PasswordUpdateRequired => ex
-      res.redirect "#{redirect}?pwreset=1&email=#{ex.email}"
 
     rescue Stella::App::Unauthorized => ex
       Stella.li ex.message
@@ -150,6 +146,10 @@ class Stella::App
       err "[limit-exceeded] #{cust.custid}(#{sess[:ipaddress]}): #{ex.event}(#{ex.count}) #{sess.identifier.shorten(10)}"
       err req.current_absolute_uri
       error_response "Apologies dear citizen! You have been rate limited. Consider upgrading or try again in a few minutes."
+
+    rescue Stella::App::Problem => ex
+      sess.add_error_message! ex.message
+      res.redirect redirect
 
     rescue Errno::ECONNREFUSED => ex
       Stella.li "Redis is down: #{ex.message}"
