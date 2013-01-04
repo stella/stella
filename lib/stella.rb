@@ -673,7 +673,7 @@ end
 require "stathat"
 module Stella::Analytics
   extend self
-  def stathat_count name, count, wait=0.500
+  def stathat_count name, count=1, wait=0.500
     safely(wait) do
       StatHat::API.ez_post_count(name, Stella.config['vendor.stathat.user'], count)
     end
@@ -683,13 +683,20 @@ module Stella::Analytics
       StatHat::API.ez_post_value(name, Stella.config['vendor.stathat.user'], value)
     end
   end
+  def stathat?
+    !Stella.config['vendor.stathat.user'].to_s.empty?
+  end
   def safely(wait, &blk)
+    return unless stathat?
     begin
       Timeout.timeout(wait) do
         blk.call
       end
     rescue Timeout::Error
-      Stella.li "timeout calling stathat"
+      Stella.li '[stathat] timeout (%d)' % wait
+    rescue => ex
+      Stella.li '[stathat] %s' % ex.message
+      Stella.ld ex.backtrace
     end
   end
 end
