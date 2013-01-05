@@ -27,10 +27,10 @@ gem 'i18n'
 
 gem 'coderay', '1.0.8'
 
-group :backend do
-  gem 'redis', '3.0.2'
-  gem 'redis-objects', '0.6.1'
+gem 'redis', '3.0.2'
+gem 'redis-objects', '0.6.1'
 
+group :backend do
   gem 'datamapper', '1.2.0'
   gem 'dm-sqlite-adapter', '1.2.0'
   gem 'dm-postgres-adapter', '1.2.0'
