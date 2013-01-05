@@ -26,13 +26,6 @@ routines do
     end
   end
 
-  bundle_install do
-    remote do
-      cd 'blamestella.com'
-      bundle :install, '--deployment', '--frozen', '--without', 'profiling'
-    end
-  end
-
   update_static_files do
     remote do
       rsync :r, :p, 'blamestella.com/public/web', '/var/www/public/'  #
@@ -134,6 +127,12 @@ routines do
   end
 
   role :fe do
+    bundle_install do
+      remote do
+        cd 'blamestella.com'
+        bundle :install, '--deployment', '--frozen', '--without', 'profiling'
+      end
+    end
 
     quick_deploy do
       before :release
@@ -189,23 +188,61 @@ routines do
         git 'co', $branch
       end
     end
+  end
 
-    installdeps do
-      remote :root do
-        puts "Depends on the OS : ] (see this Rudy config)"
-        #apt_get 'update'
-        #apt_get 'install', 'joe', 'ntp', 'libmagick++5', 'libmagick++-dev', 'postgresql-9.1', 'postgresql-client-9.1', 'postgresql-client-common', 'postgresql-common'
-        #yum_install 'gcc', 'make', 'libtool', 'git', 'ntp', 'gcc-c++'
-        yum_install 'postgresql91.x86_64', 'postgresql91-server.x86_64', 'postgresql91-devel.x86_64', 'postgresql91-libs.x86_64', 'libpqxx.x86_64', 'libpqxx-devel.x86_64'
-        yum_install 'openssl-devel', 'readline-devel', 'ncurses-devel', 'libyaml-devel', 'libffi-devel'
-        yum_install 'sqlite.x86_64', 'sqlite-devel.x86_64'
-        #yum_install 'ImageMagick-c++.x86_64', 'ImageMagick-c++-devel.x86_64'
-        # SEE: https://github.com/kongregate/ruby-1.9.3-rpm
-        #gem_update '--system'
-        #gem_sources :a, "https://rubygems.org/"
-        #gem_install "bundler", "sysinfo", "gibbler"
-      end
+  installdeps do
+    remote :root do
+      puts "Depends on the OS : ] (see this Rudy config)"
+      #apt_get 'update'
+      #apt_get 'install', 'joe', 'ntp', 'libmagick++5', 'libmagick++-dev', 'postgresql-9.1', 'postgresql-client-9.1', 'postgresql-client-common', 'postgresql-common'
+      yum_install 'gcc', 'make', 'libtool', 'git', 'ntp', 'gcc-c++', 'screen'
+      #yum_install 'postgresql91.x86_64', 'postgresql91-server.x86_64', 'postgresql91-devel.x86_64', 'postgresql91-libs.x86_64', 'libpqxx.x86_64', 'libpqxx-devel.x86_64'
+      yum_install 'openssl-devel', 'readline-devel', 'ncurses-devel', 'libyaml-devel', 'libffi-devel'
+      yum_install 'sqlite.x86_64', 'sqlite-devel.x86_64'
+      yum_install 'ImageMagick-c++.x86_64', 'ImageMagick-c++-devel.x86_64'
+      # SEE: https://github.com/kongregate/ruby-1.9.3-rpm
+      gem_update '--system'
+      gem_sources :a, "https://rubygems.org/"
+      gem_install "bundler", "sysinfo", "gibbler"
     end
   end
 
+  env :remote do
+    after :bundle_install
+    clone_stella do
+      remote do
+        git :clone, "git://github.com/stella/stella.git"
+        cd 'stella'
+        git :checkout, :b, 'v3.0', 'origin/v3.0'
+      end
+    end
+
+    bundle_install do
+      remote do
+        cd 'stella'
+        bundle :install, '--deployment', '--frozen', '--without', 'profiling', '--without', 'backend'
+      end
+    end
+
+    install_ruby19 do
+      remote :root do
+        mkdir :p, 'sources'
+        cd 'sources'
+        #curl :O, 'http://pyyaml.org/download/libyaml/yaml-0.1.4.tar.gz'
+        #tar :z, :x, :f, 'yaml-0.1.4.tar.gz'
+        cd 'yaml-0.1.4'
+        #sh 'configure'
+        #make
+        make 'install'
+        cd '..'
+        curl :O, 'http://ftp.ruby-lang.org/pub/ruby/1.9/ruby-1.9.3-p362.tar.gz'
+        tar :z, :x, :f, 'ruby-1.9.3-p362.tar.gz'
+        cd 'ruby-1.9.3-p362'
+        sh 'configure'
+        make
+        make 'install'
+      end
+    end
+
+  end
 end
