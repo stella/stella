@@ -19,9 +19,8 @@ class Stella
       end
       def notches parts=[], now=Stella.now, limit=3
         n = []
-        #p [1, parts, now, limit]
         limit.times { |idx| n << Stella::SmartQueue.notch(now-idx.minutes, *parts) } # first offset is 0.
-        n
+        n.reverse
       end
       def key *parts
         Stella::RedisObject.key :queue, *parts
