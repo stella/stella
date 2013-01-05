@@ -162,6 +162,12 @@ class Stella
         #puts checkup.summary.to_yaml
         checkup.status = :done
 
+        if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?
+          Stella.ld "Updating google account id"
+          checkup.host.settings['gaid'] = checkup.summary['gaid']
+          checkup.host.save
+        end
+
         screenshot_path = report['log']['screenshot']
         if !screenshot_path.to_s.empty? && File.exists?(screenshot_path)
           shot = Stella::Screenshot.new :testplan => plan
@@ -219,6 +225,11 @@ class Stella
           Stella.ld "Updating testplan: #{plan.planid}"
           plan.save
         }
+
+        if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
+          plan.host.settings['gaid'] = run.summary['gaid']
+          plan.host.save
+        end
 
         plan.add_metrics run.started_at, run.metrics
         keys = [plan.rangemetrics.metrics.key]

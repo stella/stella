@@ -352,7 +352,8 @@ class Stella
           'error_count' => 0,
           'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil},
           'initial_offset' => nil,
-          'total_size' => 0
+          'total_size' => 0,
+          'gaid' => har['log']['gaid']
         }
         summary['assets'] = har['log']['entries'].collect do |entry|
           uri = Stella::Utils.uri(entry['request']['url'])

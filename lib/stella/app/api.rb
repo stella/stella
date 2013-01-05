@@ -168,6 +168,10 @@ class Stella
                   Stella.ld "Updating testplan: #{plan.planid}"
                   plan.save
                 }
+                if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
+                  plan.host.settings['gaid'] = run.summary['gaid']
+                  plan.host.save
+                end
                 if run.metrics?
                   plan.add_metrics run.started_at, run.metrics
                   keys = [plan.rangemetrics.metrics.key]
