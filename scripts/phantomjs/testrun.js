@@ -158,7 +158,6 @@ try {
            document.body.bgColor = 'white';
       });
 
-      console.log(page.options.with_screenshots == true)
       if (page.options.with_screenshots) {
         har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
         page.render(har.log.screenshot);

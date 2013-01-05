@@ -150,10 +150,6 @@ function createHAR12(page, endTime, pageTimings) {
       return;
     }
 
-    if (endReply.status < 300) {
-      console.log("STATUS " + endReply.status)
-    }
-
     entries.push({
       startedDateTime: request.time.toISOString(),
       time: endReply.time - request.time,
@@ -205,6 +201,7 @@ function createHAR12(page, endTime, pageTimings) {
       viewPort: page.viewportSize,
       options: page.options,
       gaDisabled: page.gaDisabled,
+      gaid: googleAnalyticsAccount(page.content),
       pages: [{
         startedDateTime: startTimeObj.toISOString(),
         id: page.address,
@@ -216,6 +213,10 @@ function createHAR12(page, endTime, pageTimings) {
   };
 }
 
+function googleAnalyticsAccount(str){
+  var matches = str.toString().match(/ua\-\d{4,9}\-\d{1,4}/i);
+  return matches == undefined ? null : matches[0];
+}
 
 function createErrorHAR(page, status, timeout) {
   var startTimeObj = new Date(page.timingLoadStarted);
