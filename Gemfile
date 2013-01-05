@@ -18,16 +18,6 @@ gem 'addressable', '2.2.6' #, :git => "https://github.com/delano/addressable"
 gem 'bcrypt-ruby', '3.0.1'
 gem 'mustache', '0.99.4'
 
-gem 'redis', '3.0.2'
-gem 'redis-objects', '0.6.1'
-
-gem 'datamapper', '1.2.0'
-gem 'dm-sqlite-adapter', '1.2.0'
-gem 'dm-postgres-adapter', '1.2.0'
-gem 'do_postgres', '0.10.10'
-
-gem 'stripe', '1.7.8'
-
 gem 'googleajax', '1.0.1'
 gem 'httparty', '0.9.0'
 
@@ -37,7 +27,19 @@ gem 'i18n'
 
 gem 'coderay', '1.0.8'
 
-gem 'twilio'
+group :backend do
+  gem 'redis', '3.0.2'
+  gem 'redis-objects', '0.6.1'
+
+  gem 'datamapper', '1.2.0'
+  gem 'dm-sqlite-adapter', '1.2.0'
+  gem 'dm-postgres-adapter', '1.2.0'
+  gem 'do_postgres', '0.10.10'
+
+  gem 'stripe', '1.7.8'
+
+  gem 'twilio'
+end
 
 # SOLUTIOUS FAMILY LIBS
 gem 'otto', '0.3.1'
