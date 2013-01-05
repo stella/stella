@@ -168,6 +168,10 @@ class Stella
           checkup.host.save
         end
 
+        if checkup.summary['total_size']
+          Stella::Analytics.event "Bytes In", checkup.summary['total_size']
+        end
+
         screenshot_path = report['log']['screenshot']
         if !screenshot_path.to_s.empty? && File.exists?(screenshot_path)
           shot = Stella::Screenshot.new :testplan => plan
@@ -229,6 +233,10 @@ class Stella
         if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
           plan.host.settings['gaid'] = run.summary['gaid']
           plan.host.save
+        end
+
+        if run.summary['total_size']
+          Stella::Analytics.event "Bytes In", run.summary['total_size']
         end
 
         plan.add_metrics run.started_at, run.metrics
