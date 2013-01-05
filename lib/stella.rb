@@ -25,6 +25,13 @@ require 'stella/logic'
 
 class Stella
   autoload :API, 'stella/api/client'
+  autoload :RedisObject, 'stella/redisobject'
+  autoload :Entropy, 'stella/redisobject'
+  autoload :Session, 'stella/redisobject/session'
+  autoload :Vendors, 'stella/vendors'
+  autoload :Job, 'stella/job'
+  autoload :SmartQueue, 'stella/queue'
+  autoload :Queueable, 'stella/queue'
   autoload :Email, 'stella/email'
 
   unless defined?(Stella::HOME)
@@ -138,13 +145,6 @@ class Stella
         Stella.ld "Loading backend..."
         require 'data_mapper'
         require 'stella/model'
-        autoload :RedisObject, 'stella/redisobject'
-        autoload :Entropy, 'stella/redisobject'
-        autoload :Session, 'stella/redisobject/session'
-        autoload :Vendors, 'stella/vendors'
-        autoload :Job, 'stella/job'
-        autoload :SmartQueue, 'stella/queue'
-        autoload :Queueable, 'stella/queue'
         autoload :Notifier, 'stella/notification'
 
         if Stella.config['redis.uri']
