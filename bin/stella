@@ -21,7 +21,16 @@ class Stella::CLI::Definition
   end
 
   command :irb do
-    Kernel.exec 'irb -I %s -rstella/irb' % [File.join(Stella::HOME, 'lib')]
+    cmd = 'irb -I%s -rstella/irb' % [File.join(Stella::HOME, 'lib')]
+    Stella.ld cmd
+    Kernel.exec cmd
+  end
+
+  command :phantomjs do |obj|
+    Stella.load!
+    cmd = '%s %s' % [Stella.config['phantomjs.path'], obj.argv.join(' ')]
+    Stella.ld cmd
+    Kernel.exec cmd
   end
 
   option :l, :local, "Local worker"

@@ -40,6 +40,8 @@ vendor.stathat.user: CHANGEME
 
 location.city: montreal
 
+phantomjs.home: ./vendor/phantomjs-1.7.0-macosx
+
 render.path: /path/2/dir
 render.thumbnail.sizes:
   :t:

@@ -151,6 +151,9 @@ class Stella
         Stella::Secret.redis = Stella.redis(2)
         @redis_scripts = Stella::RedisObject.load_scripts
       end
+      if Stella.config['phantomjs.home']
+        Stella.config['phantomjs.path'] = File.join(Stella.config['phantomjs.home'], 'bin', 'phantomjs')
+      end
       SendGrid.api_user = Stella.config['vendor.sendgrid.user']
       SendGrid.api_key = Stella.config['vendor.sendgrid.key']
       SendGrid.hostname = Stella.sysinfo.hostname
