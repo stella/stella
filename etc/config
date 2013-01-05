@@ -7,6 +7,8 @@ site.colonels:
 site.allow_signups: true
 site.allow_local: false
 
+site.backend: false
+
 # [OSX] shasum -a 1 /path/to/inputfile
 site.secret: PLEASECHANGEMESTELLA
 

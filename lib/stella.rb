@@ -8,7 +8,6 @@ autoload :Resolv, 'resolv'
 autoload :IPAddr, 'ipaddr'
 autoload :Redis, 'redis/objects'
 autoload :Yajl, 'yajl'
-autoload :DataMapper, 'data_mapper'
 autoload :Magick, 'RMagick'
 autoload :SecureRandom, 'securerandom'
 autoload :SendGrid, 'sendgrid'
@@ -23,18 +22,9 @@ Gibbler.secret = 'PLEASECHANGEMESTELLA'
 require 'stella/core_ext'
 require 'stella/errors'
 require 'stella/logic'
-require 'stella/model'
 
 class Stella
   autoload :API, 'stella/api/client'
-  autoload :RedisObject, 'stella/redisobject'
-  autoload :Entropy, 'stella/redisobject'
-  autoload :Session, 'stella/redisobject/session'
-  autoload :Vendors, 'stella/vendors'
-  autoload :Job, 'stella/job'
-  autoload :SmartQueue, 'stella/queue'
-  autoload :Queueable, 'stella/queue'
-  autoload :Notifier, 'stella/notification'
   autoload :Email, 'stella/email'
 
   unless defined?(Stella::HOME)
@@ -136,37 +126,56 @@ class Stella
       Stella.ld "---  STELLA v#{Stella::VERSION}  -----------------------------------"
       Stella.ld "[%d/%s] %s/%s %s-%s @ %s" % [$$, Stella.instance.short,
         Stella.mode, Stella.env, Stella.sysinfo.vm, Stella.sysinfo.ruby.join('.'), Time.now.utc]
-      if Stella.config['db.uri'].to_s.empty?
-        Stella.li "No database specified. (Check db.uri)"
-      else
-        load_db
-        DataMapper.finalize
-      end
+
       Gibbler.secret = Stella.config['site.secret'] if Stella.config['site.secret']
       Stella.li "You need to update site.secret" if Gibbler.secret == "PLEASECHANGEMESTELLA"
       Stella.config['site.ssl_ca_file'] ||= File.join(Stella::HOME, 'certs', 'stella-master.crt')
-      if Stella.config['redis.uri']
-        Stella::Session.redis = Stella.redis(1)
-        Stella::Job.redis = Stella.redis(11)
-        Stella::Secret.redis = Stella.redis(2)
-        @redis_scripts = Stella::RedisObject.load_scripts
-      end
+
       if Stella.config['phantomjs.home']
         Stella.config['phantomjs.path'] = File.join(Stella.config['phantomjs.home'], 'bin', 'phantomjs')
       end
-      SendGrid.api_user = Stella.config['vendor.sendgrid.user']
-      SendGrid.api_key = Stella.config['vendor.sendgrid.key']
-      SendGrid.hostname = Stella.sysinfo.hostname
-      Twilio.connect(Stella.config['vendor.twilio.sid'], Stella.config['vendor.twilio.token'])
-      # If we don't specify a cert authority file, the Twilio lib can raise
-      # "certificate verify failed" errors on some machines.
-      Twilio.ssl_ca_file Stella.config['site.ssl_ca_file']
-      SendGrid.ssl_ca_file Stella.config['site.ssl_ca_file']
-      if Stella.debug
-        SendGrid.debug_output $stderr
-        Twilio.debug_output $stderr
+      if !Stella.config.has_key?('site.backend') || Stella.config['site.backend']
+        Stella.ld "Loading backend..."
+        require 'data_mapper'
+        require 'stella/model'
+        autoload :RedisObject, 'stella/redisobject'
+        autoload :Entropy, 'stella/redisobject'
+        autoload :Session, 'stella/redisobject/session'
+        autoload :Vendors, 'stella/vendors'
+        autoload :Job, 'stella/job'
+        autoload :SmartQueue, 'stella/queue'
+        autoload :Queueable, 'stella/queue'
+        autoload :Notifier, 'stella/notification'
+
+        if Stella.config['redis.uri']
+          Stella::Session.redis = Stella.redis(1)
+          Stella::Job.redis = Stella.redis(11)
+          Stella::Secret.redis = Stella.redis(2)
+          @redis_scripts = Stella::RedisObject.load_scripts
+        end
+
+        if Stella.config['db.uri'].to_s.empty?
+          Stella.li "No database specified. (Check db.uri)"
+        else
+          load_db
+          DataMapper.finalize
+        end
+
+        SendGrid.api_user = Stella.config['vendor.sendgrid.user']
+        SendGrid.api_key = Stella.config['vendor.sendgrid.key']
+        SendGrid.hostname = Stella.sysinfo.hostname
+        Twilio.connect(Stella.config['vendor.twilio.sid'], Stella.config['vendor.twilio.token'])
+        # If we don't specify a cert authority file, the Twilio lib can raise
+        # "certificate verify failed" errors on some machines.
+        Twilio.ssl_ca_file Stella.config['site.ssl_ca_file']
+        SendGrid.ssl_ca_file Stella.config['site.ssl_ca_file']
+        if Stella.debug
+          SendGrid.debug_output $stderr
+          Twilio.debug_output $stderr
+        end
+        Stella::Product.load!
       end
-      Stella::Product.load!
+
       true
     rescue Stella::NoRedis => ex
       Stella.lc ex.message rescue nil
