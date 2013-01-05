@@ -65,7 +65,7 @@ class Stella
         end
         self[:hello_style] = :simple_hello
         self[:colonels_only] = cust.colonel?
-        self[:is_production] = Stella.config['site.mode'] == 'production'
+        self[:is_production] =  ['production', 'prod'].member?(Stella.config['site.env'])
         self[:spreedlycore_key] = Stella.config['vendor.spreedlycore.key']
         self[:site_price] = 2
         init(*args) if respond_to?(:init)
