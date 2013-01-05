@@ -140,16 +140,20 @@ function createHAR(page, endTime, pageTimings) {
 function createHAR12(page, endTime, pageTimings) {
   var entries = [];
   var startTimeObj = new Date(page.timingInitialize);
-  
+
   page.resources.forEach(function (resource) {
     var request = resource.request,
       startReply = resource.startReply,
       endReply = resource.endReply;
-      
+
     if (!request || !startReply || !endReply) {
       return;
     }
-    
+
+    if (endReply.status < 300) {
+      console.log("STATUS " + endReply.status)
+    }
+
     entries.push({
       startedDateTime: request.time.toISOString(),
       time: endReply.time - request.time,

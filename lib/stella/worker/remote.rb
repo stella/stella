@@ -72,7 +72,7 @@ class Stella
       ret = @api.post 'worker/deregister', :workerid => workerid
     end
     private
-    def cmd script, *args
+    def prepare_command script, *args
       Shellwords.join [script, *args.flatten.collect(&:to_s)]
     end
     def debug_line meth

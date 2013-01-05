@@ -66,7 +66,7 @@ class Stella
         shot = Stella::Screenshot.new :width => 1024, :height => 768, :host => host
         thumbdir = Stella.config['render.path']
         raise error("Bad hostid #{job[:hostid]}") unless host
-        cmd = cmd('bin/phantomjs', 'scripts/phantomjs/render.js', host.hostname, shot.width, shot.height)
+        cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', host.hostname, shot.width, shot.height)
         Stella.li cmd
         tmpfile = nil
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
@@ -101,7 +101,7 @@ class Stella
         shot = Stella::Screenshot.new :width => 1024, :height => 768, :testplan => plan
         thumbdir = Stella.config['render.path']
         raise error("Bad planid #{job[:planid]}") unless plan
-        cmd = cmd('bin/phantomjs', 'scripts/phantomjs/render.js', plan.uri, shot.width, shot.height)
+        cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', plan.uri, shot.width, shot.height)
         Stella.li cmd
         tmpfile = nil
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
@@ -143,7 +143,7 @@ class Stella
           :with_screenshots => true
         }
         options[:gaid] = plan.host.settings['gaid'] if plan.host.settings['disable_ga'].to_s == 'true'
-        cmd = cmd('bin/phantomjs', 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
+        cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
         report = {}
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
@@ -196,7 +196,7 @@ class Stella
           :with_screenshots => false
         }
         options[:gaid] = plan.host.settings['gaid'] if plan.host.settings['disable_ga'].to_s == 'true'
-        cmd = cmd('bin/phantomjs', 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
+        cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
         har = {}
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
@@ -241,7 +241,7 @@ class Stella
     module TestrunRemote
       extend Stella::Queueable
       def self.perform job
-        cmd = cmd('bin/phantomjs', 'scripts/phantomjs/testrun.js', job['uri'], job['options'].to_json)
+        cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', job['uri'], job['options'].to_json)
         Stella.li cmd
         result = nil
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|

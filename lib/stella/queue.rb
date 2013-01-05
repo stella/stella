@@ -163,7 +163,7 @@ class Stella
       }.merge attributes
       Stella::Job.create attributes
     end
-    def cmd script, *args
+    def prepare_command script, *args
       Shellwords.join [script, *args.flatten.collect(&:to_s)]
     end
     def error msg
