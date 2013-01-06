@@ -82,6 +82,9 @@ class Stella
     attr_reader :instance, :config, :agent, :redis_connection, :redis_scripts
     attr_accessor :mode, :noise, :quiet
     attr_writer :env, :debug
+    def config? param
+      config.has_key?(param) && !config[param].to_s.empty?
+    end
     def quiet?
       quiet == true
     end
