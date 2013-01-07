@@ -166,6 +166,21 @@ class Stella::App
       @cust ||= Stella::Customer.anonymous
     end
 
+    def app_uri path, params={}
+      uri = Addressable::URI.parse '%s://%s' % [
+            Stella.config['site.scheme'],
+            Stella.config['site.host']]
+      if (![80,443].member?(Stella.config['site.port'].to_i))
+        uri.port = Stella.config['site.port']
+      end
+      uri.path = path
+      if params.empty?
+        uri.to_s
+      else
+        '%s?%s' % [uri.to_s, params.to_http_params]
+      end
+    end
+
     def enforce_method! meth
       return if req.request_method.to_s.upcase == meth.to_s.upcase
       raise Stella::App::NotFound
