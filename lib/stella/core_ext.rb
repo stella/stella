@@ -491,3 +491,33 @@ class Hash
     self
   end
 end
+
+
+# Since rack 1.4, Rack::Reloader doesn't actually reload.
+# A new instance is created for every request, so the cached
+# modified times are reset every time.
+# This patch uses a class variable for the @mtimes hash
+# instead of an instance variable.
+module Rack
+  class Reloader
+    @mtimes = {}
+    class << self
+      attr_reader :mtimes
+    end
+    def reload!(stderr = $stderr)
+      rotation do |file, mtime|
+        previous_mtime = self.class.mtimes[file] ||= mtime
+        safe_load(file, mtime, stderr) if mtime > previous_mtime
+      end
+    end
+    def safe_load(file, mtime, stderr = $stderr)
+      load(file)
+      stderr.puts "#{self.class}: reloaded `#{file}'"
+      file
+    rescue LoadError, SyntaxError => ex
+      stderr.puts ex
+    ensure
+      self.class.mtimes[file] = mtime
+    end
+  end
+end

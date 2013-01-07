@@ -1,5 +1,6 @@
 require 'stella/app/helpers'
 
+
 class Stella
   class App
 
