@@ -1,6 +1,48 @@
 require 'stella/logic'
 require 'stella/email'
 
+class Stella::Logic::GitHubSignup < Stella::Logic::Base
+  attr_reader :token, :github
+  def raise_concerns
+    raise Stella::App::SignupError, 'No token' if token.empty?
+    @github = HTTParty.get('https://api.github.com/user?access_token=%s' % token)
+  end
+  def process
+    if github['email'].to_s.empty?
+      github['email'] = '%s+GITHUB@blamestella.com' % github['nickname']
+    end
+    @cust = Stella::Customer.first(:github_token => token)
+    new_cust = false
+    if cust.nil?
+      @cust = Stella::Customer.new :email => github['email'], :nickname => github['nickname']
+      new_cust = true
+    end
+    cust.name = github['name']
+    cust.location = github['location']
+    cust.company = github['company']
+    cust.nickname = github['nickname']
+    cust.github_token = token
+    cust.data['github'] = github.parsed_response
+    begin
+      cust.save
+    rescue DataObjects::IntegrityError
+      raise Stella::App::SignupError, "That email is already is use!"
+    end
+    sess[:custid] = cust.custid
+    sess[:authenticated] = true
+    if new_cust
+      welcome_msg = Stella::Email::Account::Welcome.new cust, :via => :github
+      welcome_msg.send_email
+      Stella::Analytics.event "New Customers"
+    end
+  end
+
+  protected
+  def process_params
+    @token = params[:token].to_s
+  end
+end
+
 class Stella::Logic::Signup < Stella::Logic::Base
   attr_reader :email, :password, :host, :checkup, :testplan, :secret, :secret_uri
   def raise_concerns
@@ -63,7 +105,7 @@ class Stella::Logic::Signup < Stella::Logic::Base
       end
     end
     cust.save
-    # TODO: Move to StartNewMonitor job
+    # TODO: Move to ExpressConfirmation job
     unless cust.colonel?
       @secret = Stella::Secret.create :type => 'confirm-account', :custid => cust.custid
       @secret_uri = Stella::App::StaticHelpers.uri '/account/confirm', secret.objid

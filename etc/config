@@ -19,11 +19,11 @@ redis.uri: 'redis://127.0.0.1/0?timeout=5&thread_safe=false&logging=false'
 
 stella.remote: https://www.blamestella.com/
 stella.custid: delano@blamestella.com
-stella.apikey: d554f3c589f09bb74a71baa1348d4cdc63ae7c5f
+#stella.apikey: CHANGEME
 
-account.tech.name: Tucker (BlameStella)
+account.tech.name: Tucker
 account.tech.email: tucker@blamestella.com
-account.tech.phone: 12508991905
+#account.tech.phone: CHANGEME
 
 account.biz.name: Morton Blamey
 account.biz.email: morton@blamestella.com
@@ -31,18 +31,22 @@ account.biz.email: morton@blamestella.com
 account.anonymous.name: Anonymous
 account.anonymous.email: anonymous@blamestella.com
 
-vendor.sendgrid.user: CHANGEME
-vendor.sendgrid.key: CHANGEME
+#vendor.sendgrid.user: CHANGEME
+#vendor.sendgrid.key: CHANGEME
 
-vendor.twilio.sid: CHANGEME
-vendor.twilio.token: CHANGEME
-vendor.twilio.phone: CHANGEME
+#vendor.twilio.sid: CHANGEME
+#vendor.twilio.token: CHANGEME
+#vendor.twilio.phone: CHANGEME
 
-vendor.stathat.user: CHANGEME
+#vendor.stathat.user: CHANGEME
+
+#vendor.github.client: CHANGEME
+#vendor.github.secret: CHANGEME
 
 location.city: montreal
 
 phantomjs.home: ./vendor/phantomjs-1.7.0-macosx
+#phantomjs.home: ./vendor/phantomjs-1.7.0-linux-x86_64
 
 render.path: /path/2/dir
 render.thumbnail.sizes:

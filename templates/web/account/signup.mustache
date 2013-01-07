@@ -3,7 +3,7 @@
   {{>_partial/session_messages}}
 
   <div class="span7 offset2">
-    
+
     <form class="well form-horizontal" method="POST">
       <fieldset>
         <legend><h2><span class="cufon">Sign Up</span> &nbsp;
@@ -40,10 +40,19 @@
           </div>
         </div>
       </fieldset>
-      
+
       <p>If you have an account, <a href="/login"><em>sign in</em></a>.</p>
+
+      <div class="offset1">
+      {{^authenticated}}
+      <h3 class="cufon">Or you may also...</h3>
+      <p><a class="btn btn-huge btn-primary cufon" href="/auth/github/redirect">Sign In with GitHub <em>!</em></a></p>
+      {{/authenticated}}
+      </div>
+
     </form>
-    
+
+
   </div>
 
 {{>_layout/footer}}

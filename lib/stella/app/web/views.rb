@@ -42,6 +42,7 @@ class Stella
           @authenticated = @sess.authenticated?
         rescue => ex
           Stella.ld ex.message
+          Stella.ld ex.backtrace
         end
         @show_feedback_form = true
         @body_class = :common

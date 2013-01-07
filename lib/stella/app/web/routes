@@ -11,6 +11,9 @@ POST  /hooks/stripe                                   Stella::App::Hooks#stripe
 GET   /hooks/twilio                                   Stella::App::Hooks#twilio
 POST  /hooks/twilio                                   Stella::App::Hooks#twilio
 
+GET   /auth/github/redirect                           Stella::App::Auth#github_redirect
+GET   /auth/github/callback                           Stella::App::Auth#github_callback
+
 
 ##########################################################################  CHECKUP
 POST  /checkup                                        Stella::App::Checkup#run

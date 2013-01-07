@@ -22,7 +22,7 @@ class Stella
       class ExpressConfirmation < Stella::Email
         def subject
           if self[:hostname].to_s.empty?
-            "You are now monitoring with BlameStella"
+            "You are now monitoring with Stella"
           else
             "%s is now being monitored for downtime" % [self[:hostname]]
           end
@@ -32,6 +32,18 @@ class Stella
       class PasswordReset < Stella::Email
         def subject
           'Password Reset for %s' % [cust.email]
+        end
+      end
+
+      class Welcome < Stella::Email
+        def subject
+          "Welcome to Stella"
+        end
+        def via_github
+          self[:via].to_s == 'github'
+        end
+        def username
+          via_github ? cust.nickname : cust.email
         end
       end
 

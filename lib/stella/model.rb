@@ -90,6 +90,7 @@ class Stella
     property :confirmed_at, Time
     property :srcpartner, String
     property :entropy, String
+    property :github_token, String
     property :payment_token, String
     property :testing,     Boolean, :default => false, :required => true
     property :sessid, String, :length => 100

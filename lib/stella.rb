@@ -104,7 +104,7 @@ class Stella
       (Stella.config['site.colonels'] || []).member?(guess.to_s)
     end
     def debug
-      @debug || (@debug.nil? && !ENV['STELLA_DEBUG'].to_s.empty?)
+      @debug || (@debug.nil? && ENV['STELLA_DEBUG'].to_s == 'true' || ENV['STELLA_DEBUG'].to_i == 1)
     end
     def rescue(&blk)
       blk.call

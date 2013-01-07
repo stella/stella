@@ -4,6 +4,7 @@ module Stella::Logic
   autoload :Signup, 'stella/logic/account'
   autoload :Login, 'stella/logic/account'
   autoload :Logout, 'stella/logic/account'
+  autoload :GitHubSignup, 'stella/logic/account'
   autoload :UpdatePassword, 'stella/logic/account'
   autoload :ViewCheckup, 'stella/logic/checkup'
   autoload :CreateCheckup, 'stella/logic/checkup'

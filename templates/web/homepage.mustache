@@ -46,11 +46,9 @@
       <span id="runningAWebsite" class="cell"></span>
       <span id="stellaLoves" class="cell cellCenter">
         <p><br/></p>
-        {{#bogus}}
         {{^authenticated}}
-        <button class="btn btn-huge btn-info cufon" href="/monitoring">Learn More <em>!</em></button>
+        <a class="btn btn-huge btn-primary cufon" href="/auth/github/redirect">Sign In with GitHub <em>!</em></a>
         {{/authenticated}}
-        {{/bogus}}
       </span>
       <span id="stellaIs" class="cell"></span>
     </div>

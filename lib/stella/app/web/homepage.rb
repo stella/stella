@@ -5,6 +5,14 @@ class Stella::App::Homepage
 
   def index
     publically do
+      token = '03b7cd5670eb44f8caffe7cd171c12e5bcca87dd'
+      #github = HTTParty.get('https://api.github.com/user?access_token=%s' % token)
+      #p github.parsed_response.class
+      #p github.parsed_response
+      if !req.params[:error].to_s.empty?
+        sess.add_error_message! "GitHub error: %s" % req.params[:error]
+        res.redirect '/'
+      end
       if sess.authenticated?
         view = Stella::App::Views::Dashboard.new req, sess, cust, req.params
         res.body = view.render
@@ -124,4 +132,57 @@ class Stella::App::Hooks
       res.body = "Thanks Twilio"
     end
   end
+end
+
+class Stella::App::Auth
+  include Stella::App::Base
+  def github_redirect
+    publically do
+      sess[:github_state] = [Stella.secret, SecureRandom.hex, :github_state].gibbler
+      params = {
+        :client_id => Stella.config['vendor.github.client'],
+        :redirect_uri => app_uri('/auth/github/callback'),
+        :scope => '', #'user,repo:status,gist',
+        :state => sess[:github_state]
+      }
+      Stella.ld '[to-github] %s' % params
+      res.redirect 'https://github.com/login/oauth/authorize?%s' % [params.to_http_params]
+    end
+  end
+
+  def github_callback
+    publically('/signup') do
+      #assert_params :code, :state
+      Stella.ld '[from-github] %s' % req.params
+      if req.get? && req.params[:state] == sess[:github_state]
+        uri = 'https://github.com/login/oauth/access_token'
+        params = {
+          :client_id => Stella.config['vendor.github.client'],
+          :client_secret => Stella.config['vendor.github.secret'],
+          :code => req.params[:code],
+          :state => sess[:github_state]
+        }
+        headers = {
+          'Accept' => 'application/json'
+        }
+        Stella.ld '[github-token-params] %s' % params
+        github = HTTParty.post(uri, :body => params, :headers => headers)
+        Stella.ld '[github-response] %s' % github.parsed_response
+        sess[:github_state] = nil
+        if github['access_token']
+          logic = Stella::Logic::GitHubSignup.new sess, cust, {:token => github['access_token']}
+          logic.raise_concerns
+          logic.process
+          res.redirect '/'
+        else
+          sess.add_error_message! "Did not get a token. Please try again."
+          res.redirect '/'
+        end
+      else
+        sess.add_error_message! "Cannot authenticate with Github at this time."
+        res.redirect '/'
+      end
+    end
+  end
+
 end

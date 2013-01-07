@@ -160,5 +160,5 @@ DEPENDENCIES
   sysinfo (= 0.8.0)!
   thin (= 1.5.0)
   tryouts (= 2.1.1)!
-  twilio
+  twilio (= 3.1.0)
   yajl-ruby (= 1.1.0)

@@ -37,8 +37,8 @@ group :backend do
   gem 'do_postgres', '0.10.10'
 
   gem 'stripe', '1.7.8'
-
-  gem 'twilio'
+  gem 'twilio', '3.1.0'
+  #gem 'octokit', '1.2.0'
 end
 
 # SOLUTIOUS FAMILY LIBS
