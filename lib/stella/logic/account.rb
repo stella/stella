@@ -20,7 +20,7 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     cust.name = github['name']
     cust.location = github['location']
     cust.company = github['company']
-    cust.nickname = github['nickname']
+    cust.nickname = github['login']
     cust.github_token = token
     cust.data['github'] = github.parsed_response
     begin
