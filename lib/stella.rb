@@ -1,5 +1,3 @@
-require 'bundler/setup'
-
 require 'sysinfo'
 require 'public_suffix'
 
@@ -19,11 +17,11 @@ autoload :Timeout, "timeout"
 require 'gibbler/mixins'
 Gibbler.secret = 'PLEASECHANGEMESTELLA'
 
-require 'stella/core_ext'
-require 'stella/errors'
-require 'stella/logic'
-
 class Stella
+  require 'stella/core_ext'
+  require 'stella/errors'
+
+  autoload :Logic, 'stella/logic'
   autoload :API, 'stella/api/client'
   autoload :RedisObject, 'stella/redisobject'
   autoload :Entropy, 'stella/redisobject'

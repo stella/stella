@@ -4,6 +4,7 @@ GEM
     addressable (2.2.6)
     annoy (0.5.6)
       highline (>= 1.5.0)
+    attic (0.5.3)
     bcrypt-ruby (3.0.1)
     builder (3.1.4)
     coderay (1.0.8)
@@ -119,6 +120,7 @@ PLATFORMS
 DEPENDENCIES
   addressable (= 2.2.6)
   annoy (= 0.5.6)
+  attic
   bcrypt-ruby (= 3.0.1)
   coderay (= 1.0.8)
   datamapper (= 1.2.0)
