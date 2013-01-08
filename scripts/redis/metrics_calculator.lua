@@ -12,7 +12,7 @@
 --    # of JSON object
 --
 local etime, stime, target = ARGV[1], ARGV[1]-ARGV[2], ARGV[3]
-redis.log(redis.LOG_NOTICE, KEYS[1] .. ' ' .. etime .. ' ' .. stime .. ' ' .. target)
+--redis.log(redis.LOG_NOTICE, KEYS[1] .. ' ' .. etime .. ' ' .. stime .. ' ' .. target)
 
 local items = redis.call('zrangebyscore', KEYS[1], stime, etime)
 
