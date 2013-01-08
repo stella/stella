@@ -136,6 +136,8 @@ end
 
 class Stella::App::Auth
   include Stella::App::Base
+
+  # See: http://developer.github.com/v3/oauth/
   def github_redirect
     publically do
       sess[:github_state] = [Stella.secret, SecureRandom.hex, :github_state].gibbler

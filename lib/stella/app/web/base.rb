@@ -1,3 +1,4 @@
+require 'stella/email'
 require 'stella/app/helpers'
 
 
