@@ -72,14 +72,14 @@ class Stella
     end
 
     def start_timingbelt
-      belt_index, belt_count = *@argv
+      belt_index, belt_count = argv[0].to_i, argv[1].to_i
       belt_index ||= 1
       belt_count ||= 1
       start_worker Stella::Worker::TimingBelt, belt_index, belt_count
     end
 
     def run_timingbelt
-      belt_index, belt_count = *@argv
+      belt_index, belt_count = argv[0].to_i, argv[1].to_i
       belt_index ||= 1
       belt_count ||= 1
       loop_start = Stella.now
