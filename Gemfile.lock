@@ -1,32 +1,9 @@
-GIT
-  remote: https://github.com/delano/gibbler
-  revision: 6dfc4a535fbb3bb27f31de565353c461aeb64b91
-  specs:
-    gibbler (0.9.0)
-      attic (>= 0.4.0)
-
-GIT
-  remote: https://github.com/delano/sysinfo
-  revision: 5d845aa77c0f9ffa0e91bfc679ebac5208bffb50
-  specs:
-    sysinfo (0.8.0)
-      drydock
-      storable
-
-GIT
-  remote: https://github.com/delano/tryouts
-  revision: 9dfe3a5be7834e2addb31d0725e0ac14635e4b12
-  specs:
-    tryouts (2.1.1)
-      sysinfo (>= 0.7.3)
-
 GEM
   remote: https://rubygems.org/
   specs:
     addressable (2.2.6)
     annoy (0.5.6)
       highline (>= 1.5.0)
-    attic (0.5.3)
     bcrypt-ruby (3.0.1)
     builder (3.1.4)
     coderay (1.0.8)
@@ -87,6 +64,7 @@ GEM
     drydock (0.6.9)
     eventmachine (1.0.0)
     fastercsv (1.5.5)
+    gibbler (0.9.0)
     googleajax (1.0.1)
       json (>= 1.0.0)
     highline (1.6.15)
@@ -119,10 +97,15 @@ GEM
     stripe (1.7.8)
       multi_json (>= 1.0.4, < 2)
       rest-client (~> 1.4)
+    sysinfo (0.8.0)
+      drydock
+      storable
     thin (1.5.0)
       daemons (>= 1.0.9)
       eventmachine (>= 0.12.6)
       rack (>= 1.0.0)
+    tryouts (2.1.1)
+      sysinfo (>= 0.7.3)
     twilio (3.1.0)
       builder (>= 2.1.2)
       httparty (~> 0.8)
@@ -143,7 +126,7 @@ DEPENDENCIES
   dm-sqlite-adapter (= 1.2.0)
   do_postgres (= 0.10.10)
   drydock (= 0.6.9)
-  gibbler (= 0.9.0)!
+  gibbler (= 0.9.0)
   googleajax (= 1.0.1)
   httparty (= 0.9.0)
   i18n
@@ -157,8 +140,8 @@ DEPENDENCIES
   rmagick (= 2.13.1)
   rufus-scheduler (= 2.0.17)
   stripe (= 1.7.8)
-  sysinfo (= 0.8.0)!
+  sysinfo (= 0.8.0)
   thin (= 1.5.0)
-  tryouts (= 2.1.1)!
+  tryouts (= 2.1.1)
   twilio (= 3.1.0)
   yajl-ruby (= 1.1.0)

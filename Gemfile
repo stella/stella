@@ -45,6 +45,6 @@ end
 gem 'otto', '0.3.1'
 gem 'drydock', '0.6.9'
 gem 'annoy', '0.5.6'
-gem 'sysinfo', '0.8.0', :git => "https://github.com/delano/sysinfo"
-gem 'gibbler', '0.9.0', :git => "https://github.com/delano/gibbler"
-gem 'tryouts', '2.1.1', :git => "https://github.com/delano/tryouts"
+gem 'gibbler', '0.9.0'
+gem 'sysinfo', '0.8.0'
+gem 'tryouts', '2.1.1'
