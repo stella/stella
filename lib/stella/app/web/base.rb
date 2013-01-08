@@ -3,7 +3,6 @@ require 'stella/app/helpers'
 
 class Stella
   class App
-    require 'stella/email'
     module Base
       include Stella::App::Helpers
 
