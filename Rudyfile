@@ -153,7 +153,7 @@ routines do
       local do
         # TODO: can do a fetch without a release using:
         # git describe --tags HEAD
-        $build = ruby './bin/stella', 'build'
+        $build = stella 'build'
         $branch = git 'rev-parse', '--abbrev-ref', 'HEAD'
         git 'co', config_env
         git 'merge', "rel-#{$build}"
@@ -175,7 +175,7 @@ routines do
         raise "Cannot release from master" if $branch == 'master'
         git 'fetch', '--tags', :origin
         msg = argv.first
-        $build = ruby './bin/stella', 'register-build', msg
+        $build = stella 'register-build', msg
         $build_tag = "rel-#{$build}"
         msg_ci = "RUDY PRESENTS: #{$build}"
         msg_ci << " (#{msg})" if msg
