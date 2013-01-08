@@ -14,6 +14,7 @@ class Stella
       self.passhash = nil
       self.github_token = nil
       self.payment_token = nil
+      self.nickname = nil
       # And so we don't accidentally email
       self.email = "%s-DELETED-%s" % [self.email, SecureRandom.hex[0..7]]
       self.products.each do |product|
