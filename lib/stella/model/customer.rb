@@ -12,7 +12,10 @@ class Stella
       self.hosts.each { |host| host.destroy! }
       self.deleted_at = Stella.now
       self.passhash = nil
-      self.email = "%s-DELETED" % self.email # so we don't accidentally email
+      self.github_token = nil
+      self.payment_token = nil
+      # And so we don't accidentally email
+      self.email = "%s-DELETED-%s" % [self.email, SecureRandom.hex[0..7]]
       self.products.each do |product|
         product.active = false
         product.save
