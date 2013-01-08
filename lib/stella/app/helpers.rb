@@ -67,6 +67,17 @@ class Stella::App
     def message() "Have we met?" end
   end
 
+  class SignupError < Stella::App::Problem
+    attr_reader :email, :msg
+    def report
+      "signup-failed: #{message}"
+    end
+    def initialize(email, msg=nil)
+      @email, @msg = email, msg
+    end
+    def message() msg || "We had a problem creating your account" end
+  end
+
   class PasswordUpdateRequired < Stella::App::Problem
     attr_reader :email
     def initialize(e)
@@ -74,11 +85,6 @@ class Stella::App
     end
   end
 
-  class SignupError < Stella::App::Problem
-    def report
-      "signup-failed: #{message}"
-    end
-  end
   unless defined?(Stella::App::BADAGENTS)
     BADAGENTS = [:facebook, :google, :yahoo, :bing, :stella, :baidu, :bot, :curl, :wget]
     LOCAL_HOSTS = ['localhost', '127.0.0.1', 'www.bs.com', 'bs3-dev-01', 'bs3-dev-02', 'bs3-dev-03', 'dev-03.bs.com'].freeze
@@ -112,9 +118,7 @@ class Stella::App
 
     rescue Stella::App::SignupError => ex
       sess.add_error_message! ex.message
-      req.params.delete "password"
-      req.params.delete "password2"
-      sess.request_params.update req.params
+      sess.request_params[:email] = ex.email
       res.redirect redirect
 
     rescue Stella::App::PasswordUpdateRequired => ex

@@ -153,7 +153,7 @@ class Stella::App::Auth
   end
 
   def github_callback
-    publically('/signup') do
+    publically('/login') do
       #assert_params :code, :state
       Stella.ld '[from-github] %s' % req.params
       if req.get? && req.params[:state] == sess[:github_state]

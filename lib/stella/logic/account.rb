@@ -4,7 +4,7 @@ require 'stella/email'
 class Stella::Logic::GitHubSignup < Stella::Logic::Base
   attr_reader :token, :github
   def raise_concerns
-    raise Stella::App::SignupError, 'No token' if token.empty?
+    raise Stella::App::Problem, 'No github token provided' if token.empty?
     @github = HTTParty.get('https://api.github.com/user?access_token=%s' % token)
   end
   def process
@@ -26,7 +26,7 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     begin
       cust.save
     rescue DataObjects::IntegrityError
-      raise Stella::App::SignupError, "That email is already is use!"
+      raise Stella::App::SignupError.new(github['email'], "#{github['email']} already has an account. Try logging in.")
     end
     sess[:custid] = cust.custid
     sess[:authenticated] = true
@@ -49,26 +49,26 @@ class Stella::Logic::Signup < Stella::Logic::Base
     exclass = Stella::App::SignupError
     check_rate_limits! :signup
     if Stella.config['site.allow_signups'].to_s == 'false' && !cust.colonel?
-      raise Stella::App::SignupError, "Signups are currently disabled."
+      raise Stella::App::Problem.new("Signups are currently disabled.")
     end
     if email.size < 4
       raise exclass.new("You did not enter an email address")
     #elsif !Stella.colonel?(email)
     #  raise exclass.new("Only colonels can signup (#{email})")
     elsif Stella::Customer.exists?( email )
-      raise exclass.new("'#{email}' already has an account.")
+      raise exclass.new(email, "'#{email}' already has an account.")
     elsif !email.empty? && !valid_email?(email)
-      raise exclass.new("That ain't a valid email: #{email}")
+      raise exclass.new(email, "That ain't a valid email: #{email}")
     elsif email.size > 64
-      raise exclass.new("Your email address is too long!")
+      raise exclass.new(email, "Your email address is too long!")
     elsif params[:checkid] && checkup.nil?
-      raise exclass.new("Unknown checkup")
+      raise exclass.new(email, "Unknown checkup")
     elsif password.to_s.size < 4
-      raise exclass.new("Your short password frightens me. Go long!")
+      raise exclass.new(email, "Your short password frightens me. Go long!")
     elsif password.to_s.size > 64
-      raise exclass.new("Your password is too long!")
+      raise exclass.new(email, "Your password is too long!")
     elsif password.to_s == "password"
-      raise exclass.new("Your password cannot literally be 'password'.")
+      raise exclass.new(email, "Your password cannot literally be 'password'.")
     end
   end
 
@@ -197,9 +197,9 @@ class Stella::Logic::PasswordResetEmail < Stella::Logic::Base
     check_rate_limits! :reset_password
     exklass = Stella::App::SignupError
     if !valid_email?(@email)
-      raise exklass.new("That ain't a valid email: #{params[:email]}")
+      raise exklass.new(params[:email], "That ain't a valid email: #{params[:email]}")
     elsif (@this_cust = Stella::Customer.first(:email => @email)).nil?
-      raise exklass.new("That address does not look familiar.")
+      raise exklass.new(params[:email], "That address does not look familiar.")
     end
   end
 
