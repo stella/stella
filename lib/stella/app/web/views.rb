@@ -2,7 +2,6 @@
 class Stella
   class App
     module Views
-      require 'stella/email'
       class JSTemplate < Mustache
         self.template_path = './templates/web/partial'
         def self.load

@@ -1,5 +1,4 @@
-require 'stella/app/web'
-require 'stella/app/web/views/helpers'
+require 'mustache'
 
 
 class Stella

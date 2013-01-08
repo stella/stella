@@ -1,4 +1,5 @@
 require 'stella'  # must be required before
+require 'stella/email'
 require 'stella/app/web/base'
 require 'stella/app/web/views'
 require 'timeout'

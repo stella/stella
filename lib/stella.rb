@@ -32,7 +32,6 @@ class Stella
   autoload :Job, 'stella/job'
   autoload :SmartQueue, 'stella/queue'
   autoload :Queueable, 'stella/queue'
-  autoload :Email, 'stella/email'
 
   unless defined?(Stella::HOME)
     HOME = File.expand_path( File.join(File.dirname(__FILE__), '..') )
