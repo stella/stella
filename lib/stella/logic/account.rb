@@ -11,9 +11,14 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     if github['email'].to_s.empty?
       github['email'] = '%s+GITHUB@blamestella.com' % github['login']
     end
-    @cust = Stella::Customer.first(:github_token => token)
+    @cust = Stella::Customer.first(:github_token => token, :nickname => github['login'])
     new_cust = false
     if cust.nil?
+      if !Stella::Customer.first(:email => github['email']).nil?
+        raise Stella::App::SignupError.new(github['email'], "#{github['email']} already has an account. Try logging in.")
+      elsif !Stella::Customer.first(:nickname => github['login']).nil?
+        raise Stella::App::SignupError.new(github['login'], "#{github['login']} already has an account. Try logging in.")
+      end
       @cust = Stella::Customer.new :email => github['email'], :nickname => github['login']
       new_cust = true
     end
@@ -25,8 +30,10 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     cust.data['github'] = github.parsed_response
     begin
       cust.save
-    rescue DataObjects::IntegrityError
-      raise Stella::App::SignupError.new(github['email'], "#{github['email']} already has an account. Try logging in.")
+    rescue DataObjects::IntegrityError => ex
+      Stella.ld ex.message
+      Stella.ld ex.backtrace
+      raise Stella::App::Problem.new("We ran into a problem. You are authorized to give Tucker heck!")
     end
     sess[:custid] = cust.custid
     sess[:authenticated] = true
