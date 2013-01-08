@@ -9,12 +9,12 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
   end
   def process
     if github['email'].to_s.empty?
-      github['email'] = '%s+GITHUB@blamestella.com' % github['nickname']
+      github['email'] = '%s+GITHUB@blamestella.com' % github['login']
     end
     @cust = Stella::Customer.first(:github_token => token)
     new_cust = false
     if cust.nil?
-      @cust = Stella::Customer.new :email => github['email'], :nickname => github['nickname']
+      @cust = Stella::Customer.new :email => github['email'], :nickname => github['login']
       new_cust = true
     end
     cust.name = github['name']
