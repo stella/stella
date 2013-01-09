@@ -3,6 +3,32 @@ require 'stripe'
 class Stella::App::Account
   include Stella::App::Base
 
+  def contributors
+    publically do
+      if !sess.authenticated? && req.post?
+        sess.add_info_message! "You'll need to sign in before agreeing."
+        res.redirect '/signin'
+      end
+      if sess.authenticated? && req.post?
+        if !req.params[:contributor].to_s.empty?
+          if cust.contributor_at
+            cust.contributor = req.params[:contributor]
+            cust.contributor_at = Stella.now
+            cust.save
+          end
+          sess.add_info_message! "You are now a contributor!"
+          res.redirect "/"
+        else
+          sess.add_info_message! "You need to sign and agree, one way or the other."
+          res.redirect '/contributors'
+        end
+      else
+        view = Stella::App::Views::Account::Contributors.new req, sess, cust
+        res.body = view.render
+      end
+    end
+  end
+
   def delete
     authenticated('/account') do
       enforce_method! :POST
@@ -329,6 +355,13 @@ module Stella::App::Views
       attr_accessor :secret
       def init *args
         @title = "Reset Password"
+      end
+    end
+
+    class Contributors < Stella::App::View
+      attr_accessor :secret
+      def init *args
+        @title = "Contribute"
       end
     end
 

@@ -4,6 +4,7 @@ GET   /                                               Stella::App::Homepage#inde
 GET   /feedback                                       Stella::App::Homepage#feedback
 POST  /feedback                                       Stella::App::Homepage#send_feedback
 
+
 ##########################################################################  WEBHOOKS
 GET   /hooks/stripe                                   Stella::App::Hooks#stripe
 POST  /hooks/stripe                                   Stella::App::Hooks#stripe
@@ -52,9 +53,7 @@ GET   /account/billing                                Stella::App::Account#billi
 GET   /account/billing/:tabid                         Stella::App::Account#billing
 
 POST  /account/:custid/delete                         Stella::App::Account#delete
-
 POST  /account/addcontact                             Stella::App::Account#addcontact
-
 POST  /account/token                                  Stella::App::Account#receive_token
 
 GET   /account/confirm/:secret                        Stella::App::Account#confirm
@@ -69,6 +68,9 @@ GET   /login/reset                                    Stella::App::Account#login
 POST  /login/reset                                    Stella::App::Account#login_reset_secret_request
 GET   /login/reset/:secret                            Stella::App::Account#login_reset_secret_request
 POST  /login/reset/:secret                            Stella::App::Account#login_reset_pword_change
+
+GET   /contributor                                    Stella::App::Account#contributors
+POST  /contributor                                    Stella::App::Account#contributors
 
 
 ##########################################################################  INFO

@@ -94,6 +94,8 @@ class Stella
     property :payment_token, String
     property :testing,     Boolean, :default => false, :required => true
     property :sessid, String, :length => 100
+    property :contributor, Enum[ :no, :outlaw, :abider ], :default => :no
+    property :contributor_at, Time
     before :valid?, :normalize
     gibbler :email, :role, :entropy, :created_at
     include Stella::Model::Schedulable
