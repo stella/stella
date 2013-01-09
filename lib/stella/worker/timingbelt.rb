@@ -19,12 +19,14 @@ class Stella
       if Stella.env?(:prod)
         # Start at a consistent time and stagger eaching timing belt
         @started_at = started_at.on_the_next(interval) + 1.minute*(@belt_index-1)
+      else
+        @started_at = Stella.now
       end
     end
     # We define tasks in here so that we have access to Stella.config
     # (otherwise it won't have been loaded yet).
     def online
-      self.class.every interval, :first_at => Stella.now do
+      self.class.every interval, :first_at => @started_at do
         loop_start = Stella.now
         hosts = Stella::Host.by_timingbelt belt_index, belt_count
         Stella.li "%s [%d/%d]: %s hosts @ %s" % [self.class, belt_index, belt_count, hosts.size, loop_start]
