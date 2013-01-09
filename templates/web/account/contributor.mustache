@@ -1,24 +1,25 @@
 {{>_layout/header}}
 
 <div class="span7 offset1">
-<h2 class="cufon">Become a contributor <em>!</em></h2>
+<h1 class="cufon">Become a contributor <em>!</em></h1>
 
 <p>Contributing to an open source project like Stella is awesome. We use an <a href="https://github.com/stella/stella/blob/master/LICENSE.txt">MIT-style license</a> which means you're free to take the code and do whatever you want (just don't blame us if stuff goes wrong).</p>
 
-<p>If you want to commit code to the project let's avoid the legal stuff and agree to something simple:</p>
+<p>So if you want to commit code to the project let's avoid the long legal document and agree to something simple:</p>
 
-<h3 class="cufon"><strong>Let's be good people</strong></h3>
+<h2 class="cufon"><em><strong>Let's agree to be good people about it</strong></em></h2>
 
 <form class="form-horizontal" method="POST">
   <fieldset>
   <div class="control-group">
     <label class="radio">
-      <input id="outlaw" type="radio" name="contributor" value="outlaw" class="huge">
-      You AGREE to the term listed above.
+      <input id="outlaw" type="radio" name="contributor" value="outlaw" class="huge" {{#outlaw}}checked{{/outlaw}}>
+      You AGREE
     </label>
     <label class="radio">
-      <input id="abider" type="radio" name="contributor" value="abider" class="huge">
-      You DISAGREE to the term listed above <em>and agree to the terms below.</em>
+      <input id="abider" type="radio" name="contributor" value="abider" class="huge" {{#abider}}checked{{/abider}}>
+      You DISAGREE <em>but agree to the terms below</em>
+      <span>(Click to see)</span>
     </label>
   </div>
   <div id="usualAgreement" class="hide" method="POST">
@@ -105,16 +106,17 @@
     <a class="btn" href="/">I do not agree (with any of that)</a>
   </fieldset>
 </form>
-<p><em>If you have any questions, ask Tucker below.</em></p>
 </div>
 
 <script type="text/javascript">
   $(function() {
     $('#abider').click(function() {
       $('#usualAgreement').show();
+      $('#abider').next().next().hide();
     });
     $('#outlaw').click(function() {
       $('#usualAgreement').hide();
+      $('#abider').next().next().show();
     });
   });
 </script>

@@ -7,6 +7,10 @@ class Stella
     alias_method :exists?, :saved?
     alias_method :objid, :custid
 
+    def contributor? guess
+      self.contributor && self.contributor.to_s == guess.to_s
+    end
+
     def destroy!
       self.contacts.destroy!
       self.hosts.each { |host| host.destroy! }

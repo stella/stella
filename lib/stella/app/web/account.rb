@@ -23,7 +23,7 @@ class Stella::App::Account
           res.redirect '/contributors'
         end
       else
-        view = Stella::App::Views::Account::Contributors.new req, sess, cust
+        view = Stella::App::Views::Account::Contributor.new req, sess, cust
         res.body = view.render
       end
     end
@@ -358,10 +358,12 @@ module Stella::App::Views
       end
     end
 
-    class Contributors < Stella::App::View
+    class Contributor < Stella::App::View
       attr_accessor :secret
       def init *args
         @title = "Contribute"
+        self[:abider] = cust.contributor?(:abider)
+        self[:outlaw] = cust.contributor?(:outlaw)
       end
     end
 
