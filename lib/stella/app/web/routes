@@ -60,6 +60,7 @@ GET   /account/confirm/:secret                        Stella::App::Account#confi
 GET   /login                                          Stella::App::Account#login
 GET   /signin                                         Stella::App::Account#login
 POST  /login                                          Stella::App::Account#login
+POST  /signin                                         Stella::App::Account#login
 GET   /logout                                         Stella::App::Account#logout
 
 GET   /signup                                         Stella::App::Account#signup
