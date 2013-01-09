@@ -58,6 +58,7 @@ POST  /account/token                                  Stella::App::Account#recei
 
 GET   /account/confirm/:secret                        Stella::App::Account#confirm
 GET   /login                                          Stella::App::Account#login
+GET   /signin                                         Stella::App::Account#login
 POST  /login                                          Stella::App::Account#login
 GET   /logout                                         Stella::App::Account#logout
 
