@@ -11,7 +11,7 @@ class Stella::App::Account
       end
       if sess.authenticated? && req.post?
         if !req.params[:contributor].to_s.empty?
-          if cust.contributor_at
+          if !cust.contributor_at
             cust.contributor = req.params[:contributor]
             cust.contributor_at = Stella.now
             cust.save
