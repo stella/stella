@@ -1,3 +1,12 @@
+class Stella
+  unless defined?(Stella::HOME)
+    HOME = File.expand_path( File.join(File.dirname(__FILE__), '..') )
+  end
+end
+
+# Avoid running with bundle exec in development
+require 'bundler/setup' if Dir.pwd == Stella::HOME
+
 require 'sysinfo'
 require 'public_suffix'
 
@@ -31,9 +40,7 @@ class Stella
   autoload :SmartQueue, 'stella/queue'
   autoload :Queueable, 'stella/queue'
 
-  unless defined?(Stella::HOME)
-    HOME = File.expand_path( File.join(File.dirname(__FILE__), '..') )
-  end
+
   module VERSION
     def self.to_a
       load_config

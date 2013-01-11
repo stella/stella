@@ -3,9 +3,6 @@
 base_path = File.expand_path File.join(File.dirname(__FILE__), '..')
 $:.unshift File.join(base_path, 'lib')
 
-# Avoid running with bundle exec in development
-require 'bundler/setup' if Dir.pwd == base_path
-
 require 'stella'
 require 'stella/cli'
 require 'stella/worker'
