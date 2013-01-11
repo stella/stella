@@ -1,6 +1,7 @@
 
 
 module Stella::Logic
+  autoload :Account, 'stella/logic/account'
   autoload :Signup, 'stella/logic/account'
   autoload :Login, 'stella/logic/account'
   autoload :Logout, 'stella/logic/account'
@@ -10,8 +11,8 @@ module Stella::Logic
   autoload :ViewCheckup, 'stella/logic/checkup'
   autoload :CreateCheckup, 'stella/logic/checkup'
   class Base
-    unless defined?(Stella::Logic::Base::MOBILE_REGEX)
-      MOBILE_REGEX = /^\+?\d{9,16}$/
+    unless defined?(Stella::Logic::Base::PHONE_REGEX)
+      PHONE_REGEX = /^\+?\d{9,16}$/
       EMAIL_REGEX = %r{^(?:[\+_a-z0-9-]+)(\.[\+_a-z0-9-]+)*@([a-z0-9-]+)(\.[a-zA-Z0-9\-\.]+)*(\.[a-z]{2,4})$}i
     end
 
@@ -68,6 +69,11 @@ module Stella::Logic
     Stella.li [ex.class, ex.message].inspect
     ex.resource.errors.each { |e| Stella.li e }
     nil
+  end
+
+  def self.normalize_phone(phone)
+    return if phone.to_s.empty?
+    ['+', phone.gsub(/\D/, '')].join
   end
 
 end

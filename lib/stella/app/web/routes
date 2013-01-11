@@ -48,6 +48,9 @@ POST  /plan/:planid/disable                           Stella::App::Host#disable_
 ##########################################################################  ACCOUNT
 GET   /account                                        Stella::App::Account#index
 GET   /account/:tabid                                 Stella::App::Account#index
+
+POST  /account                                        Stella::App::Account#update
+
 GET   /account/api                                    Stella::App::Account#api
 GET   /account/billing                                Stella::App::Account#billing
 GET   /account/billing/:tabid                         Stella::App::Account#billing

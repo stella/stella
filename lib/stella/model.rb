@@ -77,6 +77,7 @@ class Stella
     property :id,         Serial, :key => true
     property :custid,     String, :unique_index => true, :required => true
     property :email,      String, :unique_index => true, :required => true
+    property :phone,      String, :required => false
     property :role,       Enum[ :anonymous, :colonel, :customer ], :default => :customer
     property :name, String
     property :website, String

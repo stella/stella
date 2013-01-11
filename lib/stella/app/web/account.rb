@@ -29,6 +29,28 @@ class Stella::App::Account
     end
   end
 
+  def update
+    authenticated('/account') do
+      enforce_method! :POST
+      logic = Stella::Logic::Account.new sess, cust, req.params
+      logic.raise_concerns :update_account
+      logic.process
+      sess.add_info_message! "Changes saved."
+      res.redirect '/account'
+    end
+  end
+
+  #def update_password
+  #  privately('/account') do
+  #    assert_params :old, :new, :new2
+  #    logic = BS::Logic::ChangePassword.new @sess, @cust, req.params
+  #    logic.raise_concerns
+  #    logic.update_customer
+  #    sess.msg! "Password changed."
+  #    res.redirect '/account'
+  #  end
+  #end
+
   def delete
     authenticated('/account') do
       enforce_method! :POST

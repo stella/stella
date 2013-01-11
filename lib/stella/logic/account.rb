@@ -1,6 +1,73 @@
 require 'stella/logic'
 require 'stella/email'
 
+class Stella::Logic::Account < Stella::Logic::Base
+  unless defined?(Account::UPDATEABLE_FIELDS)
+    UPDATEABLE_FIELDS = [:name, :phone, :website, :company, :location].freeze
+  end
+
+  def raise_concerns(event)
+    #check_rate_limits! event
+    # NOTE: not tested, doesn't work:
+    #tmpcust = Stella::Customer.first(:nickname => params[:nickname])
+    #if tmpcust && tmpcust.email != cust.email
+    #  raise Stella::App::Problem.new("That email address is not available.")
+    #end
+  end
+
+  def valid_email?(email)
+    !email.match(EMAIL_REGEX).nil?
+  end
+
+  def valid_mobile?(phone)
+    !phone.match(PHONE_REGEX).nil?
+  end
+
+  def process_params
+    UPDATEABLE_FIELDS.each do |field|
+      next if params[field].nil? || params[field].empty?
+      params[field].strip!
+    end
+
+    if !params[:email].to_s.empty? && !valid_email?(params[:email])
+      raise Stella::App::Problem.new("Inavlid email: #{params[:email]}")
+    end
+
+    params[:phone] = Stella::Logic.normalize_phone(params[:phone])
+    if !params[:phone].to_s.empty? && !valid_mobile?(params[:phone])
+      raise Stella::App::Problem.new("Inavlid phone: #{params[:phone]}")
+    end
+
+    if params[:website]
+      uri = URI.parse params[:website] rescue nil
+      if uri.nil?
+        raise Stella::App::Problem.new("Invalid website: #{params[:website]}")
+      end
+    end
+
+    @params = params
+  end
+
+  def process
+
+    UPDATEABLE_FIELDS.each do |field|
+      #next if params[field].nil? #|| @cust.send(field) == @params[field]
+      cust.send("#{field}=", params[field])
+    end
+    cust.save
+  end
+
+  def create_uri(host)
+    host = host.strip if String === host
+    host = "http://#{host}" unless host.match(/^https?:\/\//)
+    uri = URI.parse(host)
+    uri.host ||= ''
+    uri.path = '/' if uri.path.nil? || uri.path.empty?
+    uri
+  end
+
+end
+
 class Stella::Logic::GitHubSignup < Stella::Logic::Base
   attr_reader :token, :github
   def raise_concerns

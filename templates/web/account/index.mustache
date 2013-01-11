@@ -25,32 +25,42 @@
         <div class="tab-pane active" id="profile">
           <div class="row well static">
             <div class="span8">
-              <form class="form-horizontal">
+              <form class="form-horizontal" method="post">
                 <fieldset>
                   <legend><h2 class="cufon">Your Account - {{cust.email}}</h2></legend>
                   <div class="control-group">
                     <label class="control-label" for="input01">Name</label>
                     <div class="controls">
-                      <input type="text" class="input-large selectable" id="input01" value="{{cust.name}}" placeholder="Your Name">
-                      <p class="help-block">e.g. Morton Blamey</p>
+                      <input type="text" class="input-large selectable" id="input01" name="name" value="{{cust.name}}" placeholder="Your Name">
+                      <!-- <p class="help-block">e.g. Morton Blamey</p> -->
+                    </div>
+                  </div>
+                  <div class="control-group {{^cust.phone}}warning{{/cust.phone}}">
+                    <label class="control-label" for="input02">Phone</label>
+                    <div class="controls">
+                      <input type="text" class="input-large selectable" id="input02" name="phone" value="{{cust.phone}}" placeholder="+1-414-375-0070">
+                      {{^cust.phone}}
+                      <span class="help-inline">Please enter your mobile number</span>
+                      {{/cust.phone}}
+                      <p class="help-block">The number to receive SMS alerts.</p>
                     </div>
                   </div>
                   <div class="control-group">
                     <label class="control-label" for="input03">Location</label>
                     <div class="controls">
-                      <input type="text" class="input-xlarge span3 selectable" id="input03" value="{{cust.location}}" placeholder="City">
+                      <input type="text" class="input-large selectable" id="input03" name="location" value="{{cust.location}}" placeholder="City">
                     </div>
                   </div>
                   <div class="control-group">
                     <label class="control-label" for="input04">Company</label>
                     <div class="controls">
-                      <input type="text" class="input-xlarge span3 selectable" id="input04" value="{{cust.company}}" placeholder="Your Fine Establishment">
+                      <input type="text" class="input-large selectable" id="input04" name="company" value="{{cust.company}}" placeholder="Your Fine Establishment">
                     </div>
                   </div>
                   <div class="control-group">
                     <label class="control-label" for="input05">Website</label>
                     <div class="controls">
-                      <input type="text" class="input-xlarge span3 selectable" id="input05" value="{{cust.website}}" placeholder="http://yourcompany.com/">
+                      <input type="text" class="input-large selectable" id="input05" name="website" value="{{cust.website}}" placeholder="http://yourcompany.com/">
                     </div>
                   </div>
                   <div class="form-actions">
