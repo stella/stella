@@ -19,10 +19,10 @@ rescue DataMapper::PersistenceError => ex
   ex.resource.errors.each { |e| puts e }
   nil
 end
-#=> '8aafec572811cb1f93978e4a12be5ca5632ff368'
+#=> '637d183e94ad81ee4a8a3d0cec9b6a4cd0fa6fc1'
 
 ## Definition defaults to an empty Hash
-plan = Stella::Testplan.new 
+plan = Stella::Testplan.new
 plan.definition
 #=> {}
 
@@ -41,7 +41,7 @@ plan.definition
 
 ## Generated digest is constant
 [@plan2.planid, @plan2.gibbler]
-#=> ['db8ba3b6d033f47401eff2e3128f28cef4366785', 'db8ba3b6d033f47401eff2e3128f28cef4366785']
+#=> ['db5cd751053c31118300f0fb52d4506a5e609838', 'db5cd751053c31118300f0fb52d4506a5e609838']
 
 ## Add uri to testplan
 plan = Stella::Testplan.new :host => @host, :uri => 'http://solutious.com/'
