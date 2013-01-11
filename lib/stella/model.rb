@@ -416,6 +416,7 @@ class Stella
     has n, :billing_statements
     has n, :daily_usage
     has n, :feedbacks
+    #has n, :incidents
   end
   class Host
     has n, :testplans
@@ -423,7 +424,7 @@ class Stella
     has n, :checkups
     has n, :testruns
     has n, :screenshots
-    has n, :incidents
+    #has n, :incidents
     belongs_to :customer, :required => true
     belongs_to :product, :required => false
   end
@@ -431,7 +432,7 @@ class Stella
     has n, :testruns
     has n, :checkups
     has n, :screenshots
-    has n, :incidents
+    #has n, :incidents
     belongs_to :host, :required => true
     belongs_to :customer, :required => false
   end
@@ -464,11 +465,11 @@ class Stella
     belongs_to :host, :required => false
     belongs_to :testplan, :required => false
   end
-  class Incident
-    belongs_to :testplan, :required => true
-    belongs_to :host, :required => true
-    has n, :testruns
-  end
+  #class Incident
+  #  belongs_to :testplan, :required => true
+  #  belongs_to :host, :required => true
+  #  has n, :testruns
+  #end
   class Product
     belongs_to :customer, :required => true
   end
