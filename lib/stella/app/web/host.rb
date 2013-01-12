@@ -336,11 +336,10 @@ module Stella::App::Views
       self[:this_path] = self[:this_uri].path
       self[:this_shortpath] = File.basename(self[:this_path]).shorten(30)
       self[:this_host_uri] = '%s://%s' % [self[:this_uri].scheme, self[:this_uri].host]
-      self[:summary] = testrun.summary
+      self[:summary] = testrun.parsed_summary
       self[:is_done] = self[:testrun].status?(:done, :fubar, :cancelled)
       self[:is_fubar] = self[:testrun].status?(:fubar) || self[:testrun].status?(:error)
       self[:is_running] = self[:testrun].status?(:running, :pending, :new)
-
       if self[:summary]
         self[:ran_at] =testrun.created_at.utc
         self[:ran_at_js] = self[:ran_at].to_i * 1000

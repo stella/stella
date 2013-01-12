@@ -7,7 +7,7 @@
     <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
       <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
-      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN CHECKUP</button>
     </form>
   </div>
   {{/authenticated}}
@@ -52,7 +52,12 @@
 
    {{#is_done}}
     <div class="stats span8 offset1 well row">
-      <img src="/t/{{testplan.thumbnail}}" alt="{{testplan.uri}} thumbnail" style="float: left">
+      {{#testplan.screenshot}}
+      <img src="/t/{{thumbnail}}" alt="{{testplan.uri}} thumbnail" class="screenshot">
+      {{/testplan.screenshot}}
+      {{^testplan.screenshot}}
+      <img src="/img/thumbnail-host.png" alt="Generating thumbnail..." class="screenshot">
+      {{/testplan.screenshot}}
       <ul class="span4">
         <li class="rt">
           <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->

@@ -5,12 +5,11 @@ class Stella
     def initialize(*args)
       @args = *args
     end
+    def message() @args.first end
   end
   class DuplicateItem < Stella::Problem
-    def message() @args.first end
   end
   class MissingItem < Stella::Problem
-    def message() @args.first end
   end
   class LocalDomainError < Stella::Problem
     def host() @args[0] end

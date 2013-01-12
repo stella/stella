@@ -264,7 +264,32 @@ class Stella
     end
   end
 
+  module HasTestrunSummary
+    def parsed_summary
+      @parsed_summary ||=
+      if self.summary && self.summary['assets']
+        s = self.summary
+        s['assets'].each do |asset|
+          uri = Stella::Utils.uri(asset['uri'])
+          asset['scheme'] = uri.scheme
+          asset['host'] = uri.host
+          asset['host_short'] = uri.host.to_s.shorten(20)
+          asset['path'] = uri.path
+          asset['path_short'] = uri.path.to_s.shorten(30)
+          asset['subdir'] = File.dirname(uri.path.to_s).shorten(30)
+        end
+        s
+      end
+      @parsed_summary
+    end
+  end
+
+  class Checkup
+    include HasTestrunSummary
+  end
+
   class Testrun
+    include HasTestrunSummary
     alias_method :objid, :runid
     def normalize
       update_timestamps
@@ -276,6 +301,7 @@ class Stella
         self.custid = testplan.custid
       end
     end
+
     #def results_cache
     # TODO: STORE FULL RESULTS IN REDIS
     #end
