@@ -2,7 +2,7 @@
 class Stella
   class Job
     include Stella::RedisObject
-    expiration 24.hours
+    expiration 4.hours
     db 11
     alias_method :jobid, :objid
     def type? guess
