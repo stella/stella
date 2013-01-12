@@ -44,7 +44,7 @@ class Stella
     def normalize
       update_timestamps
       self.entropy ||= Stella::Entropy.pop
-      self.custid ||=
+      self.custid ||= self.gibbler
       self.apikey ||= Gibbler.new(Stella.now.to_f, custid, entropy, :apikey)
       self.external_id ||= Gibbler.new(custid, entropy, :external_id).base(36).shorten(20)
     end
