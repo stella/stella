@@ -75,8 +75,8 @@
         </li>
         {{/summary.on_content_ready}}
         <li>
-          <span class="value cufon ">{{summary.total_bytes}}</span>
-          <span class="description ">Total Bytes</span>
+          <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
+          <span class="description ">Total Size</span>
         </li>
         <li>
           <span class="value cufon">{{summary.requests}}</span>
@@ -145,7 +145,7 @@
                   <th>host</th>
                   <th>file</th>
                   <th style="text-align: right">status</th>
-                  <th style="text-align: right">bytes</th>
+                  <th style="text-align: right">size</th>
                   <th style="text-align: right">offset</th>
                   <th style="text-align: right">time</th>
                 </tr>
@@ -159,12 +159,14 @@
                     <a href="{{scheme}}://{{host}}{{path}}" title="{{uri}}" rel="nofollow">{{path_short}}</a>
                   </td>
                   <td style="text-align: right">{{code}}</td>
-                  <td style="text-align: right">{{size}}</td>
+                  <td style="text-align: right">{{size.to_bytes}}</td>
                   <td style="text-align: right">
-                    {{#offset}}{{to_s}}s{{/offset}}
+                    {{#offset}}<em>{{to_s}}ms</em>{{/offset}}
                     {{^offset}}--{{/offset}}
                   </td>
-                  <td class="rt" style="text-align: right" rel="tooltip" title="Waiting: {{fb}}ms, Receiving: {{lb}}ms">{{rt}}ms</td>
+                  <td class="rt" style="text-align: right" rel="tooltip" title="Waiting: {{fb}}ms, Receiving: {{lb}}ms">
+                  {{rt}}ms
+                  </td>
                 </tr>
                 {{/summary.assets}}
               </tbody>

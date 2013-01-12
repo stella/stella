@@ -420,7 +420,7 @@ class Stella
           end
           asset
         end
-        summary['total_bytes'] = summary['total_size'].to_bytes
+        summary['total_size'] = summary['total_size']
         summary
       end
 
