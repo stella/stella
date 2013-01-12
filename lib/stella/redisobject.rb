@@ -48,12 +48,16 @@ module Stella::RedisObject
     end
     def load objid
       obj = new(objid)
-      raise Stella::MissingItem, '%s["%s"]' % [name,objid] if !obj.object.exists?
+      if !obj.object.exists?
+        raise Stella::MissingItem.new('[%s] %s does not exist'% [objid,name])
+      end
       obj
     end
     def create objid, attributes={}
       obj = new(objid)
-      raise Stella::DuplicateItem, '%s["%s"]' % [name,objid] if obj.object.exists?
+      if obj.object.exists?
+        raise Stella::MissingItem.new('[%s] duplicate %s'% [objid,name])
+      end
       now = Stella.now.to_i
       attributes[:objid] = objid
       attributes = {

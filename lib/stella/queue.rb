@@ -151,7 +151,7 @@ class Stella
   module Queueable
     def enqueue attributes={}
       job = create_job attributes
-      Stella.li "Adding #{job.jobid} (#{self}) to #{job.queue.key}"
+      Stella.ld "Adding #{job.jobid} (#{self}) to #{job.queue.key}"
       job.queue.add job
       job
     end

@@ -356,20 +356,13 @@ class Stella
           'gaid' => har['log']['gaid']
         }
         summary['assets'] = har['log']['entries'].collect do |entry|
+          summary['total_size'] += entry['response']['bodySize'].to_i
           uri = Stella::Utils.uri(entry['request']['url'])
           uri.path = '[data-uri]' if uri.scheme == "data"
           time = Time.parse(entry['startedDateTime'])
-          #uri = entry['request']['url'].gsub(/\A#{summary['base']}/, '/')
-          summary['total_size'] += entry['response']['bodySize'].to_i
           asset = {
             'meth' => entry['request']['method'],
-            'uri' => uri,
-            'scheme' => uri.scheme,
-            'host' => uri.host,
-            'host_short' => uri.host.to_s.shorten(20),
-            'path' => uri.path,
-            'path_short' => uri.path.to_s.shorten(30),
-            'subdir' => File.dirname(uri.path.to_s).shorten(30),
+            'uri' => uri.to_s,
             'code' => entry['response']['status'],
             'size' => entry['response']['bodySize'],
             'rt' => entry['time'],

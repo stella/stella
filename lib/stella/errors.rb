@@ -3,12 +3,14 @@
 class Stella
   class Problem < RuntimeError
     def initialize(*args)
-      @args = args.flatten.compact
+      @args = *args
     end
   end
   class DuplicateItem < Stella::Problem
+    def message() @args.first end
   end
   class MissingItem < Stella::Problem
+    def message() @args.first end
   end
   class LocalDomainError < Stella::Problem
     def host() @args[0] end
