@@ -138,8 +138,8 @@ class Stella
           cnt += 1
         }
       end
-      list.expire 48.hours
-      set.expire 48.hours
+      list.expire 24.hours
+      set.expire 24.hours
       self
     end
     def clear
@@ -151,8 +151,9 @@ class Stella
   module Queueable
     def enqueue attributes={}
       job = create_job attributes
-      Stella.ld "Adding #{job.jobid} (#{self}) to #{job.queue.key}"
+      Stella.li "[self] adding #{job.jobid} to #{job.queue.key}"
       job.queue.add job
+      Stella.li job.queue.list.values
       job
     end
     def create_job attributes={}
