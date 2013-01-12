@@ -117,7 +117,12 @@
               {{#cust.contacts}}
               <label class="checkbox">
                 <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
-                {{email}} {{#phone}}({{to_s}}){{/phone}}
+                {{email}}
+                {{#phone}}
+                  ({{to_s}})
+                  <span class="help-inline"><button href="/account/contact/{{contactid}}/testsms" class="btn btn-mini send-test-sms">Send Test</button>
+                  </span>
+                {{/phone}}
               </label>
               {{/cust.contacts}}
 

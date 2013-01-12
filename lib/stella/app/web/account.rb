@@ -32,15 +32,26 @@ class Stella::App::Account
   def testsms
     authenticated('/account') do
       enforce_method! :POST
-      args = {
-        :message => "Hello from Stella. This is Tucker",
-        :phone => cust.phone
-      }
-      logic = Stella::Logic::SendSMS.new sess, cust, args
-      logic.raise_concerns
-      logic.process
-      sess.add_info_message! "Message sent to #{logic.phone}."
-      res.redirect '/account'
+      if req.params[:contactid]
+        contact = Stella::Contact.first :contactid => req.params[:contactid], :customer => cust
+        phone = contact.phone if contact
+      else
+        phone = cust.phone
+      end
+      if phone
+        args = {
+          :message => "Hello from Stella. This is Tucker",
+          :phone => phone
+        }
+        logic = Stella::Logic::SendSMS.new sess, cust, args
+        logic.raise_concerns
+        logic.process
+        sess.add_info_message! "Message sent to #{logic.phone}."
+        res.redirect '/account'
+        Stella::Analytics.event "Sent Test SMS"
+      else
+        not_found_response "No such contact"
+      end
     end
   end
 

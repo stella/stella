@@ -320,11 +320,19 @@ $(function() {
     return false;
   });
   $(".send-test-sms").click(function(e) {
-    var domObj = $(this)
-    req('POST', domObj.attr('href'), {shrimp: shrimp}, function(data, textStatus) {
-      alertify.log("SMS message sent")
+    var obj = $(this);
+    $.ajax({
+      type: 'POST',
+      url: obj.attr('href'),
+      success: function(data, textStatus){
+        alertify.log("SMS message sent");
+      },
+      error: function(){
+        alertify.error("Ooops! There was an error.");
+      }
     });
     return e.preventDefault();
+
   });
   $('#toggle-signin').click(function(){
     $('#nav-hideable').hide();
