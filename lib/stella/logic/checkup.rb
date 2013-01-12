@@ -85,7 +85,6 @@ module Stella::Logic
     end
 
     def check_hostname!
-      Stella.li "check_hostname: #{@uri}"
       begin
         is_valid = timeout(5.seconds, TimeoutError) do
           Stella::Utils.valid_hostname?(@uri)
@@ -99,7 +98,7 @@ module Stella::Logic
         raise Stella::LocalDomainError.new(@uri.host, @cust.custid, @sess[:ipaddress])
       end
       addresses = Stella::Utils.ipaddr(@uri.host) || []
-      Stella.li "#{addresses}"
+      Stella.ld "[check-hostname] #{@uri.host} -> #{addresses}"
       addresses.each do |ipaddr|
         if Stella::Utils.private_ipaddr?(ipaddr) || Stella::Utils.local_ipaddr?(ipaddr)
           raise Stella::LocalDomainError.new @uri.host, @cust.custid, @sess[:ipaddress]
