@@ -80,14 +80,16 @@ module Stella::App::Views
       @title = "Status of #{self['this_uri']} on #{self['ran_at_text']}"
       @body_class = "checkup"
       self[:summary] = checkup.summary
-      self[:summary]['assets'].each do |asset|
-        uri = Stella::Utils.uri(asset['uri'])
-        asset['scheme'] = uri.scheme
-        asset['host'] = uri.host
-        asset['host_short'] = uri.host.to_s.shorten(20)
-        asset['path'] = uri.path
-        asset['path_short'] = uri.path.to_s.shorten(30)
-        asset['subdir'] = File.dirname(uri.path.to_s).shorten(30)
+      if self[:summary] && self[:summary]['assets']
+        self[:summary]['assets'].each do |asset|
+          uri = Stella::Utils.uri(asset['uri'])
+          asset['scheme'] = uri.scheme
+          asset['host'] = uri.host
+          asset['host_short'] = uri.host.to_s.shorten(20)
+          asset['path'] = uri.path
+          asset['path_short'] = uri.path.to_s.shorten(30)
+          asset['subdir'] = File.dirname(uri.path.to_s).shorten(30)
+        end
       end
     end
 

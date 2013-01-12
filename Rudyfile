@@ -217,6 +217,12 @@ routines do
       end
     end
 
+    promote do
+      remote do
+        git :pull, 'origin', 'v3.0'
+      end
+    end
+
     bundle_install do
       remote do
         cd 'stella'

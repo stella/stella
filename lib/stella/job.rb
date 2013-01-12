@@ -159,7 +159,7 @@ class Stella
           report = Yajl::Parser.parse(output, :check_utf8 => false)
         }
         checkup.summary = Stella::Testrun.parse_har(report)
-        #puts checkup.summary.to_json
+        Stella.ld checkup.summary.to_json
         checkup.status = :done
 
         if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?

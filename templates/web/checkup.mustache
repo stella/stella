@@ -68,10 +68,12 @@
         <li class="advice cufon">
           <!-- "<strong class="slowish">Not so fast.</strong> Slower than most sites." -->
         </li>
+        {{#summary.initial_offset}}
         <li>
-          <span class="value cufon">{{summary.initial_offset}}ms</span>
+          <span class="value cufon">{{to_i}}ms</span>
           <span class="description ">Page Content</span>
         </li>
+        {{/summary.initial_offset}}
         <li>
           <span class="value cufon ">{{summary.total_bytes}}</span>
           <span class="description ">Total Bytes</span>
