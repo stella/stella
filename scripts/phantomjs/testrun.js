@@ -50,20 +50,35 @@ page.onConsoleMessage = function (msg) {
   console.log('# CONSOLE: ' + msg);
 };
 
-// We use onInitialized for the start time.
-// From: https://groups.google.com/d/msg/phantomjs/WnXZLIb_jVc/1kP2SAVq8qEJ
 page.onInitialized = function () {
   try {
     var options = page.options;
     page.timingInitialize = page.evaluate(function (options) {
       (function () {
-        document.addEventListener("DOMContentLoaded", function(){window.timingDOMContentLoaded = +new Date();}, false);
-        // BUG: This event is not always fired. Test http://google.com for example.
-        window.addEventListener("load", function(){window.timingOnLoad = +new Date();}, false);
-        if (options.gaid && '' != options.gaid) {
-          window['ga-account'] = options.gaid
-          window['ga-disable-' + window['ga-account']] = true;
-        }
+
+      // This won't be fired if the page loads very quickly (http://stellaaahhhh.com)
+      document.addEventListener("DOMContentLoaded", function(){
+        window.timingDOMContentLoaded = +new Date();
+      }, false);
+
+      // Callback example. Can be used here or by a webpage.
+      //window.callPhantom('DOMContentLoaded');
+
+      // NOTE: This is how to manually call an event
+      //var DOMContentLoaded_event = document.createEvent("Event")
+      //DOMContentLoaded_event.initEvent("DOMContentLoaded", true, true)
+      //window.document.dispatchEvent(DOMContentLoaded_event)
+
+      // This is often not fired.
+      window.addEventListener("load", function(){
+        window.timingOnLoad = +new Date();
+      }, false);
+
+      // Disable google analytics
+      if (options.gaid && '' != options.gaid) {
+        window['ga-account'] = options.gaid
+        window['ga-disable-' + window['ga-account']] = true;
+      }
       })();
       return +new Date();
     }, page.options); // Pass options to the evaluate function.
@@ -72,15 +87,21 @@ page.onInitialized = function () {
   }
 };
 
-// Fired onInitialized
+// An example callback.
+//page.onCallback = function(data) {
+//  page.timingCallback = +new Date();
+//  console.log('DOMContentLoaded');
+//};
+
+// Fired after onInitialized
+// We use onLoadStarted for the start time.
 page.onLoadStarted = function () {
   try {
-    // We don't currently use this timing anywhere else
     page.timingLoadStarted = +new Date();
     hardTimeout("typeof page.timingOnLoad != 'undefined'", function(elapsed) {
       console.log(json(createErrorHAR(page, "timeout", elapsed)));
       phantom.exit(0);
-    }, 20000);
+    }, 15000);
   } catch(err) {
     handleError(err);
   }
@@ -96,9 +117,9 @@ page.onResourceRequested = function (req) {
   //}
   try {
     page.resources[req.id] = {
-    request: req,
-    startReply: null,
-    endReply: null
+      request: req,
+      startReply: null,
+      endReply: null
     };
   } catch(err) {
     handleError(err);
@@ -118,64 +139,83 @@ page.onResourceReceived = function (res) {
   }
 };
 
-try {
-  var globalStartTime = +new Date();
-  page.open(page.address, function (status) {
-    var har;
+// Called just before the callback provided to page.open
+page.onLoadFinished = function() {
+  //console.log('page.onLoadFinished');
+  page.timingOnLoadFinished = +new Date();
+};
 
-    if (status !== 'success') {
-      console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false}));
-    } else {
-      var endTime = +new Date();
-      page.title = page.evaluate(function () {
-        return document.title;
-      });
-      page.timingDOMContentLoaded = page.evaluate(function () {
-        return window.timingDOMContentLoaded;
-      });
-      page.timingOnLoad = page.evaluate(function () {
-        return window.timingOnLoad;
-      });
-      page.gaDisabled = page.evaluate(function () {
-        return window['ga-disable-' + window['ga-account']] || false;
-      });
-      var timings = {
-        "onContentReady": page.timingDOMContentLoaded - page.timingLoadStarted,
-        // BUG: the onload event doesn't always fire. In these cases, we use
-        // the time from when this function is called. It's usually within ~5ms
-        // of the onload value but occasionally as high as 40ms. Seems to happen
-        // most often for very fast pages. Example: http://google.com
-        "onLoad": (page.timingOnLoad || endTime) - page.timingLoadStarted
-      };
+function runTestrun(status) {
+  try {
+  if (status !== 'success') {
+    console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false}));
+  } else {
 
-      har = createHAR(page, endTime, timings);
+    page.title = page.evaluate(function () {
+      return document.title;
+    });
+    page.timingDOMContentLoaded = page.evaluate(function () {
+      return window.timingDOMContentLoaded;
+    });
+    page.timingOnLoad = page.evaluate(function () {
+      return window.timingOnLoad;
+    });
+    page.gaDisabled = page.evaluate(function () {
+      return window['ga-disable-' + window['ga-account']] || false;
+    });
 
-      // Avoid transparent backgrounds
-      page.evaluate(function() {
-        if (document.body.bgColor == "")
-           document.body.bgColor = 'white';
-      });
+    var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
+    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
+    var timings = {
+      "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
+      "onLoad": onLoad
+    };
 
-      if (page.options.with_screenshots) {
-        har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
-        page.render(har.log.screenshot);
-        if (! fs.isReadable(har.log.screenshot)) {
-          har.log.screenshot = '';
-        }
+    // FOR DEBUGGING TIMINGS
+    //console.log('start    ' + (page.timingLoadStarted-1357958380000))
+    //console.log('content  ' + (page.timingDOMContentLoaded-1357958380000))
+    //console.log('callback ' + (page.timingCallback-1357958380000))
+    //console.log('load     ' + (page.timingOnLoad))
+    //console.log('end      ' + (page.timingOnLoadFinished-1357958380000))
+    //console.log('duration1 ' + ((page.timingDOMContentLoaded || page.timingInitialize) - page.timingLoadStarted))
+    //console.log('duration2 ' + ((page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted))
+
+    // Avoid transparent backgrounds
+    page.evaluate(function() {
+      if (document.body.bgColor == "")
+         document.body.bgColor = 'white';
+    });
+
+    var har = createHAR(page, page.timingOnLoadFinished, timings);
+
+    if (page.options.with_screenshots) {
+      har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
+      page.render(har.log.screenshot);
+      if (! fs.isReadable(har.log.screenshot)) {
+        har.log.screenshot = '';
       }
-
-      // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
-      // This has actually happened! (See http://space.com/)
-      page.onConsoleMessage = null;
-
-      // NOTE: Must always print the HAR on a single line. This is a hack to get
-      // around phantomjs noise where it will print messages while executing.
-      console.log(json(har));
     }
-    phantom.exit();
-  });
 
+    // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
+    // This has actually happened! (See http://space.com/)
+    page.onConsoleMessage = null;
 
+    // NOTE: Must always print the HAR on a single line. This is a hack to get
+    // around phantomjs noise where it will print messages while executing.
+    console.log(json(har));
+
+  }
+
+  } catch(err) {
+    handleError(err);
+  }
+
+  phantom.exit();
+}
+
+try {
+  page.open(page.address, runTestrun);
 } catch(err) {
   handleError(err);
 }
+

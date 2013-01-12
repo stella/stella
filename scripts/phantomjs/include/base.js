@@ -195,8 +195,7 @@ function createHAR12(page, endTime, pageTimings) {
       version: '1.2',
       creator: {
         name: "PhantomJS",
-        version: phantom.version.major + '.' + phantom.version.minor +
-          '.' + phantom.version.patch
+        version: phantom.version.major + '.' + phantom.version.minor + '.' + phantom.version.patch
       },
       viewPort: page.viewportSize,
       options: page.options,
@@ -244,3 +243,5 @@ function handleError(err) {
   console.log(err)
   phantom.exit(1);
 }
+
+
