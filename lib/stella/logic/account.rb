@@ -25,7 +25,7 @@ class Stella::Logic::Account < Stella::Logic::Base
 
   def process_params
     UPDATEABLE_FIELDS.each do |field|
-      next if params[field].nil? || params[field].empty?
+      next if params[field].nil?
       params[field].strip!
     end
 
@@ -49,12 +49,11 @@ class Stella::Logic::Account < Stella::Logic::Base
   end
 
   def process
-
     UPDATEABLE_FIELDS.each do |field|
-      #next if params[field].nil? #|| @cust.send(field) == @params[field]
+      next if params[field].nil? || @cust.send(field) == @params[field]
       cust.send("#{field}=", params[field])
     end
-    cust.save
+    cust.save # won't save if no change
   end
 
   def create_uri(host)
