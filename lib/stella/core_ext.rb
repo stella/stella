@@ -279,15 +279,15 @@ unless defined?(Time::Units)
     def to_bytes
       args = case self.abs.to_i
       when (1000)..(1000**2)
-        '%3.2f%s' % [(self / 1000.to_f).to_s, 'kb']
+        '%3.2f%s' % [(self / 1000.to_f).to_s, 'KB']
       when (1000**2)..(1000**3)
-        '%3.2f%s' % [(self / (1000**2).to_f).to_s, 'mb']
+        '%3.2f%s' % [(self / (1000**2).to_f).to_s, 'MB']
       when (1000**3)..(1000**4)
-        '%3.2f%s' % [(self / (1000**3).to_f).to_s, 'gb']
+        '%3.2f%s' % [(self / (1000**3).to_f).to_s, 'GB']
       when (1000**4)..(1000**6)
-        '%3.2f%s' % [(self / (1000**4).to_f).to_s, 'tb']
+        '%3.2f%s' % [(self / (1000**4).to_f).to_s, 'TB']
       else
-        [self.to_i, 'bytes'].join
+        [self.to_i, 'B'].join
       end
     end
   end
