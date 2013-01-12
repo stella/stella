@@ -33,7 +33,7 @@ class Stella::App::Account
     authenticated('/account') do
       enforce_method! :POST
       args = {
-        :message => "Hello from Tucker",
+        :message => "Hello from Stella. This is Tucker",
         :phone => cust.phone
       }
       logic = Stella::Logic::SendSMS.new sess, cust, args
