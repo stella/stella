@@ -197,7 +197,7 @@ class Stella
     def load_db
       @config ||= Stella::Config.load
       ENV['TZ'] = 'UTC'  # Important for datamapper
-      DataMapper::Logger.new($stderr, :debug) if Stella.debug
+      DataMapper::Logger.new($stderr, :debug) if ENV['DATAMAPPER_DEBUG']
       DataMapper.setup(:default, Stella.config['db.uri'])
     end
   end
