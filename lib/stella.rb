@@ -44,7 +44,7 @@ class Stella
   module VERSION
     def self.to_a
       load_config
-      [@version[:MAJOR], @version[:MINOR], @version[:PATCH]]
+      [@version[:MAJOR], @version[:MINOR], @version[:PATCH], @version[:BUILD]]
     end
     def self.to_s
       to_a.join('.')
