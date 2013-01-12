@@ -122,10 +122,23 @@ end
 
 class Stella::App::Hooks
   include Stella::App::Base
-  def twilio_sms
+  def twilio_text
     publically do
       Stella.li '[twilio] %s' % req.params.to_json
-      res.body = "<Response><Sms>This is Tucker. Thanks for the feedback.</Sms></Response>"
+      res.body = %Q{<Response><Sms>Thanks for the feedback.</Sms></Response>}
+      Stella::Analytics.event "Text Received"
+    end
+  end
+  def twilio_call
+    publically do
+      Stella.li '[twilio] %s' % req.params.to_json
+      res.body = %Q{<Response>
+      <Say>Good day, you have reached Tucker at the Blamey and Stella Information Company.</Say>
+      <Pause length="1"/>
+      <Say>I am not able to take messages on this line. Please contact me via our internet website: www.blamestella.com</Say>
+      <Pause length="1"/>
+      </Response>}
+      Stella::Analytics.event "Call Received"
     end
   end
 end

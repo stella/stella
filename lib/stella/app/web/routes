@@ -9,8 +9,11 @@ POST  /feedback                                       Stella::App::Homepage#send
 GET   /hooks/stripe                                   Stella::App::Hooks#stripe
 POST  /hooks/stripe                                   Stella::App::Hooks#stripe
 
-GET   /hooks/twilio/sms                               Stella::App::Hooks#twilio_sms
-POST  /hooks/twilio/sms                               Stella::App::Hooks#twilio_sms
+GET   /hooks/twilio/text                              Stella::App::Hooks#twilio_text
+POST  /hooks/twilio/text                              Stella::App::Hooks#twilio_text
+
+GET   /hooks/twilio/call                              Stella::App::Hooks#twilio_call
+POST  /hooks/twilio/call                              Stella::App::Hooks#twilio_call
 
 GET   /auth/github/redirect                           Stella::App::Auth#github_redirect
 GET   /auth/github/callback                           Stella::App::Auth#github_callback
