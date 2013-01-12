@@ -67,7 +67,7 @@ class Stella
         thumbdir = Stella.config['render.path']
         raise error("Bad hostid #{job[:hostid]}") unless host
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', host.hostname, shot.width, shot.height)
-        Stella.li cmd
+        Stella.ld cmd
         tmpfile = nil
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
           pid = wait_thr.pid # pid of the started process.
@@ -82,12 +82,12 @@ class Stella
           tmpfile = output
         }
         file = "#{thumbdir}/#{shot.filename}"
-        Stella.li "mv #{tmpfile} #{file}"
+        Stella.ld "mv #{tmpfile} #{file}"
         FileUtils.mv tmpfile, file
         cmd = "bin/stella resize #{file}"
-        Stella.li cmd
-        Stella.li `#{cmd}`
-        Stella.li "Updating host (#{host.hostname})"
+        Stella.ld cmd
+        Stella.ld `#{cmd}`
+        Stella.ld "Updating host (#{host.hostname})"
         Stella::Logic.safedb { shot.save }
         Stella::Logic.safedb { host.screenshots << shot }
         Stella::Logic.safedb { host.save }
@@ -102,7 +102,7 @@ class Stella
         thumbdir = Stella.config['render.path']
         raise error("Bad planid #{job[:planid]}") unless plan
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', plan.uri, shot.width, shot.height)
-        Stella.li cmd
+        Stella.ld cmd
         tmpfile = nil
         Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
           pid = wait_thr.pid # pid of the started process.
@@ -117,12 +117,12 @@ class Stella
           tmpfile = output
         }
         file = "#{thumbdir}/#{shot.filename}"
-        Stella.li "mv #{tmpfile} #{file}"
+        Stella.ld "mv #{tmpfile} #{file}"
         FileUtils.mv tmpfile, file
         cmd = "bin/stella resize #{file}"
-        Stella.li cmd
-        Stella.li `#{cmd}`
-        Stella.li "Updating plan (#{plan.uri})"
+        Stella.ld cmd
+        Stella.ld `#{cmd}`
+        Stella.ld "Updating plan (#{plan.uri})"
         Stella::Logic.safedb { shot.save }
         Stella::Logic.safedb { plan.screenshots << shot }
         Stella::Logic.safedb { plan.save }
@@ -159,7 +159,7 @@ class Stella
           report = Yajl::Parser.parse(output, :check_utf8 => false)
         }
         checkup.summary = Stella::Testrun.parse_har(report)
-        #puts checkup.summary.to_yaml
+        #puts checkup.summary.to_json
         checkup.status = :done
 
         if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?
