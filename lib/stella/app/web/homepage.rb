@@ -58,11 +58,15 @@ class Stella::App::Homepage
   end
 
   def not_found
-    not_found_response "Not found"
+    publically do
+      not_found_response "Not found"
+    end
   end
 
   def server_error
-    error_response "We experienced an error"
+    publically do
+      error_response "We experienced an error"
+    end
   end
 
 end
