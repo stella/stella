@@ -224,9 +224,9 @@ class Stella
         run.status = :done
         plan.testruns << run
         Stella::Logic.safedb {
-          Stella.ld "Updating testrun: #{run.runid}"
+          #Stella.ld "Updating testrun: #{run.runid}"
           run.save
-          Stella.ld "Updating testplan: #{plan.planid}"
+          #Stella.ld "Updating testplan: #{plan.planid}"
           plan.save
         }
 
@@ -245,19 +245,19 @@ class Stella
             plan.host.add_metrics run.started_at, run.metrics
             Stella::RangeMetrics.ranges.each_pair do |rangeid,duration|  # [past_1h, 1.hour]
               if plan.host.settings['interval'].to_i >= duration.to_i
-                Stella.li '[%s]  skipping %s metrics (interval: %d)' % [plan.host.hostname, rangeid, plan.host.settings['interval']]
+                Stella.ld '[%s]  skipping %s metrics (interval: %d)' % [plan.host.hostname, rangeid, plan.host.settings['interval']]
                 next
               end
               # plan metrics:
               keys = [plan.rangemetrics.metrics.key]
               argv = [Stella.now.to_i, duration, plan.rangemetrics.send(rangeid).key]
               cnt = Stella.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
-              Stella.li '[%s]  %d items for %s' % [plan.planid, cnt, rangeid]
+              Stella.ld '[%s]  %d items for %s' % [plan.planid, cnt, rangeid]
               # host metrics:
               keys = [plan.host.rangemetrics.metrics.key]
               argv = [Stella.now.to_i, duration, plan.host.rangemetrics.send(rangeid).key]
               cnt = Stella.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
-              Stella.li '[%s]  %d items for %s' % [plan.host.hostname, cnt, rangeid]
+              Stella.ld '[%s]  %d items for %s' % [plan.host.hostname, cnt, rangeid]
             end
           rescue Redis::CommandError => ex
             Stella.li ex.message

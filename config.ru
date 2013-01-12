@@ -44,11 +44,9 @@ apps = {
 #  empty_directory destination_root('/app/stylesheets')
 #end
 
-#Stella.debug = true
+Stella.load! :app
 
-# DEV: Run web apps with extra logging and reloading
-if Otto.env?(:dev)
-  Stella.load! :app
+if Otto.env?(:dev)  # DEV: Run web apps with extra logging and reloading
   apps.each_pair do |path,app|
     map(path) {
       use Rack::CommonLogger
@@ -63,9 +61,8 @@ if Otto.env?(:dev)
   map("/img/")      { run Rack::File.new("#{PUBLIC_DIR}/img") }
   map("/t/")        { run Rack::File.new(Stella.config['render.path']) }
 
-# PROD: run barebones webapps
-else
-  Stella.load! :app
+else                # PROD: run barebones webapps
+
   apps.each_pair do |path,app|
     map(path) {
       #use Rack::CommonLogger
