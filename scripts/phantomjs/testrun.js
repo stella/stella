@@ -60,7 +60,6 @@ page.onInitialized = function () {
         document.addEventListener("DOMContentLoaded", function(){window.timingDOMContentLoaded = +new Date();}, false);
         // BUG: This event is not always fired. Test http://google.com for example.
         window.addEventListener("load", function(){window.timingOnLoad = +new Date();}, false);
-        // TODO: https://developers.google.com/analytics/devguides/collection/gajs/#disable
         if (options.gaid && '' != options.gaid) {
           window['ga-account'] = options.gaid
           window['ga-disable-' + window['ga-account']] = true;
@@ -125,7 +124,7 @@ try {
     var har;
 
     if (status !== 'success') {
-      console.log(JSON.stringify({"msg": "failed to load " + page.address, "success": false}));
+      console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false}));
     } else {
       var endTime = +new Date();
       page.title = page.evaluate(function () {
@@ -140,14 +139,13 @@ try {
       page.gaDisabled = page.evaluate(function () {
         return window['ga-disable-' + window['ga-account']] || false;
       });
-      // BUG: the onload event doesn't always fire. In these cases, we use
-      // the time from when this function is called. It's usually within ~5ms
-      // of the onload value but occasionally as high as 40ms. Seems to happen
-      // most often for very fast pages. Example: http://google.com
-      var onload_time_fix = (page.timingOnLoad || endTime);
       var timings = {
-        "onContentReady": page.timingDOMContentLoaded - page.timingInitialize,
-        "onLoad": onload_time_fix - page.timingInitialize
+        "onContentReady": page.timingDOMContentLoaded - page.timingLoadStarted,
+        // BUG: the onload event doesn't always fire. In these cases, we use
+        // the time from when this function is called. It's usually within ~5ms
+        // of the onload value but occasionally as high as 40ms. Seems to happen
+        // most often for very fast pages. Example: http://google.com
+        "onLoad": (page.timingOnLoad || endTime) - page.timingLoadStarted
       };
 
       har = createHAR(page, endTime, timings);
