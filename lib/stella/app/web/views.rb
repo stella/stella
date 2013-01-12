@@ -64,6 +64,7 @@ class Stella
           @topnav << ahref('/docs', 'API')
           @topnav << ahref('/info/company', 'About Us')
         end
+        self[:stella_version] = self.class.stella_version
         self[:hello_style] = :simple_hello
         self[:colonels_only] = cust.colonel?
         self[:is_production] =  ['production', 'prod'].member?(Stella.config['site.env'])
@@ -108,6 +109,9 @@ class Stella
           @partialsrc = Stella::App::Views::JSTemplate.load
         end
         @partialsrc
+      end
+      def self.stella_version
+        @stella_version ||= Stella::VERSION.gibbler.short
       end
       include Stella::App::Views::Helpers::Common
       include Stella::App::Views::Helpers::URIHelpers

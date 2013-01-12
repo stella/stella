@@ -44,9 +44,9 @@
       var {{name}} = {{{value}}};
     {{/jsvars}}
     </script>
-    <script src="/app/common.js?bs3" type="text/javascript"></script>
+    <script src="/app/common.js?{{stella_version}}" type="text/javascript"></script>
     {{#js}}
-    <script src="{{to_s}}?bs3" type="text/javascript"></script>
+    <script src="{{to_s}}?{{stella_version}}" type="text/javascript"></script>
     {{/js}}
 
     {{#is_production}}
