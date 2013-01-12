@@ -122,18 +122,10 @@ end
 
 class Stella::App::Hooks
   include Stella::App::Base
-
-  def stripe
-    publically do
-      Stella.li '[stripe] %s' % req.params.to_json
-      res.body = "Thanks Stripe"
-    end
-  end
-
-  def twilio
+  def twilio_sms
     publically do
       Stella.li '[twilio] %s' % req.params.to_json
-      res.body = "Thanks Twilio"
+      res.body = "<Response><Sms>This is Tucker. Thanks for the feedback.</Sms></Response>"
     end
   end
 end

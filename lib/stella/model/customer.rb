@@ -41,6 +41,16 @@ class Stella
     end
     alias_method :outdated_password?, :outdated_password
 
+    def phone?
+      !self.phone.to_s.empty?
+    end
+
+    def send_sms msg
+      raise Stella::NoPhone unless self.phone?
+      from = Stella.config['vendor.twilio.phone']
+      Twilio::Sms.message(from, self.phone, msg)
+    end
+
     def normalize
       update_timestamps
       self.entropy ||= Stella::Entropy.pop

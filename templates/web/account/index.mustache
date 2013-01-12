@@ -42,6 +42,9 @@
                       {{^cust.phone}}
                       <span class="help-inline">Please enter your mobile number</span>
                       {{/cust.phone}}
+                      {{#cust.phone}}
+                      <span class="help-inline"><button href="/account/testsms" class="btn btn-mini send-test-sms">Send Test</button></span>
+                      {{/cust.phone}}
                       <p class="help-block">The number to receive SMS alerts.</p>
                     </div>
                   </div>

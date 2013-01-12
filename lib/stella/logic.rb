@@ -112,6 +112,32 @@ class Stella::Logic::ViewDocs < Stella::Logic::Base
   end
 end
 
+class Stella::Logic::SendSMS < Stella::Logic::Base
+  attr_reader :message, :phone
+  def raise_concerns
+    #check_rate_limits! :send_sms
+    raise Stella::NoPhone unless phone
+    raise RuntimeError, "No message" unless message
+    raise RuntimeError, "Message to long (#{message.size})" if message.size > 158
+  end
+  def process
+    self.class.send_sms phone, message
+  end
+  protected
+  def process_params
+    @message = params[:message].to_s.strip
+    @message = nil if @message.empty?
+    @phone = params[:phone].to_s.strip
+    @phone = nil if @phone.empty?
+  end
+  class << self
+    def send_sms phone, msg
+      @from ||= Stella.config['vendor.twilio.phone']
+      Twilio::Sms.message(@from, phone, msg)
+    end
+  end
+end
+
 class Stella::Logic::Feedback < Stella::Logic::Base
   attr_reader :referrer, :message
   def raise_concerns

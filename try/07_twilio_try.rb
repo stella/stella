@@ -21,7 +21,7 @@ Twilio.default_options[:basic_auth].values
 #=> [Stella.config['vendor.twilio.sid'], Stella.config['vendor.twilio.token']]
 
 ## Can send SMS
-from = Stella.config['vendor.twilio.phone'],
-to = Stella.config['account.tech.phone'],
+from = Stella.config['vendor.twilio.phone']
+to = Stella.config['account.tech.phone']
 Twilio::Sms.message(from, to, "#{$0} @ #{Time.now}")
 #=> true

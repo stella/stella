@@ -29,6 +29,21 @@ class Stella::App::Account
     end
   end
 
+  def testsms
+    authenticated('/account') do
+      enforce_method! :POST
+      args = {
+        :message => "Hello from Tucker",
+        :phone => cust.phone
+      }
+      logic = Stella::Logic::SendSMS.new sess, cust, args
+      logic.raise_concerns
+      logic.process
+      sess.add_info_message! "Message sent to #{logic.phone}."
+      res.redirect '/account'
+    end
+  end
+
   def update
     authenticated('/account') do
       enforce_method! :POST

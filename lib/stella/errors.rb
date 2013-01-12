@@ -20,6 +20,8 @@ class Stella
       "#{self.class}: #{host} #{user} #{ipaddress}"
     end
   end
+  class NoPhone < Stella::Problem
+  end
   class UnknownHostname < Stella::Problem
     attr_reader :host
     def initialize host

@@ -9,8 +9,8 @@ POST  /feedback                                       Stella::App::Homepage#send
 GET   /hooks/stripe                                   Stella::App::Hooks#stripe
 POST  /hooks/stripe                                   Stella::App::Hooks#stripe
 
-GET   /hooks/twilio                                   Stella::App::Hooks#twilio
-POST  /hooks/twilio                                   Stella::App::Hooks#twilio
+GET   /hooks/twilio/sms                               Stella::App::Hooks#twilio_sms
+POST  /hooks/twilio/sms                               Stella::App::Hooks#twilio_sms
 
 GET   /auth/github/redirect                           Stella::App::Auth#github_redirect
 GET   /auth/github/callback                           Stella::App::Auth#github_callback
@@ -50,6 +50,7 @@ GET   /account                                        Stella::App::Account#index
 GET   /account/:tabid                                 Stella::App::Account#index
 
 POST  /account                                        Stella::App::Account#update
+POST  /account/testsms                                Stella::App::Account#testsms
 
 GET   /account/api                                    Stella::App::Account#api
 GET   /account/billing                                Stella::App::Account#billing

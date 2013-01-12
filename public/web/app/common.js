@@ -319,17 +319,10 @@ $(function() {
     $('.checkupSummaryToggle').toggle();
     return false;
   });
-  $(".smsTest").click(function(e) {
+  $(".send-test-sms").click(function(e) {
     var domObj = $(this)
-    req('POST', this.href, {shrimp: shrimp}, function(data, textStatus) {
-      displayMsg('SMS message sent');
-    });
-    return e.preventDefault();
-  });
-  $(".pdTest").click(function(e) {
-    var domObj = $(this)
-    req('POST', this.href, {shrimp: shrimp}, function(data, textStatus) {
-      displayMsg('Test notification sent');
+    req('POST', domObj.attr('href'), {shrimp: shrimp}, function(data, textStatus) {
+      alertify.log("SMS message sent")
     });
     return e.preventDefault();
   });
