@@ -69,7 +69,7 @@ $(function() {
       error:  genericError,  // error callback
       success:  function(res) {
         $('#contactsModal').modal('hide');
-        window.location.reload();
+        window.location = '/account/contacts'
       }
     };  // post-submit callback
 

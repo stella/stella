@@ -89,15 +89,14 @@ class Stella::App::Account
     authenticated do
       enforce_method! :POST
       assert_params :email
-      opts = {:email => req.params[:email], :customer => cust}
-      opts[:name] = req.params[:name] if !req.params[:name].to_s.empty?
-      opts[:phone] = req.params[:phone] if !req.params[:phone].to_s.empty?
-      contact = Stella::Contact.create opts
+      logic = Stella::Logic::AddContact.new sess, cust, req.params
+      logic.raise_concerns
+      contact = logic.process
       res.body = json({
         :name => contact.name, :email => contact.email, :phone => contact.phone, :contactid => contact.contactid
       })
-      Stella::Analytics.event "Add Contact"
       res.redirect "/account/contacts" unless req.ajax?
+      Stella::Analytics.event "Add Contact"
     end
   end
 

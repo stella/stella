@@ -1,15 +1,6 @@
 
 
 module Stella::Logic
-  autoload :Account, 'stella/logic/account'
-  autoload :Signup, 'stella/logic/account'
-  autoload :Login, 'stella/logic/account'
-  autoload :Logout, 'stella/logic/account'
-  autoload :GitHubSignup, 'stella/logic/account'
-  autoload :UpdatePassword, 'stella/logic/account'
-  autoload :PasswordResetEmail, 'stella/logic/account'
-  autoload :ViewCheckup, 'stella/logic/checkup'
-  autoload :CreateCheckup, 'stella/logic/checkup'
   class Base
     unless defined?(Stella::Logic::Base::PHONE_REGEX)
       PHONE_REGEX = /^\+?\d{9,16}$/
@@ -22,6 +13,14 @@ module Stella::Logic
       @processed_params ||= {}
       process_params if respond_to?(:process_params) # && @params
       process_generic_params if @params
+    end
+
+    def valid_email?(email)
+      !email.match(EMAIL_REGEX).nil?
+    end
+
+    def valid_phone?(phone)
+      !phone.match(PHONE_REGEX).nil?
     end
 
     protected
@@ -175,3 +174,5 @@ class Stella::Logic::Feedback < Stella::Logic::Base
   end
 end
 
+require 'stella/logic/account'
+require 'stella/logic/checkup'

@@ -1,6 +1,32 @@
 require 'stella/logic'
 require 'stella/email'
 
+class Stella::Logic::AddContact < Stella::Logic::Base
+  attr_reader :email, :name, :phone, :contact
+  def raise_concerns(event=:add_contact)
+    if !valid_email?(email)
+      raise Stella::App::Problem.new("Inavlid email: #{email}")
+    end
+    if phone && !valid_phone?(phone)
+      raise Stella::App::Problem.new("Inavlid phone: #{phone}")
+    end
+  end
+  def process
+    opts = {:email => email, :customer => cust}
+    opts[:name] = name if name
+    opts[:phone] = phone if phone
+    @contact = Stella::Contact.create opts
+  end
+  def process_params
+    @email = params[:email].to_s.strip
+    @phone = params[:phone].to_s.strip
+    @name = params[:name].to_s.strip
+    @email = nil if @email.empty?
+    @phone = nil if @phone.empty?
+    @name = nil if @name.empty?
+  end
+end
+
 class Stella::Logic::Account < Stella::Logic::Base
   unless defined?(Account::UPDATEABLE_FIELDS)
     UPDATEABLE_FIELDS = [:name, :phone, :website, :company, :location].freeze
@@ -15,14 +41,6 @@ class Stella::Logic::Account < Stella::Logic::Base
     #end
   end
 
-  def valid_email?(email)
-    !email.match(EMAIL_REGEX).nil?
-  end
-
-  def valid_mobile?(phone)
-    !phone.match(PHONE_REGEX).nil?
-  end
-
   def process_params
     UPDATEABLE_FIELDS.each do |field|
       next if params[field].nil?
@@ -34,7 +52,7 @@ class Stella::Logic::Account < Stella::Logic::Base
     end
 
     params[:phone] = Stella::Logic.normalize_phone(params[:phone])
-    if !params[:phone].to_s.empty? && !valid_mobile?(params[:phone])
+    if !params[:phone].to_s.empty? && !valid_phone?(params[:phone])
       raise Stella::App::Problem.new("Inavlid phone: #{params[:phone]}")
     end
 
