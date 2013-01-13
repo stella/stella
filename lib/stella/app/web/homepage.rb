@@ -119,7 +119,6 @@ module Stella::App::Views
 end
 
 
-
 class Stella::App::Hooks
   include Stella::App::Base
   def twilio_text
