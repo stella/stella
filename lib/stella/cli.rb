@@ -136,14 +136,14 @@ class Stella
     end
 
     def db
-      puts Stella.config['db.uri']
+      puts Stella.config['db.default.uri']
     end
 
     def db_recreate
       if Stella.env?(:prod) || Stella.env?(:prod2) || Stella.env?(:production)
         raise "You're messing with production"
       end
-      STDERR.puts "Replacing database schema (#{Stella.config['db.uri']})"
+      STDERR.puts "Replacing database schema (#{Stella.config['db.default.uri']})"
       if @global.auto || Annoy.are_you_sure?
         if @option.data
           DataMapper::Model.descendants.entries.each do |model|
@@ -160,7 +160,7 @@ class Stella
       ##if Stella.env?(:prod) || Stella.env?(:prod2) || Stella.env?(:production)
       ##  raise "You're messing with production"
       ##end
-      STDERR.puts "Updating database schema (#{Stella.config['db.uri']})"
+      STDERR.puts "Updating database schema (#{Stella.config['db.default.uri']})"
       DataMapper.finalize.auto_upgrade!
     end
 

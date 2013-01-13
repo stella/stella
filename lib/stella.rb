@@ -122,7 +122,11 @@ class Stella
     end
     def redis(db=0)
       @redis_connection ||= []
-      @redis_connection[db] ||= Redis.new(:host => 'localhost', :port => 6379, :db => db)
+      unless @redis_connection[db]
+        (uri = URI.parse(Stella.config['redis.default.uri'])).db = db
+        Stella.ld "Connecting to #{uri}"
+        @redis_connection[db] = Redis.new(:url => uri.to_s)
+      end
       @redis_connection[db]
     end
     def generate_instanceid
@@ -155,17 +159,18 @@ class Stella
         Stella.ld "Loading backend..."
         require 'data_mapper'
         require 'stella/model'
-        autoload :Notifier, 'stella/notification'
+        #autoload :Notifier, 'stella/notification'
 
-        if Stella.config['redis.uri']
+        if Stella.config['redis.default.uri']
+          require 'uri/redis'
           Stella::Session.redis = Stella.redis(1)
           Stella::Job.redis = Stella.redis(11)
           Stella::Secret.redis = Stella.redis(2)
           @redis_scripts = Stella::RedisObject.load_scripts
         end
 
-        if Stella.config['db.uri'].to_s.empty?
-          Stella.li "No database specified. (Check db.uri)"
+        if Stella.config['db.default.uri'].to_s.empty?
+          Stella.li "No database specified. (Check db.default.uri)"
         else
           load_db
           DataMapper.finalize
@@ -198,7 +203,7 @@ class Stella
       @config ||= Stella::Config.load
       ENV['TZ'] = 'UTC'  # Important for datamapper
       DataMapper::Logger.new($stderr, :debug) if ENV['DATAMAPPER_DEBUG']
-      DataMapper.setup(:default, Stella.config['db.uri'])
+      DataMapper.setup(:default, Stella.config['db.default.uri'])
     end
   end
 end

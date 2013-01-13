@@ -17,7 +17,7 @@ def run
   Stella.li "Flushing redis"
   Stella.redis.flushall
 
-  Stella.li "Scrubbing database (%s)" % Stella.config['db.uri']
+  Stella.li "Scrubbing database (%s)" % Stella.config['db.default.uri']
   DataMapper::Model.descendants.entries.each do |model|
     Stella.ld "Removing #{model} data..."
     begin

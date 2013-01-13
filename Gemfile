@@ -29,6 +29,7 @@ gem 'coderay', '1.0.8'
 
 gem 'redis', '3.0.2'
 gem 'redis-objects', '0.6.1'
+gem 'uri-redis', '0.4.2'
 
 group :backend do
   gem 'datamapper', '1.2.0'

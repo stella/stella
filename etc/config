@@ -14,8 +14,8 @@ site.secret: PLEASECHANGEMESTELLA
 
 #site.ssl_ca_file:
 
-db.uri: 'postgres://stella:stellapass@127.0.0.1/stella'
-redis.uri: 'redis://127.0.0.1/0?timeout=5&thread_safe=false&logging=false'
+db.default.uri: 'postgres://stella:stellapass@127.0.0.1/stella'
+redis.default.uri: 'redis://127.0.0.1:6579/0?timeout=5&thread_safe=false&logging=false'
 
 stella.remote: https://www.blamestella.com/
 stella.custid: delano@blamestella.com
@@ -45,8 +45,8 @@ account.anonymous.email: anonymous@blamestella.com
 
 location.city: montreal
 
-phantomjs.home: ./vendor/phantomjs-1.7.0-macosx
-#phantomjs.home: ./vendor/phantomjs-1.7.0-linux-x86_64
+phantomjs.home: ./vendor/phantomjs-1.8.1-macosx
+#phantomjs.home: ./vendor/phantomjs-1.8.1-linux-x86_64
 
 render.path: /path/2/dir
 render.thumbnail.sizes:

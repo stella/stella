@@ -276,15 +276,15 @@ class Stella::RangeMetrics
   def initialize context, metric_id
     @context, @metric_id = context, metric_id
     @base_key = self.class.key(context, metric_id)
-    @lock = Redis::Lock.new self.class.key(base_key, :lock), :expiration => 30, :timeout => 0.1
-    @metrics = Redis::SortedSet.new self.class.key(base_key, :metrics), :expiration => 7.days
+    @lock = Redis::Lock.new self.class.key(base_key, :lock), self.class.redis, :expiration => 30, :timeout => 0.1
+    @metrics = Redis::SortedSet.new self.class.key(base_key, :metrics), self.class.redis, :expiration => 7.days
     self.class.ranges.each_pair do |rangeid,range|
       options = {
         :expiration => 7.days,
         :range => range,
         :rangeid => rangeid
       }
-      r = Redis::HashKey.new self.class.key(base_key, rangeid), options
+      r = Redis::HashKey.new self.class.key(base_key, rangeid), self.class.redis, options
       instance_variable_set("@#{rangeid}", r)
     end
   end
@@ -294,6 +294,7 @@ class Stella::RangeMetrics
   end
   class << self
     attr_reader :ranges
+    attr_accessor :redis_uri
     def key *parts
       Stella::RedisObject.key parts
     end
@@ -307,6 +308,15 @@ class Stella::RangeMetrics
       else
         "#{range.in_hours} hours"
       end
+    end
+    def redis
+      unless @redis
+        uri = Stella.config['redis.metrics.uri'] ||
+              Stella.config['redis.default.uri']
+        Stella.ld "Connecting to #{uri}"
+        @redis = Redis.new(:url => uri)
+      end
+      @redis
     end
   end
   @ranges = {
