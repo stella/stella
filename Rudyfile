@@ -20,9 +20,9 @@ routines do
   thin_vars do
     remote do
       $user = Rudy::Huxtable.current_machine_user
-      $sock = "/var/run/stella/thin_#{$user}.sock"
-      $pid = "/var/run/stella/thin_#{$user}.pid"
-      $log = "/var/log/stella/thin_#{$user}.log"
+      $sock = "/var/run/stella/thin_web.sock"
+      $pid = "/var/run/stella/thin_web.pid"
+      $log = "/var/log/stella/thin_web.log"
     end
   end
 
