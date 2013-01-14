@@ -116,6 +116,7 @@ class Stella
     def redis_load_scripts
       argv.each do |path|
         Stella::RedisObject.load_script path
+        Stella::RangeMetrics.load_script path
       end
       Stella.redis_scripts.each_pair { |name,sha| Stella.li "#{name} #{sha}"}
     end

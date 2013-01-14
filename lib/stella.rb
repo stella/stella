@@ -40,7 +40,6 @@ class Stella
   autoload :SmartQueue, 'stella/queue'
   autoload :Queueable, 'stella/queue'
 
-
   module VERSION
     def self.to_a
       load_config
@@ -120,14 +119,15 @@ class Stella
       @sysinfo ||= SysInfo.new.freeze
       @sysinfo
     end
-    def redis(db=0)
-      @redis_connection ||= []
-      unless @redis_connection[db]
+    def redis(db=0, profile=:default)
+      @redis_connection ||= {}
+      if @redis_connection.empty? || !@redis_connection[profile.to_s][db]
         (uri = URI.parse(Stella.config['redis.default.uri'])).db = db
         Stella.ld "Connecting to #{uri}"
-        @redis_connection[db] = Redis.new(:url => uri.to_s)
+        @redis_connection[profile.to_s] ||= []
+        @redis_connection[profile.to_s][db] = Redis.new(:url => uri.to_s)
       end
-      @redis_connection[db]
+      @redis_connection[profile.to_s][db]
     end
     def generate_instanceid
       Gibbler.new Stella.sysinfo.hostname, Stella.sysinfo.user, $$, Stella::VERSION.to_s, Stella.now.to_f
@@ -167,6 +167,7 @@ class Stella
           Stella::Job.redis = Stella.redis(11)
           Stella::Secret.redis = Stella.redis(2)
           @redis_scripts = Stella::RedisObject.load_scripts
+          Stella::RangeMetrics.load_scripts
         end
 
         if Stella.config['db.default.uri'].to_s.empty?

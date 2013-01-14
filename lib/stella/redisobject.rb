@@ -10,11 +10,12 @@ class Redis
 end
 
 
+
 module Stella::RedisObject
   Stella::RO = self
   @version = 'v3'
   @classes = []
-  class << self
+  module ScriptCollector
     attr_reader :version, :classes
     def load_scripts
       scripts = {}
@@ -29,10 +30,11 @@ module Stella::RedisObject
     def load_script path
       script = File.readlines(path).reject { |l| l =~ /\s*\-\-|^\s*$/ }.join
       name = File.basename(path, '.lua')
-      sha = Stella.redis.script 'load', script
+      sha = self.redis.script 'load', script
       [name, sha]
     end
   end
+  extend ScriptCollector
   module ClassMethods
     def included obj
       classes << obj
@@ -98,6 +100,9 @@ module Stella::RedisObject
     end
     def has_index?
       kind_of? Stella::RedisObject::InstanceIndex
+    end
+    def redis
+      Stella.redis(0, :default)
     end
     attr_writer :expiration,  :db
     def expiration(v=nil)
@@ -326,4 +331,5 @@ class Stella::RangeMetrics
   }.freeze
   # Install accessor methods for all ranges (RangeMetrics#past_1h)
   ranges.each_pair { |rangeid,r| attr_reader rangeid }
+  extend Stella::RedisObject::ScriptCollector
 end

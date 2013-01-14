@@ -59,6 +59,7 @@ class Stella::CLI::Definition
   action :S, :start
   action :L, :load_scripts
   action :F, :flush_scripts
+  #option :p, :profile, String, "Redis profile. Default: default"
   command :redis => Stella::CLI
 
   option :d, :data, "Remove data"
