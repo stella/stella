@@ -52,7 +52,7 @@ class Stella
         if authenticated
           self[:your_sites] = cust.hosts(:hidden => false, :order => [ :monitored.desc, :updated_at.desc ])
           self[:your_sites].sort! { |a,b|
-            b.rangemetrics.past_4h['on_load_avg'].to_i <=> a.rangemetrics.past_4h['on_load_avg'].to_i
+            b.rangemetrics.past_24h['on_load_avg'].to_i <=> a.rangemetrics.past_24h['on_load_avg'].to_i
           }
           self[:your_sites_count] = self[:your_sites].size
           self[:your_monitored_count] = self[:your_sites].select { |h| h.monitored }.size
