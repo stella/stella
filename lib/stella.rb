@@ -254,7 +254,7 @@ class Stella
     def clean msg
       msg = msg.to_s.strip
       msg.gsub!(/%/, '%%') # syslog(3) freaks on % (printf)
-      msg.gsub!(/\e\[[^m]*m/, '') # remove useless ansi color codes
+      msg.gsub!(/\e\[[^m]*m/, '') # remove ansi color codes
       msg
     end
   end

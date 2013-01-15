@@ -240,27 +240,31 @@ class Stella
         end
 
         if run.metrics?
-          begin
-            plan.add_metrics run.started_at, run.metrics
-            plan.host.add_metrics run.started_at, run.metrics
-            Stella::RangeMetrics.ranges.each_pair do |rangeid,duration|  # [past_1h, 1.hour]
-              if plan.host.settings['interval'].to_i >= duration.to_i
-                Stella.ld '[%s]  skipping %s metrics (interval: %d)' % [plan.host.hostname, rangeid, plan.host.settings['interval']]
-                next
-              end
+          plan.add_metrics run.started_at, run.metrics
+          plan.host.add_metrics run.started_at, run.metrics
+          Stella::RangeMetrics.ranges.each_pair do |rangeid,duration|  # [past_1h, 1.hour]
+            if plan.host.settings['interval'].to_i >= duration.to_i
+              Stella.li '[%s]  skipping %s metrics (interval: %d)' % [plan.host.hostname, rangeid, plan.host.settings['interval']]
+              next
+            end
+            begin
               # plan metrics:
               keys = [plan.rangemetrics.metrics.key]
               argv = [Stella.now.to_i, duration, plan.rangemetrics.send(rangeid).key]
-              cnt = Stella.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
-              Stella.ld '[%s]  %d items for %s' % [plan.planid, cnt, rangeid]
+              cnt = Stella::RangeMetrics.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
+              Stella.li '[%s]  %d items for %s' % [plan.planid, cnt, rangeid]
+            rescue Redis::CommandError => ex
+              Stella.li ex.message
+            end
+            begin
               # host metrics:
               keys = [plan.host.rangemetrics.metrics.key]
               argv = [Stella.now.to_i, duration, plan.host.rangemetrics.send(rangeid).key]
-              cnt = Stella.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
-              Stella.ld '[%s]  %d items for %s' % [plan.host.hostname, cnt, rangeid]
+              cnt = Stella::RangeMetrics.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
+              Stella.li '[%s]  %d items for %s' % [plan.host.hostname, cnt, rangeid]
+            rescue Redis::CommandError => ex
+              Stella.li ex.message
             end
-          rescue Redis::CommandError => ex
-            Stella.li ex.message
           end
         end
       end
