@@ -8,6 +8,22 @@ class Stella
       rangemetrics.metrics[metrics.to_json] = time.to_i
       # TODO: past_1hour via rangemetrics.range or call LUA script
     end
+    def update_stat_summaries interval=1.hour, now=Stella.now
+      Stella::RangeMetrics.ranges.each_pair do |rangeid,duration|  # [past_1h, 1.hour]
+        if interval.to_i >= duration.to_i
+          Stella.ld '[%s/%d]  skipping %s metrics (interval: %d)' % [self.class, self.id, rangeid, interval]
+          next
+        end
+        begin
+          keys = [self.rangemetrics.metrics.key]
+          argv = [now.to_i, duration, self.rangemetrics.send(rangeid).key]
+          cnt = Stella::RangeMetrics.redis.evalsha(Stella.redis_scripts['metrics_calculator'], keys, argv)
+          Stella.ld '[%s/%d]  %d items for %s' % [self.class, self.id, cnt, rangeid]
+        rescue Redis::CommandError => ex
+          Stella.li ex.message
+        end
+      end
+    end
   end
 
   class Host
