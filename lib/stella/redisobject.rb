@@ -293,9 +293,16 @@ class Stella::RangeMetrics
       instance_variable_set("@#{rangeid}", r)
     end
   end
-  def range duration
-    now = Stella.now.to_i
-    metrics.rangebyscore now-duration, now
+  def range duration, epoint=Stella.now
+    r = rangeraw duration, epoint
+    #r.collect { |str| Yajl::Parser.parse(str) }
+    objects = []
+    Yajl::Parser.parse(r.join($/)) { |obj| objects << obj }
+    objects
+  end
+  def rangeraw duration, epoint=Stella.now
+    spoint = epoint.to_i-duration.to_i
+    metrics.rangebyscore spoint, epoint.to_i
   end
   class << self
     attr_reader :ranges
