@@ -250,7 +250,7 @@ class Stella
     end
     alias_method :homepage, :homepage?
     def recent_testruns
-      testruns.all :created_at.gt => Stella.now-1.day, :order => [:created_at.desc], :limit => 20
+      #testruns.all :created_at.gt => Stella.now-1.day, :order => [:created_at.desc], :limit => 6
     end
     def parsed_uri
       @parsed_uri ||= Stella::Utils.uri(self.uri)

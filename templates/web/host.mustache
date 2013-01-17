@@ -43,7 +43,7 @@
           <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
         </li>
         <li>
-          <a href="#recent" data-toggle="tab"><h4 class="cufon">Recent Checks</h4></a>
+          <a href="#data" data-toggle="tab"><h4 class="cufon">Data</h4></a>
         </li>
         {{/host.monitored}}
         {{/owner_only}}
@@ -124,12 +124,13 @@
                     {{/host.contacts}}
 
                     {{^host.contacts}}
+                    <em class="contacts-none">We will notify you</em>
                     {{/host.contacts}}
                   </div>
                 </div>
-                                  <div class="controls">
-                    <a href="#contactsModal" role="button" class="" data-toggle="modal"><i class="icon  icon-plus"></i> Add contact</a><br/>
-                  </div>
+                <div class="controls">
+                  <a href="#contactsModal" role="button" class="" data-toggle="modal"><i class="icon  icon-plus"></i> Add contact</a><br/>
+                </div>
               </div>
 
               <div class="form-actions">
@@ -178,6 +179,7 @@
                 nowElem.show();
                 nowElem.insertAfter($('.contacts').find('label.contactField').last())
                 $('#contactsModal').modal('hide');
+                $('.contacts-none').hide();
               });
 
             });
@@ -279,9 +281,9 @@
           {{/enabled_pages}}
         </div>
 
-        <div id="recent" class="hidden">
+        <div id="data" class="hidden">
 
-          <div class="btn-group pull-right">
+          <div class="btn-group">
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
               Download Metrics
               <span class="caret"></span>
@@ -296,23 +298,7 @@
               <li><a href="/site/{{host.hostid}}/report.csv?d=86400">CSV (24h)</a></li>
             </ul>
           </div>
-
-          <p><em>Recent checks for monitored pages.</em></p>
-          {{#enabled_pages}}
-          <h3><span class="cufon">{{host.hostname}}{{path}}</span> &nbsp;<small class="cufon"></small></h3>
-            <ul class="">
-            {{#recent_testruns}}
-            <li class="">
-              <a href="/testrun/{{runid}}">{{summary.on_load}}ms @ <span class="tsbasic" title="{{created_at.to_i}}">{{created_at}}</span></a>
-            </li>
-            {{/recent_testruns}}
-          </ul>
-
-          {{^testruns}}
-          <p><em>No checks yet</em></p>
-          {{/testruns}}
-          {{/enabled_pages}}
-
+          <br/><br/><br/><br/>
           <br/><br/><br/><br/>
           <br/><br/><br/><br/>
         </div>
