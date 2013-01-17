@@ -264,10 +264,8 @@
 
         <div id="screenshots" class="hidden">
 
-          <p><em>Screenshot history for monitored pages.</em></p>
-          {{#enabled_pages}}
-          <h3><span class="cufon">{{host.hostname}}{{path}}</span> &nbsp;<small class="cufon"></small></h3>
-            <ul class="thumbnails">
+          <p><em>Homepage screenshot history.</em></p>
+          <ul class="thumbnails">
             {{#host.screenshots.reverse}}
             <li class="span3 screenshot">
               <div class="thumbnail">
@@ -280,7 +278,6 @@
           {{^host.screenshots}}
           <p><em>No screenshots yet</em></p>
           {{/host.screenshots}}
-          {{/enabled_pages}}
         </div>
 
         <div id="data" class="hidden">
