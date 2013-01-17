@@ -22,7 +22,7 @@ class Stella::App::Host
   def report_dump
     publically do
       assert_params :format
-      duration = (req.params[:i] || 4.hours).to_i
+      duration = (req.params[:d] || 4.hours).to_i
       duration = 7.days if duration > 7.days
       duration = 1.hour if duration < 1.hour
       metrics = host.rangemetrics.range(duration)
