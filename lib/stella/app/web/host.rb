@@ -274,6 +274,34 @@ class Stella::App::Host
     end
   end
 
+  def plan_report_dump
+    publically do
+      assert_params :format
+      duration = (req.params[:d] || 4.hours).to_i
+      duration = 7.days if duration > 7.days
+      duration = 1.hour if duration < 1.hour
+      plan = Stella::Testplan.first :planid => req.params[:planid]
+      if plan
+        metrics = plan.rangemetrics.range(duration)
+        case req.params[:format]
+        when 'json'
+          res.body = json(metrics)
+        when 'yaml'
+          res.body = yaml(metrics)
+        when 'csv'
+          unless metrics .empty?
+            fields = metrics.first.keys
+            metrics.collect! {|o| o.values }
+            metrics.unshift fields
+          end
+          res.body = csv(metrics)
+        end
+      else
+        not_found_response "No such plan"
+      end
+    end
+  end
+
   def disable_plan
     authenticated do
       enforce_method! :POST
@@ -341,16 +369,10 @@ module Stella::App::Views
       @title = plan.uri
       @css << '/app/style/component/host.css'
       @body_class = :host
+      self[:owner_only] = self[:authenticated] && (plan.host.customer?(cust) || cust.colonel?)
       self[:plan] = plan
       self[:host] = plan.host
-      self[:testruns] = plan.recent_testruns
-      if self[:testruns].first
-        self[:summary] = self[:testruns].first.summary
-        self[:ran_at] = self[:testruns].first.created_at.utc
-        self[:ran_at_js] = self[:ran_at].to_i * 1000
-        self[:ran_at_text] = epochformat(self[:ran_at])
-        self[:ran_at_natural] = natural_time(self[:ran_at].to_i)
-      end
+      self[:selected_tabid] = req.params[:tabid]
     end
   end
 

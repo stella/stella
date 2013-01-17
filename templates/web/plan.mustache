@@ -1,77 +1,127 @@
 {{>_layout/header}}
 
-  {{>_partial/session_messages}}
-
   <div class="span11">
     <ul class="breadcrumb">
-      {{#authenticated}}
-      <li><h2 class="cufon"><a href="/site/{{host.hostname}}">{{host.hostname}}</a> <span class="divider">&gt;</span></h2></li>
-      <li class="active"><h2 class="cufon"><a href="/plan/{{plan.planid}}">{{plan.shortpath}}</a></h2></li>
-      {{/authenticated}}
+      <li><h2 class="cufon"><a href="/">Home</a> <span class="divider">&gt;</span></h2></li>
+      <li class="">
+        <h2 class="cufon"><a href="/site/{{host.hostname}}">{{host.hostname}}</a> <span class="divider">&gt;</span></h2>
+      </li>
+
+      <li class="active">
+        <h2 class="cufon"><a href="/site/{{host.hostname}}">{{plan.shortpath}}</a></h2>
+      </li>
 
       <div style="float: right; margin-top: 4px" class="">
-        {{#host.monitored}}<button href="/site/{{host.hostid}}/stop" class="btn host-stop">Stop Monitoring</button>{{/host.monitored}}
-        {{^host.monitored}}<button href="/site/{{host.hostid}}/start" class="btn btn-primary host-start">Start Monitoring for ${{site_price}}/month</button>{{/host.monitored}}
+        {{^host.monitored}}
+        {{/host.monitored}}
+        {{#plan.enabled}}
+        <span class="cufon" style="font-size: 36px; font-weight: bold">{{plan.rangemetrics.past_1h.on_load_avg.to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{/plan.enabled}}
       </div>
     </ul>
   </div>
 
-  <div id="stats" class="span8 offset1 well row">
-    {{#plan.screenshot}}
-    <a href="/t/{{plan.screenshot.filename}}"><img style="float: left" src="/t/{{plan.screenshot.thumbnail}}" alt="{{host.hostname}} thumbnail"></a>
-    {{/plan.screenshot}}
-    {{^plan.screenshot}}
-    <img src="/img/thumbnail-host.png"  style="float: left" alt="Generating thumbnail...">
-    {{/plan.screenshot}}
-    <ul class="span4">
-      <li class="rt rt-summary-header">
-        <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->
-        <span class="value cufon">{{summary.on_load}}</span>
-        <span class="suffix cufon">milliseconds</span>
-        <!--<span class="description">Response Time</span>-->
-      </li>
-      <li class="advice cufon">
-        "<strong class="slowish">Not so fast.</strong> Slower than most sites."
-      </li>
-      <li>
-        <span class="value cufon">{{summary.on_content_ready}}ms</span>
-        <span class="description ">Content Ready</span>
-      </li>
-      <li>
-        <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
-        <span class="description ">Total Size</span>
-      </li>
-      <li>
-        <span class="value cufon">{{summary.requests}}</span>
-        <span class="description ">Requests</span>
-      </li>
-      <li>
-        <span class="value cufon">{{summary.error_count}}</span>
-        <span class="description ">Errors</span>
-      </li>
-      <li class="time">
-        <span class="cufon">updated {{ran_at_natural}}</span>
-      </li>
-    </ul>
-  </div>
+  <div class="row">
+    <div class="span10 offset1">
+      <div style="margin-left: 20px">{{>_partial/session_messages}}</div>
 
-  <div class="span11 offset1">
-    <div class="page-header span10">
-      <h2><span class="cufon">Latest Checks</span> &nbsp;<small class="cufon">Updated every few minutes.</small></h2>
-      <div class="line"></div>
+      <ul id="pageTabs" class="nav nav-tabs">
+        {{#owner_only}}
+        <li class="active">
+          <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
+        </li>
+        <li>
+          <a href="#recent" data-toggle="tab"><h4 class="cufon">Recent Checks</h4></a>
+        </li>
+        <li>
+          <a href="#data" data-toggle="tab"><h4 class="cufon">Data</h4></a>
+        </li>
+        {{/owner_only}}
+      </ul>
+
+      <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
+
+        {{#owner_only}}
+        <div id="recent" class="hidden">
+          <ul class="">
+            {{#plan.recent_testruns}}
+            <li class="">
+              <a href="/testrun/{{runid}}">{{summary.on_load}}ms @ <span class="tsbasic" title="{{created_at.to_i}}">{{created_at}}</span></a>
+            </li>
+            {{/plan.recent_testruns}}
+          </ul>
+
+          {{^plan.testruns}}
+          <p><em>No checks yet</em></p>
+          {{/plan.testruns}}
+
+        </div>
+
+        <div id="screenshots" class="hidden active">
+
+          <p><em>Screenshot history.</em></p>
+
+            <ul class="thumbnails">
+            {{#plan.screenshots.reverse}}
+            <li class="span3 screenshot">
+              <div class="thumbnail">
+                <img src="/t/{{thumbnail}}"/>
+                <div class="date tsbasic" title="{{created_at.to_i}}">{{created_at.to_datetime}}</div>
+              </div>
+            </li>
+            {{/plan.screenshots.reverse}}
+          </ul>
+          {{^plan.screenshots}}
+          <p><em>No screenshots yet</em></p>
+          {{/plan.screenshots}}
+
+        </div>
+
+        <div id="data" class="hidden">
+
+          <div class="btn-group">
+            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+              Download Metrics
+              <span class="caret"></span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a href="/plan/{{plan.planid}}/report.json?d=14400">JSON (4h)</a></li>
+              <li><a href="/plan/{{plan.planid}}/report.yaml?d=14400">YAML (4h)</a></li>
+              <li><a href="/plan/{{plan.planid}}/report.csv?d=14400">CSV (4h)</a></li>
+              <li class="divider"></li>
+              <li><a href="/plan/{{plan.planid}}/report.json?d=86400">JSON (24h)</a></li>
+              <li><a href="/plan/{{plan.planid}}/report.yaml?d=86400">YAML (24h)</a></li>
+              <li><a href="/plan/{{plan.planid}}/report.csv?d=86400">CSV (24h)</a></li>
+            </ul>
+          </div>
+          <br/><br/><br/><br/>
+          <br/><br/><br/><br/>
+          <br/><br/><br/><br/>
+        </div>
+
+        {{/owner_only}}
+
+      </div>
+
     </div>
-  </div>
-  <div class="span11 offset1">
-
-    <ul class="">
-      {{#testruns}}
-      <li><a href="/testrun/{{runid}}"><strong>{{summary.on_load}}</strong>ms <em title="{{updated_at}}"> @ {{updated_at.utc}}</em></a></li>
-      {{/testruns}}
-      {{^testruns}}
-      <div class="span6"><h4><em>No checks run yet</em></h4></div>
-      {{/testruns}}
-    </ul>
 
   </div>
+
+  {{#bogus}}
+  '#pageTabs li a[href$="VALUE"]'
+   = is exactly equal
+  != is not equal
+  ^= is starts with
+  $= is ends with
+  *= is contains
+  {{/bogus}}
+
+  {{#selected_tabid}}
+  <script type="text/javascript">
+    $(function() {
+      $('#pageTabs li a[href$="#{{to_s}}"]').tab('show');
+    });
+  </script>
+  {{/selected_tabid}}
 
 {{>_layout/footer}}

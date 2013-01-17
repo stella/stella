@@ -45,6 +45,9 @@ POST  /site/:hostid/destroy                           Stella::App::Host#destroy
 
 GET   /testrun/:runid                                 Stella::App::Host#testrun
 GET   /plan/:planid                                   Stella::App::Host#plan
+GET   /plan/:planid/report.:format                    Stella::App::Host#plan_report_dump
+GET   /plan/:planid/:tabid                            Stella::App::Host#plan
+
 POST  /plan/:planid/hide                              Stella::App::Host#hide_plan
 POST  /plan/:planid/enable                            Stella::App::Host#enable_plan
 POST  /plan/:planid/disable                           Stella::App::Host#disable_plan
