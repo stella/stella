@@ -133,6 +133,22 @@ function postAndIgnore(e) {
   return e.preventDefault();
 };
 
+function postAndDelete(e) {
+  var obj = $(this);
+  $.ajax({
+    type: 'POST',
+    url: obj.attr('href'),
+    success: function(data, textStatus){
+      alertify.success("Done.")
+      $('#object-' + obj.data('objid')).remove();
+    },
+    error: function(){
+      alertify.error("Ooops! There was an error.")
+    }
+  });
+  return e.preventDefault();
+};
+
 function hostHide(e) {
   var obj = $(this);
   var target = obj.parent().parent();
@@ -313,6 +329,7 @@ $(function() {
   $('.host-upgrade').click(postAndRefresh);
   $('.host-stop').click(postAndRefresh);
   $('.host-destroy').click(postAndRedirect);
+  $('.contact-delete').click(postAndDelete);
 
   $('.checkupSummaryToggle').click(function() {
     $("#checkupSummary").slideToggle();

@@ -135,6 +135,9 @@ class Stella::App
       Stella.li ex.message
       not_found_response "Not authorized"
 
+    rescue Stella::DuplicateItem => ex
+      error_response ex.message
+
     rescue Stella::App::BadShrimp => ex
       sess.add_error_message! "Please go back, refresh the page, and try again."
       res.redirect redirect

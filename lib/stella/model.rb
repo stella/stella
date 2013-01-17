@@ -215,7 +215,7 @@ class Stella
     property :email,        String, :length => 64, :required => true
     property :phone,        String, :length => 24
     property :hidden,       Boolean, :default => false
-    gibbler :id, :name, :email, :phone
+    gibbler :id, :name, :email, :phone, :customer
     before :valid?, :normalize
     include Stella::Model::TimeStamps
     include Stella::Model::DataField

@@ -54,7 +54,9 @@ GET   /account/:tabid                                 Stella::App::Account#index
 
 POST  /account                                        Stella::App::Account#update
 POST  /account/testsms                                Stella::App::Account#testsms
+
 POST  /account/contact/:contactid/testsms             Stella::App::Account#testsms
+POST  /account/contact/:contactid/delete              Stella::App::Account#deletecontact
 
 GET   /account/api                                    Stella::App::Account#api
 GET   /account/billing                                Stella::App::Account#billing

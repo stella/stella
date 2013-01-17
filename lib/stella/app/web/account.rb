@@ -97,7 +97,7 @@ class Stella::App::Account
   end
 
   def addcontact
-    authenticated do
+    authenticated('/account/contact') do
       enforce_method! :POST
       assert_params :email
       logic = Stella::Logic::AddContact.new sess, cust, req.params
@@ -108,6 +108,21 @@ class Stella::App::Account
       })
       res.redirect "/account/contacts" unless req.ajax?
       Stella::Analytics.event "Add Contact"
+    end
+  end
+
+  def deletecontact
+    authenticated('/account/contact') do
+      enforce_method! :POST
+      assert_params :contactid
+      logic = Stella::Logic::DeleteContact.new sess, cust, req.params
+      logic.raise_concerns
+      contact = logic.process
+      res.body = json({
+        :success => true, :msg => "Contact deleted"
+      })
+      res.redirect "/account/contacts" unless req.ajax?
+      Stella::Analytics.event "Delete Contact"
     end
   end
 

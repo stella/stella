@@ -114,18 +114,40 @@
               <h2 class="cufon">Contacts</h2>
               <div class="line"></div>
 
-              {{#cust.contacts}}
-              <label class="checkbox">
-                <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
-                {{email}}
-                {{#phone}}
-                  ({{to_s}})
-                  <span class="help-inline"><button href="/account/contact/{{contactid}}/testsms" class="btn btn-mini send-test-sms">Send Test</button>
-                  </span>
-                {{/phone}}
-              </label>
-              {{/cust.contacts}}
-
+              <table class="table table-condensed">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <!--<th>Name</th>-->
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#cust.contacts}}
+                <tr id="object-{{contactid}}">
+                  <td><img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/> {{email}}</td>
+                  <td>
+                  {{#phone}}{{phone}}{{/phone}}
+                  {{^phone}}<em>[no phone]</em>{{/phone}}
+                  </td>
+                  <!--<td>{{nickname}}</td>-->
+                  <td>
+                  <div class="btn-group">
+                    <button class="btn btn-mini dropdown-toggle" data-toggle="dropdown"><i class="icon-pencil"></i> <span class="caret"></span></button>
+                    <ul class="dropdown-menu pull-right">
+                      <li>
+                        <a href="/account/contact/{{contactid}}/testsms" class="send-test-sms"><i class="icon-bullhorn"></i> Send Test SMS</a>
+                      </li>
+                      <li class="divider"></li>
+                      <li class=""><a href="/account/contact/{{contactid}}/delete" data-objid="{{contactid}}" class="contact-delete"><i class="icon-remove-sign"></i> Delete Contact</a></li>
+                    </ul>
+                  </div>
+                  </td>
+                </tr>
+                {{/cust.contacts}}
+                </tbody>
+              </table>
               <div class="control-group">
                 <div class="controls">
                   <a href="#contactsModal" role="button" class="btn" data-toggle="modal"><i class="icon icon-plus"></i> Add contact</a>

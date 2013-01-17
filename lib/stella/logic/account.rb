@@ -16,6 +16,8 @@ class Stella::Logic::AddContact < Stella::Logic::Base
     opts[:name] = name if name
     opts[:phone] = phone if phone
     @contact = Stella::Contact.create opts
+  rescue DataObjects::IntegrityError => ex
+    raise Stella::DuplicateItem, "That contact already exists"
   end
   def process_params
     @email = params[:email].to_s.strip
@@ -24,6 +26,20 @@ class Stella::Logic::AddContact < Stella::Logic::Base
     @email = nil if @email.empty?
     @phone = nil if @phone.empty?
     @name = nil if @name.empty?
+  end
+end
+
+class Stella::Logic::DeleteContact < Stella::Logic::Base
+  attr_reader :contactid, :contact
+  def raise_concerns(event=:delete_contact)
+    raise Stella::App::Problem, "No such contact" if contact.nil?
+  end
+  def process
+    contact.destroy
+  end
+  def process_params
+    @contactid = params[:contactid].to_s.strip
+    @contact = cust.contacts :contactid => contactid
   end
 end
 
