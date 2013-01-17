@@ -234,7 +234,7 @@
                   <p>
                     {{#host.monitored}}
                     {{^enabled}}
-                    {{^has_max_pages}}<button href="/plan/{{planid}}/enable" class="btn btn-primary plan-enable">Monitor this page</button>{{/has_max_pages}}
+                    {{^has_max_pages}}<button href="/plan/{{planid}}/enable" class="btn btn-primary plan-enable">Monitor for $2/month</button>{{/has_max_pages}}
                     {{#has_max_pages}}<br/><span class="label">not monitored</span>{{/has_max_pages}}
                     {{/enabled}}
                     {{#enabled}}<button href="/plan/{{planid}}/disable" class="btn plan-disable">Stop Monitoring This Page</button>{{/enabled}}
