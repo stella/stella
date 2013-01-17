@@ -331,6 +331,7 @@ class Stella
     # value (Proc) => value.call(summary)
     @metrics = {
       :at => lambda { |summary| Time.parse(summary['started_at']) },
+      #:base_uri => 'b',
       :redirect_count => 'redirects',
       :asset_count => nil,
       :error_count => nil,

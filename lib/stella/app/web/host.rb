@@ -25,19 +25,23 @@ class Stella::App::Host
       duration = (req.params[:d] || 4.hours).to_i
       duration = 7.days if duration > 7.days
       duration = 1.hour if duration < 1.hour
-      metrics = host.rangemetrics.range(duration)
-      case req.params[:format]
-      when 'json'
-        res.body = json(metrics)
-      when 'yaml'
-        res.body = yaml(metrics)
-      when 'csv'
-        unless metrics .empty?
-          fields = metrics.first.keys
-          metrics.collect! {|o| o.values }
-          metrics.unshift fields
+      if host
+        metrics = host.rangemetrics.range(duration)
+        case req.params[:format]
+        when 'json'
+          res.body = json(metrics)
+        when 'yaml'
+          res.body = yaml(metrics)
+        when 'csv'
+          unless metrics .empty?
+            fields = metrics.first.keys
+            metrics.collect! {|o| o.values }
+            metrics.unshift fields
+          end
+          res.body = csv(metrics)
         end
-        res.body = csv(metrics)
+      else
+        not_found_response "No such host"
       end
     end
   end
