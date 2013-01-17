@@ -123,7 +123,7 @@ function renderUrlToFile(uri, file, width, height, callback) {
 }
 
 function json(hsh) {
-  return JSON.stringify(hsh, undefined); // Indent: JSON.stringify(har, undefined, 2)
+  return JSON.stringify(hsh, undefined, 0); // Indent: JSON.stringify(har, undefined, 1)
 }
 
 function normalize_uri(uri) {
@@ -141,14 +141,20 @@ function createHAR12(page, endTime, pageTimings) {
   var entries = [];
   var startTimeObj = new Date(page.timingInitialize);
 
+
+
   page.resources.forEach(function (resource) {
+
     var request = resource.request,
       startReply = resource.startReply,
       endReply = resource.endReply;
 
+    //console.log(json(resource))
+
     if (!request || !startReply || !endReply) {
       return;
     }
+
 
     entries.push({
       startedDateTime: request.time.toISOString(),

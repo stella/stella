@@ -147,9 +147,9 @@ page.onLoadFinished = function() {
 
 function runTestrun(status) {
   try {
-  if (status !== 'success') {
-    console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false}));
-  } else {
+  //if (status !== 'success') {
+  //  console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false, "status": page.title}));
+  //} else {
 
     page.title = page.evaluate(function () {
       return document.title;
@@ -204,7 +204,7 @@ function runTestrun(status) {
     // around phantomjs noise where it will print messages while executing.
     console.log(json(har));
 
-  }
+  //}
 
   } catch(err) {
     handleError(err);
