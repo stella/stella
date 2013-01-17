@@ -4,16 +4,16 @@ class Stella::App
   class API
     module Base
       include Stella::App::Helpers
-      
+
       def publically
-        carefully do 
+        carefully do
           yield
         end
       end
-      
+
       # curl -F 'ttl=7200' -u 'delano@onetimesecret.com:4eb33c6340006d6607c813fc7e707a32f8bf5342' http://www.ot.com:7143/api/v1/generate
       def authenticated allow_anonymous=false
-        carefully do 
+        carefully do
           success = false
           req.env['otto.auth'] ||= Rack::Auth::Basic::Request.new(req.env)
           auth = req.env['otto.auth']
@@ -25,7 +25,7 @@ class Stella::App
             possible = Stella::Customer.first :email => email
             raise Unauthorized if possible.nil?
             @cust = possible if possible.apikey?(apikey)
-            unless cust.nil? || @sess = cust.load_session 
+            unless cust.nil? || @sess = cust.load_session
               @sess = Stella::Session.create req.client_ipaddress, req.user_agent, :custid => cust.custid
             end
             sess[:authenticated] = true unless sess.nil?
@@ -46,31 +46,37 @@ class Stella::App
           end
         end
       end
-      
+
       def content hsh
         json hsh
       end
-      
+
       def handle_form_error ex, redirect
         error_response ex.message
       end
-      
+
       def secret_not_found_response
         not_found_response "Unknown secret", :secret_key => req.params[:key]
       end
-      
+
+      def authentication_required msg, hsh={}
+        hsh[:code], hsh[:msg] = 401, msg
+        res.status = 401
+        json hsh
+      end
+
       def not_found_response msg, hsh={}
         hsh[:code], hsh[:msg] = 404, msg
         res.status = 404
         json hsh
       end
-    
+
       def error_response msg, hsh={}
         hsh[:code], hsh[:msg] = msg, 404
         res.status = 404
         json hsh
       end
-      
+
     end
   end
 end

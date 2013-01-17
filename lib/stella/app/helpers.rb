@@ -133,7 +133,7 @@ class Stella::App
 
     rescue Stella::App::Unauthorized => ex
       Stella.li ex.message
-      not_found_response "Not authorized"
+      authentication_required "Not authorized"
 
     rescue Stella::DuplicateItem => ex
       error_response ex.message

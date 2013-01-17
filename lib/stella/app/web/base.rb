@@ -64,6 +64,10 @@ class Stella
         sess[:referrer] ||= req.referrer
       end
 
+      def authentication_required message
+        not_found_response message
+      end
+
       def handle_form_error ex, redirect
         sess.set_form_fields ex.form_fields
         sess.add_error_message! ex.message
@@ -80,7 +84,7 @@ class Stella
       def error_response message
         view = Stella::App::Views::Error.new req, sess, cust
         view.add_error message
-        res.status = 401
+        res.status = 500
         res.body = view.render
       end
 

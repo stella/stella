@@ -32,11 +32,13 @@ class Stella
 
         def self.not_found req, res
           res.header['Content-Type'] = "application/json; charset=utf-8"
+          res.status = 404
           res.body = {:code => 404, :msg => "That dynamo cannot be found"}.to_json
         end
 
         def self.server_error req, res
           res.header['Content-Type'] = "application/json; charset=utf-8"
+          res.status = 500
           res.body = {:code => 500, :msg => 'The turbines have failed'}.to_json
         end
 
