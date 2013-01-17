@@ -35,11 +35,17 @@ class Stella::Logic::DeleteContact < Stella::Logic::Base
     raise Stella::App::Problem, "No such contact" if contact.nil?
   end
   def process
-    contact.destroy
+    contact.hosts.each { |host|
+      Stella.ld '[contact-host-delete] %s for %s ' % [contact.email, host.hostname]
+      host.contacts.delete contact
+      contact.hosts.delete host
+    }
+    contact.save
+    contact.destroy!
   end
   def process_params
     @contactid = params[:contactid].to_s.strip
-    @contact = cust.contacts :contactid => contactid
+    @contact = cust.contacts.first :contactid => contactid
   end
 end
 

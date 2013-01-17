@@ -94,6 +94,7 @@ class Stella::App::Host
         host.contacts.each do |contact|
           Stella.ld "[contact-delete] #{contact.email}"
           host.contacts.delete contact
+          contact.hosts.delete host
         end
         Stella::Host.transaction do
           if req.params[:contactid]
@@ -102,6 +103,8 @@ class Stella::App::Host
               next unless contact
               Stella.ld "[contact-add] #{contact.email}"
               host.contacts << contact
+              contact.hosts << host
+              contact.save
             end
           end
         end
