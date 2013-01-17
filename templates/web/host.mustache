@@ -281,6 +281,22 @@
 
         <div id="recent" class="hidden">
 
+          <div class="btn-group pull-right">
+            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+              Download Metrics
+              <span class="caret"></span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a href="/site/{{host.hostid}}/report.json?i=14400">JSON (4h)</a></li>
+              <li><a href="/site/{{host.hostid}}/report.yaml?i=14400">YAML (4h)</a></li>
+              <li><a href="/site/{{host.hostid}}/report.csv?i=14400">CSV (4h)</a></li>
+              <li class="divider"></li>
+              <li><a href="/site/{{host.hostid}}/report.json?i=86400">JSON (24h)</a></li>
+              <li><a href="/site/{{host.hostid}}/report.yaml?i=86400">YAML (24h)</a></li>
+              <li><a href="/site/{{host.hostid}}/report.csv?i=86400">CSV (24h)</a></li>
+            </ul>
+          </div>
+
           <p><em>Recent checks for monitored pages.</em></p>
           {{#enabled_pages}}
           <h3><span class="cufon">{{host.hostname}}{{path}}</span> &nbsp;<small class="cufon"></small></h3>
@@ -291,10 +307,14 @@
             </li>
             {{/recent_testruns}}
           </ul>
+
           {{^testruns}}
           <p><em>No checks yet</em></p>
           {{/testruns}}
           {{/enabled_pages}}
+
+          <br/><br/><br/><br/>
+          <br/><br/><br/><br/>
         </div>
 
         {{/owner_only}}

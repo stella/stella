@@ -33,6 +33,21 @@ class Stella
         end
       end
 
+      def json obj
+        res.header['Content-Type'] = "application/json"
+        obj.to_json
+      end
+
+      def yaml obj
+        res.header['Content-Type'] = "application/x-yaml"
+        obj.to_yaml
+      end
+
+      def csv obj
+        res.header['Content-Type'] = "text/plain"
+        obj.collect { |o| o.to_csv }
+      end
+
       #def check_subdomain!
       #  subdomstr = req.env['SERVER_NAME'].split('.').first
       #  if !subdomstr.to_s.empty? && subdomstr != 'www' && OT::Subdomain.mapped?(subdomstr)

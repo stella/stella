@@ -19,6 +19,29 @@ class Stella::App::Host
     host && (cust.colonel? || host.customer?(cust))
   end
 
+  def report_dump
+    publically do
+      assert_params :format
+      duration = (req.params[:i] || 4.hours).to_i
+      duration = 7.days if duration > 7.days
+      duration = 1.hour if duration < 1.hour
+      metrics = host.rangemetrics.range(duration)
+      case req.params[:format]
+      when 'json'
+        res.body = json(metrics)
+      when 'yaml'
+        res.body = yaml(metrics)
+      when 'csv'
+        unless metrics .empty?
+          fields = metrics.first.keys
+          metrics.collect! {|o| o.values }
+          metrics.unshift fields
+        end
+        res.body = csv(metrics)
+      end
+    end
+  end
+
   def destroy
     authenticated do
       enforce_method! :POST

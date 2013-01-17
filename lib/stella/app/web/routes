@@ -28,6 +28,8 @@ POST  /checkup/:checkid                               Stella::App::Checkup#signu
 
 ##########################################################################  HOST
 GET   /site/:hostname                                 Stella::App::Host#index
+GET   /site/:hostname/report                          Stella::App::Host#report
+GET   /site/:hostid/report.:format                    Stella::App::Host#report_dump
 GET   /site/:hostname/:tabid                          Stella::App::Host#index
 
 POST  /site/:hostid/settings                          Stella::App::Host#settings
