@@ -208,15 +208,6 @@
 
         <div id="pages" class=" hidden">
 
-            {{#owner_only}}
-            <p class="">
-              <em>You are monitoring <strong>{{enabled_pages_count}} of {{max_enabled_pages}}</strong> available pages.</em>
-              {{#bogus}}
-              {{#is_free_plan}}<a href="/site/{{host.hostid}}/upgrade" class="btn btn-primary host-upgrade">Monitor more for $5/month</a>{{/is_free_plan}}
-              {{/bogus}}
-            </p>
-            {{/owner_only}}
-
             <ul class="thumbnails">
               {{#testplans}}
               <li class="span3">
