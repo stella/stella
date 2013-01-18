@@ -377,7 +377,7 @@ module Stella::App::Views
         @tab = :products
         self[:tabs] = [
           {:tab => :products,  :text => "Products", :active => true },
-          {:tab => :payment,   :text => "Payment Info" },
+          #{:tab => :payment,   :text => "Payment Info" },
           {:tab => :history,   :text => "History" }
         ]
         self[:selected_tabid] = req.params[:tabid]
