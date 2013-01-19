@@ -198,7 +198,7 @@ class Stella::Logic::Signup < Stella::Logic::Base
         Stella::Host.create :hostname => checkup.host.hostname, :custid => cust.custid, :customer => cust
       }
       @testplan = Stella::Logic.safedb {
-        Stella::Testplan.create :uri => checkup.testplan.uri, :customer => cust, :host => host
+        Stella::Testplan.create :uri => checkup.testplan.uri, :customer => cust, :host => host, :data => checkup.testplan.data
       }
     elsif params[:hostid]
       hosttmp = Stella::Host.first :hostid => params[:hostid]
