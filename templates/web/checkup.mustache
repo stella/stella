@@ -60,29 +60,28 @@
 
       {{#is_done}}
       {{#testplan.host.monitored}}
-      {{#testplan.enabled}}
-      <form action="/checkup" method="post" class="form-inline">
-      {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
-      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
-      </form>
-      {{/testplan.enabled}}
+        {{#testplan.enabled}}
+        <form action="/checkup" method="post" class="form-inline">
+        {{{add_shrimp}}}
+        <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+        <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+        </form>
+        {{/testplan.enabled}}
+        {{^testplan.enabled}}
+          <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
+          {{{add_shrimp}}}
+          <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
+          <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
+          </form>
+        {{/testplan.enabled}}
       {{/testplan.host.monitored}}
 
-      {{^testplan.enabled}}
-      <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
-      {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
-      <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
-      </form>
-      {{/testplan.enabled}}
-
       {{^testplan.host.monitored}}
-      <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
-      {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
-      <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
-      </form>
+        <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
+        {{{add_shrimp}}}
+        <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
+        <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
+        </form>
       {{/testplan.host.monitored}}
 
       {{/is_done}}
