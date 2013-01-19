@@ -190,7 +190,7 @@ function runTestplan(status) {
          document.body.bgColor = 'white';
     });
 
-    var har = createHAR(page, page.timingOnLoadFinished, timings);
+    var har = createHAR(page, page.timingOnLoadFinished, timings, status);
 
     if (page.options.with_screenshots) {
       har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';

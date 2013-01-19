@@ -143,16 +143,14 @@ function normalize_uri(uri) {
   return uri;
 }
 
-function createHAR(page, endTime, pageTimings) {
-  return createHAR12(page, endTime, pageTimings);
+function createHAR(page, endTime, pageTimings, status) {
+  return createHAR12(page, endTime, pageTimings, status);
 }
 
 // HTTP Archive v1.2 (http://www.softwareishard.com/blog/har-12-spec/)
-function createHAR12(page, endTime, pageTimings) {
+function createHAR12(page, endTime, pageTimings, status) {
   var entries = [];
   var startTimeObj = new Date(page.timingInitialize);
-
-
 
   page.resources.forEach(function (resource) {
 
@@ -160,12 +158,9 @@ function createHAR12(page, endTime, pageTimings) {
       startReply = resource.startReply,
       endReply = resource.endReply;
 
-    //console.log(json(resource))
-
     if (!request || !startReply || !endReply) {
       return;
     }
-
 
     entries.push({
       startedDateTime: request.time.toISOString(),
@@ -214,8 +209,10 @@ function createHAR12(page, endTime, pageTimings) {
         name: "PhantomJS",
         version: phantom.version.major + '.' + phantom.version.minor + '.' + phantom.version.patch
       },
+      status: status,
       viewPort: page.viewportSize,
       options: page.options,
+      settings: page.settings,
       gaDisabled: page.gaDisabled,
       gaid: googleAnalyticsAccount(page.content),
       pages: [{
