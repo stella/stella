@@ -132,7 +132,7 @@ class Stella::App
       res.redirect redirect
 
     rescue Stella::App::Unauthorized => ex
-      Stella.li ex.message
+      Stella.ld ex.message
       authentication_required "Not authorized"
 
     rescue Stella::DuplicateItem => ex

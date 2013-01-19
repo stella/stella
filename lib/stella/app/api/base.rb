@@ -61,19 +61,19 @@ class Stella::App
 
       def authentication_required msg, hsh={}
         hsh[:code], hsh[:msg] = 401, msg
-        res.status = 401
+        res.status = hsh[:code]
         json hsh
       end
 
       def not_found_response msg, hsh={}
         hsh[:code], hsh[:msg] = 404, msg
-        res.status = 404
+        res.status = hsh[:code]
         json hsh
       end
 
       def error_response msg, hsh={}
-        hsh[:code], hsh[:msg] = msg, 404
-        res.status = 404
+        hsh[:code], hsh[:msg] = 404, msg
+        res.status = hsh[:code]
         json hsh
       end
 
