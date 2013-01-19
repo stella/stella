@@ -142,6 +142,10 @@ class Stella
           :height => 768,
           :with_screenshots => true
         }
+        if plan.host.settings['username']
+          options[:username] = plan.host.settings['username']
+          options[:password] = plan.host.settings['password']
+        end
         options[:gaid] = plan.host.settings['gaid'] if plan.host.settings['disable_ga'].to_s == 'true'
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
@@ -205,6 +209,10 @@ class Stella
           :height => 768,
           :with_screenshots => false
         }
+        if plan.host.settings['username']
+          options[:username] = plan.host.settings['username']
+          options[:password] = plan.host.settings['password']
+        end
         options[:gaid] = plan.host.settings['gaid'] if plan.host.settings['disable_ga'].to_s == 'true'
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
