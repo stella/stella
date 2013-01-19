@@ -80,6 +80,9 @@ module Stella::App::Views
       @title = "Status of #{self['this_uri']} on #{self['ran_at_text']}"
       @body_class = "checkup"
       self[:summary] = checkup.parsed_summary
+      if self[:summary]
+        self[:has_errors] = self[:summary]['error_count'] > 0
+      end
     end
 
   end
