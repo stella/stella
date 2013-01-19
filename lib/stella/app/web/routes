@@ -24,6 +24,7 @@ POST  /checkup                                        Stella::App::Checkup#run
 GET   /checkup/:checkid                               Stella::App::Checkup#get
 GET   /checkup/:checkid/status                        Stella::App::Checkup#status
 POST  /checkup/:checkid                               Stella::App::Checkup#signup_express
+POST  /checkup/:checkid/enable                        Stella::App::Checkup#enable
 
 
 ##########################################################################  HOST

@@ -117,6 +117,7 @@ text-align: center;
 #form-signup {
   display: none;
   margin-bottom: 31px !important;
+  margin-left: 45px;
 }
 
 #signup-email {

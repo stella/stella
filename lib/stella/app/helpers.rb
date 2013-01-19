@@ -132,8 +132,8 @@ class Stella::App
       res.redirect redirect
 
     rescue Stella::App::Unauthorized => ex
-      Stella.li ex.message
-      not_found_response "Not authorized"
+      #Stella.ld ex.message
+      authentication_required "Not authorized"
 
     rescue Stella::DuplicateItem => ex
       error_response ex.message

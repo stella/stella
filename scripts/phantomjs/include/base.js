@@ -7,7 +7,18 @@ var page = require('webpage').create(),
     system = require('system'),
     fs = require('fs');
 
-page.settings.userAgent = 'Mozilla/5.0 (compatible; Stella/3.0; +https://blamestella.com/)'
+
+page.resources = [];
+page.settings = {
+  userAgent: 'Mozilla/5.0 (compatible; Stella/3.0; +https://blamestella.com/)',
+  javascriptEnabled: true,
+  loadImages: true,
+  XSSAuditingEnabled: false,
+  webSecurityEnabled: true
+}
+page.customHeaders = {
+  //'X-Stella': 'https://www.blamestella.com/',
+}
 
 if (!Date.prototype.toISOString) {
   Date.prototype.toISOString = function () {
@@ -123,7 +134,7 @@ function renderUrlToFile(uri, file, width, height, callback) {
 }
 
 function json(hsh) {
-  return JSON.stringify(hsh, undefined); // Indent: JSON.stringify(har, undefined, 2)
+  return JSON.stringify(hsh, undefined, 0); // Indent: JSON.stringify(har, undefined, 1)
 }
 
 function normalize_uri(uri) {
@@ -132,62 +143,98 @@ function normalize_uri(uri) {
   return uri;
 }
 
-function createHAR(page, endTime, pageTimings) {
-  return createHAR12(page, endTime, pageTimings);
+function createHAR(page, endTime, pageTimings, status) {
+  return createHAR12(page, endTime, pageTimings, status);
 }
 
 // HTTP Archive v1.2 (http://www.softwareishard.com/blog/har-12-spec/)
-function createHAR12(page, endTime, pageTimings) {
+function createHAR12(page, endTime, pageTimings, status) {
   var entries = [];
   var startTimeObj = new Date(page.timingInitialize);
 
   page.resources.forEach(function (resource) {
+
     var request = resource.request,
-      startReply = resource.startReply,
-      endReply = resource.endReply;
+        startReply = resource.startReply,
+        endReply = resource.endReply;
 
-    if (!request || !startReply || !endReply) {
-      return;
-    }
+    if (!request) {
+      console.log("skipping...");
 
-    entries.push({
-      startedDateTime: request.time.toISOString(),
-      time: endReply.time - request.time,
-      request: {
-        method: request.method,
-        url: request.url,
-        httpVersion: "HTTP/1.1",
-        cookies: [],
-        headers: request.headers,
-        queryString: [],
-        headersSize: -1,
-        bodySize: -1
-      },
-      response: {
-        status: endReply.status,
-        statusText: endReply.statusText,
-        httpVersion: "HTTP/1.1",
-        cookies: [],
-        headers: endReply.headers,
-        redirectURL: "",
-        headersSize: -1,
-        bodySize: startReply.bodySize,
-        content: {
-          size: startReply.bodySize,
-          mimeType: endReply.contentType
+    } else if (!startReply) {
+
+      entries.push({
+        startedDateTime: request.time.toISOString(),
+        time: endReply.time - request.time,
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: request.headers,
+          queryString: [],
+          headersSize: -1,
+          bodySize: -1
+        },
+        response: {
+          status: endReply.status,
+          statusText: endReply.statusText,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: endReply.headers,
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: endReply.bodySize,
+          content: {
+            size: endReply.bodySize,
+            mimeType: endReply.contentType
+          }
+        },
+        cache: {},
+        timings: {}
+      });
+    } else {
+
+
+      entries.push({
+        startedDateTime: request.time.toISOString(),
+        time: endReply.time - request.time,
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: request.headers,
+          queryString: [],
+          headersSize: -1,
+          bodySize: -1
+        },
+        response: {
+          status: endReply.status,
+          statusText: endReply.statusText,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: endReply.headers,
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: startReply.bodySize,
+          content: {
+            size: startReply.bodySize,
+            mimeType: endReply.contentType
+          }
+        },
+        cache: {},
+        timings: {
+          blocked: 0,
+          dns: -1,
+          connect: -1,
+          send: 0,
+          wait: startReply.time - request.time,
+          receive: endReply.time - startReply.time,
+          ssl: -1
         }
-      },
-      cache: {},
-      timings: {
-        blocked: 0,
-        dns: -1,
-        connect: -1,
-        send: 0,
-        wait: startReply.time - request.time,
-        receive: endReply.time - startReply.time,
-        ssl: -1
-      }
-    });
+      });
+    }
   });
 
   return {
@@ -197,8 +244,10 @@ function createHAR12(page, endTime, pageTimings) {
         name: "PhantomJS",
         version: phantom.version.major + '.' + phantom.version.minor + '.' + phantom.version.patch
       },
+      status: status,
       viewPort: page.viewportSize,
       options: page.options,
+      settings: page.settings,
       gaDisabled: page.gaDisabled,
       gaid: googleAnalyticsAccount(page.content),
       pages: [{

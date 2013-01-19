@@ -36,7 +36,11 @@ try {
 
   page.address = uri;
   page.viewportSize = { width: page.options.width || 1024, height : page.options.height || 768};
-  page.resources = [];
+
+  if (page.options.username) {
+    page.settings.userName = page.options.username;
+    page.settings.password = page.options.password;
+  }
 
 } catch (err) {
   handleError(err);
@@ -145,11 +149,11 @@ page.onLoadFinished = function() {
   page.timingOnLoadFinished = +new Date();
 };
 
-function runTestrun(status) {
+function runTestplan(status) {
   try {
-  if (status !== 'success') {
-    console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false}));
-  } else {
+  //if (status !== 'success') {
+  //  console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false, "status": page.title}));
+  //} else {
 
     page.title = page.evaluate(function () {
       return document.title;
@@ -186,7 +190,7 @@ function runTestrun(status) {
          document.body.bgColor = 'white';
     });
 
-    var har = createHAR(page, page.timingOnLoadFinished, timings);
+    var har = createHAR(page, page.timingOnLoadFinished, timings, status);
 
     if (page.options.with_screenshots) {
       har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
@@ -204,7 +208,7 @@ function runTestrun(status) {
     // around phantomjs noise where it will print messages while executing.
     console.log(json(har));
 
-  }
+  //}
 
   } catch(err) {
     handleError(err);
@@ -214,7 +218,9 @@ function runTestrun(status) {
 }
 
 try {
-  page.open(page.address, runTestrun);
+  //console.log('page.options: ' + json(page.options))
+  //console.log('page.settings: ' + json(page.settings))
+  page.open(page.address, runTestplan);
 } catch(err) {
   handleError(err);
 }

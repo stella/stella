@@ -36,6 +36,18 @@ class Stella
         end
       end
 
+      def enable
+        publically('/checkup/%s' % req.params[:checkid]) do
+          enforce_method! :POST
+          assert_params :checkid
+          logic = Stella::Logic::EnableCheckup.new(sess, cust, req.params)
+          logic.raise_concerns(:enable_checkup)
+          logic.process
+          checkup = logic.checkup
+          res.redirect '/site/%s/pages' % checkup.host.hostname
+        end
+      end
+
       def signup_express
         publically(req.path) do
           if req.post?
@@ -80,6 +92,9 @@ module Stella::App::Views
       @title = "Status of #{self['this_uri']} on #{self['ran_at_text']}"
       @body_class = "checkup"
       self[:summary] = checkup.parsed_summary
+      if self[:summary]
+        self[:has_errors] = self[:summary]['error_count'] > 0
+      end
     end
 
   end
