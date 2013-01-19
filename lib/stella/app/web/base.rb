@@ -9,7 +9,7 @@ class Stella
       def publically redirect=nil
         carefully(redirect) do
           check_session!     # 1. Load or create the session, load customer (or anon)
-          #check_shrimp!      # 2. Check the shrimp for POST,PUT,DELETE (after session)\
+          check_shrimp!      # 2. Check the shrimp for POST,PUT,DELETE (after session)\
           #check_subdomain!  # 3. Check if we're running as a subdomain
           check_referrer!    # 4. Check referrers for public requests
           yield
@@ -19,7 +19,7 @@ class Stella
       def authenticated redirect=nil
         carefully(redirect) do
           check_session!     # 1. Load or create the session, load customer (or anon)
-          #check_shrimp!      # 2. Check the shrimp for POST,PUT,DELETE (after session)
+          check_shrimp!      # 2. Check the shrimp for POST,PUT,DELETE (after session)
           #check_subdomain!  # 3. Check if we're running as a subdomain
           sess.authenticated? ? yield : res.redirect(('/')) # TODO: raise OT::Redirect
         end
