@@ -189,7 +189,9 @@ function createHAR12(page, endTime, pageTimings, status) {
             size: endReply.bodySize,
             mimeType: endReply.contentType
           }
-        }
+        },
+        cache: {},
+        timings: {}
       });
     } else {
 
