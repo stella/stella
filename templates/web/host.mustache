@@ -213,7 +213,7 @@
               {{#testplans}}
               <li class="span3">
                 <div class="thumbnail {{^enabled}}notmonitored{{/enabled}}">
-                  {{#enabled}}<a href="/plan/{{planid}}/hide" class="host-hide close"><i class="icon icon-remove-sign"></i></a>{{/enabled}}
+                  {{^enabled}}<a href="/plan/{{planid}}/hide" class="host-hide close"><i class="icon icon-remove-sign"></i></a>{{/enabled}}
                   <div class="hostname">{{shortpath}}</div>
                   <a href="/plan/{{planid}}">
                   {{#screenshot}}
