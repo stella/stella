@@ -192,6 +192,7 @@ class Stella::Logic::Signup < Stella::Logic::Base
       cust.role = :colonel
       cust.confirmed_at = Stella.now
     end
+    cust.save
     if checkup
       cust.checkups << checkup
       @host = Stella::Logic.safedb {
