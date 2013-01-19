@@ -26,6 +26,7 @@
           <div class="row well static">
             <div class="span8">
               <form class="form-horizontal" method="post" action="/account">
+                {{{add_shrimp}}}
                 <fieldset>
                   <legend><h2 class="cufon">Your Account - {{cust.email}}</h2></legend>
                   <div class="control-group">
@@ -99,6 +100,7 @@
             <p>You can delete your account by clicking the button below.</p>
             <p><strong>This is not reversable. All monitoring data will be deleted.</strong></p>
             <form action="/account/{{cust.custid}}/delete" method="POST">
+            {{{add_shrimp}}}
             <input type="hidden" name="confirm" value="11111" />
             <div><button type="submit" class="btn btn-danger">Confirmed</button></div>
             </form>
