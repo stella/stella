@@ -213,13 +213,14 @@ routines do
       remote do
         git :clone, "git://github.com/stella/stella.git"
         cd 'stella'
-        git :checkout, :b, 'v3.2', 'origin/v3.2'
+        #git :checkout, :b, 'v3.2', 'origin/v3.2'
       end
     end
 
     promote do
       remote do
-        git :pull, 'origin', 'v3.2'
+        cd 'stella'
+        git :pull, 'origin', 'master'
       end
     end
 
