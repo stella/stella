@@ -155,51 +155,84 @@ function createHAR12(page, endTime, pageTimings, status) {
   page.resources.forEach(function (resource) {
 
     var request = resource.request,
-      startReply = resource.startReply,
-      endReply = resource.endReply;
+        startReply = resource.startReply,
+        endReply = resource.endReply;
 
-    if (!request || !startReply || !endReply) {
-      return;
-    }
+    if (!request) {
+      console.log("skipping...");
 
-    entries.push({
-      startedDateTime: request.time.toISOString(),
-      time: endReply.time - request.time,
-      request: {
-        method: request.method,
-        url: request.url,
-        httpVersion: "HTTP/1.1",
-        cookies: [],
-        headers: request.headers,
-        queryString: [],
-        headersSize: -1,
-        bodySize: -1
-      },
-      response: {
-        status: endReply.status,
-        statusText: endReply.statusText,
-        httpVersion: "HTTP/1.1",
-        cookies: [],
-        headers: endReply.headers,
-        redirectURL: "",
-        headersSize: -1,
-        bodySize: startReply.bodySize,
-        content: {
-          size: startReply.bodySize,
-          mimeType: endReply.contentType
+    } else if (!startReply) {
+
+      entries.push({
+        startedDateTime: request.time.toISOString(),
+        time: endReply.time - request.time,
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: request.headers,
+          queryString: [],
+          headersSize: -1,
+          bodySize: -1
+        },
+        response: {
+          status: endReply.status,
+          statusText: endReply.statusText,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: endReply.headers,
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: endReply.bodySize,
+          content: {
+            size: endReply.bodySize,
+            mimeType: endReply.contentType
+          }
         }
-      },
-      cache: {},
-      timings: {
-        blocked: 0,
-        dns: -1,
-        connect: -1,
-        send: 0,
-        wait: startReply.time - request.time,
-        receive: endReply.time - startReply.time,
-        ssl: -1
-      }
-    });
+      });
+    } else {
+
+
+      entries.push({
+        startedDateTime: request.time.toISOString(),
+        time: endReply.time - request.time,
+        request: {
+          method: request.method,
+          url: request.url,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: request.headers,
+          queryString: [],
+          headersSize: -1,
+          bodySize: -1
+        },
+        response: {
+          status: endReply.status,
+          statusText: endReply.statusText,
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: endReply.headers,
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: startReply.bodySize,
+          content: {
+            size: startReply.bodySize,
+            mimeType: endReply.contentType
+          }
+        },
+        cache: {},
+        timings: {
+          blocked: 0,
+          dns: -1,
+          connect: -1,
+          send: 0,
+          wait: startReply.time - request.time,
+          receive: endReply.time - startReply.time,
+          ssl: -1
+        }
+      });
+    }
   });
 
   return {
