@@ -2,17 +2,87 @@
 
   {{>_partial/session_messages}}
 
+  {{#summary.auth_required}}
+  <div class="span11">
+    <form action="/checkup" method="post" class="form-inline">
+      {{{add_shrimp}}}
+      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <a data-toggle="modal" href="#authModal" id="authRequired" class="btn btn-large btn-warning cufon" style="margin-top: 6px; margin-left: 6px">AUTHENTICATION REQUIRED</a>
+    </form>
+  </div>
+  <div class="hide hidden modal" id="authModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-header">
+      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+      <h3 id="myModalLabel" class="cufon">Basic Authentication</h3>
+    </div>
+    <div class="modal-body">
+      <p class="light"><em>That page requires HTTP authentication to continue.</em></p>
+      <form id="checkupUpdateForm" class="form-horizontal" method="post" action="/checkup">
+        {{{add_shrimp}}}
+        <input type="hidden" name="uri" value="{{this_uri}}" />
+        <div class="control-group">
+          <label class="control-label" for="inputUsername">Username</label>
+          <div class="controls">
+            <input type="text" id="inputUsername" name="auth[username]" placeholder="" value="{{testplan.data.auth.username}}">
+            <span class="help-block"></span>
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="control-label" for="inputPassword">Password</label>
+          <div class="controls">
+            <input type="password" id="inputPassword" name="auth[password]" placeholder="" value="{{testplan.data.auth.password}}">
+            <span class="help-block"></span>
+          </div>
+        </div>
+        <input type="submit" style="position:absolute; margin-top: 2000px"></input>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-dismiss="modal" aria-hidden="true">Close</button>
+      <button id="auth-form-submit" type="submit" class="btn btn-primary">RE-RUN CHECKUP</button>
+    </div>
+  </div>
+  <script type="text/javascript">
+  $(function() {
+    $('#auth-form-submit').on('click', function(e){
+      // We don't want this to act as a link so cancel the link action
+      e.preventDefault();
+      // Find form and submit it
+      $('#checkupUpdateForm').submit();
+    });
+  });
+  </script>
+  {{/summary.auth_required}}
+
+
+  {{^summary.auth_required}}
   {{#authenticated}}
   <div class="span11 offset1">
     <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
       <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      {{#is_done}}
       <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+      {{/is_done}}
+      {{^is_done}}
+      <a href="/" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">CANCEL</a>
+      {{/is_done}}
     </form>
   </div>
   {{/authenticated}}
 
   {{^authenticated}}
+  {{^is_done}}
+  <div class="span11 offset1">
+    <form action="/checkup" method="post" class="form-inline">
+      {{{add_shrimp}}}
+      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <a href="/" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">CANCEL</a>
+    </form>
+  </div>
+  {{/is_done}}
+
+  {{#is_done}}
   <form id="request" action="/checkup" method="post" class="span12">
     {{{add_shrimp}}}
     <div class="row">
@@ -23,10 +93,8 @@
         <button id="fire" class="btn btn-huge btn-primary" type="submit"><span class="cufon">Start monitoring <em class="forFree">for free!</em><img class="checkupMonitoringIcon" src="/img/checkupStartMonitoring.png"></span></button>
       </div>
     </div>
-    <div class="row">
-      <!--<div class="span2 offset10"><em style="color: #999;">No signup required.</em></div>-->
-    </div>
   </form>
+  {{/is_done}}
 
   <form id="form-signup" method="post" action="/checkup/{{checkup.checkid}}" class="span12 form-inline">
     {{{add_shrimp}}}
@@ -35,13 +103,14 @@
         <input id="signup-email" type="text" class="span4" placeholder="Email" name="email">
         <input id="signup-password" type="password" class="span3" placeholder="Password" name="password">
         <button id="fire" class="btn btn-large btn-inverse" type="submit"><strong class="cufon" style="color:#fff">Start Monitoring <em class="forFree">{{host.shortname}}</em></strong></button>
-        <p class="help-block cufon">
+        <p class="help-block cufon light">
           We use your email address for notifications and reports. Nothing else<em>!</em>
         </p>
       </div>
     </div>
   </form>
   {{/authenticated}}
+  {{/summary.auth_required}}
 
   <div class="span11">
     {{^is_done}}<div class="line"></div>{{/is_done}}
