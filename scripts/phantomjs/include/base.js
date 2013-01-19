@@ -158,14 +158,15 @@ function createHAR12(page, endTime, pageTimings, status) {
         startReply = resource.startReply,
         endReply = resource.endReply;
 
-    if (!request) {
+    if (!request || (!startReply && !endReply)) {
       console.log("skipping...");
 
-    } else if (!startReply) {
+    } else if (!startReply || !endReply) {
+      var reply = startReply || endReply;
 
       entries.push({
         startedDateTime: request.time.toISOString(),
-        time: endReply.time - request.time,
+        time: -1,
         request: {
           method: request.method,
           url: request.url,
@@ -177,17 +178,17 @@ function createHAR12(page, endTime, pageTimings, status) {
           bodySize: -1
         },
         response: {
-          status: endReply.status,
-          statusText: endReply.statusText,
+          status: reply.status,
+          statusText: reply.statusText,
           httpVersion: "HTTP/1.1",
           cookies: [],
-          headers: endReply.headers,
+          headers: reply.headers,
           redirectURL: "",
           headersSize: -1,
-          bodySize: endReply.bodySize,
+          bodySize: reply.bodySize,
           content: {
-            size: endReply.bodySize,
-            mimeType: endReply.contentType
+            size: reply.bodySize,
+            mimeType: reply.contentType
           }
         },
         cache: {},
