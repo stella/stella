@@ -22,6 +22,36 @@ module Stella::Logic
     end
   end
 
+  class EnableCheckup < Stella::Logic::Base
+    attr_reader :checkup, :checkid
+    def raise_concerns(event=:view_checkup)
+      raise Stella::NoRun.new(params[:checkid]) if checkup.nil?
+      check_privacy!
+      #return if @cust.colonel? && self.class.colonel_power?
+      check_rate_limits! event unless params[:status]  # ajax for reloading page
+    end
+    def process
+      checkup.testplan.enabled = true
+      checkup.testplan.save
+      if checkup.host.monitored?
+        Stella::Analytics.event "Start Page Monitor"
+        sess.add_info_message! "Started monitoring #{checkup.testplan.uri}"
+      else
+        checkup.host.start! :site_basic_v1
+        Stella::Analytics.event "Start Monitor"
+        sess.add_info_message! "Started monitoring #{checkup.host.hostname}"
+      end
+    end
+    protected
+    def process_params
+      @checkid = params[:checkid] #Stella::Testrun.expand params[:checkid]
+      @checkup = Stella::Checkup.first :checkid => checkid
+    end
+    def check_privacy!
+      raise Stella::NoRun.new(checkup.checkid) if !checkup.customer?(cust)
+    end
+  end
+
   class CreateCheckup < Stella::Logic::Base
     attr_reader :uri, :private, :checkup, :testplan, :host
     def raise_concerns(event=:create_checkup)

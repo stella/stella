@@ -36,6 +36,18 @@ class Stella
         end
       end
 
+      def enable
+        publically('/checkup/%s' % req.params[:checkid]) do
+          enforce_method! :POST
+          assert_params :checkid
+          logic = Stella::Logic::EnableCheckup.new(sess, cust, req.params)
+          logic.raise_concerns(:enable_checkup)
+          logic.process
+          checkup = logic.checkup
+          res.redirect '/site/%s/pages' % checkup.host.hostname
+        end
+      end
+
       def signup_express
         publically(req.path) do
           if req.post?
