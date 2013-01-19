@@ -46,6 +46,16 @@ module Stella::Logic
       }
       @testplan = Stella::Testplan.first :custid => cust.custid, :uri => uri
       @testplan ||= Stella::Testplan.create :custid => cust.custid, :host => host, :uri => uri, :customer => cust
+      if cust.anonymous?
+        testplan.definition = {}
+        testplan.data = {}
+      end
+      if params[:auth]
+        testplan.data['auth'] = {
+          'username' => params[:auth][:username],
+          'password' => params[:auth][:password],
+        }
+      end
       if !cust.anonymous? && host.customer?(cust)
         host.hidden = false
         host.save

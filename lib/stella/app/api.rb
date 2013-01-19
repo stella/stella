@@ -238,9 +238,9 @@ class Stella
               :height => 768,
               :with_screenshots => false
             }
-            if plan.host.settings['username']
-              info['options']['username'] = plan.host.settings['username']
-              info['options']['password'] = plan.host.settings['password']
+            if plan.data['auth']
+              info['options']['username'] = plan.data['auth']['username']
+              info['options']['password'] = plan.data['auth']['password']
             end
             if plan.host.settings['disable_ga'].to_s == 'true'
               info['options']['gaid'] = plan.host.settings['gaid']
