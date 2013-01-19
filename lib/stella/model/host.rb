@@ -412,6 +412,9 @@ class Stella
             'fb' => entry['timings']['wait'],
             'lb' => entry['timings']['receive'],
           }
+          if summary['auth_required'].nil? && asset['code'].to_i == 401
+            summary['auth_required'] = true
+          end
           if summary['first_request']['started_at'].nil?
             case asset['code'].to_i   # skip initial redirects
             when 200...300
