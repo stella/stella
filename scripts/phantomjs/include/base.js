@@ -7,7 +7,18 @@ var page = require('webpage').create(),
     system = require('system'),
     fs = require('fs');
 
-page.settings.userAgent = 'Mozilla/5.0 (compatible; Stella/3.0; +https://blamestella.com/)'
+
+page.resources = [];
+page.settings = {
+  userAgent: 'Mozilla/5.0 (compatible; Stella/3.0; +https://blamestella.com/)',
+  javascriptEnabled: true,
+  loadImages: true,
+  XSSAuditingEnabled: false,
+  webSecurityEnabled: true
+}
+page.customHeaders = {
+  //'X-Stella': 'https://www.blamestella.com/',
+}
 
 if (!Date.prototype.toISOString) {
   Date.prototype.toISOString = function () {
