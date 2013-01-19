@@ -420,6 +420,8 @@ class Stella
               summary['first_request']['rt'] = asset['rt']
             when 300...400
               summary['redirect_count'] += 1
+            when 400...600
+              summary['error_count'] += 1
             end
           else
             sample = (time.to_f - summary['first_request']['started_at'].to_f)
