@@ -62,10 +62,11 @@ function parseURI(doc, uri) {
  * @param onReady what to do when testFx condition is fulfilled,
  * it can be passed in as a string (e.g.: "1 == 1" or "$('#bar').is(':visible')" or
  * as a callback function.
+ * @param onTimeout what to do when testFx condition is not fulfilled.
  * @param timeOutMillis the max amount of time to wait. If not specified, 3 sec is used.
  * @param repeatMillis the amount of time between intervals
  */
-function waitFor(testFx, onReady, timeOutMillis, repeatMillis) {
+function waitFor(testFx, onReady, onTimeout, timeOutMillis, repeatMillis) {
   var maxtimeOutMillis = timeOutMillis ? timeOutMillis : 3000, //< Default Max Timout is 3s
     repeatMillis = repeatMillis ? repeatMillis : 1000,
     start = new Date().getTime(),
@@ -76,8 +77,9 @@ function waitFor(testFx, onReady, timeOutMillis, repeatMillis) {
       condition = (typeof(testFx) === "string" ? eval(testFx) : testFx()); //< defensive code
     } else {
       if(!condition) { // If condition still not fulfilled (timeout but condition is 'false')
-        console.log("'waitFor()' timeout");
-        phantom.exit(1);
+        console.log("waitFor() timeout");
+        typeof(onTimeout) === "string" ? eval(onTimeout) : onTimeout(); //< Do what it's supposed to do once the condition is NOT fulfilled
+        clearInterval(interval); //< Stop this interval
       } else {         // Condition fulfilled (timeout and/or condition is 'true')
         var elapsed = (new Date().getTime() - start)
         typeof(onReady) === "string" ? eval(onReady) : onReady(); //< Do what it's supposed to do once the condition is fulfilled

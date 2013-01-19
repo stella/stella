@@ -149,7 +149,63 @@ page.onLoadFinished = function() {
   page.timingOnLoadFinished = +new Date();
 };
 
-function runTestplan(status) {
+function createOutput() {
+  console.log('# done...');
+
+  // Avoid transparent backgrounds
+  page.evaluate(function() {
+    if (document.body.bgColor == "")
+       document.body.bgColor = 'white';
+  });
+
+  page.title = page.evaluate(function () {
+    return document.title;
+  });
+  page.timingDOMContentLoaded = page.evaluate(function () {
+    return window.timingDOMContentLoaded;
+  });
+  page.timingOnLoad = page.evaluate(function () {
+    return window.timingOnLoad;
+  });
+  page.gaDisabled = page.evaluate(function () {
+    return window['ga-disable-' + window['ga-account']] || false;
+  });
+
+  try {
+    var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
+    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
+    var timings = {
+      "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
+      "onLoad": onLoad
+    };
+
+
+    var har = createHAR(page, page.timingOnLoadFinished, timings, status);
+
+    if (page.options.with_screenshots) {
+      har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
+      page.render(har.log.screenshot);
+      if (! fs.isReadable(har.log.screenshot)) {
+        har.log.screenshot = '';
+      }
+    }
+
+    // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
+    // This has actually happened! (See http://space.com/)
+    page.onConsoleMessage = null;
+
+    // NOTE: Must always print the HAR on a single line. This is a hack to get
+    // around phantomjs noise where it will print messages while executing.
+    console.log(json(har));
+  } catch(err) {
+    handleError(err);
+  }
+
+  phantom.exit();
+}
+
+
+function evaluateTestplan(status) {
 
     // FOR DEBUGGING TIMINGS
     //console.log('start    ' + (page.timingLoadStarted-1357958380000))
@@ -160,6 +216,11 @@ function runTestplan(status) {
     //console.log('duration1 ' + ((page.timingDOMContentLoaded || page.timingInitialize) - page.timingLoadStarted))
     //console.log('duration2 ' + ((page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted))
 
+    // We call waitFor here b/c in some cases it takes a few moments
+    // for the page to fully load. Rather than exit right away, we'll
+    // give it some time.
+    // We call createOutput either way b/v this is not a fail condition.
+    // Also pages that return a 401 response never set window.timingOnLoad.
     waitFor(function(){
       //console.log('# waiting...');
       try {
@@ -167,69 +228,17 @@ function runTestplan(status) {
           return window.timingOnLoad != null;
         });
       } catch(err) {
+        console.log("HERE")
         handleError(err);
       }
 
-    }, function(){
-      //console.log('# done...');
-
-      // Avoid transparent backgrounds
-      page.evaluate(function() {
-        if (document.body.bgColor == "")
-           document.body.bgColor = 'white';
-      });
-
-      page.title = page.evaluate(function () {
-        return document.title;
-      });
-      page.timingDOMContentLoaded = page.evaluate(function () {
-        return window.timingDOMContentLoaded;
-      });
-      page.timingOnLoad = page.evaluate(function () {
-        return window.timingOnLoad;
-      });
-      page.gaDisabled = page.evaluate(function () {
-        return window['ga-disable-' + window['ga-account']] || false;
-      });
-
-      try {
-        var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
-        var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
-        var timings = {
-          "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
-          "onLoad": onLoad
-        };
-
-
-        var har = createHAR(page, page.timingOnLoadFinished, timings, status);
-
-        if (page.options.with_screenshots) {
-          har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
-          page.render(har.log.screenshot);
-          if (! fs.isReadable(har.log.screenshot)) {
-            har.log.screenshot = '';
-          }
-        }
-
-        // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
-        // This has actually happened! (See http://space.com/)
-        page.onConsoleMessage = null;
-
-        // NOTE: Must always print the HAR on a single line. This is a hack to get
-        // around phantomjs noise where it will print messages while executing.
-        console.log(json(har));
-      } catch(err) {
-        handleError(err);
-      }
-
-      phantom.exit();
-    });
+    }, createOutput, createOutput);
 }
 
 try {
   //console.log('page.options: ' + json(page.options))
   //console.log('page.settings: ' + json(page.settings))
-  page.open(page.address, runTestplan);
+  page.open(page.address, evaluateTestplan);
 } catch(err) {
   handleError(err);
 }
