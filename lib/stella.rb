@@ -120,6 +120,7 @@ class Stella
       @sysinfo
     end
     def redis(db=0, profile=:default)
+      require 'uri/redis'
       @redis_connection ||= {}
       if @redis_connection.empty? || !@redis_connection[profile.to_s][db]
         (uri = URI.parse(Stella.config['redis.default.uri'])).db = db
@@ -162,7 +163,6 @@ class Stella
         #autoload :Notifier, 'stella/notification'
 
         if Stella.config['redis.default.uri']
-          require 'uri/redis'
           Stella::Session.redis = Stella.redis(1)
           Stella::Job.redis = Stella.redis(11)
           Stella::Secret.redis = Stella.redis(2)
