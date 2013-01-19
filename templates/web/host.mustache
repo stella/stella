@@ -38,10 +38,10 @@
         <li>
           <a href="#pages" data-toggle="tab"><h4 class="cufon">Pages</h4></a>
         </li>
-        {{#host.monitored}}
         <li>
           <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
         </li>
+        {{#host.monitored}}
         <li>
           <a href="#data" data-toggle="tab"><h4 class="cufon">Data</h4></a>
         </li>
@@ -55,6 +55,7 @@
         <div id="settings" class=" tab-pane in active">
 
           <form action="/site/{{host.hostid}}/settings" class="form-horizontal" method="POST">
+            {{{add_shrimp}}}
             <legend><h3><span class="cufon">Monitoring &amp; Notifications</span> &nbsp;<small class="cufon"></small></h3></legend>
             <fieldset>
               <div class="control-group">
