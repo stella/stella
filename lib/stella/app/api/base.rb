@@ -17,7 +17,6 @@ class Stella::App
           success = false
           req.env['otto.auth'] ||= Rack::Auth::Basic::Request.new(req.env)
           auth = req.env['otto.auth']
-          #req.env['HTTP_X_ONETIME_CLIENT']
           if auth.provided?
             raise Unauthorized unless auth.basic?
             email, apikey = *(auth.credentials || [])
@@ -61,6 +60,7 @@ class Stella::App
 
       def authentication_required msg, hsh={}
         hsh[:code], hsh[:msg] = 401, msg
+        res.header['WWW-Authenticate'] = 'Basic realm="Authorization required"'
         res.status = hsh[:code]
         json hsh
       end
