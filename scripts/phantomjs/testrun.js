@@ -150,30 +150,6 @@ page.onLoadFinished = function() {
 };
 
 function runTestplan(status) {
-  try {
-  //if (status !== 'success') {
-  //  console.log(JSON.stringify({"msg": "Cannot connect", "uri": page.address, "success": false, "status": page.title}));
-  //} else {
-
-    page.title = page.evaluate(function () {
-      return document.title;
-    });
-    page.timingDOMContentLoaded = page.evaluate(function () {
-      return window.timingDOMContentLoaded;
-    });
-    page.timingOnLoad = page.evaluate(function () {
-      return window.timingOnLoad;
-    });
-    page.gaDisabled = page.evaluate(function () {
-      return window['ga-disable-' + window['ga-account']] || false;
-    });
-
-    var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
-    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
-    var timings = {
-      "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
-      "onLoad": onLoad
-    };
 
     // FOR DEBUGGING TIMINGS
     //console.log('start    ' + (page.timingLoadStarted-1357958380000))
@@ -184,37 +160,70 @@ function runTestplan(status) {
     //console.log('duration1 ' + ((page.timingDOMContentLoaded || page.timingInitialize) - page.timingLoadStarted))
     //console.log('duration2 ' + ((page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted))
 
-    // Avoid transparent backgrounds
-    page.evaluate(function() {
-      if (document.body.bgColor == "")
-         document.body.bgColor = 'white';
-    });
-
-    var har = createHAR(page, page.timingOnLoadFinished, timings, status);
-
-    if (page.options.with_screenshots) {
-      har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
-      page.render(har.log.screenshot);
-      if (! fs.isReadable(har.log.screenshot)) {
-        har.log.screenshot = '';
+    waitFor(function(){
+      //console.log('# waiting...');
+      try {
+        return page.evaluate(function(){
+          return window.timingOnLoad != null;
+        });
+      } catch(err) {
+        handleError(err);
       }
-    }
 
-    // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
-    // This has actually happened! (See http://space.com/)
-    page.onConsoleMessage = null;
+    }, function(){
+      //console.log('# done...');
 
-    // NOTE: Must always print the HAR on a single line. This is a hack to get
-    // around phantomjs noise where it will print messages while executing.
-    console.log(json(har));
+      // Avoid transparent backgrounds
+      page.evaluate(function() {
+        if (document.body.bgColor == "")
+           document.body.bgColor = 'white';
+      });
 
-  //}
+      page.title = page.evaluate(function () {
+        return document.title;
+      });
+      page.timingDOMContentLoaded = page.evaluate(function () {
+        return window.timingDOMContentLoaded;
+      });
+      page.timingOnLoad = page.evaluate(function () {
+        return window.timingOnLoad;
+      });
+      page.gaDisabled = page.evaluate(function () {
+        return window['ga-disable-' + window['ga-account']] || false;
+      });
 
-  } catch(err) {
-    handleError(err);
-  }
+      try {
+        var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
+        var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
+        var timings = {
+          "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
+          "onLoad": onLoad
+        };
 
-  phantom.exit();
+
+        var har = createHAR(page, page.timingOnLoadFinished, timings, status);
+
+        if (page.options.with_screenshots) {
+          har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
+          page.render(har.log.screenshot);
+          if (! fs.isReadable(har.log.screenshot)) {
+            har.log.screenshot = '';
+          }
+        }
+
+        // NOTE: We remove the callback to ensure there's no output AFTER the JSON.
+        // This has actually happened! (See http://space.com/)
+        page.onConsoleMessage = null;
+
+        // NOTE: Must always print the HAR on a single line. This is a hack to get
+        // around phantomjs noise where it will print messages while executing.
+        console.log(json(har));
+      } catch(err) {
+        handleError(err);
+      }
+
+      phantom.exit();
+    });
 }
 
 try {
