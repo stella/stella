@@ -75,6 +75,7 @@ function postAndRefresh(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       //log(data)
       window.location.reload()
@@ -92,6 +93,7 @@ function postAndRedirect(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       window.location = '/';
     },
@@ -107,6 +109,7 @@ function checkPostAndRefresh(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       //log(data)
       window.location.reload()
@@ -122,6 +125,7 @@ function postAndIgnore(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       //alertify.log("Updated")
       window.location.reload()
@@ -138,6 +142,7 @@ function postAndDelete(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       alertify.success("Done.")
       $('#object-' + obj.data('objid')).remove();
@@ -155,6 +160,7 @@ function hostHide(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       target.hide();
       return false;
@@ -176,6 +182,7 @@ function hostShow(e) {
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
+    data: {'shrimp': shrimp},
     success: function(data, textStatus){
       // TODO: update ui
       return false;
