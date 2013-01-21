@@ -65,6 +65,7 @@
         {{{add_shrimp}}}
         <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
         <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+        <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
         </form>
         {{/testplan.enabled}}
         {{^testplan.enabled}}
@@ -72,6 +73,7 @@
           {{{add_shrimp}}}
           <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
           <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
+          <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
           </form>
         {{/testplan.enabled}}
       {{/testplan.host.monitored}}
@@ -81,6 +83,7 @@
         {{{add_shrimp}}}
         <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
         <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
+        <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
         </form>
       {{/testplan.host.monitored}}
 
@@ -135,6 +138,19 @@
   </form>
   {{/authenticated}}
   {{/summary.auth_required}}
+  <script type="text/javascript">
+  $(function() {
+    // TODO:
+    //$('#checkup-uri').on('focus', function(e) {
+    //  var obj = $(e.currentTarget);
+    //  var buttonObj1 = $(obj.next());
+    //  var buttonObj2 = $(buttonObj1.next());
+    //  buttonObj1.hide();
+    //  buttonObj2.show();
+    //  console.log()
+    //});
+  });
+  </script>
 
   <div class="span11">
     {{^is_done}}<div class="line"></div>{{/is_done}}
@@ -154,8 +170,7 @@
       {{#is_done}}
       <ul class="span4">
         <li class="rt">
-          <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->
-          <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
+          <span class="value cufon">{{summary.duration}}</span><span class="suffix cufon">milliseconds</span>
           <!--<span class="description">Response Time</span>-->
         </li>
         <li class="advice cufon">
@@ -167,6 +182,12 @@
           <span class="description ">Content Ready</span>
         </li>
         {{/summary.on_content_ready}}
+        {{#summary.on_load}}
+        <li>
+          <span class="value cufon">{{to_i}}ms</span>
+          <span class="description ">On Load</span>
+        </li>
+        {{/summary.on_load}}
         <li>
           <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
           <span class="description ">Total Size</span>
