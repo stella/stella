@@ -182,12 +182,14 @@
           <span class="description ">Content Ready</span>
         </li>
         {{/summary.on_content_ready}}
+        {{#bogus}}
         {{#summary.on_load}}
         <li>
           <span class="value cufon">{{to_i}}ms</span>
           <span class="description ">On Load</span>
         </li>
         {{/summary.on_load}}
+        {{/bogus}}
         <li>
           <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
           <span class="description ">Total Size</span>
