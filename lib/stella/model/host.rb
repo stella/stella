@@ -339,13 +339,10 @@ class Stella
         summary['first_request']['fb']
       },
       :first_request_rt => lambda { |summary|
-        # NOTE (Dec 17): This noise is a temporary fix for old "first_page" key.
-        (summary['first_page'] || summary['first_request'])['rt']
+        summary['first_request']['rt']
       },
       :first_request_size => lambda { |summary|
-        s = (summary['first_page'] || summary['first_request'])['size']
-        # NOTE (Dec 17): This noise is a temporary fix for "96.45kb" values.
-        String === s ? (s.to_f*1000).to_i : s
+        summary['first_request']['size']
       },
       :initial_offset => nil,
       :on_content_ready => 'onContentReady',
