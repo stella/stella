@@ -396,7 +396,7 @@ class Stella
           'redirect_count' => 0,
           'asset_count' => 0,
           'error_count' => 0,
-          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil},
+          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil, 'fb' => nil},
           'initial_offset' => nil,
           'total_size' => 0,
           'gaid' => har['log']['gaid']
