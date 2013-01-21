@@ -181,7 +181,9 @@ function createOutput() {
     };
 
     // FOR DEBUGGING TIMINGS
-    //offset = 1358739170000
+    //var prefix = sharedPrefix([""+page.timingInitialize, ""+page.timingLoadStarted])
+    //prefix = prefix.substring(0, prefix.length-2)
+    //offset = +rpad(prefix, (""+page.timingInitialize).length)
     //console.log('init     ' + (page.timingInitialize-offset))
     //console.log('start    ' + (page.timingLoadStarted-offset))
     //console.log('content  ' + (page.timingDOMContentLoaded-offset))

@@ -135,10 +135,6 @@ function renderUrlToFile(uri, file, width, height, callback) {
   });
 }
 
-function json(hsh) {
-  return JSON.stringify(hsh, undefined, 0); // Indent: JSON.stringify(har, undefined, 1)
-}
-
 function normalize_uri(uri) {
   if (!uri.match(/^https?:\/\//))
     uri = "http://" + uri;
@@ -296,4 +292,26 @@ function handleError(err) {
   phantom.exit(1);
 }
 
+// via http://stackoverflow.com/questions/1916218/find-the-longest-common-starting-substring-in-a-set-of-strings
+function sharedPrefix(A) {
+  var tem1, tem2, s, A = A.slice(0).sort();
+  tem1 = A[0];
+  s = tem1.length;
+  tem2 = A.pop();
+  while(s && tem2.indexOf(tem1) == -1) {
+    tem1 = tem1.substring(0, --s);
+  }
+  return tem1;
+}
 
+function rpad(number, length) {
+  var str = '' + number;
+  while (str.length < length) {
+      str = str + '0';
+  }
+  return str;
+}
+
+function json(hsh) {
+  return JSON.stringify(hsh, undefined, 0); // Indent: JSON.stringify(har, undefined, 1)
+}
