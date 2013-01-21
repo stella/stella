@@ -58,22 +58,22 @@ page.onInitialized = function () {
   try {
     var options = page.options;
     page.timingInitialize = page.evaluate(function (options) {
-      (function () {
+      var initStarted = +new Date();
 
+      (function () {
       // This won't be fired if the page loads very quickly (http://stellaaahhhh.com)
       document.addEventListener("DOMContentLoaded", function(){
+        // Callback example. Can be used here or by a webpage.
+        //window.callPhantom('DOMContentLoaded');
         window.timingDOMContentLoaded = +new Date();
       }, false);
-
-      // Callback example. Can be used here or by a webpage.
-      //window.callPhantom('DOMContentLoaded');
 
       // NOTE: This is how to manually call an event
       //var DOMContentLoaded_event = document.createEvent("Event")
       //DOMContentLoaded_event.initEvent("DOMContentLoaded", true, true)
       //window.document.dispatchEvent(DOMContentLoaded_event)
 
-      // This is often not fired.
+      // This is often not fired (or we exit too soon).
       window.addEventListener("load", function(){
         window.timingOnLoad = +new Date();
       }, false);
@@ -83,8 +83,9 @@ page.onInitialized = function () {
         window['ga-account'] = options.gaid
         window['ga-disable-' + window['ga-account']] = true;
       }
+
       })();
-      return +new Date();
+      return initStarted;
     }, page.options); // Pass options to the evaluate function.
   } catch(err) {
     handleError(err);
@@ -97,15 +98,14 @@ page.onInitialized = function () {
 //  console.log('DOMContentLoaded');
 //};
 
-// Fired after onInitialized
-// We use onLoadStarted for the start time.
+// Fired after onInitialized (usually, but not always)
 page.onLoadStarted = function () {
   try {
     page.timingLoadStarted = +new Date();
     hardTimeout("typeof page.timingOnLoad != 'undefined'", function(elapsed) {
       console.log(json(createErrorHAR(page, "timeout", elapsed)));
       phantom.exit(0);
-    }, 15000);
+    }, 20000);
   } catch(err) {
     handleError(err);
   }
@@ -172,13 +172,23 @@ function createOutput() {
   });
 
   try {
-    var onContentReady = (page.timingDOMContentLoaded) - page.timingLoadStarted;
-    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted;
+    var startPoint = page.timingInitialize;
+    var onContentReady = (page.timingDOMContentLoaded) - startPoint;
+    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - startPoint;
     var timings = {
       "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
       "onLoad": onLoad
     };
 
+    // FOR DEBUGGING TIMINGS
+    //offset = 1358739170000
+    //console.log('init     ' + (page.timingInitialize-offset))
+    //console.log('start    ' + (page.timingLoadStarted-offset))
+    //console.log('content  ' + (page.timingDOMContentLoaded-offset))
+    //console.log('load     ' + (page.timingOnLoad-offset))
+    //console.log('end      ' + (page.timingOnLoadFinished-offset))
+    //console.log('content  ' + ((page.timingDOMContentLoaded || page.timingInitialize) - startPoint))
+    //console.log('onload   ' + ((page.timingOnLoad || page.timingOnLoadFinished) - startPoint))
 
     var har = createHAR(page, page.timingOnLoadFinished, timings, status);
 
@@ -197,6 +207,7 @@ function createOutput() {
     // NOTE: Must always print the HAR on a single line. This is a hack to get
     // around phantomjs noise where it will print messages while executing.
     console.log(json(har));
+
   } catch(err) {
     handleError(err);
   }
@@ -206,15 +217,6 @@ function createOutput() {
 
 
 function evaluateTestplan(status) {
-
-    // FOR DEBUGGING TIMINGS
-    //console.log('start    ' + (page.timingLoadStarted-1357958380000))
-    //console.log('content  ' + (page.timingDOMContentLoaded-1357958380000))
-    //console.log('callback ' + (page.timingCallback-1357958380000))
-    //console.log('load     ' + (page.timingOnLoad))
-    //console.log('end      ' + (page.timingOnLoadFinished-1357958380000))
-    //console.log('duration1 ' + ((page.timingDOMContentLoaded || page.timingInitialize) - page.timingLoadStarted))
-    //console.log('duration2 ' + ((page.timingOnLoad || page.timingOnLoadFinished) - page.timingLoadStarted))
 
     // We call waitFor here b/c in some cases it takes a few moments
     // for the page to fully load. Rather than exit right away, we'll
@@ -228,7 +230,6 @@ function evaluateTestplan(status) {
           return window.timingOnLoad != null;
         });
       } catch(err) {
-        console.log("HERE")
         handleError(err);
       }
 
@@ -236,8 +237,6 @@ function evaluateTestplan(status) {
 }
 
 try {
-  //console.log('page.options: ' + json(page.options))
-  //console.log('page.settings: ' + json(page.settings))
   page.open(page.address, evaluateTestplan);
 } catch(err) {
   handleError(err);

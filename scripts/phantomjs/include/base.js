@@ -161,7 +161,7 @@ function createHAR12(page, endTime, pageTimings, status) {
         endReply = resource.endReply;
 
     if (!request || (!startReply && !endReply)) {
-      console.log("skipping...");
+      console.log("# skipping...");
 
     } else if (!startReply || !endReply) {
       var reply = startReply || endReply;
