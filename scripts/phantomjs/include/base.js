@@ -141,14 +141,15 @@ function normalize_uri(uri) {
   return uri;
 }
 
-function createHAR(page, endTime, pageTimings, status) {
-  return createHAR12(page, endTime, pageTimings, status);
+function createHAR(page, pageTimings, status) {
+  return createHAR12(page, pageTimings, status);
 }
 
 // HTTP Archive v1.2 (http://www.softwareishard.com/blog/har-12-spec/)
-function createHAR12(page, endTime, pageTimings, status) {
+function createHAR12(page, pageTimings, status) {
   var entries = [];
   var startTimeObj = new Date(page.timingInitialize);
+  var endTimeObj = new Date(page.timingOnLoadFinished);
 
   page.resources.forEach(function (resource) {
 
@@ -251,6 +252,7 @@ function createHAR12(page, endTime, pageTimings, status) {
       gaid: googleAnalyticsAccount(page.content),
       pages: [{
         startedDateTime: startTimeObj.toISOString(),
+        endDateTime: endTimeObj.toISOString(),
         id: page.address,
         title: page.title,
         pageTimings: pageTimings || {}

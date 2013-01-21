@@ -387,8 +387,10 @@ class Stella
           'base' => har['log']['pages'][0]['id'],
           'title' => har['log']['pages'][0]['title'],
           'started_at' => Time.parse(har['log']['pages'][0]['startedDateTime']).to_s,   # to normalize format
+          'ended_at' => Time.parse(har['log']['pages'][0]['endDateTime']).to_s,
           'on_content_ready' => har['log']['pages'][0]['pageTimings']['onContentReady'],
           'on_load' => har['log']['pages'][0]['pageTimings']['onLoad'],
+          'duration' => har['log']['pages'][0]['pageTimings']['duration'],
           'requests' => har['log']['entries'].size,
           'redirect_count' => 0,
           'asset_count' => 0,

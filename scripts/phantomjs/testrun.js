@@ -177,7 +177,8 @@ function createOutput() {
     var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - startPoint;
     var timings = {
       "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
-      "onLoad": onLoad
+      "onLoad": onLoad,
+      "duration": page.timingOnLoadFinished-startPoint
     };
 
     // FOR DEBUGGING TIMINGS
@@ -192,7 +193,7 @@ function createOutput() {
     //console.log('content  ' + ((page.timingDOMContentLoaded || page.timingInitialize) - startPoint))
     //console.log('onload   ' + ((page.timingOnLoad || page.timingOnLoadFinished) - startPoint))
 
-    var har = createHAR(page, page.timingOnLoadFinished, timings, status);
+    var har = createHAR(page, timings, status);
 
     if (page.options.with_screenshots) {
       har.log.screenshot = screenshot_path + '/' + hex_sha1(json(har)) + '.png';
