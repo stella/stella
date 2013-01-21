@@ -335,6 +335,9 @@ class Stella
       :redirect_count => 'redirects',
       :asset_count => nil,
       :error_count => nil,
+      :first_request_fb => lambda { |summary|
+        summary['first_request']['fb']
+      },
       :first_request_rt => lambda { |summary|
         # NOTE (Dec 17): This noise is a temporary fix for old "first_page" key.
         (summary['first_page'] || summary['first_request'])['rt']
@@ -347,6 +350,7 @@ class Stella
       :initial_offset => nil,
       :on_content_ready => 'onContentReady',
       :on_load => 'onLoad',
+      :duration => nil,
       :total_size => nil
     }
     def metrics?
@@ -423,6 +427,7 @@ class Stella
               summary['first_request']['started_at'] = time
               summary['first_request']['size'] = asset['size']
               summary['first_request']['rt'] = asset['rt']
+              summary['first_request']['fb'] = asset['fb']
             when 300...400
               summary['redirect_count'] += 1
             when 400...600
