@@ -65,7 +65,8 @@
                 <a href="http://{{hostname}}">{{hostname}}</a>
                 {{#monitored}}
                 <div class="stat">
-                  <a href="/site/{{hostname}}/report">{{rangemetrics.past_24h.on_load_avg.to_i}}ms</a>
+                  <!-- NOTE: (Jan 21) Temprarily set to 4h until 12h is populated -->
+                  <a href="/site/{{hostname}}/report">{{rangemetrics.past_4h.on_load_avg.to_i}}ms</a>
                 </div>
                 {{/monitored}}
               </div>
