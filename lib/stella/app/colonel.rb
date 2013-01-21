@@ -192,7 +192,7 @@ module Stella::App::Colonel::Views
       @title = "Checkups"
       colonel_vars if respond_to?(:colonel_vars)
       self[:checkups_count] = Stella::Checkup.count
-      self[:recent_checkups] = Stella::Checkup.all :updated_at.gt => Time.now-30.days, :order => [:updated_at.desc], :limit => 25
+      self[:recent_checkups] = Stella::Checkup.all :updated_at.gt => Time.now-7.days, :order => [:updated_at.desc], :limit => 100
       if thisobj
         self[:thishost] = thisobj
       else

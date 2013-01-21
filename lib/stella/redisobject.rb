@@ -334,7 +334,8 @@ class Stella::RangeMetrics
   @ranges = {
     :past_1h => 1.hour,
     :past_4h => 4.hours,
-    :past_24h => 24.hours
+    :past_12h => 12.hours,
+    #:past_24h => 24.hours
   }.freeze
   # Install accessor methods for all ranges (RangeMetrics#past_1h)
   ranges.each_pair { |rangeid,r| attr_reader rangeid }
