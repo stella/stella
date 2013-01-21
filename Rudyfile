@@ -32,7 +32,7 @@ routines do
     end
   end
 
-  env :prod, :stage do
+  env :prod, :stage, :test do
     start_workers do
       remote do |args|
         count = args.first || worker_count
