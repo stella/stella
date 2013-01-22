@@ -6,7 +6,7 @@
   <div class="span11">
     <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <input id="checkupURI" type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
       <a data-toggle="modal" href="#authModal" id="authRequired" class="btn btn-large btn-warning cufon" style="margin-top: 6px; margin-left: 6px">AUTHENTICATION REQUIRED</a>
     </form>
   </div>
@@ -57,23 +57,21 @@
   {{^summary.auth_required}}
   {{#authenticated}}
   <div class="span11 offset1 ">
-
       {{#is_done}}
+
       {{#testplan.host.monitored}}
         {{#testplan.enabled}}
         <form action="/checkup" method="post" class="form-inline">
         {{{add_shrimp}}}
-        <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+        <input id="checkupURI" type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
         <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
-        <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
         </form>
         {{/testplan.enabled}}
         {{^testplan.enabled}}
           <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
           {{{add_shrimp}}}
-          <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
+          <input id="checkupURI" type="text" class="checkup-uri span8" value="{{this_uri}}" />
           <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
-          <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
           </form>
         {{/testplan.enabled}}
       {{/testplan.host.monitored}}
@@ -81,17 +79,32 @@
       {{^testplan.host.monitored}}
         <form action="/checkup/{{checkup.checkid}}/enable" method="post" class="form-inline">
         {{{add_shrimp}}}
-        <input id="checkup-uri" type="text" class="span8" value="{{this_uri}}" />
+        <input id="checkupURI" type="text" class="checkup-uri span8" value="{{this_uri}}" />
         <button type="submit" class="btn btn-large btn-primary" style="margin-top: 6px; margin-left: 6px">Monitor for $2/month</button>
-        <button type="submit" class="btn btn-large cufon hidden" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
         </form>
       {{/testplan.host.monitored}}
+
+      <!-- Displayed on focus -->
+      <form id="rerunCheckupForm" action="/checkup" method="post" class="hide form-inline">
+      {{{add_shrimp}}}
+      <input type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
+      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+      </form>
+      <script type="text/javascript">
+      $(function() {
+        $('#checkupURI').on('focus', function(e) {
+          var obj = $(e.currentTarget);
+          obj.parent('form').hide();
+          $('#rerunCheckupForm').show();
+        });
+      });
+      </script>
 
       {{/is_done}}
       {{^is_done}}
       <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <input id="checkupURI" type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
       <a class="btn btn-large cufon" href="/" style="margin-top: 6px; margin-left: 6px">CANCEL</a>
       </form>
       {{/is_done}}
@@ -103,7 +116,7 @@
   <div class="span11 offset1">
     <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
-      <input id="checkup-uri" type="text" name="uri" class="span8" value="{{this_uri}}" />
+      <input id="checkupURI" type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
       <a href="/" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">CANCEL</a>
     </form>
   </div>
@@ -138,19 +151,6 @@
   </form>
   {{/authenticated}}
   {{/summary.auth_required}}
-  <script type="text/javascript">
-  $(function() {
-    // TODO:
-    //$('#checkup-uri').on('focus', function(e) {
-    //  var obj = $(e.currentTarget);
-    //  var buttonObj1 = $(obj.next());
-    //  var buttonObj2 = $(buttonObj1.next());
-    //  buttonObj1.hide();
-    //  buttonObj2.show();
-    //  console.log()
-    //});
-  });
-  </script>
 
   <div class="span11">
     {{^is_done}}<div class="line"></div>{{/is_done}}
@@ -160,12 +160,17 @@
   <div class="span12">
     <div class="stats span8 offset1 well row">
       <a href="/site/{{host.hostname}}">
+      {{#checkup.screenshot}}
+      <img src="/t/{{thumbnail}}" alt="{{testplan.uri}} thumbnail" class="screenshot">
+      {{/checkup.screenshot}}
+      {{^checkup.screenshot}}
       {{#testplan.screenshot}}
       <img src="/t/{{thumbnail}}" alt="{{testplan.uri}} thumbnail" class="screenshot">
       {{/testplan.screenshot}}
       {{^testplan.screenshot}}
       <img src="/img/thumbnail-host.png" alt="Generating thumbnail..." class="screenshot">
       {{/testplan.screenshot}}
+      {{/checkup.screenshot}}
       </a>
       {{#is_done}}
       <ul class="span4">
@@ -205,12 +210,12 @@
         <img src="/img/progress.gif"/>
       </div>
       <script type="text/javascript">
-       setInterval(function(){
-         checkCheckupStatus("{{checkup.checkid}}");
-       }, 2000);
-       setInterval(function(){
-          $('.tuckerProgress').progressDots();
-          Cufon.replace('.tuckerProgress')
+        setInterval(function(){
+          checkCheckupStatus("{{checkup.checkid}}");
+        }, 2000);
+        setInterval(function(){
+           $('.tuckerProgress').progressDots();
+           Cufon.replace('.tuckerProgress')
         }, 1000);
       </script>
 

@@ -108,7 +108,7 @@ text-align: center;
   padding-bottom: 0px !important;
 }
 
-#checkup-uri {
+form .checkup-uri {
   border: 4px #333 solid !important;
   font-size: 20px;
   color: #666;

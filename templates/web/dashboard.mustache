@@ -6,10 +6,10 @@
     <form id="request" action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
         {{#checkup_uri}}
-        <input id="checkup-uri" type="text" name="uri" value="{{checkup_uri}}" class="span8" />
+        <input id="checkupURI" type="text" name="uri" value="{{checkup_uri}}" class="checkup-uri span8" />
         {{/checkup_uri}}
         {{^checkup_uri}}
-        <input id="checkup-uri" type="text" name="uri" class="clearDefault span8" value="Enter a site to test (e.g. www.stellaaahhhh.com)" />
+        <input id="checkupURI" type="text" name="uri" class="clearDefault checkup-uri span8" value="Enter a site to test (e.g. www.stellaaahhhh.com)" />
         {{/checkup_uri}}
         <button type="submit" class="btn btn-large btn-inverse cufon" style="margin-top: 6px; margin-left: 6px">RUN CHECKUP</button>
     </form>

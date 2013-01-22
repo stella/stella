@@ -1,4 +1,4 @@
-#checkup-uri {
+form .checkup-uri {
   border: 4px #ccc solid;
   color: #999;
   font-family: Georgia,serif;
@@ -9,7 +9,7 @@
   height: 28px;
   font-size: 16px;
 }
-#checkup-uri:focus{outline:none !important;}
+form .checkup-uri:focus{outline:none !important;}
 
 h1 { margin-bottom: 10px }
 
