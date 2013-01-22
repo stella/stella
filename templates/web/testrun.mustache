@@ -60,17 +60,18 @@
       {{/testplan.screenshot}}
       <ul class="span4">
         <li class="rt">
-          <!--<span class="value cufon">{{summary.on_content_ready}}<span class="small">ms</span>/</span>-->
           <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
           <!--<span class="description">Response Time</span>-->
         </li>
         <li class="advice cufon">
           <!-- "<strong class="slowish">Not so fast.</strong> Slower than most sites." -->
         </li>
+        {{#summary.on_content_ready}}
         <li>
-          <span class="value cufon">{{summary.on_content_ready}}ms</span>
+          <span class="value cufon">{{to_i}}ms</span>
           <span class="description ">Content Ready</span>
         </li>
+        {{/summary.on_content_ready}}
         <li>
           <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
           <span class="description ">Total Size</span>
@@ -83,8 +84,8 @@
           <span class="value cufon">{{summary.error_count}}</span>
           <span class="description ">Errors</span>
         </li>
-        <li class="time">
-          <span class="cufon">updated {{testrun.updated_at.to_natural}}</span>
+        <li class="time cufon">
+          <span class="prettyDate cufon" title="{{checkup.updated_at.to_i}}">{{ran_at_natural}}</span>
         </li>
       </ul>
     </div>
@@ -147,9 +148,9 @@
               <a href="{{scheme}}://{{host}}{{path}}" title="{{uri}}" rel="nofollow">{{path_short}}</a>
             </td>
             <td style="text-align: right">{{code}}</td>
-            <td style="text-align: right">{{size}}</td>
+            <td style="text-align: right">{{size.to_bytes}}</td>
             <td style="text-align: right">
-              {{#offset}}{{to_s}}s{{/offset}}
+              {{#offset}}<em>{{to_s}}s</em>{{/offset}}
               {{^offset}}--{{/offset}}
             </td>
             <td class="rt" style="text-align: right" rel="tooltip" title="Waiting: {{fb}}ms, Receiving: {{lb}}ms">{{rt}}ms</td>

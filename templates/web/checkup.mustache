@@ -170,7 +170,7 @@
       {{#is_done}}
       <ul class="span4">
         <li class="rt">
-          <span class="value cufon">{{summary.duration}}</span><span class="suffix cufon">milliseconds</span>
+          <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
           <!--<span class="description">Response Time</span>-->
         </li>
         <li class="advice cufon">
@@ -182,14 +182,6 @@
           <span class="description ">Content Ready</span>
         </li>
         {{/summary.on_content_ready}}
-        {{#bogus}}
-        {{#summary.on_load}}
-        <li>
-          <span class="value cufon">{{to_i}}ms</span>
-          <span class="description ">On Load</span>
-        </li>
-        {{/summary.on_load}}
-        {{/bogus}}
         <li>
           <span class="value cufon ">{{summary.total_size.to_bytes}}</span>
           <span class="description ">Total Size</span>
