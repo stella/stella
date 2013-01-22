@@ -77,7 +77,7 @@ function waitFor(testFx, onReady, onTimeout, timeOutMillis, repeatMillis) {
       condition = (typeof(testFx) === "string" ? eval(testFx) : testFx()); //< defensive code
     } else {
       if(!condition) { // If condition still not fulfilled (timeout but condition is 'false')
-        console.log("waitFor() timeout");
+        console.log("# waitFor timeout ("+timeOutMillis/1000+"s)");
         typeof(onTimeout) === "string" ? eval(onTimeout) : onTimeout(); //< Do what it's supposed to do once the condition is NOT fulfilled
         clearInterval(interval); //< Stop this interval
       } else {         // Condition fulfilled (timeout and/or condition is 'true')

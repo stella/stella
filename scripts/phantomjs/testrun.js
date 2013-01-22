@@ -57,15 +57,23 @@ page.onConsoleMessage = function (msg) {
 page.onInitialized = function () {
   try {
     var options = page.options;
-    page.timingInitialize = page.evaluate(function (options) {
+    //console.log("# init");
+    var v = page.evaluate(function (options) {
       var initStarted = +new Date();
 
       (function () {
+      window.timingReadyState = {}
+
       // This won't be fired if the page loads very quickly (http://stellaaahhhh.com)
-      document.addEventListener("DOMContentLoaded", function(){
+      window.document.addEventListener("DOMContentLoaded", function(){
         // Callback example. Can be used here or by a webpage.
         //window.callPhantom('DOMContentLoaded');
         window.timingDOMContentLoaded = +new Date();
+      }, false);
+
+      window.document.addEventListener("readystatechange", function(e){
+        //console.log("statechange: " + window.document.readyState);
+        window.timingReadyState[window.document.readyState] = +new Date();
       }, false);
 
       // NOTE: This is how to manually call an event
@@ -87,6 +95,9 @@ page.onInitialized = function () {
       })();
       return initStarted;
     }, page.options); // Pass options to the evaluate function.
+
+    if (!page.timingInitialize)
+      page.timingInitialize = v;
   } catch(err) {
     handleError(err);
   }
@@ -101,6 +112,7 @@ page.onInitialized = function () {
 // Fired after onInitialized (usually, but not always)
 page.onLoadStarted = function () {
   try {
+    //console.log("# loadStart");
     page.timingLoadStarted = +new Date();
     hardTimeout("typeof page.timingOnLoad != 'undefined'", function(elapsed) {
       console.log(json(createErrorHAR(page, "timeout", elapsed)));
@@ -150,7 +162,7 @@ page.onLoadFinished = function() {
 };
 
 function createOutput() {
-  console.log('# done...');
+  //console.log('# done...');
 
   // Avoid transparent backgrounds
   page.evaluate(function() {
@@ -170,11 +182,13 @@ function createOutput() {
   page.gaDisabled = page.evaluate(function () {
     return window['ga-disable-' + window['ga-account']] || false;
   });
-
+  page.timingReadyState = page.evaluate(function () {
+    return window.timingReadyState;
+  });
   try {
-    var startPoint = page.timingInitialize;
-    var onContentReady = (page.timingDOMContentLoaded) - startPoint;
-    var onLoad = (page.timingOnLoad || page.timingOnLoadFinished) - startPoint;
+    var startPoint = (page.timingInitialize > page.timingLoadStarted) ? page.timingLoadStarted : page.timingInitialize;
+    var onContentReady = (page.timingDOMContentLoaded || page.timingReadyState['interactive']) - startPoint;
+    var onLoad = (page.timingOnLoad || page.timingReadyState['complete'] || page.timingOnLoadFinished) - startPoint;
     var timings = {
       "onContentReady": ((onContentReady > 0) ? onContentReady : onLoad),
       "onLoad": onLoad,
@@ -187,11 +201,14 @@ function createOutput() {
     //offset = +rpad(prefix, (""+page.timingInitialize).length)
     //console.log('init     ' + (page.timingInitialize-offset))
     //console.log('start    ' + (page.timingLoadStarted-offset))
+    //console.log('spoint   ' + (startPoint-offset))
     //console.log('content  ' + (page.timingDOMContentLoaded-offset))
+    //console.log('interact ' + (page.timingReadyState['interactive']-offset))
     //console.log('load     ' + (page.timingOnLoad-offset))
+    //console.log('complete ' + (page.timingReadyState['complete']-offset))
     //console.log('end      ' + (page.timingOnLoadFinished-offset))
-    //console.log('content  ' + ((page.timingDOMContentLoaded || page.timingInitialize) - startPoint))
-    //console.log('onload   ' + ((page.timingOnLoad || page.timingOnLoadFinished) - startPoint))
+    //console.log(json(timings))
+    //console.log(json(page.timingReadyState))
 
     var har = createHAR(page, timings, status);
 
@@ -224,19 +241,14 @@ function evaluateTestplan(status) {
     // We call waitFor here b/c in some cases it takes a few moments
     // for the page to fully load. Rather than exit right away, we'll
     // give it some time.
-    // We call createOutput either way b/v this is not a fail condition.
+    // We call createOutput either way b/c this is not a fail condition.
     // Also pages that return a 401 response never set window.timingOnLoad.
     waitFor(function(){
       //console.log('# waiting...');
-      try {
-        return page.evaluate(function(){
-          return window.timingOnLoad != null;
-        });
-      } catch(err) {
-        handleError(err);
-      }
-
-    }, createOutput, createOutput);
+      return page.evaluate(function(){
+        return window.document.readyState == 'complete';
+      });
+    }, createOutput, createOutput, 3000, 250);
 }
 
 try {
