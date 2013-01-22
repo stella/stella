@@ -69,7 +69,6 @@ end
 module Stella::App::Views
   class Checkup < Stella::App::View
     def init checkup, uri=nil
-      @js << '/etc/jquery/jquery-ui.min.js'
       @js << '/app/component/checkup.js'
       @css << '/app/style/component/checkup.css'
       self[:checkup], self[:testplan] = checkup, checkup.testplan

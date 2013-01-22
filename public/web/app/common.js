@@ -376,9 +376,7 @@ $(function() {
     this.select();
   });
 
-  $('.rt').tooltip({
-
-  });
+  $('.rt').tooltip();
 
   $('.rt-summary-header').popover({
     placement: 'bottom',
