@@ -32,27 +32,28 @@
 
       <ul id="pageTabs" class="nav nav-tabs">
         {{#owner_only}}
+        {{#host.monitored}}
         <li class="active">
           <a href="#settings" data-toggle="tab"><h4 class="cufon">Settings</h4></a>
         </li>
+        {{/host.monitored}}
         <li>
           <a href="#pages" data-toggle="tab"><h4 class="cufon">Pages</h4></a>
         </li>
         <li>
           <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
         </li>
-        {{#host.monitored}}
         <li>
           <a href="#data" data-toggle="tab"><h4 class="cufon">Data</h4></a>
         </li>
-        {{/host.monitored}}
         {{/owner_only}}
       </ul>
 
       <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
 
         {{#owner_only}}
-        <div id="settings" class=" tab-pane in active">
+
+        <div id="settings" class=" tab-pane in {{#host.monitored}}active{{/host.monitored}}">
 
           <form action="/site/{{host.hostid}}/settings" class="form-horizontal" method="POST">
             {{{add_shrimp}}}
@@ -88,11 +89,10 @@
                     <span class="help-inline">Please enter your tracking code</span>
                     {{/host.settings.gaid}}{{/host.settings.disable_ga}}
                   <span class="help-block">
-                  <label class="checkbox">
-                    <input href="/site/{{host.hostid}}/ga/disable" type="checkbox" name="disable_ga" value="true" {{#host.settings.disable_ga}}checked="checked"{{/host.settings.disable_ga}}>
-                    Don't count stella requests in Google Analytics.
-                  </label>
-
+                    <label class="checkbox">
+                      <input href="/site/{{host.hostid}}/ga/disable" type="checkbox" name="disable_ga" value="true" {{#host.settings.disable_ga}}checked="checked"{{/host.settings.disable_ga}}>
+                      <span class="light">Don't count stella requests in Google Analytics.</span>
+                    </label>
                   </span>
                 </div>
               </div>
@@ -117,7 +117,7 @@
                       <span>some text</span>
                     </label>
                     {{#host.contacts}}
-                    <label class="checkbox">
+                    <label class="">
                       <input type="checkbox" name="contactid[]" value="{{contactid}}" checked>
                       <img src="{{gravatar_prefix}}{{gravatar}}?s=18&amp;r=g" class="avatar"/>
                       {{email}} {{#phone}}({{to_s}}){{/phone}}{{^phone}}(<em>No phone</em>){{/phone}}
@@ -125,7 +125,9 @@
                     {{/host.contacts}}
 
                     {{^host.contacts}}
-                    <em class="contacts-none">We will notify you</em>
+                    <label class="">
+                    <em class="contacts-none">Notifications will be sent to {{cust.email}}</em>
+                    </label>
                     {{/host.contacts}}
                   </div>
                 </div>
@@ -186,28 +188,9 @@
             });
           </script>
 
-          <br/>
-          <legend><h3><span class="cufon">Danger Zone</span> &nbsp;<small class="cufon"></small></h3></legend>
-          {{#host.monitored}}
-          <div class="span5">
-            <div class="alert alert-info">
-              <h4 class="alert-heading">Stop monitoring {{host.hostname}}</h4>
-              You will no longer receive downtime notifications.
-              <div><a href="/site/{{host.hostid}}/stop" class="btn host-stop">Stop Monitoring</a></div>
-            </div>
-          </div>
-          {{/host.monitored}}
-
-          <div class="span5">
-            <div class="alert alert-block">
-              <h4 class="alert-heading">Delete {{host.hostname}}</h4>
-              All data will be deleted and this is not reversable.
-              <div><a href="/site/{{host.hostid}}/destroy" class="btn host-destroy">Delete this site</a></div>
-            </div>
-          </div>
         </div>
 
-        <div id="pages" class=" hidden">
+        <div id="pages" class="{{^host.monitored}}active {{/host.monitored}} hidden">
 
             <ul class="thumbnails">
               {{#testplans}}
@@ -274,6 +257,9 @@
 
         <div id="data" class="hidden">
 
+          {{#host.monitored}}
+          <legend><h3><span class="cufon">Metrics</span> &nbsp;<small class="cufon"></small></h3></legend>
+
           <div class="btn-group">
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
               Download Metrics
@@ -293,6 +279,28 @@
               <li><a href="/site/{{host.hostid}}/report.csv?d=43200">CSV (12h)</a></li>
             </ul>
           </div>
+          {{/host.monitored}}
+
+          <br/>
+          <legend><h3><span class="cufon">Danger Zone</span> &nbsp;<small class="cufon"></small></h3></legend>
+          {{#host.monitored}}
+          <div class="span5">
+            <div class="alert alert-info">
+              <h4 class="alert-heading">Stop monitoring {{host.hostname}}</h4>
+              You will no longer receive downtime notifications.
+              <div><a href="/site/{{host.hostid}}/stop" class="btn host-stop">Stop Monitoring</a></div>
+            </div>
+          </div>
+          {{/host.monitored}}
+
+          <div class="span5">
+            <div class="alert alert-block">
+              <h4 class="alert-heading">Delete {{host.hostname}}</h4>
+              All data will be deleted and this is not reversable.
+              <div><a href="/site/{{host.hostid}}/destroy" class="btn host-destroy">Delete this site</a></div>
+            </div>
+          </div>
+
           <br/><br/><br/><br/>
           <br/><br/><br/><br/>
           <br/><br/><br/><br/>
