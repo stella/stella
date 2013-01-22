@@ -387,8 +387,6 @@ class Stella
         summary = {
           'base' => har['log']['pages'][0]['id'],
           'title' => har['log']['pages'][0]['title'],
-          'started_at' => Time.parse(har['log']['pages'][0]['startedDateTime']).to_s,   # to normalize format
-          'ended_at' => Time.parse(har['log']['pages'][0]['endDateTime']).to_s,
           'on_content_ready' => har['log']['pages'][0]['pageTimings']['onContentReady'],
           'on_load' => har['log']['pages'][0]['pageTimings']['onLoad'],
           'duration' => har['log']['pages'][0]['pageTimings']['duration'],
@@ -396,11 +394,17 @@ class Stella
           'redirect_count' => 0,
           'asset_count' => 0,
           'error_count' => 0,
-          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil, 'fb' => nil},
+          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil, 'fb' => nil },
           'initial_offset' => nil,
           'total_size' => 0,
           'gaid' => har['log']['gaid']
         }
+        if har['log']['pages'][0]['startedDateTime']
+          summary['started_at'] = Time.parse(har['log']['pages'][0]['startedDateTime']).to_s  # to normalize format
+        end
+        if har['log']['pages'][0]['endDateTime']
+          summary['ended_at'] = Time.parse(har['log']['pages'][0]['endDateTime']).to_s
+        end
         summary['assets'] = har['log']['entries'].collect do |entry|
           summary['total_size'] += entry['response']['bodySize'].to_i
           uri = Stella::Utils.uri(entry['request']['url'])
