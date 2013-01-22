@@ -14,7 +14,12 @@ class Stella
       self[:subject]
     end
     def send_email
-      SendGrid.send_email subject, render, :to => cust.email, :from => 'tucker@blamestella.com', :fromname => 'Tucker (Stella)'
+      self.class.fromname ||= Stella.config['account.tech.name'] || 'Stella'
+      self.class.from ||= Stella.config['account.tech.email'] || 'tucker@blamestella.com'
+      SendGrid.send_email subject, render, :to => cust.email, :from => self.class.from, :fromname => self.class.fromname
+    end
+    class << self
+      attr_accessor :from, :fromname
     end
     module Account
 

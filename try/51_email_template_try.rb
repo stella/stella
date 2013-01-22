@@ -1,5 +1,8 @@
 $: << './app'
 require 'stella'
+require 'stella/app/helpers'
+require 'stella/app/web/base'
+require 'stella/app/web/views'
 require 'stella/email'
 
 Stella.debug = false
@@ -17,3 +20,11 @@ args = [@cust, :hostname => 'tryouts91.com', :uri => uri]
 view = Stella::Email::Account::ExpressConfirmation.new *args
 view.render.match(uri).nil?
 #=> false
+
+## Send Email
+uri = 'https://host/account/claim/abc123'
+args = [@cust, :hostname => 'tryouts91.com', :uri => uri]
+view = Stella::Email::Account::ExpressConfirmation.new *args
+ret = view.send_email
+ret.response.code
+#=> 200
