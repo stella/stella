@@ -334,6 +334,7 @@ module Stella::App::Views
       @body_class = :host
       self[:host] = host
       self[:owner_only] = self[:authenticated] && (host.customer?(cust) || cust.colonel?)
+      self[:recent_checkup] = host.checkups.first :status => :done, :order => [ :created_at.desc ]
       self[:testplans] = host.testplans :hidden => false, :order => [ :enabled.desc, :uri ]
       #self[:summary] = self[:testruns].first.summary if self[:testruns]
       self[:ran_at] = self[:host].updated_at
@@ -370,6 +371,7 @@ module Stella::App::Views
       @css << '/app/style/component/host.css'
       @body_class = :host
       self[:owner_only] = self[:authenticated] && (plan.host.customer?(cust) || cust.colonel?)
+      self[:recent_checkup] = plan.checkups.first :status => :done, :order => [ :created_at.desc ]
       self[:plan] = plan
       self[:host] = plan.host
       self[:selected_tabid] = req.params[:tabid]

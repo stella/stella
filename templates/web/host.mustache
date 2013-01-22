@@ -12,7 +12,14 @@
         {{#authenticated}}<button href="/site/{{host.hostid}}/start" class="btn btn-primary host-start">Start Monitoring for ${{site_price}}/month</button>{{/authenticated}}
         {{^authenticated}}<a href="/signup?hostid={{host.hostid}}" class="btn btn-primary">Start Monitoring for Free <em>!</em></a>{{/authenticated}}
         {{/host.monitored}}
-        {{#host.monitored}}<span class="cufon" style="font-size: 36px; font-weight: bold">{{host.rangemetrics.past_1h.on_load_avg.to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>{{/host.monitored}}
+        {{#host.monitored}}
+        {{#host.rangemetrics.past_1h.on_load_avg}}
+        <span class="cufon" style="font-size: 36px; font-weight: bold">{{to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{/host.rangemetrics.past_1h.on_load_avg}}
+        {{^host.rangemetrics.past_1h.on_load_avg}}
+        <span class="cufon" style="font-size: 36px; font-weight: bold">{{recent_checkup.summary.on_load}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{/host.rangemetrics.past_1h.on_load_avg}}
+        {{/host.monitored}}
       </div>
     </ul>
   </div>
@@ -223,7 +230,7 @@
             {{#owner_only}}
               {{#has_pages}}
               <p>
-              <em>Pages you run checkups on appear here. Click <i class="icon icon-remove-sign"></i> to remove.</em>
+              <em>Pages you run checkups on appear here.</em>
               </p>
               {{/has_pages}}
               {{^has_pages}}

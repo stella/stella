@@ -44,7 +44,7 @@ class Stella
           logic.raise_concerns(:enable_checkup)
           logic.process
           checkup = logic.checkup
-          res.redirect '/site/%s/pages' % checkup.host.hostname
+          res.redirect '/site/%s/settings' % checkup.host.hostname
         end
       end
 

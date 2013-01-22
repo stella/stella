@@ -15,7 +15,12 @@
         {{^host.monitored}}
         {{/host.monitored}}
         {{#plan.enabled}}
-        <span class="cufon" style="font-size: 36px; font-weight: bold">{{plan.rangemetrics.past_1h.on_load_avg.to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{#plan.rangemetrics.past_1h.on_load_avg}}
+        <span class="cufon" style="font-size: 36px; font-weight: bold">{{to_i}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{/plan.rangemetrics.past_1h.on_load_avg}}
+        {{^plan.rangemetrics.past_1h.on_load_avg}}
+        <span class="cufon" style="font-size: 36px; font-weight: bold">{{recent_checkup.summary.on_load}}</span><span cufon="cufon" style="font-size: 16px">ms</span>
+        {{/plan.rangemetrics.past_1h.on_load_avg}}
         {{/plan.enabled}}
       </div>
     </ul>
@@ -78,6 +83,7 @@
         </div>
 
         <div id="data" class="hidden">
+          <legend><h3><span class="cufon">Metrics</span> &nbsp;<small class="cufon"></small></h3></legend>
 
           <div class="btn-group">
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
