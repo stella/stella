@@ -46,7 +46,11 @@
                 {{#monitored}}
                   <button class="btn btn-mini btn-inverse dropdown-toggle" data-toggle="dropdown"><i class="icon-pencil icon-white"></i> <span class="caret"></span></button>
                   <ul class="dropdown-menu pull-right">
-                    <li><a href="/site/{{hostname}}/settings"><i class="icon-wrench"></i> Monitor &amp; Notification Settings</a></li>
+                    <li><a href="/site/{{hostname}}/settings"><i class="icon-wrench"></i> Settings</a></li>
+                    <li><a href="/site/{{hostname}}/pages"><i class="icon-th-large"></i> Pages</a></li>
+                    <li><a href="/site/{{hostname}}/screenshots"><i class="icon-eye-open"></i> Screenshots</a></li>
+                    <li><a href="/site/{{hostname}}/data"><i class="icon-book"></i> Data</a></li>
+                    <li class="divider"></li>
                     <li><a href="/site/{{hostid}}/screenshot" class="host-stop"><i class="icon-eye-open"></i> Update screenshot</a></li>
                     {{#bogus}}
                     <li><a href="/site/{{hostname}}/settings"><i class="icon-envelope"></i> </a></li>

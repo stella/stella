@@ -303,6 +303,10 @@ color: #33cccc !important;
 .host-list .host.notmonitored .settings {
   margin-top:-120px; margin-left: 44px;
 }
+.host-list .host.notmonitored .description {
+  background-color: #808080;
+}
+
 .host-list .host .description {
   width: 248px;
   margin-top:-21px; margin-left: 0px;
