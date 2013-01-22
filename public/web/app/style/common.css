@@ -270,7 +270,6 @@ color: #33cccc !important;
 .small { font-size: 70% }
 
 
-
 .host-list .host {
   display: inline-block;
   float:left;
@@ -284,29 +283,6 @@ color: #33cccc !important;
   width: 260px;
   height:180px;
 }
-.host-list .host.notmonitored .screenshot {
-  opacity:0.3;
-  filter:alpha(opacity=30); /* For IE8 and earlier */
-}
-.host-list .host .settings {
-  display:none;
-  position:absolute;
-}
-.host-list .host:hover .settings, .host-list .host:hover .description {
-  display:block;
-  opacity:1.8;
-  filter:alpha(opacity=100); /* For IE8 and earlier */
-}
-.host-list .host.monitored .settings {
-  margin-top:-176px; margin-left: 214px;
-}
-.host-list .host.notmonitored .settings {
-  margin-top:-120px; margin-left: 44px;
-}
-.host-list .host.notmonitored .description {
-  background-color: #808080;
-}
-
 .host-list .host .description {
   width: 248px;
   margin-top:-21px; margin-left: 0px;
@@ -323,18 +299,20 @@ color: #33cccc !important;
   font-weight: light;
   color: #fff;
 }
-.host-list .host .description a {
-  color: #fff;
+.host-list .host .settings {
+  display:none; position:absolute;
 }
-.host-list .host.monitored {
-  border: 1px solid #ccc;
-}
-.host-list .host.monitored:hover {
-  border: 1px solid #0cc;
-}
-.host-list .host.notmonitored {
-  border: 1px solid #ccc;
-}
-.host-list .host.notmonitored:hover {
-  border: 1px solid #999;
-}
+
+.host-list .host.notmonitored .screenshot         { opacity:0.3; filter:alpha(opacity=30); }
+.host-list .host.notmonitored:hover .screenshot   { opacity:1; filter:alpha(opacity=60); }
+.host-list .host:hover .settings,
+.host-list .host:hover .description         { display:block; opacity:1.8; filter:alpha(opacity=100); }
+.host-list .host.monitored .settings        { margin-top:-176px; margin-left: 214px; }
+.host-list .host.notmonitored .settings     { margin-top:-120px; margin-left: 44px; }
+.host-list .host.notmonitored .description  { background-color: #808080; }
+.host-list .host.notmonitored:hover .description  { background-color: #333; }
+.host-list .host .description a             { color: #fff; }
+.host-list .host.monitored                  { border: 1px solid #ccc; }
+.host-list .host.monitored:hover            { border: 1px solid #0cc; }
+.host-list .host.notmonitored               { border: 1px solid #ccc; }
+.host-list .host.notmonitored:hover         { border: 1px solid #999;}
