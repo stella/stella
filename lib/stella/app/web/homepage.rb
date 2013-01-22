@@ -152,7 +152,7 @@ class Stella::App::Auth
       params = {
         :client_id => Stella.config['vendor.github.client'],
         :redirect_uri => app_uri('/auth/github/callback'),
-        :scope => '', #'user,repo:status,gist',
+        :scope => 'user:email', #'user,repo:status,gist',
         :state => sess[:github_state]
       }
       Stella.ld '[to-github] %s' % params
