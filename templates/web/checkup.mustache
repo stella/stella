@@ -58,7 +58,7 @@
   {{#authenticated}}
   <div class="span11 offset1 ">
       {{#is_done}}
-
+      {{#is_success}}
       {{#testplan.host.monitored}}
         {{#testplan.enabled}}
         <form action="/checkup" method="post" class="form-inline">
@@ -100,8 +100,18 @@
         });
       });
       </script>
+      {{/is_success}}
+
+      {{^is_success}}
+      <form action="/checkup" method="post" class="form-inline">
+      {{{add_shrimp}}}
+      <input id="checkupURI" type="text" name="uri" class="checkup-uri span8" value="{{this_uri}}" />
+      <button type="submit" class="btn btn-large cufon" style="margin-top: 6px; margin-left: 6px">RUN AGAIN</button>
+      </form>
+      {{/is_success}}
 
       {{/is_done}}
+
       {{^is_done}}
       <form action="/checkup" method="post" class="form-inline">
       {{{add_shrimp}}}
