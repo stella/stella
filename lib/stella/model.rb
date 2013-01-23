@@ -179,7 +179,7 @@ class Stella
     property :result,       Json, :default => {}, :lazy => true
     property :summary,      Json, :default => {}, :lazy => false
     property :private,      Boolean, :default => false
-    property :status,       Enum[ :new, :pending, :running, :fubar, :done ], :default => :new
+    property :status,       Enum[ :new, :pending, :running, :error, :timeout, :done ], :default => :new
     property :salt,         String, :default => (Proc.new() { Stella::Entropy.pop })
     #property :queue_filter, Json, :default => [], :lazy => false
     gibbler :planid, :custid, :hosts, :mode, :options, :created_at, :salt
@@ -198,7 +198,7 @@ class Stella
     property :planid,       String
     property :runid,        String
     property :summary,      Json, :default => {}
-    property :status,       Enum[ :new, :pending, :running, :error, :done ], :default => :new
+    property :status,       Enum[ :new, :pending, :running, :error, :timeout, :done ], :default => :new
     property :salt,         String, :default => (Proc.new() { Stella::Entropy.pop })
     gibbler :custid, :hostid, :planids, :runids, :created_at, :salt
     before :valid?, :normalize
