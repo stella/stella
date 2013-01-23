@@ -41,6 +41,13 @@ class Stella::App::Homepage
     end
   end
 
+  def authtest
+    publically do
+      view = Stella::App::Views::Authtest.new req, sess, cust
+      res.body = view.render
+    end
+  end
+
   def slow
     time = 2.seconds
     sleep time
@@ -109,10 +116,17 @@ module Stella::App::Views
       @title = "Dashboard"
       @body_class = 'dashboard'
       @css << '/app/style/component/dashboard.css'
-      @js << '/etc/jquery/jquery.sparkline.min.js'
       self[:highlight_button] = (sess && sess.get!(:highlight_button)) || !req.params[:uri].to_s.empty?
       self[:recent_checkups] = cust.checkups :created_at.gt => Stella.now-24.hours, :order => [ :created_at.desc ], :limit => 20 #, :conditions => [ :created_at.gt 1.days ]
       self[:checkup_uri] = Stella::Utils.uri(req.params[:uri]) if req.params[:uri]
+    end
+  end
+
+  class Authtest < Stella::App::View
+    def init *args
+      @title = "Success"
+      @body_class = 'home'
+      @css << '/app/style/component/home.css'
     end
   end
 

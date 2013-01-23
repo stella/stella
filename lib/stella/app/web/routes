@@ -4,6 +4,7 @@ GET   /                                               Stella::App::Homepage#inde
 GET   /feedback                                       Stella::App::Homepage#feedback
 POST  /feedback                                       Stella::App::Homepage#send_feedback
 
+GET   /authtest                                       Stella::App::Homepage#authtest
 
 ##########################################################################  WEBHOOKS
 GET   /hooks/stripe                                   Stella::App::Hooks#stripe
