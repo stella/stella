@@ -162,7 +162,13 @@ class Stella
                   Stella.li [plan.uri, ex.message].inspect
                   Stella.li ex.backtrace
                 end
-                run.status = :done
+                if run.summary.nil?
+                  run.status = :failed
+                elsif run.summary['status'] == 'timeout'
+                  run.status = :timeout
+                else
+                  run.status = :done
+                end
                 plan.testruns << run
                 Stella::Logic.safedb {
                   #Stella.ld "Updating testrun: #{run.runid}"
@@ -188,6 +194,7 @@ class Stella
                 else
                   #Stella.li "no metrics"
                 end
+
               when 'Stella::Job::Checkup'
               else
                 p 2

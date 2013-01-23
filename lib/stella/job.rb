@@ -14,8 +14,7 @@ class Stella
     def perform
       type.perform self
     rescue => ex
-      # DO THINGS
-      Stella.li ex.message
+      Stella.li '[%s] %s' % [ex.class, ex.message]
       Stella.li ex.backtrace
       raise ex
     end
@@ -69,18 +68,25 @@ class Stella
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', host.hostname, shot.width, shot.height)
         Stella.ld cmd
         tmpfile = nil
-        Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
-          pid = wait_thr.pid # pid of the started process.
-          output = stdout.read
-          process = wait_thr.value # Process::Status object returned.
-          unless process.exitstatus.zero?
-            raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+        begin
+          Timeout.timeout(15.seconds) do
+            Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
+              pid = wait_thr.pid # pid of the started process.
+              output = stdout.read
+              process = wait_thr.value # Process::Status object returned.
+              unless process.exitstatus.zero?
+                raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+              end
+              # Only use the last line of output.
+              # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
+              output = output.split($/).last
+              tmpfile = output
+            }
           end
-          # Only use the last line of output.
-          # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
-          output = output.split($/).last
-          tmpfile = output
-        }
+        rescue Timeout::Error
+          Stella.li "[renderhost-timeout] #{host.hostname}"
+          return
+        end
         file = "#{thumbdir}/#{shot.filename}"
         Stella.ld "mv #{tmpfile} #{file}"
         FileUtils.mv tmpfile, file
@@ -104,18 +110,25 @@ class Stella
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/render.js', plan.uri, shot.width, shot.height)
         Stella.ld cmd
         tmpfile = nil
-        Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
-          pid = wait_thr.pid # pid of the started process.
-          output = stdout.read
-          process = wait_thr.value # Process::Status object returned.
-          unless process.exitstatus.zero?
-            raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+        begin
+          Timeout.timeout(15.seconds) do
+            Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
+              pid = wait_thr.pid # pid of the started process.
+              output = stdout.read
+              process = wait_thr.value # Process::Status object returned.
+              unless process.exitstatus.zero?
+                raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+              end
+              # Only use the last line of output.
+              # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
+              output = output.split($/).last
+              tmpfile = output
+            }
           end
-          # Only use the last line of output.
-          # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
-          output = output.split($/).last
-          tmpfile = output
-        }
+        rescue Timeout::Error
+          Stella.li "[renderplan-timeout] #{plan.uri}"
+          return
+        end
         file = "#{thumbdir}/#{shot.filename}"
         Stella.ld "mv #{tmpfile} #{file}"
         FileUtils.mv tmpfile, file
@@ -150,21 +163,33 @@ class Stella
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
         report = {}
-        Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
-          pid = wait_thr.pid # pid of the started process.
-          output = stdout.read
-          process = wait_thr.value # Process::Status object returned.
-          unless process.exitstatus.zero?
-            raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+        begin
+          Timeout.timeout(15.seconds) do
+            Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
+              pid = wait_thr.pid # pid of the started process.
+              output = stdout.read
+              process = wait_thr.value # Process::Status object returned.
+              unless process.exitstatus.zero?
+                raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+              end
+              # Only use the last line of output.
+              # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
+              output = output.split($/).last
+              report = Yajl::Parser.parse(output, :check_utf8 => false)
+            }
           end
-          # Only use the last line of output.
-          # NOTE: THIS IS A HACK to get around noisy phantomjs messages (e.g. "TypeError ...")
-          output = output.split($/).last
-          report = Yajl::Parser.parse(output, :check_utf8 => false)
-        }
+        rescue Timeout::Error
+          checkup.status = :timeout
+          checkup.save
+          return
+        end
         checkup.summary = Stella::Testrun.parse_har(report)
         Stella.ld checkup.summary.to_json
-        checkup.status = :done
+        if checkup.summary['status'] == 'timeout'
+          checkup.status = :timeout
+        else
+          checkup.status = :done
+        end
 
         if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?
           Stella.ld "Updating google account id"
@@ -217,18 +242,31 @@ class Stella
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
         Stella.ld cmd
         har = {}
-        Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
-          pid = wait_thr.pid # pid of the started process.
-          output = stdout.read
-          process = wait_thr.value # Process::Status object returned.
-          unless process.exitstatus.zero?
-            raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+        begin
+          Timeout.timeout(15.seconds) do
+            Open3.popen3(cmd) {|stdin, stdout, stderr, wait_thr|
+              pid = wait_thr.pid # pid of the started process.
+              output = stdout.read
+              process = wait_thr.value # Process::Status object returned.
+              unless process.exitstatus.zero?
+                raise error("#{cmd} exited:#{process.exitstatus} (#{output})")
+              end
+              output = output.split($/).last
+              har = Yajl::Parser.parse(output, :check_utf8 => false)
+            }
           end
-          output = output.split($/).last
-          har = Yajl::Parser.parse(output, :check_utf8 => false)
-        }
+        rescue Timeout::Error
+          run.status = :timeout
+          run.save
+          return
+        end
         run.summary = Stella::Testrun.parse_har(har)
         run.result = har
+        if run.summary['status'] == 'timeout'
+          run.status = :timeout
+        else
+          run.status = :done
+        end
         run.status = :done
         plan.testruns << run
         Stella::Logic.safedb {

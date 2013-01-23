@@ -34,6 +34,13 @@ class Stella
       return if force_exit
       begin
         Stella.ld job.to_json
+        #result = Timeout.timeout(15.seconds) do
+        #  Stella::Job.perform_remote job
+        #rescue Timeout::Error
+        #  run.status = :timeout
+        #  run.save
+        #  return
+        #end
         result = Stella::Job.perform_remote job
         params = {
           :jobid => job['jobid'],

@@ -384,7 +384,9 @@ class Stella
       # using the summary right after it's created and loading it from JSON.
       # When an object is deserialize from JSON it uses strings not symbols.
       def parse_har har
+        return if har.nil? || har.empty?
         summary = {
+          'status' => har['log']['status'],
           'base' => har['log']['pages'][0]['id'],
           'title' => har['log']['pages'][0]['title'],
           'on_content_ready' => har['log']['pages'][0]['pageTimings']['onContentReady'],
@@ -405,52 +407,55 @@ class Stella
         if har['log']['pages'][0]['endDateTime']
           summary['ended_at'] = Time.parse(har['log']['pages'][0]['endDateTime']).to_s
         end
-        summary['assets'] = har['log']['entries'].collect do |entry|
-          summary['total_size'] += entry['response']['bodySize'].to_i
-          uri = Stella::Utils.uri(entry['request']['url'])
-          uri.path = '[data-uri]' if uri.scheme == "data"
-          time = Time.parse(entry['startedDateTime'])
-          asset = {
-            'meth' => entry['request']['method'],
-            'uri' => uri.to_s,
-            'code' => entry['response']['status'],
-            'size' => entry['response']['bodySize'],
-            'rt' => entry['time'],
-            'fb' => entry['timings']['wait'],
-            'lb' => entry['timings']['receive'],
-          }
-          if summary['auth_required'].nil? && asset['code'].to_i == 401
-            summary['auth_required'] = true
-          end
-          if summary['first_request']['started_at'].nil?
-            case asset['code'].to_i   # skip initial redirects
-            when 200...300
-              summary['first_request']['started_at'] = time
-              summary['first_request']['size'] = asset['size']
-              summary['first_request']['rt'] = asset['rt']
-              summary['first_request']['fb'] = asset['fb']
-            when 300...400
-              summary['redirect_count'] += 1
-            when 400...600
-              summary['error_count'] += 1
+        if summary['status'] == 'timeout'
+          summary['on_timeout'] = har['log']['pages'][0]['pageTimings']['onTimeout']
+        else
+          summary['assets'] = har['log']['entries'].collect do |entry|
+            summary['total_size'] += entry['response']['bodySize'].to_i
+            uri = Stella::Utils.uri(entry['request']['url'])
+            uri.path = '[data-uri]' if uri.scheme == "data"
+            time = Time.parse(entry['startedDateTime'])
+            asset = {
+              'meth' => entry['request']['method'],
+              'uri' => uri.to_s,
+              'code' => entry['response']['status'],
+              'size' => entry['response']['bodySize'],
+              'rt' => entry['time'],
+              'fb' => entry['timings']['wait'],
+              'lb' => entry['timings']['receive'],
+            }
+            if summary['auth_required'].nil? && asset['code'].to_i == 401
+              summary['auth_required'] = true
             end
-          else
-            sample = (time.to_f - summary['first_request']['started_at'].to_f)
-            asset['offset'] = (sample*1000).to_i # convert back to ms
-            # The elapsed time before the first asset is requested
-            (summary['initial_offset'] ||= asset['offset']).to_i
-            summary['asset_count'] += 1
-            case asset['code'].to_i
-            when 200...300
-            when 300...400
-              summary['redirect_count'] += 1
-            when 400...600
-              summary['error_count'] += 1
+            if summary['first_request']['started_at'].nil?
+              case asset['code'].to_i   # skip initial redirects
+              when 200...300
+                summary['first_request']['started_at'] = time
+                summary['first_request']['size'] = asset['size']
+                summary['first_request']['rt'] = asset['rt']
+                summary['first_request']['fb'] = asset['fb']
+              when 300...400
+                summary['redirect_count'] += 1
+              when 400...600
+                summary['error_count'] += 1
+              end
+            else
+              sample = (time.to_f - summary['first_request']['started_at'].to_f)
+              asset['offset'] = (sample*1000).to_i # convert back to ms
+              # The elapsed time before the first asset is requested
+              (summary['initial_offset'] ||= asset['offset']).to_i
+              summary['asset_count'] += 1
+              case asset['code'].to_i
+              when 200...300
+              when 300...400
+                summary['redirect_count'] += 1
+              when 400...600
+                summary['error_count'] += 1
+              end
             end
+            asset
           end
-          asset
         end
-        summary['total_size'] = summary['total_size']
         summary
       end
 
