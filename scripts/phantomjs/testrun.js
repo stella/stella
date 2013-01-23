@@ -116,6 +116,7 @@ page.onLoadStarted = function () {
     page.timingLoadStarted = +new Date();
     hardTimeout("typeof page.timingOnLoad != 'undefined'", function(elapsed) {
       console.log(json(createErrorHAR(page, "timeout", elapsed)));
+      page.abortTestplan = true;
       phantom.exit(0);
     }, 12000);
   } catch(err) {
