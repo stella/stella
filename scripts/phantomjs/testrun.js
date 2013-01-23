@@ -117,7 +117,7 @@ page.onLoadStarted = function () {
     hardTimeout("typeof page.timingOnLoad != 'undefined'", function(elapsed) {
       console.log(json(createErrorHAR(page, "timeout", elapsed)));
       phantom.exit(0);
-    }, 20000);
+    }, 12000);
   } catch(err) {
     handleError(err);
   }
