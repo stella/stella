@@ -33,10 +33,10 @@
       <ul id="pageTabs" class="nav nav-tabs">
         {{#owner_only}}
         <li class="active">
-          <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
-        </li>
-        <li>
           <a href="#recent" data-toggle="tab"><h4 class="cufon">Recent Checks</h4></a>
+        </li>
+        <li class="">
+          <a href="#screenshots" data-toggle="tab"><h4 class="cufon">Screenshots</h4></a>
         </li>
         <li>
           <a href="#data" data-toggle="tab"><h4 class="cufon">Data</h4></a>
@@ -47,7 +47,7 @@
       <div class="tab-content" style="background-color: #fff; margin-top: -18px; padding: 20px">
 
         {{#owner_only}}
-        <div id="recent" class="hidden">
+        <div id="recent" class="active">
           <ul class="">
             {{#plan.recent_testruns}}
             <li class="">
@@ -62,7 +62,7 @@
 
         </div>
 
-        <div id="screenshots" class="hidden active">
+        <div id="screenshots" class="hidden">
 
           <p><em>Screenshot history.</em></p>
 

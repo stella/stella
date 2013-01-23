@@ -317,7 +317,9 @@ class Stella
         self.custid = testplan.custid
       end
     end
-
+    def customer? cust
+      customer == cust
+    end
     #def results_cache
     # TODO: STORE FULL RESULTS IN REDIS
     #end

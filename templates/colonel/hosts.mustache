@@ -55,6 +55,7 @@
       </div>
 
       <div id="dump" class=" tab-pane active in">
+        <p><a href="/site/{{thishost.hostid}}">{{thishost.hostname}}</a><br/></p>
         <textarea class="span10" rows="20">{{thishost.to_yaml}}</textarea>
         <textarea class="span10" rows="20">{{thishost.testplans.to_yaml}}</textarea>
         <textarea class="span10" rows="20">{{thishost.product.to_yaml}}</textarea>
