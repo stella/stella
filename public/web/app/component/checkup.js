@@ -9,7 +9,7 @@ function checkCheckupStatus(checkid) {
   try {
     var statusURI = "/checkup/" + checkid + "/status";
     $.getJSON(statusURI, { field: 'status' }, function(res) {
-      if (res.status == "done" || res.status == "fubar") {
+      if ("new" != res.status && "pending" != res.status && "running" != res.status) {
         location.reload();
       } else if (res.status != prevStatus) {
         prevStatus = res.status;
@@ -32,18 +32,18 @@ $.fn.progressDots = function(){
     } else {
       text = jQuery(this).text( text.substring(0, spos) );
     }
-  }); 
+  });
 };
 
 $(function() {
   //$("#checkupResults").tabs();
-  
+
   $('#request button').click(function(e) {
     $("#request").hide();
     $("#form-signup").show();
     $('#signup-email').focus();
     $(document).keyup(function(e) {
-      if (e.keyCode == 27) { 
+      if (e.keyCode == 27) {
         $('#form-signup').hide();
         $('#request').fadeIn(200);
       }   // esc
@@ -56,5 +56,5 @@ $(function() {
   //  $("#request").show();
   //  e.preventDefault();
   //});
-  
+
 });

@@ -31,9 +31,13 @@ font-size: 24px;
 }
 
 
-#checkup .stats  li {
+#checkup .stats ul.success li {
   text-align: right;
   margin-bottom: 0px;
+}
+
+#checkup .stats div.timeout  {
+  margin-left: 50px;
 }
 
 #checkup .stats li.advice {
@@ -42,6 +46,15 @@ font-size: 24px;
   font-style: italic;
 }
 
+
+#checkup .stats .msg  {
+  margin-bottom: 0px;
+}
+
+#checkup .stats .msg .value {
+font-size: 48px;
+font-weight: bold;
+}
 
 #checkup .stats li.rt .value {
 font-size: 48px;
@@ -59,7 +72,7 @@ font-style: italic;
 font-weight: normal;
 }
 
-#checkup .stats ul {
+#checkup .stats ul.success {
   list-style: none;
 }
 
@@ -86,6 +99,8 @@ text-transform: uppercase;
 #checkup .stats img.screenshot {
   border: 1px solid #ccc;
   float: left;
+  width: 260px;
+  height: 180px;
 }
 
 #checkup #advice {

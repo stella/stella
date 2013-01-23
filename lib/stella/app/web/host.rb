@@ -394,6 +394,10 @@ module Stella::App::Views
       self[:is_done] = self[:testrun].status?(:done, :fubar, :cancelled)
       self[:is_fubar] = self[:testrun].status?(:fubar) || self[:testrun].status?(:error)
       self[:is_running] = self[:testrun].status?(:running, :pending, :new)
+      self[:ran_at] = self[:testrun].updated_at
+      self[:ran_at_js] = self[:ran_at].to_i * 1000
+      self[:ran_at_text] = epochformat(self[:ran_at])
+      self[:ran_at_natural] = natural_time(self[:ran_at].to_i)
       if self[:summary]
         self[:ran_at] =testrun.created_at.utc
         self[:ran_at_js] = self[:ran_at].to_i * 1000

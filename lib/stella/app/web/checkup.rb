@@ -77,8 +77,10 @@ module Stella::App::Views
       self[:this_path] = self[:this_uri].path
       self[:this_shortpath] = File.basename(self[:this_path]).shorten(30)
       self[:this_host_uri] = '%s://%s' % [self[:this_uri].scheme, self[:this_uri].host]
-      self[:is_done] = self[:checkup].status?(:done, :fubar, :cancelled)
-      self[:is_fubar] = self[:checkup].status?(:fubar) || checkup.status?(:error)
+      self[:is_done] = self[:checkup].status?(:done, :error, :timeout)
+      self[:is_success] = self[:checkup].status?(:done)
+      self[:is_error] = self[:checkup].status?(:error)
+      self[:is_timeout] = self[:checkup].status?(:timeout)
       self[:is_running] = self[:checkup].status?(:running, :pending, :new)
       self[:is_owner] = self[:checkup].customer?(cust)
       self[:is_homepage] = self[:this_path] == '/'

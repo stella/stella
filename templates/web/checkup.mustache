@@ -153,8 +153,8 @@
   {{/summary.auth_required}}
 
   <div class="span11">
-    {{^is_done}}<div class="line"></div>{{/is_done}}
-    {{#is_done}}<h1 class="cufon section">Results</h1>{{/is_done}}
+    {{^is_success}}<div class="line"></div>{{/is_success}}
+    {{#is_success}}<h1 class="cufon section">Results</h1>{{/is_success}}
   </div>
 
   <div class="span12">
@@ -173,14 +173,28 @@
       {{/checkup.screenshot}}
       </a>
       {{#is_done}}
-      <ul class="span4">
+      {{#is_timeout}}
+      <div class="timeout span4">
+        <p class="msg"><span class="value cufon slow">Timeout!</span></p>
+        <p><em>The checkup took too long to complete.</em></p>
+        <p>Potential reasons:
+          <ul>
+            <li>The target site is down. <a href="{{this_uri}}"><i class=" icon-globe"></i></a> </li>
+            <li>Our servers are very busy.</li>
+            <li>There was an unhandled error on our side.</li>
+          </ul>
+        </p>
+        <p>Try the checkup again. If you're still having problems, <a href="#feedback">let Tucker know</a>.</p>
+      </div>
+      {{/is_timeout}}
+      {{^is_timeout}}
+      <ul class="success span4">
         <li class="rt">
           <span class="value cufon">{{summary.on_load}}</span><span class="suffix cufon">milliseconds</span>
-          <!--<span class="description">Response Time</span>-->
         </li>
-        <li class="advice cufon">
-          <!-- "<strong class="slowish">Not so fast.</strong> Slower than most sites." -->
-        </li>
+        <!--<li class="advice cufon">
+          <strong class="slow">Not so fast.</strong> Slower than most sites.
+        </li>-->
         {{#summary.on_content_ready}}
         <li>
           <span class="value cufon">{{to_i}}ms</span>
@@ -203,6 +217,7 @@
           <span class="prettyDate cufon" title="{{checkup.updated_at.to_i}}">{{ran_at_natural}}</span>
         </li>
       </ul>
+      {{/is_timeout}}
       {{/is_done}}
       {{#is_running}}
       <div class="span3 offset1" style="padding-top: 60px">
@@ -223,15 +238,8 @@
     </div>
   </div>
 
-  {{#bogus}}
-  <div class="span11 offset1">
-    <p id="checkupSummary" class="columnHalf cufon"><strong class="tuckerProgress">Just a moment...</strong><br/>
-    {{#authenticated}}Our dynamos and doohickies are warming up.{{/authenticated}}<span id="checkupSummaryBottom"></span></p>
-    <br/><br/><br/>
-  </div>
-  {{/bogus}}
 
-  {{#is_done}}
+  {{#is_success}}
   <div class="span11 offset1">
     <div class="page-header span10">
       <h2><span class="cufon">Network Performance</span> &nbsp;<small class="cufon">All page requests including images, javascript, and CSS.</small></h2>
@@ -289,7 +297,7 @@
       </div>
     </div>
   </div>
-  {{/is_done}}
+  {{/is_success}}
 
 
 {{>_layout/footer}}
