@@ -2,4 +2,12 @@
 
 Stella v{{stella_version.to_s}} ({{stella_version.version.STORY}} by {{stella_version.version.OWNER}})
 
+<h3>{{sessions.size}} Sessions</h3>
+<ul>
+{{#sessions}}
+  <li>
+    <a href="/colonel/redump/?db=1&amp;q={{objid}}">{{objid.shorten}}</a> {{ttl.in_days}} days
+  </li>
+{{/sessions}}
+</ul>
 {{>_layout/footer}}

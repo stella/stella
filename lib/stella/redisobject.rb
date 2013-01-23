@@ -80,8 +80,8 @@ module Stella::RedisObject
     def fields
       redis_objects.collect() { |name, attributes| name }.sort
     end
-    def keys
-      redis.keys(key('*'))
+    def keys(suffix='*')
+      redis.keys(key('*' + suffix))
     end
     def count
       keys.size
@@ -191,6 +191,22 @@ module Stella::RedisObject::InstanceIndex
   end
   def index_del objid
     index.delete objid
+  end
+  def instances
+    # A hack for clearing non-existent object ids
+    deletable = []
+    ret = index.members.collect { |objid|
+      begin
+        load(objid)
+      rescue Stella::MissingItem
+        deletable << objid
+        nil
+      end
+    }.compact
+    redis.pipelined do
+      deletable.each { |objid| index.delete(objid) }
+    end
+    ret
   end
 end
 

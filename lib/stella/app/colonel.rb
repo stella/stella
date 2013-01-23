@@ -79,10 +79,12 @@ class Stella::App
         else
           db = (sess.vars[:redis_db] || 1).to_i
         end
+        profile = req.params[:profile]
+        profile ||= 'default'
         selected_db = Stella.redis(db)
         key = req.params[:key] unless req.params[:key].to_s.empty?
         query = req.params[:q] unless req.params[:q].to_s.empty?
-        databases = (0..15).to_a.collect { |idx| Stella.redis_connection[idx] }.compact
+        databases = (0..15).to_a.collect { |idx| p Stella.redis_connection; Stella.redis_connection[profile][idx] }.compact
         view = Stella::App::Colonel::Views::Redump.new req, sess, cust
         view.databases = databases
         view.selected_db = selected_db
@@ -151,6 +153,7 @@ module Stella::App::Colonel::Views
     def init *args
       @title = "Dashboard"
       colonel_vars if respond_to?(:colonel_vars)
+      self[:sessions] = Stella::Session.instances
     end
   end
 
