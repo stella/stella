@@ -337,6 +337,8 @@ $(function() {
   $('.host-stop').click(postAndRefresh);
   $('.host-destroy').click(postAndRedirect);
   $('.contact-delete').click(postAndDelete);
+  $('.machine-delete').click(postAndDelete);
+  $('.machine-tidyup').click(postAndRefresh);
 
   $('.checkupSummaryToggle').click(function() {
     $("#checkupSummary").slideToggle();

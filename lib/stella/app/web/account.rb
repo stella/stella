@@ -1,4 +1,3 @@
-require 'stripe'
 
 class Stella::App::Account
   include Stella::App::Base
@@ -297,7 +296,7 @@ module Stella::App::Views
           {:tab => :sites,   :text => "Sites" }
         ]
         self[:selected_tabid] = req.params[:tabid]
-        self[:tabs] << {:tab => :machines, :text => "Machines" } if cust.colonel?
+        self[:tabs] << {:tab => :machines, :text => "Machines" } if cust.data['ui_beta']
         self[:hosts] = cust.hosts :order => [ :response_time.desc, :monitored.desc, :hidden ]
       end
     end

@@ -171,7 +171,7 @@ end
 module Stella::RedisObject::TimeStamps
   def created_age() Stella.now.to_i - (created_at || -1) end
   def created_at() self[:created_at].to_f end
-  def updated_age() Stella.now.to_i - (created_at || -1) end
+  def updated_age() Stella.now.to_i - (updated_at || -1) end
   def updated_at() self[:updated_at].to_f end
   def updated! now=Stella.now.to_i
     self[:updated_at] = now

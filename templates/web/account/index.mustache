@@ -192,8 +192,8 @@
               <thead>
                 <tr>
                   <th>Host</th>
+                  <th>Status</th>
                   <th>&nbsp;</th>
-                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,7 +222,7 @@
           </div>
         </div>
 
-        {{#colonels_only}}
+        {{#cust.data.ui_beta}}
         <div class="tab-pane" id="machines">
           <div class="row well static">
           <div class="span8">
@@ -233,36 +233,67 @@
                 <tr>
                   <th>hostname</th>
                   <th>ip address</th>
-                  <th>region</th>
-                  <th>nation</th>
                   <th>city</th>
-                  <th>area</th>
+                  <th>workers</th>
+                  <th>age</th>
                   <th>status</th>
                   <th>&nbsp;</th>
                 </tr>
               </thead>
               <tbody>
                 {{#cust.remote_machines}}
-                <tr>
-                  <td>{{hostname}}</td>
+                <tr id="object-{{machineid}}">
+                  <td>
+                    <a href="#modal-{{machineid}}" data-toggle="modal">{{hostname}}</a>
+                  </td>
                   <td>{{ipaddress}}</td>
-                  <td>{{region}}</td>
-                  <td>{{nation}}</td>
-                  <td>{{area}}</td>
                   <td>{{city}}</td>
+                  <td>{{worker_profiles.size}}</td>
+                  <td>{{created_age.in_days}}d</td>
                   <td>{{status}}</td>
                   <td>
-                    <!--<a href="/site/{{hostid}}/hide" class="machine-hide"><i class="icon icon-pause"></i></a>-->
-                    <a href="/machine/{{machineid}}/hide" class="machine-hide"><i class="icon icon-remove-sign"></i></a>
+                    <div class="btn-group">
+                      <button class="btn btn-mini dropdown-toggle" data-toggle="dropdown"><i class="icon-pencil"></i> <span class="caret"></span></button>
+                      <ul class="dropdown-menu pull-right">
+                        <li class="">
+                          <a href="/machine/{{machineid}}/tidyup" data-objid="{{machineid}}" class="machine-tidyup">
+                           Remove Stale Workers
+                          </a>
+                        </li>
+                        <li class="divider"></li>
+                        <li class="">
+                          <a href="/machine/{{machineid}}/delete" data-objid="{{machineid}}" class="machine-delete">
+                          <i class="icon-remove-sign"></i> Delete Machine
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
                   </td>
                 </tr>
+                <div class="hide hidden modal" id="modal-{{machineid}}" role="dialog" aria-labelledby="modal-{{machineid}}" aria-hidden="true">
+                  <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    <h3 id="myModalLabel">Machine Workers</h3>
+                  </div>
+                  <div class="modal-body">
+                    <ul>
+                      {{#workers}}
+                      <li class="{{^online}}light{{/online}}">
+                      <span class="mono">{{workerid}}</span> @ {{interval}}s intervals ({{assumed_status}})</li>
+                      {{/workers}}
+                    </ul>
+                  </div>
+                  <div class="modal-footer">
+                    <button class="btn" data-dismiss="modal" aria-hidden="true"> Close</button>
+                  </div>
+                </div>
                 {{/cust.remote_machines}}
-              </tbody>
+            </tbody>
             </table>
           </div>
           </div>
         </div>
-        {{/colonels_only}}
+        {{/cust.data.ui_beta}}
 
       </div>
     </div>

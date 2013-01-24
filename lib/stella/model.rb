@@ -26,6 +26,8 @@ class Stella
         self.created_at ||= Stella.now
         self.updated_at = Stella.now
       end
+      def updated_age() (Stella.now - (updated_at || -1)).to_i end
+      def created_age() (Stella.now - (updated_at || -1)).to_i end
     end
     module PerformanceSummary
       attr_reader :classes
@@ -253,11 +255,10 @@ class Stella
     property :ipaddress,    String, :required => true
     property :hostname,     String, :length => 64, :required => true
     property :name,         String, :length => 100
-    property :area,         Enum[ :na_east ], :default => :na_east, :required => true
     property :city,         String
     property :status,       Enum[ :online, :offline ], :default => :online
     property :hidden,       Boolean, :default => false
-    gibbler :custid, :name, :hostname, :ipaddress, :location
+    gibbler :custid, :name, :hostname, :ipaddress, :city
     before :valid?, :normalize
     include Stella::Model::TimeStamps
     include Stella::Model::DataField

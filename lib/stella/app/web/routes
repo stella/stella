@@ -91,6 +91,11 @@ POST  /login/reset/:secret                            Stella::App::Account#login
 GET   /contributor                                    Stella::App::Account#contributors
 POST  /contributor                                    Stella::App::Account#contributors
 
+##########################################################################  MACHINES
+
+POST  /machine/:machineid/delete                      Stella::App::Machine#delete
+POST  /machine/:machineid/tidyup                      Stella::App::Machine#tidyup
+
 
 ##########################################################################  INFO
 GET   /info/company                                   Stella::App::Info#company

@@ -176,3 +176,4 @@ end
 
 require 'stella/logic/account'
 require 'stella/logic/checkup'
+require 'stella/logic/machine'
