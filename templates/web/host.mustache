@@ -44,7 +44,7 @@
           <a href="#settings" data-toggle="tab"><h4 class="cufon">Settings</h4></a>
         </li>
         {{/host.monitored}}
-        <li>
+        <li class="{{^host.monitored}}active{{/host.monitored}}">
           <a href="#pages" data-toggle="tab"><h4 class="cufon">Pages</h4></a>
         </li>
         <li>

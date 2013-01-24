@@ -191,16 +191,20 @@
             <table class="table table-condensed table-striped">
               <thead>
                 <tr>
+                  <th>Host</th>
                   <th>&nbsp;</th>
-                  <th>&nbsp;</th>
-                  <th>&nbsp;</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {{#hosts}}
                 <tr>
-                  <td>{{hostname}}</td>
-                  <td>{{#hidden}}<em>hidden</em>{{/hidden}}</td>
+                  <td>
+                    <a href="/site/{{hostname}}" class="{{#hidden}}light{{/hidden}}{{#monitored}}monitored{{/monitored}}">{{hostname}}</a></td>
+                  <td>
+                    {{#hidden}}<em>hidden</em>{{/hidden}}
+                    {{#monitored}}<em>monitored</em>{{/monitored}}
+                  </td>
                   <td>
                     <!--<a href="/site/{{hostid}}/hide" class="machine-hide"><i class="icon icon-pause"></i></a>-->
                     {{^hidden}}

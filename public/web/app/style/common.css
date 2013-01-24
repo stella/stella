@@ -225,6 +225,10 @@ body{background: #eee url("/img/background.png") repeat;font-family:Verdana,Aria
 .thumbnail img { padding-bottom: 10px; width: 210px; height: 150px }
 .thumbnail i.icon { float: right }
 
+a.monitored {
+  font-weight: bold;
+}
+
 .grey, .gray, .light { color: #999 }
 .small {font-size: 90%}
 

@@ -366,7 +366,7 @@ module Stella::App::Views
         ]
         self[:selected_tabid] = req.params[:tabid]
         self[:tabs] << {:tab => :machines, :text => "Machines" } if cust.colonel?
-        self[:hosts] = cust.hosts :order => [ :response_time.desc, :hidden ]
+        self[:hosts] = cust.hosts :order => [ :response_time.desc, :monitored.desc, :hidden ]
       end
     end
 
