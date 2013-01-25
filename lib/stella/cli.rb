@@ -72,18 +72,19 @@ class Stella
     end
 
     def start_timingbelt
-      belt_index, belt_count = argv[0].to_i, argv[1].to_i
-      belt_index ||= 1
-      belt_count ||= 1
+      belt_index, belt_count = (argv[0] || 1).to_i, (argv[1] || 1).to_i
       start_worker Stella::Worker::TimingBelt, belt_index, belt_count
     end
 
     def run_timingbelt
-      belt_index, belt_count = argv[0].to_i, argv[1].to_i
-      belt_index ||= 1
-      belt_count ||= 1
+      belt_index, belt_count = (argv[0] || 1).to_i, (argv[1] || 1).to_i
       loop_start = Stella.now
-      hosts = Stella::Host.by_timingbelt belt_index, belt_count
+      loop_start -= option.offset.to_i
+      if option.hostid
+        hosts = [Stella::Host.first(:hostid => option.hostid)]
+      else
+        hosts = Stella::Host.by_timingbelt belt_index, belt_count
+      end
       Stella.li "[%d/%d]: %s hosts @ %s" % [belt_index, belt_count, hosts.size, loop_start]
       Stella::Host.schedule hosts, loop_start
     end

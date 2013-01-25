@@ -45,7 +45,10 @@ class Stella::CLI::Definition
   option :d, :daemon, "Daemonize"
   command :start_timingbelt => Stella::CLI
 
+  usage "stella run-timingbelt -H HOSTID -o 300"
   usage "stella run-timingbelt [INDEX] [COUNT]"
+  option :o, :offset, Integer, "Offset time to subtract from start time (in seconds)"
+  option :H, :hostid, String, "Hostname"
   command :run_timingbelt => Stella::CLI
 
   option :d, :daemon, "Daemonize"
