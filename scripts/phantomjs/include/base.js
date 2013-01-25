@@ -116,9 +116,6 @@ function hardTimeout(testFx, onTimeout, timeOutMillis) {
  * @param callback Callback function
  */
 function renderUrlToFile(uri, file, width, height, callback) {
-  var page = require('webpage').create();
-  page.viewportSize = { width: width, height : height };
-  page.settings.userAgent = "BlameStella.com renderbot";
   page.open(uri, function(status){
    if ( status !== "success") {
      console.log("Unable to render '"+uri+"' ");

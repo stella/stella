@@ -110,6 +110,7 @@ page.onInitialized = function () {
 //};
 
 // Fired after onInitialized (usually, but not always)
+// Can be called twice on redirects.
 page.onLoadStarted = function () {
   try {
     //console.log("# loadStart");
