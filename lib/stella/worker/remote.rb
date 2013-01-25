@@ -24,11 +24,9 @@ class Stella
       Stella.li "Created: #{name} (#{self.class})"
     end
     def workload
-      ret1 = @api.post '/worker/pull', :interval => interval, :workerid => workerid
-      ret1["jobs"] ||= []
-      ret1["jobs"].each do |job|
-        handle_job job
-      end
+      ret = @api.post '/worker/pull', :interval => interval, :workerid => workerid
+      ret["jobs"] ||= []
+      ret["jobs"].each { |job| handle_job job }
     end
     def handle_job job
       return if force_exit

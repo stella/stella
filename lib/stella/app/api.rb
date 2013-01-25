@@ -76,16 +76,13 @@ class Stella
             interval = 3 if interval < 3
             interval = 120 if interval > 120
             opts = {
-              :custid => cust.custid,
               :hostname => sysinfo[:hostname],
               :ipaddress => req.client_ipaddress
             }
-            machine = Stella::RemoteMachine.first opts
-            Stella::Logic.safedb { cust.save }
+            machine = cust.remote_machines.first opts
             if machine.nil?
               machine = Stella::RemoteMachine.new :hostname => sysinfo[:hostname],
-              :ipaddress => req.client_ipaddress, :customer => cust
-              cust.normalize
+                :ipaddress => req.client_ipaddress, :customer => cust
               cust.save
             end
             opts = {
@@ -115,6 +112,7 @@ class Stella
             else
               worker.status = :offline
               worker.save
+              worker.destroy
               Stella::Analytics.event "Remote Worker Deregister"
               res.body = content(:workerid => worker.workerid, :status => worker.status)
             end
@@ -127,12 +125,16 @@ class Stella
             logic = Stella::Logic::Generic.new(sess, cust, req.params)
             logic.raise_concerns(:public_api_get)
             worker = Stella::WorkerProfile.first :workerid => req.params[:workerid]
-            jobs = self.class.find_jobs([:montreal]) || []
-            output = jobs.collect { |job|
-              self.class.prepare_job_output(worker, job)
-            }
-            Stella::Analytics.event "Remote Worker Pull"
-            res.body = content(:workerid => worker.workerid, :jobs => output)
+            if worker.nil?
+               # TODO
+            else
+              jobs = self.class.find_jobs([:montreal]) || []
+              output = jobs.collect { |job|
+                self.class.prepare_job_output(worker, job)
+              }
+              Stella::Analytics.event "Remote Worker Pull"
+              res.body = content(:workerid => worker.workerid, :jobs => output)
+            end
           end
         end
 
@@ -142,71 +144,75 @@ class Stella
             logic = Stella::Logic::Generic.new(sess, cust, req.params)
             logic.raise_concerns(:public_api_get)
             worker = Stella::WorkerProfile.first :workerid => req.params[:workerid]
-            result = if req.params[:result]
-              Hash.from_json(Zlib::Inflate.inflate(req.params[:result]))
-            end
-            Stella::Analytics.event "Remote Worker Push"
-            # p [req.params[:result].to_s.size, req.params[:screenshot].to_s.size]
-            job = Stella::Job.load req.params[:jobid]
-            if job.nil?
-              res.status = 404
-              res.body = content(:msg => "Unknown job")
+            if worker.nil?
             else
-              case job.type.to_s
-              when 'Stella::Job::Testrun'
-                run = Stella::Testrun.first :runid => job['runid']
-                plan = Stella::Testplan.first :planid => job['planid']
-                begin
-                  run.summary = Stella::Testrun.parse_har(result)
-                rescue => ex
-                  Stella.li [plan.uri, ex.message].inspect
-                  Stella.li ex.backtrace
-                end
-                if run.summary.nil?
-                  run.status = :failed
-                elsif run.summary['status'] == 'timeout'
-                  run.status = :timeout
-                else
-                  run.status = :done
-                end
-                plan.testruns << run
-                Stella::Logic.safedb {
-                  #Stella.ld "Updating testrun: #{run.runid}"
-                  run.save
-                  #Stella.ld "Updating testplan: #{plan.planid}"
-                  plan.save
-                }
-                if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
-                  plan.host.settings['gaid'] = run.summary['gaid']
-                  plan.host.save
-                end
-                if run.summary['total_size']
-                  Stella::Analytics.event "Bytes In", run.summary['total_size']
-                end
-                if run.metrics?
-                  interval, now = plan.host.settings['interval'].to_i, Stella.now
-
-                  plan.add_metrics run.started_at, run.metrics
-                  plan.update_stat_summaries interval, now
-
-                  plan.host.add_metrics run.started_at, run.metrics
-                  plan.host.update_stat_summaries interval, now
-                else
-                  #Stella.li "no metrics"
-                end
-
-              when 'Stella::Job::Checkup'
+              result = if req.params[:result]
+                Hash.from_json(Zlib::Inflate.inflate(req.params[:result]))
+              end
+              Stella::Analytics.event "Remote Worker Push"
+              # p [req.params[:result].to_s.size, req.params[:screenshot].to_s.size]
+              job = Stella::Job.load req.params[:jobid]
+              if job.nil?
+                res.status = 404
+                res.body = content(:msg => "Unknown job")
               else
-                p 2
+                case job.type.to_s
+                when 'Stella::Job::Testrun'
+                  run = Stella::Testrun.first :runid => job['runid']
+                  plan = Stella::Testplan.first :planid => job['planid']
+                  begin
+                    run.summary = Stella::Testrun.parse_har(result)
+                  rescue => ex
+                    Stella.li [plan.uri, ex.message].inspect
+                    Stella.li ex.backtrace
+                  end
+                  if run.summary.nil?
+                    run.status = :failed
+                  elsif run.summary['status'] == 'timeout'
+                    run.status = :timeout
+                  else
+                    run.status = :done
+                  end
+                  plan.testruns << run
+                  Stella::Logic.safedb {
+                    #Stella.ld "Updating testrun: #{run.runid}"
+                    run.save
+                    #Stella.ld "Updating testplan: #{plan.planid}"
+                    plan.save
+                  }
+                  if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
+                    plan.host.settings['gaid'] = run.summary['gaid']
+                    plan.host.save
+                  end
+                  if run.summary['total_size']
+                    Stella::Analytics.event "Bytes In", run.summary['total_size']
+                  end
+                  if run.metrics?
+                    interval, now = plan.host.settings['interval'].to_i, Stella.now
+
+                    plan.add_metrics run.started_at, run.metrics
+                    plan.update_stat_summaries interval, now
+
+                    plan.host.add_metrics run.started_at, run.metrics
+                    plan.host.update_stat_summaries interval, now
+                  else
+                    #Stella.li "no metrics"
+                  end
+
+                when 'Stella::Job::Checkup'
+                else
+                  p 2
+                end
+                output = []
+                if req.params[:continue].to_s == "true"
+                  jobs = self.class.find_jobs( [:montreal]) || []
+                  output = jobs.collect { |job|
+                    self.class.prepare_job_output(worker, job)
+                  }
+                end
+                res.body = content(:workerid => worker.workerid, :jobs => output, :msg => :thanks!)
               end
-              output = []
-              if req.params[:continue].to_s == "true"
-                jobs = self.class.find_jobs( [:montreal]) || []
-                output = jobs.collect { |job|
-                  self.class.prepare_job_output(worker, job)
-                }
-              end
-              res.body = content(:workerid => worker.workerid, :jobs => output, :msg => :thanks!)
+              worker.save
             end
           end
         end
