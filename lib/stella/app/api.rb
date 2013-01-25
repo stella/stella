@@ -128,6 +128,8 @@ class Stella
             if worker.nil?
                # TODO
             else
+              worker.update_timestamps
+              worker.save
               jobs = self.class.find_jobs([:montreal]) || []
               output = jobs.collect { |job|
                 self.class.prepare_job_output(worker, job)
@@ -146,6 +148,8 @@ class Stella
             worker = Stella::WorkerProfile.first :workerid => req.params[:workerid]
             if worker.nil?
             else
+              worker.update_timestamps
+              worker.save
               result = if req.params[:result]
                 Hash.from_json(Zlib::Inflate.inflate(req.params[:result]))
               end

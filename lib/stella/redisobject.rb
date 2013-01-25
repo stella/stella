@@ -235,7 +235,6 @@ module Stella::RedisObject::Vars
   end
 end
 
-
 module Stella::Entropy
   extend self
   @values = Redis::Set.new(Stella::RedisObject.key('stella', 'entropy'), Stella.redis(11))
