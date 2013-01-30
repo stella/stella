@@ -107,7 +107,6 @@ class Stella::Logic::Account < Stella::Logic::Base
 
 end
 
-require 'pp'
 class Stella::Logic::GitHubSignup < Stella::Logic::Base
   attr_reader :token, :github, :emails, :email, :login
   def raise_concerns
@@ -148,7 +147,18 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     end
     sess[:custid] = cust.custid
     sess[:authenticated] = true
-    if new_cust
+    if new_cust # if the customer isn't just logging in
+      [emails, github['email']].flatten.uniq.compact.each do |email|
+        next if email.empty?
+        opts = {:email => email, :customer => cust}
+        #opts[:name] = name if name
+        #opts[:phone] = phone if phone
+        begin
+          contact = Stella::Contact.create opts
+        rescue DataObjects::IntegrityError => ex
+          Stella.li "[contact-create] duplicate"
+        end
+      end
       welcome_msg = Stella::Email::Account::Welcome.new cust, :via => :github
       welcome_msg.send_email
       Stella::Analytics.event "New Customers"
