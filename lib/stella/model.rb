@@ -78,7 +78,7 @@ class Stella
     include Gibbler::Complex
     property :id,         Serial, :key => true
     property :custid,     String, :unique_index => true, :required => true
-    property :email,      String, :unique_index => true, :required => true
+    property :email,      String, :unique_index => true, :required => true, :length => 100
     property :phone,      String, :required => false
     property :role,       Enum[ :anonymous, :colonel, :customer ], :default => :customer
     property :name, String
