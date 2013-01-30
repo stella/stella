@@ -107,33 +107,38 @@ class Stella::Logic::Account < Stella::Logic::Base
 
 end
 
+require 'pp'
 class Stella::Logic::GitHubSignup < Stella::Logic::Base
-  attr_reader :token, :github
+  attr_reader :token, :github, :emails, :email, :login
   def raise_concerns
     raise Stella::App::Problem, 'No github token provided' if token.empty?
     @github = HTTParty.get('https://api.github.com/user?access_token=%s' % token)
+    @emails = HTTParty.get('https://api.github.com/user/emails?access_token=%s' % token)
+    if github.nil? || github.empty?
+      raise Stella::App::Problem, 'Could not retrieve github profile'
+    end
+    @login = github['login']
+    @email = @emails.last || github['email'] || ('%s+GITHUB@blamestella.com' % login)
   end
   def process
-    if github['email'].to_s.empty?
-      github['email'] = '%s+GITHUB@blamestella.com' % github['login']
-    end
-    @cust = Stella::Customer.first(:github_token => token, :nickname => github['login'])
+    @cust = Stella::Customer.first(:github_token => token, :nickname => login)
     new_cust = false
     if cust.nil?
-      if !Stella::Customer.first(:email => github['email']).nil?
-        raise Stella::App::SignupError.new(github['email'], "#{github['email']} already has an account. Try logging in.")
-      elsif !Stella::Customer.first(:nickname => github['login']).nil?
-        raise Stella::App::SignupError.new(github['login'], "#{github['login']} already has an account. Try logging in.")
+      if !Stella::Customer.first(:email => email).nil?
+        raise Stella::App::SignupError.new(email, "#{email} already has an account. Try logging in.")
+      elsif !Stella::Customer.first(:nickname => login).nil?
+        raise Stella::App::SignupError.new(login, "#{login} already has an account. Try logging in.")
       end
-      @cust = Stella::Customer.new :email => github['email'], :nickname => github['login']
+      @cust = Stella::Customer.new :email => email, :nickname => login
       new_cust = true
     end
     cust.name = github['name']
     cust.location = github['location']
     cust.company = github['company']
-    cust.nickname = github['login']
+    cust.nickname = login
     cust.github_token = token
     cust.data['github'] = github.parsed_response
+    cust.data['github_emails'] = emails
     begin
       cust.save
     rescue DataObjects::IntegrityError => ex
