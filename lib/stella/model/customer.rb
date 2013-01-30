@@ -20,7 +20,7 @@ class Stella
       self.payment_token = nil
       self.nickname = nil
       # And so we don't accidentally email
-      self.email = "%s-DELETED-%s" % [self.email, SecureRandom.hex[0..7]]
+      self.email = "%s-D-%s" % [self.email, SecureRandom.hex[0..7]]
       self.products.each do |product|
         product.active = false
         product.save
@@ -57,6 +57,7 @@ class Stella
       self.custid ||= self.gibbler
       self.apikey ||= Gibbler.new(Stella.now.to_f, custid, entropy, :apikey)
       self.external_id ||= Gibbler.new(custid, entropy, :external_id).base(36).shorten(20)
+      self.email = self.email.downcase
     end
 
     def contact
