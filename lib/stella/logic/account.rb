@@ -148,6 +148,17 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
     sess[:custid] = cust.custid
     sess[:authenticated] = true
     if new_cust # if the customer isn't just logging in
+      if !github['blog'].to_s.empty?
+        begin
+          uri = Stella::Utils.uri(github['blog'])
+          logic = Stella::Logic::CreateCheckup.new sess, cust, :uri => uri
+          logic.raise_concerns(:create_checkup)
+          logic.create
+          logic.queue_jobs
+        rescue => ex
+          Stella.li "[github-signup] error creating checkup"
+        end
+      end
       [emails, github['email']].flatten.uniq.compact.each do |email|
         next if email.empty?
         opts = {:email => email, :customer => cust}
@@ -156,9 +167,10 @@ class Stella::Logic::GitHubSignup < Stella::Logic::Base
         begin
           contact = Stella::Contact.create opts
         rescue DataObjects::IntegrityError => ex
-          Stella.li "[contact-create] duplicate"
+          Stella.li "[github-signup] duplicate contact"
         end
       end
+
       welcome_msg = Stella::Email::Account::Welcome.new cust, :via => :github
       welcome_msg.send_email
       Stella::Analytics.event "New Customers"
