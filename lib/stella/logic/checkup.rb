@@ -105,13 +105,13 @@ module Stella::Logic
     end
 
     def queue_jobs
+      if host.screenshots.empty?
+        Stella::Job::RenderHost.enqueue :hostid => host.hostid
+      end
       Stella::Job::Checkup.enqueue :checkid => checkup.checkid
       #if testplan.screenshots.empty?
       #  Stella::Job::RenderPlan.enqueue :planid => testplan.planid
       #end
-      if host.screenshots.empty?
-        Stella::Job::RenderHost.enqueue :hostid => host.hostid
-      end
     end
 
     protected
