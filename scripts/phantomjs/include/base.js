@@ -116,6 +116,7 @@ function hardTimeout(testFx, onTimeout, timeOutMillis) {
  * @param callback Callback function
  */
 function renderUrlToFile(uri, file, width, height, callback) {
+  page.viewportSize = { width: (width || 1024), height : (height || 768)};
   page.open(uri, function(status){
    if ( status !== "success") {
      console.log("Unable to render '"+uri+"' ");
