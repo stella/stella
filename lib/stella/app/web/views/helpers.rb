@@ -28,11 +28,11 @@ module Stella::App::Views::Helpers
       { :name => name, :value => value }
     end
     def pretty_ms(v)
-      return 0 if Float === v && v.nan?
+      return 0 if v.nil? || Float === v && v.nan?
       v < 1 ? v.fineround(2) : v.to_i
     end
     def pretty_percent(v)
-      return 0 if Float === v && v.nan?
+      return 0 if v.nil? || Float === v && v.nan?
       v = v * 100
       v.to_i.zero? ? ('%.1f' % v) : v.to_i
     end

@@ -88,10 +88,10 @@ class Stella
           %w[site.host site.scheme site.port].each do |k|
             @config[k.tr('.', '_')] = Stella.config[k]
           end
-          jsvars << jsvar(:shrimp, sess.add_shrimp) if sess
-          jsvars << jsvar(:custid, cust.custid)
-          jsvars << jsvar(:email, cust.email)
         end
+        jsvars << jsvar(:shrimp, sess.add_shrimp) if sess
+        jsvars << jsvar(:custid, cust.custid)
+        jsvars << jsvar(:email, cust.email)
         self[:is_local] = local?
       end
       def add_message msg

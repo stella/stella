@@ -308,6 +308,16 @@ class Stella::RangeMetrics
       instance_variable_set("@#{rangeid}", r)
     end
   end
+  def first count=1
+    epoint = 0+count
+    members = range(0, epoint)
+    count == 1 ? members.first : members
+  end
+  def last count=1
+    spoint = -1 - count
+    members = range(spoint, -1)
+    count == 1 ? members.first : members
+  end
   def range duration, epoint=Stella.now
     r = rangeraw duration, epoint
     #r.collect { |str| Yajl::Parser.parse(str) }
@@ -315,9 +325,13 @@ class Stella::RangeMetrics
     Yajl::Parser.parse(r.join($/)) { |obj| objects << obj }
     objects
   end
-  def rangeraw duration, epoint=Stella.now
-    spoint = epoint.to_i-duration.to_i
-    metrics.rangebyscore spoint, epoint.to_i
+  def rangeraw duration_or_spoint, epoint=Stella.now
+    if Time === epoint
+      spoint = epoint.to_i-duration_or_spoint.to_i
+      metrics.rangebyscore spoint, epoint.to_i
+    else
+      metrics.range duration_or_spoint, epoint
+    end
   end
   class << self
     attr_reader :ranges

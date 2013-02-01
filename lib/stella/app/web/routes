@@ -45,6 +45,9 @@ POST  /site/:hostid/start                             Stella::App::Host#start
 POST  /site/:hostid/upgrade                           Stella::App::Host#upgrade
 POST  /site/:hostid/destroy                           Stella::App::Host#destroy
 
+GET   /site/:hostid/geckoboard/:content.:format       Stella::App::Host#geckoboard_dump
+GET   /host/:hostid/geckoboard/:content.:format       Stella::App::Host#geckoboard_dump
+
 GET   /testrun/:runid                                 Stella::App::Host#testrun
 GET   /plan/:planid                                   Stella::App::Host#plan
 GET   /plan/:planid/report.:format                    Stella::App::Host#plan_report_dump
@@ -95,6 +98,7 @@ POST  /contributor                                    Stella::App::Account#contr
 
 POST  /machine/:machineid/delete                      Stella::App::Machine#delete
 POST  /machine/:machineid/tidyup                      Stella::App::Machine#tidyup
+POST  /machine/:machineid                             Stella::App::Machine#update
 
 
 ##########################################################################  INFO

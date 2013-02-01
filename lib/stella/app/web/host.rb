@@ -19,6 +19,36 @@ class Stella::App::Host
     host && (cust.colonel? || host.customer?(cust))
   end
 
+  def geckoboard_dump
+    publically do
+      logic = Stella::Logic::MetricsCollector.new sess, cust, req.params
+      # Content type first in case there is an exception.
+      res.header['Content-Type'] =  'text/plain'
+      #logic.raise_concerns
+      if host && logic.content == :meter
+        most_recent = host.rangemetrics.last || {'on_load' => 0}
+        past_12h = host.rangemetrics.past_12h
+        max = past_12h ? past_12h['on_load_max'] : 0
+        min = past_12h ? past_12h['on_load_min'] : 0
+        Stella::App::StaticHelpers.req = req
+        data = {
+          :item => Stella::App::StaticHelpers.pretty_ms(most_recent['on_load']),
+          :max => {
+            :text => "Max (past 12h)",
+            :value => Stella::App::StaticHelpers.pretty_ms(max)
+          },
+          :min => {
+            :text => "Min (past 12h)",
+            :value => Stella::App::StaticHelpers.pretty_ms(min)
+          }
+        }.to_json
+        res.body = logic.jsonp ? Stella::App::StaticHelpers.jsonp(data, logic.jsonp) : data
+      else
+        res.status = 404
+      end
+    end
+  end
+
   def report_dump
     publically do
       assert_params :format
