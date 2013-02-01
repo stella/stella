@@ -32,7 +32,7 @@ class Stella::App::Host
         min = past_12h ? (past_12h['on_load_min'] : 0).to_i
         Stella::App::StaticHelpers.req = req
         data = {
-          :item => Stella::App::StaticHelpers.pretty_ms(most_recent['on_load']),
+          :item => Stella::App::StaticHelpers.pretty_ms(most_recent['on_load'].to_i),
           :max => {
             :text => "Max (past 12h)",
             :value => Stella::App::StaticHelpers.pretty_ms(max)
