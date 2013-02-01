@@ -28,8 +28,8 @@ class Stella::App::Host
       if host && logic.content == :meter
         most_recent = host.rangemetrics.last || {'on_load' => 0}
         past_12h = host.rangemetrics.past_12h
-        max = past_12h ? past_12h['on_load_max'] : 0
-        min = past_12h ? past_12h['on_load_min'] : 0
+        max = past_12h ? (past_12h['on_load_max'] : 0).to_i
+        min = past_12h ? (past_12h['on_load_min'] : 0).to_i
         Stella::App::StaticHelpers.req = req
         data = {
           :item => Stella::App::StaticHelpers.pretty_ms(most_recent['on_load']),
