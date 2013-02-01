@@ -29,7 +29,7 @@ module Stella::App::Views::Helpers
     end
     def pretty_ms(v)
       return 0 if v.nil? || Float === v && v.nan?
-      v < 1 ? v.fineround(2) : v.to_i
+      v.to_i < 1 ? v.fineround(2) : v.to_i
     end
     def pretty_percent(v)
       return 0 if v.nil? || Float === v && v.nan?
