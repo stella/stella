@@ -75,6 +75,9 @@ module Stella::Logic
     ['+', phone.gsub(/\D/, '')].join
   end
 
+  def self.valid_format?(format)
+    ['json','jsonp','html','csv','yaml','atom','txt','xml'].member?(format.to_s)
+  end
 end
 
 class Stella::Logic::Generic < Stella::Logic::Base
@@ -177,3 +180,4 @@ end
 require 'stella/logic/account'
 require 'stella/logic/checkup'
 require 'stella/logic/machine'
+require 'stella/logic/metrics'
