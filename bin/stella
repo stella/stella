@@ -40,6 +40,8 @@ class Stella::CLI::Definition
   command :stop_workers => Stella::CLI
   option :f, :force
   command :stop_worker => Stella::CLI
+  option :l, :local, "Local worker"
+  command :run_worker => Stella::CLI
 
   usage "stella start-timingbelt [INDEX] [COUNT]"
   option :d, :daemon, "Daemonize"
@@ -79,7 +81,7 @@ class Stella::CLI::Definition
   usage "stella checkup <HOSTNAME>"
   command :checkup => Stella::CLI
 
-  usage "stella testrun <HOSTNAME>"
+  usage "stella testrun <PLANID>"
   command :testrun => Stella::CLI
 
   option :u, :customer, String, "Customer email"

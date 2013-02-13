@@ -43,6 +43,12 @@ class Stella
       exit 1
     end
 
+    def run_worker worker_class=Stella::Worker::Remote, *worker_args
+      worker_class = Stella::Worker::Local if @option.local
+      worker = worker_class.new *worker_args
+      worker.run_once
+    end
+
     # stella start-worker
     def start_worker worker_class=Stella::Worker::Remote, *worker_args
       worker_class = Stella::Worker::Local if @option.local
