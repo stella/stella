@@ -1,11 +1,7 @@
 # http://gembundler.com/man/gemfile.5.html
 source "https://rubygems.org/"
 
-# There's a bug in 1.3.6 regarding large POST requests
-# (RangeError: exceeded available parameter key space)
-# See: http://stackoverflow.com/questions/9122411/rails-javascript-too-many-parameter-keys-whats-a-good-way-to-normalize-f
-gem 'rack', '1.4.1'
-
+gem 'rack', '1.4.5'
 gem 'thin', '1.5.0'
 
 gem 'yajl-ruby', '1.1.0'
@@ -41,7 +37,7 @@ group :backend do
 end
 
 # SOLUTIOUS FAMILY LIBS
-gem 'otto', '0.3.1'
+gem 'otto', '0.3.2'
 gem 'drydock', '0.6.9'
 gem 'annoy', '0.5.6'
 gem 'gibbler', '0.9.0'
