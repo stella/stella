@@ -72,6 +72,7 @@ module Stella::App::Views
       @js << '/app/component/checkup.js'
       @css << '/app/style/component/checkup.css'
       self[:checkup], self[:testplan] = checkup, checkup.testplan
+      self[:testrun] = self[:checkup]
       self[:owner], self[:host] = self[:checkup].customer, self[:checkup].host
       self[:this_uri] = self[:testplan].requests.first
       self[:this_path] = self[:this_uri].path

@@ -25,7 +25,39 @@ class Stella
       end
     end
   end
-
+  class Incident
+    def detected_age() (Stella.now - (detected_at || -1)).to_i end
+    def verified_age() (Stella.now - (verified_at || -1)).to_i end
+    def resolved_age() (Stella.now - (resolved_at || -1)).to_i end
+    def normalize
+      self.dentid ||= gibbler
+      update_timestamps
+    end
+    def update_timestamps
+      if self.detected_at.nil?
+        self.detected_at = self.created_at
+        self.status = :detected
+      end
+      super
+    end
+    def verified!
+      self.status = :verified
+      self.verified_at = Stella.now
+      self.save
+    end
+    def resolved!
+      self.status = :resolved
+      self.resolved_at = Stella.now
+      self.save
+    end
+    def enqueue_checkups
+      checkup = Stella::Checkup.new :host => host, :planid => testplan.planid
+      checkup.testplan = testplan
+      checkup.customer = testplan.customer
+      checkup.save
+      Stella::Job::Checkup.enqueue :checkid => checkup.checkid
+    end
+  end
   class Host
     include Stella::MetricsCollector
     alias_method :objid, :hostid
@@ -250,7 +282,13 @@ class Stella
     end
     alias_method :homepage, :homepage?
     def recent_testruns
-      testruns.all :created_at.gt => Stella.now-1.day, :order => [:created_at.desc], :limit => 12
+      testruns.all :updated_at.gt => Stella.now-1.day, :order => [:updated_at.desc], :limit => 12
+    end
+    def recent_incidents
+      incidents.all :updated_at.gt => Stella.now-1.day, :order => [:resolved_at.desc, :verified_at.desc, :detected_at.desc], :limit => 12
+    end
+    def current_incident
+      @current_incident ||= incidents.first :updated_at.gt => Stella.now-1.day, :status.not => :resolved, :order => [:verified_at.desc, :detected_at.desc], :limit => 2
     end
     def parsed_uri
       @parsed_uri ||= Stella::Utils.uri(self.uri)
@@ -326,6 +364,11 @@ class Stella
     def status? *guesses
       guesses.flatten.collect(&:to_s).member?(self.status.to_s)
     end
+    def detect_incident kind
+      self.incident = self.testplan.current_incident
+      self.incident ||= Stella::Incident.create :host => self.host, :testplan => self.testplan, :kind => kind
+      self.incident
+    end
     # Metrics to pull from a testrun summary.
     # key => metric name
     # value (nil) => summary[metric_name]
@@ -398,7 +441,7 @@ class Stella
           'redirect_count' => 0,
           'asset_count' => 0,
           'error_count' => 0,
-          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil, 'fb' => nil },
+          'first_request' => { 'started_at' => nil, 'size' => nil, 'rt' => nil, 'fb' => nil, 'status' => nil },
           'initial_offset' => nil,
           'total_size' => 0,
           'gaid' => har['log']['gaid']
@@ -436,10 +479,16 @@ class Stella
                 summary['first_request']['size'] = asset['size']
                 summary['first_request']['rt'] = asset['rt']
                 summary['first_request']['fb'] = asset['fb']
+                summary['first_request']['status'] = asset['code']
               when 300...400
                 summary['redirect_count'] += 1
               when 400...600
                 summary['error_count'] += 1
+                summary['first_request']['started_at'] = time
+                summary['first_request']['size'] = asset['size']
+                summary['first_request']['rt'] = asset['rt']
+                summary['first_request']['fb'] = asset['fb']
+                summary['first_request']['status'] = asset['code']
               end
             else
               sample = (time.to_f - summary['first_request']['started_at'].to_f)

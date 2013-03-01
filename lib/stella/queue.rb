@@ -167,7 +167,7 @@ class Stella
       Shellwords.join [script, *args.flatten.collect(&:to_s)]
     end
     def error msg
-      Stella::Problem.new "#{msg} (#{self})"
+      Stella::Job::Problem.new "#{msg} (#{self})"
     end
     class << self
       attr_reader :classes

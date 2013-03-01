@@ -403,6 +403,8 @@ module Stella::App::Views
       self[:owner_only] = self[:authenticated] && (plan.host.customer?(cust) || cust.colonel?)
       self[:recent_checkup] = plan.checkups.first :status => :done, :order => [ :created_at.desc ]
       self[:plan] = plan
+      self[:incidents] = plan.recent_incidents
+      self[:has_incidents] = self[:incidents].size
       self[:host] = plan.host
       self[:selected_tabid] = req.params[:tabid]
     end

@@ -27,7 +27,7 @@ class Stella
         self.updated_at = Stella.now
       end
       def updated_age() (Stella.now - (updated_at || -1)).to_i end
-      def created_age() (Stella.now - (updated_at || -1)).to_i end
+      def created_age() (Stella.now - (created_at || -1)).to_i end
     end
     module PerformanceSummary
       attr_reader :classes
@@ -225,23 +225,29 @@ class Stella
 
   class Incident
     include DataMapper::Resource
+    include Gibbler::Complex
     property :id,           Serial, :key => true
+    property :dentid,       String, :required => true, :unique_index => true
     property :kind,         Enum[ :error, :timeout, :slowness, :domain ]
-    property :status,       Enum[ :new, :detected, :verified, :resolved ], :default => :new, :key => true
-    property :detected_at,  Time
-    property :verified_at,  Time
-    property :resolved_at,  Time
+    property :status,       Enum[ :new, :detected, :verified, :resolved ], :default => :new
+    property :detected_at,  Time, :index => true
+    property :verified_at,  Time, :index => true
+    property :resolved_at,  Time, :index => true
+    gibbler :id, :kind, :created_at, :testplan
+    before :valid?, :normalize
     include Stella::Model::TimeStamps
     include Stella::Model::DataField
   end
 
   class Notification
     include DataMapper::Resource
+    include Gibbler::Complex
     property :id,           Serial, :key => true
     property :nid,          String, :required => true, :unique_index => true
     property :subject,      String, :length => 255, :required => true
     property :content,      Text, :required => true
     property :summary,      String, :length => 140, :required => true
+    gibbler :id, :kind, :created_at, :incident
     include Stella::Model::TimeStamps
     include Stella::Model::DataField
   end
@@ -425,7 +431,7 @@ class Stella
     has n, :checkups
     has n, :testruns
     has n, :screenshots
-    #has n, :incidents
+    has n, :incidents
     belongs_to :customer, :required => true
     belongs_to :product, :required => false
   end
@@ -433,7 +439,7 @@ class Stella
     has n, :testruns
     has n, :checkups
     has n, :screenshots
-    #has n, :incidents
+    has n, :incidents
     belongs_to :host, :required => true
     belongs_to :customer, :required => false
   end
@@ -442,6 +448,7 @@ class Stella
     belongs_to :testplan, :required => false
     belongs_to :remote_machine, :required => false
     belongs_to :host, :required => true
+    belongs_to :incident, :required => false
   end
   class Checkup
     has n, :screenshots
@@ -466,11 +473,11 @@ class Stella
     belongs_to :host, :required => false
     belongs_to :testplan, :required => false
   end
-  #class Incident
-  #  belongs_to :testplan, :required => true
-  #  belongs_to :host, :required => true
-  #  has n, :testruns
-  #end
+  class Incident
+    belongs_to :testplan, :required => false
+    belongs_to :host, :required => false
+    has n, :testruns
+  end
   class Product
     belongs_to :customer, :required => true
   end

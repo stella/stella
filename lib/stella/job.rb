@@ -1,6 +1,8 @@
 
 class Stella
   class Job
+    class Problem < Stella::Problem
+    end
     include Stella::RedisObject
     expiration 4.hours
     db 11
@@ -13,6 +15,8 @@ class Stella
     end
     def perform
       type.perform self
+    rescue Stella::Job::Problem => ex
+      Stella.li '[%s] %s' % [ex.class, ex.message]
     rescue => ex
       Stella.li '[%s] %s' % [ex.class, ex.message]
       Stella.li ex.backtrace
@@ -161,7 +165,7 @@ class Stella
         end
         options[:gaid] = plan.host.settings['gaid'] if plan.host.settings['disable_ga'].to_s == 'true'
         cmd = prepare_command(Stella.config['phantomjs.path'], 'scripts/phantomjs/testrun.js', plan.requests.first, options.to_json)
-        Stella.ld cmd
+        Stella.ld '[phantomjs] %s' % cmd
         report = {}
         begin
           Timeout.timeout(15.seconds) do
@@ -184,11 +188,16 @@ class Stella
           return
         end
         checkup.summary = Stella::Testrun.parse_har(report)
-        Stella.ld checkup.summary.to_json
+        Stella.ld '[summary] %s' % checkup.summary.to_json
         if checkup.summary['status'] == 'timeout'
           checkup.status = :timeout
         else
           checkup.status = :done
+        end
+
+        if dent = plan.current_incident
+          dent.verified!
+          Stella.ld '[current-incident] %s' % [dent.to_json]
         end
 
         if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?
@@ -206,10 +215,10 @@ class Stella
           shot = Stella::Screenshot.new :testplan => plan
           thumbdir = Stella.config['render.path']
           file = "#{thumbdir}/#{shot.filename}"
-          Stella.ld "mv #{screenshot_path} #{file}"
+          #Stella.ld "mv #{screenshot_path} #{file}"
           FileUtils.cp screenshot_path, file
           cmd = "bin/stella resize #{file}"
-          Stella.ld cmd
+          #Stella.ld cmd
           Stella.ld `#{cmd}`
           Stella::Logic.safedb { shot.save }
           Stella::Logic.safedb { plan.screenshots << shot }
@@ -264,17 +273,26 @@ class Stella
         run.result = har
         if run.summary['status'] == 'timeout'
           run.status = :timeout
+          run.detect_incident run.status
         else
           run.status = :done
         end
         run.status = :done
         plan.testruns << run
+
+        if run.summary['error_count'] > 0
+          run.detect_incident :error
+        end
+
         Stella::Logic.safedb {
           #Stella.ld "Updating testrun: #{run.runid}"
           run.save
           #Stella.ld "Updating testplan: #{plan.planid}"
           plan.save
         }
+
+        Stella.ld '[%s/%d] status:%s errors:%d' % [plan.class, plan.id, run.status, run.summary['error_count']]
+        Stella.ld '[%s/%d] %s' % [plan.class, plan.id, run.incident.to_json] if run.incident
 
         if run.summary['gaid'] #&& plan.host.settings['gaid'].to_s.empty?
           plan.host.settings['gaid'] = run.summary['gaid']

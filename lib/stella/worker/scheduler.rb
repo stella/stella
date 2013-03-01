@@ -5,20 +5,27 @@ class Stella
     include Stella::Worker::ScheduledLoop
     def online
       p :todo_scheduler_online
-      cust = Stella::Customer.find :email => 'delano@blamestella.com'
-      p cust
-      p [Stella::DailyUsage.daily_bill(cust.monthly_bill), cust.monthly_bill, cust.active_products]
     end
     def offline
       p :todo_scheduler_offline
     end
     every 1.minute, :first_at => Stella.now do |*args|
-      # check some bullshit
-      #p [1, self, args]
-      customers = Stella::Customer.all :hour_offset => Stella.now.min
-      Stella.li '%d @ %d' % [customers.size, Stella.now.min]
-      customers.each { |cust|
-        #Stella.li " #{cust.email} #{cust.monthly_bill}"
+      current_incidents = Stella::Incident.all :status => :detected
+      Stella.li '[detected-incidents] %d @ %d' % [current_incidents.size, Stella.now.min]
+      current_incidents.each { |dent|
+        Stella.li " [#{dent.testplan.planid}/#{dent.dentid}]"
+        if dent.data['scheduled']
+          Stella.ld "  already scheduled"
+          if dent.detected_age > 5.minutes
+            Stella.li "  assumed resolved"
+            dent.resolved!
+          end
+        else
+          job = dent.enqueue_checkups
+          Stella.ld "  scheduled #{job.jobid}"
+          dent.data['scheduled'] = true
+          dent.save
+        end
       }
     end
     every 1.hour do |args|

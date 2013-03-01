@@ -167,6 +167,11 @@ class Stella
         end
         call_offline
       end
+      def run_once
+        call_online
+        carefully { workload }
+        call_offline
+      end
       def workload
         raise Stella::Problem, "No workload defined for #{self.class}"
       end

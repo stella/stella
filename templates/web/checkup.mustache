@@ -310,5 +310,10 @@
   </div>
   {{/is_success}}
 
-
+  {{#colonels_only}}
+  <hr/>
+  <div class="span10 offset1">
+  <textarea rows="25" class="span9">{{testrun.to_yaml}}</textarea>
+  </div>
+  {{/colonels_only}}
 {{>_layout/footer}}

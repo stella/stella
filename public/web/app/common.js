@@ -1,3 +1,4 @@
+
 // http://code.google.com/p/datejs/wiki/FormatSpecifiers
 var timeStampFormat = 'MMM dd, yyyy h:mmtt';
 var dateStampFormat = 'MMM dd, yyyy';
@@ -392,3 +393,11 @@ $(function() {
   })
 });
 
+/*
+'#pageTabs li a[href$="VALUE"]'
+ = is exactly equal
+!= is not equal
+^= is starts with
+$= is ends with
+*= is contains
+*/
