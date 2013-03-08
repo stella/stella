@@ -10,20 +10,20 @@ var timeOfDayFormat = 'h:mmtt';
 
 // Font Replacement
 Cufon.replace('.cufon');
-Cufon.replace('#productHook', { fontFamily: 'Officina Book Italic' })
+Cufon.replace('#productHook', { fontFamily: 'Officina Book Italic' });
 
 // See: http://stackoverflow.com/questions/10013812/how-to-prevent-jquery-ajax-from-following-a-redirect-after-a-post
 jQuery.ajaxSetup({
   beforeSend: function(xhr) {
-    xhr.setRequestHeader("ACCEPT", "text/javascript")
-    xhr.setRequestHeader("X_REQUESTED_WITH", "xmlhttprequest")
+    xhr.setRequestHeader("ACCEPT", "text/javascript");
+    xhr.setRequestHeader("X_REQUESTED_WITH", "xmlhttprequest");
   }
-})
+});
 
 var is_chrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
 function log(msg) {
   if (is_chrome)
-    console.log(msg)
+    console.log(msg);
 }
 
 /*
@@ -35,14 +35,14 @@ function log(msg) {
 // Takes an epoch time in milliseconds and returns a string representing how
 // long ago the date represents.
 function prettyDate(time){
-  var date = new Date(parseInt(time)),
+  var date = new Date(parseInt(time, 10)),
     diff = (((new Date()).getTime() - date.getTime()) / 1000),
     day_diff = Math.floor(diff / 86400);
 
   if ( isNaN(day_diff) || day_diff < 0 || day_diff >= 31 )
     return;
 
-  return day_diff == 0 && (
+  return day_diff === 0 && (
       diff < 60 && "just now" ||
       diff < 120 && "1 minute ago" ||
       diff < 3600 && Math.floor( diff / 60 ) + " minutes ago" ||
@@ -54,9 +54,9 @@ function prettyDate(time){
 }
 
 function newsDate(time) {
-  var date = new Date(parseInt(time*1000))
-  date.setYear(date.getFullYear() - 113)
-  var now = date.toString(newsStampFormat)
+  var date = new Date(parseInt(time*1000, 10));
+  date.setYear(date.getFullYear() - 113);
+  var now = date.toString(newsStampFormat);
   return now;
 }
 
@@ -79,18 +79,17 @@ function postAndRefresh(e) {
     data: {'shrimp': shrimp},
     success: function(data, textStatus){
       //log(data)
-      window.location.reload()
+      window.location.reload();
     },
     error: function(){
-      alertify.error("Ooops! There was an error.")
+      alertify.error("Ooops! There was an error.");
     }
   });
   return e.preventDefault();
-};
+}
 
 function postAndRedirect(e) {
   var obj = $(this);
-  log(obj.attr('href'))
   $.ajax({
     type: 'POST',
     url: obj.attr('href'),
@@ -99,11 +98,11 @@ function postAndRedirect(e) {
       window.location = '/';
     },
     error: function(){
-      alertify.error("Ooops! There was an error.")
+      alertify.error("Ooops! There was an error.");
     }
   });
   return e.preventDefault();
-};
+}
 
 function checkPostAndRefresh(e) {
   var obj = $(this);
@@ -351,6 +350,7 @@ $(function() {
     $.ajax({
       type: 'POST',
       url: obj.attr('href'),
+      data: {'shrimp': shrimp},
       success: function(data, textStatus){
         alertify.log("SMS message sent");
       },
