@@ -350,6 +350,7 @@ $(function() {
     $.ajax({
       type: 'POST',
       url: obj.attr('href'),
+      data: {'shrimp': shrimp},
       success: function(data, textStatus){
         alertify.log("SMS message sent");
       },
