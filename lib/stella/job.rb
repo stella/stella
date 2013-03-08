@@ -196,7 +196,10 @@ class Stella
         end
 
         if dent = plan.current_incident
+          dent.data['verified_count'] ||= 0
+          dent.data['verified_count'] += 1
           dent.verified!
+          dent.save
           Stella.ld '[current-incident] %s' % [dent.to_json]
         end
 
@@ -273,7 +276,7 @@ class Stella
         run.result = har
         if run.summary['status'] == 'timeout'
           run.status = :timeout
-          run.detect_incident run.status
+          dent = run.detect_incident run.status
         else
           run.status = :done
         end
@@ -281,7 +284,7 @@ class Stella
         plan.testruns << run
 
         if run.summary['error_count'] > 0
-          run.detect_incident :error
+          dent = run.detect_incident :error
         end
 
         Stella::Logic.safedb {

@@ -40,12 +40,17 @@ class Stella
       end
       super
     end
+    def status? *guesses
+      guesses.flatten.collect(&:to_s).member?(self.status.to_s)
+    end
     def verified!
+      return if status?(:verified)
       self.status = :verified
       self.verified_at = Stella.now
       self.save
     end
     def resolved!
+      return if status?(:resolved)
       self.status = :resolved
       self.resolved_at = Stella.now
       self.save
@@ -233,26 +238,6 @@ class Stella
     end
   end
 
-  class Contact
-    alias_method :objid, :contactid
-    def gravatar
-      Digest::MD5.hexdigest email.downcase if email
-    end
-    def normalize
-      self.contactid ||= gibbler
-      update_timestamps
-    end
-    def customer? cust
-      customer == cust
-    end
-    class << self
-      def destroy! opts={}
-        inst = first opts
-        inst && inst.destroy!
-      end
-    end
-  end
-
   class Testplan
     include Stella::MetricsCollector
     alias_method :objid, :planid
@@ -365,8 +350,9 @@ class Stella
       guesses.flatten.collect(&:to_s).member?(self.status.to_s)
     end
     def detect_incident kind
-      self.incident = self.testplan.current_incident
-      self.incident ||= Stella::Incident.create :host => self.host, :testplan => self.testplan, :kind => kind
+      self.incident = self.testplan.current_incident ||
+                      Stella::Incident.create(:host => self.host, :testplan => self.testplan, :kind => kind)
+      self.incident.testruns << self
       self.incident
     end
     # Metrics to pull from a testrun summary.
@@ -528,6 +514,26 @@ class Stella
       created_at.to_natural
     end
     class << self
+    end
+  end
+
+  class Contact
+    alias_method :objid, :contactid
+    def gravatar
+      Digest::MD5.hexdigest email.downcase if email
+    end
+    def normalize
+      self.contactid ||= gibbler
+      update_timestamps
+    end
+    def customer? cust
+      customer == cust
+    end
+    class << self
+      def destroy! opts={}
+        inst = first opts
+        inst && inst.destroy!
+      end
     end
   end
 
