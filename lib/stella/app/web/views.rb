@@ -81,6 +81,9 @@ class Stella
         self[:is_production] =  ['production', 'prod'].member?(Stella.config['site.env'])
         self[:spreedlycore_key] = Stella.config['vendor.spreedlycore.key']
         self[:site_price] = 2
+        self[:unread_notifications] = cust.unread_notifications
+        self[:unread_notification_count] = self[:unread_notifications].count
+        self[:has_unread_notifications] = !self[:unread_notification_count].zero?
         init(*args) if respond_to?(:init)
         if Stella.config
           # whitelist config values for template use.

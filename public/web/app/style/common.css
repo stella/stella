@@ -286,6 +286,48 @@ color: #33cccc !important;
      -moz-border-radius: 2px;
           border-radius: 2px;
 }
+ul.notification-list {
+  list-style: none;
+  background-color: #fff;
+  padding: 2px;
+}
+ul.notification-list li {
+  height: 60px;
+  display: block;
+  padding: 4px;
+  border-bottom: 1px #eee solid;
+}
+ul.notification-list li:hover, ul.notification-list li.unread:hover {
+  background-color: #eeffff;
+}
+ul.notification-list li.unread {
+  background-color: #ddffff;
+}
+ul.notification-list li a {
+  text-decoration: none;
+  color: black;
+}
+ul.notification-list li a:active {
+  text-decoration: none;
+  color: black;
+}
+ul.notification-list i.screenshot {
+  display: block;
+  width: 60px;
+  height:60px;
+  float: left;
+  margin-right: 6px;
+}
+ul.notification-list li .uri {
+  font-weight: bolder;
+  font-size: 125%;
+}
+ul.notification-list li .summary {
+}
+ul.notification-list li .stamp {
+  font-size: 90%;
+  color: #999;
+}
 .host-list .host .screenshot {
   display: block;
   width: 260px;

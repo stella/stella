@@ -64,12 +64,25 @@
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
               <img src="{{gravatar_uri}}?s=18&amp;r=g" class="avatar"/>
               {{cust.email}}
+              {{#has_unread_notifications}}
+              <span class="badge badge-important">{{unread_notification_count}}</span>
+              {{/has_unread_notifications}}
               <span class="caret"></span>
             </a>
             <ul class="dropdown-menu">
               <li><a href="/account">Account</a></li>
               <li><a href="/account/billing">Billing (<em>${{monthly_bill}}/month</em>)</a></li>
               <li><a href="/docs">API Docs</a></li>
+              <li class="divider"></li>
+
+              {{^has_unread_notifications}}
+              <li><a href="/notifications"><em>No notifications</em></a></li>
+              {{/has_unread_notifications}}
+
+              {{#has_unread_notifications}}
+              <li><a href="/notifications"><strong>Notifications</strong> <span class="badge badge-important">{{unread_notification_count}}</span></a></li>
+              {{/has_unread_notifications}}
+
               {{#colonels_only}}
               <li class="divider"></li>
               <li class=""><a href="/colonel">Colonel</a></li>
@@ -80,7 +93,7 @@
           </div>
           <ul class="nav nav-pills pull-right">
             <li class="dropdown active">
-              <a class="dropdown-toggle" data-toggle="dropdown" href="#">Your Sites ({{your_monitored_count}})<b class="caret"></b></a>
+              <a class="dropdown-toggle" data-toggle="dropdown" href="#">Your Sites <!--<span class="badge">{{your_monitored_count}}</span>--><b class="caret"></b></a>
               <ul class="dropdown-menu">
                 {{#your_sites}}
                 <li class="{{#bogus}}active{{/bogus}} {{^monitored}}not{{/monitored}}monitored"><a href="/site/{{hostname}}">{{hostname}}</a></li>

@@ -2,6 +2,14 @@
 class Stella::App::Account
   include Stella::App::Base
 
+  def notifications
+    authenticated('/notifications') do
+      view = Stella::App::Views::Account::Notifications.new req, sess, cust
+      res.body = view.render
+      cust.unread_notifications.each { |note| note.viewed! }
+    end
+  end
+
   def contributors
     publically do
       if !sess.authenticated? && req.post?
@@ -357,6 +365,14 @@ module Stella::App::Views
         @title = "Contribute"
         self[:abider] = cust.contributor?(:abider)
         self[:outlaw] = cust.contributor?(:outlaw)
+      end
+    end
+
+    class Notifications < Stella::App::View
+      def init *args
+        @title = "Notifications"
+        self[:recent_notifications] = cust.recent_notifications
+        self[:has_notifications] = !self[:recent_notifications].empty?
       end
     end
 

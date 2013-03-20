@@ -33,6 +33,16 @@ class Stella
     def enqueue_jobs
       p :todo_enqueue_jobs
     end
+    def testrun
+      @testrun ||= incident.testruns.last
+    end
+    def testplan
+      @testplan ||= incident.testplan
+    end
+    def viewed!
+      self.viewed = true
+      save
+    end
   end
   class Incident
     def detected_age() (Stella.now - (detected_at || -1)).to_i end
@@ -564,6 +574,9 @@ class Stella
     end
     def thumbnail
       filename :s
+    end
+    def tiny
+      filename :t
     end
     def stamp
       created_at.strftime('%Y%m%d-%H%M')

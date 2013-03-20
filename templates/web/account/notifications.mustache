@@ -1,0 +1,30 @@
+{{>_layout/header}}
+
+<div class="span8 offset1">
+<h1 class="cufon">Your Notifications</h1>
+
+{{#has_notifications}}
+  <ul class="notification-list">
+    {{#recent_notifications}}
+    <li class="{{^viewed}}unread{{/viewed}}"><a href="/testrun/{{testrun.runid}}">
+      <i class="screenshot" style="background-image: url('/t/{{incident.testplan.screenshot.tiny}}');"></i>
+      <div class="uri">{{testplan.uri.shorten}}</div>
+      <div class="summary">{{summary}}</div>
+      <div class="stamp"><span class="badge">{{kind}}</span> {{created_at.to_natural}}</div>
+    </a></li>
+    {{/recent_notifications}}
+  </ul>
+{{/has_notifications}}
+
+{{^has_notifications}}
+<p><em>No notifications</em></p>
+{{/has_notifications}}
+</div>
+
+
+<script type="text/javascript">
+  $(function() {
+  });
+</script>
+
+{{>_layout/footer}}

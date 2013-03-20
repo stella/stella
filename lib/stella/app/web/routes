@@ -57,7 +57,6 @@ POST  /plan/:planid/hide                              Stella::App::Host#hide_pla
 POST  /plan/:planid/enable                            Stella::App::Host#enable_plan
 POST  /plan/:planid/disable                           Stella::App::Host#disable_plan
 
-
 ##########################################################################  ACCOUNT
 GET   /account                                        Stella::App::Account#index
 GET   /account/:tabid                                 Stella::App::Account#index
@@ -93,6 +92,9 @@ POST  /login/reset/:secret                            Stella::App::Account#login
 
 GET   /contributor                                    Stella::App::Account#contributors
 POST  /contributor                                    Stella::App::Account#contributors
+
+GET   /notifications                                  Stella::App::Account#notifications
+
 
 ##########################################################################  MACHINES
 

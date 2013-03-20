@@ -32,6 +32,14 @@ class Stella
       colonel? || comped || !monthly_bill.zero?
     end
 
+    def unread_notifications
+      @unread_notifications ||= self.notifications :viewed => false, :order => [ :created_at.desc ]
+    end
+
+    def recent_notifications
+      @recent_notifications ||= self.notifications :created_at.gt => Time.now-14.days, :order => [ :created_at.desc ]
+    end
+
     def monitored_hosts
       self.hosts :monitored => true
     end
