@@ -115,7 +115,7 @@ class Stella::Logic::ViewDocs < Stella::Logic::Base
 end
 
 class Stella::Logic::SendSMS < Stella::Logic::Base
-  attr_reader :message, :phone
+  attr_reader :message, :phone, :from
   def raise_concerns
     #check_rate_limits! :send_sms
     raise Stella::NoPhone unless phone
@@ -131,10 +131,12 @@ class Stella::Logic::SendSMS < Stella::Logic::Base
     @message = nil if @message.empty?
     @phone = params[:phone].to_s.strip
     @phone = nil if @phone.empty?
+    @from = params[:from].to_s.strip
+    @from = nil if @from.empty?
   end
   class << self
     def send_sms phone, msg
-      @from ||= Stella.config['vendor.twilio.phone']
+      @from = Stella.config['vendor.twilio.phone'] if @from.to_s.empty?
       Twilio::Sms.message(@from, phone, msg)
     end
   end

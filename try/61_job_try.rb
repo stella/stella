@@ -6,7 +6,7 @@ Stella.load! :tryouts
 #Stella::Host.destroy! :hostname => 'bff.heroku.com'
 #Stella::Customer.destroy! :email => 'tryouts61@blamestella.com'
 @cust = Stella::Customer.first_or_create :email => 'tryouts61@blamestella.com'
-@host = Stella::Host.first_or_create :hostname => 'bff.heroku.com', :custid => @cust.custid
+@host = Stella::Host.first_or_create :hostname => 'bff.heroku.com', :custid => @cust.custid, :customer => @cust
 @host.customer = @cust and @host.save
 
 ## Can generate unique ID
@@ -31,7 +31,7 @@ p s.objid
 
 ## Knows classes
 Stella::Queueable.classes.collect(&:to_s)
-#=> ["Stella::Job::RenderHost", "Stella::Job::RenderPlan", "Stella::Job::Checkup", "Stella::Job::Testrun"]
+#=> ["Stella::Job::SendEmail", "Stella::Job::SendSMS", "Stella::Job::RenderHost", "Stella::Job::RenderPlan", "Stella::Job::Checkup", "Stella::Job::Testrun", "Stella::Job::TestrunRemote"]
 
 ## Enqueing defaults to high queue
 job = Stella::Job::RenderHost.enqueue
@@ -48,11 +48,15 @@ job = Stella::Job::RenderHost.enqueue :hostid => @host.hostid
 [job[:type], job.type]
 #=> ["Stella::Job::RenderHost", Stella::Job::RenderHost]
 
-## Jobs run
-job = Stella::Job::RenderHost.enqueue :hostid => @host.hostid
-job.perform
-#=> nil
+## Jobs run (SMS)
+job = Stella::Job::SendSMS.enqueue :phone => Stella.config['account.tech.phone'], :message => "Job test #{Stella.now}"
+job.perform.class
+#=> HTTParty::Response
 
+## Jobs run (Email)
+job = Stella::Job::SendEmail.enqueue :email => Stella.config['account.tech.email'], :subject => "Job test #{Stella.now}", :content => @cust.email
+job.perform.class
+#=> SendGrid
 
 @host.destroy if @host
 @cust.destroy if @cust

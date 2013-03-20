@@ -61,7 +61,27 @@ class Stella
   require 'open3'
   require 'fileutils'
   class Job
-
+    module SendEmail
+      extend Stella::Queueable
+      def self.perform job
+        fromname = job[:fromname] || Stella.config['account.tech.name'] || 'Stella'
+        from = job[:from] || Stella.config['account.tech.email'] || 'tucker@blamestella.com'
+        SendGrid.send_email job[:subject], job[:content], :to => job[:email], :from => from, :fromname => fromname
+      end
+    end
+    module SendSMS
+      extend Stella::Queueable
+      def self.perform job
+        params = {
+          :from => job[:from],
+          :phone => job[:phone],
+          :message => job[:message]
+        }
+        logic = Stella::Logic::SendSMS.new nil, nil, params
+        logic.process
+        # Twilio::Sms.message(from, to, "[C] #{@cust.email} (#{host}): #{@message}.")
+      end
+    end
     module RenderHost
       extend Stella::Queueable
       def self.perform job
