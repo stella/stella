@@ -228,7 +228,7 @@ class Stella
     include Gibbler::Complex
     property :id,           Serial, :key => true
     property :dentid,       String, :required => true, :unique_index => true
-    property :kind,         Enum[ :error, :timeout, :slowness, :domain ]
+    property :kind,         Enum[ :error, :timeout, :slowness, :domain, :ssl ]
     property :status,       Enum[ :new, :detected, :verified, :resolved ], :default => :new
     property :detected_at,  Time, :index => true
     property :verified_at,  Time, :index => true
@@ -243,11 +243,16 @@ class Stella
     include DataMapper::Resource
     include Gibbler::Complex
     property :id,           Serial, :key => true
-    property :nid,          String, :required => true, :unique_index => true
-    property :subject,      String, :length => 255, :required => true
-    property :content,      Text, :required => true
+    property :noteid,       String, :required => true, :unique_index => true
+    property :subject,      String, :length => 255, :required => false
+    property :content,      Text, :required => false
     property :summary,      String, :length => 140, :required => true
-    gibbler :id, :kind, :created_at, :incident
+    property :kind,         Enum[ :error, :timeout, :slowness, :domain, :ssl ]
+    property :viewed,       Boolean, :default => false
+    property :hidden,       Boolean, :default => false
+    property :sent_at,      Time, :index => true
+    gibbler :id, :created_at, :incident
+    before :valid?, :normalize
     include Stella::Model::TimeStamps
     include Stella::Model::DataField
   end
@@ -423,7 +428,8 @@ class Stella
     has n, :billing_statements
     has n, :daily_usage
     has n, :feedbacks
-    #has n, :incidents
+    has n, :incidents
+    has n, :notifications
   end
   class Host
     has n, :testplans
@@ -474,9 +480,15 @@ class Stella
     belongs_to :testplan, :required => false
   end
   class Incident
-    belongs_to :testplan, :required => false
+    belongs_to :customer, :required => true
+    belongs_to :testplan, :required => true
     belongs_to :host, :required => false
     has n, :testruns
+    has n, :notifications
+  end
+  class Notification
+    belongs_to :customer, :required => true
+    belongs_to :incident, :required => true
   end
   class Product
     belongs_to :customer, :required => true

@@ -25,6 +25,15 @@ class Stella
       end
     end
   end
+  class Notification
+    def normalize
+      self.noteid ||= gibbler
+      update_timestamps
+    end
+    def enqueue_jobs
+      p :todo_enqueue_jobs
+    end
+  end
   class Incident
     def detected_age() (Stella.now - (detected_at || -1)).to_i end
     def verified_age() (Stella.now - (verified_at || -1)).to_i end
@@ -43,6 +52,18 @@ class Stella
     def status? *guesses
       guesses.flatten.collect(&:to_s).member?(self.status.to_s)
     end
+    def send_notification
+      return unless status?(:verified)
+      Stella::Logic.safedb {
+        note = Stella::Notification.create :customer => self.customer,
+                                           :incident => self,
+                                           :kind => self.kind,
+                                           :summary => "There was an incident."
+        Stella.ld note
+        note.enqueue_jobs
+        self.notifications << note
+      }
+    end
     def verified!
       return if status?(:verified)
       self.status = :verified
@@ -56,11 +77,46 @@ class Stella
       self.save
     end
     def enqueue_checkups
-      checkup = Stella::Checkup.new :host => host, :planid => testplan.planid
-      checkup.testplan = testplan
-      checkup.customer = testplan.customer
-      checkup.save
-      Stella::Job::Checkup.enqueue :checkid => checkup.checkid
+      1.times {
+        checkup = Stella::Checkup.new :host => host, :planid => testplan.planid
+        checkup.testplan = testplan
+        checkup.customer = testplan.customer
+        checkup.save
+        Stella::Job::Checkup.enqueue :checkid => checkup.checkid
+      }
+    end
+    class << self
+      def handle_detected_incidents
+        detected_incidents = Stella::Incident.all :status => :detected
+        Stella.li '[detected-incidents] %d @ %s' % [detected_incidents.size, Stella.now]
+        detected_incidents.each { |dent|
+          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] #{dent.detected_age.in_minutes}m old"
+          to_schedule = false
+          if dent.data['scheduled'] && dent.detected_age > 5.minutes
+            Stella.li "  assumed resolved"
+            dent.resolved!
+          else
+            to_schedule = true
+          end
+
+          if to_schedule
+            job = dent.enqueue_checkups
+            dent.data['scheduled'] = Stella.now
+            dent.save
+          end
+        }
+      end
+      def handle_verified_incidents
+        verified_incidents = Stella::Incident.all :status => :verified
+        Stella.li '[verified-incidents] %d @ %s' % [verified_incidents.size, Stella.now]
+        verified_incidents.each { |dent|
+          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] testruns:#{dent.testruns.size} #{dent.verified_age.in_minutes}m old"
+          if dent.verified_age > 24.hours
+            Stella.li "  assumed resolved"
+            dent.resolved!
+          end
+        }
+      end
     end
   end
   class Host
@@ -350,10 +406,12 @@ class Stella
       guesses.flatten.collect(&:to_s).member?(self.status.to_s)
     end
     def detect_incident kind
-      self.incident = self.testplan.current_incident ||
-                      Stella::Incident.create(:host => self.host, :testplan => self.testplan, :kind => kind)
-      self.incident.testruns << self
-      self.incident
+      Stella::Logic.safedb {
+        self.incident = self.testplan.current_incident ||
+                        Stella::Incident.create(:host => self.host, :testplan => self.testplan, :customer => self.testplan.customer, :kind => kind)
+        self.incident.testruns << self
+        self.incident
+      }
     end
     # Metrics to pull from a testrun summary.
     # key => metric name

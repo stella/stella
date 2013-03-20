@@ -199,6 +199,7 @@ class Stella
           dent.data['verified_count'] ||= 0
           dent.data['verified_count'] += 1
           dent.verified!
+          dent.send_notification
           dent.save
           Stella.ld '[current-incident] %s' % [dent.to_json]
         end
