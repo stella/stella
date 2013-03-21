@@ -48,6 +48,7 @@ class Stella
     def detected_age() (Stella.now - (detected_at || -1)).to_i end
     def verified_age() (Stella.now - (verified_at || -1)).to_i end
     def resolved_age() (Stella.now - (resolved_at || -1)).to_i end
+    def duration() ((resolved_at || Stella.now) - detected_at).to_i end
     def normalize
       self.dentid ||= gibbler
       update_timestamps
@@ -100,7 +101,7 @@ class Stella
         detected_incidents = Stella::Incident.all :status => :detected
         Stella.li '[detected-incidents] %d @ %s' % [detected_incidents.size, Stella.now]
         detected_incidents.each { |dent|
-          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] #{dent.detected_age.in_minutes}m old"
+          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] #{dent.duration.in_minutes}m old"
           to_schedule = false
           if dent.data['scheduled'] && dent.detected_age > 5.minutes
             Stella.li "  assumed resolved"
@@ -120,7 +121,7 @@ class Stella
         verified_incidents = Stella::Incident.all :status => :verified
         Stella.li '[verified-incidents] %d @ %s' % [verified_incidents.size, Stella.now]
         verified_incidents.each { |dent|
-          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] testruns:#{dent.testruns.size} #{dent.verified_age.in_minutes}m old"
+          Stella.li " [#{dent.testplan.planid}/#{dent.dentid}] testruns:#{dent.testruns.size} #{dent.duration.in_minutes}m old"
           if dent.verified_age > 24.hours
             Stella.li "  assumed resolved"
             dent.resolved!
@@ -416,14 +417,6 @@ class Stella
     def status? *guesses
       guesses.flatten.collect(&:to_s).member?(self.status.to_s)
     end
-    def detect_incident kind
-      Stella::Logic.safedb {
-        self.incident = self.testplan.current_incident ||
-                        Stella::Incident.create(:host => self.host, :testplan => self.testplan, :customer => self.testplan.customer, :kind => kind)
-        self.incident.testruns << self
-        self.incident
-      }
-    end
     # Metrics to pull from a testrun summary.
     # key => metric name
     # value (nil) => summary[metric_name]
@@ -473,6 +466,31 @@ class Stella
     def started_at
       raise Stella::NoMetrics, runid if ! metrics?
       Time.parse(summary['started_at'])
+    end
+    def parse_har har
+      self.summary = Stella::Testrun.parse_har(har)
+      self.result = har
+    end
+    def incident_detection
+      if self.summary['status'] == 'timeout'
+        self.status = :timeout
+        dent = self.create_incident self.status
+      else
+        self.status = :done
+      end
+      self.status = :done
+
+      if self.summary['error_count'] > 0
+        dent = self.create_incident :error
+      end
+    end
+    def create_incident kind
+      Stella::Logic.safedb {
+        self.incident = self.testplan.current_incident ||
+                        Stella::Incident.create(:host => self.host, :testplan => self.testplan, :customer => self.testplan.customer, :kind => kind)
+        self.incident.testruns << self
+        self.incident
+      }
     end
     class << self
       attr_reader :metrics

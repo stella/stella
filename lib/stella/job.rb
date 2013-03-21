@@ -293,27 +293,15 @@ class Stella
           run.save
           return
         end
-        run.summary = Stella::Testrun.parse_har(har)
-        run.result = har
-        if run.summary['status'] == 'timeout'
-          run.status = :timeout
-          dent = run.detect_incident run.status
-        else
-          run.status = :done
-        end
-        run.status = :done
+
         plan.testruns << run
 
-        if run.summary['error_count'] > 0
-          dent = run.detect_incident :error
-        end
+        run.parse_har(har)
 
-        Stella::Logic.safedb {
-          #Stella.ld "Updating testrun: #{run.runid}"
-          run.save
-          #Stella.ld "Updating testplan: #{plan.planid}"
-          plan.save
-        }
+        run.incident_detection
+
+        Stella::Logic.safedb { run.save }
+        Stella::Logic.safedb { plan.save }
 
         Stella.ld '[%s/%d] status:%s errors:%d' % [plan.class, plan.id, run.status, run.summary['error_count']]
         Stella.ld '[%s/%d] %s' % [plan.class, plan.id, run.incident.to_json] if run.incident
