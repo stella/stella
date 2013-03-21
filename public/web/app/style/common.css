@@ -318,6 +318,9 @@ ul.notification-list i.screenshot {
   float: left;
   margin-right: 6px;
 }
+ul.notification-list li .badge {
+  float: right;
+}
 ul.notification-list li .uri {
   font-weight: bolder;
   font-size: 125%;

@@ -372,8 +372,9 @@ class Stella
   module HasTestrunSummary
     def parsed_summary
       @parsed_summary ||=
-      if self.summary && self.summary['assets']
+      if self.summary
         s = self.summary
+        s['assets'] ||= []
         s['assets'].each do |asset|
           uri = Stella::Utils.uri(asset['uri'])
           asset['scheme'] = uri.scheme

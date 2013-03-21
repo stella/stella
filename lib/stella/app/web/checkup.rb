@@ -96,6 +96,7 @@ module Stella::App::Views
       self[:summary] = checkup.parsed_summary
       if self[:summary]
         self[:has_errors] = self[:summary]['error_count'] > 0
+        self[:is_timeout] = self[:summary]['status'] == 'timeout'
       end
     end
 

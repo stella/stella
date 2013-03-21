@@ -257,7 +257,7 @@ class Stella::App::Host
       @plan = testrun.testplan if testrun
       @host = @plan.host if @plan
       if is_owner? || host.custid == Stella::Customer.anonymous.custid
-        view = Stella::App::Views::Testrun.new req, sess, cust, testrun
+        view = Stella::App::Views::Checkup.new req, sess, cust, testrun
         res.body = view.render
       else
         not_found_response "No such testrun"
@@ -407,38 +407,6 @@ module Stella::App::Views
       self[:has_incidents] = self[:incidents].size
       self[:host] = plan.host
       self[:selected_tabid] = req.params[:tabid]
-    end
-  end
-
-  class Testrun < Stella::App::View
-    def init testrun
-      @title = testrun.testplan.uri
-      @css << '/app/style/component/checkup.css'
-      @body_class = :checkup
-      self[:testrun] = self[:checkup] = testrun
-      self[:testplan] = testrun.testplan
-      self[:host] = testrun.testplan.host
-      self[:this_uri] = self[:testplan].requests.first
-      self[:this_path] = self[:this_uri].path
-      self[:this_shortpath] = File.basename(self[:this_path]).shorten(30)
-      self[:this_host_uri] = '%s://%s' % [self[:this_uri].scheme, self[:this_uri].host]
-      self[:summary] = testrun.parsed_summary
-      self[:is_done] = self[:checkup].status?(:done, :error, :timeout)
-      self[:is_success] = self[:checkup].status?(:done)
-      self[:is_error] = self[:checkup].status?(:error)
-      self[:is_timeout] = self[:checkup].status?(:timeout)
-      self[:is_running] = self[:checkup].status?(:running, :pending, :new)
-      self[:is_owner] = self[:checkup].customer?(cust)
-      self[:ran_at] = self[:testrun].updated_at
-      self[:ran_at_js] = self[:ran_at].to_i * 1000
-      self[:ran_at_text] = epochformat(self[:ran_at])
-      self[:ran_at_natural] = natural_time(self[:ran_at].to_i)
-      if self[:summary]
-        self[:ran_at] =testrun.created_at.utc
-        self[:ran_at_js] = self[:ran_at].to_i * 1000
-        self[:ran_at_text] = epochformat(self[:ran_at])
-        self[:ran_at_natural] = natural_time(self[:ran_at].to_i)
-      end
     end
   end
 

@@ -370,7 +370,7 @@ module Stella::App::Views
 
     class Notifications < Stella::App::View
       def init *args
-        @title = "Notifications"
+        @title = "Your Notifications"
         self[:recent_notifications] = cust.recent_notifications
         self[:has_notifications] = !self[:recent_notifications].empty?
       end

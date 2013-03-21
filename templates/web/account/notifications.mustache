@@ -10,7 +10,8 @@
       <i class="screenshot" style="background-image: url('/t/{{incident.testplan.screenshot.tiny}}');"></i>
       <div class="uri">{{testplan.uri.shorten}}</div>
       <div class="summary">{{summary}}</div>
-      <div class="stamp"><span class="badge">{{kind}}</span> {{created_at.to_natural}}</div>
+      <div class="badge">{{kind}}</div>
+      <div class="stamp">{{created_at.to_natural}}</div>
     </a></li>
     {{/recent_notifications}}
   </ul>
