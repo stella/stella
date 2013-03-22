@@ -8,23 +8,33 @@ require 'stella/email'
 Stella.debug = false
 Stella.load! :tryouts
 
-@cust = Stella::Customer.first_or_create :custid => :tryouts91, :email => 'tryouts91@blamestella.com'
+@cust = Stella::Customer.first_or_create :email => 'tryouts51-%s@blamestella.com' % [(rand*1000).to_i], :testing => true
 
 ## hihi
 Stella::App::StaticHelpers.uri :checkup, '1'
 #=> 'http://www.bs.com:3000/checkup/1'
 
 ## Express Confirmation
-uri = 'https://host/account/claim/abc123'
-args = [@cust, :hostname => 'tryouts91.com', :uri => uri]
+uri = 'https://tryouts51.com/account/claim/abc123'
+args = [@cust, :hostname => 'tryouts51.com', :uri => uri]
 view = Stella::Email::Account::ExpressConfirmation.new *args
+view.render.match(uri).nil?
+##=> false
+
+## General notification
+uri = 'https://tryouts51.com/account/claim/abc123'
+args = [@cust, :hostname => 'tryouts51.com', :runid => '1234567890abcdef']
+view = Stella::Email::Notification::General.new *args
+puts view.render
 view.render.match(uri).nil?
 #=> false
 
 ## Send Email
-uri = 'https://host/account/claim/abc123'
-args = [@cust, :hostname => 'tryouts91.com', :uri => uri]
-view = Stella::Email::Account::ExpressConfirmation.new *args
+uri = 'https://tryouts51.com/account/claim/abc123'
+args = [@cust, :hostname => 'tryouts51.com', :runid => '1234567890abcdef']
+view = Stella::Email::Notification::General.new *args
 ret = view.send_email
 ret.response.code
 #=> 200
+
+@cust.destroy!

@@ -1,8 +1,9 @@
 require 'mustache'
-
+require 'stella/app/web/views/helpers'
 
 class Stella
   class Email < Mustache
+    include Stella::App::Views::Helpers::Common
     self.template_path = './templates/email'
     self.view_namespace = Stella::Email
     attr_reader :cust
@@ -21,8 +22,15 @@ class Stella
     class << self
       attr_accessor :from, :fromname
     end
-    module Account
+    module Notification
+      class General < Stella::Email
+        def subject
+          "Error for %s" % [self[:hostname]]
+        end
+      end
+    end
 
+    module Account
       class ExpressConfirmation < Stella::Email
         def subject
           if self[:hostname].to_s.empty?

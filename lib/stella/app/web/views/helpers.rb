@@ -1,6 +1,6 @@
 
 
-module Stella::App::Views::Helpers
+class Stella::App; module Views; module Helpers
   module Common
     def obscure_email(text)
       text.to_s.encode_fix("ISO-8859-1").gsub /(\b[A-Z0-9._%-]+(@[A-Z0-9.-]+\.[A-Z]{2,4}\b))/i, "*******\\2"
@@ -238,4 +238,4 @@ module Stella::App::Views::Helpers
     end
   end
 
-end
+end; end; end
