@@ -11,7 +11,7 @@
       <div class="uri">{{testplan.uri.shorten}}</div>
       <div class="summary">{{summary}}</div>
       <div class="badge">{{kind}}</div>
-      <div class="stamp">{{created_at.to_natural}}</div>
+      <div class="stamp">{{created_at.to_natural}} - lasted for {{incident.duration.in_minutes}}m {{#incident.resolved}}- RESOLVED{{/incident.resolved}}</div>
     </a></li>
     {{/recent_notifications}}
   </ul>

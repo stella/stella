@@ -19,7 +19,7 @@ uri = 'https://tryouts51.com/account/claim/abc123'
 args = [@cust, :hostname => 'tryouts51.com', :uri => uri]
 view = Stella::Email::Account::ExpressConfirmation.new *args
 view.render.match(uri).nil?
-##=> false
+#=> false
 
 ## General notification
 uri = 'https://tryouts51.com/account/claim/abc123'

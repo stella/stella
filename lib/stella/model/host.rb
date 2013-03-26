@@ -49,6 +49,10 @@ class Stella
     def verified_age() (Stella.now - (verified_at || -1)).to_i end
     def resolved_age() (Stella.now - (resolved_at || -1)).to_i end
     def duration() ((resolved_at || Stella.now) - detected_at).to_i end
+    def resolved?
+      !resolved_at.nil?
+    end
+    alias_method :resolved, :resolved?
     def normalize
       self.dentid ||= gibbler
       update_timestamps
@@ -90,6 +94,7 @@ class Stella
     def enqueue_checkups
       1.times {
         checkup = Stella::Checkup.new :host => host, :planid => testplan.planid
+        checkup.data['incident-detected'] = true
         checkup.testplan = testplan
         checkup.customer = testplan.customer
         checkup.save
@@ -371,9 +376,35 @@ class Stella
   end
 
   module HasTestrunSummary
+    def incident_detection
+      if self.summary['status'] == 'timeout'
+        dent = self.create_incident self.status
+      elsif self.summary['error_count'] > 0
+        dent = self.create_incident :error
+      else
+        nil
+      end
+    end
+    def create_incident kind
+      Stella::Logic.safedb {
+        if dent = self.testplan.current_incident
+          Stella.li '[current-incident] %s' % [dent.to_json]
+          dent.data['verified_count'] ||= 0
+          dent.data['verified_count'] += 1
+          dent.verified! unless dent.status?(:verified)
+        else
+          dent = Stella::Incident.create(:host => self.host, :testplan => self.testplan, :customer => self.testplan.customer, :kind => kind)
+        end
+        if self.respond_to?(:incident=)
+          self.incident = dent
+          self.incident.testruns << self
+        end
+        dent
+      }
+    end
     def parsed_summary
       @parsed_summary ||=
-      if self.summary
+      if !(self.summary || {}).empty?
         s = self.summary
         s['assets'] ||= []
         s['assets'].each do |asset|
@@ -471,27 +502,7 @@ class Stella
       self.summary = Stella::Testrun.parse_har(har)
       self.result = har
     end
-    def incident_detection
-      if self.summary['status'] == 'timeout'
-        self.status = :timeout
-        dent = self.create_incident self.status
-      else
-        self.status = :done
-      end
-      self.status = :done
 
-      if self.summary['error_count'] > 0
-        dent = self.create_incident :error
-      end
-    end
-    def create_incident kind
-      Stella::Logic.safedb {
-        self.incident = self.testplan.current_incident ||
-                        Stella::Incident.create(:host => self.host, :testplan => self.testplan, :customer => self.testplan.customer, :kind => kind)
-        self.incident.testruns << self
-        self.incident
-      }
-    end
     class << self
       attr_reader :metrics
       def destroy! opts={}

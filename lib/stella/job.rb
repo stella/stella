@@ -207,6 +207,7 @@ class Stella
           checkup.save
           return
         end
+        checkup.status = :done
         checkup.summary = Stella::Testrun.parse_har(report)
         Stella.ld '[summary] %s' % checkup.summary.to_json
         if checkup.summary['status'] == 'timeout'
@@ -215,13 +216,15 @@ class Stella
           checkup.status = :done
         end
 
-        if dent = plan.current_incident
-          dent.data['verified_count'] ||= 0
-          dent.data['verified_count'] += 1
-          dent.verified!
-          dent.send_notification
-          dent.save
-          Stella.ld '[current-incident] %s' % [dent.to_json]
+        if checkup.data['incident-detected']
+          Stella.li '[verifying-incident]'
+          if (dent = checkup.incident_detection)
+            Stella.li '[ongoing-incident] %s' % [dent.to_json]
+            dent.send_notification if dent.data['verified_count'] == 1
+          elsif dent = plan.current_incident
+            dent.resolved!
+            Stella.li '[resolved-incident] %s' % [dent.to_json]
+          end
         end
 
         if checkup.summary['gaid'] #&& checkup.host.settings['gaid'].to_s.empty?
@@ -296,9 +299,16 @@ class Stella
 
         plan.testruns << run
 
+        run.status = :done
         run.parse_har(har)
 
-        run.incident_detection
+        if (dent = run.incident_detection)
+          Stella.li '[ongoing-incident] %s' % [dent.to_json]
+          dent.send_notification if dent.data['verified_count'] == 1
+        elsif dent = plan.current_incident
+          dent.resolved!
+          Stella.li '[resolved-incident] %s' % [dent.to_json]
+        end
 
         Stella::Logic.safedb { run.save }
         Stella::Logic.safedb { plan.save }
