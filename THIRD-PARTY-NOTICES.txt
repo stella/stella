@@ -15433,10 +15433,13 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
+ - @tiptap/extension-bold@3.20.0
  - @tiptap/extension-bubble-menu@3.20.0
  - @tiptap/extension-document@3.20.0
  - @tiptap/extension-floating-menu@3.20.0
+ - @tiptap/extension-heading@3.20.0
  - @tiptap/extension-history@3.20.0
+ - @tiptap/extension-italic@3.20.0
  - @tiptap/extension-mention@3.20.0
  - @tiptap/extension-paragraph@3.20.0
  - @tiptap/extension-placeholder@3.20.0
