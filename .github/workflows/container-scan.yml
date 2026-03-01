@@ -1,0 +1,54 @@
+name: Container Image Scan
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/Dockerfile"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/Dockerfile"
+  schedule:
+    # Weekly scan to catch newly disclosed CVEs
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build image
+        run: |
+          docker build \
+            -f apps/api/Dockerfile \
+            -t stella-api:scan \
+            .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # v0.34.1
+        with:
+          image-ref: "stella-api:scan"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          # Fail on scheduled scans (alert on new CVEs) but not
+          # on PRs where base-image CVEs are outside author control.
+          exit-code: ${{ github.event_name == 'schedule' && '1' || '0' }}
+
+      # TODO: remove visibility guard once the repo is public
+      # (upload-sarif requires GitHub Advanced Security).
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        if: always() && github.repository_visibility == 'public'
+        with:
+          sarif_file: "trivy-results.sarif"

@@ -1,0 +1,70 @@
+import { eq, inArray } from "drizzle-orm";
+import Elysia from "elysia";
+
+import { db } from "@/api/db";
+import {
+  contacts,
+  properties,
+  propertyDependencies,
+  timeEntries,
+  workspaceContacts,
+  workspaces,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
+import { authMacro } from "@/api/lib/auth";
+
+export const devRoute = new Elysia({ prefix: "/dev" })
+  .use(authMacro)
+  .guard({
+    validateAuth: true,
+    beforeHandle: () => {
+      if (!env.isDev) {
+        return new Response("Not available", {
+          status: 404,
+        });
+      }
+      return undefined;
+    },
+  })
+  .post("/seed", async (ctx) => {
+    const orgId = ctx.session.activeOrganizationId;
+    const userId = ctx.user.id;
+    const { seed } = await import("../../../scripts/seed-dev");
+    await seed(orgId, userId);
+    return { ok: true };
+  })
+  .post("/clean", async (ctx) => {
+    const orgId = ctx.session.activeOrganizationId;
+
+    // Delete in dependency order.
+    // 1. Time entries and workspace contacts (org-scoped)
+    await db.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));
+    await db
+      .delete(workspaceContacts)
+      .where(eq(workspaceContacts.organizationId, orgId));
+
+    // 2. Property dependencies (no org FK; resolve via
+    //    properties -> workspaces). The restrict FK on
+    //    dependsOnPropertyId blocks workspace cascade.
+    const orgPropertyIds = db
+      .select({ id: properties.id })
+      .from(properties)
+      .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id))
+      .where(eq(workspaces.organizationId, orgId));
+
+    await db
+      .delete(propertyDependencies)
+      .where(inArray(propertyDependencies.propertyId, orgPropertyIds));
+    await db
+      .delete(propertyDependencies)
+      .where(inArray(propertyDependencies.dependsOnPropertyId, orgPropertyIds));
+
+    // 3. Workspaces (cascades entities, versions, fields,
+    //    properties, views)
+    await db.delete(workspaces).where(eq(workspaces.organizationId, orgId));
+
+    // 4. Contacts
+    await db.delete(contacts).where(eq(contacts.organizationId, orgId));
+
+    return { ok: true };
+  });

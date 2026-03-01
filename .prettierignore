@@ -1,0 +1,5 @@
+**/*.gen.*
+**/.cache
+.agents
+bun.lock
+sbom.cdx.json

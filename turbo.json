@@ -1,0 +1,49 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "typegen": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": ["transit"],
+      "outputs": [".cache/tsbuildinfo.json"]
+    },
+    "lint": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "{root}/biome.jsonc"]
+    },
+    "format": {
+      "dependsOn": ["transit"],
+      "outputs": [".cache/.prettiercache"],
+      "outputLogs": "new-only"
+    },
+    "//#format:root": {
+      "outputs": [".cache/.prettiercache"],
+      "outputLogs": "new-only"
+    },
+    "i18n:check": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

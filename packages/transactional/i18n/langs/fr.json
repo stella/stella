@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Accepter l'invitation",
+    "body": "{invitedByUsername} vous a invité à rejoindre {organizationName}. Cliquez ci-dessous pour accepter.",
+    "expires": "Cette invitation expire dans 48 heures.",
+    "heading": "Invitation à l'organisation",
+    "ignore": "Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.",
+    "subject": "Vous êtes invité à rejoindre {organizationName}"
+  },
+  "otp": {
+    "emailVerification": "Utilisez ce code pour vérifier votre adresse e-mail.",
+    "expires": "Ce code expire dans 5 minutes.",
+    "forgetPassword": "Utilisez ce code pour réinitialiser votre mot de passe.",
+    "heading": "Votre code à usage unique Stella",
+    "ignore": "Si vous n'avez pas demandé ce code, vous pouvez ignorer cet e-mail.",
+    "preview": "Votre code à usage unique : {otp}",
+    "signIn": "Utilisez ce code pour vous connecter à votre compte Stella.",
+    "subject": "Stella"
+  }
+}

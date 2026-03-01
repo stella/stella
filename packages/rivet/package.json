@@ -1,0 +1,26 @@
+{
+  "name": "@stella/rivet",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "@tamtamchik/json-deep-sort": "^1.4.1",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@rivetkit/react": "catalog:rivet",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    "./consts": "./src/consts.ts",
+    "./actors/*": "./src/actors/*.ts",
+    "./types": "./src/types.ts",
+    "./errors": "./src/errors.ts"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Võta kutse vastu",
+    "body": "{invitedByUsername} kutsus teid liituma organisatsiooniga {organizationName}. Vajutage allpool, et nõustuda.",
+    "expires": "See kutse aegub 48 tunni pärast.",
+    "heading": "Kutse organisatsiooni",
+    "ignore": "Kui te ei oodanud seda kutset, võite selle e-kirja eirata.",
+    "subject": "Teid on kutsutud liituma organisatsiooniga {organizationName}"
+  },
+  "otp": {
+    "emailVerification": "Kasutage seda koodi oma e-posti aadressi kinnitamiseks.",
+    "expires": "See kood aegub 5 minuti pärast.",
+    "forgetPassword": "Kasutage seda koodi oma parooli lähtestamiseks.",
+    "heading": "Teie Stella ühekordne kood",
+    "ignore": "Kui te ei taotlenud seda koodi, võite selle e-kirja eirata.",
+    "preview": "Teie ühekordne kood: {otp}",
+    "signIn": "Kasutage seda koodi oma Stella kontole sisselogimiseks.",
+    "subject": "Stella"
+  }
+}

@@ -1,0 +1,35 @@
+name: "\U0001F680 Feature request"
+description: Submit a proposal/request for a feature
+title: "feat: "
+labels: ["needs approval"]
+type: "feature"
+projects: ["stll-ai/1"]
+
+body:
+  - type: textarea
+    id: feature-request
+    validations:
+      required: true
+    attributes:
+      label: Feature request
+      description: |
+        A short description of the feature proposal.
+
+  - type: textarea
+    id: motivation
+    validations:
+      required: true
+    attributes:
+      label: Motivation
+      description: |
+        Motivation for the proposal, if relevant (inspiration from users' feedback,
+        similar projects, etc.)
+
+  - type: textarea
+    id: sources
+    validations:
+      required: false
+    attributes:
+      label: Relevant sources
+      description: |
+        Links to any relevant GitHub repos, papers, or other resources, if relevant.

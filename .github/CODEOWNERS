@@ -1,0 +1,9 @@
+# Default — all changes require review.
+* @jan-kubica @nnad3N
+
+# CI, workflows, and branch protection — admin only.
+.github/ @jan-kubica
+
+# Database schema — requires Damian's review.
+apps/api/src/db/schema.ts @nnad3N
+apps/api/src/db/schema-validators.ts @nnad3N

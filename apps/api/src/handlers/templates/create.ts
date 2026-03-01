@@ -1,0 +1,166 @@
+import { eq } from "drizzle-orm";
+import { status, t } from "elysia";
+import { nanoid } from "nanoid";
+
+import { db } from "@/api/db";
+import { templates } from "@/api/db/schema";
+import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
+import { discoverTemplate } from "@/api/handlers/docx/discover-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+  writeManifest,
+} from "@/api/handlers/docx/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { LIMITS } from "@/api/lib/limits";
+import { s3 } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
+
+export const createTemplateBodySchema = t.Object({
+  file: t.File({ maxSize: "50m" }),
+  name: tDefaultVarchar,
+  // Elysia auto-parses JSON strings from FormData, so the
+  // manifest may arrive as a string or an already-parsed
+  // object depending on transport. Accept any and validate
+  // in the handler.
+  manifest: t.Optional(t.Any()),
+});
+
+type CreateTemplateProps = {
+  organizationId: SafeId<"organization">;
+  userId: string;
+  body: {
+    file: File;
+    name: string;
+    manifest?: unknown;
+  };
+};
+
+const buildS3Key = (organizationId: string, templateId: string) =>
+  `${organizationId}/templates/${templateId}.docx`;
+
+/** Accept a string (JSON body) or already-parsed object
+ *  (FormData auto-parsed by Elysia). */
+const parseClientManifest = (value: unknown): TemplateManifest | null => {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(parsed)) {
+    return null;
+  }
+  if (!Array.isArray(parsed.fields)) {
+    return null;
+  }
+  if ("conditions" in parsed && !Array.isArray(parsed.conditions)) {
+    return null;
+  }
+  // SAFETY: top-level shape validated above; FieldMeta
+  // optional properties handled gracefully downstream.
+  return parsed as TemplateManifest;
+};
+
+export const createTemplateHandler = async ({
+  organizationId,
+  userId,
+  body: { file, name, manifest: manifestJson },
+}: CreateTemplateProps) => {
+  if (file.type !== DOCX_MIME_TYPE) {
+    return status(400, {
+      message: "Invalid file type. Expected a DOCX file.",
+    });
+  }
+
+  const existingCount = await db.$count(
+    templates,
+    eq(templates.organizationId, organizationId),
+  );
+
+  if (existingCount >= LIMITS.templatesCount) {
+    return status(400, {
+      message: "Templates limit reached",
+    });
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const [discovered, existingManifest] = await Promise.all([
+    discoverTemplate(buffer),
+    readManifest(buffer),
+  ]);
+
+  const fields = mergeManifestWithDiscovery(existingManifest, discovered);
+
+  // If the client supplied field metadata (from the configure
+  // step), overlay it onto the discovered fields.
+  let fieldMetas: FieldMeta[] = fields.map((f) => ({
+    path: f.path,
+    label: f.label,
+    inputType: f.inputType,
+    options: f.options,
+    validation: f.validation,
+    required: f.required,
+  }));
+
+  const clientManifest =
+    manifestJson != null ? parseClientManifest(manifestJson) : null;
+
+  if (clientManifest) {
+    const metaByPath = new Map<string, FieldMeta>();
+    for (const f of clientManifest.fields) {
+      metaByPath.set(f.path, f);
+    }
+    fieldMetas = fieldMetas.map((f) => {
+      const override = metaByPath.get(f.path);
+      if (!override) {
+        return f;
+      }
+      return { ...f, ...override };
+    });
+  }
+
+  const manifest: TemplateManifest = {
+    version: existingManifest?.version ?? 1,
+    fields: fieldMetas,
+    conditions:
+      clientManifest?.conditions ?? existingManifest?.conditions ?? [],
+  };
+
+  const docxWithManifest = await writeManifest(buffer, manifest);
+
+  // Pre-generate the ID so the S3 key and DB row stay in sync.
+  const templateId = nanoid();
+  const s3Key = buildS3Key(organizationId, templateId);
+
+  await s3.write(s3Key, new Uint8Array(docxWithManifest));
+
+  const [inserted] = await db
+    .insert(templates)
+    .values({
+      id: templateId,
+      organizationId,
+      name,
+      fileName: file.name,
+      s3Key,
+      sizeBytes: docxWithManifest.byteLength,
+      manifest,
+      fieldCount: fields.length,
+      createdBy: userId,
+    })
+    .returning({
+      id: templates.id,
+      name: templates.name,
+      fileName: templates.fileName,
+      fieldCount: templates.fieldCount,
+      sizeBytes: templates.sizeBytes,
+      createdAt: templates.createdAt,
+    });
+
+  return inserted;
+};

@@ -1,0 +1,239 @@
+import { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { actor, UserError } from "rivetkit";
+
+import { db } from "@/api/db";
+import { entities } from "@/api/db/schema";
+import { advanceQueueAction } from "@/api/handlers/registry/actors/workflow/advance-queue";
+import { finishWorkflowAction } from "@/api/handlers/registry/actors/workflow/finish-workflow";
+import {
+  getExecutionPlanData,
+  getPropertyExecutionPlan,
+} from "@/api/handlers/registry/actors/workflow/get-execution-plan";
+import { processBatchAction } from "@/api/handlers/registry/actors/workflow/process-batch";
+import {
+  defaultWorkflowState,
+  startWorkflowSchema,
+  workflowActions,
+  type StartWorkflowReturn,
+  type StartWorkflowSchema,
+  type WorkflowActionSchemas,
+} from "@/api/handlers/registry/actors/workflow/schema";
+import {
+  handleUnrecoverableError,
+  runWorkflowAction,
+} from "@/api/handlers/registry/actors/workflow/utils";
+import {
+  broadcastEvent,
+  createUserError,
+  validateActorInput,
+  validateActorSession,
+} from "@/api/handlers/registry/utils";
+
+const { processBatch, advanceQueue, finishWorkflow } = workflowActions;
+
+type DestroyActionResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
+export const workflowActor = actor({
+  state: defaultWorkflowState(),
+  createConnState: (c, params) => validateActorSession(c.key, params),
+  onWake: (c) => {
+    if (!c.state.isRunning) {
+      return;
+    }
+
+    if (c.state.pendingBatches.size === 0) {
+      c.state.isRunning = false;
+      return;
+    }
+
+    for (const [entityId, pendingEntity] of c.state.pendingBatches) {
+      for (const batchId of pendingEntity.remainingBatches) {
+        runWorkflowAction(c, processBatch, {
+          batchId,
+          level: pendingEntity.level,
+          entityId,
+        });
+      }
+    }
+  },
+  actions: {
+    getWorkflowStatus: (c) => {
+      return { running: c.state.isRunning };
+    },
+    startWorkflow: async (
+      c,
+      rawInput: StartWorkflowSchema,
+    ): Promise<StartWorkflowReturn> => {
+      const input = validateActorInput(startWorkflowSchema, rawInput);
+      const { workspaceId } = c.conn.state;
+      if (c.state.isRunning) {
+        c.log.warn("Workflow already running");
+        return { status: "already-running" };
+      }
+
+      c.state.requestId = nanoid();
+      c.state.isRunning = true;
+      broadcastEvent(c, {
+        name: "workflow-status",
+        data: { running: true },
+      });
+
+      const nestedResult = await Result.tryPromise(async () => {
+        const entityRows = await db
+          .select({ id: entities.id, kind: entities.kind })
+          .from(entities)
+          .where(and(eq(entities.workspaceId, workspaceId)));
+
+        const executionPlanData = await getExecutionPlanData(workspaceId);
+        const executionPlan = getPropertyExecutionPlan(executionPlanData);
+
+        c.state.executionPlan = executionPlan;
+
+        // Filter out folders (they can't have AI-derived metadata)
+        // and order based on input entityIds
+        const nonFolderIds = new Set(
+          entityRows.filter((e) => e.kind !== "folder").map((e) => e.id),
+        );
+        const orderedEntityIds = input.entityIds.filter((id) =>
+          nonFolderIds.has(id),
+        );
+
+        for (const entityId of orderedEntityIds) {
+          c.state.queuedEntities.add(entityId);
+        }
+
+        const batchId = executionPlan.at(0)?.at(0)?.id;
+        const entityId = orderedEntityIds.at(0);
+
+        // No AI properties to process: finish immediately
+        if (!batchId || !entityId) {
+          c.log.debug(
+            { requestId: c.state.requestId },
+            "Empty execution plan, finishing",
+          );
+          await runWorkflowAction(c, finishWorkflow, undefined);
+          return Result.ok();
+        }
+
+        c.log.debug({ requestId: c.state.requestId }, "Starting workflow");
+
+        await runWorkflowAction(c, advanceQueue, {
+          batchId,
+          entityId,
+        });
+
+        return Result.ok();
+      });
+
+      const workflowStartResult = Result.flatten(nestedResult);
+
+      if (Result.isOk(workflowStartResult)) {
+        return { status: "started" };
+      }
+
+      const error = workflowStartResult.error;
+
+      handleUnrecoverableError({
+        c,
+        requestId: c.state.requestId,
+        error,
+      });
+
+      c.state.isRunning = false;
+      broadcastEvent(c, {
+        name: "workflow-status",
+        data: { running: false },
+      });
+
+      if (workflowStartResult.error instanceof UserError) {
+        throw workflowStartResult.error;
+      }
+
+      return { status: "failed" };
+    },
+    [advanceQueue]: async (
+      c,
+      input: WorkflowActionSchemas[typeof advanceQueue],
+    ) => {
+      if (c.conn) {
+        throw createUserError("forbidden");
+      }
+
+      c.log.debug(
+        { requestId: c.state.requestId, ...input },
+        "Advancing queue",
+      );
+
+      const result = await advanceQueueAction(c, input);
+
+      if (Result.isError(result)) {
+        handleUnrecoverableError({
+          c,
+          requestId: c.state.requestId,
+          error: result.error,
+        });
+      }
+    },
+    [processBatch]: async (
+      c,
+      input: WorkflowActionSchemas[typeof processBatch],
+    ) => {
+      if (c.conn) {
+        throw createUserError("forbidden");
+      }
+
+      c.log.debug(
+        { requestId: c.state.requestId, ...input },
+        "Processing batch",
+      );
+
+      const result = await processBatchAction(c, input);
+
+      if (Result.isError(result)) {
+        handleUnrecoverableError({
+          c,
+          requestId: c.state.requestId,
+          error: result.error,
+        });
+      }
+    },
+    [finishWorkflow]: async (c) => {
+      if (c.conn) {
+        throw createUserError("forbidden");
+      }
+
+      c.log.debug({ requestId: c.state.requestId }, "Finishing workflow");
+
+      const result = await finishWorkflowAction(c);
+
+      if (Result.isError(result)) {
+        handleUnrecoverableError({
+          c,
+          requestId: c.state.requestId,
+          error: result.error,
+        });
+      }
+    },
+    destroy: (c): DestroyActionResult => {
+      if (c.state.isRunning) {
+        return {
+          success: false,
+          message: "You can't delete workspace while workflow is running",
+        };
+      }
+
+      c.destroy();
+
+      return { success: true };
+    },
+  },
+});

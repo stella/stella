@@ -1,0 +1,272 @@
+import { useCallback, useRef, useState } from "react";
+import {
+  LayoutTemplateIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
+
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stella/ui/components/alert-dialog";
+import { Button } from "@stella/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@stella/ui/components/menu";
+import { toastManager } from "@stella/ui/components/toast";
+
+import { api } from "@/lib/api";
+import { DOCX_MIME } from "@/lib/consts";
+import { userErrorMessage } from "@/lib/errors";
+import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
+
+type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
+
+type DiscoverData = Exclude<
+  NonNullable<Extract<DiscoverResponse, { data: unknown }>["data"]>,
+  Response
+>;
+
+type TemplateItem = {
+  id: string;
+  name: string;
+  fileName: string;
+  fieldCount: number;
+  sizeBytes: number;
+  createdAt: Date;
+};
+
+type TemplateListProps = {
+  templates: TemplateItem[];
+  onDiscovered: (file: File, schema: DiscoverData) => void;
+  onSelect: (template: TemplateItem) => void;
+  onDeleted: () => void;
+};
+
+export const TemplateList = ({
+  templates,
+  onDiscovered,
+  onSelect,
+  onDeleted,
+}: TemplateListProps) => {
+  const t = useTranslations();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [discovering, setDiscovering] = useState(false);
+
+  const discover = useCallback(
+    async (file: File) => {
+      if (file.type !== DOCX_MIME) {
+        toastManager.add({
+          type: "error",
+          title: t("templates.invalidFileType"),
+        });
+        return;
+      }
+
+      setDiscovering(true);
+      const response = await api.templates.discover.post({ file });
+      setDiscovering(false);
+
+      if (response.error) {
+        toastManager.add({
+          type: "error",
+          title: t("templates.discoveryFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      const { data } = response;
+      if (data instanceof Response) {
+        toastManager.add({
+          type: "error",
+          title: t("templates.discoveryFailed"),
+        });
+        return;
+      }
+
+      onDiscovered(file, data);
+    },
+    [onDiscovered, t],
+  );
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.item(0);
+      if (file) {
+        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+        discover(file);
+      }
+      e.target.value = "";
+    },
+    [discover],
+  );
+
+  if (templates.length === 0) {
+    return <TemplateUpload onDiscovered={onDiscovered} />;
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b px-4 py-2">
+        <span className="text-sm text-muted-foreground">
+          {String(templates.length)}
+        </span>
+        <Button
+          disabled={discovering}
+          onClick={() => inputRef.current?.click()}
+          size="sm"
+        >
+          <PlusIcon />
+          {discovering
+            ? t("templates.discovering")
+            : t("templates.newTemplate")}
+        </Button>
+        <input
+          accept=".docx"
+          className="hidden"
+          onChange={handleFileChange}
+          ref={inputRef}
+          type="file"
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <ul className="divide-y">
+          {templates.map((template) => (
+            <TemplateRow
+              key={template.id}
+              onDeleted={onDeleted}
+              onSelect={() => onSelect(template)}
+              template={template}
+            />
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+const TemplateRow = ({
+  template,
+  onSelect,
+  onDeleted,
+}: {
+  template: TemplateItem;
+  onSelect: () => void;
+  onDeleted: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    const response = await api
+      .templates({
+        templateId: template.id,
+      })
+      .delete();
+
+    setDeleting(false);
+
+    if (response.error) {
+      toastManager.add({
+        type: "error",
+        title: t("templates.deleteFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    toastManager.add({
+      type: "success",
+      title: t("templates.templateDeleted"),
+    });
+    setDeleteOpen(false);
+    onDeleted();
+  }, [template.id, t, onDeleted]);
+
+  return (
+    <li className="flex items-center gap-4 px-4 py-3">
+      <button
+        className="flex min-w-0 flex-1 items-center gap-3 text-left hover:opacity-80"
+        onClick={onSelect}
+        type="button"
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+          <LayoutTemplateIcon className="size-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{template.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("templates.fieldCount", {
+              count: template.fieldCount,
+            })}
+            {" \u00b7 "}
+            {format.dateTime(new Date(template.createdAt), {
+              dateStyle: "medium",
+            })}
+          </p>
+        </div>
+      </button>
+
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button size="icon-xs" variant="ghost" />}
+          >
+            <MoreHorizontalIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              className="text-destructive-foreground"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2Icon />
+              {t("common.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("templates.confirmDelete")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={deleting}
+              onClick={handleDelete}
+              variant="destructive"
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </li>
+  );
+};

@@ -1,0 +1,118 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+      timezone: "Europe/Prague"
+    # Only accept updates that have been published for at least 3 days
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+      - "nnad3N"
+
+  - package-ecosystem: "docker"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Prague"
+    cooldown:
+      default-days: 3
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+
+  - package-ecosystem: "bun"
+    # given that we use monorepo setup, Dependabot should only point to the root
+    directories:
+      - "/"
+    labels:
+      - "📦 dependencies"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "Europe/Prague"
+    # Only accept updates that have been published for at least 3 days
+    cooldown:
+      default-days: 3
+
+    groups:
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+        exclude-patterns:
+          - "@tanstack/react-query*"
+      vite:
+        patterns:
+          - "vite*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      prettier:
+        patterns:
+          - "prettier*"
+      ai:
+        patterns:
+          - "ai*"
+      convex:
+        patterns:
+          - "convex*"
+          - "@convex-dev/*"
+      posthog:
+        patterns:
+          - "posthog*"
+          - "@posthog*"
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+      aws:
+        patterns:
+          - "@aws-sdk/*"
+      drizzle:
+        patterns:
+          - "drizzle-orm"
+          - "drizzle-kit"
+      elysia:
+        patterns:
+          - "elysia"
+          - "@elysiajs/*"
+      react-email:
+        patterns:
+          - "react-email"
+          - "@react-email/*"
+      rivetkit:
+        patterns:
+          - "rivetkit"
+          - "@rivetkit/*"
+      biome:
+        patterns:
+          - "@biomejs/*"
+          - "ultracite"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+    versioning-strategy: increase
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "nnad3N"

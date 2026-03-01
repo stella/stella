@@ -1,0 +1,14 @@
+{
+  "extends": "@stella/typescript-config/base.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "baseUrl": "./",
+    "paths": {
+      "@/api/*": ["./src/*"]
+    },
+    "jsx": "react-jsx",
+    "types": ["bun-types"]
+  }
+}

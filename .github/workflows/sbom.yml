@@ -1,0 +1,63 @@
+name: SBOM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bun.lock"
+      - "**/package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sbom-generation
+  cancel-in-progress: true
+
+jobs:
+  generate-sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Generate CycloneDX SBOM
+        run: bunx @cyclonedx/cdxgen -o sbom.cdx.json
+
+      - name: Generate third-party license notices
+        run: bunx generate-license-file --input package.json --output THIRD-PARTY-NOTICES.txt --overwrite
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom.cdx.json
+            THIRD-PARTY-NOTICES.txt
+          retention-days: 365
+
+      - name: Commit SBOM and NOTICE to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sbom.cdx.json THIRD-PARTY-NOTICES.txt
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update SBOM and third-party notices [skip ci]"
+            git pull --rebase
+            git push
+          fi

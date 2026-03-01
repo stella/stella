@@ -1,0 +1,14 @@
+{
+  "extends": "@stella/typescript-config/react-library.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@stella/ui/*": ["./src/*"]
+    }
+  },
+  "include": [
+    ".",
+    "../../apps/web/src/routes/workspaces/$workspaceId/-components/properties/rich-text-editor.tsx"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

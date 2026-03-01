@@ -1,0 +1,57 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Weekly scan to catch new vulnerability patterns
+  schedule:
+    - cron: "30 14 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # CodeQL requires GitHub Advanced Security, which is
+      # only free for public repositories. Skip gracefully
+      # while the repo is private; remove this check once
+      # the repository is public.
+      - name: Check if repo is public
+        id: visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRIVATE=$(gh api repos/${{ github.repository }} --jq '.private')
+          echo "skip=$PRIVATE" >> "$GITHUB_OUTPUT"
+
+      - name: Initialize CodeQL
+        if: steps.visibility.outputs.skip != 'true'
+        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4.4.32.42.4.32.4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        if: steps.visibility.outputs.skip != 'true'
+        uses: github/codeql-action/autobuild@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4.4.32.42.4.32.4
+
+      - name: Run CodeQL analysis
+        if: steps.visibility.outputs.skip != 'true'
+        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4.4.32.42.4.32.4
+        with:
+          category: "/language:${{ matrix.language }}"
