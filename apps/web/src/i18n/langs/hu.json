@@ -447,7 +447,7 @@
     "sidebarDescription": "Megjeleníti a mobil oldalsávot.",
     "templates": "Sablonok",
     "timeTracking": "Időkövetés",
-    "toggleSidebar": "Oldalsáv váltása"
+    "toggleSidebar": "Oldalsáv be/ki"
   },
   "organization": {
     "invitations": {

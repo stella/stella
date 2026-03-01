@@ -446,8 +446,8 @@
     "sidebar": "Külgriba",
     "sidebarDescription": "Kuvab mobiilse külgriba.",
     "templates": "Mallid",
-    "timeTracking": "Ajaregistreerimine",
-    "toggleSidebar": "Lülita külgriba"
+    "timeTracking": "Ajaarvestus",
+    "toggleSidebar": "Külgriba kuvamine"
   },
   "organization": {
     "invitations": {
