@@ -246,6 +246,7 @@ checksums:
     common/edit: eee7f39ff90b18852afc1671f21fbaa9
     common/email: e7f34943a0c2fb849db1839ff6ef5cb5
     common/empty: 0ae6634426bd0372d82f5bcd0441f67e
+    common/enterKey: d047afa5fcbf925ecc71457e7909ca73
     common/filter: 626325a05e4c8800f7ede7012b0cadaf
     common/invite: 181884cea804cbde665f160811ee7ad0
     common/kind: 0123e6ec1d5591e6af34906cc4904d58
@@ -479,6 +480,23 @@ checksums:
     organization/settings: 11528aa89ae9935e55dcb54478058775
     organization/settingsDescription: c49871988cec7c6915257ca77d1a0b72
     organization/title: 3dc8489af7e74121f65ce6d9677bc94d
+    rightPanel/askAboutMatter: bf6a6768ea0db930f8bc5bb98b1bca75
+    rightPanel/chatPlaceholder: bb14221474426ee72e8c3d2b09cc6cab
+    rightPanel/title: 1171b63c16b3431dca319af1804de2a0
+    search/emptyState: b9ab4fbf293bb23ee0cac706dbf6de30
+    search/escKey: 8faef74a45ab0b2f23819a473466de98
+    search/facets/kind: 0123e6ec1d5591e6af34906cc4904d58
+    search/facets/workspace: b63ef0e99ee6f7fef6cbe4971ca6cf0f
+    search/filterLabel: a0d4f9515d4d3268810bc56c637d8d43
+    search/kinds/document: 5ecdc0287221f041681ed05eecde53f4
+    search/kinds/folder: 55abc55b8ff7891f38db1a5b7bf97765
+    search/kinds/message: f2f72126bd244cfc534eab395e054362
+    search/kinds/task: 3f9a91cfb6e28a19e84a786238fc6a66
+    search/loadMore: 365c2d8dfc53ac7e9188acd5274e2837
+    search/metaSeparator: dcad7d6a11a80935b366a5ba27766003
+    search/noResults: 847c747f08a479d650e6bdea779e9ba1
+    search/placeholder: 2409a1e42cf8c6902e8eadb221170162
+    search/resultCount: 01304031537c8c08724d1718ddc71148
     success/clientUpdated: ebe84e980444cb92cb9159eff2adfec5
     success/contactCreated: 900fc2ca4e8ba5a5494a35f087684033
     success/contactDeleted: 46ff2bb2918975f350f8ea201af8c138
