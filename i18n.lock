@@ -196,8 +196,11 @@ checksums:
     clauses/outdatedVersion: 1285697331e7232ea69104fdd69cd916
     clauses/saveFailed: 62400b733928e0ff6732defff6a5adb3
     clauses/searchClauses: 5032cfcb84dd990bbf9e3c968e7f8847
+    clauses/searchPlaceholder: 5032cfcb84dd990bbf9e3c968e7f8847
     clauses/selectCategory: 1b0340cd175aa5a2be745a0d54908466
     clauses/selectVariant: c6f13e35b690d95979b2ef60643b7d46
+    clauses/slotName: c7e7e0150cd68800aa2e25a3fef1feab
+    clauses/slotNamePlaceholder: 557a7061df4787c446f11f4fd951d901
     clauses/syncFailed: 6bfef0d9d60c9580dcd8b117fd05660e
     clauses/syncVersion: f826181fac0b8043c0df0834e0fdfa3d
     clauses/synced: 8c5a0f395d67ed2f7eadc984b032a5fb
@@ -209,7 +212,10 @@ checksums:
     clauses/unlinkConfirm: 723edd7bced175ec71b7f9dc2453ac4c
     clauses/unlinkFailed: a501d5f7d357ae86ed19724bd2959c2f
     clauses/unlinked: ed5fb6a2822be075b8ccc7eabe7d39fd
+    clauses/unmappedSlot: 6a8dad7784ecae5d3f042d41a4564869
     clauses/updateFailed: a0bf40d4bdf03dd7316e6600de7d01ed
+    clauses/usageNotes: 3d3b77c93fabd664d66928a0458fbc3d
+    clauses/usageNotesPlaceholder: fecb2758172b03a11955374f5085b578
     clauses/variantCreated: 6cdc17a411877f5c8326d5f998999342
     clauses/variantDeleted: 085e8244250751f5d89b9ba79ff35ddf
     clauses/variantLabel: 97b71d640a313bfdcedecbb7ea6d39b4
@@ -519,6 +525,7 @@ checksums:
     templates/fillForm: 4a15e225dbc14cb451ec26a9e6270878
     templates/generate: 038761ad1a11e65749fb0b6d6cd732bf
     templates/generating: d55ce9138ed4a7d033bd9030425bf850
+    templates/history: b0578d6d225f512e42f823fbca2e3c32
     templates/inputTypes/boolean: e5929d2af93c29177e2bec2e01e9c8ec
     templates/inputTypes/date: 56f41c5d30a76295bb087b20b7bee4c3
     templates/inputTypes/number: 2789f8391f63e7200a5521078aab017d
@@ -551,6 +558,9 @@ checksums:
     templates/validationMinLength: a7d0cf9a382721778ac083481eac3376
     templates/validationPattern: 9c595130e6dd1c02f5f70c876635b3f6
     templates/validationRequired: 41f31582f26b943b74e63ec06580a682
+    templates/versionLabel: b519bdc0f1dfa0134ef3d0fb98f51cde
+    templates/versionsEmpty: 59f88a89f58cecc500e135601e7a8732
+    templates/viewVersion: 36a9b5e3dc153c036d320460d72a03c3
     validation/organizationNameRequired: 273c074cf6b26453fad2814f6b594042
     validation/slugFormat: a171800ab50449d6b3f3075eaa6a198c
     validation/slugRequired: 4e8aa0597a551cb9c1ca4724e272df23
