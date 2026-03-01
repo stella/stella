@@ -8,6 +8,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const duplicateEntityBodySchema = t.Object({
   entityId: tNanoid,
@@ -143,7 +145,7 @@ export const duplicateEntityHandler = async ({
 
   const sourceFields = source.currentVersion.fields;
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const entityCount = await tx.$count(
       entities,
       eq(entities.workspaceId, workspaceId),
@@ -202,4 +204,10 @@ export const duplicateEntityHandler = async ({
 
     return { entityId: newEntityId };
   });
+
+  if (result && typeof result === "object" && "entityId" in result) {
+    getSearchProvider().indexEntity(result.entityId).catch(captureError);
+  }
+
+  return result;
 };

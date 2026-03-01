@@ -268,6 +268,7 @@ type Messages = {
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "description": "Description";
     "done": "Done";
+    "enterKey": "↵";
     "download": "Download";
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
@@ -559,6 +560,31 @@ type Messages = {
     "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
     "title": "Organization";
+  };
+  "rightPanel": {
+    "askAboutMatter": "Ask questions about your matter.";
+    "chatPlaceholder": "Chat will appear here.";
+    "title": "Chat";
+  };
+  "search": {
+    "emptyState": "Start typing to search across all matters.";
+    "facets": {
+      "kind": "Kind";
+      "workspace": "Workspace";
+    };
+    "kinds": {
+      "document": "Document";
+      "folder": "Folder";
+      "message": "Message";
+      "task": "Task";
+    };
+    "escKey": "ESC";
+    "filterLabel": "{type}:";
+    "loadMore": "Load more";
+    "metaSeparator": "{workspace} · {time}";
+    "noResults": "No results found for \"{query}\".";
+    "placeholder": "Search across all matters...";
+    "resultCount": "{count, plural, one {# result} other {# results}}";
   };
   "success": {
     "clientUpdated": "Client updated";

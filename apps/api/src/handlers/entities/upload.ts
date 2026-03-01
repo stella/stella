@@ -17,7 +17,9 @@ import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const uploadEntityBodySchema = t.Object({
   file: t.File({
@@ -235,6 +237,8 @@ export const uploadEntityHandler = async ({
 
       return resolvedName;
     });
+
+    getSearchProvider().indexEntity(entityId).catch(captureError);
 
     return {
       entityId,

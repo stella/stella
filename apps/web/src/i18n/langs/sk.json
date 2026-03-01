@@ -271,6 +271,7 @@
     "edit": "Upraviť",
     "email": "Email",
     "empty": "Prázdne",
+    "enterKey": "↵",
     "filter": "Filter",
     "invite": "Pozvať",
     "kind": "Druh",
@@ -556,6 +557,31 @@
     "settings": "Nastavenia organizácie",
     "settingsDescription": "Upravte názov a slug organizácie",
     "title": "Organizácia"
+  },
+  "rightPanel": {
+    "askAboutMatter": "Ask questions about your matter.",
+    "chatPlaceholder": "Chat will appear here.",
+    "title": "Chat"
+  },
+  "search": {
+    "emptyState": "Start typing to search across all matters.",
+    "escKey": "ESC",
+    "facets": {
+      "kind": "Kind",
+      "workspace": "Workspace"
+    },
+    "filterLabel": "{type}:",
+    "kinds": {
+      "document": "Document",
+      "folder": "Folder",
+      "message": "Message",
+      "task": "Task"
+    },
+    "loadMore": "Load more",
+    "metaSeparator": "{workspace} · {time}",
+    "noResults": "No results found for \"{query}\".",
+    "placeholder": "Search across all matters...",
+    "resultCount": "{count, plural, one {# result} other {# results}}"
   },
   "success": {
     "clientUpdated": "Klient aktualizovaný",

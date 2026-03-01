@@ -8,6 +8,8 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { captureError } from "@/api/lib/posthog";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tNanoid, { minItems: 1 }),
@@ -89,6 +91,12 @@ export const deleteEntitiesHandler = async ({
     .update(workspaces)
     .set({ lastActivityAt: new Date() })
     .where(eq(workspaces.id, workspaceId));
+
+  // Explicit removal for non-PG providers (CASCADE handles PG)
+  const provider = getSearchProvider();
+  for (const id of body.entityIds) {
+    provider.removeEntity(id).catch(captureError);
+  }
 
   return;
 };

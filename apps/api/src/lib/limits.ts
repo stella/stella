@@ -27,6 +27,9 @@ export const LIMITS = {
   workspaceContactsCount: 100,
   entityNameMaxLength: 255,
   workspaceContributors: 5,
+  searchQueryMaxLength: 500,
+  searchPageSizeDefault: 20,
+  searchPageSizeMax: 100,
 } as const;
 
 /**

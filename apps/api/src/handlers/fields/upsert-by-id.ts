@@ -6,6 +6,8 @@ import { db } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { captureError } from "@/api/lib/posthog";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const upsertFieldBodySchema = t.Object({
   propertyId: tNanoid,
@@ -91,8 +93,12 @@ export const upsertFieldHandler = async ({
     body.content.value === "" ||
     (Array.isArray(body.content.value) && body.content.value.length === 0);
 
+  const reindex = () => {
+    getSearchProvider().indexEntity(body.entityId).catch(captureError);
+  };
+
   if (isEmpty) {
-    return db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       await tx
         .delete(fields)
         .where(
@@ -106,9 +112,11 @@ export const upsertFieldHandler = async ({
         .set({ updatedAt: new Date() })
         .where(eq(entities.id, body.entityId));
     });
+    reindex();
+    return;
   }
 
-  return db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     await tx
       .delete(fields)
       .where(
@@ -128,7 +136,7 @@ export const upsertFieldHandler = async ({
       .update(entities)
       .set({ updatedAt: new Date() })
       .where(eq(entities.id, body.entityId));
-
-    return;
   });
+  reindex();
+  return;
 };

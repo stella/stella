@@ -60,7 +60,7 @@ export const InlineEdit = ({
         variant="default"
       >
         {t("common.done")}
-        <kbd className="text-[10px] opacity-70">↵</kbd>
+        <kbd className="text-[10px] opacity-70">{t("common.enterKey")}</kbd>
       </Button>
     </span>
   );
