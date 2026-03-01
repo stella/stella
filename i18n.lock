@@ -1,6 +1,25 @@
 version: 1
 checksums:
   d3a2279c00f678fef08875297dab6080:
+    analytics/billedAmount: 312ca0e9934041e7b24eda0fab671668
+    analytics/billedHours: b506a545cfd14c71d0a6dc952993a25d
+    analytics/entries: cfe9fa2bbeedda59de54266997e94efe
+    analytics/entryCount: cfe9fa2bbeedda59de54266997e94efe
+    analytics/hoursByMatter: c9ac675088d6907f995b58e0156dc1dc
+    analytics/hoursByPeriod: 7ddb85b9de04109e694930098f621267
+    analytics/hoursByUser: aada4fcfee58cfec933d1b1a70ea55a7
+    analytics/invalidDateRange: 9d113869d2a31986f3d1813454de668f
+    analytics/last30Days: a738894cfc5e592052f1e16787744568
+    analytics/last7Days: 3631df3109bfecfe358ba15dcf8bd6f5
+    analytics/last90Days: 92882f227706e946b0c6b92953ff1f0f
+    analytics/matter: 8a0a14d10babe8cafbeb08a637893939
+    analytics/noData: 06bb8f19153c855e13fac1bfda21c215
+    analytics/revenueByPeriod: 476196019467156ebb12c0172e20322c
+    analytics/thisMonth: 50845a38865204a97773c44dcd2ebb90
+    analytics/title: ec67586974cc78f25959d47bb36683a7
+    analytics/totalHours: 68e421d55a1c3a6a1fb52ce9d398859b
+    analytics/user: 61073457a5c3901084b557d065f876be
+    analytics/utilization: f507bf25beeb57c3730531ab162e703d
     appearance/cool: 777e63f8478697edfaff84419c8da849
     appearance/dark: 73e6e208ba628b26e90fcf6dce15e1b2
     appearance/flexoki: 93e2a3dde93c9da1b96cd0aa797be0db
@@ -416,6 +435,7 @@ checksums:
     knowledge/sections/templates/description: 54ba289f88d3aef807f03e6a3bac72d5
     knowledge/sections/templates/title: 8ed62f56c81fa96c0f3182acb331bf63
     navigation/agents: f902c551bd769a3ae2f65b44305b1976
+    navigation/analytics: ec67586974cc78f25959d47bb36683a7
     navigation/chat: 1171b63c16b3431dca319af1804de2a0
     navigation/clauses: 462579754cf0f9dab85e687c243a6ed5
     navigation/clients: fc58b7c66ff46ebb5176d1b2af50cc0d
@@ -572,8 +592,11 @@ checksums:
     templates/uploadDescription: 0b981cff1d6b35a051fba345e5e01293
     templates/uploadDifferent: 842aacd2ec4425f93ad7533ec92de11a
     templates/uploadTitle: fe4ec5fa9f670230c50af0da76cc0db2
+    templates/validationErrors: 7579d8c63549a291c89dbd1f1409b58c
     templates/validationMaxLength: e08a03a74e5a53afa9ec30812a51cbce
     templates/validationMinLength: a7d0cf9a382721778ac083481eac3376
+    templates/validationNumberMax: 21b3e8cc74de142c7ec2d3c8a3e50b15
+    templates/validationNumberMin: 844a730bfca8cda7c6e077d4935ec552
     templates/validationPattern: 9c595130e6dd1c02f5f70c876635b3f6
     templates/validationRequired: 41f31582f26b943b74e63ec06580a682
     templates/versionLabel: b519bdc0f1dfa0134ef3d0fb98f51cde
