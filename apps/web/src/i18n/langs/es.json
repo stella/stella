@@ -446,8 +446,8 @@
     "sidebar": "Panel lateral",
     "sidebarDescription": "Muestra el panel lateral móvil.",
     "templates": "Plantillas",
-    "timeTracking": "Registro de tiempo",
-    "toggleSidebar": "Alternar panel lateral"
+    "timeTracking": "Seguimiento de tiempo",
+    "toggleSidebar": "Alternar barra lateral"
   },
   "organization": {
     "invitations": {

@@ -447,7 +447,7 @@
     "sidebarDescription": "Zeigt die mobile Seitenleiste an.",
     "templates": "Vorlagen",
     "timeTracking": "Zeiterfassung",
-    "toggleSidebar": "Seitenleiste umschalten"
+    "toggleSidebar": "Seitenleiste ein-/ausblenden"
   },
   "organization": {
     "invitations": {

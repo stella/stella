@@ -4,7 +4,6 @@ checksums:
     appearance/cool: 777e63f8478697edfaff84419c8da849
     appearance/dark: 73e6e208ba628b26e90fcf6dce15e1b2
     appearance/flexoki: 93e2a3dde93c9da1b96cd0aa797be0db
-    appearance/language: 277fd1a41cc237a437cd1d5e4a80463b
     appearance/light: bb78ea2c6edd8662676c81a8a13ecb93
     appearance/neutral: 39e62449e5ad1af5a2630a0a7182dd4d
     appearance/nord: 0786b9b246fe21febcaf5a1f6ba2e38d
@@ -48,7 +47,6 @@ checksums:
     billing/codes/noCodesYet: 6d7cab4cb45076cd4ddd66ed29288c04
     billing/codes/task: 3f9a91cfb6e28a19e84a786238fc6a66
     billing/codes/taskCode: 05b89fead7bbe4c81edf3249360affd8
-    billing/date: 56f41c5d30a76295bb087b20b7bee4c3
     billing/day: 47648cd60fc313bc3f05b70357a1d675
     billing/decimalHours: 610e7d0cd99767a71c58cae5049b9b6f
     billing/duration: bf6ed0974fdd4eb9d8bd3f4f8c4bd5ae
@@ -74,7 +72,6 @@ checksums:
     billing/loading: 82b4ea7ed1439094d7c4be13aaba9a66
     billing/matter: 8a0a14d10babe8cafbeb08a637893939
     billing/matterRequired: 5bcfe99f65b9145afeac6bb927fe20dd
-    billing/narrative: e17686a22ffad04cc7bb70524ed4478b
     billing/narrativePlaceholder: 21aec97c8081ab43d765f0a659826f1f
     billing/noEntries: de63f6c0548affa7b788e606925025e8
     billing/nonBillable: 3737061070ad35bc13d80a6bd1b45ef3
@@ -183,21 +180,30 @@ checksums:
     common/actions: c46571856723b03262fd33f511116298
     common/add: 87c4a663507f2bcbbf79934af8164e13
     common/cancel: 2e2a849c2223911717de8caa2c71bade
+    common/category: 1b0340cd175aa5a2be745a0d54908466
+    common/comingSoon: ee2b0671e00972773210c5be5a9ccb89
     common/convertTo: d172275c31f502b214eb97230dab850d
     common/createdAt: 21d81e727ea38bb7d9c4af320ef5b248
+    common/currency: d2ba9a9cea418ea653e3ca6785617a3f
     common/currentPage: d88a3915469d5215fc6ba9659ca9a7bf
+    common/date: 56f41c5d30a76295bb087b20b7bee4c3
     common/decline: d9d2b48dc570848e9d803d9216c58b73
     common/delete: 8bcf303dd10a645b5baacb02b47d72c9
     common/deleteConfirmDescription: d72a873f0215ac8cdb18fa262303aa10
+    common/description: e17686a22ffad04cc7bb70524ed4478b
     common/download: 56b7d0834952b39ee394b44bd8179178
     common/duplicate: 27756566785c2b8463e21582c4bb619b
     common/duplicated: b49d344694311ff4d6c9835dd6179ae9
     common/edit: eee7f39ff90b18852afc1671f21fbaa9
+    common/email: e7f34943a0c2fb849db1839ff6ef5cb5
     common/empty: 0ae6634426bd0372d82f5bcd0441f67e
     common/filter: 626325a05e4c8800f7ede7012b0cadaf
     common/invite: 181884cea804cbde665f160811ee7ad0
     common/kind: 0123e6ec1d5591e6af34906cc4904d58
+    common/language: 277fd1a41cc237a437cd1d5e4a80463b
+    common/matters: f898530912102eca13389d49c63c05ae
     common/metadata: 695d4f7da261ba76e3be4de495491028
+    common/name: 9368b5a047572b6051f334af5aa76819
     common/newRow: 527d5b28ee8f1ea5a81b33ef47f80d12
     common/open: 9a8c3b16091ea6cef3f771fc6715ab67
     common/pin: e67f6931f858d0a348f4145e2649b3cf
@@ -217,9 +223,11 @@ checksums:
     common/sort: 8b928fb3b68d93ccda40bed22261e796
     common/tryAgain: 33dd8820e743e35a66e6977f69e9d3b5
     common/type: f04471a7ddac844b9ad145eb9911ef75
+    common/uncategorized: 6db4303a319dd0dc118c7f0878f1b81f
     common/unexpectedError: 7d57bf6af0d97c3b2f5b793c3564384e
     common/unpin: 955a06674c944718bf9f2f242b04bc9f
     common/uploadFiles: 0c517ac5a21439c4a3b8d1f4070ed9fe
+    common/user: 61073457a5c3901084b557d065f876be
     common/verify: 6ad4aad279b2411ee9bf24a43e37ae03
     contacts/alsoPartyIn: be520cdbed329b1ac259f5b8db69ff99
     contacts/attorneys/none: 5a943aee27ddc821660afd716cb9a818
@@ -346,7 +354,6 @@ checksums:
     errors/partyAlreadyExists: d489886d3458725872d3ad018747adbb
     errors/slugAlreadyTaken: 1c53f69ae9dc7c8cc4a17219a1aca656
     errors/uploadFailed: 5b7b755f05330164dbfb00096c500ee3
-    knowledge/comingSoon: ee2b0671e00972773210c5be5a9ccb89
     knowledge/sections/agents/description: 6e30f42346b678a15fe00d88355cde67
     knowledge/sections/agents/title: f902c551bd769a3ae2f65b44305b1976
     knowledge/sections/clauses/description: 7f74a1dad0ff0094563e834597688def
@@ -361,7 +368,6 @@ checksums:
     navigation/chat: 1171b63c16b3431dca319af1804de2a0
     navigation/clauses: 462579754cf0f9dab85e687c243a6ed5
     navigation/clients: fc58b7c66ff46ebb5176d1b2af50cc0d
-    navigation/comingSoon: ee2b0671e00972773210c5be5a9ccb89
     navigation/contacts: d5b6c3f890b3904eaf5754081945c03d
     navigation/expenses: 1746536359bb638c45a12980ab3aac3a
     navigation/inbox: 57e9db873911bf848c79e2ed546ecf45
@@ -377,19 +383,12 @@ checksums:
     navigation/searchPlaceholder: 61c473615b7553462dc022cd37d7b568
     navigation/shortcutCategories/actions: c46571856723b03262fd33f511116298
     navigation/shortcutCategories/navigation: 0373afd8238db1c49f4be4fa6cdf5cd3
-    navigation/shortcutLabels/newMatter: 656707a10b484a3a3fe8e38b0b817615
-    navigation/shortcutLabels/search: 49dd6c21604b5e8d4153ff1aff2177e1
-    navigation/shortcutLabels/toggleSidebar: 4885c19b36525953a6f047dae1d98d2d
-    navigation/shortcutLabels/toggleTimeTracking: b903703c6323a1df9fd47fef933cf452
     navigation/sidebar: 85fcd93a6f051c26d057e4b30d392317
     navigation/sidebarDescription: 51aa5f202c817560f38d3527a9a1366d
     navigation/templates: 8ed62f56c81fa96c0f3182acb331bf63
-    navigation/timeTracking: 0afdb2601727293f211229cc51395b2a
-    navigation/toggleSidebar: 0ef91fcb33b04612eb8a202f673d7881
-    navigation/user: 61073457a5c3901084b557d065f876be
-    navigation/workspaces: f898530912102eca13389d49c63c05ae
+    navigation/timeTracking: b903703c6323a1df9fd47fef933cf452
+    navigation/toggleSidebar: 4885c19b36525953a6f047dae1d98d2d
     organization/invitations/cancelInvitation: 0d45f29a0417e8405834c4167b9924f7
-    organization/invitations/email: e7f34943a0c2fb849db1839ff6ef5cb5
     organization/invitations/emailAddressLabel: 3ba3f099b1b9be6c35ad797da660cb9f
     organization/invitations/emailAddressPlaceholder: b033bdc9cd5b4d00ce3688ef0783fb6f
     organization/invitations/expires: c7be2eba0aa8a35d1b057bde5229508d
@@ -404,7 +403,6 @@ checksums:
     organization/invitations/statuses/canceled: 342a409089d71ce45725add1c62b0ade
     organization/invitations/statuses/pending: 030a6f3395d5d4efddd3cc67d6009039
     organization/invitations/statuses/rejected: 30202c9a9a2093021b0e9a1c61717fe9
-    organization/invitations/title: ab15f40b1ab9fd28b11024e6fb6d3622
     organization/matterNumber/description: d70e2342b189b6a15eced846a3438ef3
     organization/matterNumber/nextPreview: e93a92408d68c51419849cea9dd84b84
     organization/matterNumber/padding: e0bf7e3a0e67921f6df9032890662250
@@ -424,9 +422,7 @@ checksums:
     organization/members/joined: 23f25c607ede93b0610497ccc3b001ae
     organization/members/noMembersFound: fbab5ad192434e49b9208870aab07fd6
     organization/members/removeMember: 1d77c2ca3768e486fd1fb5df30cb60d9
-    organization/members/title: 0932e80cba1e3e0a7f52bb67ff31da32
     organization/members/updateRole: 821c6a0de0b1c94804da5cd2bc871d5e
-    organization/members/user: 61073457a5c3901084b557d065f876be
     organization/roles/admin: 90eb20f1400db82ab874744e47836dc6
     organization/roles/member: 1606dc30b369856b9dba1fe9aec425d2
     organization/roles/owner: 9c0b3aeca046c3ebd3bdc352edc83e88
@@ -531,7 +527,6 @@ checksums:
     workspaces/fields/calculating: b5e7c3c3e1d22b07da4f6413e32ae2fe
     workspaces/fields/currencyLabel: d951c2b0ace239577437aa1ab66b6350
     workspaces/fields/currencyPlaceholder: 5ffadf28abee4bdcb695ffee59087e1c
-    workspaces/fields/dateLabel: 56f41c5d30a76295bb087b20b7bee4c3
     workspaces/fields/editFieldValue: c6a9c170c10729b868ea06c8d518e69a
     workspaces/fields/errored: 67b74622055a5f302588c1ab41293950
     workspaces/fields/fieldValueLabel: 6b71a5e7b705b58111a6b55ea1043902
@@ -542,7 +537,6 @@ checksums:
     workspaces/fields/selectAValue: 91b18fe5342891becfcae4157d3ba101
     workspaces/fields/selectValues: 7ee1b4f419ea407ecdb7d7f44fa0905b
     workspaces/files/addFilePropertyToUpload: aa57aa5eae5d9a12a0b75e85dfdbd4f3
-    workspaces/files/defaultPropertyName: c3882fc98216636873ab9091f3453f0c
     workspaces/files/downloadAsZip: 598236c017cb7a7465a77023edd91834
     workspaces/files/maxEntitiesReached: c6b87236fa051a00ea357f9955fb9356
     workspaces/files/renamedToAvoidConflicts: 8fa1b210809c5799082af6f735c9f0b4
@@ -553,7 +547,6 @@ checksums:
     workspaces/filesystem/collapseAll: ead3c4ad7d1bfa74f40b0b259a227b42
     workspaces/filesystem/expandAll: 5cb98519a7f93196e08e0b9a73e7c41f
     workspaces/filesystem/lastUpdated: e1c731316d903fa762f5c302fa907756
-    workspaces/filesystem/name: 9368b5a047572b6051f334af5aa76819
     workspaces/filesystem/noFilesYet: aa3ad867820d427173b9e3e79bf79ac6
     workspaces/filesystem/version: 501b826ddd956aae42ef8e3f6865e4a6
     workspaces/generatingCitations: cd2ab0bdaa30adbb5578da3c5c366dbf
@@ -563,7 +556,6 @@ checksums:
     workspaces/kanban/deleteAllConfirm: 8dbab361b854331734d586a8b674db74
     workspaces/kanban/hideColumn: 23ce94db148f2d8e4a0923defead6cf1
     workspaces/kanban/selectPropertyHint: d5ac2a2b81d6c39c0f3fbc235e61895e
-    workspaces/kanban/uncategorized: 6db4303a319dd0dc118c7f0878f1b81f
     workspaces/kanban/unknown: 5cd12b882fe90320f93130c1b50e2e32
     workspaces/kanban/uploadDocument: 038e8b574f76426b6af590df8b127da9
     workspaces/kanban/usePropertyHint: f15f512e0578ba4daa4112d72eae9989
@@ -650,7 +642,6 @@ checksums:
     workspaces/saveAsPdf: f64d125bfcaf0d48c8307d85c1cbf308
     workspaces/sections/documents: c3882fc98216636873ab9091f3453f0c
     workspaces/sections/parties: 84e2209c900d25dbe39d610bbd4005ab
-    workspaces/title: f898530912102eca13389d49c63c05ae
     workspaces/tools/aiModel: 7dabd9d9875a8f0895d449706a1a9993
     workspaces/tools/manualInput: f801b5870107106d9be81292d7caaac9
     workspaces/views/addFields: 05993d462df938a066e16d04151db6db
