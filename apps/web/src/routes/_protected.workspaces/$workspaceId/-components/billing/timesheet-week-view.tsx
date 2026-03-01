@@ -4,7 +4,14 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import {
+  formatDecimalHours,
+  formatMinutes,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyCompact,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
@@ -51,42 +58,70 @@ export const TimesheetWeekView = ({
     [weekStart, weekEnd],
   );
 
-  // Group: matterId -> { day -> totalMinutes }
+  // Grid: matterId -> { day -> { minutes, amount } }
+  type DayData = { minutes: number; amount: number };
   const grid = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
+    const map = new Map<string, Map<string, DayData>>();
     if (!entries) {
       return map;
     }
     for (const entry of entries) {
       let dayMap = map.get(entry.matterId);
       if (!dayMap) {
-        dayMap = new Map<string, number>();
+        dayMap = new Map<string, DayData>();
         map.set(entry.matterId, dayMap);
       }
-      const current = dayMap.get(entry.dateWorked) ?? 0;
-      dayMap.set(entry.dateWorked, current + entry.durationMinutes);
+      const current = dayMap.get(entry.dateWorked) ?? {
+        minutes: 0,
+        amount: 0,
+      };
+      current.minutes += entry.durationMinutes;
+      if (entry.billable) {
+        current.amount += Math.round(
+          (entry.billedMinutes / 60) * entry.rateAtEntry,
+        );
+      }
+      dayMap.set(entry.dateWorked, current);
     }
     return map;
+  }, [entries]);
+
+  // Find dominant currency
+  const dominantCurrency = useMemo(() => {
+    if (!entries || entries.length === 0) {
+      return DEFAULT_CURRENCY;
+    }
+    return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
   }, [entries]);
 
   const matterIds = Array.from(grid.keys());
 
   const columnTotals = useMemo(() => {
-    const totals = new Map<string, number>();
+    const totals = new Map<string, DayData>();
     for (const day of days) {
-      let total = 0;
+      let minutes = 0;
+      let amount = 0;
       for (const dayMap of grid.values()) {
-        total += dayMap.get(day) ?? 0;
+        const data = dayMap.get(day);
+        if (data) {
+          minutes += data.minutes;
+          amount += data.amount;
+        }
       }
-      totals.set(day, total);
+      totals.set(day, { minutes, amount });
     }
     return totals;
   }, [grid, days]);
 
-  const weekTotal = useMemo(
-    () => Array.from(columnTotals.values()).reduce((sum, v) => sum + v, 0),
-    [columnTotals],
-  );
+  const weekTotals = useMemo(() => {
+    let minutes = 0;
+    let amount = 0;
+    for (const data of columnTotals.values()) {
+      minutes += data.minutes;
+      amount += data.amount;
+    }
+    return { minutes, amount };
+  }, [columnTotals]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -137,10 +172,15 @@ export const TimesheetWeekView = ({
         <tbody>
           {matterIds.map((matterId) => {
             const dayMap = grid.get(matterId);
-            const rowTotal = days.reduce(
-              (sum, day) => sum + (dayMap?.get(day) ?? 0),
-              0,
-            );
+            let rowMinutes = 0;
+            let rowAmount = 0;
+            for (const day of days) {
+              const data = dayMap?.get(day);
+              if (data) {
+                rowMinutes += data.minutes;
+                rowAmount += data.amount;
+              }
+            }
 
             return (
               <tr className="border-b hover:bg-muted/30" key={matterId}>
@@ -150,7 +190,8 @@ export const TimesheetWeekView = ({
                   </span>
                 </td>
                 {days.map((day) => {
-                  const mins = dayMap?.get(day) ?? 0;
+                  const data = dayMap?.get(day);
+                  const mins = data?.minutes ?? 0;
                   return (
                     <td
                       className={cn(
@@ -164,8 +205,13 @@ export const TimesheetWeekView = ({
                     </td>
                   );
                 })}
-                <td className="px-2 py-2 text-center font-medium tabular-nums">
-                  {formatMinutes(rowTotal)}
+                <td className="px-2 py-2 text-center tabular-nums">
+                  <div className="font-medium">{formatMinutes(rowMinutes)}</div>
+                  {rowAmount > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {formatCurrencyCompact(rowAmount, dominantCurrency)}
+                    </div>
+                  )}
                 </td>
               </tr>
             );
@@ -187,19 +233,32 @@ export const TimesheetWeekView = ({
               <td className="sticky left-0 z-10 bg-background px-3 py-2">
                 {t("billing.total")}
               </td>
-              {days.map((day) => (
-                <td
-                  className={cn(
-                    "px-2 py-2 text-center tabular-nums",
-                    day === today && "bg-primary/5",
-                  )}
-                  key={day}
-                >
-                  {formatMinutes(columnTotals.get(day) ?? 0)}
-                </td>
-              ))}
+              {days.map((day) => {
+                const data = columnTotals.get(day);
+                return (
+                  <td
+                    className={cn(
+                      "px-2 py-2 text-center tabular-nums",
+                      day === today && "bg-primary/5",
+                    )}
+                    key={day}
+                  >
+                    {formatMinutes(data?.minutes ?? 0)}
+                  </td>
+                );
+              })}
               <td className="px-2 py-2 text-center tabular-nums">
-                {formatMinutes(weekTotal)}
+                <div>{formatMinutes(weekTotals.minutes)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("billing.decimalHours", {
+                    hours: formatDecimalHours(weekTotals.minutes),
+                  })}
+                </div>
+                {weekTotals.amount > 0 && (
+                  <div className="text-xs">
+                    {formatCurrencyCompact(weekTotals.amount, dominantCurrency)}
+                  </div>
+                )}
               </td>
             </tr>
           </tfoot>

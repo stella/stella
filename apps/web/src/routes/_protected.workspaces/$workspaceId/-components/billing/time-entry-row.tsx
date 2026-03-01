@@ -1,10 +1,21 @@
-import { PencilIcon, TrashIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  CheckCheckIcon,
+  PencilIcon,
+  ScissorsIcon,
+  TrashIcon,
+  UndoIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
+import { Checkbox } from "@stella/ui/components/checkbox";
 import { cn } from "@stella/ui/lib/utils";
 
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
+import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
 
 type TimeEntry = {
   id: string;
@@ -12,7 +23,10 @@ type TimeEntry = {
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
+  rateAtEntry: number;
+  currency: string;
   narrative: string;
+  invoiceNarrative: string | null;
   billable: boolean;
   status: string;
   userName: string | null;
@@ -24,13 +38,10 @@ type TimeEntryRowProps = {
   matterName: string;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-};
-
-const STATUS_STYLES: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  approved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  billed: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  written_off: "bg-red-500/10 text-red-700 dark:text-red-400",
+  onStatusChange?: (id: string, status: "draft" | "approved") => void;
+  selected?: boolean;
+  onSelect?: (id: string, selected: boolean) => void;
+  workspaceId: string;
 };
 
 export const TimeEntryRow = ({
@@ -38,82 +49,151 @@ export const TimeEntryRow = ({
   matterName,
   onEdit,
   onDelete,
+  onStatusChange,
+  selected,
+  onSelect,
+  workspaceId,
 }: TimeEntryRowProps) => {
   const t = useTranslations();
+  const [splitOpen, setSplitOpen] = useState(false);
 
   const isActive = entry.timerStartedAt !== null;
+  const billedAmount = Math.round(
+    (entry.billedMinutes / 60) * entry.rateAtEntry,
+  );
 
   return (
-    <div
-      className={cn(
-        "group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50",
-        isActive && "border-green-500/30 bg-green-500/5",
-      )}
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{matterName}</span>
-          {!entry.billable && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
-              {t("billing.nonBillable")}
-            </span>
-          )}
-          <span
-            className={cn(
-              "shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]",
-              STATUS_STYLES[entry.status] ?? STATUS_STYLES.draft,
+    <>
+      <div
+        className={cn(
+          "group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50",
+          isActive && "border-green-500/30 bg-green-500/5",
+          selected && "border-primary/30 bg-primary/5",
+        )}
+      >
+        {onSelect && (
+          <Checkbox
+            checked={selected ?? false}
+            onCheckedChange={(checked) => onSelect(entry.id, Boolean(checked))}
+          />
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium">{matterName}</span>
+            {!entry.billable && (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+                {t("billing.nonBillable")}
+              </span>
             )}
-          >
-            {
+            <span
+              className={cn(
+                "shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]",
+                STATUS_STYLES[entry.status] ?? STATUS_STYLES.draft,
+              )}
+            >
               {
-                draft: t("billing.statuses.draft"),
-                approved: t("billing.statuses.approved"),
-                billed: t("billing.statuses.billed"),
-                written_off: t("billing.statuses.written_off"),
-              }[entry.status]
-            }
-          </span>
+                {
+                  draft: t("billing.statuses.draft"),
+                  approved: t("billing.statuses.approved"),
+                  billed: t("billing.statuses.billed"),
+                  written_off: t("billing.statuses.written_off"),
+                }[entry.status]
+              }
+            </span>
+          </div>
+          {entry.narrative && (
+            <p className="truncate text-xs text-muted-foreground">
+              {entry.narrative}
+            </p>
+          )}
         </div>
-        {entry.narrative && (
-          <p className="truncate text-xs text-muted-foreground">
-            {entry.narrative}
-          </p>
-        )}
-      </div>
 
-      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-        {isActive ? (
-          <span className="flex items-center gap-1.5">
-            <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-            {t("billing.running")}
+        {/* Billing amount */}
+        {entry.billable && billedAmount > 0 && (
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {formatCurrencyAmount(billedAmount, entry.currency)}
           </span>
-        ) : (
-          formatMinutes(entry.durationMinutes)
         )}
-      </span>
 
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {entry.status === "draft" && (
-          <>
+        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+          {isActive ? (
+            <span className="flex items-center gap-1.5">
+              <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+              {t("billing.running")}
+            </span>
+          ) : (
+            formatMinutes(entry.durationMinutes)
+          )}
+        </span>
+
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {/* Approval actions */}
+          {entry.status === "draft" && onStatusChange && (
             <Button
               className="size-7"
-              onClick={() => onEdit(entry.id)}
+              onClick={() => onStatusChange(entry.id, "approved")}
               size="icon"
+              title={t("billing.approve")}
               variant="ghost"
             >
-              <PencilIcon className="size-3.5" />
+              <CheckCheckIcon className="size-3.5" />
             </Button>
+          )}
+          {entry.status === "approved" && onStatusChange && (
             <Button
-              className="size-7 text-destructive"
-              onClick={() => onDelete(entry.id)}
+              className="size-7"
+              onClick={() => onStatusChange(entry.id, "draft")}
               size="icon"
+              title={t("billing.revertToDraft")}
               variant="ghost"
             >
-              <TrashIcon className="size-3.5" />
+              <UndoIcon className="size-3.5" />
             </Button>
-          </>
-        )}
+          )}
+
+          {/* Split */}
+          {(entry.status === "draft" || entry.status === "approved") && (
+            <Button
+              className="size-7"
+              onClick={() => setSplitOpen(true)}
+              size="icon"
+              title={t("billing.split.splitEntry")}
+              variant="ghost"
+            >
+              <ScissorsIcon className="size-3.5" />
+            </Button>
+          )}
+
+          {entry.status === "draft" && (
+            <>
+              <Button
+                className="size-7"
+                onClick={() => onEdit(entry.id)}
+                size="icon"
+                variant="ghost"
+              >
+                <PencilIcon className="size-3.5" />
+              </Button>
+              <Button
+                className="size-7 text-destructive"
+                onClick={() => onDelete(entry.id)}
+                size="icon"
+                variant="ghost"
+              >
+                <TrashIcon className="size-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      <SplitEntryDialog
+        entryId={entry.id}
+        onOpenChange={setSplitOpen}
+        open={splitOpen}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };

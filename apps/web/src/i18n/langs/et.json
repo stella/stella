@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Lisa kanne",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Arveldatav",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Päev",
     "decimalHours": "({hours}h)",
+    "deleteSelected": "Delete selected",
     "duration": "Kestus",
     "editEntry": "Muuda kannet",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Kande kustutamine ebaõnnestus",
     "failedToSave": "Kande salvestamine ebaõnnestus",
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Laadimine...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Toimik",
     "matterRequired": "Palun valige toimik",
     "narrativePlaceholder": "Kirjeldage tehtud tööd...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Selle perioodi ajakandeid pole",
     "nonBillable": "Mittearveldatav",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "Käib",
+    "selectAll": "Select all",
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Käivita taimer",
     "statuses": {
+      "all": "All statuses",
       "approved": "Kinnitatud",
       "billed": "Arveldatud",
       "draft": "Mustand",
@@ -126,7 +172,8 @@
     "timesheets": "Tööajatabelid",
     "today": "Täna",
     "total": "Kokku",
-    "week": "Nädal"
+    "week": "Nädal",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",

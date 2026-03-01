@@ -541,7 +541,9 @@ export const timeEntries = p.pgTable(
     source: timeEntrySourceEnum().notNull().default("manual"),
     taskCode: p.varchar("task_code", { length: 20 }),
     activityCode: p.varchar("activity_code", { length: 20 }),
-    invoiceId: p.varchar("invoice_id", { length: 21 }),
+    invoiceId: p
+      .varchar("invoice_id", { length: 21 })
+      .references(() => invoices.id, { onDelete: "set null" }),
     splitGroupId: p.varchar("split_group_id", { length: 21 }),
     timerStartedAt: p.timestamp("timer_started_at", {
       withTimezone: true,
@@ -560,6 +562,7 @@ export const timeEntries = p.pgTable(
       .index("time_entries_ws_matter_status_idx")
       .on(table.workspaceId, table.matterId, table.status),
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
+    p.index("time_entries_invoice_idx").on(table.invoiceId),
     p.check(
       "time_entries_duration_or_timer_check",
       sql`${table.durationMinutes} > 0 OR ${table.timerStartedAt} IS NOT NULL`,
@@ -683,7 +686,9 @@ export const expenses = p.pgTable(
     billable: p.boolean().notNull().default(true),
     markup: p.integer().notNull().default(0),
     status: timeEntryStatusEnum().notNull().default("draft"),
-    invoiceId: p.varchar("invoice_id", { length: 21 }),
+    invoiceId: p
+      .varchar("invoice_id", { length: 21 })
+      .references(() => invoices.id, { onDelete: "set null" }),
     receiptFileId: p.varchar("receipt_file_id", { length: 21 }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
@@ -695,7 +700,47 @@ export const expenses = p.pgTable(
     p
       .index("expenses_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateIncurred),
+    p.index("expenses_invoice_idx").on(table.invoiceId),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
+  ],
+);
+
+export const invoiceStatusEnum = p.pgEnum("invoice_status", [
+  "draft",
+  "finalized",
+  "sent",
+  "paid",
+  "void",
+]);
+
+export const invoices = p.pgTable(
+  "invoices",
+  {
+    id: pNanoid.primaryKey(),
+    organizationId: p
+      .varchar("organization_id", { length: 128 })
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: p
+      .varchar("workspace_id", { length: 21 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    invoiceNumber: p.varchar("invoice_number", { length: 64 }).notNull(),
+    reference: p.varchar({ length: 256 }),
+    status: invoiceStatusEnum().notNull().default("draft"),
+    invoiceDate: p.date("invoice_date").notNull(),
+    dueDate: p.date("due_date"),
+    currency: p.varchar({ length: 3 }).notNull(),
+    totalAmount: p.integer("total_amount").notNull().default(0),
+    notes: p.text(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("invoices_ws_status_idx").on(table.workspaceId, table.status),
+    p
+      .uniqueIndex("invoices_ws_number_uidx")
+      .on(table.workspaceId, table.invoiceNumber),
   ],
 );
 
@@ -884,6 +929,7 @@ export const relations = defineRelations(
     rateTables,
     rateEntries,
     expenses,
+    invoices,
     matterCounters,
     organizationSettings,
     clauseCategories,
@@ -1117,6 +1163,12 @@ export const relations = defineRelations(
       matter: r.one.entities({
         from: r.expenses.matterId,
         to: r.entities.id,
+      }),
+    },
+    invoices: {
+      workspace: r.one.workspaces({
+        from: r.invoices.workspaceId,
+        to: r.workspaces.id,
       }),
     },
     matterCounters: {},

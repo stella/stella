@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Ajouter une entrée",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Facturable",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Jour",
     "decimalHours": "({hours}h)",
+    "deleteSelected": "Delete selected",
     "duration": "Durée",
     "editEntry": "Modifier l'entrée",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Échec de la suppression de l'entrée",
     "failedToSave": "Échec de l'enregistrement de l'entrée",
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Chargement...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Dossier",
     "matterRequired": "Veuillez sélectionner un dossier",
     "narrativePlaceholder": "Décrivez le travail effectué...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Aucune entrée de temps pour cette période",
     "nonBillable": "Non facturable",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "En cours",
+    "selectAll": "Select all",
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Démarrer le chronomètre",
     "statuses": {
+      "all": "All statuses",
       "approved": "Approuvé",
       "billed": "Facturé",
       "draft": "Brouillon",
@@ -126,7 +172,8 @@
     "timesheets": "Feuilles de temps",
     "today": "Aujourd'hui",
     "total": "Total",
-    "week": "Semaine"
+    "week": "Semaine",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",

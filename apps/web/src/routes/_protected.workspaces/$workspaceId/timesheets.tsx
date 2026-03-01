@@ -1,11 +1,27 @@
 import { Suspense, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronLeftIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CodeIcon,
+  DownloadIcon,
+  SettingsIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stella/ui/components/select";
 import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
+import { toastManager } from "@stella/ui/components/toast";
 
+import { api } from "@/lib/api";
+import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
 import { RateManagementDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog";
 import { TimesheetDayView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view";
 import { TimesheetWeekView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view";
@@ -37,6 +53,16 @@ const addDays = (d: Date, n: number): Date => {
   return result;
 };
 
+const downloadBlob = (content: string, filename: string) => {
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 function TimesheetsPage() {
   const t = useTranslations();
   const workspaceId = Route.useParams({
@@ -47,6 +73,7 @@ function TimesheetsPage() {
   const [view, setView] = useState<ViewMode>("day");
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [ratesOpen, setRatesOpen] = useState(false);
+  const [codesOpen, setCodesOpen] = useState(false);
 
   const dateStr = formatDateISO(currentDate);
 
@@ -83,6 +110,51 @@ function TimesheetsPage() {
           year: "numeric",
         })}`;
 
+  const handleExport = async (format: string) => {
+    const dateFrom = view === "day" ? dateStr : weekStart;
+    const dateTo = view === "day" ? dateStr : weekEnd;
+    const query = { dateFrom, dateTo };
+
+    if (format === "csv") {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).export.csv.get({ query });
+      if (response.error) {
+        throw new Error("Export failed");
+      }
+      // SAFETY: CSV endpoint returns plain text string
+      downloadBlob(response.data as string, `timesheet-${dateFrom}.csv`);
+    } else if (format === "ledes") {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).export.ledes.get({ query });
+      if (response.error) {
+        throw new Error("Export failed");
+      }
+      // SAFETY: LEDES endpoint returns plain text string
+      downloadBlob(response.data as string, `timesheet-${dateFrom}.ledes`);
+    } else if (format === "pdf") {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).export.pdf.get({ query });
+      if (response.error) {
+        throw new Error("Export failed");
+      }
+      // SAFETY: PDF endpoint returns binary; Eden types it
+      // as unknown but the response body is an ArrayBuffer
+      const pdfData = response.data as unknown as ArrayBuffer;
+      const blob = new Blob([pdfData], {
+        type: "application/pdf",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `timesheet-${dateFrom}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -106,9 +178,38 @@ function TimesheetsPage() {
             <SettingsIcon className="size-4" />
             {t("billing.rates.rates")}
           </Button>
+          <Button onClick={() => setCodesOpen(true)} size="sm" variant="ghost">
+            <CodeIcon className="size-4" />
+            {t("billing.codes.manageCodes")}
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Export dropdown */}
+          <Select
+            onValueChange={(val) => {
+              if (val) {
+                handleExport(val).catch(() => {
+                  toastManager.add({
+                    title: t("errors.actionFailed"),
+                    type: "error",
+                  });
+                });
+              }
+            }}
+            value=""
+          >
+            <SelectTrigger size="sm">
+              <DownloadIcon className="size-3.5" />
+              <SelectValue placeholder={t("billing.export")} />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="csv">{t("billing.exportCSV")}</SelectItem>
+              <SelectItem value="ledes">{t("billing.exportLEDES")}</SelectItem>
+              <SelectItem value="pdf">{t("billing.exportPDF")}</SelectItem>
+            </SelectPopup>
+          </Select>
+
           <Button onClick={goToToday} size="sm" variant="outline">
             {t("billing.today")}
           </Button>
@@ -168,6 +269,12 @@ function TimesheetsPage() {
       <RateManagementDialog
         onOpenChange={setRatesOpen}
         open={ratesOpen}
+        workspaceId={workspaceId}
+      />
+
+      <BillingCodesDialog
+        onOpenChange={setCodesOpen}
+        open={codesOpen}
         workspaceId={workspaceId}
       />
     </div>

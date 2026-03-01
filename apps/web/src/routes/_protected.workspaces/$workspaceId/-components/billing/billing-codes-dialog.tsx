@@ -1,0 +1,256 @@
+import { useState } from "react";
+import { useForm } from "@tanstack/react-form";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { PlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stella/ui/components/button";
+import { Checkbox } from "@stella/ui/components/checkbox";
+import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
+import { Input } from "@stella/ui/components/input";
+import { Label } from "@stella/ui/components/label";
+import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
+import { toastManager } from "@stella/ui/components/toast";
+
+import {
+  useCreateBillingCode,
+  useDeleteBillingCode,
+  useUpdateBillingCode,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/billing-codes";
+import { billingCodesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
+
+type BillingCodesDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  workspaceId: string;
+};
+
+export const BillingCodesDialog = ({
+  open,
+  onOpenChange,
+  workspaceId,
+}: BillingCodesDialogProps) => {
+  const t = useTranslations();
+  const [activeTab, setActiveTab] = useState<"task" | "activity">("task");
+  const [showForm, setShowForm] = useState(false);
+
+  const { data: codes } = useSuspenseQuery(
+    billingCodesOptions(workspaceId, activeTab),
+  );
+
+  const createCode = useCreateBillingCode();
+  const deleteCode = useDeleteBillingCode();
+  const updateCode = useUpdateBillingCode();
+
+  const handleDelete = (id: string) => {
+    deleteCode.mutate(
+      { workspaceId, id },
+      {
+        onError: () => {
+          toastManager.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleToggleActive = (id: string, active: boolean) => {
+    updateCode.mutate(
+      { workspaceId, id, active: !active },
+      {
+        onError: () => {
+          toastManager.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogPopup className="max-w-lg">
+        <div className="flex flex-col gap-4 p-4">
+          <div className="flex items-center justify-between pr-6">
+            <h3 className="text-sm font-medium">
+              {t("billing.codes.manageCodes")}
+            </h3>
+          </div>
+
+          <Tabs
+            onValueChange={(v) => {
+              if (v === "task" || v === "activity") {
+                setActiveTab(v);
+                setShowForm(false);
+              }
+            }}
+            value={activeTab}
+          >
+            <TabsList>
+              <TabsTab value="task">{t("billing.codes.task")}</TabsTab>
+              <TabsTab value="activity">{t("billing.codes.activity")}</TabsTab>
+            </TabsList>
+          </Tabs>
+
+          <Button
+            className="self-end"
+            onClick={() => setShowForm(!showForm)}
+            size="sm"
+            variant="outline"
+          >
+            <PlusIcon className="size-4" />
+            {t("billing.codes.createCode")}
+          </Button>
+
+          {showForm && (
+            <CreateCodeForm
+              onCancel={() => setShowForm(false)}
+              onSubmit={(values) => {
+                createCode.mutate(
+                  {
+                    workspaceId,
+                    type: activeTab,
+                    ...values,
+                  },
+                  {
+                    onSuccess: () => setShowForm(false),
+                    onError: () => {
+                      toastManager.add({
+                        title: t("common.somethingWentWrong"),
+                        type: "error",
+                      });
+                    },
+                  },
+                );
+              }}
+            />
+          )}
+
+          {codes && codes.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {codes.map((code) => (
+                <div
+                  className="group flex items-center gap-3 rounded-md border px-3 py-2"
+                  key={code.id}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {code.code}
+                    </span>
+                    <span className="truncate text-sm">{code.label}</span>
+                    {!code.active && (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+                        {t("billing.codes.inactive")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      className="size-7"
+                      onClick={() => handleToggleActive(code.id, code.active)}
+                      size="icon"
+                      title={
+                        code.active
+                          ? t("billing.codes.inactive")
+                          : t("billing.codes.active")
+                      }
+                      variant="ghost"
+                    >
+                      <Checkbox checked={code.active} />
+                    </Button>
+                    <Button
+                      className="size-7 text-destructive"
+                      onClick={() => handleDelete(code.id)}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            !showForm && (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {t("billing.codes.noCodesYet")}
+              </div>
+            )
+          )}
+        </div>
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+const CreateCodeForm = ({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (values: { code: string; label: string }) => void;
+  onCancel: () => void;
+}) => {
+  const t = useTranslations();
+
+  const form = useForm({
+    defaultValues: { code: "", label: "" },
+    onSubmit: ({ value }) => {
+      if (!value.code.trim() || !value.label.trim()) {
+        return;
+      }
+      onSubmit(value);
+    },
+  });
+
+  return (
+    <form
+      className="flex flex-col gap-3 rounded-md border p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        form.handleSubmit();
+      }}
+    >
+      <div className="flex gap-3">
+        <div className="w-24">
+          <Label>{t("billing.codes.codeLabel")}</Label>
+          <form.Field name="code">
+            {(field) => (
+              <Input
+                autoFocus
+                maxLength={20}
+                onChange={(e) => field.handleChange(e.currentTarget.value)}
+                placeholder="L110"
+                value={field.state.value}
+              />
+            )}
+          </form.Field>
+        </div>
+        <div className="flex-1">
+          <Label>{t("billing.codes.codeLabelField")}</Label>
+          <form.Field name="label">
+            {(field) => (
+              <Input
+                maxLength={256}
+                onChange={(e) => field.handleChange(e.currentTarget.value)}
+                placeholder="Research"
+                value={field.state.value}
+              />
+            )}
+          </form.Field>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button onClick={onCancel} size="sm" type="button" variant="outline">
+          {t("common.cancel")}
+        </Button>
+        <Button size="sm" type="submit">
+          {t("common.save")}
+        </Button>
+      </div>
+    </form>
+  );
+};

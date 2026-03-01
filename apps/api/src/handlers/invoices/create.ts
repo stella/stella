@@ -1,0 +1,153 @@
+import { and, eq, inArray } from "drizzle-orm";
+import { status, t, type Static } from "elysia";
+
+import { db } from "@/api/db";
+import { invoices, timeEntries } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tNanoid } from "@/api/lib/custom-schema";
+import { LIMITS } from "@/api/lib/limits";
+
+export const createInvoiceBodySchema = t.Object({
+  invoiceNumber: t.String({ minLength: 1, maxLength: 64 }),
+  invoiceDate: t.String({ format: "date" }),
+  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
+  currency: t.String({ minLength: 3, maxLength: 3 }),
+  notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  timeEntryIds: t.Array(tNanoid, {
+    minItems: 1,
+    maxItems: 500,
+  }),
+});
+
+type CreateInvoiceBodySchema = Static<typeof createInvoiceBodySchema>;
+
+type CreateInvoiceHandlerProps = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  body: CreateInvoiceBodySchema;
+};
+
+export const createInvoiceHandler = async ({
+  organizationId,
+  workspaceId,
+  body,
+}: CreateInvoiceHandlerProps) => {
+  const totalInvoices = await db.$count(
+    invoices,
+    eq(invoices.workspaceId, workspaceId),
+  );
+
+  if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
+    return status(400, {
+      message: "Invoice limit reached for this workspace",
+    });
+  }
+
+  // Pre-validate entries for user-facing error messages.
+  const entries = await db
+    .select({
+      id: timeEntries.id,
+      billedMinutes: timeEntries.billedMinutes,
+      rateAtEntry: timeEntries.rateAtEntry,
+      status: timeEntries.status,
+      billable: timeEntries.billable,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        inArray(timeEntries.id, body.timeEntryIds),
+      ),
+    );
+
+  if (entries.length !== body.timeEntryIds.length) {
+    return status(400, {
+      message: "Some time entries were not found",
+    });
+  }
+
+  const invalid = entries.some((e) => e.status !== "approved" || !e.billable);
+  if (invalid) {
+    return status(400, {
+      message: "All entries must be approved and billable",
+    });
+  }
+
+  let totalAmount = 0;
+  for (const entry of entries) {
+    totalAmount += Math.round((entry.billedMinutes / 60) * entry.rateAtEntry);
+  }
+
+  const now = new Date();
+  const expectedCount = entries.length;
+
+  const CONCURRENT = "CONCURRENT_MODIFICATION";
+
+  const result = await db
+    .transaction(async (tx) => {
+      const [created] = await tx
+        .insert(invoices)
+        .values({
+          organizationId,
+          workspaceId,
+          invoiceNumber: body.invoiceNumber,
+          invoiceDate: body.invoiceDate,
+          dueDate: body.dueDate ?? null,
+          reference: body.reference ?? null,
+          currency: body.currency,
+          totalAmount,
+          notes: body.notes ?? null,
+          status: "draft",
+        })
+        .returning({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+        });
+
+      // Re-verify status inside transaction to prevent races.
+      const updated = await tx
+        .update(timeEntries)
+        .set({
+          invoiceId: created.id,
+          status: "billed",
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspaceId),
+            inArray(timeEntries.id, body.timeEntryIds),
+            eq(timeEntries.status, "approved"),
+            eq(timeEntries.billable, true),
+          ),
+        );
+
+      // If fewer entries matched, a concurrent request changed
+      // them. Throwing rolls back the transaction automatically.
+      const linkedCount = updated.rowCount ?? 0;
+      if (linkedCount !== expectedCount) {
+        throw new Error(CONCURRENT);
+      }
+
+      return {
+        id: created.id,
+        invoiceNumber: created.invoiceNumber,
+        totalAmount,
+        entryCount: linkedCount,
+      };
+    })
+    .catch((err: unknown) => {
+      if (err instanceof Error && err.message === CONCURRENT) {
+        return null;
+      }
+      throw err;
+    });
+
+  if (!result) {
+    return status(409, {
+      message: "Some entries were modified concurrently; please retry",
+    });
+  }
+
+  return result;
+};

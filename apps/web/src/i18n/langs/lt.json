@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Pridėti įrašą",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Apmokamas",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Diena",
     "decimalHours": "({hours}val.)",
+    "deleteSelected": "Delete selected",
     "duration": "Trukmė",
     "editEntry": "Redaguoti įrašą",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Nepavyko ištrinti įrašo",
     "failedToSave": "Nepavyko išsaugoti įrašo",
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Kraunama...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Byla",
     "matterRequired": "Pasirinkite bylą",
     "narrativePlaceholder": "Aprašykite atliktą darbą...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Šiam laikotarpiui laiko įrašų nėra",
     "nonBillable": "Neapmokamas",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "Vykdoma",
+    "selectAll": "Select all",
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Paleisti laikmatį",
     "statuses": {
+      "all": "All statuses",
       "approved": "Patvirtintas",
       "billed": "Išrašyta sąskaita",
       "draft": "Juodraštis",
@@ -126,7 +172,8 @@
     "timesheets": "Darbo laiko apskaita",
     "today": "Šiandien",
     "total": "Iš viso",
-    "week": "Savaitė"
+    "week": "Savaitė",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",

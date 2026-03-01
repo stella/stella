@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Přidat záznam",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Fakturovatelné",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Den",
     "decimalHours": "({hours}h)",
+    "deleteSelected": "Delete selected",
     "duration": "Doba trvání",
     "editEntry": "Upravit záznam",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Nepodařilo se smazat položku",
     "failedToSave": "Nepodařilo se uložit položku",
     "failedToStartTimer": "Nepodařilo se spustit časovač",
     "failedToStopTimer": "Nepodařilo se zastavit časovač",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Načítání...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Spis",
     "matterRequired": "Vyberte prosím spis",
     "narrativePlaceholder": "Popište provedenou práci...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Žádné časové záznamy za toto období",
     "nonBillable": "Nefakturovatelné",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "Běží",
+    "selectAll": "Select all",
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Spustit časovač",
     "statuses": {
+      "all": "All statuses",
       "approved": "Schváleno",
       "billed": "Vyfakturováno",
       "draft": "Návrh",
@@ -126,7 +172,8 @@
     "timesheets": "Výkazy práce",
     "today": "Dnes",
     "total": "Celkem",
-    "week": "Týden"
+    "week": "Týden",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",
