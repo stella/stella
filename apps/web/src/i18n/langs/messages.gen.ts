@@ -203,6 +203,7 @@ type Messages = {
     "add": "Add";
     "cancel": "Cancel";
     "category": "Category";
+    "columns": "Columns";
     "comingSoon": "Coming soon";
     "convertTo": "Convert to";
     "createdAt": "Created at {date}";
@@ -213,6 +214,7 @@ type Messages = {
     "delete": "Delete";
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "description": "Description";
+    "done": "Done";
     "download": "Download";
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
@@ -231,6 +233,7 @@ type Messages = {
     "pin": "Pin";
     "print": "Print";
     "properties": "Properties";
+    "reference": "Reference";
     "rename": "Rename";
     "required": "Required";
     "role": "Role";
@@ -446,8 +449,8 @@ type Messages = {
     "sidebar": "Sidebar";
     "sidebarDescription": "Displays the mobile sidebar.";
     "templates": "Templates";
-    "timeTracking": "Time Tracking";
-    "toggleSidebar": "Toggle Sidebar";
+    "timeTracking": "Time tracking";
+    "toggleSidebar": "Toggle sidebar";
   };
   "organization": {
     "invitations": {
@@ -594,8 +597,11 @@ type Messages = {
     "slugRequired": "Slug is required";
   };
   "workspaces": {
+    "active": "Active";
+    "all": "All";
     "answer": "Answer:";
     "archiveMatter": "Archive";
+    "archived": "Archived";
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
     "deleteItem": "Delete item";
@@ -605,8 +611,10 @@ type Messages = {
     "deleteWorkspace": "Delete matter";
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.";
     "deletingWorkspace": "Deleting matter";
+    "documentsCount": "{count, plural, one {# document} other {# documents}}";
     "dropToUploadFiles": "Drop to upload files";
     "duplicateWithContent": "Duplicate with content";
+    "entitiesCount": "{count, plural, one {# item} other {# items}}";
     "exportToCsv": "Export to CSV";
     "fields": {
       "calculating": "Calculating...";
@@ -624,6 +632,7 @@ type Messages = {
     };
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files";
+      "defaultPropertyName": "Documents";
       "downloadAsZip": "Download as ZIP";
       "maxEntitiesReached": "Max entities count reached";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
@@ -651,14 +660,30 @@ type Messages = {
       "uploadDocument": "Upload document";
       "usePropertyHint": "Use Kind, Author, or a single-select property";
     };
+    "lastActive": "Last active {time}";
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
+    "mattersCount": "{count, plural, one {# matter} other {# matters}}";
     "newDocument": "New document";
     "newFolder": "New folder";
+    "newMatter": "New matter";
+    "noDocuments": "No documents yet";
     "noFieldsToView": "This entity doesn't have any fields to view";
+    "noGrouping": "None";
+    "noItems": "No items yet";
+    "noMatters": "No matters yet. Create your first matter to get started.";
     "operators": {
       "containsEvery": "Contains every";
       "equals": "Equals";
+    };
+    "overview": {
+      "atAGlance": "At a glance";
+      "getStarted": "Get started by uploading documents or creating your first folder.";
+      "matterDetails": "Matter details";
+      "recentActivity": "Recent activity";
+      "title": "Overview";
+      "totalDocuments": "Total documents";
+      "totalItems": "Items";
     };
     "parties": {
       "addParty": "Add party";
@@ -736,7 +761,9 @@ type Messages = {
       "setPromptPlaceholder": "Set a prompt to extract the information";
       "singleSelect": "Single Select";
       "sortAscending": "Sort ascending";
+      "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";
+      "sortDescendingDate": "Newest first";
       "text": "Text";
       "unsupported": "Unsupported";
     };
@@ -748,6 +775,8 @@ type Messages = {
       "documents": "Documents";
       "parties": "Parties";
     };
+    "tasksCount": "{count, plural, one {# task} other {# tasks}}";
+    "title": "Matters";
     "tools": {
       "aiModel": "AI Model";
       "manualInput": "Manual Input";
@@ -755,15 +784,24 @@ type Messages = {
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";
+      "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
+      "failedToChangeViewType": "Failed to change view type";
+      "failedToCreateView": "Failed to create view";
+      "failedToDeleteView": "Failed to delete view";
+      "failedToDuplicateView": "Failed to duplicate view";
+      "failedToRenameView": "Failed to rename view";
+      "failedToReorderViews": "Failed to reorder views";
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "groupBy": "Group by:";
       "layouts": {
-        "gallery": "Gallery";
+        "filesystem": "List";
+        "grid": "Grid";
         "kanban": "Kanban";
         "list": "List";
+        "overview": "Overview";
         "table": "Table";
       };
       "newView": "New {layout}";

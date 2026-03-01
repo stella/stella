@@ -1,5 +1,5 @@
 export const LIMITS = {
-  workspacesCount: 10,
+  workspacesCount: 200,
   propertiesCount: 20,
   entitiesCount: 100,
   viewsCount: 20,
@@ -14,6 +14,7 @@ export const LIMITS = {
   timeEntriesPerWorkspace: 50_000,
   expensesPerWorkspace: 10_000,
   billingCodesPerWorkspace: 500,
+  overviewRecentEntities: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
   billingIncrementMinutes: 6,
@@ -21,6 +22,7 @@ export const LIMITS = {
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
   entityNameMaxLength: 255,
+  workspaceContributors: 5,
 } as const;
 
 /**

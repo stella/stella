@@ -263,8 +263,11 @@ export type ContactAddress = Static<typeof contactAddressSchema>;
 // -- View schemas --
 
 export const viewLayoutSchema = t.UnionEnum([
+  "overview",
   "table",
   "filesystem",
+  // "gallery" kept for backward compat with existing
+  // DB rows; the layout is removed from the UI
   "gallery",
   "kanban",
 ]);
@@ -295,11 +298,6 @@ export const kanbanConfigSchema = t.Object({
   groupByPropertyId: t.String({ minLength: 1 }),
 });
 
-export const galleryConfigSchema = t.Object({
-  cardFields: t.Array(t.String()),
-  coverPropertyId: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
-});
-
 export const viewConfigSchema = t.Object({
   filters: t.Array(viewFilterConditionSchema),
   sorts: t.Array(
@@ -312,7 +310,6 @@ export const viewConfigSchema = t.Object({
   columnSizing: t.Record(t.String(), t.Number()),
   columnOrder: t.Array(t.String()),
   kanban: t.Optional(kanbanConfigSchema),
-  gallery: t.Optional(galleryConfigSchema),
 });
 
 export type ViewConfig = Static<typeof viewConfigSchema>;

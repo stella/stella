@@ -21,10 +21,19 @@ import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view-toolbar";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import {
+  entitiesKeys,
+  entitiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import {
+  justificationsOptions,
+  workflowOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -39,6 +48,7 @@ const defaultSearch = {
 
 const projectSearchSchema = v.object({
   view: v.optional(v.string()),
+  folder: v.optional(v.string()),
   columnPinning: v.optional(v.array(v.string()), defaultSearch.columnPinning),
   columnSizing: v.optional(
     v.record(v.string(), v.number()),
@@ -59,6 +69,19 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
   search: {
     middlewares: [retainSearchParams(true)],
+  },
+  beforeLoad: async ({ context, params }) => {
+    // Prefetch all workspace data in parallel before
+    // rendering so the component never suspends (no
+    // sidebar flash, no blank screen).
+    const wsId = params.workspaceId;
+    const qc = context.queryClient;
+    await Promise.all([
+      qc.ensureQueryData(viewsOptions(wsId)),
+      qc.ensureQueryData(entitiesOptions(wsId)),
+      qc.ensureQueryData(propertiesOptions(wsId)),
+      qc.ensureQueryData(justificationsOptions(wsId)),
+    ]);
   },
 });
 
@@ -165,19 +188,22 @@ function RouteComponent() {
 
   return (
     <DropZone workspaceId={workspaceId}>
-      <ViewSwitcher
-        activeViewId={activeView?.id ?? null}
-        onViewChange={async (viewId) => {
-          await navigate({
-            to: "/workspaces/$workspaceId",
-            search: (prev) => ({ ...prev, view: viewId }),
-          });
-        }}
-        workspaceId={workspaceId}
-      />
-      {activeView && (
-        <ViewToolbar view={activeView} workspaceId={workspaceId} />
-      )}
+      <div className="flex items-center border-b">
+        <ViewSwitcher
+          activeViewId={activeView?.id ?? null}
+          onViewChange={async (viewId) => {
+            await navigate({
+              to: "/workspaces/$workspaceId",
+              search: (prev) => ({ ...prev, view: viewId }),
+            });
+          }}
+          workspaceId={workspaceId}
+        />
+        <div className="flex-1" />
+        {activeView && (
+          <ViewToolbar view={activeView} workspaceId={workspaceId} />
+        )}
+      </div>
       <Group orientation="horizontal">
         <Panel>
           <Outlet />

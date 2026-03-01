@@ -500,13 +500,15 @@ owns `cs.json`, `de.json`, `hu.json`, `pl.json`, `sk.json`.
 Manual edits will be overwritten on the next CI run.
 
 **Prefer generic, reusable keys over feature-specific ones.**
-If a label like "Delete", "Save", "Cancel", or "Amount" already
-exists under `common.*` or a shared namespace, reuse it instead
-of creating a new key like `billing.expenses.deleteExpense`.
-Feature-specific keys are only justified when the wording truly
-differs from the generic version (e.g., a confirmation message
-that mentions the resource by name). This keeps the translation
-file compact and reduces translator workload.
+Before adding any new i18n key, search `en.json` for an existing
+key with the same or similar wording (e.g., `common.filter`,
+`common.sort`, `common.columns`). Reuse `common.*` or shared
+namespace keys instead of creating feature-scoped duplicates
+like `billing.expenses.deleteExpense`. Feature-specific keys
+are only justified when the wording truly differs from the
+generic version (e.g., a confirmation message that mentions
+the resource by name). This keeps the translation file compact
+and reduces translator workload.
 
 Key naming, pluralization, and style rules are documented
 in `apps/web/src/i18n/TERMINOLOGY.md`.

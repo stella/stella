@@ -99,7 +99,9 @@ import {
 } from "@/i18n/i18n-store";
 import type { Role } from "@/lib/auth";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
+import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
@@ -112,10 +114,13 @@ import {
   useStopTimer,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   activeTimerOptions,
   timeEntriesKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 const isDev = import.meta.env.DEV;
 const WHITESPACE = /\s+/;
@@ -132,29 +137,6 @@ const formatTimer = (seconds: number) => {
     return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
   return `${m}:${String(s).padStart(2, "0")}`;
-};
-
-// TODO: Add `color` column to clients and workspaces.
-// Clients get a user-assignable color; new workspaces
-// inherit a shade from their client's color by default.
-// Replace this deterministic hash with the stored color.
-export const MATTER_SWATCHES = [
-  "--option-blue",
-  "--option-emerald",
-  "--option-amber",
-  "--option-violet",
-  "--option-red",
-  "--option-cyan",
-  "--option-orange",
-  "--option-teal",
-] as const;
-
-export const getMatterSwatch = (id: string) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = Math.imul(hash, 31) + id.charCodeAt(i);
-  }
-  return MATTER_SWATCHES[Math.abs(hash) % MATTER_SWATCHES.length];
 };
 
 const MatterIcon = ({ id, color }: { id: string; color?: string | null }) => (
@@ -354,6 +336,7 @@ type MatterItemProps = {
     reference: string | null;
     color: string | null;
     client?: { id: string; displayName: string } | null;
+    lastActivityAt: Date;
   };
   isPinned?: boolean;
   onTogglePin: (id: string) => void;
@@ -371,6 +354,8 @@ const MatterItem = ({
   navBadge,
 }: MatterItemProps) => {
   const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+  const qc = useQueryClient();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -397,6 +382,7 @@ const MatterItem = ({
     },
     isDisabled: !isPinned || !onReorder,
   });
+  const relTime = formatRelativeTime(ws.lastActivityAt, lang);
 
   const cancelRename = () => {
     setIsRenaming(false);
@@ -485,6 +471,13 @@ const MatterItem = ({
       >
         <Link
           activeProps={{ "data-active": true }}
+          onMouseEnter={() => {
+            const id = ws.id;
+            qc.prefetchQuery(viewsOptions(id));
+            qc.prefetchQuery(entitiesOptions(id));
+            qc.prefetchQuery(propertiesOptions(id));
+            qc.prefetchQuery(justificationsOptions(id));
+          }}
           params={{ workspaceId: ws.id }}
           to="/workspaces/$workspaceId"
         >
@@ -494,12 +487,13 @@ const MatterItem = ({
             {ws.client ? (
               <span className="truncate text-[0.625rem] leading-tight text-muted-foreground opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
                 {ws.client.displayName}
+                {relTime ? ` · ${relTime}` : ""}
               </span>
-            ) : ws.reference ? (
+            ) : (
               <span className="font-mono text-[0.625rem] leading-tight text-muted-foreground opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
-                {ws.reference}
+                {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
               </span>
-            ) : null}
+            )}
           </span>
         </Link>
       </SidebarMenuButton>
@@ -642,7 +636,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       .filter((ws) => !pinnedIds.has(ws.id))
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          new Date(b.lastActivityAt).getTime() -
+          new Date(a.lastActivityAt).getTime(),
       )
       .slice(0, RECENTS_LIMIT);
   }, [workspaces, pinnedIds]);
@@ -956,8 +951,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           </SidebarGroup>
         )}
 
-        {/* Recents — sorted by createdAt for now; TODO: track
-           last-visited timestamps to reflect genuine recency. */}
+        {/* Recents — sorted by lastActivityAt */}
         {recents.length > 0 && (
           <SidebarGroup className="min-h-0 flex-1">
             <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>

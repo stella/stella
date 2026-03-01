@@ -1,3 +1,4 @@
 addin
+registr
 sherif
 te

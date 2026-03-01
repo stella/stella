@@ -23,7 +23,6 @@ import {
   AlertDialogTrigger,
 } from "@stella/ui/components/alert-dialog";
 import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
 import {
   Menu,
   MenuItem,
@@ -39,6 +38,7 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { optionColors } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -235,15 +235,6 @@ export const KanbanColumn = ({
       {...restDropProps}
     >
       <div className="flex items-center gap-2 px-3 py-2">
-        {isDraggable && (
-          <div
-            className="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/column:opacity-100 hover:text-foreground"
-            ref={dragRef}
-            {...dragProps}
-          >
-            <GripVerticalIcon className="size-3.5" />
-          </div>
-        )}
         {color && onChangeColor ? (
           <Popover modal>
             <PopoverTrigger
@@ -270,31 +261,37 @@ export const KanbanColumn = ({
           />
         ) : null}
         {editing ? (
-          <Input
-            autoFocus
-            className="h-6 flex-1 border-transparent bg-transparent px-0 text-sm font-medium"
-            onBlur={commitRename}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                commitRename();
-              }
-              if (e.key === "Escape") {
-                cancelEditing();
-              }
-            }}
+          <InlineEdit
+            className="flex-1"
+            inputClassName="flex-1 font-medium"
+            onChange={setEditValue}
+            onCancel={cancelEditing}
+            onCommit={commitRename}
             value={editValue}
           />
         ) : (
-          <button
-            className="flex-1 truncate text-left text-sm font-medium"
-            onClick={startEditing}
-            type="button"
-          >
-            {title}
-          </button>
+          <span className="flex flex-1 items-center gap-1.5 truncate">
+            <button
+              className="truncate text-left text-sm font-medium"
+              onClick={startEditing}
+              type="button"
+            >
+              {title}
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {entities.length}
+            </span>
+          </span>
         )}
-        <span className="text-xs text-muted-foreground">{entities.length}</span>
+        {isDraggable && (
+          <div
+            className="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/column:opacity-100 hover:text-foreground"
+            ref={dragRef}
+            {...dragProps}
+          >
+            <GripVerticalIcon className="size-3.5" />
+          </div>
+        )}
         {hasColumnActions && (
           <Menu>
             <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>

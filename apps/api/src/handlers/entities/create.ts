@@ -4,7 +4,7 @@ import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
-import { entities, entityVersions } from "@/api/db/schema";
+import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -121,6 +121,11 @@ export const createEntitiesHandler = ({
       .update(entities)
       .set({ currentVersionId: entityVersionId })
       .where(eq(entities.id, entityId));
+
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
     return { entityId };
   });

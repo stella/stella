@@ -4,6 +4,7 @@ import {
   CopyIcon,
   DownloadIcon,
   EllipsisVerticalIcon,
+  EyeIcon,
   FileOutputIcon,
   PencilIcon,
   Trash2Icon,
@@ -52,6 +53,7 @@ type RowActionsProps = {
   workspaceId: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onOpen?: () => void;
   onRename?: () => void;
   triggerClassName?: string;
   anchor?: VirtualAnchor | null;
@@ -62,6 +64,7 @@ export const RowActions = ({
   workspaceId,
   open,
   onOpenChange,
+  onOpen,
   onRename,
   triggerClassName,
   anchor,
@@ -208,6 +211,12 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
+        {onOpen && (
+          <MenuItem onClick={onOpen}>
+            <EyeIcon />
+            {t("common.open")}
+          </MenuItem>
+        )}
         {onRename && (
           <MenuItem onClick={onRename}>
             <PencilIcon />

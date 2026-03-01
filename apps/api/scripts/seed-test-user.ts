@@ -52,6 +52,46 @@ const COLLEAGUES = [
     image:
       "https://api.dicebear.com/9.x/avataaars/svg?seed=bob&backgroundColor=d1d4f9",
   },
+  {
+    id: "test-user-clara-novak",
+    memberId: "test-member-clara-novak",
+    name: "Clara Novak",
+    email: "clara@stella.dev",
+    image:
+      "https://api.dicebear.com/9.x/avataaars/svg?seed=clara&backgroundColor=ffd5dc",
+  },
+  {
+    id: "test-user-david-kim",
+    memberId: "test-member-david-kim",
+    name: "David Kim",
+    email: "david@stella.dev",
+    image:
+      "https://api.dicebear.com/9.x/avataaars/svg?seed=david&backgroundColor=c0aede",
+  },
+  {
+    id: "test-user-eva-schmidt",
+    memberId: "test-member-eva-schmidt",
+    name: "Eva Schmidt",
+    email: "eva@stella.dev",
+    image:
+      "https://api.dicebear.com/9.x/avataaars/svg?seed=eva&backgroundColor=b6e3f4",
+  },
+  {
+    id: "test-user-frank-horvat",
+    memberId: "test-member-frank-horvat",
+    name: "Frank Horvát",
+    email: "frank@stella.dev",
+    image:
+      "https://api.dicebear.com/9.x/avataaars/svg?seed=frank&backgroundColor=d1d4f9",
+  },
+  {
+    id: "test-user-greta-jones",
+    memberId: "test-member-greta-jones",
+    name: "Greta Jones",
+    email: "greta@stella.dev",
+    image:
+      "https://api.dicebear.com/9.x/avataaars/svg?seed=greta&backgroundColor=ffd5dc",
+  },
 ] as const;
 
 const TEST_ORG = {

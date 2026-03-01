@@ -27,10 +27,15 @@ export const getPinningStyles = <T = WorkspaceEntity>(
 ): CSSProperties => {
   const canPin = column.getCanPin();
 
-  // last non pinnable column always needs to stretch
-  if (!canPin && column.getIsLastColumn()) {
+  // The add-property column is sticky on the right so the "+"
+  // button stays visible during horizontal scroll.
+  if (column.id === getInternalColId("add-property")) {
     return {
-      width: "auto",
+      boxShadow: "2px 0 0px 0px var(--color-border) inset",
+      position: "sticky",
+      right: 0,
+      width: column.getSize(),
+      zIndex: 2,
     };
   }
 
@@ -39,20 +44,18 @@ export const getPinningStyles = <T = WorkspaceEntity>(
   }
 
   const isPinned = column.getIsPinned() === "left";
+  const isSelectColumn = column.id === getInternalColId("select");
   const isLastPinnedColumn =
-    column.id !== getInternalColId("select") &&
-    isPinned &&
-    column.getIsLastColumn("left");
+    !isSelectColumn && isPinned && column.getIsLastColumn("left");
 
   return {
-    backgroundColor: isPinned ? "var(--color-background)" : undefined,
     boxShadow: isLastPinnedColumn
       ? "-2px 0 0px 0px var(--color-border) inset"
       : undefined,
     left: isPinned ? `${column.getStart("left")}px` : undefined,
     position: isPinned ? "sticky" : undefined,
     width: column.getSize(),
-    zIndex: isPinned ? 2 : undefined,
+    zIndex: isPinned ? (isSelectColumn ? 3 : 2) : undefined,
   };
 };
 
@@ -104,6 +107,11 @@ declare module "@tanstack/table-core" {
   // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Table
   interface SortingFns {
     sortProperty: SortingFn<WorkspaceEntity>;
+  }
+  // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Table
+  interface ColumnMeta<TData, TValue> {
+    /** Render cell text in muted-foreground. */
+    muted?: boolean;
   }
 }
 
@@ -450,14 +458,53 @@ export const buildTree = (entities: WorkspaceEntity[]): TreeNode[] => {
   return roots;
 };
 
+/** Find a node by ID in a tree (depth-first). */
+export const findNode = (
+  roots: TreeNode[],
+  targetId: string,
+): TreeNode | null => {
+  const stack = [...roots];
+  let node = stack.pop();
+  while (node) {
+    if (node.entityId === targetId) {
+      return node;
+    }
+    for (const child of node.children) {
+      stack.push(child);
+    }
+    node = stack.pop();
+  }
+  return null;
+};
+
 /** Collect all row IDs from a tree node and its descendants. */
 export const collectDescendantIds = (node: TreeNode): string[] => {
   const ids: string[] = [];
-  for (const child of node.children) {
+  const stack = [...node.children];
+  let child = stack.pop();
+  while (child) {
     ids.push(child.entityId);
-    ids.push(...collectDescendantIds(child));
+    for (const grandchild of child.children) {
+      stack.push(grandchild);
+    }
+    child = stack.pop();
   }
   return ids;
+};
+
+/** Count all descendants (non-recursive, stack-based). */
+export const countDescendants = (node: TreeNode): number => {
+  let count = 0;
+  const stack = [...node.children];
+  let child = stack.pop();
+  while (child) {
+    count += 1;
+    for (const grandchild of child.children) {
+      stack.push(grandchild);
+    }
+    child = stack.pop();
+  }
+  return count;
 };
 
 /**

@@ -18,12 +18,14 @@ import {
   FolderIcon,
   FolderOpenIcon,
   HashIcon,
+  TableIcon,
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { Checkbox } from "@stella/ui/components/checkbox";
+import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import {
@@ -37,7 +39,9 @@ import {
 import type { WorkspaceView } from "@/lib/types";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
+import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import {
   AuthorCell,
@@ -45,9 +49,15 @@ import {
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
+import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
+import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import {
+  useCreateEntities,
+  useMoveEntity,
+  useRenameEntity,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -56,7 +66,7 @@ import {
   applyFilters,
   applySorts,
   buildTree,
-  collectDescendantIds,
+  countDescendants,
   getEntityName,
   getInternalColId,
   getPinningStyles,
@@ -64,6 +74,7 @@ import {
   type TreeNode,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
+const ENTITY_DRAG_TYPE = "stella/entity-id";
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
 const metadataFieldIds = ["__created_by__", "__updated_at__", "__version__"];
@@ -87,6 +98,8 @@ export default function RouteComponent() {
   }
 
   switch (activeView.layout) {
+    case "overview":
+      return <OverviewView workspaceId={workspaceId} />;
     case "filesystem":
       return <FilesystemView view={activeView} workspaceId={workspaceId} />;
     case "kanban":
@@ -114,11 +127,21 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
   const [expanded, setExpanded] = useState<ExpandedState>(true);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const renameEntity = useRenameEntity();
+  const moveEntity = useMoveEntity();
+  const createEntities = useCreateEntities();
   const setEntityName = useWorkspaceStore((s) => s.setEntityName);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const rawData = useWorkspaceStore(useShallow((s) => s.data));
   const updateView = useUpdateView();
+  const activeEntityId = usePeekStore((s) => {
+    if (!s.activeFieldId) {
+      return null;
+    }
+    const tab = s.tabs.find((tab) => tab.fieldId === s.activeFieldId);
+    return tab?.entityId ?? null;
+  });
 
   const { filters, sorts, visibleProperties } = activeView.config;
 
@@ -204,7 +227,9 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       const property = visibleProps[i];
       // SAFETY: TreeNode extends WorkspaceEntity, so
       // ColumnDef<WorkspaceEntity> is structurally compatible.
-      const col = getPropertyColumn(property) as ColumnDef<TreeNode>;
+      const col = getPropertyColumn(property, {
+        onHide: () => hideColumn(property.id),
+      }) as ColumnDef<TreeNode>;
 
       // Wrap the first column's cell to include folder hierarchy
       if (i === 0 && hasFolders) {
@@ -235,7 +260,6 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
                 });
               }}
               onStopEditing={() => setEditingEntityId(null)}
-              onToggleExpanded={() => row.toggleExpanded()}
               startEditing={() => setEditingEntityId(row.original.entityId)}
             />
           );
@@ -252,12 +276,14 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       cols.push({
         id: "__created_by__",
         accessorKey: "__created_by__",
+        meta: { muted: true },
         header: (ctx) => (
           <MetadataPopover
             column={ctx.header.column}
             icon={UserIcon}
             label={t("workspaces.filesystem.author")}
             onHide={() => hideColumn("__created_by__")}
+            sortHint="text"
           />
         ),
         cell: (props) => <AuthorCell entity={props.row.original} />,
@@ -273,12 +299,14 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       cols.push({
         id: "__updated_at__",
         accessorKey: "__updated_at__",
+        meta: { muted: true },
         header: (ctx) => (
           <MetadataPopover
             column={ctx.header.column}
             icon={ClockIcon}
             label={t("workspaces.filesystem.lastUpdated")}
             onHide={() => hideColumn("__updated_at__")}
+            sortHint="date"
           />
         ),
         cell: (props) => <LastUpdatedCell entity={props.row.original} />,
@@ -295,12 +323,14 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       cols.push({
         id: "__version__",
         accessorKey: "__version__",
+        meta: { muted: true },
         header: (ctx) => (
           <MetadataPopover
             column={ctx.header.column}
             icon={HashIcon}
             label={t("workspaces.filesystem.version")}
             onHide={() => hideColumn("__version__")}
+            sortHint="number"
           />
         ),
         cell: (props) => <VersionCell entity={props.row.original} />,
@@ -317,6 +347,7 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       enableResizing: false,
       enablePinning: false,
       enableSorting: false,
+      size: 48,
     });
 
     return cols;
@@ -359,8 +390,9 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
 
   // Compute logical row labels that account for collapsed folder children.
   // Each visible row gets a 1-based number; collapsed folders show a range.
+  const rowModel = table.getRowModel();
   const rowLabels = useMemo(() => {
-    const rows = table.getRowModel().rows;
+    const rows = rowModel.rows;
     const labels: string[] = [];
     let logicalPos = 1;
 
@@ -369,7 +401,7 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
       const isCollapsed = isFolder && !row.getIsExpanded();
 
       if (isCollapsed) {
-        const descendantCount = collectDescendantIds(row.original).length;
+        const descendantCount = countDescendants(row.original);
         if (descendantCount > 0) {
           labels.push(`${logicalPos}-${logicalPos + descendantCount}`);
           logicalPos += descendantCount + 1;
@@ -384,7 +416,79 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
     }
 
     return labels;
-  }, [table.getRowModel]);
+  }, [rowModel]);
+
+  const handleRowDrop = useCallback(
+    (e: React.DragEvent, target: TreeNode) => {
+      e.preventDefault();
+      setDropTargetId(null);
+      const entityId = e.dataTransfer.getData(ENTITY_DRAG_TYPE);
+      if (!entityId || entityId === target.entityId) {
+        return;
+      }
+
+      const onError = () => {
+        toastManager.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+      };
+
+      if (target.kind === "folder") {
+        moveEntity.mutate(
+          { workspaceId, entityId, parentId: target.entityId },
+          { onError },
+        );
+      } else {
+        createEntities.mutate(
+          {
+            workspaceId,
+            type: "manual-input",
+            kind: "folder",
+            parentId: target.parentId ?? undefined,
+            name: t("workspaces.newFolder"),
+          },
+          {
+            onSuccess: (data) => {
+              if (!data?.entityId) {
+                return;
+              }
+              const folderId = data.entityId;
+              moveEntity.mutate({
+                workspaceId,
+                entityId: target.entityId,
+                parentId: folderId,
+              });
+              moveEntity.mutate({
+                workspaceId,
+                entityId,
+                parentId: folderId,
+              });
+              setExpanded((prev) => {
+                if (prev === true) {
+                  return true;
+                }
+                return { ...prev, [folderId]: true };
+              });
+              setEditingEntityId(folderId);
+            },
+            onError,
+          },
+        );
+      }
+    },
+    [workspaceId, moveEntity, createEntities, t],
+  );
+
+  if (table.getRowModel().rows.length === 0) {
+    return (
+      <EmptyState
+        icon={TableIcon}
+        message={t("workspaces.noItems")}
+        workspaceId={workspaceId}
+      />
+    );
+  }
 
   return (
     <div className="relative h-full flex-1 overflow-auto *:data-[slot=table-container]:max-h-96">
@@ -448,8 +552,26 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
 
               return (
                 <TableRow
+                  className={cn(
+                    row.original.entityId === activeEntityId && "bg-muted/50",
+                    dropTargetId === row.original.entityId &&
+                      "ring-2 ring-primary",
+                  )}
                   data-state={row.getIsSelected() && "selected"}
+                  draggable
                   key={row.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDropTargetId(row.original.entityId);
+                  }}
+                  onDragLeave={() => setDropTargetId(null)}
+                  onDragStart={(e) =>
+                    e.dataTransfer.setData(
+                      ENTITY_DRAG_TYPE,
+                      row.original.entityId,
+                    )
+                  }
+                  onDrop={(e) => handleRowDrop(e, row.original)}
                 >
                   <TableCell
                     data-state={row.getIsSelected() ? "selected" : undefined}
@@ -465,9 +587,10 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
                     />
                   </TableCell>
                   <TableCell
-                    colSpan={remainingCount + 1}
+                    className="cursor-pointer"
                     data-state={row.getIsSelected() ? "selected" : undefined}
                     key={nameCell.id}
+                    onClick={() => row.toggleExpanded()}
                     style={{ ...getPinningStyles(nameCell.column) }}
                   >
                     {flexRender(
@@ -475,18 +598,48 @@ const TableView = ({ workspaceId, activeView }: TableViewProps) => {
                       nameCell.getContext(),
                     )}
                   </TableCell>
+                  {remainingCount > 0 && (
+                    <TableCell
+                      className="cursor-pointer"
+                      colSpan={remainingCount}
+                      data-state={row.getIsSelected() ? "selected" : undefined}
+                      onClick={() => row.toggleExpanded()}
+                    />
+                  )}
                 </TableRow>
               );
             }
 
             return (
               <TableRow
+                className={cn(
+                  row.original.entityId === activeEntityId && "bg-muted/50",
+                  dropTargetId === row.original.entityId &&
+                    "ring-2 ring-primary",
+                )}
                 data-state={row.getIsSelected() && "selected"}
+                draggable
                 key={row.id}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDropTargetId(row.original.entityId);
+                }}
+                onDragLeave={() => setDropTargetId(null)}
+                onDragStart={(e) =>
+                  e.dataTransfer.setData(
+                    ENTITY_DRAG_TYPE,
+                    row.original.entityId,
+                  )
+                }
+                onDrop={(e) => handleRowDrop(e, row.original)}
               >
                 {visibleCells.map((cell) => {
                   return (
                     <TableCell
+                      className={cn(
+                        cell.column.columnDef.meta?.muted &&
+                          "text-muted-foreground",
+                      )}
                       data-state={
                         cell.row.getIsSelected() ? "selected" : undefined
                       }
@@ -586,7 +739,6 @@ type FolderCellProps = {
   depth: number;
   isExpanded: boolean;
   editingEntityId: string | null;
-  onToggleExpanded: () => void;
   startEditing: () => void;
   onStopEditing: () => void;
   onRename: (entityId: string, newName: string) => void;
@@ -597,7 +749,6 @@ const FolderCell = ({
   depth,
   isExpanded,
   editingEntityId,
-  onToggleExpanded,
   startEditing,
   onStopEditing,
   onRename,
@@ -621,14 +772,7 @@ const FolderCell = ({
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
     >
-      <button
-        className="flex shrink-0 items-center"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleExpanded();
-        }}
-        type="button"
-      >
+      <button className="flex shrink-0 items-center" type="button">
         <ChevronRightIcon
           className={cn(
             "size-3.5 transition-transform",
@@ -642,29 +786,19 @@ const FolderCell = ({
         <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
       )}
       {isEditing ? (
-        <input
-          autoFocus
-          className="h-auto w-48 border-0 bg-transparent p-0 text-sm outline-none"
-          onBlur={commitRename}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.currentTarget.blur();
-            }
-            if (e.key === "Escape") {
-              onStopEditing();
-              setEditValue(name);
-            }
+        <InlineEdit
+          inputClassName="w-48"
+          onChange={setEditValue}
+          onCancel={() => {
+            onStopEditing();
+            setEditValue(name);
           }}
+          onCommit={commitRename}
           value={editValue}
         />
       ) : (
         <button
           className="truncate text-left text-sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleExpanded();
-          }}
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditValue(name);

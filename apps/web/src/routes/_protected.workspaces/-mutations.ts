@@ -1,5 +1,5 @@
 import { usePostHog } from "@posthog/react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 
 import { api } from "@/lib/api";
@@ -12,21 +12,31 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 const DEFAULT_WORKSPACE_NAME = "Untitled";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
+type CreateWorkspaceVars = {
+  name?: string;
+};
+
 export const useCreateWorkspace = () => {
   const posthog = usePostHog();
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (vars?: CreateWorkspaceVars) => {
       const response = await api.workspaces.put({
         queryKey: workspacesKeys.all,
         id: nanoid(),
-        name: DEFAULT_WORKSPACE_NAME,
+        name: vars?.name || DEFAULT_WORKSPACE_NAME,
         filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
       });
 
       if (response.error) {
         throw toAPIError(response.error);
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      });
     },
     onError: (error) => {
       captureError(posthog, error);

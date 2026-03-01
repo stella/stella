@@ -41,6 +41,7 @@ import type {
   ViewConfig,
 } from "@/api/db/schema-validators";
 import { s3 } from "@/api/lib/s3";
+import { DEFAULT_VIEWS, type RequiredViewLayout } from "@/api/lib/views";
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -51,6 +52,11 @@ const ALL_USER_IDS = [
   DEFAULT_USER_ID,
   "test-user-alice-johnson",
   "test-user-bob-martinez",
+  "test-user-clara-novak",
+  "test-user-david-kim",
+  "test-user-eva-schmidt",
+  "test-user-frank-horvat",
+  "test-user-greta-jones",
 ];
 
 const pickAuthor = (index: number): string =>
@@ -377,6 +383,285 @@ const orgContacts = [
   },
 ];
 
+// Additional org contacts for overview stress-testing
+const moreOrgContacts = [
+  {
+    id: seedId("contact-org-bratislava-legal"),
+    type: "organization" as const,
+    displayName: "Bratislava Legal Group, s.r.o.",
+    organizationName: "Bratislava Legal Group, s.r.o.",
+    registrationNumber: "36721484",
+    taxId: "SK2022336611",
+    billingAddress: {
+      line1: "Michalská 9",
+      city: "Bratislava",
+      postalCode: "811 01",
+      country: "Slovensko",
+    },
+    defaultHourlyRate: 200,
+    currency: "EUR",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "office@bratislava-legal.sk",
+        isPrimary: true,
+      },
+    ],
+    color: "indigo",
+  },
+  {
+    id: seedId("contact-org-muller-bergmann"),
+    type: "organization" as const,
+    displayName: "Müller & Bergmann Rechtsanwälte",
+    organizationName: "Müller & Bergmann Rechtsanwälte",
+    registrationNumber: "HRB 123456",
+    taxId: "DE987654321",
+    billingAddress: {
+      line1: "Friedrichstraße 44",
+      city: "Berlin",
+      postalCode: "10117",
+      country: "Deutschland",
+    },
+    defaultHourlyRate: 380,
+    currency: "EUR",
+    paymentTermDays: 21,
+    emails: [
+      {
+        type: "work" as const,
+        address: "kanzlei@muller-bergmann.de",
+        isPrimary: true,
+      },
+    ],
+    color: "rose",
+  },
+  {
+    id: seedId("contact-org-thames-advisory"),
+    type: "organization" as const,
+    displayName: "Thames Advisory Partners LLP",
+    organizationName: "Thames Advisory Partners LLP",
+    registrationNumber: "OC345678",
+    taxId: "GB345678901",
+    billingAddress: {
+      line1: "1 Finsbury Avenue",
+      city: "London",
+      postalCode: "EC2M 2PF",
+      country: "United Kingdom",
+    },
+    defaultHourlyRate: 450,
+    currency: "GBP",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "enquiries@thames-advisory.co.uk",
+        isPrimary: true,
+      },
+    ],
+    color: "teal",
+  },
+  {
+    id: seedId("contact-org-zilina-steel"),
+    type: "organization" as const,
+    displayName: "Žilina Steel Works, a.s.",
+    organizationName: "Žilina Steel Works, a.s.",
+    registrationNumber: "31625801",
+    taxId: "SK2020459789",
+    billingAddress: {
+      line1: "Priemyselná 12",
+      city: "Žilina",
+      postalCode: "010 01",
+      country: "Slovensko",
+    },
+    defaultHourlyRate: 180,
+    currency: "EUR",
+    paymentTermDays: 45,
+    emails: [
+      {
+        type: "work" as const,
+        address: "legal@zilina-steel.sk",
+        isPrimary: true,
+      },
+    ],
+    color: "slate",
+  },
+  {
+    id: seedId("contact-org-pragobanka"),
+    type: "organization" as const,
+    displayName: "PragoBanka, a.s.",
+    organizationName: "PragoBanka, a.s.",
+    registrationNumber: "49241257",
+    taxId: "CZ49241257",
+    billingAddress: {
+      line1: "Senovážné náměstí 15",
+      city: "Praha",
+      postalCode: "110 00",
+      country: "Česká republika",
+    },
+    defaultHourlyRate: 5500,
+    currency: "CZK",
+    paymentTermDays: 14,
+    emails: [
+      {
+        type: "work" as const,
+        address: "pravni@pragobanka.cz",
+        isPrimary: true,
+      },
+    ],
+    color: "lime",
+  },
+  {
+    id: seedId("contact-org-dunaj-pharma"),
+    type: "organization" as const,
+    displayName: "Dunaj Pharma, s.r.o.",
+    organizationName: "Dunaj Pharma, s.r.o.",
+    registrationNumber: "44556677",
+    taxId: "SK2044556677",
+    billingAddress: {
+      line1: "Záhradnícka 46",
+      city: "Bratislava",
+      postalCode: "821 08",
+      country: "Slovensko",
+    },
+    defaultHourlyRate: 220,
+    currency: "EUR",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "legal@dunaj-pharma.sk",
+        isPrimary: true,
+      },
+    ],
+    color: "pink",
+  },
+  {
+    id: seedId("contact-org-nord-energie"),
+    type: "organization" as const,
+    displayName: "Nord Energie GmbH",
+    organizationName: "Nord Energie GmbH",
+    registrationNumber: "HRB 789012",
+    taxId: "DE789012345",
+    billingAddress: {
+      line1: "Am Sandtorkai 50",
+      city: "Hamburg",
+      postalCode: "20457",
+      country: "Deutschland",
+    },
+    defaultHourlyRate: 320,
+    currency: "EUR",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "recht@nord-energie.de",
+        isPrimary: true,
+      },
+    ],
+    color: "yellow",
+  },
+  {
+    id: seedId("contact-org-ostrava-mining"),
+    type: "organization" as const,
+    displayName: "Ostrava Mining Corp., a.s.",
+    organizationName: "Ostrava Mining Corp., a.s.",
+    registrationNumber: "25831470",
+    taxId: "CZ25831470",
+    billingAddress: {
+      line1: "Nádražní 88",
+      city: "Ostrava",
+      postalCode: "702 00",
+      country: "Česká republika",
+    },
+    defaultHourlyRate: 4000,
+    currency: "CZK",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "office@ostrava-mining.cz",
+        isPrimary: true,
+      },
+    ],
+    color: "stone",
+  },
+  {
+    id: seedId("contact-org-crown-shipping"),
+    type: "organization" as const,
+    displayName: "Crown Shipping Ltd.",
+    organizationName: "Crown Shipping Ltd.",
+    registrationNumber: "09876543",
+    taxId: "GB987654321",
+    billingAddress: {
+      line1: "3 Royal Exchange",
+      city: "London",
+      postalCode: "EC3V 3DG",
+      country: "United Kingdom",
+    },
+    defaultHourlyRate: 400,
+    currency: "GBP",
+    paymentTermDays: 45,
+    emails: [
+      {
+        type: "work" as const,
+        address: "legal@crown-shipping.co.uk",
+        isPrimary: true,
+      },
+    ],
+    color: "red",
+  },
+  {
+    id: seedId("contact-org-tatra-motors"),
+    type: "organization" as const,
+    displayName: "Tatra Motors, a.s.",
+    organizationName: "Tatra Motors, a.s.",
+    registrationNumber: "47892315",
+    taxId: "CZ47892315",
+    billingAddress: {
+      line1: "Areál Tatra 1450",
+      city: "Kopřivnice",
+      postalCode: "742 21",
+      country: "Česká republika",
+    },
+    defaultHourlyRate: 4200,
+    currency: "CZK",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "pravni@tatra-motors.cz",
+        isPrimary: true,
+      },
+    ],
+    color: "purple",
+  },
+  {
+    id: seedId("contact-org-kosice-tech"),
+    type: "organization" as const,
+    displayName: "Košice Tech Ventures, s.r.o.",
+    organizationName: "Košice Tech Ventures, s.r.o.",
+    registrationNumber: "55667788",
+    taxId: "SK2055667788",
+    billingAddress: {
+      line1: "Hlavná 32",
+      city: "Košice",
+      postalCode: "040 01",
+      country: "Slovensko",
+    },
+    defaultHourlyRate: 190,
+    currency: "EUR",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "office@kosice-tech.sk",
+        isPrimary: true,
+      },
+    ],
+    color: "zinc",
+  },
+];
+
 const personContacts = [
   {
     id: seedId("contact-person-jan-novak"),
@@ -602,41 +887,17 @@ type ViewSeed = {
   id: string;
   workspaceId: string;
   name: string;
-  layout: "table" | "filesystem";
+  layout: RequiredViewLayout;
   config: ViewConfig;
   position: number;
 };
 
-const buildViews = (wsId: string, wsLabel: string): ViewSeed[] => [
-  {
-    id: seedId(`${wsLabel}-view-table`),
+const buildViews = (wsId: string, wsLabel: string): ViewSeed[] =>
+  DEFAULT_VIEWS.map((v) => ({
+    id: seedId(`${wsLabel}-view-${v.layout}`),
     workspaceId: wsId,
-    name: "Table",
-    layout: "table",
-    config: {
-      filters: [],
-      sorts: [],
-      visibleProperties: [],
-      columnSizing: {},
-      columnOrder: [],
-    },
-    position: 0,
-  },
-  {
-    id: seedId(`${wsLabel}-view-files`),
-    workspaceId: wsId,
-    name: "Files",
-    layout: "filesystem",
-    config: {
-      filters: [],
-      sorts: [],
-      visibleProperties: [],
-      columnSizing: {},
-      columnOrder: [],
-    },
-    position: 1,
-  },
-];
+    ...v,
+  }));
 
 // ─── Entities (per-workspace) ───────────────────────────
 
@@ -686,7 +947,7 @@ const buildEntities = (wsId: string, wsLabel: string): EntitySeed[] => {
   ];
 };
 
-// ─── Fields (status for each entity) ────────────────────
+// ─── Fields (status, due date, notes for each entity) ───
 
 type FieldSeed = {
   id: string;
@@ -697,23 +958,94 @@ type FieldSeed = {
 
 const statuses = ["Active", "In Review", "Closed", "On Hold"];
 
+const notes = [
+  "Awaiting client feedback on latest draft",
+  "Reviewed by senior partner; minor revisions needed",
+  "Final version pending signature",
+  "Opposing counsel requested extension",
+  "Submitted to court registry",
+  "Internal review completed",
+  "Client meeting scheduled to discuss terms",
+  "Requires translation to English",
+  "Expert opinion attached separately",
+  "Pending regulatory approval",
+  "Redlined version sent to counterparty",
+  "Board resolution required before execution",
+  "Notarization scheduled for next week",
+  "Updated to reflect amended legislation",
+  "Confidential; restricted distribution",
+  "Cross-referenced with due diligence findings",
+  "Template updated to current standards",
+  "Risk assessment appended",
+  "Fee estimate included in cover letter",
+  "Archived after matter closure",
+];
+
+/** Deterministic future date within ~6 months of 2025-03-01. */
+const seedDueDate = (index: number): string => {
+  const base = new Date(2025, 2, 1); // 2025-03-01
+  const offsetDays = ((index * 37 + 13) % 180) + 1; // 1..180
+  base.setDate(base.getDate() + offsetDays);
+  return base.toISOString().slice(0, 10);
+};
+
 const buildFields = (
   wsLabel: string,
   entitySeeds: EntitySeed[],
 ): FieldSeed[] => {
   const statusPropId = seedId(`${wsLabel}-prop-status`);
-  return entitySeeds
-    .filter((e) => e.kind === "document")
-    .map((e, i) => ({
+  const dueDatePropId = seedId(`${wsLabel}-prop-due-date`);
+  const notesPropId = seedId(`${wsLabel}-prop-notes`);
+
+  const docs = entitySeeds.filter((e) => e.kind === "document");
+  const result: FieldSeed[] = [];
+
+  for (let i = 0; i < docs.length; i++) {
+    const doc = at(docs, i);
+
+    // Status field
+    result.push({
       id: seedId(`${wsLabel}-field-status-${i}`),
       propertyId: statusPropId,
-      entityVersionId: e.versionId,
+      entityVersionId: doc.versionId,
       content: {
         version: 1,
         type: "single-select",
-        value: statuses[i % statuses.length],
+        value: at(statuses, i % statuses.length),
       },
-    }));
+    });
+
+    // Due Date field
+    result.push({
+      id: seedId(`${wsLabel}-field-due-date-${i}`),
+      propertyId: dueDatePropId,
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "date",
+        value: seedDueDate(
+          // Use wsLabel hash + doc index for variety
+          seedId(`${wsLabel}-${i}`).charCodeAt(0) + i,
+        ),
+      },
+    });
+
+    // Notes field
+    const noteIndex =
+      (seedId(`${wsLabel}-note-${i}`).charCodeAt(0) + i) % notes.length;
+    result.push({
+      id: seedId(`${wsLabel}-field-notes-${i}`),
+      propertyId: notesPropId,
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "text",
+        value: at(notes, noteIndex),
+      },
+    });
+  }
+
+  return result;
 };
 
 // ─── Workspace contacts (parties) ───────────────────────
@@ -866,6 +1198,273 @@ const buildTimeEntries = (): TimeEntrySeed[] => {
   return entries;
 };
 
+// ─── Additional workspaces for overview stress-testing ──
+
+const MORE_WORKSPACES = [
+  // Bratislava Legal Group
+  {
+    name: "Reštitučné konanie Bratislava",
+    reference: "2024/009",
+    clientLabel: "contact-org-bratislava-legal",
+  },
+  {
+    name: "Obchodný spor – dodávky",
+    reference: "2024/010",
+    clientLabel: "contact-org-bratislava-legal",
+  },
+  {
+    name: "Prevod obchodného podielu",
+    reference: "2024/011",
+    clientLabel: "contact-org-bratislava-legal",
+  },
+  // Müller & Bergmann
+  {
+    name: "Kartellrechtliche Prüfung",
+    reference: "2024/012",
+    clientLabel: "contact-org-muller-bergmann",
+  },
+  {
+    name: "Gesellschafterstreit GmbH",
+    reference: "2024/013",
+    clientLabel: "contact-org-muller-bergmann",
+  },
+  {
+    name: "Arbeitsrechtliche Restrukturierung",
+    reference: "2024/014",
+    clientLabel: "contact-org-muller-bergmann",
+  },
+  {
+    name: "Datenschutz-Folgenabschätzung",
+    reference: "2024/015",
+    clientLabel: "contact-org-muller-bergmann",
+  },
+  // Thames Advisory
+  {
+    name: "Shareholder Dispute Resolution",
+    reference: "2024/016",
+    clientLabel: "contact-org-thames-advisory",
+  },
+  {
+    name: "UK Regulatory Filing",
+    reference: "2024/017",
+    clientLabel: "contact-org-thames-advisory",
+  },
+  {
+    name: "Post-Acquisition Integration",
+    reference: "2024/018",
+    clientLabel: "contact-org-thames-advisory",
+  },
+  {
+    name: "Employee Share Scheme",
+    reference: "2024/019",
+    clientLabel: "contact-org-thames-advisory",
+  },
+  {
+    name: "Anti-Bribery Compliance Review",
+    reference: "2024/020",
+    clientLabel: "contact-org-thames-advisory",
+  },
+  // Žilina Steel
+  {
+    name: "Environmentálne povolenia",
+    reference: "2024/021",
+    clientLabel: "contact-org-zilina-steel",
+  },
+  {
+    name: "Kolektívna zmluva 2025",
+    reference: "2024/022",
+    clientLabel: "contact-org-zilina-steel",
+  },
+  {
+    name: "Cezhraničná dodávka ocele",
+    reference: "2024/023",
+    clientLabel: "contact-org-zilina-steel",
+  },
+  // PragoBanka
+  {
+    name: "Syndikovaný úvěr – strukturace",
+    reference: "2024/024",
+    clientLabel: "contact-org-pragobanka",
+  },
+  {
+    name: "Regulatorní reporting ČNB",
+    reference: "2024/025",
+    clientLabel: "contact-org-pragobanka",
+  },
+  {
+    name: "AML vyšetřování",
+    reference: "2024/026",
+    clientLabel: "contact-org-pragobanka",
+  },
+  {
+    name: "Spotřebitelské úvěry – audit",
+    reference: "2024/027",
+    clientLabel: "contact-org-pragobanka",
+  },
+  {
+    name: "Bankovní záruky – rámcová smlouva",
+    reference: "2024/028",
+    clientLabel: "contact-org-pragobanka",
+  },
+  {
+    name: "Digitální transformace – právní rámec",
+    reference: "2024/029",
+    clientLabel: "contact-org-pragobanka",
+  },
+  // Dunaj Pharma
+  {
+    name: "Registrácia liečiv ŠÚKL",
+    reference: "2024/030",
+    clientLabel: "contact-org-dunaj-pharma",
+  },
+  {
+    name: "Klinické skúšanie – zmluvy",
+    reference: "2024/031",
+    clientLabel: "contact-org-dunaj-pharma",
+  },
+  {
+    name: "Patentový spor – generikum",
+    reference: "2024/032",
+    clientLabel: "contact-org-dunaj-pharma",
+  },
+  {
+    name: "Distribučná sieť – regulácia",
+    reference: "2024/033",
+    clientLabel: "contact-org-dunaj-pharma",
+  },
+  // Nord Energie
+  {
+    name: "Windpark Genehmigung Nordsee",
+    reference: "2024/034",
+    clientLabel: "contact-org-nord-energie",
+  },
+  {
+    name: "Energieliefervertrag B2B",
+    reference: "2024/035",
+    clientLabel: "contact-org-nord-energie",
+  },
+  {
+    name: "Netzanschluss Offshore",
+    reference: "2024/036",
+    clientLabel: "contact-org-nord-energie",
+  },
+  {
+    name: "EEG-Umlage Optimierung",
+    reference: "2024/037",
+    clientLabel: "contact-org-nord-energie",
+  },
+  {
+    name: "Gasliefervertrag Russland-Exit",
+    reference: "2024/038",
+    clientLabel: "contact-org-nord-energie",
+  },
+  // Ostrava Mining
+  {
+    name: "Těžební licence – prodloužení",
+    reference: "2024/039",
+    clientLabel: "contact-org-ostrava-mining",
+  },
+  {
+    name: "Rekultivace území Karviná",
+    reference: "2024/040",
+    clientLabel: "contact-org-ostrava-mining",
+  },
+  {
+    name: "Pracovní úrazy – hromadná žaloba",
+    reference: "2024/041",
+    clientLabel: "contact-org-ostrava-mining",
+  },
+  {
+    name: "Emise CO₂ – povolenky EU ETS",
+    reference: "2024/042",
+    clientLabel: "contact-org-ostrava-mining",
+  },
+  // Crown Shipping
+  {
+    name: "Charter Party Dispute",
+    reference: "2024/043",
+    clientLabel: "contact-org-crown-shipping",
+  },
+  {
+    name: "Marine Insurance Claim",
+    reference: "2024/044",
+    clientLabel: "contact-org-crown-shipping",
+  },
+  {
+    name: "Port Authority Compliance",
+    reference: "2024/045",
+    clientLabel: "contact-org-crown-shipping",
+  },
+  {
+    name: "Sanctions Screening Programme",
+    reference: "2024/046",
+    clientLabel: "contact-org-crown-shipping",
+  },
+  {
+    name: "Bill of Lading Fraud Investigation",
+    reference: "2024/047",
+    clientLabel: "contact-org-crown-shipping",
+  },
+  // Tatra Motors
+  {
+    name: "Homologace vozidla EU",
+    reference: "2024/048",
+    clientLabel: "contact-org-tatra-motors",
+  },
+  {
+    name: "Záruční spor – flotila",
+    reference: "2024/049",
+    clientLabel: "contact-org-tatra-motors",
+  },
+  {
+    name: "Dodavatelský řetězec – audit",
+    reference: "2024/050",
+    clientLabel: "contact-org-tatra-motors",
+  },
+  {
+    name: "Ochranná známka TATRA",
+    reference: "2024/051",
+    clientLabel: "contact-org-tatra-motors",
+  },
+  // Košice Tech Ventures
+  {
+    name: "Seed investment – term sheet",
+    reference: "2024/052",
+    clientLabel: "contact-org-kosice-tech",
+  },
+  {
+    name: "IP licenčná zmluva",
+    reference: "2024/053",
+    clientLabel: "contact-org-kosice-tech",
+  },
+  {
+    name: "ESOP program pre zamestnancov",
+    reference: "2024/054",
+    clientLabel: "contact-org-kosice-tech",
+  },
+  // Extra matters for existing clients (deeper grouping)
+  {
+    name: "Daňová optimalizace holdingu",
+    reference: "2024/055",
+    clientLabel: "contact-org-novak-partners",
+  },
+  {
+    name: "Obchodní registr – změny",
+    reference: "2024/056",
+    clientLabel: "contact-org-ceska-energie",
+  },
+  {
+    name: "Stavební povolení Brno-jih",
+    reference: "2024/057",
+    clientLabel: "contact-org-moravska-stavebni",
+  },
+  {
+    name: "Fund IV Structuring",
+    reference: "2024/058",
+    clientLabel: "contact-org-greenleaf",
+  },
+];
+
 // ─── Main ───────────────────────────────────────────────
 
 export async function seed(organizationId?: string, userId?: string) {
@@ -878,9 +1477,9 @@ export async function seed(organizationId?: string, userId?: string) {
 
   console.log("Seeding development data...\n");
 
-  // 1. Contacts
-  const allContacts = [...orgContacts, ...personContacts];
-  for (const c of allContacts) {
+  // 1. Contacts (original orgs + people)
+  const coreContacts = [...orgContacts, ...personContacts];
+  for (const c of coreContacts) {
     await db
       .insert(contacts)
       .values({
@@ -913,8 +1512,33 @@ export async function seed(organizationId?: string, userId?: string) {
       })
       .onConflictDoNothing();
   }
+  // 1b. Additional org contacts for overview stress-testing
+  for (const c of moreOrgContacts) {
+    await db
+      .insert(contacts)
+      .values({
+        id: c.id,
+        organizationId: ORG_ID,
+        type: c.type,
+        displayName: c.displayName,
+        organizationName: c.organizationName,
+        registrationNumber: c.registrationNumber,
+        taxId: c.taxId,
+        billingAddress: c.billingAddress,
+        defaultHourlyRate: c.defaultHourlyRate,
+        currency: c.currency,
+        paymentTermDays: c.paymentTermDays,
+        emails: c.emails,
+        color: c.color,
+        originatingAttorneyId: USER_ID,
+        responsibleAttorneyId: USER_ID,
+        createdBy: USER_ID,
+      })
+      .onConflictDoNothing();
+  }
+  const totalContacts = coreContacts.length + moreOrgContacts.length;
   console.log(
-    `  Contacts: ${allContacts.length} (${orgContacts.length} orgs, ${personContacts.length} people)`,
+    `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
   );
 
   // 2. Workspaces
@@ -932,7 +1556,39 @@ export async function seed(organizationId?: string, userId?: string) {
       })
       .onConflictDoNothing();
   }
-  console.log(`  Workspaces: ${seedWorkspaces.length}`);
+  // 2b. Additional workspaces (overview stress-testing)
+  let moreWsCount = 0;
+  for (const mw of MORE_WORKSPACES) {
+    const clientId = seedId(mw.clientLabel);
+    const wsId = seedId(`extra-ws-${mw.reference}`);
+    await db
+      .insert(workspaces)
+      .values({
+        id: wsId,
+        organizationId: ORG_ID,
+        name: mw.name,
+        reference: mw.reference,
+        clientId,
+      })
+      .onConflictDoNothing();
+
+    // Default views for extra workspaces
+    for (const v of DEFAULT_VIEWS) {
+      await db
+        .insert(views)
+        .values({
+          id: seedId(`extra-ws-${mw.reference}-view-${v.layout}`),
+          workspaceId: wsId,
+          ...v,
+        })
+        .onConflictDoNothing();
+    }
+
+    moreWsCount++;
+  }
+  console.log(
+    `  Workspaces: ${seedWorkspaces.length} + ${moreWsCount} extra = ${seedWorkspaces.length + moreWsCount}`,
+  );
 
   // 3. Properties
   const allProperties: PropertySeed[] = [];
@@ -950,6 +1606,11 @@ export async function seed(organizationId?: string, userId?: string) {
     allProperties.push(
       ...buildProperties(at(seedWorkspaces, i).id, at(wsLabels, i)),
     );
+  }
+  for (const mw of MORE_WORKSPACES) {
+    const wsId = seedId(`extra-ws-${mw.reference}`);
+    const label = `extra-ws-${mw.reference}`;
+    allProperties.push(...buildProperties(wsId, label));
   }
   for (const prop of allProperties) {
     await db
@@ -1030,7 +1691,10 @@ export async function seed(organizationId?: string, userId?: string) {
   );
 
   // 6. File fields (generate files, upload to S3, insert fields)
+  // For DOCX files, also create a PDF "converted twin" as if
+  // Gotenberg had converted it.
   let fileCount = 0;
+  let pdfTwinCount = 0;
   for (let i = 0; i < seedWorkspaces.length; i++) {
     const ws = at(seedWorkspaces, i);
     const wsLabel = at(wsLabels, i);
@@ -1066,6 +1730,16 @@ export async function seed(organizationId?: string, userId?: string) {
 
       await s3.write(s3Key, new Uint8Array(content));
 
+      // For DOCX files, create a PDF converted twin
+      let pdfFileId: string | null = null;
+      if (isDocx) {
+        pdfFileId = seedId(`${wsLabel}-pdf-twin-${j}`);
+        const pdfContent = createMockPdf(title);
+        const pdfS3Key = `${ORG_ID}/${ws.id}/${pdfFileId}.pdf`;
+        await s3.write(pdfS3Key, new Uint8Array(pdfContent));
+        pdfTwinCount++;
+      }
+
       await db
         .insert(fields)
         .values({
@@ -1081,7 +1755,7 @@ export async function seed(organizationId?: string, userId?: string) {
             sizeBytes: content.length,
             encrypted: false,
             sha256Hex,
-            pdfFileId: null,
+            pdfFileId,
           },
         })
         .onConflictDoNothing();
@@ -1089,7 +1763,9 @@ export async function seed(organizationId?: string, userId?: string) {
       fileCount++;
     }
   }
-  console.log(`  Files: ${fileCount} (uploaded to S3)`);
+  console.log(
+    `  Files: ${fileCount} (uploaded to S3, ${pdfTwinCount} PDF twins)`,
+  );
 
   // 7. Fields (status for each document)
   const allFields: FieldSeed[] = [];

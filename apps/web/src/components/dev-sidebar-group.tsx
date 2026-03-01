@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { DatabaseIcon, Trash2Icon, WrenchIcon } from "lucide-react";
+import {
+  DatabaseIcon,
+  RotateCcwIcon,
+  Trash2Icon,
+  WrenchIcon,
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
@@ -20,6 +25,7 @@ export const DevSidebarGroup = () => {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
   const dev = useDevStore(
     useShallow((s) => ({
       tanstackDevtools: s.tanstackDevtools,
@@ -47,6 +53,25 @@ export const DevSidebarGroup = () => {
       title: "Dev data seeded",
       type: "success",
     });
+  };
+
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    const { error } = await api.dev["clear-cache"].post();
+    setClearingCache(false);
+    if (error) {
+      toastManager.add({
+        title: "Clear cache failed",
+        type: "error",
+      });
+      return;
+    }
+    queryClient.clear();
+    toastManager.add({
+      title: "Cache cleared, reloading…",
+      type: "success",
+    });
+    setTimeout(() => window.location.reload(), 500);
   };
 
   const handleClean = async () => {
@@ -103,6 +128,11 @@ export const DevSidebarGroup = () => {
         <MenuItem disabled={cleaning} onClick={handleClean}>
           <Trash2Icon />
           {cleaning ? "Cleaning..." : "Clean data"}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem disabled={clearingCache} onClick={handleClearCache}>
+          <RotateCcwIcon />
+          {clearingCache ? "Clearing…" : "Clear cache"}
         </MenuItem>
       </MenuSubPopup>
     </MenuSub>

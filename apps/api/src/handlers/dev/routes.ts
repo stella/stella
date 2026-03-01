@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import Elysia from "elysia";
 
@@ -12,6 +14,11 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
+
+const VITE_CACHE_DIR = resolve(
+  import.meta.dir,
+  "../../../../../apps/web/node_modules/.vite",
+);
 
 export const devRoute = new Elysia({ prefix: "/dev" })
   .use(authMacro)
@@ -66,5 +73,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     // 4. Contacts
     await db.delete(contacts).where(eq(contacts.organizationId, orgId));
 
+    return { ok: true };
+  })
+  .post("/clear-cache", () => {
+    rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
     return { ok: true };
   });

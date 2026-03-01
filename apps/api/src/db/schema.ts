@@ -38,8 +38,12 @@ export const entityKindEnum = p.pgEnum("entity_kind", [
 ]);
 
 export const viewLayoutEnum = p.pgEnum("view_layout", [
+  "overview",
   "table",
   "filesystem",
+  // "gallery" kept in DB enum (PostgreSQL cannot drop
+  // enum values); the layout is removed from validators
+  // and UI
   "gallery",
   "kanban",
 ]);
@@ -240,6 +244,7 @@ export const workspaces = p.pgTable(
       .text({ enum: ["active", "deleting"] })
       .notNull()
       .default("active"),
+    lastActivityAt: p.timestamp("last_activity_at").notNull().defaultNow(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -251,6 +256,9 @@ export const workspaces = p.pgTable(
       .index("workspaces_client_id_idx")
       .on(table.clientId)
       .where(isNotNull(table.clientId)),
+    p
+      .index("workspaces_org_last_activity_idx")
+      .on(table.organizationId, table.lastActivityAt),
   ],
 );
 

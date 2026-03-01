@@ -4,6 +4,7 @@ import { status } from "elysia";
 import { db } from "@/api/db";
 import { views } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { REQUIRED_VIEW_LAYOUT_SET } from "@/api/lib/views";
 
 type DeleteViewHandlerProps = {
   viewId: string;
@@ -16,13 +17,29 @@ export const deleteViewHandler = ({
 }: DeleteViewHandlerProps) => {
   return db.transaction(async (tx) => {
     const lockedViews = await tx
-      .select({ id: views.id })
+      .select({ id: views.id, layout: views.layout })
       .from(views)
       .where(eq(views.workspaceId, workspaceId))
       .for("update");
 
-    if (!lockedViews.some((v) => v.id === viewId)) {
+    const target = lockedViews.find((v) => v.id === viewId);
+
+    if (!target) {
       return status(404, { message: "View not found" });
+    }
+
+    const isRequired = REQUIRED_VIEW_LAYOUT_SET.has(target.layout);
+
+    if (isRequired) {
+      const sameLayoutCount = lockedViews.filter(
+        (v) => v.layout === target.layout,
+      ).length;
+
+      if (sameLayoutCount <= 1) {
+        return status(400, {
+          message: `Cannot delete the last ${target.layout} view`,
+        });
+      }
     }
 
     if (lockedViews.length <= 1) {
