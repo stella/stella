@@ -2,6 +2,27 @@
 // Do not edit manually.
 
 type Messages = {
+  "analytics": {
+    "billedAmount": "Billed amount";
+    "billedHours": "Billed hours";
+    "entries": "Entries";
+    "entryCount": "Entries";
+    "hoursByMatter": "Hours by matter";
+    "hoursByPeriod": "Hours by period";
+    "hoursByUser": "Hours by user";
+    "last30Days": "Last 30 days";
+    "last7Days": "Last 7 days";
+    "last90Days": "Last 90 days";
+    "matter": "Matter";
+    "noData": "No data for this period";
+    "revenueByPeriod": "Revenue by period";
+    "invalidDateRange": "Start date is after end date";
+    "thisMonth": "This month";
+    "title": "Analytics";
+    "totalHours": "Total hours";
+    "user": "User";
+    "utilization": "Utilization";
+  };
   "appearance": {
     "cool": "Cool";
     "dark": "Dark";
@@ -268,13 +289,13 @@ type Messages = {
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "description": "Description";
     "done": "Done";
-    "enterKey": "↵";
     "download": "Download";
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
     "edit": "Edit";
     "email": "Email";
     "empty": "Empty";
+    "enterKey": "↵";
     "filter": "Filter";
     "invite": "Invite";
     "kind": "Kind";
@@ -480,6 +501,7 @@ type Messages = {
   };
   "navigation": {
     "agents": "Agents";
+    "analytics": "Analytics";
     "chat": "Chat";
     "clauses": "Clauses";
     "clients": "Clients";
@@ -568,18 +590,18 @@ type Messages = {
   };
   "search": {
     "emptyState": "Start typing to search across all matters.";
+    "escKey": "ESC";
     "facets": {
       "kind": "Kind";
       "workspace": "Workspace";
     };
+    "filterLabel": "{type}:";
     "kinds": {
       "document": "Document";
       "folder": "Folder";
       "message": "Message";
       "task": "Task";
     };
-    "escKey": "ESC";
-    "filterLabel": "{type}:";
     "loadMore": "Load more";
     "metaSeparator": "{workspace} · {time}";
     "noResults": "No results found for \"{query}\".";
@@ -666,8 +688,11 @@ type Messages = {
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";
     "uploadDifferent": "Upload a different template";
     "uploadTitle": "Create a template";
+    "validationErrors": "Please fix the highlighted errors";
     "validationMaxLength": "Maximum {max} characters";
     "validationMinLength": "Minimum {min} characters";
+    "validationNumberMax": "Maximum value is {max}";
+    "validationNumberMin": "Minimum value is {min}";
     "validationPattern": "Invalid format";
     "validationRequired": "This field is required";
     "versionLabel": "Version {version}";

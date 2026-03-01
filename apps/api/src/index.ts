@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
+import { analyticsRoute } from "@/api/handlers/analytics/routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import {
   clauseCategoriesRoute,
@@ -94,6 +95,7 @@ const api = new Elysia()
       .use(clausesRoute)
       .use(contactsRoute)
       .use(searchRoute)
+      .use(analyticsRoute)
       .use(devRoute),
   );
 

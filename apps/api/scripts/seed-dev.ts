@@ -23,11 +23,16 @@ import { createHash } from "node:crypto";
 
 import { db } from "@/api/db";
 import {
+  billingCodes,
   contacts,
   entities,
   entityVersions,
+  expenses,
   fields,
+  invoices,
   properties,
+  rateEntries,
+  rateTables,
   timeEntries,
   views,
   workspaceContacts,
@@ -70,7 +75,7 @@ const seedId = (label: string): string => {
 };
 
 /** Safe array access for seed data (panics on out-of-bounds). */
-const at = <T>(arr: T[], i: number): T => {
+const at = <T>(arr: readonly T[], i: number): T => {
   const item = arr[i];
   if (item === undefined) {
     throw new Error(`Seed data: index ${i} out of bounds`);
@@ -1125,11 +1130,178 @@ const seedParties: PartySeed[] = [
   },
 ];
 
-// ─── Time entries ───────────────────────────────────────
+// ─── Billing codes ─────────────────────────────────────
 
-type TimeEntrySeed = {
+const TASK_CODES = [
+  { code: "RESEARCH", label: "Legal research" },
+  { code: "REVIEW", label: "Document review" },
+  { code: "DRAFT", label: "Drafting" },
+  { code: "MEETING", label: "Meeting / conference" },
+  { code: "COURT", label: "Court appearance" },
+  { code: "FILING", label: "Filing and service" },
+  { code: "DISCOVERY", label: "Discovery" },
+  { code: "NEGOTIATE", label: "Negotiation" },
+  { code: "ADVISE", label: "Advisory" },
+  { code: "ADMIN", label: "Administrative" },
+] as const;
+
+const ACTIVITY_CODES = [
+  { code: "PLAN", label: "Planning and strategy" },
+  { code: "COMMUNICATE", label: "Communication" },
+  { code: "ANALYZE", label: "Analysis" },
+  { code: "MANAGE", label: "Case management" },
+  { code: "TRAVEL", label: "Travel" },
+  { code: "ATTEND", label: "Attendance" },
+  { code: "PREPARE", label: "Preparation" },
+  { code: "CORRESPOND", label: "Correspondence" },
+] as const;
+
+type BillingCodeSeed = {
   id: string;
   workspaceId: string;
+  type: "task" | "activity";
+  code: string;
+  label: string;
+  sortOrder: number;
+};
+
+const buildBillingCodes = (): BillingCodeSeed[] => {
+  const codes: BillingCodeSeed[] = [];
+  for (let wsIndex = 0; wsIndex < seedWorkspaces.length; wsIndex++) {
+    const ws = at(seedWorkspaces, wsIndex);
+    for (let i = 0; i < TASK_CODES.length; i++) {
+      const tc = at(TASK_CODES, i);
+      codes.push({
+        id: seedId(`billing-code-${wsIndex}-task-${tc.code}`),
+        workspaceId: ws.id,
+        type: "task",
+        code: tc.code,
+        label: tc.label,
+        sortOrder: i,
+      });
+    }
+    for (let i = 0; i < ACTIVITY_CODES.length; i++) {
+      const ac = at(ACTIVITY_CODES, i);
+      codes.push({
+        id: seedId(`billing-code-${wsIndex}-activity-${ac.code}`),
+        workspaceId: ws.id,
+        type: "activity",
+        code: ac.code,
+        label: ac.label,
+        sortOrder: i,
+      });
+    }
+  }
+  return codes;
+};
+
+// ─── Rate tables ───────────────────────────────────────
+
+type RateTableSeed = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  currency: string;
+};
+
+type RateEntrySeed = {
+  id: string;
+  rateTableId: string;
+  userId: string;
+  hourlyRate: number;
+  effectiveFrom: string;
+};
+
+/** Tiered hourly rates (CZK) by user seniority */
+const USER_RATES: Record<string, number> = {
+  "test-user-stella-dev": 6500,
+  "test-user-alice-johnson": 4500,
+  "test-user-bob-martinez": 2500,
+  "test-user-clara-novak": 4500,
+  "test-user-david-kim": 6500,
+  "test-user-eva-schmidt": 3500,
+  "test-user-frank-horvat": 2500,
+  "test-user-greta-jones": 5500,
+};
+
+const buildRateTables = (): {
+  tables: RateTableSeed[];
+  entries: RateEntrySeed[];
+} => {
+  const tables: RateTableSeed[] = [];
+  const entries: RateEntrySeed[] = [];
+  for (let wsIndex = 0; wsIndex < seedWorkspaces.length; wsIndex++) {
+    const ws = at(seedWorkspaces, wsIndex);
+    const tableId = seedId(`rate-table-${wsIndex}`);
+    tables.push({
+      id: tableId,
+      workspaceId: ws.id,
+      name: "Default Rate Table",
+      currency: "CZK",
+    });
+    for (let ui = 0; ui < ALL_USER_IDS.length; ui++) {
+      const userId = at(ALL_USER_IDS, ui);
+      entries.push({
+        id: seedId(`rate-entry-${wsIndex}-${ui}`),
+        rateTableId: tableId,
+        userId,
+        hourlyRate: USER_RATES[userId] ?? 4000,
+        effectiveFrom: "2024-01-01",
+      });
+    }
+  }
+  return { tables, entries };
+};
+
+// ─── Extended time entries (~500) ──────────────────────
+
+const EXTENDED_NARRATIVES = [
+  "Review of acquisition agreement draft",
+  "Client conference call re: deal terms",
+  "Legal research on regulatory compliance",
+  "Preparation of due diligence checklist",
+  "Analysis of opposing party's motion",
+  "Drafting response to counterparty",
+  "Review of financial disclosure documents",
+  "Witness interview preparation",
+  "Court filing and service coordination",
+  "Negotiation of settlement terms",
+  "Review of employment contract amendments",
+  "Compliance risk assessment meeting",
+  "Cross-border regulatory analysis",
+  "GDPR gap analysis and documentation",
+  "Internal team strategy discussion",
+  "Preparation of expert witness report",
+  "Review of corporate restructuring plan",
+  "Analysis of environmental permit conditions",
+  "Draft shareholder resolution",
+  "Anti-money laundering review",
+  "Review of merger notification filing",
+  "Client update on litigation status",
+  "Research on jurisdictional questions",
+  "Preparation of closing documents",
+  "Review of lease agreement modifications",
+  "Correspondence with opposing counsel",
+  "Due diligence on target company assets",
+  "Review of intellectual property portfolio",
+  "Preparation for arbitration hearing",
+  "Analysis of insurance coverage terms",
+  "Tax advisory on cross-border transaction",
+  "Review of non-compete clause enforceability",
+  "Preparation of board meeting minutes",
+  "Research on data protection regulations",
+  "Draft supply contract amendments",
+  "Review of regulatory investigation response",
+  "Client briefing on new legislation",
+  "Analysis of construction contract claims",
+  "Preparation of settlement proposal",
+  "Review of export control compliance",
+];
+
+type ExtendedTimeEntrySeed = {
+  id: string;
+  workspaceId: string;
+  userId: string;
   matterId: string;
   dateWorked: string;
   durationMinutes: number;
@@ -1138,64 +1310,212 @@ type TimeEntrySeed = {
   currency: string;
   narrative: string;
   billable: boolean;
+  status: "draft" | "approved" | "billed" | "written_off";
+  taskCode: string;
+  activityCode: string;
+  invoiceId: string | null;
 };
 
-const buildTimeEntries = (): TimeEntrySeed[] => {
-  const entries: TimeEntrySeed[] = [];
-  const narratives = [
-    "Review of acquisition agreement draft",
-    "Client conference call re: deal terms",
-    "Legal research on regulatory compliance",
-    "Preparation of due diligence checklist",
-    "Analysis of opposing party's motion",
-    "Drafting response to counterparty",
-    "Review of financial disclosure documents",
-    "Witness interview preparation",
-    "Court filing and service coordination",
-    "Negotiation of settlement terms",
-    "Review of employment contract amendments",
-    "Compliance risk assessment meeting",
-    "Cross-border regulatory analysis",
-    "GDPR gap analysis and documentation",
-    "Internal team strategy discussion",
-  ];
+const WS_LABELS = [
+  "ws-akvizice-energo",
+  "ws-stavebni-spor",
+  "ws-due-diligence",
+  "ws-pracovni-spory",
+  "ws-compliance-ceska-energie",
+  "ws-reorganizace",
+  "ws-cross-border",
+  "ws-gdpr-audit",
+] as const;
 
-  for (let i = 0; i < narratives.length; i++) {
+const buildExtendedTimeEntries = (
+  invoiceIds: string[],
+): ExtendedTimeEntrySeed[] => {
+  const entries: ExtendedTimeEntrySeed[] = [];
+  const TARGET = 500;
+
+  for (let i = 0; i < TARGET; i++) {
     const wsIndex = i % seedWorkspaces.length;
     const ws = at(seedWorkspaces, wsIndex);
-    const wsLabel = at(
-      [
-        "ws-akvizice-energo",
-        "ws-stavebni-spor",
-        "ws-due-diligence",
-        "ws-pracovni-spory",
-        "ws-compliance-ceska-energie",
-        "ws-reorganizace",
-        "ws-cross-border",
-        "ws-gdpr-audit",
-      ],
-      wsIndex,
-    );
-    // Use the first document entity in the workspace
+    const wsLabel = at(WS_LABELS, wsIndex);
     const matterId = seedId(`${wsLabel}-doc-1`);
-    const dayOffset = i * 2;
-    const date = new Date(2024, 10, 1 + dayOffset); // November 2024
-    const duration = 30 + (i % 5) * 30; // 30–150 min
-    const rate = wsIndex < 4 ? 4500 : 3500; // CZK
+    const userIndex = i % ALL_USER_IDS.length;
+    const userId = at(ALL_USER_IDS, userIndex);
+    const rate = USER_RATES[userId] ?? 4000;
+
+    // Spread across 90 days (Dec 2024 – Feb 2025)
+    const dayOffset = i % 90;
+    const date = new Date(2024, 11, 1 + dayOffset);
+    const dateStr = date.toISOString().slice(0, 10);
+
+    // Duration: 15–240 min, varied
+    const duration = 15 + ((i * 7 + 13) % 226);
+    const billedMinutes = Math.ceil(duration / 6) * 6;
+
+    const narrative = at(EXTENDED_NARRATIVES, i % EXTENDED_NARRATIVES.length);
+    const taskCode = at(TASK_CODES, i % TASK_CODES.length).code;
+    const activityCode = at(ACTIVITY_CODES, i % ACTIVITY_CODES.length).code;
+
+    // Status distribution: 60% draft, 25% approved,
+    // 10% billed, 5% written_off
+    const statusRoll = i % 20;
+    let status: ExtendedTimeEntrySeed["status"] = "draft";
+    let invoiceId: string | null = null;
+    if (statusRoll >= 19) {
+      status = "written_off";
+    } else if (statusRoll >= 17) {
+      status = "billed";
+      invoiceId = at(invoiceIds, i % invoiceIds.length);
+    } else if (statusRoll >= 12) {
+      status = "approved";
+    }
+
+    const billable = i % 7 !== 0;
+
     entries.push({
-      id: seedId(`time-entry-${i}`),
+      id: seedId(`ext-time-entry-${i}`),
       workspaceId: ws.id,
+      userId,
       matterId,
-      dateWorked: date.toISOString().slice(0, 10),
+      dateWorked: dateStr,
       durationMinutes: duration,
-      billedMinutes: duration,
+      billedMinutes,
       rateAtEntry: rate,
       currency: "CZK",
-      narrative: at(narratives, i),
-      billable: i % 7 !== 0, // ~1 in 7 non-billable
+      narrative,
+      billable,
+      status,
+      taskCode,
+      activityCode,
+      invoiceId,
     });
   }
   return entries;
+};
+
+// ─── Expenses (~50) ────────────────────────────────────
+
+type ExpenseSeed = {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  matterId: string;
+  dateIncurred: string;
+  amount: number;
+  currency: string;
+  category:
+    | "filing_fee"
+    | "expert_witness"
+    | "travel"
+    | "printing"
+    | "courier"
+    | "other";
+  description: string;
+  billable: boolean;
+  status: "draft" | "approved" | "billed" | "written_off";
+};
+
+const EXPENSE_CATEGORIES = [
+  "filing_fee",
+  "travel",
+  "expert_witness",
+  "printing",
+  "courier",
+  "other",
+] as const;
+
+const EXPENSE_DESCRIPTIONS = [
+  "Court filing fee",
+  "Travel to client office",
+  "Expert witness consultation fee",
+  "Document printing and binding",
+  "Courier delivery of signed contracts",
+  "Notarization fee",
+  "Land registry extract",
+  "Process server fee",
+  "Conference room rental",
+  "Postage for certified mail",
+];
+
+const buildExpenses = (): ExpenseSeed[] => {
+  const expenseSeeds: ExpenseSeed[] = [];
+  const TARGET = 50;
+
+  for (let i = 0; i < TARGET; i++) {
+    const wsIndex = i % seedWorkspaces.length;
+    const ws = at(seedWorkspaces, wsIndex);
+    const wsLabel = at(WS_LABELS, wsIndex);
+    const matterId = seedId(`${wsLabel}-doc-1`);
+    const userId = pickAuthor(i);
+    const dayOffset = (i * 3) % 90;
+    const date = new Date(2024, 11, 1 + dayOffset);
+    const dateStr = date.toISOString().slice(0, 10);
+
+    // Amounts 500–50000 CZK
+    const amount = 500 + ((i * 997) % 49_501);
+    const category = at(EXPENSE_CATEGORIES, i % EXPENSE_CATEGORIES.length);
+    const description = at(
+      EXPENSE_DESCRIPTIONS,
+      i % EXPENSE_DESCRIPTIONS.length,
+    );
+    const billable = i % 5 !== 0;
+    const statusRoll = i % 10;
+    let status: ExpenseSeed["status"] = "draft";
+    if (statusRoll >= 9) {
+      status = "written_off";
+    } else if (statusRoll >= 7) {
+      status = "billed";
+    } else if (statusRoll >= 4) {
+      status = "approved";
+    }
+
+    expenseSeeds.push({
+      id: seedId(`expense-${i}`),
+      workspaceId: ws.id,
+      userId,
+      matterId,
+      dateIncurred: dateStr,
+      amount,
+      currency: "CZK",
+      category,
+      description,
+      billable,
+      status,
+    });
+  }
+  return expenseSeeds;
+};
+
+// ─── Invoices (~5) ─────────────────────────────────────
+
+type InvoiceSeed = {
+  id: string;
+  workspaceId: string;
+  invoiceNumber: string;
+  status: "draft" | "finalized" | "sent" | "paid";
+  invoiceDate: string;
+  dueDate: string;
+  currency: string;
+  totalAmount: number;
+};
+
+const buildInvoices = (): InvoiceSeed[] => {
+  const statuses = ["draft", "finalized", "sent", "paid", "sent"] as const;
+  const invoiceSeeds: InvoiceSeed[] = [];
+  for (let i = 0; i < 5; i++) {
+    const wsIndex = i % seedWorkspaces.length;
+    const ws = at(seedWorkspaces, wsIndex);
+    invoiceSeeds.push({
+      id: seedId(`invoice-${i}`),
+      workspaceId: ws.id,
+      invoiceNumber: `INV-2025-${String(i + 1).padStart(4, "0")}`,
+      status: at(statuses, i),
+      invoiceDate: `2025-0${i + 1}-15`,
+      dueDate: `2025-0${i + 2}-15`,
+      currency: "CZK",
+      totalAmount: 50_000 + i * 25_000,
+    });
+  }
+  return invoiceSeeds;
 };
 
 // ─── Additional workspaces for overview stress-testing ──
@@ -1803,16 +2123,87 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(`  Parties: ${seedParties.length}`);
 
-  // 9. Time entries
-  const timeEntrySeeds = buildTimeEntries();
-  for (const te of timeEntrySeeds) {
+  // 9. Billing codes
+  const billingCodeSeeds = buildBillingCodes();
+  for (const bc of billingCodeSeeds) {
+    await db
+      .insert(billingCodes)
+      .values({
+        id: bc.id,
+        organizationId: ORG_ID,
+        workspaceId: bc.workspaceId,
+        type: bc.type,
+        code: bc.code,
+        label: bc.label,
+        sortOrder: bc.sortOrder,
+      })
+      .onConflictDoNothing();
+  }
+  console.log(`  Billing codes: ${billingCodeSeeds.length}`);
+
+  // 10. Rate tables + entries
+  const { tables: rateTableSeeds, entries: rateEntrySeeds } = buildRateTables();
+  for (const rt of rateTableSeeds) {
+    await db
+      .insert(rateTables)
+      .values({
+        id: rt.id,
+        organizationId: ORG_ID,
+        workspaceId: rt.workspaceId,
+        name: rt.name,
+        currency: rt.currency,
+        isDefault: true,
+      })
+      .onConflictDoNothing();
+  }
+  for (const re of rateEntrySeeds) {
+    await db
+      .insert(rateEntries)
+      .values({
+        id: re.id,
+        rateTableId: re.rateTableId,
+        userId: re.userId,
+        hourlyRate: re.hourlyRate,
+        effectiveFrom: re.effectiveFrom,
+      })
+      .onConflictDoNothing();
+  }
+  console.log(
+    `  Rate tables: ${rateTableSeeds.length}, entries: ${rateEntrySeeds.length}`,
+  );
+
+  // 11. Invoices (must be inserted before time entries
+  // that reference them)
+  const invoiceSeeds = buildInvoices();
+  for (const inv of invoiceSeeds) {
+    await db
+      .insert(invoices)
+      .values({
+        id: inv.id,
+        organizationId: ORG_ID,
+        workspaceId: inv.workspaceId,
+        invoiceNumber: inv.invoiceNumber,
+        status: inv.status,
+        invoiceDate: inv.invoiceDate,
+        dueDate: inv.dueDate,
+        currency: inv.currency,
+        totalAmount: inv.totalAmount,
+      })
+      .onConflictDoNothing();
+  }
+  console.log(`  Invoices: ${invoiceSeeds.length}`);
+
+  // 12. Extended time entries (~500)
+  const invoiceIds = invoiceSeeds.map((inv) => inv.id);
+  const extTimeEntries = buildExtendedTimeEntries(invoiceIds);
+  for (const te of extTimeEntries) {
     await db
       .insert(timeEntries)
       .values({
         id: te.id,
         organizationId: ORG_ID,
         workspaceId: te.workspaceId,
-        userId: USER_ID,
+        userId: te.userId,
         matterId: te.matterId,
         dateWorked: te.dateWorked,
         timezoneId: "Europe/Prague",
@@ -1822,10 +2213,37 @@ export async function seed(organizationId?: string, userId?: string) {
         currency: te.currency,
         narrative: te.narrative,
         billable: te.billable,
+        status: te.status,
+        taskCode: te.taskCode,
+        activityCode: te.activityCode,
+        invoiceId: te.invoiceId,
       })
       .onConflictDoNothing();
   }
-  console.log(`  Time entries: ${timeEntrySeeds.length}`);
+  console.log(`  Time entries: ${extTimeEntries.length}`);
+
+  // 13. Expenses (~50)
+  const expenseSeeds = buildExpenses();
+  for (const exp of expenseSeeds) {
+    await db
+      .insert(expenses)
+      .values({
+        id: exp.id,
+        organizationId: ORG_ID,
+        workspaceId: exp.workspaceId,
+        userId: exp.userId,
+        matterId: exp.matterId,
+        dateIncurred: exp.dateIncurred,
+        amount: exp.amount,
+        currency: exp.currency,
+        category: exp.category,
+        description: exp.description,
+        billable: exp.billable,
+        status: exp.status,
+      })
+      .onConflictDoNothing();
+  }
+  console.log(`  Expenses: ${expenseSeeds.length}`);
 
   console.log("\nDone. Dev data seeded successfully.");
 }

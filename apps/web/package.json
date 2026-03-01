@@ -59,6 +59,7 @@
     "react-aria": "^3.46.0",
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.6.5",
+    "recharts": "^3.7.0",
     "use-debounce": "^10.1.0",
     "use-intl": "catalog:",
     "valibot": "^1.2.0",
