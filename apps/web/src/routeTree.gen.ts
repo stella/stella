@@ -30,6 +30,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './route
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdPdfRouteImport } from './routes/_protected.workspaces/$workspaceId/pdf'
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
+import { Route as ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport } from './routes/_protected.workspaces/$workspaceId/analytics'
 
 const ProtectedRoute = ProtectedRouteImport.update({
   id: '/_protected',
@@ -148,6 +149,12 @@ const ProtectedWorkspacesWorkspaceIdExpensesRoute =
     path: '/expenses',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdAnalyticsRoute =
+  ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport.update({
+    id: '/analytics',
+    path: '/analytics',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -166,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/contacts/': typeof ProtectedContactsIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/workspaces/': typeof ProtectedWorkspacesIndexRoute
+  '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -186,6 +194,7 @@ export interface FileRoutesByTo {
   '/contacts': typeof ProtectedContactsIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
+  '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -210,6 +219,7 @@ export interface FileRoutesById {
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/_protected/workspaces/': typeof ProtectedWorkspacesIndexRoute
+  '/_protected/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/contacts/'
     | '/knowledge/'
     | '/workspaces/'
+    | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/pdf'
     | '/workspaces/$workspaceId/timesheets'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/knowledge'
     | '/workspaces'
+    | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/pdf'
     | '/workspaces/$workspaceId/timesheets'
@@ -277,6 +289,7 @@ export interface FileRouteTypes {
     | '/_protected/contacts/'
     | '/_protected/knowledge/'
     | '/_protected/workspaces/'
+    | '/_protected/workspaces/$workspaceId/analytics'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/pdf'
     | '/_protected/workspaces/$workspaceId/timesheets'
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
+    '/_protected/workspaces/$workspaceId/analytics': {
+      id: '/_protected/workspaces/$workspaceId/analytics'
+      path: '/analytics'
+      fullPath: '/workspaces/$workspaceId/analytics'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
   }
 }
 
@@ -480,6 +500,7 @@ const ProtectedOrganizationRouteRouteWithChildren =
   )
 
 interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
+  ProtectedWorkspacesWorkspaceIdAnalyticsRoute: typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   ProtectedWorkspacesWorkspaceIdExpensesRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   ProtectedWorkspacesWorkspaceIdPdfRoute: typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -488,6 +509,8 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
 
 const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorkspaceIdRouteRouteChildren =
   {
+    ProtectedWorkspacesWorkspaceIdAnalyticsRoute:
+      ProtectedWorkspacesWorkspaceIdAnalyticsRoute,
     ProtectedWorkspacesWorkspaceIdExpensesRoute:
       ProtectedWorkspacesWorkspaceIdExpensesRoute,
     ProtectedWorkspacesWorkspaceIdPdfRoute:

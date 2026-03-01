@@ -178,11 +178,15 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/timesheets",
     shouldThrow: false,
   });
+  const analyticsMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/analytics",
+    shouldThrow: false,
+  });
 
   const hasPeekTabs = usePeekStore((s) => s.tabs.length > 0);
 
-  // Timesheets has its own layout; skip entity-specific UI
-  if (timesheetsMatch) {
+  // Timesheets and analytics have their own layout
+  if (timesheetsMatch || analyticsMatch) {
     return <Outlet />;
   }
 

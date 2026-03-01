@@ -8,6 +8,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
+  BarChart3Icon,
   BookOpenIcon,
   ChevronsUpDownIcon,
   ClockIcon,
@@ -923,6 +924,29 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     <SidebarTimerPopover workspaceId={currentWorkspaceId} />
                   </SidebarMenuBadge>
                 )
+              )}
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              {currentWorkspaceId ? (
+                <SidebarMenuButton asChild tooltip={t("navigation.analytics")}>
+                  <Link
+                    params={{
+                      workspaceId: currentWorkspaceId,
+                    }}
+                    to="/workspaces/$workspaceId/analytics"
+                  >
+                    <BarChart3Icon />
+                    <span>{t("navigation.analytics")}</span>
+                  </Link>
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton
+                  onClick={comingSoon}
+                  tooltip={t("navigation.analytics")}
+                >
+                  <BarChart3Icon />
+                  <span>{t("navigation.analytics")}</span>
+                </SidebarMenuButton>
               )}
             </SidebarMenuItem>
           </SidebarMenu>
