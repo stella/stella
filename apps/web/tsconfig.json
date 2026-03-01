@@ -1,0 +1,15 @@
+{
+  "extends": "@stella/typescript-config/react-library.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo
+      "@stella/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,92 @@
+name: React Doctor
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "apps/**"
+      - "packages/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  react-doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for React file changes
+        id: changes
+        run: |
+          REACT_FILES=$(git diff --name-only origin/main...HEAD -- \
+            'apps/web/**' \
+            'packages/ui/**' \
+            'packages/transactional/**' \
+            | grep -E '\.(tsx|jsx)$' || true)
+          if [[ -z "$REACT_FILES" ]]; then
+            echo "has_react_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_react_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run React Doctor
+        if: steps.changes.outputs.has_react_changes == 'true'
+        id: doctor
+        uses: millionco/react-doctor@97b21f18ee4c5b530d683ae6626548081a4aad76 # main
+        with:
+          diff: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on: none
+        env:
+          NO_COLOR: "1"
+          FORCE_COLOR: "0"
+
+      - name: Update score label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCORE: ${{ steps.doctor.outputs.score }}
+          PR: ${{ github.event.pull_request.number }}
+          HAS_CHANGES: ${{ steps.changes.outputs.has_react_changes }}
+        run: |
+          if [[ "$HAS_CHANGES" != "true" || -z "$SCORE" || "$SCORE" == "0" ]]; then
+            TARGET="react-doctor: ⚪ N/A"
+          elif [[ "$SCORE" -eq 100 ]]; then
+            TARGET="react-doctor: 💯 100"
+          elif [[ "$SCORE" -ge 96 ]]; then
+            TARGET="react-doctor: 🟢 >95"
+          elif [[ "$SCORE" -ge 90 ]]; then
+            TARGET="react-doctor: 🟡 90-95"
+          elif [[ "$SCORE" -ge 80 ]]; then
+            TARGET="react-doctor: 🟠 80-90"
+          else
+            TARGET="react-doctor: 🔴 <80"
+          fi
+
+          # Check if PR already has target label
+          CURRENT=$(gh pr view "$PR" --json labels -q '.labels[].name' | grep "^react-doctor:" || true)
+          if [[ "$CURRENT" == "$TARGET" ]]; then
+            echo "Label already set to $TARGET, no change needed"
+            exit 0
+          fi
+
+          # Remove existing react-doctor labels
+          gh pr edit "$PR" \
+            --remove-label "react-doctor: 💯 100" \
+            --remove-label "react-doctor: 🟢 >95" \
+            --remove-label "react-doctor: 🟡 90-95" \
+            --remove-label "react-doctor: 🟠 80-90" \
+            --remove-label "react-doctor: 🔴 <80" \
+            --remove-label "react-doctor: ⚪ N/A" \
+            2>/dev/null || true
+
+          # Add target label
+          gh pr edit "$PR" --add-label "$TARGET"

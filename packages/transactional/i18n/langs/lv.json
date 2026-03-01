@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Pieņemt uzaicinājumu",
+    "body": "{invitedByUsername} ir uzaicinājis jūs pievienoties {organizationName}. Noklikšķiniet zemāk, lai pieņemtu.",
+    "expires": "Šis uzaicinājums ir derīgs 48 stundas.",
+    "heading": "Uzaicinājums organizācijā",
+    "ignore": "Ja negaidījāt šo uzaicinājumu, varat droši ignorēt šo e-pastu.",
+    "subject": "Jūs esat uzaicināts pievienoties {organizationName}"
+  },
+  "otp": {
+    "emailVerification": "Izmantojiet šo kodu, lai apstiprinātu savu e-pasta adresi.",
+    "expires": "Šī koda derīguma termiņš ir 5 minūtes.",
+    "forgetPassword": "Izmantojiet šo kodu, lai atiestatītu savu paroli.",
+    "heading": "Jūsu Stella vienreizējais kods",
+    "ignore": "Ja neesat pieprasījis šo kodu, varat ignorēt šo e-pastu.",
+    "preview": "Jūsu vienreizējais kods: {otp}",
+    "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam Stella kontam.",
+    "subject": "Stella"
+  }
+}

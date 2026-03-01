@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Přijmout pozvánku",
+    "body": "Byli jste pozváni do organizace {organizationName} uživatelem {invitedByUsername}. Klikněte níže pro přijetí.",
+    "expires": "Platnost pozvánky vyprší za 48 hodin.",
+    "heading": "Pozvánka do organizace",
+    "ignore": "Pokud jste tuto pozvánku nečekali, tento e-mail můžete ignorovat.",
+    "subject": "Byli jste pozváni do organizace {organizationName}"
+  },
+  "otp": {
+    "emailVerification": "Použijte tento kód pro ověření vaší e-mailové adresy.",
+    "expires": "Platnost kódu vyprší za 5 minut.",
+    "forgetPassword": "Použijte tento kód pro obnovení hesla.",
+    "heading": "Váš jednorázový kód Stella",
+    "ignore": "Pokud jste o tento kód nežádali, tento e-mail můžete ignorovat.",
+    "preview": "Váš jednorázový kód: {otp}",
+    "signIn": "Použijte tento kód pro přihlášení ke svému účtu Stella.",
+    "subject": "Stella"
+  }
+}

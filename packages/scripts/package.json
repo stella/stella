@@ -1,0 +1,22 @@
+{
+  "name": "@stella/scripts",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "i18n-typegen": "src/i18n-typegen.ts",
+    "i18n-check": "src/i18n-check.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

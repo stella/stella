@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Meghívó elfogadása",
+    "body": "{invitedByUsername} meghívta Önt a(z) {organizationName} szervezetbe. Kattintson az alábbi gombra az elfogadáshoz.",
+    "expires": "Ez a meghívó 48 órán belül lejár.",
+    "heading": "Szervezeti meghívó",
+    "ignore": "Ha nem számított erre a meghívóra, nyugodtan figyelmen kívül hagyhatja ezt az e-mailt.",
+    "subject": "Meghívást kapott a(z) {organizationName} szervezetbe"
+  },
+  "otp": {
+    "emailVerification": "Használja ezt a kódot az e-mail címe megerősítéséhez.",
+    "expires": "Ez a kód 5 perc múlva lejár.",
+    "forgetPassword": "Használja ezt a kódot a jelszava visszaállításához.",
+    "heading": "Az Ön Stella egyszer használatos kódja",
+    "ignore": "Ha nem Ön kérte ezt a kódot, figyelmen kívül hagyhatja ezt az e-mailt.",
+    "preview": "Az Ön egyszer használatos kódja: {otp}",
+    "signIn": "Használja ezt a kódot a Stella fiókjába való bejelentkezéshez.",
+    "subject": "Stella"
+  }
+}

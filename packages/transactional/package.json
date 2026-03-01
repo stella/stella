@@ -1,0 +1,37 @@
+{
+  "name": "@stella/transactional",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "build": "email build",
+    "dev": "email dev -p 3002",
+    "export": "email export",
+    "start": "email start -p 3002",
+    "typecheck": "tsc --noEmit",
+    "typegen": "i18n-typegen i18n/langs",
+    "i18n:check": "i18n-check i18n/langs",
+    "lint": "biome lint",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.7",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "use-intl": "catalog:"
+  },
+  "devDependencies": {
+    "@react-email/preview-server": "5.2.8",
+    "@stella/scripts": "workspace:*",
+    "@stella/typescript-config": "workspace:*",
+    "@types/node": "catalog:react19",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "react-email": "5.2.8",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    "./emails/*": "./emails/*.tsx"
+  }
+}

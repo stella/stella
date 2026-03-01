@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Einladung annehmen",
+    "body": "Sie wurden von {invitedByUsername} eingeladen, {organizationName} beizutreten. Klicken Sie unten, um die Einladung anzunehmen.",
+    "expires": "Diese Einladung läuft in 48 Stunden ab.",
+    "heading": "Organisationseinladung",
+    "ignore": "Wenn Sie diese Einladung nicht erwartet haben, können Sie diese E-Mail ignorieren.",
+    "subject": "Sie wurden eingeladen, {organizationName} beizutreten"
+  },
+  "otp": {
+    "emailVerification": "Verwenden Sie diesen Code, um Ihre E-Mail-Adresse zu bestätigen.",
+    "expires": "Dieser Code läuft in 5 Minuten ab.",
+    "forgetPassword": "Verwenden Sie diesen Code, um Ihr Passwort zurückzusetzen.",
+    "heading": "Ihr Stella-Einmalcode",
+    "ignore": "Wenn Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.",
+    "preview": "Ihr Einmalcode: {otp}",
+    "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem Stella-Konto anzumelden.",
+    "subject": "Stella"
+  }
+}

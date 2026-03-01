@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "stella-docs": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["run", ".claude/mcp/stella-docs.ts"]
+    }
+  }
+}

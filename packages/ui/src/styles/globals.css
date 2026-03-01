@@ -1,0 +1,1010 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@source "../../../apps/**/*.{ts,tsx}";
+@source "../../../components/**/*.{ts,tsx}";
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --animate-skeleton: skeleton 2s -1s infinite linear;
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  @keyframes skeleton {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes caret-blink {
+    0%,
+    70%,
+    100% {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: var(--color-white);
+  --foreground: var(--color-neutral-800);
+  --card: var(--color-white);
+  --card-foreground: var(--color-neutral-800);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-neutral-800);
+  --primary: var(--color-neutral-800);
+  --primary-foreground: var(--color-neutral-50);
+  --secondary: --alpha(var(--color-black) / 4%);
+  --secondary-foreground: var(--color-neutral-800);
+  --muted: --alpha(var(--color-black) / 4%);
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--color-neutral-500) 90%,
+    var(--color-black)
+  );
+  --accent: --alpha(var(--color-black) / 4%);
+  --accent-foreground: var(--color-neutral-800);
+  --destructive: var(--color-red-500);
+  --destructive-foreground: var(--color-red-700);
+  --info: var(--color-blue-500);
+  --info-foreground: var(--color-blue-700);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-700);
+  --warning: var(--color-amber-500);
+  --warning-foreground: var(--color-amber-700);
+  --border: --alpha(var(--color-black) / 8%);
+  --input: --alpha(var(--color-black) / 10%);
+  --ring: var(--color-neutral-400);
+  --sidebar: var(--color-neutral-50);
+  --sidebar-foreground: color-mix(
+    in srgb,
+    var(--color-neutral-800) 64%,
+    var(--sidebar)
+  );
+  --sidebar-primary: var(--color-neutral-800);
+  --sidebar-primary-foreground: var(--color-neutral-50);
+  --sidebar-accent: --alpha(var(--color-black) / 4%);
+  --sidebar-accent-foreground: var(--color-neutral-800);
+  --sidebar-border: --alpha(var(--color-black) / 6%);
+  --sidebar-ring: var(--color-neutral-400);
+}
+
+.dark {
+  --background: color-mix(
+    in srgb,
+    var(--color-neutral-950) 95%,
+    var(--color-white)
+  );
+  --foreground: var(--color-neutral-100);
+  --card: color-mix(in srgb, var(--background) 98%, var(--color-white));
+  --card-foreground: var(--color-neutral-100);
+  --popover: color-mix(in srgb, var(--background) 98%, var(--color-white));
+  --popover-foreground: var(--color-neutral-100);
+  --primary: var(--color-neutral-100);
+  --primary-foreground: var(--color-neutral-800);
+  --secondary: --alpha(var(--color-white) / 4%);
+  --secondary-foreground: var(--color-neutral-100);
+  --muted: --alpha(var(--color-white) / 4%);
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--color-neutral-500) 90%,
+    var(--color-white)
+  );
+  --accent: --alpha(var(--color-white) / 4%);
+  --accent-foreground: var(--color-neutral-100);
+  --destructive: color-mix(
+    in srgb,
+    var(--color-red-500) 90%,
+    var(--color-white)
+  );
+  --destructive-foreground: var(--color-red-400);
+  --info: var(--color-blue-500);
+  --info-foreground: var(--color-blue-400);
+  --success: var(--color-emerald-500);
+  --success-foreground: var(--color-emerald-400);
+  --warning: var(--color-amber-500);
+  --warning-foreground: var(--color-amber-400);
+  --border: --alpha(var(--color-white) / 6%);
+  --input: --alpha(var(--color-white) / 8%);
+  --ring: var(--color-neutral-500);
+  --sidebar: color-mix(
+    in srgb,
+    var(--color-neutral-950) 97%,
+    var(--color-white)
+  );
+  --sidebar-foreground: color-mix(
+    in srgb,
+    var(--color-neutral-100) 64%,
+    var(--sidebar)
+  );
+  --sidebar-primary: var(--color-neutral-100);
+  --sidebar-primary-foreground: var(--color-neutral-800);
+  --sidebar-accent: --alpha(var(--color-white) / 4%);
+  --sidebar-accent-foreground: var(--color-neutral-100);
+  --sidebar-border: --alpha(var(--color-white) / 5%);
+  --sidebar-ring: var(--color-neutral-400);
+}
+
+/* Flexoki by Steph Ango (https://stephango.com/flexoki), MIT license */
+
+/* Flexoki palette — light */
+.palette-flexoki {
+  --background: #fffcf0;
+  --foreground: #100f0f;
+  --card: #f2f0e5;
+  --card-foreground: #100f0f;
+  --popover: #fffcf0;
+  --popover-foreground: #100f0f;
+  --primary: #100f0f;
+  --primary-foreground: #fffcf0;
+  --secondary: #e6e4d9;
+  --secondary-foreground: #100f0f;
+  --muted: #e6e4d9;
+  --muted-foreground: #6f6e69;
+  --accent: #e6e4d9;
+  --accent-foreground: #100f0f;
+  --destructive: #af3029;
+  --destructive-foreground: #af3029;
+  --info: #205ea6;
+  --info-foreground: #205ea6;
+  --success: #66800b;
+  --success-foreground: #66800b;
+  --warning: #ad8301;
+  --warning-foreground: #ad8301;
+  --border: #dad8ce;
+  --input: #cecdc3;
+  --ring: #b7b5ac;
+  --sidebar: #f2f0e5;
+  --sidebar-foreground: #1c1b1a;
+  --sidebar-primary: #100f0f;
+  --sidebar-primary-foreground: #fffcf0;
+  --sidebar-accent: #e6e4d9;
+  --sidebar-accent-foreground: #100f0f;
+  --sidebar-border: #dad8ce;
+  --sidebar-ring: #b7b5ac;
+}
+
+/* Flexoki palette — dark */
+.palette-flexoki.dark {
+  --background: #100f0f;
+  --foreground: #cecdc3;
+  --card: #1c1b1a;
+  --card-foreground: #cecdc3;
+  --popover: #1c1b1a;
+  --popover-foreground: #cecdc3;
+  --primary: #cecdc3;
+  --primary-foreground: #100f0f;
+  --secondary: #282726;
+  --secondary-foreground: #cecdc3;
+  --muted: #282726;
+  --muted-foreground: #878580;
+  --accent: #282726;
+  --accent-foreground: #cecdc3;
+  --destructive: #d14d41;
+  --destructive-foreground: #d14d41;
+  --info: #4385be;
+  --info-foreground: #4385be;
+  --success: #879a39;
+  --success-foreground: #879a39;
+  --warning: #d0a215;
+  --warning-foreground: #d0a215;
+  --border: #343331;
+  --input: #403e3c;
+  --ring: #575653;
+  --sidebar: #1c1b1a;
+  --sidebar-foreground: #b7b5ac;
+  --sidebar-primary: #cecdc3;
+  --sidebar-primary-foreground: #100f0f;
+  --sidebar-accent: #282726;
+  --sidebar-accent-foreground: #cecdc3;
+  --sidebar-border: #343331;
+  --sidebar-ring: #575653;
+}
+
+/* Nord palette — light
+ * Based on Arctic Ice Studio's Nord.
+ * nord0 #2e3440 .. nord3 #4c566a,
+ * nord4 #d8dee9, nord5 #e5e9f0, nord6 #eceff4 */
+.palette-nord {
+  --background: #eceff4;
+  --foreground: #2e3440;
+  --card: #e5e9f0;
+  --card-foreground: #2e3440;
+  --popover: #eceff4;
+  --popover-foreground: #2e3440;
+  --primary: #2e3440;
+  --primary-foreground: #eceff4;
+  --secondary: #e5e9f0;
+  --secondary-foreground: #2e3440;
+  --muted: #e5e9f0;
+  --muted-foreground: #4c566a;
+  --accent: #e5e9f0;
+  --accent-foreground: #2e3440;
+  --destructive: #bf616a;
+  --destructive-foreground: #a5454e;
+  --info: #5e81ac;
+  --info-foreground: #4c6e96;
+  --success: #a3be8c;
+  --success-foreground: #6d8b5e;
+  --warning: #ebcb8b;
+  --warning-foreground: #a68c3e;
+  --border: #d8dee9;
+  --input: #cdd4e0;
+  --ring: #b8c1cf;
+  --sidebar: #e5e9f0;
+  --sidebar-foreground: #3b4252;
+  --sidebar-primary: #2e3440;
+  --sidebar-primary-foreground: #eceff4;
+  --sidebar-accent: #dce1eb;
+  --sidebar-accent-foreground: #2e3440;
+  --sidebar-border: #d8dee9;
+  --sidebar-ring: #b8c1cf;
+}
+
+/* Nord palette — dark */
+.palette-nord.dark {
+  --background: #2e3440;
+  --foreground: #d8dee9;
+  --card: #3b4252;
+  --card-foreground: #d8dee9;
+  --popover: #3b4252;
+  --popover-foreground: #d8dee9;
+  --primary: #d8dee9;
+  --primary-foreground: #2e3440;
+  --secondary: #3b4252;
+  --secondary-foreground: #d8dee9;
+  --muted: #3b4252;
+  --muted-foreground: #6d7a8f;
+  --accent: #3b4252;
+  --accent-foreground: #d8dee9;
+  --destructive: #bf616a;
+  --destructive-foreground: #bf616a;
+  --info: #81a1c1;
+  --info-foreground: #81a1c1;
+  --success: #a3be8c;
+  --success-foreground: #a3be8c;
+  --warning: #ebcb8b;
+  --warning-foreground: #ebcb8b;
+  --border: #434c5e;
+  --input: #4c566a;
+  --ring: #616e88;
+  --sidebar: #3b4252;
+  --sidebar-foreground: #d8dee9;
+  --sidebar-primary: #d8dee9;
+  --sidebar-primary-foreground: #2e3440;
+  --sidebar-accent: #434c5e;
+  --sidebar-accent-foreground: #d8dee9;
+  --sidebar-border: #434c5e;
+  --sidebar-ring: #616e88;
+}
+
+/* ==================================================================
+ * Option tag colors
+ *
+ * Each palette defines swatch colors (--option-{name}). Backgrounds
+ * and foregrounds are derived automatically via color-mix() using the
+ * palette's --background and --foreground, so badges adapt to every
+ * palette and dark-mode combination without extra overrides.
+ * ================================================================== */
+
+/* ---- Swatches: neutral (Tailwind defaults) ---- */
+:root {
+  --option-red: var(--color-red-500);
+  --option-orange: var(--color-orange-500);
+  --option-amber: var(--color-amber-500);
+  --option-yellow: var(--color-yellow-500);
+  --option-lime: var(--color-lime-500);
+  --option-green: var(--color-green-500);
+  --option-emerald: var(--color-emerald-500);
+  --option-teal: var(--color-teal-500);
+  --option-cyan: var(--color-cyan-500);
+  --option-sky: var(--color-sky-500);
+  --option-blue: var(--color-blue-500);
+  --option-indigo: var(--color-indigo-500);
+  --option-violet: var(--color-violet-500);
+  --option-purple: var(--color-purple-500);
+  --option-fuchsia: var(--color-fuchsia-500);
+  --option-gray: var(--color-gray-400);
+  --option-empty: var(--color-slate-400);
+}
+
+/* ---- Swatches: Flexoki light (400 series) ---- */
+.palette-flexoki {
+  --option-red: #af3029;
+  --option-orange: #bc5215;
+  --option-amber: color-mix(in oklch, #bc5215, #ad8301);
+  --option-yellow: #ad8301;
+  --option-lime: color-mix(in oklch, #ad8301, #66800b);
+  --option-green: #66800b;
+  --option-emerald: color-mix(in oklch, #66800b, #24837b);
+  --option-teal: color-mix(in oklch, #24837b 65%, #66800b);
+  --option-cyan: #24837b;
+  --option-sky: color-mix(in oklch, #24837b, #205ea6);
+  --option-blue: #205ea6;
+  --option-indigo: color-mix(in oklch, #205ea6, #5e409d);
+  --option-violet: color-mix(in oklch, #5e409d 65%, #205ea6);
+  --option-purple: #5e409d;
+  --option-fuchsia: #a02f6f;
+  --option-gray: #878580;
+  --option-empty: #b7b5ac;
+}
+
+/* ---- Swatches: Flexoki dark (300 series) ---- */
+.palette-flexoki.dark {
+  --option-red: #d14d41;
+  --option-orange: #da702c;
+  --option-amber: color-mix(in oklch, #da702c, #d0a215);
+  --option-yellow: #d0a215;
+  --option-lime: color-mix(in oklch, #d0a215, #879a39);
+  --option-green: #879a39;
+  --option-emerald: color-mix(in oklch, #879a39, #3aa99f);
+  --option-teal: color-mix(in oklch, #3aa99f 65%, #879a39);
+  --option-cyan: #3aa99f;
+  --option-sky: color-mix(in oklch, #3aa99f, #4385be);
+  --option-blue: #4385be;
+  --option-indigo: color-mix(in oklch, #4385be, #8b7ec8);
+  --option-violet: color-mix(in oklch, #8b7ec8 65%, #4385be);
+  --option-purple: #8b7ec8;
+  --option-fuchsia: #ce5d97;
+  --option-gray: #878580;
+  --option-empty: #575653;
+}
+
+/* ---- Swatches: Nord (Aurora + Frost, same in light and dark) ---- */
+.palette-nord {
+  --option-red: #bf616a;
+  --option-orange: #d08770;
+  --option-amber: color-mix(in oklch, #d08770, #ebcb8b);
+  --option-yellow: #ebcb8b;
+  --option-lime: color-mix(in oklch, #ebcb8b, #a3be8c);
+  --option-green: #a3be8c;
+  --option-emerald: color-mix(in oklch, #a3be8c, #8fbcbb);
+  --option-teal: #8fbcbb;
+  --option-cyan: color-mix(in oklch, #8fbcbb, #88c0d0);
+  --option-sky: #88c0d0;
+  --option-blue: #81a1c1;
+  --option-indigo: #5e81ac;
+  --option-violet: color-mix(in oklch, #5e81ac, #b48ead);
+  --option-purple: #b48ead;
+  --option-fuchsia: color-mix(in oklch, #b48ead, #bf616a);
+  --option-gray: color-mix(in oklch, #4c566a, #d8dee9);
+  --option-empty: color-mix(in oklch, #4c566a 60%, #d8dee9);
+}
+
+/* ---- Derived backgrounds and foregrounds: light ---- */
+:root {
+  --option-red-bg: color-mix(in srgb, var(--option-red) 12%, var(--background));
+  --option-red-fg: color-mix(
+    in oklch,
+    var(--option-red) 50%,
+    var(--foreground)
+  );
+  --option-orange-bg: color-mix(
+    in srgb,
+    var(--option-orange) 12%,
+    var(--background)
+  );
+  --option-orange-fg: color-mix(
+    in oklch,
+    var(--option-orange) 50%,
+    var(--foreground)
+  );
+  --option-amber-bg: color-mix(
+    in srgb,
+    var(--option-amber) 12%,
+    var(--background)
+  );
+  --option-amber-fg: color-mix(
+    in oklch,
+    var(--option-amber) 50%,
+    var(--foreground)
+  );
+  --option-yellow-bg: color-mix(
+    in srgb,
+    var(--option-yellow) 12%,
+    var(--background)
+  );
+  --option-yellow-fg: color-mix(
+    in oklch,
+    var(--option-yellow) 50%,
+    var(--foreground)
+  );
+  --option-lime-bg: color-mix(
+    in srgb,
+    var(--option-lime) 12%,
+    var(--background)
+  );
+  --option-lime-fg: color-mix(
+    in oklch,
+    var(--option-lime) 50%,
+    var(--foreground)
+  );
+  --option-green-bg: color-mix(
+    in srgb,
+    var(--option-green) 12%,
+    var(--background)
+  );
+  --option-green-fg: color-mix(
+    in oklch,
+    var(--option-green) 50%,
+    var(--foreground)
+  );
+  --option-emerald-bg: color-mix(
+    in srgb,
+    var(--option-emerald) 12%,
+    var(--background)
+  );
+  --option-emerald-fg: color-mix(
+    in oklch,
+    var(--option-emerald) 50%,
+    var(--foreground)
+  );
+  --option-teal-bg: color-mix(
+    in srgb,
+    var(--option-teal) 12%,
+    var(--background)
+  );
+  --option-teal-fg: color-mix(
+    in oklch,
+    var(--option-teal) 50%,
+    var(--foreground)
+  );
+  --option-cyan-bg: color-mix(
+    in srgb,
+    var(--option-cyan) 12%,
+    var(--background)
+  );
+  --option-cyan-fg: color-mix(
+    in oklch,
+    var(--option-cyan) 50%,
+    var(--foreground)
+  );
+  --option-sky-bg: color-mix(in srgb, var(--option-sky) 12%, var(--background));
+  --option-sky-fg: color-mix(
+    in oklch,
+    var(--option-sky) 50%,
+    var(--foreground)
+  );
+  --option-blue-bg: color-mix(
+    in srgb,
+    var(--option-blue) 12%,
+    var(--background)
+  );
+  --option-blue-fg: color-mix(
+    in oklch,
+    var(--option-blue) 50%,
+    var(--foreground)
+  );
+  --option-indigo-bg: color-mix(
+    in srgb,
+    var(--option-indigo) 12%,
+    var(--background)
+  );
+  --option-indigo-fg: color-mix(
+    in oklch,
+    var(--option-indigo) 50%,
+    var(--foreground)
+  );
+  --option-violet-bg: color-mix(
+    in srgb,
+    var(--option-violet) 12%,
+    var(--background)
+  );
+  --option-violet-fg: color-mix(
+    in oklch,
+    var(--option-violet) 50%,
+    var(--foreground)
+  );
+  --option-purple-bg: color-mix(
+    in srgb,
+    var(--option-purple) 12%,
+    var(--background)
+  );
+  --option-purple-fg: color-mix(
+    in oklch,
+    var(--option-purple) 50%,
+    var(--foreground)
+  );
+  --option-fuchsia-bg: color-mix(
+    in srgb,
+    var(--option-fuchsia) 12%,
+    var(--background)
+  );
+  --option-fuchsia-fg: color-mix(
+    in oklch,
+    var(--option-fuchsia) 50%,
+    var(--foreground)
+  );
+  --option-gray-bg: color-mix(
+    in srgb,
+    var(--option-gray) 15%,
+    var(--background)
+  );
+  --option-gray-fg: color-mix(
+    in oklch,
+    var(--option-gray) 45%,
+    var(--foreground)
+  );
+  --option-empty-bg: color-mix(
+    in srgb,
+    var(--option-empty) 20%,
+    var(--background)
+  );
+  --option-empty-fg: color-mix(
+    in oklch,
+    var(--option-empty) 40%,
+    var(--foreground)
+  );
+}
+
+/* ---- Derived backgrounds and foregrounds: dark ---- */
+.dark {
+  --option-red-bg: color-mix(in srgb, var(--option-red) 18%, var(--background));
+  --option-red-fg: color-mix(
+    in oklch,
+    var(--option-red) 70%,
+    var(--foreground)
+  );
+  --option-orange-bg: color-mix(
+    in srgb,
+    var(--option-orange) 18%,
+    var(--background)
+  );
+  --option-orange-fg: color-mix(
+    in oklch,
+    var(--option-orange) 70%,
+    var(--foreground)
+  );
+  --option-amber-bg: color-mix(
+    in srgb,
+    var(--option-amber) 18%,
+    var(--background)
+  );
+  --option-amber-fg: color-mix(
+    in oklch,
+    var(--option-amber) 70%,
+    var(--foreground)
+  );
+  --option-yellow-bg: color-mix(
+    in srgb,
+    var(--option-yellow) 18%,
+    var(--background)
+  );
+  --option-yellow-fg: color-mix(
+    in oklch,
+    var(--option-yellow) 70%,
+    var(--foreground)
+  );
+  --option-lime-bg: color-mix(
+    in srgb,
+    var(--option-lime) 18%,
+    var(--background)
+  );
+  --option-lime-fg: color-mix(
+    in oklch,
+    var(--option-lime) 70%,
+    var(--foreground)
+  );
+  --option-green-bg: color-mix(
+    in srgb,
+    var(--option-green) 18%,
+    var(--background)
+  );
+  --option-green-fg: color-mix(
+    in oklch,
+    var(--option-green) 70%,
+    var(--foreground)
+  );
+  --option-emerald-bg: color-mix(
+    in srgb,
+    var(--option-emerald) 18%,
+    var(--background)
+  );
+  --option-emerald-fg: color-mix(
+    in oklch,
+    var(--option-emerald) 70%,
+    var(--foreground)
+  );
+  --option-teal-bg: color-mix(
+    in srgb,
+    var(--option-teal) 18%,
+    var(--background)
+  );
+  --option-teal-fg: color-mix(
+    in oklch,
+    var(--option-teal) 70%,
+    var(--foreground)
+  );
+  --option-cyan-bg: color-mix(
+    in srgb,
+    var(--option-cyan) 18%,
+    var(--background)
+  );
+  --option-cyan-fg: color-mix(
+    in oklch,
+    var(--option-cyan) 70%,
+    var(--foreground)
+  );
+  --option-sky-bg: color-mix(in srgb, var(--option-sky) 18%, var(--background));
+  --option-sky-fg: color-mix(
+    in oklch,
+    var(--option-sky) 70%,
+    var(--foreground)
+  );
+  --option-blue-bg: color-mix(
+    in srgb,
+    var(--option-blue) 18%,
+    var(--background)
+  );
+  --option-blue-fg: color-mix(
+    in oklch,
+    var(--option-blue) 70%,
+    var(--foreground)
+  );
+  --option-indigo-bg: color-mix(
+    in srgb,
+    var(--option-indigo) 18%,
+    var(--background)
+  );
+  --option-indigo-fg: color-mix(
+    in oklch,
+    var(--option-indigo) 70%,
+    var(--foreground)
+  );
+  --option-violet-bg: color-mix(
+    in srgb,
+    var(--option-violet) 18%,
+    var(--background)
+  );
+  --option-violet-fg: color-mix(
+    in oklch,
+    var(--option-violet) 70%,
+    var(--foreground)
+  );
+  --option-purple-bg: color-mix(
+    in srgb,
+    var(--option-purple) 18%,
+    var(--background)
+  );
+  --option-purple-fg: color-mix(
+    in oklch,
+    var(--option-purple) 70%,
+    var(--foreground)
+  );
+  --option-fuchsia-bg: color-mix(
+    in srgb,
+    var(--option-fuchsia) 18%,
+    var(--background)
+  );
+  --option-fuchsia-fg: color-mix(
+    in oklch,
+    var(--option-fuchsia) 70%,
+    var(--foreground)
+  );
+  --option-gray-bg: color-mix(
+    in srgb,
+    var(--option-gray) 20%,
+    var(--background)
+  );
+  --option-gray-fg: color-mix(
+    in oklch,
+    var(--option-gray) 60%,
+    var(--foreground)
+  );
+  --option-empty-bg: color-mix(
+    in srgb,
+    var(--option-empty) 25%,
+    var(--background)
+  );
+  --option-empty-fg: color-mix(
+    in oklch,
+    var(--option-empty) 55%,
+    var(--foreground)
+  );
+}
+
+/* Force light mode when printing to avoid wasting toner
+ * and ensure readable output on paper. */
+@media print {
+  .dark,
+  .palette-flexoki.dark,
+  .palette-nord.dark {
+    --background: var(--color-white);
+    --foreground: var(--color-neutral-800);
+    --card: var(--color-white);
+    --card-foreground: var(--color-neutral-800);
+    --popover: var(--color-white);
+    --popover-foreground: var(--color-neutral-800);
+    --primary: var(--color-neutral-800);
+    --primary-foreground: var(--color-neutral-50);
+    --secondary: --alpha(var(--color-black) / 4%);
+    --secondary-foreground: var(--color-neutral-800);
+    --muted: --alpha(var(--color-black) / 4%);
+    --muted-foreground: var(--color-neutral-500);
+    --accent: --alpha(var(--color-black) / 4%);
+    --accent-foreground: var(--color-neutral-800);
+    --destructive: var(--color-red-500);
+    --destructive-foreground: var(--color-red-700);
+    --info: var(--color-blue-500);
+    --info-foreground: var(--color-blue-700);
+    --success: var(--color-emerald-500);
+    --success-foreground: var(--color-emerald-700);
+    --warning: var(--color-amber-500);
+    --warning-foreground: var(--color-amber-700);
+    --border: --alpha(var(--color-black) / 8%);
+    --input: --alpha(var(--color-black) / 10%);
+    --ring: var(--color-neutral-400);
+    --sidebar: var(--color-neutral-50);
+    --sidebar-foreground: var(--color-neutral-800);
+    --sidebar-primary: var(--color-neutral-800);
+    --sidebar-primary-foreground: var(--color-neutral-50);
+    --sidebar-accent: --alpha(var(--color-black) / 4%);
+    --sidebar-accent-foreground: var(--color-neutral-800);
+    --sidebar-border: --alpha(var(--color-black) / 6%);
+    --sidebar-ring: var(--color-neutral-400);
+
+    /* Reset option tag derived colors to light-mode ratios so
+     * badges printed from dark mode match those from light. */
+    --option-red-bg: color-mix(
+      in srgb,
+      var(--option-red) 12%,
+      var(--background)
+    );
+    --option-red-fg: color-mix(
+      in oklch,
+      var(--option-red) 50%,
+      var(--foreground)
+    );
+    --option-orange-bg: color-mix(
+      in srgb,
+      var(--option-orange) 12%,
+      var(--background)
+    );
+    --option-orange-fg: color-mix(
+      in oklch,
+      var(--option-orange) 50%,
+      var(--foreground)
+    );
+    --option-amber-bg: color-mix(
+      in srgb,
+      var(--option-amber) 12%,
+      var(--background)
+    );
+    --option-amber-fg: color-mix(
+      in oklch,
+      var(--option-amber) 50%,
+      var(--foreground)
+    );
+    --option-yellow-bg: color-mix(
+      in srgb,
+      var(--option-yellow) 12%,
+      var(--background)
+    );
+    --option-yellow-fg: color-mix(
+      in oklch,
+      var(--option-yellow) 50%,
+      var(--foreground)
+    );
+    --option-lime-bg: color-mix(
+      in srgb,
+      var(--option-lime) 12%,
+      var(--background)
+    );
+    --option-lime-fg: color-mix(
+      in oklch,
+      var(--option-lime) 50%,
+      var(--foreground)
+    );
+    --option-green-bg: color-mix(
+      in srgb,
+      var(--option-green) 12%,
+      var(--background)
+    );
+    --option-green-fg: color-mix(
+      in oklch,
+      var(--option-green) 50%,
+      var(--foreground)
+    );
+    --option-emerald-bg: color-mix(
+      in srgb,
+      var(--option-emerald) 12%,
+      var(--background)
+    );
+    --option-emerald-fg: color-mix(
+      in oklch,
+      var(--option-emerald) 50%,
+      var(--foreground)
+    );
+    --option-teal-bg: color-mix(
+      in srgb,
+      var(--option-teal) 12%,
+      var(--background)
+    );
+    --option-teal-fg: color-mix(
+      in oklch,
+      var(--option-teal) 50%,
+      var(--foreground)
+    );
+    --option-cyan-bg: color-mix(
+      in srgb,
+      var(--option-cyan) 12%,
+      var(--background)
+    );
+    --option-cyan-fg: color-mix(
+      in oklch,
+      var(--option-cyan) 50%,
+      var(--foreground)
+    );
+    --option-sky-bg: color-mix(
+      in srgb,
+      var(--option-sky) 12%,
+      var(--background)
+    );
+    --option-sky-fg: color-mix(
+      in oklch,
+      var(--option-sky) 50%,
+      var(--foreground)
+    );
+    --option-blue-bg: color-mix(
+      in srgb,
+      var(--option-blue) 12%,
+      var(--background)
+    );
+    --option-blue-fg: color-mix(
+      in oklch,
+      var(--option-blue) 50%,
+      var(--foreground)
+    );
+    --option-indigo-bg: color-mix(
+      in srgb,
+      var(--option-indigo) 12%,
+      var(--background)
+    );
+    --option-indigo-fg: color-mix(
+      in oklch,
+      var(--option-indigo) 50%,
+      var(--foreground)
+    );
+    --option-violet-bg: color-mix(
+      in srgb,
+      var(--option-violet) 12%,
+      var(--background)
+    );
+    --option-violet-fg: color-mix(
+      in oklch,
+      var(--option-violet) 50%,
+      var(--foreground)
+    );
+    --option-purple-bg: color-mix(
+      in srgb,
+      var(--option-purple) 12%,
+      var(--background)
+    );
+    --option-purple-fg: color-mix(
+      in oklch,
+      var(--option-purple) 50%,
+      var(--foreground)
+    );
+    --option-fuchsia-bg: color-mix(
+      in srgb,
+      var(--option-fuchsia) 12%,
+      var(--background)
+    );
+    --option-fuchsia-fg: color-mix(
+      in oklch,
+      var(--option-fuchsia) 50%,
+      var(--foreground)
+    );
+    --option-gray-bg: color-mix(
+      in srgb,
+      var(--option-gray) 15%,
+      var(--background)
+    );
+    --option-gray-fg: color-mix(
+      in oklch,
+      var(--option-gray) 45%,
+      var(--foreground)
+    );
+    --option-empty-bg: color-mix(
+      in srgb,
+      var(--option-empty) 20%,
+      var(--background)
+    );
+    --option-empty-fg: color-mix(
+      in oklch,
+      var(--option-empty) 40%,
+      var(--foreground)
+    );
+  }
+
+  /* Flexoki dark uses brighter 300-series swatches; reset to the
+   * 400-series light swatches so print output matches light mode.
+   * Nord uses identical swatches in light and dark, so no reset. */
+  .palette-flexoki.dark {
+    --option-red: #af3029;
+    --option-orange: #bc5215;
+    --option-amber: color-mix(in oklch, #bc5215, #ad8301);
+    --option-yellow: #ad8301;
+    --option-lime: color-mix(in oklch, #ad8301, #66800b);
+    --option-green: #66800b;
+    --option-emerald: color-mix(in oklch, #66800b, #24837b);
+    --option-teal: color-mix(in oklch, #24837b 65%, #66800b);
+    --option-cyan: #24837b;
+    --option-sky: color-mix(in oklch, #24837b, #205ea6);
+    --option-blue: #205ea6;
+    --option-indigo: color-mix(in oklch, #205ea6, #5e409d);
+    --option-violet: color-mix(in oklch, #5e409d 65%, #205ea6);
+    --option-purple: #5e409d;
+    --option-fuchsia: #a02f6f;
+    --option-gray: #878580;
+    --option-empty: #b7b5ac;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* pdfjs text layer - font size and transform rules required by pdfjs-dist TextLayer */
+  [data-text-layer] {
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+  }
+
+  [data-text-layer] > :not(.markedContent),
+  [data-text-layer] .markedContent span:not(.markedContent) {
+    --font-height: 0;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+    --scale-x: 1;
+    --rotate: 0deg;
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+      scale(var(--min-font-size-inv));
+  }
+}

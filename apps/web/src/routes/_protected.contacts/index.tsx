@@ -1,0 +1,500 @@
+import { useState } from "react";
+import { useForm, useStore } from "@tanstack/react-form";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  BuildingIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  SearchIcon,
+  UserIcon,
+} from "lucide-react";
+import { nanoid } from "nanoid";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { Button } from "@stella/ui/components/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+  DialogTrigger,
+} from "@stella/ui/components/dialog";
+import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
+import { Form } from "@stella/ui/components/form";
+import { Input } from "@stella/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stella/ui/components/input-group";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stella/ui/components/menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stella/ui/components/table";
+import { toastManager } from "@stella/ui/components/toast";
+
+import Tooltip from "@/components/tooltip";
+import { toFormErrors } from "@/lib/schema";
+import {
+  useCreateContact,
+  useDeleteContact,
+} from "@/routes/_protected.contacts/-mutations";
+import {
+  contactsKeys,
+  contactsOptions,
+} from "@/routes/_protected.contacts/-queries";
+
+type ContactFilter = "all" | "person" | "organization";
+
+export const Route = createFileRoute("/_protected/contacts/")({
+  component: ContactsPage,
+});
+
+function ContactsPage() {
+  const t = useTranslations();
+  const [filter, setFilter] = useState<ContactFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  const updateSearch = useDebouncedCallback((value: string) => {
+    setDebouncedQuery(value);
+  }, 300);
+
+  const typeFilter = filter === "all" ? undefined : filter;
+
+  const { data, isLoading } = useQuery(
+    contactsOptions({
+      type: typeFilter,
+      q: debouncedQuery || undefined,
+    }),
+  );
+
+  const items = data?.items ?? [];
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
+      <div className="flex items-center gap-2">
+        <InputGroup className="mr-auto max-w-sm flex-1">
+          <InputGroupInput
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              updateSearch(val);
+            }}
+            placeholder={t("contacts.search")}
+            value={searchQuery}
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
+        <div className="flex gap-1">
+          <FilterButton
+            active={filter === "all"}
+            label={t("contacts.filterAll")}
+            onClick={() => setFilter("all")}
+          />
+          <FilterButton
+            active={filter === "person"}
+            label={t("contacts.filterPersons")}
+            onClick={() => setFilter("person")}
+          />
+          <FilterButton
+            active={filter === "organization"}
+            label={t("contacts.filterOrganizations")}
+            onClick={() => setFilter("organization")}
+          />
+        </div>
+        <CreateContactDialog />
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-8" />
+            <TableHead>{t("contacts.columns.name")}</TableHead>
+            <TableHead>{t("contacts.columns.email")}</TableHead>
+            <TableHead>{t("contacts.columns.phone")}</TableHead>
+            <TableHead className="text-right">
+              {t("contacts.columns.matters")}
+            </TableHead>
+            <TableHead />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((contact) => (
+            <ContactRow contact={contact} key={contact.id} />
+          ))}
+          {!isLoading && items.length === 0 && (
+            <TableRow>
+              <TableCell
+                className="py-8 text-center text-muted-foreground"
+                colSpan={6}
+              >
+                <p>{t("contacts.noContactsFound")}</p>
+                <p className="text-sm">{t("contacts.noContactsDescription")}</p>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+type FilterButtonProps = {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+};
+
+const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
+  <Button onClick={onClick} size="sm" variant={active ? "default" : "outline"}>
+    {label}
+  </Button>
+);
+
+type ContactItem = {
+  id: string;
+  type: "person" | "organization";
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+  emails: { type: string; address: string; isPrimary: boolean }[] | null;
+  phones: { type: string; number: string; isPrimary: boolean }[] | null;
+  tags: string[] | null;
+  color: string | null;
+  createdAt: Date;
+  matterCount: number;
+};
+
+const ContactRow = ({ contact }: { contact: ContactItem }) => {
+  const t = useTranslations();
+  const deleteContact = useDeleteContact();
+  const queryClient = useQueryClient();
+
+  const primaryEmail =
+    contact.emails?.find((e) => e.isPrimary) ?? contact.emails?.at(0);
+
+  const primaryPhone =
+    contact.phones?.find((p) => p.isPrimary) ?? contact.phones?.at(0);
+
+  const handleDelete = () => {
+    deleteContact.mutate(
+      { contactId: contact.id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.all,
+          });
+          toastManager.add({
+            title: t("success.contactDeleted"),
+            type: "success",
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <TableRow className="group">
+      <TableCell>
+        {contact.type === "person" ? (
+          <UserIcon className="size-4 text-muted-foreground" />
+        ) : (
+          <BuildingIcon className="size-4 text-muted-foreground" />
+        )}
+      </TableCell>
+      <TableCell>
+        <Link
+          className="font-medium hover:underline"
+          params={{ contactId: contact.id }}
+          to="/contacts/$contactId"
+        >
+          {contact.displayName}
+        </Link>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {primaryEmail?.address}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {primaryPhone?.number}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">
+        {contact.matterCount}
+      </TableCell>
+      <TableCell className="w-10 text-right">
+        <Menu>
+          <Tooltip
+            content={t("common.actions")}
+            render={
+              <MenuTrigger
+                className="opacity-0! transition-opacity group-hover:opacity-100!"
+                render={<Button size="icon-xs" variant="ghost" />}
+              />
+            }
+          >
+            <EllipsisVerticalIcon />
+          </Tooltip>
+          <MenuPopup>
+            <MenuItem
+              disabled={deleteContact.isPending}
+              onClick={handleDelete}
+              variant="destructive"
+            >
+              {t("contacts.deleteContact")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      </TableCell>
+    </TableRow>
+  );
+};
+
+const createContactSchema = v.object({
+  type: v.picklist(["person", "organization"]),
+  displayName: v.pipe(v.string(), v.minLength(1)),
+  firstName: v.string(),
+  lastName: v.string(),
+  organizationName: v.string(),
+});
+
+const CreateContactDialog = () => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [isOpen, setIsOpen] = useState(false);
+  const createContact = useCreateContact();
+
+  const form = useForm({
+    defaultValues: {
+      type: "person" as "person" | "organization",
+      displayName: "",
+      firstName: "",
+      lastName: "",
+      organizationName: "",
+    },
+    validators: { onDynamic: createContactSchema },
+    onSubmit: async ({ value }) => {
+      await createContact.mutateAsync({
+        id: nanoid(),
+        type: value.type,
+        displayName: value.displayName,
+        firstName:
+          value.type === "person" ? value.firstName || undefined : undefined,
+        lastName:
+          value.type === "person" ? value.lastName || undefined : undefined,
+        organizationName:
+          value.type === "organization"
+            ? value.organizationName || undefined
+            : undefined,
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: contactsKeys.all,
+      });
+      toastManager.add({
+        title: t("success.contactCreated"),
+        type: "success",
+      });
+      setIsOpen(false);
+    },
+  });
+
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
+
+  const contactType = useStore(form.store, (s) => s.values.type);
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
+          form.reset();
+        }
+      }}
+      open={isOpen}
+    >
+      <DialogTrigger render={<Button size="sm" />}>
+        <PlusIcon />
+        {t("contacts.newContact")}
+      </DialogTrigger>
+      <DialogPopup>
+        <Form
+          className="gap-0"
+          errors={formErrors}
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("contacts.newContact")}</DialogTitle>
+            <DialogDescription />
+          </DialogHeader>
+          <DialogPanel className="flex flex-col gap-4">
+            <form.Field name="type">
+              {(field) => (
+                <Field name={field.name}>
+                  <FieldLabel>{t("contacts.fields.type")}</FieldLabel>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        field.handleChange("person");
+                        form.setFieldValue("displayName", "");
+                      }}
+                      size="sm"
+                      type="button"
+                      variant={
+                        field.state.value === "person" ? "default" : "outline"
+                      }
+                    >
+                      <UserIcon className="size-4" />
+                      {t("contacts.type.person")}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        field.handleChange("organization");
+                        form.setFieldValue("displayName", "");
+                      }}
+                      size="sm"
+                      type="button"
+                      variant={
+                        field.state.value === "organization"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      <BuildingIcon className="size-4" />
+                      {t("contacts.type.organization")}
+                    </Button>
+                  </div>
+                  <FieldError />
+                </Field>
+              )}
+            </form.Field>
+
+            {contactType === "person" && (
+              <>
+                <form.Field name="firstName">
+                  {(field) => (
+                    <Field name={field.name}>
+                      <FieldLabel>{t("contacts.fields.firstName")}</FieldLabel>
+                      <Input
+                        autoFocus
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          field.handleChange(val);
+                          const last = form.state.values.lastName;
+                          form.setFieldValue(
+                            "displayName",
+                            [val, last].filter(Boolean).join(" "),
+                          );
+                        }}
+                        value={field.state.value}
+                      />
+                      <FieldError />
+                    </Field>
+                  )}
+                </form.Field>
+                <form.Field name="lastName">
+                  {(field) => (
+                    <Field name={field.name}>
+                      <FieldLabel>{t("contacts.fields.lastName")}</FieldLabel>
+                      <Input
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          field.handleChange(val);
+                          const first = form.state.values.firstName;
+                          form.setFieldValue(
+                            "displayName",
+                            [first, val].filter(Boolean).join(" "),
+                          );
+                        }}
+                        value={field.state.value}
+                      />
+                      <FieldError />
+                    </Field>
+                  )}
+                </form.Field>
+              </>
+            )}
+
+            {contactType === "organization" && (
+              <form.Field name="organizationName">
+                {(field) => (
+                  <Field name={field.name}>
+                    <FieldLabel>
+                      {t("contacts.fields.organizationName")}
+                    </FieldLabel>
+                    <Input
+                      autoFocus
+                      onBlur={field.handleBlur}
+                      onChange={(e) => {
+                        field.handleChange(e.target.value);
+                        form.setFieldValue("displayName", e.target.value);
+                      }}
+                      value={field.state.value}
+                    />
+                    <FieldError />
+                  </Field>
+                )}
+              </form.Field>
+            )}
+
+            <form.Field name="displayName">
+              {(field) => (
+                <Field name={field.name}>
+                  <FieldLabel>{t("contacts.fields.displayName")}</FieldLabel>
+                  <Input
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    value={field.state.value}
+                  />
+                  <FieldError />
+                </Field>
+              )}
+            </form.Field>
+          </DialogPanel>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("common.cancel")}
+            </DialogClose>
+            <form.Subscribe selector={(s) => s.isSubmitting}>
+              {(isSubmitting) => (
+                <Button disabled={isSubmitting} type="submit">
+                  {t("common.save")}
+                </Button>
+              )}
+            </form.Subscribe>
+          </DialogFooter>
+        </Form>
+      </DialogPopup>
+    </Dialog>
+  );
+};

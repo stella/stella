@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Stella</title>
+    <script type="module">
+      import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "/src/consts.ts";
+
+      document.documentElement.classList.toggle(
+        "dark",
+        localStorage[THEME_STORAGE_KEY] === "dark" ||
+          (localStorage[THEME_STORAGE_KEY] !== "light" &&
+            matchMedia("(prefers-color-scheme: dark)").matches),
+      );
+
+      const palette = localStorage.getItem(PALETTE_STORAGE_KEY) || "neutral";
+
+      if (palette !== "neutral") {
+        document.documentElement.classList.add(`palette-${palette}`);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

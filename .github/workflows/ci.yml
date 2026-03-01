@@ -1,0 +1,151 @@
+name: CI Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trust-check:
+    # Skip irrelevant label events: only the "run-ci" label matters.
+    # Without this gate, adding any label (e.g. priority, triage)
+    # would cancel an in-progress CI run due to cancel-in-progress.
+    if: >-
+      github.event.action != 'labeled'
+      || github.event.label.name == 'run-ci'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      trusted: ${{ steps.check.outputs.trusted }}
+    steps:
+      - name: Check if PR is trusted
+        id: check
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          # Same-repo PRs are trusted: the author has write access
+          # to push branches. Fork PRs need a maintainer to add
+          # the "run-ci" label after reviewing the code.
+          if [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          elif [[ '${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}' == 'true' ]]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Fork PR without 'run-ci' label — CI skipped. A maintainer must review the code and add the 'run-ci' label to run checks."
+          fi
+
+  ci-checks:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@0abc2381e688c4d2832f0665a68a01c6e82f0d6c # v2.3.11
+        with:
+          max-age: 7d
+
+      - name: Run Codespell
+        uses: codespell-project/actions-codespell@8f01853be192eb0f849a5c7d721450e7a467c579 # v2.2
+        with:
+          skip: package.json,bun.lock,README.md,*.snap,*.gen.ts,*.code-workspace,sbom.cdx.json,THIRD-PARTY-NOTICES.txt,langs
+          ignore_words_file: .codespell-ignore-words.txt
+          check_filenames: true
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          mv .env.example .env
+          cd ../web
+          mv .env.example .env
+
+      - name: Check i18n sync
+        run: bun run i18n:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Lint colors
+        run: bash scripts/lint-colors.sh
+
+      - name: Format
+        run: bun run format
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun run test
+
+  # Aggregation job for branch protection. The ruleset requires
+  # this check to pass, which ensures untrusted PRs cannot be
+  # merged without CI and trusted PRs must pass all checks.
+  ci-result:
+    if: always()
+    needs: [trust-check, ci-checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Evaluate CI outcome
+        run: |
+          TRUSTED="${{ needs.trust-check.outputs.trusted }}"
+          CI_RESULT="${{ needs.ci-checks.result }}"
+          TRUST_RESULT="${{ needs.trust-check.result }}"
+          EVENT="${{ github.event_name }}"
+
+          # When the trust-check job was skipped (irrelevant label
+          # event), all downstream jobs are also skipped. This is
+          # expected and should not block the PR.
+          if [[ "$TRUST_RESULT" == "skipped" ]]; then
+            echo "Trust-check skipped (irrelevant label event). Passing."
+            exit 0
+          fi
+
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then
+            if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" ]]; then
+              echo "::error::CI checks failed."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          if [[ "$TRUSTED" != "true" ]]; then
+            echo "::error::CI was not run. A maintainer must review the code and add the 'run-ci' label."
+            exit 1
+          fi
+
+          # "cancelled" means cancel-in-progress replaced this
+          # run with a newer one; the newer run is authoritative.
+          if [[ "$CI_RESULT" == "cancelled" ]]; then
+            echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
+            exit 0
+          fi
+
+          if [[ "$CI_RESULT" == "failure" ]]; then
+            echo "::error::CI checks failed."
+            exit 1
+          fi

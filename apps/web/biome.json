@@ -1,0 +1,24 @@
+{
+  "root": false,
+  "extends": "//",
+  "linter": {
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "zod": "Use 'valibot' instead of 'zod'."
+            },
+            "patterns": [
+              {
+                "group": "@/api/**/*",
+                "message": "Use '@stella/api/types' instead of '@/api/'."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--viewport-size",
+        "1280x720",
+        "--storage-state",
+        ".playwright/storage-state.json"
+      ]
+    }
+  }
+}

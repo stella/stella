@@ -1,0 +1,27 @@
+import Elysia, { t } from "elysia";
+
+import { readFileHandler } from "@/api/handlers/files/read-by-id";
+import { workspaceAccessMacro } from "@/api/lib/auth";
+
+export const filesRoute = new Elysia({
+  prefix: "/files/:workspaceId",
+})
+  .use(workspaceAccessMacro)
+  .guard({
+    validateWorkspaceAccess: true,
+  })
+  .get(
+    "/url/:fieldId",
+    (ctx) =>
+      readFileHandler({
+        fieldId: ctx.params.fieldId,
+        organizationId: ctx.session.activeOrganizationId,
+        workspaceId: ctx.workspaceId,
+        purpose: ctx.query.purpose,
+      }),
+    {
+      query: t.Object({
+        purpose: t.UnionEnum(["download", "display"]),
+      }),
+    },
+  );

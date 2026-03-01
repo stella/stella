@@ -1,0 +1,20 @@
+{
+  "invitation": {
+    "accept": "Priimti kvietimą",
+    "body": "{invitedByUsername} pakvietė jus prisijungti prie {organizationName}. Paspauskite žemiau, kad priimtumėte.",
+    "expires": "Šis kvietimas galioja 48 valandas.",
+    "heading": "Kvietimas į organizaciją",
+    "ignore": "Jei nesitikėjote šio kvietimo, galite nepaisyti šio el. laiško.",
+    "subject": "Jūs pakviesti prisijungti prie {organizationName}"
+  },
+  "otp": {
+    "emailVerification": "Naudokite šį kodą el. pašto adreso patvirtinimui.",
+    "expires": "Šio kodo galiojimas baigiasi po 5 minučių.",
+    "forgetPassword": "Naudokite šį kodą slaptažodžio atkūrimui.",
+    "heading": "Jūsų vienkartinis Stella kodas",
+    "ignore": "Jei neprašėte šio kodo, galite nepaisyti šio el. laiško.",
+    "preview": "Jūsų vienkartinis kodas: {otp}",
+    "signIn": "Naudokite šį kodą prisijungimui prie savo Stella paskyros.",
+    "subject": "Stella"
+  }
+}

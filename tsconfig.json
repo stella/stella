@@ -1,0 +1,3 @@
+{
+  "extends": "@stella/typescript-config/base.json"
+}

@@ -1,0 +1,70 @@
+name: Dependency Review
+
+# Blocks PRs that introduce dependencies with known vulnerabilities
+# or licenses incompatible with our dual-licensing model.
+#
+# Stella is dual-licensed: AGPL-3.0 (open source) + Commercial.
+# For the commercial license to work, ALL dependencies must be under
+# permissive licenses. We cannot bundle copyleft (GPL, AGPL, LGPL)
+# code in a proprietary distribution — we don't own those copyrights.
+#
+# Allowed: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD,
+#          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,
+#          MPL-2.0 (file-level copyleft, acceptable for unmodified use),
+#          Python-2.0, Zlib
+#
+# Blocked: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0, SSPL-1.0,
+#          BUSL-1.1, Elastic-2.0, Commons-Clause, CPAL-1.0
+#
+# See: https://choosealicense.com/appendix/
+#
+# TODO: remove the `if` condition once the repo is public.
+# Dependency review requires GitHub Advanced Security, which is
+# only free on public repos.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.repository.visibility == 'public'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@46a3c492319c890177366b6ef46d6b4f89743ed4 # v4
+        with:
+          fail-on-severity: high
+          deny-licenses: >-
+            GPL-2.0,
+            GPL-2.0-only,
+            GPL-2.0-or-later,
+            GPL-3.0,
+            GPL-3.0-only,
+            GPL-3.0-or-later,
+            AGPL-1.0,
+            AGPL-3.0,
+            AGPL-3.0-only,
+            AGPL-3.0-or-later,
+            LGPL-2.0,
+            LGPL-2.0-only,
+            LGPL-2.0-or-later,
+            LGPL-2.1,
+            LGPL-2.1-only,
+            LGPL-2.1-or-later,
+            LGPL-3.0,
+            LGPL-3.0-only,
+            LGPL-3.0-or-later,
+            SSPL-1.0,
+            BUSL-1.1,
+            Elastic-2.0,
+            CPAL-1.0
+          comment-summary-in-pr: always

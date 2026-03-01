@@ -1,0 +1,9 @@
+{
+  "name": "stella-docs-mcp",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^4.0.0"
+  }
+}

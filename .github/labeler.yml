@@ -1,0 +1,4 @@
+"❗️ .env changes":
+  - changed-files:
+      - any-glob-to-any-file:
+          - .env.example

@@ -1,0 +1,236 @@
+import { useMemo, useState } from "react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stella/ui/components/button";
+import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
+import { toastManager } from "@stella/ui/components/toast";
+
+import {
+  formatDecimalHours,
+  formatMinutes,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
+import {
+  TimeEntryForm,
+  type TimeEntryFormValues,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
+import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
+import {
+  useCreateTimeEntry,
+  useDeleteTimeEntry,
+  useUpdateTimeEntry,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+
+type TimesheetDayViewProps = {
+  workspaceId: string;
+  date: string;
+};
+
+export const TimesheetDayView = ({
+  workspaceId,
+  date,
+}: TimesheetDayViewProps) => {
+  const t = useTranslations();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const userId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.id,
+  });
+
+  const { data: entries } = useSuspenseQuery(
+    timeEntriesOptions(workspaceId, {
+      dateFrom: date,
+      dateTo: date,
+    }),
+  );
+
+  const matterNameMap = useMatterNameMap(workspaceId);
+
+  const createEntry = useCreateTimeEntry();
+  const updateEntry = useUpdateTimeEntry();
+  const deleteEntry = useDeleteTimeEntry();
+
+  const totalMinutes = useMemo(
+    () => (entries ?? []).reduce((sum, e) => sum + e.durationMinutes, 0),
+    [entries],
+  );
+
+  const editingEntry = editingId
+    ? entries?.find((e) => e.id === editingId)
+    : null;
+
+  const handleCreate = (values: TimeEntryFormValues) => {
+    createEntry.mutate(
+      {
+        workspaceId,
+        matterId: values.matterId,
+        dateWorked: values.dateWorked,
+        timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        durationMinutes: values.durationMinutes,
+        rateAtEntry: values.rateAtEntry,
+        currency: values.currency,
+        narrative: values.narrative,
+        billable: values.billable,
+        taskCode: values.taskCode || null,
+        activityCode: values.activityCode || null,
+      },
+      {
+        onSuccess: () => setFormOpen(false),
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleEdit = (values: TimeEntryFormValues) => {
+    if (!editingId) {
+      return;
+    }
+    updateEntry.mutate(
+      {
+        workspaceId,
+        id: editingId,
+        matterId: values.matterId,
+        dateWorked: values.dateWorked,
+        durationMinutes: values.durationMinutes,
+        narrative: values.narrative,
+        billable: values.billable,
+        taskCode: values.taskCode || null,
+        activityCode: values.activityCode || null,
+        rateAtEntry: values.rateAtEntry,
+        currency: values.currency,
+      },
+      {
+        onSuccess: () => setEditingId(null),
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleDelete = (id: string) => {
+    deleteEntry.mutate(
+      { workspaceId, id },
+      {
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium tabular-nums">
+            {formatMinutes(totalMinutes)}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {t("billing.decimalHours", {
+              hours: formatDecimalHours(totalMinutes),
+            })}
+          </span>
+        </div>
+        <Button onClick={() => setFormOpen(true)} size="sm" variant="outline">
+          <PlusIcon className="size-4" />
+          {t("billing.addEntry")}
+        </Button>
+      </div>
+
+      {/* Entries list */}
+      {entries && entries.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          {entries.map((entry) => (
+            <TimeEntryRow
+              entry={entry}
+              key={entry.id}
+              matterName={
+                matterNameMap.get(entry.matterId) ?? t("workspaces.defaultName")
+              }
+              onDelete={handleDelete}
+              onEdit={setEditingId}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          {t("billing.noEntries")}
+        </div>
+      )}
+
+      {/* Create dialog */}
+      <Dialog onOpenChange={setFormOpen} open={formOpen}>
+        <DialogPopup className="max-w-md">
+          <div className="p-4">
+            <h3 className="mb-4 text-sm font-medium">
+              {t("billing.addEntry")}
+            </h3>
+            <TimeEntryForm
+              defaultValues={{ dateWorked: date }}
+              onCancel={() => setFormOpen(false)}
+              onSubmit={handleCreate}
+              userId={userId}
+              workspaceId={workspaceId}
+            />
+          </div>
+        </DialogPopup>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingId(null);
+          }
+        }}
+        open={editingId !== null}
+      >
+        <DialogPopup className="max-w-md">
+          <div className="p-4">
+            <h3 className="mb-4 text-sm font-medium">
+              {t("billing.editEntry")}
+            </h3>
+            {editingEntry && (
+              <TimeEntryForm
+                defaultValues={{
+                  matterId: editingEntry.matterId,
+                  dateWorked: editingEntry.dateWorked,
+                  durationMinutes: editingEntry.durationMinutes,
+                  narrative: editingEntry.narrative,
+                  billable: editingEntry.billable,
+                  taskCode: editingEntry.taskCode ?? "",
+                  activityCode: editingEntry.activityCode ?? "",
+                  rateAtEntry: editingEntry.rateAtEntry,
+                  currency: editingEntry.currency,
+                }}
+                onCancel={() => setEditingId(null)}
+                onSubmit={handleEdit}
+                userId={userId}
+                workspaceId={workspaceId}
+              />
+            )}
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </div>
+  );
+};

@@ -1,0 +1,35 @@
+name: i18n — translate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/src/i18n/langs/en.json"
+      - "packages/transactional/i18n/langs/en.json"
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: app-token
+        with:
+          app-id: ${{ secrets.LINGO_APP_ID }}
+          private-key: ${{ secrets.LINGO_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: lingodotdev/lingo.dev@2d676c852703695abad82157fe2863d802d7b2b7 # main (2026-02-19)
+        with:
+          api-key: ${{ secrets.LINGO_DEV_API_KEY }}
+          pull-request: true
+          commit-message: "feat(i18n): update translations"
+          pull-request-title: "feat(i18n): update translations"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
