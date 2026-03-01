@@ -3,9 +3,11 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
+  SearchIcon,
   TextQuoteIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -66,6 +68,7 @@ type ClauseListProps = {
   onNewClause: () => void;
   onLoadMore: () => void;
   onCategoriesChanged: () => void;
+  onSearch: (q: string) => void;
   loading: boolean;
 };
 
@@ -81,9 +84,24 @@ export const ClauseList = ({
   onNewClause,
   onLoadMore,
   onCategoriesChanged,
+  onSearch,
   loading,
 }: ClauseListProps) => {
   const t = useTranslations();
+  const [searchInput, setSearchInput] = useState("");
+
+  const debouncedSearch = useDebouncedCallback(
+    (value: string) => onSearch(value),
+    300,
+  );
+
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchInput(e.target.value);
+      debouncedSearch(e.target.value);
+    },
+    [debouncedSearch],
+  );
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -98,9 +116,15 @@ export const ClauseList = ({
       {/* Clause list */}
       <div className="flex min-h-0 flex-1 flex-col border-l">
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <span className="text-sm text-muted-foreground">
-            {String(clauses.length)}
-          </span>
+          <div className="relative mr-3 flex-1">
+            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-8 pl-8"
+              onChange={handleSearchChange}
+              placeholder={t("clauses.searchPlaceholder")}
+              value={searchInput}
+            />
+          </div>
           <Button onClick={onNewClause} size="sm">
             <PlusIcon />
             {t("clauses.createClause")}

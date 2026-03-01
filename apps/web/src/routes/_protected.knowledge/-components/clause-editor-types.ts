@@ -1,5 +1,3 @@
-import type { BlockDirectiveKind } from "@/api/handlers/docx/types";
-
 export type ClauseRun = {
   text: string;
   bold?: boolean;
@@ -12,7 +10,7 @@ export type ClauseParagraph = {
   level?: number;
   runs?: ClauseRun[];
   isDirective?: boolean;
-  directiveKind?: BlockDirectiveKind;
+  directiveKind?: "if" | "elseif" | "else" | "endif" | "each" | "endeach";
   directiveExpression?: string;
 };
 

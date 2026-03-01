@@ -32,6 +32,10 @@ import {
   updateTemplateBodySchema,
   updateTemplateHandler,
 } from "@/api/handlers/templates/update";
+import {
+  getTemplateVersionHandler,
+  listTemplateVersionsHandler,
+} from "@/api/handlers/templates/versions";
 import { authMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -122,6 +126,7 @@ export const templatesRoute = new Elysia({
     (ctx) =>
       updateTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
         templateId: ctx.params.templateId,
         body: ctx.body,
       }),
@@ -138,6 +143,31 @@ export const templatesRoute = new Elysia({
         templateId: ctx.params.templateId,
       }),
     { params: t.Object({ templateId: tNanoid }) },
+  )
+  // ── Versions ──────────────────────────────────────
+  .get(
+    "/:templateId/versions",
+    (ctx) =>
+      listTemplateVersionsHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        templateId: ctx.params.templateId,
+      }),
+    { params: t.Object({ templateId: tNanoid }) },
+  )
+  .get(
+    "/:templateId/versions/:versionId",
+    (ctx) =>
+      getTemplateVersionHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        templateId: ctx.params.templateId,
+        versionId: ctx.params.versionId,
+      }),
+    {
+      params: t.Object({
+        templateId: tNanoid,
+        versionId: tNanoid,
+      }),
+    },
   )
   // ── Clause linking ──────────────────────────────────
   .get(

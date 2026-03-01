@@ -12,11 +12,20 @@ import {
   DialogTitle,
 } from "@stella/ui/components/dialog";
 import { Input } from "@stella/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stella/ui/components/select";
 import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { ClauseEditor } from "./clause-editor";
+import type { ClauseParagraph } from "./clause-editor-types";
 
 // ── Types ────────────────────────────────────────────
 
@@ -29,9 +38,10 @@ type ClauseFormData = {
   id?: string;
   title: string;
   description: string;
+  usageNotes: string;
   language: string;
   categoryId: string;
-  bodyText: string;
+  bodyParagraphs: ClauseParagraph[];
 };
 
 type ClauseFormDialogProps = {
@@ -43,16 +53,14 @@ type ClauseFormDialogProps = {
     id: string;
     title: string;
     description: string | null;
+    usageNotes: string | null;
     language: string | null;
     categoryId: string | null;
-    bodyText: string;
+    bodyParagraphs: ClauseParagraph[];
   };
 };
 
-// ── Helpers ──────────────────────────────────────────
-
-const textToBody = (text: string) =>
-  text.split("\n").map((line) => ({ text: line }));
+const DEFAULT_BODY: ClauseParagraph[] = [{ text: "" }];
 
 // ── Component ────────────────────────────────────────
 
@@ -70,9 +78,10 @@ export const ClauseFormDialog = ({
     id: initial?.id,
     title: initial?.title ?? "",
     description: initial?.description ?? "",
+    usageNotes: initial?.usageNotes ?? "",
     language: initial?.language ?? "",
     categoryId: initial?.categoryId ?? "",
-    bodyText: initial?.bodyText ?? "",
+    bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
   }));
   const [saving, setSaving] = useState(false);
 
@@ -83,9 +92,10 @@ export const ClauseFormDialog = ({
         id: initial?.id,
         title: initial?.title ?? "",
         description: initial?.description ?? "",
+        usageNotes: initial?.usageNotes ?? "",
         language: initial?.language ?? "",
         categoryId: initial?.categoryId ?? "",
-        bodyText: initial?.bodyText ?? "",
+        bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
       });
     }
   }, [open, initial]);
@@ -97,12 +107,13 @@ export const ClauseFormDialog = ({
 
     setSaving(true);
 
-    const body = textToBody(form.bodyText);
+    const body = form.bodyParagraphs;
 
     if (isEdit && form.id) {
       const response = await api.clauses({ clauseId: form.id }).post({
         title: form.title.trim(),
         description: form.description.trim() || null,
+        usageNotes: form.usageNotes.trim() || null,
         language: form.language.trim() || null,
         categoryId: form.categoryId || null,
         body,
@@ -130,6 +141,7 @@ export const ClauseFormDialog = ({
       const response = await api.clauses.put({
         title: form.title.trim(),
         description: form.description.trim() || undefined,
+        usageNotes: form.usageNotes.trim() || undefined,
         language: form.language.trim() || undefined,
         categoryId: form.categoryId || undefined,
         body,
@@ -222,44 +234,60 @@ export const ClauseFormDialog = ({
             </div>
 
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium" htmlFor="clause-category">
+              <span className="text-sm font-medium">
                 {t("clauses.selectCategory")}
-              </label>
-              <select
-                className="flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
-                id="clause-category"
-                onChange={(e) =>
+              </span>
+              <Select
+                onValueChange={(val) =>
                   setForm((f) => ({
                     ...f,
-                    categoryId: e.target.value,
+                    categoryId: val ?? "",
                   }))
                 }
-                value={form.categoryId}
+                value={form.categoryId || undefined}
               >
-                <option value="">{t("clauses.uncategorized")}</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("clauses.uncategorized")} />
+                </SelectTrigger>
+                <SelectPopup>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
             </div>
           </div>
 
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-body">
-              {t("clauses.body")}
+            <span className="text-sm font-medium">{t("clauses.body")}</span>
+            <ClauseEditor
+              content={form.bodyParagraphs}
+              onChange={(paragraphs) =>
+                setForm((f) => ({
+                  ...f,
+                  bodyParagraphs: paragraphs,
+                }))
+              }
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <label className="text-sm font-medium" htmlFor="clause-usage-notes">
+              {t("clauses.usageNotes")}
             </label>
             <Textarea
-              className="min-h-[120px]"
-              id="clause-body"
+              className="min-h-[60px]"
+              id="clause-usage-notes"
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  bodyText: e.target.value,
+                  usageNotes: e.target.value,
                 }))
               }
-              value={form.bodyText}
+              placeholder={t("clauses.usageNotesPlaceholder")}
+              value={form.usageNotes}
             />
           </div>
         </DialogPanel>

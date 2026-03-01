@@ -3,7 +3,7 @@ import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
-import { templates } from "@/api/db/schema";
+import { templates, templateVersions } from "@/api/db/schema";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
@@ -140,27 +140,44 @@ export const createTemplateHandler = async ({
 
   await s3.write(s3Key, new Uint8Array(docxWithManifest));
 
-  const [inserted] = await db
-    .insert(templates)
-    .values({
-      id: templateId,
-      organizationId,
-      name,
-      fileName: file.name,
+  const versionId = nanoid();
+
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(templates)
+      .values({
+        id: templateId,
+        organizationId,
+        name,
+        fileName: file.name,
+        s3Key,
+        sizeBytes: docxWithManifest.byteLength,
+        manifest,
+        fieldCount: fields.length,
+        currentVersion: 1,
+        createdBy: userId,
+      })
+      .returning({
+        id: templates.id,
+        name: templates.name,
+        fileName: templates.fileName,
+        fieldCount: templates.fieldCount,
+        sizeBytes: templates.sizeBytes,
+        createdAt: templates.createdAt,
+      });
+
+    await tx.insert(templateVersions).values({
+      id: versionId,
+      templateId,
+      version: 1,
       s3Key,
-      sizeBytes: docxWithManifest.byteLength,
       manifest,
       fieldCount: fields.length,
       createdBy: userId,
-    })
-    .returning({
-      id: templates.id,
-      name: templates.name,
-      fileName: templates.fileName,
-      fieldCount: templates.fieldCount,
-      sizeBytes: templates.sizeBytes,
-      createdAt: templates.createdAt,
     });
+
+    return row;
+  });
 
   return inserted;
 };

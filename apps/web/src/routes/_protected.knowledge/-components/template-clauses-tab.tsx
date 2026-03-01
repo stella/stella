@@ -30,6 +30,7 @@ type LinkedClause = {
   clauseId: string | null;
   clauseVariantId: string | null;
   clauseVersionId: string | null;
+  slotName: string | null;
   sortOrder: number;
   insertedAt: Date;
   clause: {
@@ -50,11 +51,16 @@ type LinkedClause = {
 
 type TemplateClausesTabProps = {
   templateId: string;
+  /** Clause slot names discovered in the template. */
+  clauseSlots?: string[];
 };
 
 // ── Component ────────────────────────────────────────
 
-export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
+export const TemplateClausesTab = ({
+  templateId,
+  clauseSlots,
+}: TemplateClausesTabProps) => {
   const t = useTranslations();
   const [links, setLinks] = useState<LinkedClause[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -82,9 +88,9 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
       return;
     }
 
-    // SAFETY: Eden types links as unknown due to computed
-    // isOutdated field; the shape matches LinkedClause.
-    setLinks(data.links as unknown as LinkedClause[]);
+    if ("links" in data && Array.isArray(data.links)) {
+      setLinks(data.links);
+    }
     setLoaded(true);
   }, [templateId, t]);
 
@@ -137,6 +143,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
       )}
 
       <LinkClauseDialog
+        availableSlots={clauseSlots}
         onLinked={fetchLinks}
         onOpenChange={setLinkOpen}
         open={linkOpen}
@@ -238,6 +245,11 @@ const LinkedClauseRow = ({
           <>
             <p className="text-sm font-medium">{link.clause?.title}</p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {link.slotName && (
+                <span className="rounded-sm bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                  {link.slotName}
+                </span>
+              )}
               {link.clauseVariant && <span>{link.clauseVariant.label}</span>}
               {link.clauseVersion && (
                 <span>

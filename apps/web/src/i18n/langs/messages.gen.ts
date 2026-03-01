@@ -222,8 +222,11 @@ type Messages = {
     "outdatedVersion": "Update available";
     "saveFailed": "Failed to save";
     "searchClauses": "Search clauses...";
+    "searchPlaceholder": "Search clauses...";
     "selectCategory": "Category";
     "selectVariant": "Select variant";
+    "slotName": "Slot name";
+    "slotNamePlaceholder": "e.g. NonCompete";
     "syncFailed": "Failed to sync";
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
@@ -235,7 +238,10 @@ type Messages = {
     "unlinkConfirm": "This will remove the clause from this template.";
     "unlinkFailed": "Failed to unlink clause";
     "unlinked": "Clause unlinked";
+    "unmappedSlot": "Not linked";
     "updateFailed": "Failed to update clause";
+    "usageNotes": "Usage notes";
+    "usageNotesPlaceholder": "When should this clause be used? (for AI assembly)";
     "variantCreated": "Variant created";
     "variantDeleted": "Variant deleted";
     "variantLabel": "Variant label";
@@ -603,6 +609,7 @@ type Messages = {
     "fillForm": "Fill template";
     "generate": "Generate document";
     "generating": "Generating...";
+    "history": "History";
     "inputTypes": {
       "boolean": "Yes / No";
       "date": "Date";
@@ -637,6 +644,9 @@ type Messages = {
     "validationMinLength": "Minimum {min} characters";
     "validationPattern": "Invalid format";
     "validationRequired": "This field is required";
+    "versionLabel": "Version {version}";
+    "versionsEmpty": "No version history";
+    "viewVersion": "View";
   };
   "validation": {
     "organizationNameRequired": "Organization name is required";

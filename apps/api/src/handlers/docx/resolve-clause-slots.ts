@@ -1,0 +1,137 @@
+/**
+ * Resolve clause slot markers to RichPatchValue content
+ * by looking up linked clauses via the templateClauses
+ * table and fetching their body from the appropriate
+ * clauseVersion.
+ */
+
+import { db } from "@/api/db";
+import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import type { ClauseSlot } from "./discover-clause-slots";
+import type { RichPatchValue } from "./types";
+
+// ── Version parsing ──────────────────────────────────
+
+const VERSION_NUM_RE = /^v(\d+)$/;
+
+// ── Public API ───────────────────────────────────────
+
+/**
+ * For each clause slot, look up the linked clause and
+ * resolve its body to a `RichPatchValue`. Returns a map
+ * keyed by the full patch key (e.g., `@clause:NonCompete`)
+ * that can be merged into `fillTemplate` values.
+ *
+ * Slots without a linked clause are silently skipped;
+ * their marker will appear as an unmatched placeholder
+ * in fill diagnostics.
+ */
+export const resolveClauseSlots = async (
+  templateId: string,
+  slots: ClauseSlot[],
+): Promise<Record<string, RichPatchValue>> => {
+  if (slots.length === 0) {
+    return {};
+  }
+
+  const patches: Record<string, RichPatchValue> = {};
+
+  for (const slot of slots) {
+    const link = await db.query.templateClauses.findFirst({
+      where: {
+        templateId,
+        slotName: slot.name,
+      },
+      columns: {
+        clauseId: true,
+        clauseVersionId: true,
+      },
+    });
+
+    if (!link || !link.clauseId) {
+      continue;
+    }
+
+    const versionRow = await resolveVersion(
+      link.clauseId,
+      link.clauseVersionId,
+      slot.versionModifier,
+    );
+
+    if (!versionRow) {
+      continue;
+    }
+
+    patches[slot.patchKey] = clauseBodyToRichPatch(versionRow.body);
+  }
+
+  return patches;
+};
+
+// ── Helpers ──────────────────────────────────────────
+
+type VersionRow = {
+  body: Parameters<typeof clauseBodyToRichPatch>[0];
+};
+
+const resolveVersion = async (
+  clauseId: string,
+  pinnedVersionId: string | null,
+  modifier: string | undefined,
+): Promise<VersionRow | undefined> => {
+  // :latest — always use the clause's current version
+  if (modifier === "latest") {
+    const clause = await db.query.clauses.findFirst({
+      where: { id: clauseId },
+      columns: { currentVersion: true },
+    });
+
+    if (!clause) {
+      return undefined;
+    }
+
+    return db.query.clauseVersions.findFirst({
+      where: {
+        clauseId,
+        version: clause.currentVersion,
+      },
+      columns: { body: true },
+    });
+  }
+
+  // :vN — use a specific version number
+  const vMatch = modifier?.match(VERSION_NUM_RE);
+  if (vMatch) {
+    const version = Number.parseInt(vMatch[1], 10);
+    return db.query.clauseVersions.findFirst({
+      where: { clauseId, version },
+      columns: { body: true },
+    });
+  }
+
+  // No modifier — use the pinned version from the link
+  if (pinnedVersionId) {
+    return db.query.clauseVersions.findFirst({
+      where: { id: pinnedVersionId },
+      columns: { body: true },
+    });
+  }
+
+  // Fallback: use the clause's current version
+  const clause = await db.query.clauses.findFirst({
+    where: { id: clauseId },
+    columns: { currentVersion: true },
+  });
+
+  if (!clause) {
+    return undefined;
+  }
+
+  return db.query.clauseVersions.findFirst({
+    where: {
+      clauseId,
+      version: clause.currentVersion,
+    },
+    columns: { body: true },
+  });
+};

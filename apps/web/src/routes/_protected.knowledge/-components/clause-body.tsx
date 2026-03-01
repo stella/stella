@@ -7,10 +7,17 @@ import {
 
 // ── Types ────────────────────────────────────────────
 
+type ClauseRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
 type ClauseParagraph = {
   text: string;
   style?: string;
   level?: number;
+  runs?: ClauseRun[];
   isDirective?: boolean;
   directiveKind?: BlockDirectiveKind;
   directiveExpression?: string;
@@ -61,7 +68,29 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
     return <div className="py-1" />;
   }
 
-  const isHeading = paragraph.style?.startsWith("Heading");
+  const isHeading =
+    paragraph.style?.startsWith("Heading") || paragraph.style === "heading";
+
+  // Render with formatting runs if available
+  if (paragraph.runs && paragraph.runs.length > 0) {
+    return (
+      <p className={`leading-relaxed ${isHeading ? "font-semibold" : ""}`}>
+        {paragraph.runs.map((run, ri) => {
+          let content: React.ReactNode = <HighlightedText text={run.text} />;
+          if (run.bold) {
+            content = <strong>{content}</strong>;
+          }
+          if (run.italic) {
+            content = <em>{content}</em>;
+          }
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: runs are ordered inline spans
+            <span key={ri}>{content}</span>
+          );
+        })}
+      </p>
+    );
+  }
 
   return (
     <p className={`leading-relaxed ${isHeading ? "font-semibold" : ""}`}>

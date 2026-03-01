@@ -22,6 +22,7 @@ import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/te
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplatePreview } from "@/routes/_protected.knowledge/-components/template-preview";
+import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
 import {
   buildEditableFields,
   ConfigureStep,
@@ -615,6 +616,7 @@ const TemplateDetail = ({
               <TabsTab value="fields">{t("templates.fields")}</TabsTab>
               <TabsTab value="preview">{t("templates.preview")}</TabsTab>
               <TabsTab value="clauses">{t("clauses.title")}</TabsTab>
+              <TabsTab value="history">{t("templates.history")}</TabsTab>
             </TabsList>
 
             <TabsPanel value="fields">
@@ -739,6 +741,10 @@ const TemplateDetail = ({
 
             <TabsPanel value="clauses">
               <TemplateClausesTab templateId={template.id} />
+            </TabsPanel>
+
+            <TabsPanel value="history">
+              <TemplateVersionsTab templateId={template.id} />
             </TabsPanel>
           </Tabs>
         </div>

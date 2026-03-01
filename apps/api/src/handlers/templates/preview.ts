@@ -1,6 +1,7 @@
 import { status } from "elysia";
 
 import { db } from "@/api/db";
+import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -26,10 +27,12 @@ export const previewTemplateHandler = async ({
 
   const buffer = Buffer.from(await s3.file(template.s3Key).arrayBuffer());
 
-  const [{ paragraphs, charCount }, { structureErrors }] = await Promise.all([
-    extractText(buffer),
-    discoverTemplate(buffer),
-  ]);
+  const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
+    await Promise.all([
+      extractText(buffer),
+      discoverTemplate(buffer),
+      discoverClauseSlots(buffer),
+    ]);
 
   // discoverTemplate returns structureError indices relative
   // to each section (body starts at 0, combined headers start
@@ -48,5 +51,12 @@ export const previewTemplateHandler = async ({
     // header errors: no offset needed (headers come first)
   }
 
-  return { paragraphs, charCount, structureErrors };
+  const slotNames = clauseSlots.map((s) => s.name);
+
+  return {
+    paragraphs,
+    charCount,
+    structureErrors,
+    clauseSlots: slotNames,
+  };
 };

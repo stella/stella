@@ -9,6 +9,7 @@ export const LIMITS = {
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   templateClausesPerTemplate: 50,
+  templateVersionsPerTemplate: 50,
   rateTablesPerWorkspace: 50,
   rateEntriesPerTable: 200,
   timeEntriesPerWorkspace: 50_000,
