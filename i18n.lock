@@ -35,7 +35,12 @@ checksums:
     auth/slugPlaceholder: fb60c034f6403c5183363d143ae51b45
     auth/weSentCodeTo: ef31eda95bd78d07c809da0dc73fdbc5
     billing/addEntry: f5054932b27a1085cd0e46ac33bc0501
+    billing/amount: a0ae9c6ff98b57475cdce56f66066aa4
+    billing/approve: df82197ab4899a770b4677fbea82abbb
+    billing/approveSelected: 9be1122fcc861af3bb12d6a3e80803ff
+    billing/batchActions: 8cdec81cd51672d0d78120aa43a1fc77
     billing/billable: f259a65d91fa79155c7b57c2b0f75707
+    billing/billedAmount: 312ca0e9934041e7b24eda0fab671668
     billing/codes/active: 3e1ec025c4a50830bbb9ad57a176630a
     billing/codes/activity: 1948763de8e531483a798b68195e297e
     billing/codes/activityCode: d90d5e4a4d670e177bb9178e09504590
@@ -49,8 +54,10 @@ checksums:
     billing/codes/taskCode: 05b89fead7bbe4c81edf3249360affd8
     billing/day: 47648cd60fc313bc3f05b70357a1d675
     billing/decimalHours: 610e7d0cd99767a71c58cae5049b9b6f
+    billing/deleteSelected: ec36fd952c482b89b431dcfcec9eb78c
     billing/duration: bf6ed0974fdd4eb9d8bd3f4f8c4bd5ae
     billing/editEntry: 7f18b3b79b630bb177df102544c47e4a
+    billing/elapsed: 3a764c490ebf8dc88acd155b8c6391c5
     billing/expenses/amount: a0ae9c6ff98b57475cdce56f66066aa4
     billing/expenses/categories/courier: 2aae3bd958c470310fb8ed1f5268b446
     billing/expenses/categories/expert_witness: b003a3eedf05e11d343807de2d59cb2b
@@ -65,14 +72,37 @@ checksums:
     billing/expenses/markup: a25f5517f3ea6dbe99d1cc4e6598663f
     billing/expenses/noExpenses: d8bfc50a413960b5675eb31e4f84a034
     billing/expenses/title: 1746536359bb638c45a12980ab3aac3a
+    billing/export: 709afbc86c5fdca279a111ea8e49d1c9
+    billing/exportCSV: 45e3c7a805c43d7142192a7cdc0135c9
+    billing/exportLEDES: c8d4edffb79c4618e00c601ac28f8363
+    billing/exportPDF: 119f508b1d32041afd29cdc927355989
     billing/failedToDelete: e8562fdaa7d3ef9630fec5314f91ce00
     billing/failedToSave: 026f1d9696b6b84d5990b07613ee6215
     billing/failedToStartTimer: 385dad49cace9149698ce87db6642a17
     billing/failedToStopTimer: fb9af887011793cd89fc50b3342ad796
+    billing/filterStatus: d9cacc4ff25386c21c82b419b7fc5d72
+    billing/invoiceNarrative: 019924b890b69e2da1d6064f2883dc49
+    billing/invoiceNarrativePlaceholder: f1fb38f7bac16e6388263edf94269a41
+    billing/invoices/createInvoice: 7be52dcec0ec245c46c99daf0e834cde
+    billing/invoices/dueDate: b098b52aff38516c5838c2ac4419f958
+    billing/invoices/invoiceDate: a02f07157c06a1fcbbc465bb26ac2733
+    billing/invoices/invoiceNumber: 2b80ae281bda4eb239e095f3c56854fa
+    billing/invoices/noInvoices: c0562e30a8f8193663ed898d15f03122
+    billing/invoices/reference: fbba6b416a620e774c0fa80e167e5d46
+    billing/invoices/statuses/draft: e8a92958ad300aacfe46c2bf6644927e
+    billing/invoices/statuses/finalized: cd983a96f8ac77e7d0f32117391f5b0a
+    billing/invoices/statuses/paid: 5e2fa7af50cd5d877d9c54fd87bb3bb5
+    billing/invoices/statuses/sent: 01b803329590ea067a0e9b41b3193353
+    billing/invoices/statuses/void: 244428fc68aa883114c61ab85ff8fdd8
+    billing/invoices/title: 2a9cab536b243f033848ec5dfd92b0a7
+    billing/invoices/totalAmount: 9bf9d04c8ba2e1a3bdca3f0f7d39f01a
     billing/loading: 82b4ea7ed1439094d7c4be13aaba9a66
+    billing/markBillableSelected: c1af79cf2091bd6f5c7e770b3661a075
+    billing/markNonBillableSelected: a384f50ea3ee24f2752467a1272b9959
     billing/matter: 8a0a14d10babe8cafbeb08a637893939
     billing/matterRequired: 5bcfe99f65b9145afeac6bb927fe20dd
     billing/narrativePlaceholder: 21aec97c8081ab43d765f0a659826f1f
+    billing/noActiveTimer: 6886d2da19c09f748d3ee4b3e4df1d25
     billing/noEntries: de63f6c0548affa7b788e606925025e8
     billing/nonBillable: 3737061070ad35bc13d80a6bd1b45ef3
     billing/rates/addRate: 0b4a2c1f430595b97491b84d3a987a36
@@ -98,10 +128,20 @@ checksums:
     billing/rates/setAsDefault: dcbc0ab506e0ed94bb83f5db42c419aa
     billing/rates/tableName: 9368b5a047572b6051f334af5aa76819
     billing/rates/tableNamePlaceholder: fd5aced057cdc299ed421b1fa42541e5
+    billing/revertToDraft: 6820a1e0db1870305dedd1a4e5a78e9d
     billing/running: 010d4795c3d5df31edde92a3441d7017
+    billing/selectAll: eedc7cdb02de467c15dc418a066a77f2
     billing/selectMatter: 9206410f8d43b2ec65807136d96bae93
     billing/selectMatterToStart: 1c2bfc9767e22fe42b82169e507c9eaa
+    billing/selectedCount: b6560968198fa79ee2c92c8b9bedec58
+    billing/split/addSplit: 5845a769822c4a50e6a4f5c7b7ca7c36
+    billing/split/matter: 8a0a14d10babe8cafbeb08a637893939
+    billing/split/percentValue: 35cbe4d3fffd3e6b5415eea333f532d7
+    billing/split/percentage: a3f8383e2d3a91e6c2eb6527c32224c0
+    billing/split/splitEntry: d26cdc3fe3ec87610585cc219f296be1
+    billing/split/totalMustBe100: ba8b2fa3bd5bbd3c74858a6d9845e91f
     billing/startTimer: aea3fdfc54c500b964f6c6499b52f566
+    billing/statuses/all: 041202586d00c28bcfb30bfd38105e58
     billing/statuses/approved: e5231b13f1fb9008823144a21a81a1b3
     billing/statuses/billed: 8d61820db23fe734f58f06f6f2156de3
     billing/statuses/draft: e8a92958ad300aacfe46c2bf6644927e
@@ -112,6 +152,7 @@ checksums:
     billing/today: 142173f9752e18e92109623a3ee68cad
     billing/total: f60dc0a14e9b1bace656c644de25de5b
     billing/week: 436fdd694160827dd6ea4644cdd0a8f8
+    billing/writeOff: 4c25589a2735a3ea23b9a5a0170c0c28
     clauses/addVariant: b4c1bca0a1ceb35d4fd331aa42a94234
     clauses/allClauses: 80291c34697c38769cfc882e3cbe200d
     clauses/backToList: 208c0f2ac2c480d5f8dfb0963d94b381
