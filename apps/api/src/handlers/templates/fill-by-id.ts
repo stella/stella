@@ -3,7 +3,9 @@ import { status, t } from "elysia";
 
 import { db } from "@/api/db";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
+import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
@@ -65,6 +67,15 @@ export const fillByIdHandler = async ({
   const s3File = s3.file(template.s3Key);
   const arrayBuf = await s3File.arrayBuffer();
   const buffer = Buffer.from(arrayBuf);
+
+  // Discover and resolve clause slots ({{@clause:...}})
+  const slots = await discoverClauseSlots(buffer);
+  if (slots.length > 0) {
+    const clausePatches = await resolveClauseSlots(templateId, slots);
+    for (const [key, value] of Object.entries(clausePatches)) {
+      record[key] = value;
+    }
+  }
 
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value

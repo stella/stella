@@ -1,6 +1,7 @@
 import { defineRelations, isNotNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
+import { customType } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -20,6 +21,10 @@ import type {
 } from "@/api/db/schema-validators";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+
+const tsvector = customType<{ data: string }>({
+  dataType: () => "tsvector",
+});
 
 const pNanoid = p.varchar({ length: 21 }).$defaultFn(() => nanoid());
 
@@ -470,6 +475,7 @@ export const templates = p.pgTable(
     sizeBytes: p.integer("size_bytes").notNull(),
     manifest: p.jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
+    currentVersion: p.integer("current_version").notNull().default(1),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -485,6 +491,32 @@ export const templates = p.pgTable(
     p
       .index("templates_organization_id_created_at_idx")
       .on(table.organizationId, table.createdAt),
+  ],
+);
+
+export const templateVersions = p.pgTable(
+  "template_versions",
+  {
+    id: pNanoid.primaryKey(),
+    templateId: p
+      .varchar("template_id", { length: 21 })
+      .notNull()
+      .references(() => templates.id, { onDelete: "cascade" }),
+    version: p.integer().notNull(),
+    s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
+    manifest: p.jsonb().$type<TemplateManifest>(),
+    fieldCount: p.integer("field_count").notNull().default(0),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("template_versions_template_version_uidx")
+      .on(table.templateId, table.version),
+    p.index("template_versions_template_id_idx").on(table.templateId),
   ],
 );
 
@@ -819,9 +851,11 @@ export const clauses = p.pgTable(
       }),
     title: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
+    usageNotes: p.text("usage_notes"),
     language: p.varchar({ length: 10 }),
     body: p.jsonb().$type<ClauseBody>().notNull(),
     metadata: p.jsonb().$type<Record<string, unknown>>(),
+    searchVector: tsvector("search_vector"),
     currentVersion: p.integer("current_version").notNull().default(1),
     createdBy: p
       .text("created_by")
@@ -838,6 +872,7 @@ export const clauses = p.pgTable(
     p
       .index("clauses_org_created_at_idx")
       .on(table.organizationId, table.createdAt),
+    p.index("clauses_search_vector_gin_idx").using("gin", table.searchVector),
   ],
 );
 
@@ -898,12 +933,17 @@ export const templateClauses = p.pgTable(
       .references(() => clauseVersions.id, {
         onDelete: "set null",
       }),
+    slotName: p.varchar("slot_name", { length: 128 }),
     sortOrder: p.integer("sort_order").notNull().default(0),
     insertedAt: p.timestamp("inserted_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("template_clauses_template_id_idx").on(table.templateId),
     p.index("template_clauses_clause_id_idx").on(table.clauseId),
+    p
+      .uniqueIndex("template_clauses_template_slot_uidx")
+      .on(table.templateId, table.slotName)
+      .where(isNotNull(table.slotName)),
   ],
 );
 
@@ -924,6 +964,7 @@ export const relations = defineRelations(
     justifications,
     views,
     templates,
+    templateVersions,
     timeEntries,
     billingCodes,
     rateTables,
@@ -1121,6 +1162,16 @@ export const relations = defineRelations(
       templateClauses: r.many.templateClauses({
         from: r.templates.id,
         to: r.templateClauses.templateId,
+      }),
+      versions: r.many.templateVersions({
+        from: r.templates.id,
+        to: r.templateVersions.templateId,
+      }),
+    },
+    templateVersions: {
+      template: r.one.templates({
+        from: r.templateVersions.templateId,
+        to: r.templates.id,
       }),
     },
     billingCodes: {

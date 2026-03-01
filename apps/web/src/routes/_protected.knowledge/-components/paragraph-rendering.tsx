@@ -16,6 +16,8 @@ export type BlockDirectiveKind =
 
 // ── Sub-components ───────────────────────────────────
 
+const CLAUSE_MARKER_PREFIX = "@clause:";
+
 export const HighlightedText = ({ text }: { text: string }) => {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -25,12 +27,20 @@ export const HighlightedText = ({ text }: { text: string }) => {
     if (start > lastIndex) {
       parts.push(text.slice(lastIndex, start));
     }
+
+    const inner = match[1];
+    const isClauseSlot = inner.startsWith(CLAUSE_MARKER_PREFIX);
+
     parts.push(
       <mark
-        className="rounded-sm bg-amber-100 px-0.5 dark:bg-amber-900/30"
+        className={`rounded-sm px-0.5 ${
+          isClauseSlot
+            ? "bg-purple-100 dark:bg-purple-900/30"
+            : "bg-amber-100 dark:bg-amber-900/30"
+        }`}
         key={start}
       >
-        {`{{${match[1]}}}`}
+        {`{{${inner}}}`}
       </mark>,
     );
     lastIndex = start + match[0].length;

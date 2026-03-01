@@ -7,6 +7,7 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
 
@@ -16,6 +17,7 @@ export const createClauseBodySchema = t.Object({
   language: t.Optional(t.String({ maxLength: 10 })),
   body: clauseBodySchema,
   description: t.Optional(t.String({ maxLength: 2000 })),
+  usageNotes: t.Optional(t.String({ maxLength: 2000 })),
   metadata: t.Optional(t.Record(t.String(), t.Unknown())),
 });
 
@@ -28,6 +30,7 @@ type CreateClauseProps = {
     language?: string;
     body: ClauseBody;
     description?: string;
+    usageNotes?: string;
     metadata?: Record<string, unknown>;
   };
 };
@@ -76,6 +79,7 @@ export const createClauseHandler = async ({
         categoryId: body.categoryId ?? null,
         title: body.title,
         description: body.description ?? null,
+        usageNotes: body.usageNotes ?? null,
         language: body.language ?? null,
         body: body.body,
         metadata: body.metadata ?? null,
@@ -99,6 +103,15 @@ export const createClauseHandler = async ({
 
     return row;
   });
+
+  // Best-effort: if the search vector update fails the clause
+  // is still persisted; it will be unsearchable until the next
+  // update re-indexes it.
+  try {
+    await updateSearchVector(clauseId, body.title, body.description, body.body);
+  } catch {
+    // Intentionally swallowed; see comment above.
+  }
 
   return inserted;
 };

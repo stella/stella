@@ -31,6 +31,7 @@ const decodeCursor = (cursor: string): { date: Date; id: string } | null => {
 
 export const listClausesQuerySchema = t.Object({
   categoryId: t.Optional(tNanoid),
+  q: t.Optional(t.String({ minLength: 1 })),
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   cursor: t.Optional(t.String()),
 });
@@ -39,6 +40,7 @@ type ListClausesProps = {
   organizationId: SafeId<"organization">;
   query: {
     categoryId?: string;
+    q?: string;
     limit?: number;
     cursor?: string;
   };
@@ -56,7 +58,17 @@ export const listClausesHandler = async ({
     conditions.push(eq(clauses.categoryId, query.categoryId));
   }
 
-  if (query.cursor) {
+  const isSearching = !!query.q;
+
+  if (query.q) {
+    conditions.push(
+      sql`${clauses.searchVector} @@ websearch_to_tsquery('english', ${query.q})`,
+    );
+  }
+
+  // Cursor pagination only applies to date-ordered
+  // browsing; rank-ordered search ignores the cursor.
+  if (query.cursor && !isSearching) {
     const parsed = decodeCursor(query.cursor);
     if (parsed) {
       // Compound cursor: (createdAt < cursorDate) OR
@@ -74,27 +86,43 @@ export const listClausesHandler = async ({
     }
   }
 
+  const rankExpr = isSearching
+    ? sql<number>`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q}))`
+    : undefined;
+
+  const selectColumns = {
+    id: clauses.id,
+    title: clauses.title,
+    categoryId: clauses.categoryId,
+    language: clauses.language,
+    description: clauses.description,
+    currentVersion: clauses.currentVersion,
+    createdAt: clauses.createdAt,
+    updatedAt: clauses.updatedAt,
+  };
+
   const rows = await db
-    .select({
-      id: clauses.id,
-      title: clauses.title,
-      categoryId: clauses.categoryId,
-      language: clauses.language,
-      description: clauses.description,
-      currentVersion: clauses.currentVersion,
-      createdAt: clauses.createdAt,
-      updatedAt: clauses.updatedAt,
-    })
+    .select(rankExpr ? { ...selectColumns, rank: rankExpr } : selectColumns)
     .from(clauses)
     .where(and(...conditions))
-    .orderBy(desc(clauses.createdAt), desc(clauses.id))
+    .orderBy(
+      ...(isSearching
+        ? [
+            sql`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q})) DESC`,
+          ]
+        : [desc(clauses.createdAt), desc(clauses.id)]),
+    )
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   const lastItem = items.at(-1);
+  // Cursor pagination is incompatible with rank-based
+  // ordering; disable it when searching.
   const nextCursor =
-    hasMore && lastItem ? encodeCursor(lastItem.createdAt, lastItem.id) : null;
+    hasMore && lastItem && !isSearching
+      ? encodeCursor(lastItem.createdAt, lastItem.id)
+      : null;
 
   return {
     clauses: items,
@@ -120,6 +148,7 @@ export const getClauseHandler = async ({
       title: true,
       categoryId: true,
       description: true,
+      usageNotes: true,
       language: true,
       body: true,
       metadata: true,

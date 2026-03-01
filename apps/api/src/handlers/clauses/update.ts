@@ -7,6 +7,7 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
 
@@ -16,6 +17,7 @@ export const updateClauseBodySchema = t.Object({
   language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   body: t.Optional(clauseBodySchema),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+  usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   metadata: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),
 });
 
@@ -34,7 +36,13 @@ export const updateClauseHandler = async ({
 }: UpdateClauseProps) => {
   const existing = await db.query.clauses.findFirst({
     where: { id: clauseId, organizationId },
-    columns: { id: true, currentVersion: true },
+    columns: {
+      id: true,
+      title: true,
+      description: true,
+      body: true,
+      currentVersion: true,
+    },
   });
 
   if (!existing) {
@@ -63,6 +71,7 @@ export const updateClauseHandler = async ({
     language: string | null;
     body: ClauseBody;
     description: string | null;
+    usageNotes: string | null;
     metadata: Record<string, unknown> | null;
     currentVersion: number;
     updatedAt: Date;
@@ -79,6 +88,9 @@ export const updateClauseHandler = async ({
   }
   if (body.description !== undefined) {
     updates.description = body.description;
+  }
+  if (body.usageNotes !== undefined) {
+    updates.usageNotes = body.usageNotes;
   }
   if (body.metadata !== undefined) {
     updates.metadata = body.metadata;
@@ -132,6 +144,30 @@ export const updateClauseHandler = async ({
 
     return row;
   });
+
+  // Re-index search vector when searchable fields change
+  const searchFieldsChanged =
+    body.title !== undefined ||
+    body.description !== undefined ||
+    body.body !== undefined;
+
+  // Best-effort: if the search vector update fails the clause
+  // is still persisted; it will be unsearchable until the next
+  // update re-indexes it.
+  if (searchFieldsChanged) {
+    try {
+      await updateSearchVector(
+        clauseId,
+        body.title ?? existing.title,
+        body.description !== undefined
+          ? body.description
+          : existing.description,
+        body.body ?? existing.body,
+      );
+    } catch {
+      // Intentionally swallowed; see comment above.
+    }
+  }
 
   return updated;
 };

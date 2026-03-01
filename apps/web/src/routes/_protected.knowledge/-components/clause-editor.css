@@ -1,0 +1,43 @@
+.clause-editor .tiptap {
+  outline: none;
+  min-height: 120px;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.clause-editor .tiptap p {
+  margin: 0;
+}
+
+.clause-editor .tiptap p + p {
+  margin-top: 0.25rem;
+}
+
+.clause-editor .tiptap h1,
+.clause-editor .tiptap h2,
+.clause-editor .tiptap h3 {
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.clause-editor .tiptap h1 {
+  font-size: 1.25rem;
+}
+
+.clause-editor .tiptap h2 {
+  font-size: 1.125rem;
+}
+
+.clause-editor .tiptap h3 {
+  font-size: 1rem;
+}
+
+.clause-editor .tiptap p.is-editor-empty:first-child::before {
+  color: color-mix(in srgb, var(--color-muted-foreground) 64%, transparent);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

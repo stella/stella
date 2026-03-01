@@ -49,6 +49,7 @@ function RouteComponent() {
   const [clauses, setClauses] = useState<ClauseItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -87,6 +88,7 @@ function RouteComponent() {
       const query: {
         categoryId?: string;
         uncategorized?: boolean;
+        q?: string;
         cursor?: string;
         limit?: number;
       } = { limit: 50 };
@@ -95,6 +97,10 @@ function RouteComponent() {
         query.uncategorized = true;
       } else if (selectedCategory) {
         query.categoryId = selectedCategory;
+      }
+
+      if (searchQuery) {
+        query.q = searchQuery;
       }
 
       if (cursor) {
@@ -134,7 +140,7 @@ function RouteComponent() {
       setNextCursor(data.nextCursor);
       setLoaded(true);
     },
-    [selectedCategory, t],
+    [selectedCategory, searchQuery, t],
   );
 
   // ── Initial fetch ──────────────────────────────────
@@ -180,6 +186,13 @@ function RouteComponent() {
     }
   }, [nextCursor, fetchClauses]);
 
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+    setClauses([]);
+    setNextCursor(null);
+    setLoaded(false);
+  }, []);
+
   const handleRefresh = useCallback(() => {
     setClauses([]);
     setNextCursor(null);
@@ -191,19 +204,32 @@ function RouteComponent() {
 
   // ── Render ─────────────────────────────────────────
 
+  const handleBackToList = useCallback(() => {
+    setView({ kind: "list" });
+
+    if (searchQuery) {
+      // Clearing the query creates a new fetchClauses ref,
+      // which triggers the prevFetchRef effect to refetch.
+      setSearchQuery("");
+      setClauses([]);
+      setNextCursor(null);
+      setLoaded(false);
+      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      fetchCategories();
+    } else {
+      // Query already empty; fetchClauses closure is fresh,
+      // so calling handleRefresh is safe (no stale closure).
+      handleRefresh();
+    }
+  }, [searchQuery, handleRefresh, fetchCategories]);
+
   if (view.kind === "detail") {
     return (
       <ClauseDetailView
         categories={categories}
         clauseId={view.clauseId}
-        onBack={() => {
-          setView({ kind: "list" });
-          handleRefresh();
-        }}
-        onDeleted={() => {
-          setView({ kind: "list" });
-          handleRefresh();
-        }}
+        onBack={handleBackToList}
+        onDeleted={handleBackToList}
       />
     );
   }
@@ -236,6 +262,7 @@ function RouteComponent() {
         }
         onLoadMore={handleLoadMore}
         onNewClause={() => setCreateOpen(true)}
+        onSearch={handleSearch}
         selectedCategoryId={selectedCategory}
       />
 

@@ -45,10 +45,17 @@ import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-componen
 
 // ── Types ────────────────────────────────────────────
 
+type ClauseRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
 type ClauseParagraph = {
   text: string;
   style?: string;
   level?: number;
+  runs?: ClauseRun[];
   isDirective?: boolean;
   directiveKind?: BlockDirectiveKind;
   directiveExpression?: string;
@@ -73,6 +80,7 @@ type ClauseDetail = {
   title: string;
   categoryId: string | null;
   description: string | null;
+  usageNotes: string | null;
   language: string | null;
   body: ClauseParagraph[];
   currentVersion: number;
@@ -267,9 +275,10 @@ export const ClauseDetailView = ({
             id: state.detail.id,
             title: state.detail.title,
             description: state.detail.description,
+            usageNotes: state.detail.usageNotes,
             language: state.detail.language,
             categoryId: state.detail.categoryId,
-            bodyText: state.detail.body.map((p) => p.text).join("\n"),
+            bodyParagraphs: state.detail.body,
           }}
           onOpenChange={setEditOpen}
           onSaved={load}
@@ -333,6 +342,16 @@ const DetailContent = ({
           <div className="mt-4 rounded-lg border p-4">
             <ClauseBody paragraphs={detail.body} />
           </div>
+          {detail.usageNotes && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("clauses.usageNotes")}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {detail.usageNotes}
+              </p>
+            </div>
+          )}
         </TabsPanel>
 
         <TabsPanel value="variants">

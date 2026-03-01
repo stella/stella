@@ -219,8 +219,11 @@
     "outdatedVersion": "Update available",
     "saveFailed": "Failed to save",
     "searchClauses": "Search clauses...",
+    "searchPlaceholder": "Search clauses...",
     "selectCategory": "Category",
     "selectVariant": "Select variant",
+    "slotName": "Slot name",
+    "slotNamePlaceholder": "e.g. NonCompete",
     "syncFailed": "Failed to sync",
     "syncVersion": "Sync to latest",
     "synced": "Synced to latest version",
@@ -232,7 +235,10 @@
     "unlinkConfirm": "This will remove the clause from this template.",
     "unlinkFailed": "Failed to unlink clause",
     "unlinked": "Clause unlinked",
+    "unmappedSlot": "Not linked",
     "updateFailed": "Failed to update clause",
+    "usageNotes": "Usage notes",
+    "usageNotesPlaceholder": "When should this clause be used? (for AI assembly)",
     "variantCreated": "Variant created",
     "variantDeleted": "Variant deleted",
     "variantLabel": "Variant label",
@@ -600,6 +606,7 @@
     "fillForm": "Vyplnit šablonu",
     "generate": "Vygenerovat dokument",
     "generating": "Generování...",
+    "history": "History",
     "inputTypes": {
       "boolean": "Ano / Ne",
       "date": "Datum",
@@ -633,7 +640,10 @@
     "validationMaxLength": "Maximum {max} characters",
     "validationMinLength": "Minimum {min} characters",
     "validationPattern": "Invalid format",
-    "validationRequired": "This field is required"
+    "validationRequired": "This field is required",
+    "versionLabel": "Version {version}",
+    "versionsEmpty": "No version history",
+    "viewVersion": "View"
   },
   "validation": {
     "organizationNameRequired": "Název organizace je povinný",

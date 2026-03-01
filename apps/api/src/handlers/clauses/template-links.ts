@@ -13,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 export const linkClauseBodySchema = t.Object({
   clauseId: tNanoid,
   variantId: t.Optional(tNanoid),
+  slotName: t.Optional(t.String({ maxLength: 128 })),
 });
 
 type LinkClauseBody = Static<typeof linkClauseBodySchema>;
@@ -55,6 +56,7 @@ export const listTemplateClausesHandler = async ({
       clauseId: true,
       clauseVariantId: true,
       clauseVersionId: true,
+      slotName: true,
       sortOrder: true,
       insertedAt: true,
     },
@@ -168,6 +170,7 @@ export const linkClauseHandler = async ({
       clauseId: body.clauseId,
       clauseVariantId: body.variantId ?? null,
       clauseVersionId: currentVersion?.id ?? null,
+      slotName: body.slotName ?? null,
       sortOrder: linkCount,
     })
     .returning({
@@ -175,6 +178,7 @@ export const linkClauseHandler = async ({
       clauseId: templateClauses.clauseId,
       clauseVariantId: templateClauses.clauseVariantId,
       clauseVersionId: templateClauses.clauseVersionId,
+      slotName: templateClauses.slotName,
       sortOrder: templateClauses.sortOrder,
       insertedAt: templateClauses.insertedAt,
     });

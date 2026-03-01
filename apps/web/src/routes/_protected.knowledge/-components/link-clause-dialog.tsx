@@ -36,6 +36,8 @@ type LinkClauseDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   templateId: string;
+  /** Available slot names from the template preview. */
+  availableSlots?: string[];
   onLinked: () => void;
 };
 
@@ -45,6 +47,7 @@ export const LinkClauseDialog = ({
   open,
   onOpenChange,
   templateId,
+  availableSlots,
   onLinked,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
@@ -53,6 +56,7 @@ export const LinkClauseDialog = ({
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
+  const [slotName, setSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
   // Load categories and clauses when dialog opens
@@ -115,9 +119,15 @@ export const LinkClauseDialog = ({
 
     setLinking(true);
 
-    const response = await api.templates({ templateId }).clauses.put({
-      clauseId: selectedClauseId,
-    });
+    const body: {
+      clauseId: string;
+      slotName?: string;
+    } = { clauseId: selectedClauseId };
+    if (slotName.trim()) {
+      body.slotName = slotName.trim();
+    }
+
+    const response = await api.templates({ templateId }).clauses.put(body);
 
     setLinking(false);
 
@@ -140,9 +150,10 @@ export const LinkClauseDialog = ({
 
     setSelectedClauseId(null);
     setSearch("");
+    setSlotName("");
     onOpenChange(false);
     onLinked();
-  }, [selectedClauseId, templateId, t, onOpenChange, onLinked]);
+  }, [selectedClauseId, slotName, templateId, t, onOpenChange, onLinked]);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -207,6 +218,29 @@ export const LinkClauseDialog = ({
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div>
+            <label
+              className="mb-1 block text-sm font-medium"
+              htmlFor="slot-name-input"
+            >
+              {t("clauses.slotName")}
+            </label>
+            <Input
+              id="slot-name-input"
+              list="available-slots"
+              onChange={(e) => setSlotName(e.target.value)}
+              placeholder={t("clauses.slotNamePlaceholder")}
+              value={slotName}
+            />
+            {availableSlots && availableSlots.length > 0 && (
+              <datalist id="available-slots">
+                {availableSlots.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            )}
           </div>
         </DialogPanel>
         <DialogFooter>

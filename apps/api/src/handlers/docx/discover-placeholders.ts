@@ -13,7 +13,7 @@ import * as slimdom from "slimdom";
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.]+)\}\}/gu;
+export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:]+)\}\}/gu;
 
 /**
  * Scan all `w:p` paragraphs in a parsed XML document and
