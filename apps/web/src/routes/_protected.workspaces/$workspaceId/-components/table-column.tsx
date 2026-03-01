@@ -22,14 +22,25 @@ import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-ho
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
+type PropertyColumnOptions = {
+  onHide?: () => void;
+};
+
 export const getPropertyColumn = (
   property: WorkspaceProperty,
+  options?: PropertyColumnOptions,
 ): ColumnDef<WorkspaceEntity> => ({
   id: property.id,
   accessorKey: property.id,
   accessorFn: (row) => row.fields[property.id],
   sortingFn: "sortProperty",
-  header: (ctx) => <PropertyPopover header={ctx.header} property={property} />,
+  header: (ctx) => (
+    <PropertyPopover
+      header={ctx.header}
+      onHide={options?.onHide}
+      property={property}
+    />
+  ),
   size: 200,
   cell: (props) => (
     <PropertyCell entity={props.row.original} property={property} />

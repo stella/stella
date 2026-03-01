@@ -4,7 +4,6 @@ import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
 import { matterCounters, properties, views, workspaces } from "@/api/db/schema";
-import type { ViewConfig } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -14,6 +13,7 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
+import { DEFAULT_VIEWS } from "@/api/lib/views";
 
 export const createWorkspacesBodySchema = t.Object({
   id: tNanoid,
@@ -111,30 +111,12 @@ export const createWorkspacesHandler = ({
       },
     ]);
 
-    const emptyConfig: ViewConfig = {
-      filters: [],
-      sorts: [],
-      visibleProperties: [],
-      columnSizing: {},
-      columnOrder: [],
-    };
-
-    await tx.insert(views).values([
-      {
+    await tx.insert(views).values(
+      DEFAULT_VIEWS.map((v) => ({
         workspaceId: body.id,
-        name: "Table",
-        layout: "table",
-        config: emptyConfig,
-        position: 0,
-      },
-      {
-        workspaceId: body.id,
-        name: "Files",
-        layout: "filesystem",
-        config: emptyConfig,
-        position: 1,
-      },
-    ]);
+        ...v,
+      })),
+    );
 
     return;
   });

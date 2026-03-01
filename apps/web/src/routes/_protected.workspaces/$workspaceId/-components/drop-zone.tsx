@@ -16,13 +16,10 @@ export const DropZone = ({ workspaceId, children }: DropZoneProps) => {
 
   const { dropProps, isDropTarget } = useDrop({
     ref: dropRef,
-    getDropOperation(types) {
-      if (isPending) {
-        return "cancel";
-      }
-      return types.has("Files") ? "copy" : "cancel";
-    },
     async onDrop(e) {
+      if (isPending) {
+        return;
+      }
       const files = await Promise.all(
         e.items
           .filter((item) => item.kind === "file")

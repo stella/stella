@@ -3,7 +3,7 @@ import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import { db, type Transaction } from "@/api/db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -194,6 +194,11 @@ export const duplicateEntityHandler = async ({
         })),
       );
     }
+
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
     return { entityId: newEntityId };
   });

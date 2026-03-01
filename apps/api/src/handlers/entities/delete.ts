@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -84,6 +84,11 @@ export const deleteEntitiesHandler = async ({
         inArray(entities.id, body.entityIds),
       ),
     );
+
+  await db
+    .update(workspaces)
+    .set({ lastActivityAt: new Date() })
+    .where(eq(workspaces.id, workspaceId));
 
   return;
 };

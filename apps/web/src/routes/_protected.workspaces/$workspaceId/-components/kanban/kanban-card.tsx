@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { FolderIcon } from "lucide-react";
 import { useDrag } from "react-aria";
 
-import { Input } from "@stella/ui/components/input";
+import { cn } from "@stella/ui/lib/utils";
 
 import {
   isFileDisplayable,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -43,6 +44,13 @@ export const KanbanCard = ({
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
   const navigable = file !== null && isFileDisplayable(file);
+  const isActivePeek = usePeekStore((s) => {
+    if (!s.activeFieldId) {
+      return false;
+    }
+    const tab = s.tabs.find((t) => t.fieldId === s.activeFieldId);
+    return tab?.entityId === entity.entityId;
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(name);
 
@@ -79,22 +87,14 @@ export const KanbanCard = ({
     ) : null;
 
   const nameElement = isEditing ? (
-    <Input
-      autoFocus
-      className="h-auto w-full border-0 bg-transparent p-0 text-sm leading-snug font-medium shadow-none outline-none focus-visible:ring-0"
-      onBlur={commitRename}
-      onChange={(e) => setEditValue(e.target.value)}
-      onClick={(e) => e.preventDefault()}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") {
-          e.currentTarget.blur();
-        }
-        if (e.key === "Escape") {
-          setIsEditing(false);
-          setEditValue(name);
-        }
+    <InlineEdit
+      inputClassName="w-full font-medium"
+      onChange={setEditValue}
+      onCancel={() => {
+        setIsEditing(false);
+        setEditValue(name);
       }}
+      onCommit={commitRename}
       value={editValue}
     />
   ) : (
@@ -161,7 +161,10 @@ export const KanbanCard = ({
     return (
       <div className="group/card relative" ref={dragRef} {...dragProps}>
         <button
-          className="block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md"
+          className={cn(
+            "block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md",
+            isActivePeek && "ring-2 ring-primary/30",
+          )}
           onClick={() =>
             usePeekStore.getState().openTab({
               fieldId: file.fieldId,
@@ -180,7 +183,14 @@ export const KanbanCard = ({
 
   return (
     <div className="group/card relative" ref={dragRef} {...dragProps}>
-      <div className="rounded-lg border bg-card p-3 shadow-xs">{content}</div>
+      <div
+        className={cn(
+          "rounded-lg border bg-card p-3 shadow-xs",
+          isActivePeek && "ring-2 ring-primary/30",
+        )}
+      >
+        {content}
+      </div>
       {actionsButton}
     </div>
   );

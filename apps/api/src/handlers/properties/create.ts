@@ -74,12 +74,15 @@ export const createPropertyHandler = async ({
     return status(422);
   }
 
-  await db.insert(properties).values({
-    workspaceId,
-    name: body.name,
-    content,
-    tool,
-  });
+  const [inserted] = await db
+    .insert(properties)
+    .values({
+      workspaceId,
+      name: body.name,
+      content,
+      tool,
+    })
+    .returning({ id: properties.id });
 
-  return;
+  return { id: inserted.id };
 };

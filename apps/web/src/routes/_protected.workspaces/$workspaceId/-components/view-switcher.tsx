@@ -5,6 +5,7 @@ import {
   EllipsisVerticalIcon,
   FolderTreeIcon,
   KanbanIcon,
+  LayoutDashboardIcon,
   LayoutGridIcon,
   PencilIcon,
   PlusIcon,
@@ -41,6 +42,7 @@ import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   useCreateView,
   useDeleteView,
@@ -51,7 +53,14 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 
 const VIEW_DRAG_TYPE = "stella/view-id";
 
+const REQUIRED_VIEW_LAYOUTS: ReadonlySet<ViewLayout> = new Set([
+  "overview",
+  "table",
+  "filesystem",
+]);
+
 const layoutIcons: Record<ViewLayout, typeof TableIcon> = {
+  overview: LayoutDashboardIcon,
   table: TableIcon,
   filesystem: FolderTreeIcon,
   gallery: LayoutGridIcon,
@@ -59,9 +68,10 @@ const layoutIcons: Record<ViewLayout, typeof TableIcon> = {
 };
 
 const LAYOUT_LABEL_KEYS = {
+  overview: "workspaces.views.layouts.overview",
   table: "workspaces.views.layouts.table",
   filesystem: "workspaces.views.layouts.list",
-  gallery: "workspaces.views.layouts.gallery",
+  gallery: "workspaces.views.layouts.grid",
   kanban: "workspaces.views.layouts.kanban",
 } as const satisfies Record<ViewLayout, string>;
 
@@ -74,6 +84,7 @@ const defaultConfig: ViewConfig = {
 };
 
 const defaultConfigs: Record<ViewLayout, ViewConfig> = {
+  overview: defaultConfig,
   table: defaultConfig,
   filesystem: defaultConfig,
   gallery: defaultConfig,
@@ -86,7 +97,7 @@ type ViewSwitcherProps = {
   onViewChange: (viewId: string) => void;
 };
 
-const LAYOUT_OPTIONS = ["table", "filesystem", "gallery", "kanban"] as const;
+const LAYOUT_OPTIONS = ["overview", "table", "filesystem", "kanban"] as const;
 
 export const ViewSwitcher = ({
   workspaceId,
@@ -126,15 +137,19 @@ export const ViewSwitcher = ({
   const currentViewId = activeViewId ?? views[0]?.id ?? null;
 
   return (
-    <div className="flex items-center gap-1 border-b px-2">
+    <div className="flex items-center gap-1 px-2">
       <Tabs value={currentViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
             const Icon = layoutIcons[view.layout];
+            const isLastOfLayout =
+              REQUIRED_VIEW_LAYOUTS.has(view.layout) &&
+              views.filter((v) => v.layout === view.layout).length <= 1;
 
             return (
               <ViewTab
                 config={view.config}
+                deleteDisabled={isLastOfLayout}
                 icon={<Icon className="size-3.5" />}
                 isActive={view.id === currentViewId}
                 key={view.id}
@@ -235,6 +250,7 @@ type ViewTabProps = {
   config: ViewConfig;
   icon: React.ReactNode;
   isActive: boolean;
+  deleteDisabled: boolean;
   onSelect: () => void;
   onDuplicate: () => void;
   onReorder: (draggedId: string, targetId: string) => void;
@@ -248,6 +264,7 @@ const ViewTab = ({
   config,
   icon,
   isActive,
+  deleteDisabled,
   onSelect,
   onDuplicate,
   onReorder,
@@ -319,20 +336,14 @@ const ViewTab = ({
     return (
       <TabsTab value={viewId}>
         {icon}
-        <input
-          autoFocus
-          className="h-auto w-24 border-0 bg-transparent p-0 text-sm outline-none"
-          onBlur={handleRename}
-          onChange={(e) => setRenameValue(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.currentTarget.blur();
-            }
-            if (e.key === "Escape") {
-              setIsRenaming(false);
-              setRenameValue(name);
-            }
+        <InlineEdit
+          inputClassName="w-24"
+          onChange={setRenameValue}
+          onCancel={() => {
+            setIsRenaming(false);
+            setRenameValue(name);
           }}
+          onCommit={handleRename}
           value={renameValue}
         />
       </TabsTab>
@@ -426,40 +437,57 @@ const ViewTab = ({
                 </MenuSubPopup>
               </MenuSub>
               <MenuSeparator />
-              <AlertDialog>
-                <AlertDialogTrigger
-                  render={
-                    <MenuItem closeOnClick={false} variant="destructive" />
-                  }
+              {deleteDisabled ? (
+                <MenuItem
+                  onClick={() => {
+                    toastManager.add({
+                      title: t("workspaces.views.cannotDeleteRequired"),
+                      type: "info",
+                    });
+                  }}
                 >
-                  <Trash2Icon className="size-4" />
-                  {t("common.delete")}
-                </AlertDialogTrigger>
-                <AlertDialogPopup>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("workspaces.views.deleteView")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("common.deleteConfirmDescription", {
-                        name,
-                      })}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogClose render={<Button variant="ghost" />}>
-                      {t("common.cancel")}
-                    </AlertDialogClose>
-                    <AlertDialogClose
-                      render={
-                        <Button onClick={handleDelete} variant="destructive" />
-                      }
-                    >
-                      {t("common.delete")}
-                    </AlertDialogClose>
-                  </AlertDialogFooter>
-                </AlertDialogPopup>
-              </AlertDialog>
+                  <Trash2Icon className="size-4 opacity-50" />
+                  <span className="opacity-50">{t("common.delete")}</span>
+                </MenuItem>
+              ) : (
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <MenuItem closeOnClick={false} variant="destructive" />
+                    }
+                  >
+                    <Trash2Icon className="size-4" />
+                    {t("common.delete")}
+                  </AlertDialogTrigger>
+                  <AlertDialogPopup>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {t("workspaces.views.deleteView")}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t("common.deleteConfirmDescription", {
+                          name,
+                        })}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogClose render={<Button variant="ghost" />}>
+                        {t("common.cancel")}
+                      </AlertDialogClose>
+                      <AlertDialogClose
+                        render={
+                          <Button
+                            onClick={handleDelete}
+                            variant="destructive"
+                          />
+                        }
+                      >
+                        {t("common.delete")}
+                      </AlertDialogClose>
+                    </AlertDialogFooter>
+                  </AlertDialogPopup>
+                </AlertDialog>
+              )}
             </MenuPopup>
           </Menu>
         )}

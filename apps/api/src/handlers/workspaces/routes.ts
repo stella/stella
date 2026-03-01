@@ -8,6 +8,7 @@ import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
 import { readWorkspacesHandler } from "@/api/handlers/workspaces/read";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
+import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
 import {
   updateWorkspaceBodySchema,
@@ -69,6 +70,11 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         )
         .get("/justifications", (ctx) =>
           readJustificationsHandler({
+            workspaceId: ctx.workspaceId,
+          }),
+        )
+        .get("/overview", (ctx) =>
+          readOverviewHandler({
             workspaceId: ctx.workspaceId,
           }),
         )

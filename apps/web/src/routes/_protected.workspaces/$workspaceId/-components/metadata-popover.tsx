@@ -11,7 +11,10 @@ import {
 import { Separator } from "@stella/ui/components/separator";
 
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
-import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import {
+  SortProperty,
+  type SortHint,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 
 type MetadataPopoverProps = {
   // Column operations (sort, pin) only need the column reference;
@@ -21,6 +24,7 @@ type MetadataPopoverProps = {
   column: Column<any, unknown>;
   icon: LucideIcon;
   label: string;
+  sortHint?: SortHint;
   onHide?: () => void;
 };
 
@@ -28,6 +32,7 @@ export const MetadataPopover = ({
   column,
   icon: Icon,
   label,
+  sortHint,
   onHide,
 }: MetadataPopoverProps) => {
   const t = useTranslations();
@@ -43,7 +48,7 @@ export const MetadataPopover = ({
         className="min-w-48 overflow-clip *:data-[slot=popover-viewport]:p-0!"
         initialFocus={false}
       >
-        <SortProperty column={column} />
+        <SortProperty column={column} sortHint={sortHint} />
         <Separator />
         <div className="flex flex-col p-1">
           <PinProperty column={column} />

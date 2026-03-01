@@ -11,7 +11,10 @@ import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 export const uploadFileEntity = (
@@ -65,14 +68,18 @@ export const useCreateFileEntities = (workspaceId: string) => {
 
   const mutation = useMutation({
     mutationFn: async (files: File[]) => {
-      const propertyId = properties.find((p) => p.content.type === "file")?.id;
+      let propertyId = properties.find((p) => p.content.type === "file")?.id;
 
       if (!propertyId) {
-        toastManager.add({
-          title: t("workspaces.files.addFilePropertyToUpload"),
-          type: "warning",
+        const response = await api.properties({ workspaceId }).put({
+          queryKey: propertiesKeys.all(workspaceId),
+          name: t("workspaces.files.defaultPropertyName"),
+          contentType: "file",
         });
-        return;
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        propertyId = response.data.id;
       }
 
       const remainingSlots = MAX_PROJECT_ENTITIES - data.length;

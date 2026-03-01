@@ -56,6 +56,13 @@ export const useSyncTable = () => {
               (id) => isInternalColId(id) || propertyIds.has(id),
             );
 
+            // Always pin the first property (Documents) so the
+            // filename column never scrolls out of view.
+            const firstPropId = properties[0]?.id;
+            if (firstPropId && !s.columnPinning.includes(firstPropId)) {
+              s.columnPinning.push(firstPropId);
+            }
+
             if (s.sorting.length === 0) {
               s.sorting = [
                 {

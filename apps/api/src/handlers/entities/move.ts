@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { entities } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -46,6 +46,10 @@ export const moveEntityHandler = ({
         .update(entities)
         .set({ parentId: null, updatedAt: new Date() })
         .where(eq(entities.id, body.entityId));
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
       return status(200);
     }
 
@@ -102,6 +106,11 @@ export const moveEntityHandler = ({
       .update(entities)
       .set({ parentId: body.parentId, updatedAt: new Date() })
       .where(eq(entities.id, body.entityId));
+
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
     return status(200);
   });

@@ -15,6 +15,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { optionColorsMap } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { uploadFileEntity } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
@@ -90,15 +91,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   // No group-by selected at all
   if (!isBuiltInGrouping && !groupByProperty) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
-        <div className="text-center">
-          <KanbanIcon className="mx-auto mb-2 size-8" />
-          <p className="text-sm">{t("workspaces.kanban.selectPropertyHint")}</p>
-          <p className="mt-1 text-xs">
-            {t("workspaces.kanban.usePropertyHint")}
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        hint={t("workspaces.kanban.usePropertyHint")}
+        icon={KanbanIcon}
+        message={t("workspaces.kanban.selectPropertyHint")}
+      />
     );
   }
 

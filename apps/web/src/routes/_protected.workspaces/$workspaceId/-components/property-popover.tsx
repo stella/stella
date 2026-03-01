@@ -6,11 +6,13 @@ import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Header } from "@tanstack/react-table";
 import { Result } from "better-result";
+import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import type { _Translator as Translator } from "use-intl/core";
 import * as v from "valibot";
 
 import type { OptionColor } from "@stella/api/types";
+import { Button } from "@stella/ui/components/button";
 import { FieldError } from "@stella/ui/components/field";
 import { Popover, PopoverPopup } from "@stella/ui/components/popover";
 import { Separator } from "@stella/ui/components/separator";
@@ -32,7 +34,10 @@ import {
   PropertyPopoverTrigger,
   PropertyPopoverType,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import {
+  SortProperty,
+  toSortHint,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -188,9 +193,14 @@ const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
   header: Header<WorkspaceEntity, unknown>;
+  onHide?: () => void;
 };
 
-export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
+export const PropertyPopover = ({
+  property,
+  header,
+  onHide,
+}: PropertyPopoverProps) => {
   const t = useTranslations();
   const posthog = usePostHog();
   const { workspaceId, id, name, content } = property;
@@ -425,7 +435,10 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
               )}
             </div>
             <Separator />
-            <SortProperty column={header.column} />
+            <SortProperty
+              column={header.column}
+              sortHint={toSortHint(property.content.type)}
+            />
             <Separator />
             <div className="flex flex-col p-1">
               <form.Subscribe
@@ -450,6 +463,20 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
                 )}
               </form.Subscribe>
               <PinProperty column={header.column} />
+              {onHide && (
+                <Button
+                  className="justify-start gap-1.5"
+                  onClick={() => {
+                    onHide();
+                    setIsOpen(false);
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <EyeOffIcon className="size-4" />
+                  {t("workspaces.kanban.hideColumn")}
+                </Button>
+              )}
               <DeleteProperty property={property} workspaceId={workspaceId} />
             </div>
           </div>

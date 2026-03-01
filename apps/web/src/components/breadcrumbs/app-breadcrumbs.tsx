@@ -122,8 +122,8 @@ export const AppBreadcrumbs = () => {
   }, [matches, breadcrumbMap]);
 
   return (
-    <Breadcrumb className="max-lg:hidden">
-      <BreadcrumbList className="flex-nowrap">
+    <Breadcrumb className="min-w-0 max-lg:hidden">
+      <BreadcrumbList className="flex-nowrap overflow-hidden">
         {breadcrumbs.map((breadcrumb, index) => (
           <Fragment
             key={`${id}-${

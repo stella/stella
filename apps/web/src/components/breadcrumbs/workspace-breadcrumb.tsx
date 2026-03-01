@@ -15,8 +15,8 @@ import {
   PopoverTrigger,
 } from "@stella/ui/components/popover";
 
-import { getMatterSwatch, MATTER_SWATCHES } from "@/components/app-sidebar";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { getMatterSwatch, MATTER_SWATCHES } from "@/lib/matter-colors";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -117,8 +117,20 @@ export const WorkspaceBreadcrumb = ({
       <BreadcrumbItem>
         <Link
           className="max-w-48 truncate transition-colors hover:text-foreground"
-          params={{ contactId: workspace.client.id }}
-          to="/contacts/$contactId"
+          onClick={() => {
+            try {
+              const raw = localStorage.getItem("matters_overview_config");
+              const config = raw ? JSON.parse(raw) : {};
+              config.clientFilter = workspace.client?.id ?? null;
+              localStorage.setItem(
+                "matters_overview_config",
+                JSON.stringify(config),
+              );
+            } catch {
+              // localStorage may throw in private browsing
+            }
+          }}
+          to="/workspaces"
         >
           {workspace.client.displayName}
         </Link>

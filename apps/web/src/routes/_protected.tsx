@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useCallback, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -6,7 +6,14 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
-import { FolderIcon, FolderOpenIcon, PinIcon, PinOffIcon } from "lucide-react";
+import {
+  FolderIcon,
+  FolderOpenIcon,
+  MessageSquareIcon,
+  PanelRightIcon,
+  PinIcon,
+  PinOffIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -60,17 +67,25 @@ export const Route = createFileRoute("/_protected")({
 function ProtectedComponent() {
   useSyncQueries();
   const { data: role } = useSuspenseQuery(roleOptions);
+  const [rightOpen, setRightOpen] = useState(false);
+  const toggleRight = useCallback(() => setRightOpen((o) => !o), []);
 
   return (
     <SidebarProvider>
       <AppSidebar role={role} />
-      <ProtectedContent />
+      <ProtectedContent rightOpen={rightOpen} toggleRight={toggleRight} />
+      <RightPanel open={rightOpen} onToggle={toggleRight} />
       <ShortcutHintsOverlay />
     </SidebarProvider>
   );
 }
 
-function ProtectedContent() {
+type ProtectedContentProps = {
+  rightOpen: boolean;
+  toggleRight: () => void;
+};
+
+function ProtectedContent({ rightOpen, toggleRight }: ProtectedContentProps) {
   const t = useTranslations();
   const { open, isMobile } = useSidebar();
   const togglePin = usePinnedStore((s) => s.togglePin);
@@ -92,7 +107,7 @@ function ProtectedContent() {
 
   return (
     <SidebarInset className="flex flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
         {(!open || isMobile) && (
           <>
             <SidebarTrigger className="-ml-1" />
@@ -104,45 +119,158 @@ function ProtectedContent() {
           <TableControls workspaceId={projectMatch.params.workspaceId} />
         )}
         {pdfMatch && <PdfViewerControls />}
-        {workspaceId && (
-          <div className="ml-auto flex items-center gap-0.5">
-            {folderState?.hasFolders && (
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          {workspaceId && (
+            <>
+              {folderState?.hasFolders && (
+                <Button
+                  onClick={toggleAllFolders}
+                  size="icon-sm"
+                  title={
+                    folderState.allExpanded
+                      ? t("workspaces.filesystem.collapseAll")
+                      : t("workspaces.filesystem.expandAll")
+                  }
+                  variant="ghost"
+                >
+                  {folderState.allExpanded ? (
+                    <FolderOpenIcon className="size-4" />
+                  ) : (
+                    <FolderIcon className="size-4" />
+                  )}
+                </Button>
+              )}
               <Button
-                onClick={toggleAllFolders}
+                onClick={() => togglePin(workspaceId)}
                 size="icon-sm"
-                title={
-                  folderState.allExpanded
-                    ? t("workspaces.filesystem.collapseAll")
-                    : t("workspaces.filesystem.expandAll")
-                }
+                title={isPinned ? t("common.unpin") : t("common.pin")}
                 variant="ghost"
               >
-                {folderState.allExpanded ? (
-                  <FolderOpenIcon className="size-4" />
+                {isPinned ? (
+                  <PinOffIcon className="size-4" />
                 ) : (
-                  <FolderIcon className="size-4" />
+                  <PinIcon className="size-4" />
                 )}
               </Button>
-            )}
-            <Button
-              onClick={() => togglePin(workspaceId)}
-              size="icon-sm"
-              title={isPinned ? t("common.unpin") : t("common.pin")}
-              variant="ghost"
-            >
-              {isPinned ? (
-                <PinOffIcon className="size-4" />
-              ) : (
-                <PinIcon className="size-4" />
-              )}
-            </Button>
-            <Suspense>
-              <MatterMetadataSheet workspaceId={workspaceId} />
-            </Suspense>
-          </div>
-        )}
+              <Suspense>
+                <MatterMetadataSheet workspaceId={workspaceId} />
+              </Suspense>
+            </>
+          )}
+          {!rightOpen && (
+            <>
+              <Separator className="mx-1 h-4" orientation="vertical" />
+              <Button
+                className="size-7"
+                onClick={toggleRight}
+                size="icon"
+                title="Chat"
+                variant="ghost"
+              >
+                <PanelRightIcon className="size-4" />
+              </Button>
+            </>
+          )}
+        </div>
       </header>
       <Outlet />
     </SidebarInset>
+  );
+}
+
+// -- Right panel (chat mock) --
+
+const RIGHT_PANEL_DEFAULT_WIDTH = 256;
+const RIGHT_PANEL_MIN_WIDTH = 200;
+const RIGHT_PANEL_MAX_WIDTH = 480;
+
+type RightPanelProps = {
+  open: boolean;
+  onToggle: () => void;
+};
+
+function RightPanel({ open, onToggle }: RightPanelProps) {
+  const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
+  const isDragging = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) {
+      return;
+    }
+    const newWidth = window.innerWidth - e.clientX;
+    setWidth(
+      Math.min(
+        RIGHT_PANEL_MAX_WIDTH,
+        Math.max(RIGHT_PANEL_MIN_WIDTH, newWidth),
+      ),
+    );
+  };
+
+  const handlePointerUp = () => {
+    isDragging.current = false;
+  };
+
+  const widthPx = `${width}px`;
+
+  return (
+    <div
+      className="hidden text-sidebar-foreground md:block"
+      data-side="right"
+      data-state={open ? "expanded" : "collapsed"}
+    >
+      {/* Gap element (mirrors left sidebar pattern) */}
+      <div
+        className="relative bg-transparent transition-[width] duration-200 ease-linear"
+        style={{
+          width: open ? widthPx : "0px",
+          ...(isDragging.current && {
+            transition: "none",
+          }),
+        }}
+      />
+      {/* Fixed panel */}
+      <div
+        className="fixed inset-y-0 right-0 z-10 hidden h-svh transition-[right,width] duration-200 ease-linear md:flex"
+        style={{
+          width: widthPx,
+          right: open ? "0" : `${width * -1}px`,
+          ...(isDragging.current && {
+            transition: "none",
+          }),
+        }}
+      >
+        {/* Resize handle */}
+        <div
+          className="absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l hover:bg-border active:bg-border"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        />
+        <div className="flex h-full w-full flex-col bg-sidebar">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
+            <Button
+              className="size-7 text-muted-foreground"
+              onClick={onToggle}
+              size="icon"
+              variant="ghost"
+            >
+              <PanelRightIcon className="size-4" />
+            </Button>
+            <span className="text-sm font-medium">Chat</span>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+            <MessageSquareIcon className="size-8 opacity-30" />
+            <p>Chat will appear here.</p>
+            <p className="text-xs">Ask questions about your matter.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

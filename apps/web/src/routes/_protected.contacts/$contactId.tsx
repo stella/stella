@@ -30,7 +30,7 @@ import {
 import { Skeleton } from "@stella/ui/components/skeleton";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { getMatterSwatch, MATTER_SWATCHES } from "@/components/app-sidebar";
+import { getMatterSwatch, MATTER_SWATCHES } from "@/lib/matter-colors";
 import {
   useDeleteContact,
   useUpdateContact,

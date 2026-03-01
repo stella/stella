@@ -102,13 +102,11 @@ export const useWorkspaceStore = create<State & Actions>()(
     },
     getJustifications: (justificationIds) => {
       const store = get();
+      const map = new Map(store.justifications.map((j) => [j.id, j]));
       const justifications: WorkspaceJustification[] = [];
 
       for (const justificationId of justificationIds) {
-        const justification = store.justifications.find(
-          (j) => j.id === justificationId,
-        );
-
+        const justification = map.get(justificationId);
         if (justification) {
           justifications.push(justification);
         }
@@ -154,13 +152,12 @@ export const useWorkspaceStore = create<State & Actions>()(
       }),
     setFieldData: (props) => {
       set((state) => {
-        for (const data of props) {
-          const entityIndex = state.data.findIndex(
-            (entity) => entity.entityId === data.entityId,
-          );
+        const indexMap = new Map(state.data.map((e, i) => [e.entityId, i]));
 
-          if (entityIndex === -1) {
-            return;
+        for (const data of props) {
+          const entityIndex = indexMap.get(data.entityId);
+          if (entityIndex === undefined) {
+            continue;
           }
 
           if (data.content === null) {

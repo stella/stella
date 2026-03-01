@@ -8,7 +8,6 @@ import {
   EyeIcon,
   FilterIcon,
   HashIcon,
-  PlusIcon,
   SparklesIcon,
   UserIcon,
   XIcon,
@@ -34,12 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stella/ui/components/select";
+import { cn } from "@stella/ui/lib/utils";
 
 import type {
   EntityKind,
   ViewConfig,
   ViewFilterCondition,
-  ViewLayout,
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
@@ -77,39 +76,8 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 
   const { visibleProperties } = view.config;
 
-  const hasControls =
-    filters.length > 0 || sorts.length > 0 || showLayoutControls(view.layout);
-
-  if (!hasControls) {
-    return (
-      <div className="flex items-center gap-1 border-b px-2 py-1">
-        <AddFilterButton
-          onAdd={(filter) =>
-            updateConfig({
-              filters: [...filters, filter],
-            })
-          }
-          properties={properties}
-        />
-        <AddSortButton
-          onAdd={(sort) =>
-            updateConfig({
-              sorts: [...sorts, sort],
-            })
-          }
-          properties={properties}
-        />
-        <PropertiesToggle
-          onChange={(next) => updateConfig({ visibleProperties: next })}
-          properties={properties}
-          visibleProperties={visibleProperties}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1">
+    <div className="flex flex-wrap items-center gap-1 px-2 py-1">
       {filters.map((filter, i) => {
         const filterKey =
           filter.field === "kind" ? `kind-${i}` : `${filter.propertyId}-${i}`;
@@ -132,11 +100,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
         );
       })}
       <AddFilterButton
+        isActive={filters.length > 0}
         onAdd={(filter) => updateConfig({ filters: [...filters, filter] })}
         properties={properties}
       />
-
-      {sorts.length > 0 && <span className="mx-1 h-4 w-px bg-border" />}
 
       {sorts.map((sort, i) => {
         const prop = properties.find((p) => p.id === sort.propertyId);
@@ -155,15 +122,16 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
               updateConfig({ sorts: next });
             }}
             propertyName={prop?.name ?? "Unknown"}
+            propertyType={prop?.content.type}
           />
         );
       })}
       <AddSortButton
+        isActive={sorts.length > 0}
         onAdd={(sort) => updateConfig({ sorts: [...sorts, sort] })}
         properties={properties}
       />
 
-      <span className="mx-1 h-4 w-px bg-border" />
       <PropertiesToggle
         onChange={(next) => updateConfig({ visibleProperties: next })}
         properties={properties}
@@ -184,29 +152,16 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
         </>
       )}
-
-      {view.layout === "gallery" && (
-        <>
-          <span className="mx-1 h-4 w-px bg-border" />
-          <GallerySettingsControl
-            gallery={view.config.gallery ?? { cardFields: [] }}
-            onChange={(gallery) => updateConfig({ gallery })}
-            properties={properties}
-          />
-        </>
-      )}
     </div>
   );
 };
-
-const showLayoutControls = (layout: ViewLayout) =>
-  layout === "kanban" || layout === "gallery";
 
 // -- Filter components --
 
 type AddFilterButtonProps = {
   properties: WorkspaceProperty[];
   onAdd: (filter: ViewFilterCondition) => void;
+  isActive?: boolean;
 };
 
 const filterOps = [
@@ -216,16 +171,24 @@ const filterOps = [
   { value: "is_empty", label: "is empty" },
 ] as const;
 
-const AddFilterButton = ({ properties, onAdd }: AddFilterButtonProps) => {
+const AddFilterButton = ({
+  properties,
+  onAdd,
+  isActive,
+}: AddFilterButtonProps) => {
   const t = useTranslations();
-
   return (
     <Menu>
       <MenuTrigger
-        render={<Button className="gap-1" size="xs" variant="ghost" />}
+        render={
+          <Button
+            className={cn(isActive && "text-primary")}
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
       >
-        <FilterIcon className="size-3" />
-        {t("common.filter")}
+        <FilterIcon className="size-3.5" />
       </MenuTrigger>
       <MenuPopup>
         <MenuItem
@@ -374,18 +337,22 @@ const FilterChip = ({
 type AddSortButtonProps = {
   properties: WorkspaceProperty[];
   onAdd: (sort: { propertyId: string; desc: boolean }) => void;
+  isActive?: boolean;
 };
 
-const AddSortButton = ({ properties, onAdd }: AddSortButtonProps) => {
-  const t = useTranslations();
-
+const AddSortButton = ({ properties, onAdd, isActive }: AddSortButtonProps) => {
   return (
     <Menu>
       <MenuTrigger
-        render={<Button className="gap-1" size="xs" variant="ghost" />}
+        render={
+          <Button
+            className={cn(isActive && "text-primary")}
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
       >
-        <ArrowUpDownIcon className="size-3" />
-        {t("common.sort")}
+        <ArrowUpDownIcon className="size-3.5" />
       </MenuTrigger>
       <MenuPopup>
         {properties.map((prop) => (
@@ -404,18 +371,40 @@ const AddSortButton = ({ properties, onAdd }: AddSortButtonProps) => {
 
 type SortChipProps = {
   propertyName: string;
+  propertyType?: string;
   desc: boolean;
   onToggle: () => void;
   onRemove: () => void;
 };
 
+const getSortChipLabel = (
+  propertyType: string | undefined,
+  desc: boolean,
+): string | null => {
+  switch (propertyType) {
+    case "text":
+    case "single-select":
+    case "multi-select":
+    case "file":
+      return desc ? "Z→A" : "A→Z";
+    case "int":
+      return desc ? "9→1" : "1→9";
+    case "date":
+      return desc ? "↓" : "↑";
+    default:
+      return null;
+  }
+};
+
 const SortChip = ({
   propertyName,
+  propertyType,
   desc,
   onToggle,
   onRemove,
 }: SortChipProps) => {
   const SortIcon = desc ? ArrowDownIcon : ArrowUpIcon;
+  const hint = getSortChipLabel(propertyType, desc);
 
   return (
     <span className="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-xs">
@@ -426,6 +415,7 @@ const SortChip = ({
       >
         <SortIcon className="size-3" />
         {propertyName}
+        {hint && <span className="text-muted-foreground">{hint}</span>}
       </Button>
       <Button
         className="ml-0.5 size-auto rounded p-0.5 hover:bg-muted"
@@ -502,14 +492,6 @@ const KanbanGroupByControl = ({
   );
 };
 
-type GalleryConfig = NonNullable<ViewConfig["gallery"]>;
-
-type GallerySettingsControlProps = {
-  properties: WorkspaceProperty[];
-  gallery: GalleryConfig;
-  onChange: (gallery: GalleryConfig) => void;
-};
-
 type PropertiesToggleProps = {
   properties: WorkspaceProperty[];
   visibleProperties: string[];
@@ -556,11 +538,8 @@ const PropertiesToggle = ({
 
   return (
     <Menu>
-      <MenuTrigger
-        render={<Button className="gap-1" size="xs" variant="ghost" />}
-      >
-        <EyeIcon className="size-3" />
-        {t("common.properties")}
+      <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+        <EyeIcon className="size-3.5" />
       </MenuTrigger>
       <MenuPopup>
         <MenuGroup>
@@ -629,55 +608,5 @@ const PropertiesToggle = ({
         )}
       </MenuPopup>
     </Menu>
-  );
-};
-
-const GallerySettingsControl = ({
-  properties,
-  gallery,
-  onChange,
-}: GallerySettingsControlProps) => {
-  const t = useTranslations();
-
-  return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground">
-        {t("workspaces.views.fields")}
-      </span>
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button className="h-6 gap-1 text-xs" size="xs" variant="ghost" />
-          }
-        >
-          <PlusIcon className="size-3" />
-          {gallery.cardFields.length > 0
-            ? t("workspaces.views.fieldsSelected", {
-                count: gallery.cardFields.length,
-              })
-            : t("workspaces.views.addFields")}
-        </MenuTrigger>
-        <MenuPopup>
-          {properties.map((prop) => {
-            const isSelected = gallery.cardFields.includes(prop.id);
-            return (
-              <MenuItem
-                key={prop.id}
-                onClick={() => {
-                  const next = isSelected
-                    ? gallery.cardFields.filter((id) => id !== prop.id)
-                    : [...gallery.cardFields, prop.id];
-                  onChange({ ...gallery, cardFields: next });
-                }}
-              >
-                <PropertyIcon type={prop.content.type} />
-                <span className="flex-1">{prop.name}</span>
-                {isSelected && <span className="text-primary">{"\u2713"}</span>}
-              </MenuItem>
-            );
-          })}
-        </MenuPopup>
-      </Menu>
-    </span>
   );
 };

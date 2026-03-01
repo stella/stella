@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 import { db, type Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import {
   convertToPdf,
   isConvertibleMimeType,
@@ -227,6 +227,11 @@ export const uploadEntityHandler = async ({
           scanWarnings,
         },
       });
+
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
 
       return resolvedName;
     });

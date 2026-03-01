@@ -6,13 +6,37 @@ import { Button } from "@stella/ui/components/button";
 
 import type { WorkspaceEntity } from "@/lib/types";
 
+export type SortHint = "text" | "date" | "number";
+
 type SortPropertyProps = {
   column: Column<WorkspaceEntity, unknown>;
+  sortHint?: SortHint;
 };
 
-export const SortProperty = ({ column }: SortPropertyProps) => {
-  const t = useTranslations();
+const LABELS: Record<SortHint, { asc: string; desc: string }> = {
+  text: { asc: "A → Z", desc: "Z → A" },
+  number: { asc: "1 → 9", desc: "9 → 1" },
+  // Date labels are filled in at render time from i18n.
+  date: { asc: "", desc: "" },
+};
+
+export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
+  const t = useTranslations("workspaces.properties");
   const disabled = !column.getCanSort();
+
+  let ascLabel: string;
+  let descLabel: string;
+
+  if (!sortHint) {
+    ascLabel = t("sortAscending");
+    descLabel = t("sortDescending");
+  } else if (sortHint === "date") {
+    ascLabel = t("sortAscendingDate");
+    descLabel = t("sortDescendingDate");
+  } else {
+    ascLabel = LABELS[sortHint].asc;
+    descLabel = LABELS[sortHint].desc;
+  }
 
   return (
     <div className="flex flex-col p-1">
@@ -24,7 +48,7 @@ export const SortProperty = ({ column }: SortPropertyProps) => {
         }}
         variant="ghost"
       >
-        <ArrowUpIcon /> {t("workspaces.properties.sortAscending")}
+        <ArrowUpIcon /> {ascLabel}
       </Button>
       <Button
         className="justify-start font-semibold"
@@ -34,8 +58,20 @@ export const SortProperty = ({ column }: SortPropertyProps) => {
         }}
         variant="ghost"
       >
-        <ArrowDownIcon /> {t("workspaces.properties.sortDescending")}
+        <ArrowDownIcon /> {descLabel}
       </Button>
     </div>
   );
+};
+
+/** Map a property content type to a sort hint. */
+export const toSortHint = (contentType: string): SortHint => {
+  switch (contentType) {
+    case "date":
+      return "date";
+    case "int":
+      return "number";
+    default:
+      return "text";
+  }
 };
