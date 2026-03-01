@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Eintrag hinzufügen",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Abrechenbar",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Tag",
     "decimalHours": "({hours}h)",
+    "deleteSelected": "Delete selected",
     "duration": "Dauer",
     "editEntry": "Eintrag bearbeiten",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Eintrag konnte nicht gelöscht werden",
     "failedToSave": "Eintrag konnte nicht gespeichert werden",
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Laden...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Akte",
     "matterRequired": "Bitte wählen Sie eine Akte aus",
     "narrativePlaceholder": "Beschreiben Sie die durchgeführte Arbeit...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Keine Zeiteinträge für diesen Zeitraum",
     "nonBillable": "Nicht abrechenbar",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "Läuft",
+    "selectAll": "Select all",
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Timer starten",
     "statuses": {
+      "all": "All statuses",
       "approved": "Genehmigt",
       "billed": "Abgerechnet",
       "draft": "Entwurf",
@@ -126,7 +172,8 @@
     "timesheets": "Zeiterfassung",
     "today": "Heute",
     "total": "Gesamt",
-    "week": "Woche"
+    "week": "Woche",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",

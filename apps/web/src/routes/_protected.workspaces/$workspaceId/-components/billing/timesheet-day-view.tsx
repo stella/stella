@@ -1,23 +1,30 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
+import { Checkbox } from "@stella/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
 import {
   formatDecimalHours,
   formatMinutes,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyAmount,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
   TimeEntryForm,
   type TimeEntryFormValues,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
+import { TimerControls } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls";
 import {
   useCreateTimeEntry,
   useDeleteTimeEntry,
@@ -37,6 +44,7 @@ export const TimesheetDayView = ({
   const t = useTranslations();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const userId = useRouteContext({
     from: "/_protected",
@@ -60,6 +68,28 @@ export const TimesheetDayView = ({
     () => (entries ?? []).reduce((sum, e) => sum + e.durationMinutes, 0),
     [entries],
   );
+
+  // Compute total billed amount
+  const totalBilledAmount = useMemo(() => {
+    if (!entries) {
+      return 0;
+    }
+    let total = 0;
+    for (const e of entries) {
+      if (e.billable) {
+        total += Math.round((e.billedMinutes / 60) * e.rateAtEntry);
+      }
+    }
+    return total;
+  }, [entries]);
+
+  // Find dominant currency for display
+  const dominantCurrency = useMemo(() => {
+    if (!entries || entries.length === 0) {
+      return DEFAULT_CURRENCY;
+    }
+    return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
+  }, [entries]);
 
   const editingEntry = editingId
     ? entries?.find((e) => e.id === editingId)
@@ -104,6 +134,7 @@ export const TimesheetDayView = ({
         dateWorked: values.dateWorked,
         durationMinutes: values.durationMinutes,
         narrative: values.narrative,
+        invoiceNarrative: values.invoiceNarrative || null,
         billable: values.billable,
         taskCode: values.taskCode || null,
         activityCode: values.activityCode || null,
@@ -136,11 +167,59 @@ export const TimesheetDayView = ({
     );
   };
 
+  const handleStatusChange = (id: string, status: "draft" | "approved") => {
+    updateEntry.mutate(
+      { workspaceId, id, status },
+      {
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleSelect = useCallback((id: string, selected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = () => {
+    if (!entries) {
+      return;
+    }
+    if (selectedIds.size === entries.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(entries.map((e) => e.id)));
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Timer */}
+      <TimerControls workspaceId={workspaceId} />
+
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {entries && entries.length > 0 && (
+            <Checkbox
+              checked={
+                selectedIds.size === entries.length && entries.length > 0
+              }
+              onCheckedChange={handleSelectAll}
+            />
+          )}
           <span className="text-sm font-medium tabular-nums">
             {formatMinutes(totalMinutes)}
           </span>
@@ -149,12 +228,24 @@ export const TimesheetDayView = ({
               hours: formatDecimalHours(totalMinutes),
             })}
           </span>
+          {totalBilledAmount > 0 && (
+            <span className="text-xs font-medium tabular-nums">
+              {formatCurrencyAmount(totalBilledAmount, dominantCurrency)}
+            </span>
+          )}
         </div>
         <Button onClick={() => setFormOpen(true)} size="sm" variant="outline">
           <PlusIcon className="size-4" />
           {t("billing.addEntry")}
         </Button>
       </div>
+
+      {/* Batch actions */}
+      <BatchActionBar
+        onClear={() => setSelectedIds(new Set())}
+        selectedIds={Array.from(selectedIds)}
+        workspaceId={workspaceId}
+      />
 
       {/* Entries list */}
       {entries && entries.length > 0 ? (
@@ -168,6 +259,10 @@ export const TimesheetDayView = ({
               }
               onDelete={handleDelete}
               onEdit={setEditingId}
+              onSelect={handleSelect}
+              onStatusChange={handleStatusChange}
+              selected={selectedIds.has(entry.id)}
+              workspaceId={workspaceId}
             />
           ))}
         </div>
@@ -216,6 +311,7 @@ export const TimesheetDayView = ({
                   dateWorked: editingEntry.dateWorked,
                   durationMinutes: editingEntry.durationMinutes,
                   narrative: editingEntry.narrative,
+                  invoiceNarrative: editingEntry.invoiceNarrative ?? "",
                   billable: editingEntry.billable,
                   taskCode: editingEntry.taskCode ?? "",
                   activityCode: editingEntry.activityCode ?? "",

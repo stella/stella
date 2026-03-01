@@ -167,3 +167,68 @@ export const useStopTimer = () => {
     },
   });
 };
+
+type BatchUpdateVars = {
+  workspaceId: string;
+  ids: string[];
+  action:
+    | "approve"
+    | "revert_to_draft"
+    | "mark_billable"
+    | "mark_non_billable"
+    | "delete";
+};
+
+export const useBatchUpdateTimeEntries = () => {
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).batch.post({
+        queryKey: timeEntriesKeys.all(workspaceId),
+        ...body,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      captureError(posthog, error);
+    },
+  });
+};
+
+type SplitTimeEntryVars = {
+  workspaceId: string;
+  id: string;
+  splits: Array<{ matterId: string; percentage: number }>;
+};
+
+export const useSplitTimeEntry = () => {
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).split.post({
+        queryKey: timeEntriesKeys.all(workspaceId),
+        ...body,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      captureError(posthog, error);
+    },
+  });
+};

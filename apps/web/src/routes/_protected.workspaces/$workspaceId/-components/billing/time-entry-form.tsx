@@ -27,6 +27,7 @@ export type TimeEntryFormValues = {
   dateWorked: string;
   durationMinutes: number;
   narrative: string;
+  invoiceNarrative?: string;
   billable: boolean;
   taskCode?: string;
   activityCode?: string;
@@ -95,6 +96,7 @@ export const TimeEntryForm = ({
       dateWorked: defaultValues?.dateWorked ?? today,
       durationMinutes: defaultValues?.durationMinutes ?? 6,
       narrative: defaultValues?.narrative ?? "",
+      invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
       billable: defaultValues?.billable ?? true,
       taskCode: defaultValues?.taskCode ?? "",
       activityCode: defaultValues?.activityCode ?? "",
@@ -248,6 +250,20 @@ export const TimeEntryForm = ({
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.narrativePlaceholder")}
               rows={3}
+              value={field.state.value}
+            />
+          )}
+        </form.Field>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("billing.invoiceNarrative")}</Label>
+        <form.Field name="invoiceNarrative">
+          {(field) => (
+            <Textarea
+              onChange={(e) => field.handleChange(e.currentTarget.value)}
+              placeholder={t("billing.invoiceNarrativePlaceholder")}
+              rows={2}
               value={field.state.value}
             />
           )}

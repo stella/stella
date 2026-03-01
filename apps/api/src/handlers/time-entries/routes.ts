@@ -1,6 +1,10 @@
 import Elysia from "elysia";
 
 import {
+  batchUpdateBodySchema,
+  batchUpdateHandler,
+} from "@/api/handlers/time-entries/batch-update";
+import {
   createTimeEntryBodySchema,
   createTimeEntryHandler,
 } from "@/api/handlers/time-entries/create";
@@ -9,10 +13,26 @@ import {
   deleteTimeEntryByIdHandler,
 } from "@/api/handlers/time-entries/delete-by-id";
 import {
+  exportCsvHandler,
+  exportCsvQuerySchema,
+} from "@/api/handlers/time-entries/export-csv";
+import {
+  exportLedesHandler,
+  exportLedesQuerySchema,
+} from "@/api/handlers/time-entries/export-ledes";
+import {
+  exportPdfHandler,
+  exportPdfQuerySchema,
+} from "@/api/handlers/time-entries/export-pdf";
+import {
   readTimeEntriesHandler,
   readTimeEntriesQuerySchema,
 } from "@/api/handlers/time-entries/read";
 import { readTimeEntryByIdHandler } from "@/api/handlers/time-entries/read-by-id";
+import {
+  splitEntryBodySchema,
+  splitEntryHandler,
+} from "@/api/handlers/time-entries/split";
 import {
   timerStartBodySchema,
   timerStartHandler,
@@ -110,5 +130,62 @@ export const timeEntriesRoute = new Elysia({
       }),
     {
       invalidateQuery: true,
+    },
+  )
+  .post(
+    "/batch",
+    (ctx) =>
+      batchUpdateHandler({
+        workspaceId: ctx.workspaceId,
+        body: ctx.body,
+      }),
+    {
+      invalidateQuery: true,
+      body: batchUpdateBodySchema,
+    },
+  )
+  .post(
+    "/split",
+    (ctx) =>
+      splitEntryHandler({
+        workspaceId: ctx.workspaceId,
+        body: ctx.body,
+      }),
+    {
+      invalidateQuery: true,
+      body: splitEntryBodySchema,
+    },
+  )
+  .get(
+    "/export/csv",
+    (ctx) =>
+      exportCsvHandler({
+        workspaceId: ctx.workspaceId,
+        query: ctx.query,
+      }),
+    {
+      query: exportCsvQuerySchema,
+    },
+  )
+  .get(
+    "/export/ledes",
+    (ctx) =>
+      exportLedesHandler({
+        workspaceId: ctx.workspaceId,
+        query: ctx.query,
+      }),
+    {
+      query: exportLedesQuerySchema,
+    },
+  )
+  .get(
+    "/export/pdf",
+    (ctx) =>
+      exportPdfHandler({
+        workspaceId: ctx.workspaceId,
+        query: ctx.query,
+      }),
+    {
+      query: exportPdfQuerySchema,
     },
   );

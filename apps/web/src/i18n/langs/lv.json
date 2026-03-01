@@ -40,7 +40,12 @@
   },
   "billing": {
     "addEntry": "Pievienot ierakstu",
+    "amount": "Amount",
+    "approve": "Approve",
+    "approveSelected": "Approve selected",
+    "batchActions": "Batch actions",
     "billable": "Apmaksājams",
+    "billedAmount": "Billed amount",
     "codes": {
       "active": "Active",
       "activity": "Activity",
@@ -56,8 +61,10 @@
     },
     "day": "Diena",
     "decimalHours": "({hours}st.)",
+    "deleteSelected": "Delete selected",
     "duration": "Ilgums",
     "editEntry": "Rediģēt ierakstu",
+    "elapsed": "Elapsed",
     "expenses": {
       "amount": "Amount",
       "categories": {
@@ -76,14 +83,41 @@
       "noExpenses": "No expenses for this period",
       "title": "Expenses"
     },
+    "export": "Export",
+    "exportCSV": "Export CSV",
+    "exportLEDES": "Export LEDES",
+    "exportPDF": "Export PDF",
     "failedToDelete": "Neizdevās dzēst ierakstu",
     "failedToSave": "Neizdevās saglabāt ierakstu",
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
+    "filterStatus": "Filter by status",
+    "invoiceNarrative": "Invoice narrative",
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)",
+    "invoices": {
+      "createInvoice": "Create invoice",
+      "dueDate": "Due date",
+      "invoiceDate": "Invoice date",
+      "invoiceNumber": "Invoice number",
+      "noInvoices": "No invoices yet",
+      "reference": "Reference",
+      "statuses": {
+        "draft": "Draft",
+        "finalized": "Finalized",
+        "paid": "Paid",
+        "sent": "Sent",
+        "void": "Void"
+      },
+      "title": "Invoices",
+      "totalAmount": "Total amount"
+    },
     "loading": "Ielādē...",
+    "markBillableSelected": "Mark billable",
+    "markNonBillableSelected": "Mark non-billable",
     "matter": "Lieta",
     "matterRequired": "Lūdzu, izvēlieties lietu",
     "narrativePlaceholder": "Aprakstiet veikto darbu...",
+    "noActiveTimer": "No active timer",
     "noEntries": "Šim periodam nav laika ierakstu",
     "nonBillable": "Neapmaksājams",
     "rates": {
@@ -111,11 +145,23 @@
       "tableName": "Name",
       "tableNamePlaceholder": "e.g. Standard 2025"
     },
+    "revertToDraft": "Revert to draft",
     "running": "Darbojas",
+    "selectAll": "Select all",
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Select a matter to start timing",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "split": {
+      "addSplit": "Add split",
+      "matter": "Matter",
+      "percentValue": "{value}%",
+      "percentage": "Percentage",
+      "splitEntry": "Split entry",
+      "totalMustBe100": "Percentages must total 100%"
+    },
     "startTimer": "Palaist taimeri",
     "statuses": {
+      "all": "All statuses",
       "approved": "Apstiprināts",
       "billed": "Izrakstīts rēķins",
       "draft": "Melnraksts",
@@ -126,7 +172,8 @@
     "timesheets": "Darba laika uzskaite",
     "today": "Šodien",
     "total": "Kopā",
-    "week": "Nedēļa"
+    "week": "Nedēļa",
+    "writeOff": "Write off"
   },
   "clauses": {
     "addVariant": "Add variant",

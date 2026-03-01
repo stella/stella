@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
+  invoiceStatusEnum,
   propertyStatusEnum,
   relations,
   timeEntrySourceEnum,
@@ -20,6 +21,7 @@ export const db = drizzle(env.DATABASE_URL, {
     propertyStatusEnum,
     timeEntryStatusEnum,
     timeEntrySourceEnum,
+    invoiceStatusEnum,
   },
 });
 

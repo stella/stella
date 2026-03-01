@@ -43,7 +43,12 @@ type Messages = {
   };
   "billing": {
     "addEntry": "Add entry";
+    "amount": "Amount";
+    "approve": "Approve";
+    "approveSelected": "Approve selected";
+    "batchActions": "Batch actions";
     "billable": "Billable";
+    "billedAmount": "Billed amount";
     "codes": {
       "active": "Active";
       "activity": "Activity";
@@ -59,8 +64,10 @@ type Messages = {
     };
     "day": "Day";
     "decimalHours": "({hours}h)";
+    "deleteSelected": "Delete selected";
     "duration": "Duration";
     "editEntry": "Edit entry";
+    "elapsed": "Elapsed";
     "expenses": {
       "amount": "Amount";
       "categories": {
@@ -79,14 +86,41 @@ type Messages = {
       "noExpenses": "No expenses for this period";
       "title": "Expenses";
     };
+    "export": "Export";
+    "exportCSV": "Export CSV";
+    "exportLEDES": "Export LEDES";
+    "exportPDF": "Export PDF";
     "failedToDelete": "Failed to delete entry";
     "failedToSave": "Failed to save entry";
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
+    "filterStatus": "Filter by status";
+    "invoiceNarrative": "Invoice narrative";
+    "invoiceNarrativePlaceholder": "Client-facing description (optional)";
+    "invoices": {
+      "createInvoice": "Create invoice";
+      "dueDate": "Due date";
+      "invoiceDate": "Invoice date";
+      "invoiceNumber": "Invoice number";
+      "noInvoices": "No invoices yet";
+      "reference": "Reference";
+      "statuses": {
+        "draft": "Draft";
+        "finalized": "Finalized";
+        "paid": "Paid";
+        "sent": "Sent";
+        "void": "Void";
+      };
+      "title": "Invoices";
+      "totalAmount": "Total amount";
+    };
     "loading": "Loading...";
+    "markBillableSelected": "Mark billable";
+    "markNonBillableSelected": "Mark non-billable";
     "matter": "Matter";
     "matterRequired": "Please select a matter";
     "narrativePlaceholder": "Describe the work performed...";
+    "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
     "rates": {
@@ -114,11 +148,23 @@ type Messages = {
       "tableName": "Name";
       "tableNamePlaceholder": "e.g. Standard 2025";
     };
+    "revertToDraft": "Revert to draft";
     "running": "Running";
+    "selectAll": "Select all";
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}";
+    "split": {
+      "addSplit": "Add split";
+      "matter": "Matter";
+      "percentValue": "{value}%";
+      "percentage": "Percentage";
+      "splitEntry": "Split entry";
+      "totalMustBe100": "Percentages must total 100%";
+    };
     "startTimer": "Start timer";
     "statuses": {
+      "all": "All statuses";
       "approved": "Approved";
       "billed": "Billed";
       "draft": "Draft";
@@ -130,6 +176,7 @@ type Messages = {
     "today": "Today";
     "total": "Total";
     "week": "Week";
+    "writeOff": "Write off";
   };
   "clauses": {
     "addVariant": "Add variant";

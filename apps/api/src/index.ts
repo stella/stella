@@ -14,6 +14,7 @@ import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
+import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
@@ -86,6 +87,7 @@ const api = new Elysia()
       .use(billingCodesRoute)
       .use(ratesRoute)
       .use(expensesRoute)
+      .use(invoicesRoute)
       .use(organizationSettingsRoute)
       .use(clauseCategoriesRoute)
       .use(clausesRoute)
