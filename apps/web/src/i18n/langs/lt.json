@@ -271,6 +271,7 @@
     "edit": "Redaguoti",
     "email": "Email",
     "empty": "Tuščia",
+    "enterKey": "↵",
     "filter": "Filtras",
     "invite": "Pakviesti",
     "kind": "Rūšis",
@@ -556,6 +557,31 @@
     "settings": "Organizacijos nustatymai",
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
     "title": "Organizacija"
+  },
+  "rightPanel": {
+    "askAboutMatter": "Ask questions about your matter.",
+    "chatPlaceholder": "Chat will appear here.",
+    "title": "Chat"
+  },
+  "search": {
+    "emptyState": "Start typing to search across all matters.",
+    "escKey": "ESC",
+    "facets": {
+      "kind": "Kind",
+      "workspace": "Workspace"
+    },
+    "filterLabel": "{type}:",
+    "kinds": {
+      "document": "Document",
+      "folder": "Folder",
+      "message": "Message",
+      "task": "Task"
+    },
+    "loadMore": "Load more",
+    "metaSeparator": "{workspace} · {time}",
+    "noResults": "No results found for \"{query}\".",
+    "placeholder": "Search across all matters...",
+    "resultCount": "{count, plural, one {# result} other {# results}}"
   },
   "success": {
     "clientUpdated": "Klientas atnaujintas",

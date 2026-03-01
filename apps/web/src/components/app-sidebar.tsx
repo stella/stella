@@ -49,7 +49,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stella/ui/components/combobox";
-import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
 import { Input } from "@stella/ui/components/input";
 import {
   Menu,
@@ -73,6 +72,7 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
+import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -1129,25 +1129,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         </SidebarMenu>
       </SidebarFooter>
 
-      {/* Search dialog (mock) */}
-      <Dialog onOpenChange={setSearchOpen} open={searchOpen}>
-        <DialogPopup className="max-w-xl" showCloseButton={false}>
-          <div className="flex items-center gap-3 border-b px-4 py-3">
-            <SearchIcon className="size-5 shrink-0 text-muted-foreground" />
-            <Input
-              autoFocus
-              className="flex-1 border-0 bg-transparent text-sm shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
-              placeholder={t("navigation.searchPlaceholder")}
-            />
-            <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
-              {"ESC"}
-            </kbd>
-          </div>
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {t("navigation.searchEmptyState")}
-          </div>
-        </DialogPopup>
-      </Dialog>
+      <SearchDialog onOpenChange={setSearchOpen} open={searchOpen} />
     </Sidebar>
   );
 }

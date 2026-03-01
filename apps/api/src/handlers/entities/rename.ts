@@ -6,6 +6,8 @@ import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const renameEntityBodySchema = t.Object({
   entityId: tNanoid,
@@ -42,6 +44,8 @@ export const renameEntityHandler = async ({
     .update(entities)
     .set({ name: body.name, updatedAt: new Date() })
     .where(eq(entities.id, body.entityId));
+
+  getSearchProvider().indexEntity(body.entityId).catch(captureError);
 
   return { entityId: body.entityId };
 };

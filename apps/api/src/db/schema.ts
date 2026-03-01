@@ -520,6 +520,36 @@ export const templateVersions = p.pgTable(
   ],
 );
 
+// -- Search --
+
+export const searchDocuments = p.pgTable(
+  "search_documents",
+  {
+    entityId: p
+      .varchar("entity_id", { length: 21 })
+      .primaryKey()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    organizationId: p
+      .varchar("organization_id", { length: 128 })
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: p
+      .varchar("workspace_id", { length: 21 })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    kind: entityKindEnum().notNull(),
+    title: p.text().notNull().default(""),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("search_documents_org_id_idx").on(table.organizationId),
+    p
+      .index("search_documents_org_workspace_idx")
+      .on(table.organizationId, table.workspaceId),
+  ],
+);
+
 // -- Views --
 
 export const views = p.pgTable(
@@ -978,6 +1008,7 @@ export const relations = defineRelations(
     clauseVariants,
     clauseVersions,
     templateClauses,
+    searchDocuments,
   },
   (r) => ({
     contacts: {
@@ -1120,6 +1151,10 @@ export const relations = defineRelations(
       createdByUser: r.one.user({
         from: r.entities.createdBy,
         to: r.user.id,
+      }),
+      searchDocument: r.one.searchDocuments({
+        from: r.entities.id,
+        to: r.searchDocuments.entityId,
       }),
     },
     entityVersions: {
@@ -1286,6 +1321,16 @@ export const relations = defineRelations(
       clauseVersion: r.one.clauseVersions({
         from: r.templateClauses.clauseVersionId,
         to: r.clauseVersions.id,
+      }),
+    },
+    searchDocuments: {
+      entity: r.one.entities({
+        from: r.searchDocuments.entityId,
+        to: r.entities.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.searchDocuments.workspaceId,
+        to: r.workspaces.id,
       }),
     },
   }),

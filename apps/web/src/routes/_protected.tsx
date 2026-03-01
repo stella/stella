@@ -190,6 +190,7 @@ type RightPanelProps = {
 };
 
 function RightPanel({ open, onToggle }: RightPanelProps) {
+  const t = useTranslations();
   const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
   const isDragging = useRef(false);
 
@@ -262,12 +263,12 @@ function RightPanel({ open, onToggle }: RightPanelProps) {
             >
               <PanelRightIcon className="size-4" />
             </Button>
-            <span className="text-sm font-medium">Chat</span>
+            <span className="text-sm font-medium">{t("rightPanel.title")}</span>
           </div>
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
             <MessageSquareIcon className="size-8 opacity-30" />
-            <p>Chat will appear here.</p>
-            <p className="text-xs">Ask questions about your matter.</p>
+            <p>{t("rightPanel.chatPlaceholder")}</p>
+            <p className="text-xs">{t("rightPanel.askAboutMatter")}</p>
           </div>
         </div>
       </div>

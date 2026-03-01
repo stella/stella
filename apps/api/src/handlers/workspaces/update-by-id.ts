@@ -22,6 +22,8 @@ type UpdateWorkspaceHandlerProps = {
   body: UpdateWorkspaceBodySchema;
 };
 
+// Workspace name is fetched via JOIN at search time;
+// no reindex needed on rename.
 export const updateWorkspaceHandler = async ({
   workspaceId,
   organizationId,

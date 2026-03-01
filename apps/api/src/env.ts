@@ -26,6 +26,7 @@ export const env = createEnv({
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
+    SEARCH_PROVIDER: v.optional(v.picklist(["pg-fts", "paradedb"]), "pg-fts"),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,

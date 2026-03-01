@@ -271,6 +271,7 @@
     "edit": "Editar",
     "email": "Email",
     "empty": "Vacío",
+    "enterKey": "↵",
     "filter": "Filtro",
     "invite": "Invitar",
     "kind": "Tipo",
@@ -556,6 +557,31 @@
     "settings": "Configuración de la organización",
     "settingsDescription": "Edite el nombre y el slug de su organización",
     "title": "Organización"
+  },
+  "rightPanel": {
+    "askAboutMatter": "Ask questions about your matter.",
+    "chatPlaceholder": "Chat will appear here.",
+    "title": "Chat"
+  },
+  "search": {
+    "emptyState": "Start typing to search across all matters.",
+    "escKey": "ESC",
+    "facets": {
+      "kind": "Kind",
+      "workspace": "Workspace"
+    },
+    "filterLabel": "{type}:",
+    "kinds": {
+      "document": "Document",
+      "folder": "Folder",
+      "message": "Message",
+      "task": "Task"
+    },
+    "loadMore": "Load more",
+    "metaSeparator": "{workspace} · {time}",
+    "noResults": "No results found for \"{query}\".",
+    "placeholder": "Search across all matters...",
+    "resultCount": "{count, plural, one {# result} other {# results}}"
   },
   "success": {
     "clientUpdated": "Cliente actualizado",

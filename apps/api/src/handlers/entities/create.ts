@@ -9,6 +9,8 @@ import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const createEntityBodySchema = t.Object({
   kind: t.Optional(entityKindSchema),
@@ -78,7 +80,7 @@ const validateParentId = async (
   return null;
 };
 
-export const createEntitiesHandler = ({
+export const createEntitiesHandler = async ({
   workspaceId,
   userId,
   body,
@@ -87,7 +89,7 @@ export const createEntitiesHandler = ({
   const kind = body.kind;
   const name = body.name ?? null;
 
-  return db.transaction(async (tx) => {
+  const txResult = await db.transaction(async (tx) => {
     const limitResult = await checkEntityLimit(tx, workspaceId);
     if (Result.isError(limitResult)) {
       return status(400, {
@@ -129,4 +131,10 @@ export const createEntitiesHandler = ({
 
     return { entityId };
   });
+
+  if (txResult && typeof txResult === "object" && "entityId" in txResult) {
+    getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+  }
+
+  return txResult;
 };
