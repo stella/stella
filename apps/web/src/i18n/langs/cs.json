@@ -218,6 +218,13 @@
     "week": "Týden",
     "writeOff": "Write off"
   },
+  "chat": {
+    "deleteThread": "Delete conversation",
+    "greeting": "How can I help you today?",
+    "newChat": "New chat",
+    "noThreads": "No conversations yet",
+    "threads": "Conversations"
+  },
   "clauses": {
     "addVariant": "Add variant",
     "allClauses": "All clauses",

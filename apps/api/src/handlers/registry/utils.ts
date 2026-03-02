@@ -28,12 +28,19 @@ export const createUserError = (
 // biome-ignore lint/suspicious/noExplicitAny: it's fine
 type AnyActorContext = ActorContext<any, any, any, any, any, any>;
 
-export const broadcastEvent = (c: AnyActorContext, event: ActorEvent) =>
+/** Context with a broadcast method. Accepts any actor context (including chat). */
+type BroadcastCapableContext = Pick<AnyActorContext, "broadcast">;
+
+export const broadcastEvent = (c: BroadcastCapableContext, event: ActorEvent) =>
   c.broadcast(event.name, event.data);
 
 export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
+};
+
+export type UserActorConnState = GlobalActorConnState & {
+  userId: string;
 };
 
 export type ActorConnState = GlobalActorConnState & {
@@ -57,6 +64,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   const parsedKey = parseActorKey<{
     organizationId: string;
     workspaceId: string | undefined;
+    userId: string | undefined;
   }>(key);
 
   if (parsedKey.organizationId !== activeOrganizationId) {
@@ -73,6 +81,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   return {
     authToken,
     activeOrganizationId,
+    sessionUserId: session.user.id,
     parsedKey,
   };
 };
@@ -89,6 +98,28 @@ export const validateGlobalActorSession = async (
   return {
     authToken,
     organizationId: toSafeId<"organization">(activeOrganizationId),
+  };
+};
+
+export const validateUserActorSession = async (
+  key: string[],
+  params: unknown,
+): Promise<UserActorConnState> => {
+  const { authToken, activeOrganizationId, sessionUserId, parsedKey } =
+    await validateActorAuth(key, params);
+
+  if (!parsedKey.userId) {
+    throw createUserError("invalid-arguments");
+  }
+
+  if (parsedKey.userId !== sessionUserId) {
+    throw createUserError("forbidden");
+  }
+
+  return {
+    authToken,
+    organizationId: toSafeId<"organization">(activeOrganizationId),
+    userId: parsedKey.userId,
   };
 };
 

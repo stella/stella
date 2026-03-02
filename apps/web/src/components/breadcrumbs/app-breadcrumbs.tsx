@@ -95,6 +95,11 @@ export const AppBreadcrumbs = () => {
           </BreadcrumbLink>
         );
       },
+      [serializeKey(["/chat"])]: () => {
+        return (
+          <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>
+        );
+      },
     }),
     [t],
   );

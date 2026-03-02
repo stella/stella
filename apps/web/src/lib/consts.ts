@@ -9,4 +9,7 @@ export const STALE_TIME = {
   FIVE: {
     MINUTES: 5 * 60 * 1000,
   },
+  FIVETEEN: {
+    MINUTES: 15 * 60 * 1000,
+  },
 };

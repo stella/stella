@@ -305,6 +305,13 @@ type Messages = {
     "selectFile": "Select JSON file";
     "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
   };
+  "chat": {
+    "deleteThread": "Delete conversation";
+    "greeting": "How can I help you today?";
+    "newChat": "New chat";
+    "noThreads": "No conversations yet";
+    "threads": "Conversations";
+  };
   "common": {
     "accept": "Accept";
     "actions": "Actions";
