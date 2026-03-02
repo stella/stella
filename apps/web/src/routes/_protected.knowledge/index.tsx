@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  BarChart3Icon,
   BotIcon,
   LayoutTemplateIcon,
   LightbulbIcon,
@@ -16,14 +17,21 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 });
 
 type Section = {
-  key: "templates" | "clauses" | "skills" | "agents" | "connectors";
+  key:
+    | "templates"
+    | "clauses"
+    | "analytics"
+    | "skills"
+    | "agents"
+    | "connectors";
   icon: LucideIcon;
-  to?: "/knowledge/templates" | "/knowledge/clauses";
+  to?: "/knowledge/templates" | "/knowledge/clauses" | "/knowledge/analytics";
 };
 
 const sections: Section[] = [
   { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
   { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
+  { key: "analytics", icon: BarChart3Icon, to: "/knowledge/analytics" },
   { key: "skills", icon: LightbulbIcon },
   { key: "agents", icon: BotIcon },
   { key: "connectors", icon: PlugIcon },

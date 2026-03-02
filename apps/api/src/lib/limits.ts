@@ -32,6 +32,12 @@ export const LIMITS = {
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   extractedContentMaxChars: 500_000,
+  clauseExportLimit: 500,
+  clauseImportBatchLimit: 200,
+  analyticsTopTemplatesLimit: 20,
+  analyticsFillsByUserLimit: 100,
+  analyticsFillsByPeriodLimit: 400,
+  templateFillsRetentionDays: 365,
 } as const;
 
 /**

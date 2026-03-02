@@ -21,6 +21,7 @@ import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { registry } from "@/api/handlers/registry";
 import { searchRoute } from "@/api/handlers/search/routes";
+import { templateAnalyticsRoute } from "@/api/handlers/template-analytics/routes";
 import {
   templateCategoriesRoute,
   templatesRoute,
@@ -100,6 +101,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(searchRoute)
       .use(analyticsRoute)
+      .use(templateAnalyticsRoute)
       .use(devRoute),
   );
 

@@ -10,13 +10,13 @@ type Messages = {
     "hoursByMatter": "Hours by matter";
     "hoursByPeriod": "Hours by period";
     "hoursByUser": "Hours by user";
+    "invalidDateRange": "Start date is after end date";
     "last30Days": "Last 30 days";
     "last7Days": "Last 7 days";
     "last90Days": "Last 90 days";
     "matter": "Matter";
     "noData": "No data for this period";
     "revenueByPeriod": "Revenue by period";
-    "invalidDateRange": "Start date is after end date";
     "thisMonth": "This month";
     "title": "Analytics";
     "totalHours": "Total hours";
@@ -83,8 +83,10 @@ type Messages = {
       "task": "Task";
       "taskCode": "Task code";
     };
+    "date": "Date";
     "day": "Day";
     "decimalHours": "({hours}h)";
+    "description": "Description";
     "deleteSelected": "Delete selected";
     "duration": "Duration";
     "editEntry": "Edit entry";
@@ -116,15 +118,32 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";
     "invoiceNarrativePlaceholder": "Client-facing description (optional)";
     "invoices": {
+      "addEntries": "Add entries";
+      "back": "Back";
+      "confirmDelete": "This will permanently delete this draft invoice and unlink all entries. This action cannot be undone.";
+      "confirmVoid": "Voiding this invoice will unlink all time entries and expenses, reverting them to their previous status.";
       "createInvoice": "Create invoice";
+      "delete": "Delete";
       "dueDate": "Due date";
+      "editInvoice": "Edit invoice";
+      "finalize": "Finalize";
       "invoiceDate": "Invoice date";
+      "invoiceDetail": "Invoice detail";
       "invoiceNumber": "Invoice number";
+      "linkedExpenses": "Linked expenses";
+      "linkedTimeEntries": "Linked time entries";
+      "markPaid": "Mark paid";
+      "noEntries": "No entries linked to this invoice";
       "noInvoices": "No invoices yet";
+      "paidAt": "Paid at";
       "reference": "Reference";
+      "removeEntries": "Remove entries";
+      "revertToDraft": "Revert to draft";
+      "send": "Send";
       "statuses": {
         "draft": "Draft";
         "finalized": "Finalized";
@@ -134,12 +153,15 @@ type Messages = {
       };
       "title": "Invoices";
       "totalAmount": "Total amount";
+      "totalEntries": "{count, plural, one {# entry} other {# entries}}";
+      "void": "Void";
     };
     "loading": "Loading...";
     "markBillableSelected": "Mark billable";
     "markNonBillableSelected": "Mark non-billable";
     "matter": "Matter";
     "matterRequired": "Please select a matter";
+    "narrative": "Narrative";
     "narrativePlaceholder": "Describe the work performed...";
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
@@ -270,6 +292,18 @@ type Messages = {
     "variants": "Variants";
     "version": "Version {version}";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "selectVersionToCompare": "Select a version to compare with current";
+    "compareWithCurrent": "Compared with current version";
+    "noChanges": "No changes";
+    "export": "Export";
+    "exportFailed": "Failed to export clauses";
+    "import": "Import";
+    "importing": "Importing…";
+    "importFailed": "Failed to import clauses";
+    "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
+    "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
+    "selectFile": "Select JSON file";
+    "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
   };
   "common": {
     "accept": "Accept";
@@ -300,9 +334,14 @@ type Messages = {
     "invite": "Invite";
     "kind": "Kind";
     "language": "Language";
+    "loadMore": "Load more";
     "matters": "Matters";
+    "confirm": "Confirm";
+    "confirmAction": "Are you sure?";
+    "error": "Error";
     "metadata": "Metadata";
     "name": "Name";
+    "notes": "Notes";
     "newRow": "New row";
     "open": "Open";
     "pin": "Pin";
@@ -321,6 +360,7 @@ type Messages = {
     "settings": "Settings";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
+    "status": "Status";
     "tryAgain": "Try again";
     "type": "Type";
     "uncategorized": "Uncategorized";
@@ -481,6 +521,10 @@ type Messages = {
         "description": "Autonomous agents for legal workflows";
         "title": "Agents";
       };
+      "analytics": {
+        "description": "Template usage and fill statistics";
+        "title": "Analytics";
+      };
       "clauses": {
         "description": "Reusable clause library";
         "title": "Clauses";
@@ -509,6 +553,7 @@ type Messages = {
     "expenses": "Expenses";
     "inbox": "Inbox";
     "invitations": "Invitations";
+    "invoices": "Invoices";
     "knowledge": "Knowledge";
     "members": "Members";
     "newMatter": "New matter";
@@ -636,6 +681,23 @@ type Messages = {
     "partyRemoved": "Party removed";
     "roleUpdated": "Role updated";
     "workspaceDeletedSuccessfully": "Matter deleted successfully";
+  };
+  "templateAnalytics": {
+    "title": "Template Analytics";
+    "totalFills": "Total fills";
+    "uniqueTemplates": "Templates used";
+    "pdfRatio": "PDF exports";
+    "errorRate": "Error rate";
+    "fillsByPeriod": "Fills over time";
+    "topTemplates": "Most used templates";
+    "fillsByUser": "Fills by user";
+    "template": "Template";
+    "user": "User";
+    "fills": "Fills";
+    "noData": "No data for this period";
+    "last7Days": "7 days";
+    "last30Days": "30 days";
+    "last90Days": "90 days";
   };
   "templates": {
     "addItem": "Add item";

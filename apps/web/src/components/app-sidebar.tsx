@@ -13,6 +13,7 @@ import {
   ChevronsUpDownIcon,
   ClockIcon,
   EllipsisVerticalIcon,
+  FileTextIcon,
   GlobeIcon,
   InboxIcon,
   LayersIcon,
@@ -946,6 +947,29 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 >
                   <BarChart3Icon />
                   <span>{t("navigation.analytics")}</span>
+                </SidebarMenuButton>
+              )}
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              {currentWorkspaceId ? (
+                <SidebarMenuButton asChild tooltip={t("navigation.invoices")}>
+                  <Link
+                    params={{
+                      workspaceId: currentWorkspaceId,
+                    }}
+                    to="/workspaces/$workspaceId/invoices"
+                  >
+                    <FileTextIcon />
+                    <span>{t("navigation.invoices")}</span>
+                  </Link>
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton
+                  onClick={comingSoon}
+                  tooltip={t("navigation.invoices")}
+                >
+                  <FileTextIcon />
+                  <span>{t("navigation.invoices")}</span>
                 </SidebarMenuButton>
               )}
             </SidebarMenuItem>

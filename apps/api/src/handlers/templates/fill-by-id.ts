@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { status, t } from "elysia";
 
 import { db } from "@/api/db";
+import { templateFills } from "@/api/db/schema";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -29,6 +30,7 @@ const PDF_MIME_TYPE = "application/pdf";
 
 type FillByIdProps = {
   organizationId: SafeId<"organization">;
+  userId: string;
   templateId: string;
   body: { values: string };
   query: { format?: "docx" | "pdf" };
@@ -36,6 +38,7 @@ type FillByIdProps = {
 
 export const fillByIdHandler = async ({
   organizationId,
+  userId,
   templateId,
   body: { values: valuesJson },
   query: { format = "docx" },
@@ -89,6 +92,25 @@ export const fillByIdHandler = async ({
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
   const result = await fillTemplate(buffer, parsed as TemplateData);
+
+  const fillStatus =
+    result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+
+  // Best-effort analytics; don't block the download
+  db.insert(templateFills)
+    .values({
+      organizationId,
+      templateId,
+      userId,
+      format,
+      status: fillStatus,
+      unmatchedCount: result.unmatchedPlaceholders.length,
+      unusedCount: result.unusedValues.length,
+      structureErrors:
+        result.structureErrors.length > 0 ? result.structureErrors : null,
+    })
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
+    .catch(() => {});
 
   const baseName = sanitizeFilename(template.fileName);
 

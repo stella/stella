@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeftIcon,
+  Loader2Icon,
   MoreHorizontalIcon,
   PlusIcon,
   Trash2Icon,
@@ -36,10 +37,16 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stella/ui/components/tabs";
 import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
+import { cn } from "@stella/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
+import {
+  diffClauseBodies,
+  type ParagraphDiff,
+} from "@/routes/_protected.knowledge/-components/clause-diff";
+import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 
@@ -363,7 +370,11 @@ const DetailContent = ({
         </TabsPanel>
 
         <TabsPanel value="history">
-          <HistoryTab versions={detail.versions} />
+          <HistoryTab
+            clauseId={clauseId}
+            currentBody={detail.body}
+            versions={detail.versions}
+          />
         </TabsPanel>
       </Tabs>
     </div>
@@ -630,9 +641,66 @@ const VariantFormDialog = ({
 
 // ── History Tab ──────────────────────────────────────
 
-const HistoryTab = ({ versions }: { versions: VersionItem[] }) => {
+const HistoryTab = ({
+  clauseId,
+  currentBody,
+  versions,
+}: {
+  clauseId: string;
+  currentBody: ClauseParagraph[];
+  versions: VersionItem[];
+}) => {
   const t = useTranslations();
   const format = useFormatter();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [diffResult, setDiffResult] = useState<ParagraphDiff[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleVersionClick = useCallback(
+    async (versionId: string) => {
+      if (selectedId === versionId) {
+        setSelectedId(null);
+        setDiffResult(null);
+        return;
+      }
+
+      setSelectedId(versionId);
+      setLoading(true);
+      setDiffResult(null);
+
+      const response = await api
+        .clauses({ clauseId })
+        .versions({ versionId })
+        .get();
+
+      setLoading(false);
+
+      if (response.error) {
+        toastManager.add({
+          type: "error",
+          title: t("clauses.loadFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        setSelectedId(null);
+        return;
+      }
+
+      const data = response.data;
+      if (data instanceof Response) {
+        setSelectedId(null);
+        return;
+      }
+
+      // SAFETY: body is ClauseParagraph[] stored as JSONB
+      const oldBody = data.body as unknown as ClauseParagraph[];
+      const diff = diffClauseBodies(oldBody, currentBody);
+      setDiffResult(diff);
+    },
+    [clauseId, currentBody, selectedId, t],
+  );
 
   if (versions.length === 0) {
     return (
@@ -643,27 +711,61 @@ const HistoryTab = ({ versions }: { versions: VersionItem[] }) => {
   }
 
   return (
-    <div className="mt-4 rounded-lg border">
-      <ul className="divide-y">
-        {versions.map((ver) => (
-          <li
-            className="flex items-center justify-between px-4 py-3 text-sm"
-            key={ver.id}
-          >
-            <span className="font-medium">
-              {t("clauses.version", {
-                version: String(ver.version),
-              })}
-            </span>
-            <span className="text-muted-foreground">
-              {format.dateTime(new Date(ver.createdAt), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </span>
-          </li>
-        ))}
-      </ul>
+    <div className="mt-4 space-y-4">
+      <p className="text-sm text-muted-foreground">
+        {t("clauses.selectVersionToCompare")}
+      </p>
+      <div className="rounded-lg border">
+        <ul className="divide-y">
+          {versions.map((ver) => (
+            <li key={ver.id}>
+              <button
+                className={cn(
+                  "flex w-full items-center justify-between",
+                  "px-4 py-3 text-sm transition-colors",
+                  "hover:bg-muted/50",
+                  selectedId === ver.id && "bg-muted",
+                )}
+                onClick={() => handleVersionClick(ver.id)}
+                type="button"
+              >
+                <span className="font-medium">
+                  {t("clauses.version", {
+                    version: String(ver.version),
+                  })}
+                </span>
+                <span className="text-muted-foreground">
+                  {format.dateTime(new Date(ver.createdAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-4">
+          <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {diffResult && (
+        <div className="rounded-lg border p-4">
+          <h4 className="mb-3 text-sm font-medium">
+            {t("clauses.compareWithCurrent")}
+          </h4>
+          {diffResult.every((d) => d.status === "equal") ? (
+            <p className="text-sm text-muted-foreground">
+              {t("clauses.noChanges")}
+            </p>
+          ) : (
+            <ClauseDiffView diffs={diffResult} />
+          )}
+        </div>
+      )}
     </div>
   );
 };

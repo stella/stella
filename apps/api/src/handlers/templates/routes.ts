@@ -81,6 +81,7 @@ export const templatesRoute = new Elysia({
     (ctx) =>
       fillHandler({
         organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
         body: ctx.body,
         query: ctx.query,
       }),
@@ -142,6 +143,7 @@ export const templatesRoute = new Elysia({
     (ctx) =>
       fillByIdHandler({
         organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
         templateId: ctx.params.templateId,
         body: ctx.body,
         query: ctx.query,

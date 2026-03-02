@@ -100,6 +100,7 @@ const DOCX_MIME =
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const fakeOrgId = "org_test" as SafeId<"organization">;
+const fakeUserId = "user_test";
 
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
@@ -474,6 +475,7 @@ describe("handler MIME validation", () => {
   test("fill rejects non-DOCX file", async () => {
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file: pdfFile, values: "{}" },
     });
@@ -514,6 +516,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file, values: "not json{" },
     });
@@ -530,6 +533,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file, values: "[1, 2, 3]" },
     });
@@ -546,6 +550,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file, values: "null" },
     });
@@ -562,6 +567,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file, values: '{"name": null}' },
     });
@@ -578,6 +584,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: {
         file,
@@ -603,6 +610,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: { file, values: JSON.stringify({ name: "Alice" }) },
     });
@@ -621,6 +629,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: {
         file,
@@ -642,6 +651,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      userId: fakeUserId,
       query: {},
       body: {
         file,

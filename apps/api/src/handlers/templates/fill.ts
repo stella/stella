@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { db } from "@/api/db";
+import { templateFills } from "@/api/db/schema";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
@@ -25,6 +27,7 @@ const PDF_MIME_TYPE = "application/pdf";
 
 type FillProps = {
   organizationId: SafeId<"organization">;
+  userId: string;
   body: { file: File; values: string };
   query: { format?: "docx" | "pdf" };
 };
@@ -43,6 +46,8 @@ export const containsNull = (value: unknown): boolean => {
 };
 
 export const fillHandler = async ({
+  organizationId,
+  userId,
   body: { file, values: valuesJson },
   query: { format = "docx" },
 }: FillProps) => {
@@ -90,6 +95,24 @@ export const fillHandler = async ({
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
   const result = await fillTemplate(buffer, parsed as TemplateData);
+
+  const fillStatus =
+    result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+
+  // Best-effort analytics; don't block the download
+  db.insert(templateFills)
+    .values({
+      organizationId,
+      userId,
+      format,
+      status: fillStatus,
+      unmatchedCount: result.unmatchedPlaceholders.length,
+      unusedCount: result.unusedValues.length,
+      structureErrors:
+        result.structureErrors.length > 0 ? result.structureErrors : null,
+    })
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
+    .catch(() => {});
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {

@@ -262,6 +262,7 @@ function RouteComponent() {
         }
         onLoadMore={handleLoadMore}
         onNewClause={() => setCreateOpen(true)}
+        onRefresh={handleRefresh}
         onSearch={handleSearch}
         selectedCategoryId={selectedCategory}
       />

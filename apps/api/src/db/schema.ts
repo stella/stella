@@ -834,6 +834,15 @@ export const invoiceStatusEnum = p.pgEnum("invoice_status", [
   "paid",
   "void",
 ]);
+export type InvoiceStatus = (typeof invoiceStatusEnum)["enumValues"][number];
+
+export const INVOICE_STATUS = {
+  DRAFT: "draft",
+  FINALIZED: "finalized",
+  SENT: "sent",
+  PAID: "paid",
+  VOID: "void",
+} as const satisfies Record<string, InvoiceStatus>;
 
 export const invoices = p.pgTable(
   "invoices",
@@ -855,6 +864,7 @@ export const invoices = p.pgTable(
     currency: p.varchar({ length: 3 }).notNull(),
     totalAmount: p.integer("total_amount").notNull().default(0),
     notes: p.text(),
+    paidAt: p.timestamp("paid_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1064,6 +1074,45 @@ export const templateClauses = p.pgTable(
   ],
 );
 
+// -- Template Fills (analytics) --
+
+export const templateFills = p.pgTable(
+  "template_fills",
+  {
+    id: pNanoid.primaryKey(),
+    organizationId: p
+      .varchar("organization_id", { length: 128 })
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateId: p
+      .varchar("template_id", { length: 21 })
+      .references(() => templates.id, { onDelete: "set null" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    format: p.text().notNull(),
+    status: p.text().notNull(),
+    unmatchedCount: p.integer("unmatched_count").notNull().default(0),
+    unusedCount: p.integer("unused_count").notNull().default(0),
+    structureErrors: p
+      .jsonb("structure_errors")
+      .$type<
+        { message: string; paragraphIndex: number; directive: string }[] | null
+      >(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("template_fills_organization_id_idx").on(table.organizationId),
+    p
+      .index("template_fills_org_created_at_idx")
+      .on(table.organizationId, table.createdAt),
+    p
+      .index("template_fills_org_template_idx")
+      .on(table.organizationId, table.templateId),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1096,6 +1145,7 @@ export const relations = defineRelations(
     clauseVersions,
     templateCategories,
     templateClauses,
+    templateFills,
     searchDocuments,
     extractedContent,
   },
@@ -1321,6 +1371,10 @@ export const relations = defineRelations(
         from: r.timeEntries.matterId,
         to: r.entities.id,
       }),
+      invoice: r.one.invoices({
+        from: r.timeEntries.invoiceId,
+        to: r.invoices.id,
+      }),
     },
     rateTables: {
       workspace: r.one.workspaces({
@@ -1347,11 +1401,23 @@ export const relations = defineRelations(
         from: r.expenses.matterId,
         to: r.entities.id,
       }),
+      invoice: r.one.invoices({
+        from: r.expenses.invoiceId,
+        to: r.invoices.id,
+      }),
     },
     invoices: {
       workspace: r.one.workspaces({
         from: r.invoices.workspaceId,
         to: r.workspaces.id,
+      }),
+      timeEntries: r.many.timeEntries({
+        from: r.invoices.id,
+        to: r.timeEntries.invoiceId,
+      }),
+      expenses: r.many.expenses({
+        from: r.invoices.id,
+        to: r.expenses.invoiceId,
       }),
     },
     matterCounters: {},
@@ -1416,6 +1482,16 @@ export const relations = defineRelations(
       templates: r.many.templates({
         from: r.templateCategories.id,
         to: r.templates.categoryId,
+      }),
+    },
+    templateFills: {
+      template: r.one.templates({
+        from: r.templateFills.templateId,
+        to: r.templates.id,
+      }),
+      user: r.one.user({
+        from: r.templateFills.userId,
+        to: r.user.id,
       }),
     },
     templateClauses: {
