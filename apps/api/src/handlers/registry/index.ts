@@ -2,6 +2,7 @@ import { setup } from "rivetkit";
 import { createClient, type ExtractActorsFromRegistry } from "rivetkit/client";
 
 import { bBoxActor } from "@/api/handlers/registry/actors/b-box/actor";
+import { chatActor } from "@/api/handlers/registry/actors/chat-actor";
 import { syncActor } from "@/api/handlers/registry/actors/sync-actor";
 import { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 
@@ -10,6 +11,7 @@ export const registry = setup({
     workflow: workflowActor,
     sync: syncActor,
     bBox: bBoxActor,
+    chat: chatActor,
   },
 });
 

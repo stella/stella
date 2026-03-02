@@ -830,7 +830,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={comingSoon}
+                onClick={() => navigate({ to: "/chat" })}
                 tooltip={t("navigation.chat")}
               >
                 <MessageCircleIcon />

@@ -58,7 +58,7 @@
     "lint:ws": "bunx sherif@latest -r unsync-similar-dependencies",
     "i18n:check": "turbo run i18n:check --",
     "test": "turbo run test",
-    "clean": "git clean -xdf node_modules && turbo run clean",
+    "clean": "turbo run clean && git clean -xdf node_modules",
     "sync:well-known": "cp -r .well-known apps/web/public/",
     "setup:dev": "scripts/dev.sh",
     "setup:mcp": "bun install --cwd .claude/mcp",

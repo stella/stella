@@ -16,9 +16,11 @@ import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as ProtectedOrganizationRouteRouteImport } from './routes/_protected.organization/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
+import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
+import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedOrganizationMembersRouteImport } from './routes/_protected.organization/members'
 import { Route as ProtectedOrganizationInvitationsRouteImport } from './routes/_protected.organization/invitations'
@@ -26,6 +28,7 @@ import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_prote
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedKnowledgeAnalyticsRouteImport } from './routes/_protected.knowledge/analytics'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
+import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
@@ -70,6 +73,11 @@ const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
   path: '/knowledge',
   getParentRoute: () => ProtectedRoute,
 } as any)
+const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const ProtectedWorkspacesIndexRoute =
   ProtectedWorkspacesIndexRouteImport.update({
     id: '/workspaces/',
@@ -85,6 +93,11 @@ const ProtectedContactsIndexRoute = ProtectedContactsIndexRouteImport.update({
   id: '/contacts/',
   path: '/contacts/',
   getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
 const AuthAcceptInvitationInvitationIdRoute =
   AuthAcceptInvitationInvitationIdRouteImport.update({
@@ -128,6 +141,11 @@ const ProtectedContactsContactIdRoute =
     path: '/contacts/$contactId',
     getParentRoute: () => ProtectedRoute,
   } as any)
+const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => ProtectedChatRouteRoute,
+} as any)
 const ProtectedWorkspacesWorkspaceIdRouteRoute =
   ProtectedWorkspacesWorkspaceIdRouteRouteImport.update({
     id: '/workspaces/$workspaceId',
@@ -179,12 +197,14 @@ const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
@@ -192,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
   '/organization/members': typeof ProtectedOrganizationMembersRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/chat/': typeof ProtectedChatIndexRoute
   '/contacts/': typeof ProtectedContactsIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/workspaces/': typeof ProtectedWorkspacesIndexRoute
@@ -209,6 +230,7 @@ export interface FileRoutesByTo {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth': typeof AuthIndexRoute
+  '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
@@ -216,6 +238,7 @@ export interface FileRoutesByTo {
   '/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
   '/organization/members': typeof ProtectedOrganizationMembersRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/chat': typeof ProtectedChatIndexRoute
   '/contacts': typeof ProtectedContactsIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
@@ -231,12 +254,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_protected': typeof ProtectedRouteWithChildren
+  '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/_protected/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
@@ -244,6 +269,7 @@ export interface FileRoutesById {
   '/_protected/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
   '/_protected/organization/members': typeof ProtectedOrganizationMembersRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/_protected/chat/': typeof ProtectedChatIndexRoute
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/_protected/workspaces/': typeof ProtectedWorkspacesIndexRoute
@@ -259,12 +285,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/chat'
     | '/knowledge'
     | '/organization'
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/'
     | '/workspaces/$workspaceId'
+    | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
     | '/knowledge/clauses'
@@ -272,6 +300,7 @@ export interface FileRouteTypes {
     | '/organization/invitations'
     | '/organization/members'
     | '/auth/accept-invitation/$invitationId'
+    | '/chat/'
     | '/contacts/'
     | '/knowledge/'
     | '/workspaces/'
@@ -289,6 +318,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth'
+    | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
     | '/knowledge/clauses'
@@ -296,6 +326,7 @@ export interface FileRouteTypes {
     | '/organization/invitations'
     | '/organization/members'
     | '/auth/accept-invitation/$invitationId'
+    | '/chat'
     | '/contacts'
     | '/knowledge'
     | '/workspaces'
@@ -310,12 +341,14 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_protected'
+    | '/_protected/chat'
     | '/_protected/knowledge'
     | '/_protected/organization'
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/'
     | '/_protected/workspaces/$workspaceId'
+    | '/_protected/chat/$threadId'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/analytics'
     | '/_protected/knowledge/clauses'
@@ -323,6 +356,7 @@ export interface FileRouteTypes {
     | '/_protected/organization/invitations'
     | '/_protected/organization/members'
     | '/auth/accept-invitation/$invitationId'
+    | '/_protected/chat/'
     | '/_protected/contacts/'
     | '/_protected/knowledge/'
     | '/_protected/workspaces/'
@@ -395,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedKnowledgeRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/chat': {
+      id: '/_protected/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ProtectedChatRouteRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_protected/workspaces/': {
       id: '/_protected/workspaces/'
       path: '/workspaces'
@@ -415,6 +456,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/contacts/'
       preLoaderRoute: typeof ProtectedContactsIndexRouteImport
       parentRoute: typeof ProtectedRoute
+    }
+    '/_protected/chat/': {
+      id: '/_protected/chat/'
+      path: '/'
+      fullPath: '/chat/'
+      preLoaderRoute: typeof ProtectedChatIndexRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
     }
     '/auth/accept-invitation/$invitationId': {
       id: '/auth/accept-invitation/$invitationId'
@@ -464,6 +512,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/contacts/$contactId'
       preLoaderRoute: typeof ProtectedContactsContactIdRouteImport
       parentRoute: typeof ProtectedRoute
+    }
+    '/_protected/chat/$threadId': {
+      id: '/_protected/chat/$threadId'
+      path: '/$threadId'
+      fullPath: '/chat/$threadId'
+      preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
     }
     '/_protected/workspaces/$workspaceId': {
       id: '/_protected/workspaces/$workspaceId'
@@ -523,6 +578,19 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface ProtectedChatRouteRouteChildren {
+  ProtectedChatThreadIdRoute: typeof ProtectedChatThreadIdRoute
+  ProtectedChatIndexRoute: typeof ProtectedChatIndexRoute
+}
+
+const ProtectedChatRouteRouteChildren: ProtectedChatRouteRouteChildren = {
+  ProtectedChatThreadIdRoute: ProtectedChatThreadIdRoute,
+  ProtectedChatIndexRoute: ProtectedChatIndexRoute,
+}
+
+const ProtectedChatRouteRouteWithChildren =
+  ProtectedChatRouteRoute._addFileChildren(ProtectedChatRouteRouteChildren)
 
 interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeAnalyticsRoute: typeof ProtectedKnowledgeAnalyticsRoute
@@ -607,6 +675,7 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren =
   )
 
 interface ProtectedRouteChildren {
+  ProtectedChatRouteRoute: typeof ProtectedChatRouteRouteWithChildren
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedOrganizationRouteRoute: typeof ProtectedOrganizationRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
@@ -616,6 +685,7 @@ interface ProtectedRouteChildren {
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
+  ProtectedChatRouteRoute: ProtectedChatRouteRouteWithChildren,
   ProtectedKnowledgeRouteRoute: ProtectedKnowledgeRouteRouteWithChildren,
   ProtectedOrganizationRouteRoute: ProtectedOrganizationRouteRouteWithChildren,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
