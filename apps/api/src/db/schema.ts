@@ -469,6 +469,11 @@ export const templates = p.pgTable(
       .varchar("organization_id", { length: 128 })
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    categoryId: p
+      .varchar("category_id", { length: 21 })
+      .references((): AnyPgColumn => templateCategories.id, {
+        onDelete: "set null",
+      }),
     name: p.varchar({ length: 256 }).notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
@@ -491,6 +496,9 @@ export const templates = p.pgTable(
     p
       .index("templates_organization_id_created_at_idx")
       .on(table.organizationId, table.createdAt),
+    p
+      .index("templates_org_category_idx")
+      .on(table.organizationId, table.categoryId),
   ],
 );
 
@@ -942,6 +950,33 @@ export const clauseVersions = p.pgTable(
   ],
 );
 
+export const templateCategories = p.pgTable(
+  "template_categories",
+  {
+    id: pNanoid.primaryKey(),
+    organizationId: p
+      .varchar("organization_id", { length: 128 })
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    parentId: p
+      .varchar("parent_id", { length: 21 })
+      .references((): AnyPgColumn => templateCategories.id, {
+        onDelete: "set null",
+      }),
+    name: p.varchar({ length: 256 }).notNull(),
+    description: p.text(),
+    sortOrder: p.integer("sort_order").notNull().default(0),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("template_categories_organization_id_idx").on(table.organizationId),
+    p
+      .index("template_categories_org_parent_idx")
+      .on(table.organizationId, table.parentId),
+  ],
+);
+
 export const templateClauses = p.pgTable(
   "template_clauses",
   {
@@ -1007,6 +1042,7 @@ export const relations = defineRelations(
     clauses,
     clauseVariants,
     clauseVersions,
+    templateCategories,
     templateClauses,
     searchDocuments,
   },
@@ -1194,6 +1230,10 @@ export const relations = defineRelations(
       }),
     },
     templates: {
+      category: r.one.templateCategories({
+        from: r.templates.categoryId,
+        to: r.templateCategories.id,
+      }),
       templateClauses: r.many.templateClauses({
         from: r.templates.id,
         to: r.templateClauses.templateId,
@@ -1303,6 +1343,22 @@ export const relations = defineRelations(
       clause: r.one.clauses({
         from: r.clauseVersions.clauseId,
         to: r.clauses.id,
+      }),
+    },
+    templateCategories: {
+      parent: r.one.templateCategories({
+        from: r.templateCategories.parentId,
+        to: r.templateCategories.id,
+        alias: "templateCategoryParent",
+      }),
+      children: r.many.templateCategories({
+        from: r.templateCategories.id,
+        to: r.templateCategories.parentId,
+        alias: "templateCategoryParent",
+      }),
+      templates: r.many.templates({
+        from: r.templateCategories.id,
+        to: r.templates.categoryId,
       }),
     },
     templateClauses: {

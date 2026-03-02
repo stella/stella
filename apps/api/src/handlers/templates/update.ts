@@ -7,7 +7,7 @@ import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
@@ -20,6 +20,7 @@ const buildVersionS3Key = (
 
 export const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
+  categoryId: t.Optional(t.Nullable(tNanoid)),
   manifest: t.Optional(t.String()),
 });
 
@@ -77,6 +78,7 @@ export const updateTemplateHandler = async ({
 
   const updates: Partial<{
     name: string;
+    categoryId: string | null;
     manifest: TemplateManifest;
     fieldCount: number;
     sizeBytes: number;
@@ -87,6 +89,18 @@ export const updateTemplateHandler = async ({
 
   if (body.name !== undefined) {
     updates.name = body.name;
+  }
+  if (body.categoryId !== undefined) {
+    if (body.categoryId !== null) {
+      const category = await db.query.templateCategories.findFirst({
+        where: { id: body.categoryId, organizationId },
+        columns: { id: true },
+      });
+      if (!category) {
+        return status(400, { message: "Category not found" });
+      }
+    }
+    updates.categoryId = body.categoryId;
   }
 
   if (body.manifest !== undefined) {

@@ -4,6 +4,11 @@ import { t } from "elysia";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
+import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import {
+  DOCX_EXT_RE,
+  sanitizeFilename,
+} from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const fillBodySchema = t.Object({
@@ -11,9 +16,16 @@ export const fillBodySchema = t.Object({
   values: t.String(),
 });
 
+export const fillQuerySchema = t.Object({
+  format: t.Optional(t.UnionEnum(["docx", "pdf"])),
+});
+
+const PDF_MIME_TYPE = "application/pdf";
+
 type FillProps = {
   organizationId: SafeId<"organization">;
   body: { file: File; values: string };
+  query: { format?: "docx" | "pdf" };
 };
 
 export const containsNull = (value: unknown): boolean => {
@@ -31,6 +43,7 @@ export const containsNull = (value: unknown): boolean => {
 
 export const fillHandler = async ({
   body: { file, values: valuesJson },
+  query: { format = "docx" },
 }: FillProps) => {
   if (file.type !== DOCX_MIME_TYPE) {
     return new Response(
@@ -78,10 +91,38 @@ export const fillHandler = async ({
   // shapes via `isTemplateData` discrimination internally.
   const result = await fillTemplate(buffer, record as TemplateData);
 
+  // PDF conversion via Gotenberg
+  if (format === "pdf") {
+    const docxBytes = new Uint8Array(result.buffer);
+    const pdfResult = await convertToPdf(
+      docxBytes.buffer.slice(
+        docxBytes.byteOffset,
+        docxBytes.byteOffset + docxBytes.byteLength,
+      ),
+      sanitizeFilename(file.name),
+    );
+    if (Result.isError(pdfResult)) {
+      return new Response(JSON.stringify({ error: "PDF conversion failed" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const sanitized = sanitizeFilename(file.name);
+    const pdfName = DOCX_EXT_RE.test(sanitized)
+      ? sanitized.replace(DOCX_EXT_RE, ".pdf")
+      : `${sanitized}.pdf`;
+    return new Response(new Uint8Array(pdfResult.value.buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": PDF_MIME_TYPE,
+        "Content-Disposition": `attachment; filename="${pdfName}"`,
+      },
+    });
+  }
+
   const headers = new Headers({
-    "Content-Type":
-      "application/vnd.openxmlformats-officedocument" +
-      ".wordprocessingml.document",
+    "Content-Type": DOCX_MIME_TYPE,
     "Content-Disposition": 'attachment; filename="filled.docx"',
   });
 

@@ -32,6 +32,7 @@ import {
   type ResolvedField,
   type StructureError,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
+import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 type ListResponse = Awaited<ReturnType<typeof api.templates.get>>;
 
@@ -72,43 +73,81 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
   component: RouteComponent,
 });
 
+type CategoryItem = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  description: string | null;
+};
+
 function RouteComponent() {
   const t = useTranslations();
   const [view, setView] = useState<View>({
     kind: "list",
   });
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null,
+  );
   const [loaded, setLoaded] = useState(false);
 
-  const fetchTemplates = useCallback(async () => {
-    const response = await api.templates.get();
+  const fetchTemplates = useCallback(
+    async (categoryId?: string | null) => {
+      const query =
+        categoryId !== undefined
+          ? { categoryId: categoryId ?? undefined }
+          : selectedCategoryId
+            ? { categoryId: selectedCategoryId }
+            : {};
 
-    if (response.error) {
-      toastManager.add({
-        type: "error",
-        title: t("templates.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      const response = await api.templates.get({ query });
+
+      if (response.error) {
+        toastManager.add({
+          type: "error",
+          title: t("templates.loadFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        setLoaded(true);
+        return;
+      }
+
+      const { data } = response;
+      if (data instanceof Response) {
+        toastManager.add({
+          type: "error",
+          title: t("templates.loadFailed"),
+        });
+        setLoaded(true);
+        return;
+      }
+
+      setTemplates(data.templates);
       setLoaded(true);
+    },
+    [selectedCategoryId, t],
+  );
+
+  const fetchCategories = useCallback(async () => {
+    const response = await api["template-categories"].get();
+    if (response.error || response.data instanceof Response) {
       return;
     }
+    setCategories(response.data.categories);
+  }, []);
 
-    const { data } = response;
-    if (data instanceof Response) {
-      toastManager.add({
-        type: "error",
-        title: t("templates.loadFailed"),
-      });
-      setLoaded(true);
-      return;
-    }
-
-    setTemplates(data.templates);
-    setLoaded(true);
-  }, [t]);
+  const handleCategorySelect = useCallback(
+    (id: string | null) => {
+      setSelectedCategoryId(id);
+      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      fetchTemplates(id);
+    },
+    [fetchTemplates],
+  );
 
   const initialFetchDone = useRef(false);
   useEffect(() => {
@@ -118,7 +157,9 @@ function RouteComponent() {
     initialFetchDone.current = true;
     // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
     fetchTemplates();
-  }, [fetchTemplates]);
+    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    fetchCategories();
+  }, [fetchTemplates, fetchCategories]);
 
   if (view.kind === "configure") {
     return (
@@ -263,7 +304,10 @@ function RouteComponent() {
 
   return (
     <TemplateList
-      onDeleted={fetchTemplates}
+      categories={categories}
+      onCategoriesChanged={fetchCategories}
+      onCategorySelect={handleCategorySelect}
+      onDeleted={() => fetchTemplates()}
       onDiscovered={(file, schema) =>
         setView({
           kind: "configure",
@@ -274,6 +318,7 @@ function RouteComponent() {
         })
       }
       onSelect={(template) => setView({ kind: "detail", template })}
+      selectedCategoryId={selectedCategoryId}
       templates={templates}
     />
   );
@@ -294,6 +339,12 @@ const TemplateDetail = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const setAssistantActive = useTemplateAssistantStore((s) => s.setActive);
+
+  useEffect(() => {
+    setAssistantActive(true, template.id, template.name);
+    return () => setAssistantActive(false);
+  }, [template.id, template.name, setAssistantActive]);
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "ready"; detail: DetailData }

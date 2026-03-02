@@ -13,7 +13,7 @@ import {
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
@@ -21,6 +21,7 @@ import { isRecord } from "@/api/lib/type-guards";
 export const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: "50m" }),
   name: tDefaultVarchar,
+  categoryId: t.Optional(tNanoid),
   // Elysia auto-parses JSON strings from FormData, so the
   // manifest may arrive as a string or an already-parsed
   // object depending on transport. Accept any and validate
@@ -34,6 +35,7 @@ type CreateTemplateProps = {
   body: {
     file: File;
     name: string;
+    categoryId?: string;
     manifest?: unknown;
   };
 };
@@ -69,7 +71,7 @@ const parseClientManifest = (value: unknown): TemplateManifest | null => {
 export const createTemplateHandler = async ({
   organizationId,
   userId,
-  body: { file, name, manifest: manifestJson },
+  body: { file, name, categoryId, manifest: manifestJson },
 }: CreateTemplateProps) => {
   if (file.type !== DOCX_MIME_TYPE) {
     return status(400, {
@@ -86,6 +88,16 @@ export const createTemplateHandler = async ({
     return status(400, {
       message: "Templates limit reached",
     });
+  }
+
+  if (categoryId) {
+    const category = await db.query.templateCategories.findFirst({
+      where: { id: categoryId, organizationId },
+      columns: { id: true },
+    });
+    if (!category) {
+      return status(400, { message: "Category not found" });
+    }
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -148,6 +160,7 @@ export const createTemplateHandler = async ({
       .values({
         id: templateId,
         organizationId,
+        categoryId: categoryId ?? null,
         name,
         fileName: file.name,
         s3Key,

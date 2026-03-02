@@ -7,27 +7,37 @@ import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
+import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import {
+  DOCX_EXT_RE,
+  sanitizeFilename,
+} from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { containsNull } from "./fill";
-
-/** Strip characters that could inject into Content-Disposition. */
-const sanitizeFilename = (name: string) => name.replace(/["\\<>\r\n]/g, "_");
 
 export const fillByIdBodySchema = t.Object({
   values: t.String(),
 });
 
+export const fillByIdQuerySchema = t.Object({
+  format: t.Optional(t.UnionEnum(["docx", "pdf"])),
+});
+
+const PDF_MIME_TYPE = "application/pdf";
+
 type FillByIdProps = {
   organizationId: SafeId<"organization">;
   templateId: string;
   body: { values: string };
+  query: { format?: "docx" | "pdf" };
 };
 
 export const fillByIdHandler = async ({
   organizationId,
   templateId,
   body: { values: valuesJson },
+  query: { format = "docx" },
 }: FillByIdProps) => {
   const template = await db.query.templates.findFirst({
     where: { id: templateId, organizationId },
@@ -82,9 +92,39 @@ export const fillByIdHandler = async ({
   // shapes via `isTemplateData` discrimination internally.
   const result = await fillTemplate(buffer, record as TemplateData);
 
+  const baseName = sanitizeFilename(template.fileName);
+
+  // PDF conversion via Gotenberg
+  if (format === "pdf") {
+    const docxBytes = new Uint8Array(result.buffer);
+    const pdfResult = await convertToPdf(
+      docxBytes.buffer.slice(
+        docxBytes.byteOffset,
+        docxBytes.byteOffset + docxBytes.byteLength,
+      ),
+      baseName,
+    );
+    if (Result.isError(pdfResult)) {
+      return status(502, {
+        message: "PDF conversion failed",
+      });
+    }
+
+    const pdfName = DOCX_EXT_RE.test(baseName)
+      ? baseName.replace(DOCX_EXT_RE, ".pdf")
+      : `${baseName}.pdf`;
+    return new Response(new Uint8Array(pdfResult.value.buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": PDF_MIME_TYPE,
+        "Content-Disposition": `attachment; filename="${pdfName}"`,
+      },
+    });
+  }
+
   const headers = new Headers({
     "Content-Type": DOCX_MIME_TYPE,
-    "Content-Disposition": `attachment; filename="${sanitizeFilename(template.fileName)}"`,
+    "Content-Disposition": `attachment; filename="${baseName}"`,
   });
 
   if (result.unmatchedPlaceholders.length > 0) {

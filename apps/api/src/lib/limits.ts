@@ -5,6 +5,7 @@ export const LIMITS = {
   viewsCount: 20,
   templatesCount: 50,
   clauseCategoriesCount: 100,
+  templateCategoriesCount: 100,
   clausesPerOrganization: 500,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
