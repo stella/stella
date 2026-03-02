@@ -500,9 +500,20 @@ checksums:
     organization/settings: 11528aa89ae9935e55dcb54478058775
     organization/settingsDescription: c49871988cec7c6915257ca77d1a0b72
     organization/title: 3dc8489af7e74121f65ce6d9677bc94d
+    rightPanel/addConditional: a23fe7fb5d089bd7aaf37c611dd4b2a9
     rightPanel/askAboutMatter: bf6a6768ea0db930f8bc5bb98b1bca75
     rightPanel/chatPlaceholder: bb14221474426ee72e8c3d2b09cc6cab
+    rightPanel/comingSoon: 43e5c90afb0890d963aeb1dde5b03e5b
+    rightPanel/convertToPlaceholder: ae8a638c5cda4773659d36228eea7fcd
+    rightPanel/mockDisclaimer: 11ce5ed4dcd02d9e0be69dcb24197f73
+    rightPanel/mockResponseConditional: 5594f348f5e41d9919f8c5b477f37359
+    rightPanel/mockResponsePlaceholder: 794db1ab84f61a834dc11e383bf0f25c
+    rightPanel/mockResponseRepeat: 72100b33ac15ef72e3b565ce86ad2e43
+    rightPanel/repeatForEach: ef98d89c239fa816fd146a7dbc0e43ec
+    rightPanel/selectedText: 5f2d61cca6fcd5d3f022a28f19399b61
+    rightPanel/templateAssistant: 31023ac1adb922d1a4461cbcc2167702
     rightPanel/title: 1171b63c16b3431dca319af1804de2a0
+    rightPanel/whatToDo: 43487e6d34aa345e4c2b47e12977a016
     search/emptyState: b9ab4fbf293bb23ee0cac706dbf6de30
     search/escKey: 8faef74a45ab0b2f23819a473466de98
     search/facets/kind: 0123e6ec1d5591e6af34906cc4904d58
@@ -534,10 +545,17 @@ checksums:
     success/roleUpdated: 73606ae9c35101f1bb518961f68559d0
     success/workspaceDeletedSuccessfully: 000d369fe384b7d9acabfac6306baeb6
     templates/addItem: 716f1a770990e67242ff582d7c639870
+    templates/allTemplates: f86de6078617d4f9923e22cd8c46d5c1
     templates/backToList: 3df245007c9aa4e455ad32b174e335c7
     templates/browseFiles: a7324e0da439951e42f76b14bf3a48d0
+    templates/categoryDeleteConfirm: 0ca6a95c1983b0d59c83386c499a5976
+    templates/categoryDeleteFailed: 47935240d97708b919481eb20fa66ca7
+    templates/categoryName: cbd957227fae6d91baec164eba889680
+    templates/categorySaveFailed: f7bd586f04861f186316f4387efb69b9
     templates/configureFields: 20a4f3de7a8f1807b7bb2ecb30617a8a
     templates/confirmDelete: 2770436c5e831451e84eec4f96e1ecc5
+    templates/createCategory: c81f62cc4e7b8ba7a75f2ec83089a1c4
+    templates/deleteCategory: 02e9c5787b7d0d93070dec5e3826b8bf
     templates/deleteFailed: 9d2beffd919bffacdf03a90ffede807c
     templates/directiveEach: 9e95c220ed5e69b9411e0711053de957
     templates/directiveElse: a0c6a68c7fa6b84d1f26b5360ec4ab3d
@@ -547,8 +565,11 @@ checksums:
     templates/directiveIf: 8bed0ff08007e533e675aa18d619dd8c
     templates/discovering: e1f38bd8cc6c750114f0249ca490ac02
     templates/discoveryFailed: 57ec2a8e7decb7fee53ad86820de3cd4
+    templates/downloadDocx: 7bff8f502580f64416a462a1e645d285
+    templates/downloadPdf: dfbcc86cfac971ae88ba5d033c04fcbf
     templates/downloadReady: 0ca6de702dd5cb0ad0b21527d262bf90
     templates/dragAndDrop: 6c7d6b05d39dcbfc710d35fcab25cb8c
+    templates/editCategory: 79309e98afbc5e647a4b78159c47bd78
     templates/editFields: 8969e035683d04b1bb4c13aff4a707bf
     templates/fieldCount: 8ce1fe4d7904ab6a40e387697cf19a79
     templates/fieldInputType: df4865b5d0a598a8d7f563dcec104df5
@@ -574,9 +595,13 @@ checksums:
     templates/loadFailed: 0909dcfb0d3c44ec618a0e5bc0307b55
     templates/newTemplate: 10dca64383235d1596a010e559b2e35a
     templates/noTemplates: 3d4c7e66e581968feba1d622ecb7829a
+    templates/pdfConversionFailed: a07cf0f811b09924c89f7407803507c6
     templates/preview: 3173ee1f0f1d4e50665ca4a84c38e15d
     templates/previewEmpty: a05a505c13928c458929c088dc13581c
     templates/previewFailed: d197fedfb7a10b37a40ce9921afb7398
+    templates/previewFill: 3173ee1f0f1d4e50665ca4a84c38e15d
+    templates/previewFillLoading: 388e548af840312a986b0891d40a1165
+    templates/previewFillTitle: f00e3c61cb5623574ff1fe693c294967
     templates/previewSectionBody: e88eb1ea71f5ef886aa43ea6ba292d87
     templates/previewSectionFooter: 42e6d40460f979cecee52dabcff307f8
     templates/previewSectionHeader: a24a0d808d61b90d9feaeb238d656843
@@ -589,6 +614,8 @@ checksums:
     templates/templateRenamed: 21f7810d047f36631c5f8d7f7ad37495
     templates/templateSaved: bb2ef3167b2849756be1cb24d1c4d51d
     templates/testFill: 716a495839187c541af45ae2ccec07a4
+    templates/unmatchedPlaceholders: 7fdd5b8aab9f89de7deb83345c265dc5
+    templates/unusedValues: 8c66ade33c0d85f675960dccc1b3cb3a
     templates/uploadDescription: 0b981cff1d6b35a051fba345e5e01293
     templates/uploadDifferent: 842aacd2ec4425f93ad7533ec92de11a
     templates/uploadTitle: fe4ec5fa9f670230c50af0da76cc0db2
