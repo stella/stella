@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
 import { db } from "@/api/db";
+import { invoices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const readInvoicesQuerySchema = t.Object({
@@ -22,26 +24,32 @@ export const readInvoicesHandler = async ({
   const limit = query.limit ?? 50;
   const offset = query.offset ?? 0;
 
-  const rows = await db.query.invoices.findMany({
-    where: { workspaceId },
-    columns: {
-      id: true,
-      invoiceNumber: true,
-      reference: true,
-      status: true,
-      invoiceDate: true,
-      dueDate: true,
-      currency: true,
-      totalAmount: true,
-      createdAt: true,
-    },
-    orderBy: (invoices, { asc }) => asc(invoices.createdAt),
-    limit,
-    offset,
-  });
+  const [rows, total] = await Promise.all([
+    db.query.invoices.findMany({
+      where: { workspaceId },
+      columns: {
+        id: true,
+        invoiceNumber: true,
+        reference: true,
+        status: true,
+        invoiceDate: true,
+        dueDate: true,
+        currency: true,
+        totalAmount: true,
+        createdAt: true,
+      },
+      orderBy: (inv, { asc }) => asc(inv.createdAt),
+      limit,
+      offset,
+    }),
+    db.$count(invoices, eq(invoices.workspaceId, workspaceId)),
+  ]);
 
-  return rows.map((row) => ({
-    ...row,
-    createdAt: row.createdAt.toISOString(),
-  }));
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    total,
+  };
 };

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  DownloadIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
   TextQuoteIcon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
@@ -40,6 +42,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 // ── Types ────────────────────────────────────────────
 
@@ -69,6 +73,7 @@ type ClauseListProps = {
   onLoadMore: () => void;
   onCategoriesChanged: () => void;
   onSearch: (q: string) => void;
+  onRefresh: () => void;
   loading: boolean;
 };
 
@@ -85,10 +90,12 @@ export const ClauseList = ({
   onLoadMore,
   onCategoriesChanged,
   onSearch,
+  onRefresh,
   loading,
 }: ClauseListProps) => {
   const t = useTranslations();
   const [searchInput, setSearchInput] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
 
   const debouncedSearch = useDebouncedCallback(
     (value: string) => onSearch(value),
@@ -102,6 +109,37 @@ export const ClauseList = ({
     },
     [debouncedSearch],
   );
+
+  const handleExport = useCallback(async () => {
+    const response = await api.clauses.export.get({
+      query: {},
+    });
+
+    if (response.error) {
+      toastManager.add({
+        type: "error",
+        title: t("clauses.exportFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    const { data } = response;
+    if (data instanceof Response) {
+      const blob = await data.blob();
+      downloadFile(blob, "clauses-export.json");
+      return;
+    }
+
+    // Eden may return parsed JSON; wrap in Blob
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    downloadFile(blob, "clauses-export.json");
+  }, [t]);
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -125,11 +163,31 @@ export const ClauseList = ({
               value={searchInput}
             />
           </div>
-          <Button onClick={onNewClause} size="sm">
-            <PlusIcon />
-            {t("clauses.createClause")}
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              onClick={() => setImportOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              <UploadIcon />
+              {t("clauses.import")}
+            </Button>
+            <Button onClick={handleExport} size="sm" variant="outline">
+              <DownloadIcon />
+              {t("clauses.export")}
+            </Button>
+            <Button onClick={onNewClause} size="sm">
+              <PlusIcon />
+              {t("clauses.createClause")}
+            </Button>
+          </div>
         </div>
+
+        <ClauseImportDialog
+          onImported={onRefresh}
+          onOpenChange={setImportOpen}
+          open={importOpen}
+        />
 
         <div className="flex-1 overflow-y-auto">
           {clauses.length === 0 && !loading && (

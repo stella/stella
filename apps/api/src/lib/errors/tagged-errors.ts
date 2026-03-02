@@ -44,6 +44,13 @@ export class DocxEditError extends TaggedError("DocxEditError")<{
   cause: unknown;
 }>() {}
 
+/** Optimistic-lock failure inside a transaction. */
+export class ConcurrentModificationError extends TaggedError(
+  "ConcurrentModificationError",
+)<{
+  message: string;
+}>() {}
+
 /** DOCX template block-directive structural errors. */
 export class TemplateDirectiveError extends TaggedError(
   "TemplateDirectiveError",

@@ -187,3 +187,43 @@ export const getClauseHandler = async ({
 
   return clause;
 };
+
+// ── Get version body ─────────────────────────────────
+
+type GetClauseVersionProps = {
+  organizationId: SafeId<"organization">;
+  clauseId: string;
+  versionId: string;
+};
+
+export const getClauseVersionHandler = async ({
+  organizationId,
+  clauseId,
+  versionId,
+}: GetClauseVersionProps) => {
+  // Verify clause belongs to this org (tenant isolation)
+  const clause = await db.query.clauses.findFirst({
+    where: { id: clauseId, organizationId },
+    columns: { id: true },
+  });
+
+  if (!clause) {
+    return status(404, { message: "Clause not found" });
+  }
+
+  const version = await db.query.clauseVersions.findFirst({
+    where: { id: versionId, clauseId },
+    columns: {
+      id: true,
+      version: true,
+      body: true,
+      createdAt: true,
+    },
+  });
+
+  if (!version) {
+    return status(404, { message: "Version not found" });
+  }
+
+  return version;
+};

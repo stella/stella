@@ -2,9 +2,15 @@ import { and, eq, inArray } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { BILLING_STATUS, invoices, timeEntries } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  INVOICE_STATUS,
+  invoices,
+  timeEntries,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 export const createInvoiceBodySchema = t.Object({
@@ -84,8 +90,6 @@ export const createInvoiceHandler = async ({
   const now = new Date();
   const expectedCount = entries.length;
 
-  const CONCURRENT = "CONCURRENT_MODIFICATION";
-
   const result = await db
     .transaction(async (tx) => {
       const [created] = await tx
@@ -100,7 +104,7 @@ export const createInvoiceHandler = async ({
           currency: body.currency,
           totalAmount,
           notes: body.notes ?? null,
-          status: BILLING_STATUS.DRAFT,
+          status: INVOICE_STATUS.DRAFT,
         })
         .returning({
           id: invoices.id,
@@ -128,7 +132,9 @@ export const createInvoiceHandler = async ({
       // them. Throwing rolls back the transaction automatically.
       const linkedCount = updated.rowCount ?? 0;
       if (linkedCount !== expectedCount) {
-        throw new Error(CONCURRENT);
+        throw new ConcurrentModificationError({
+          message: "Time entries modified during invoice creation",
+        });
       }
 
       return {
@@ -139,7 +145,7 @@ export const createInvoiceHandler = async ({
       };
     })
     .catch((err: unknown) => {
-      if (err instanceof Error && err.message === CONCURRENT) {
+      if (err instanceof ConcurrentModificationError) {
         return null;
       }
       throw err;

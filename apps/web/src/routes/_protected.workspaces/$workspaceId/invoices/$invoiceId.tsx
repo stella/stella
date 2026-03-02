@@ -1,0 +1,765 @@
+import { Suspense, useState } from "react";
+import { useForm, useStore } from "@tanstack/react-form";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  EditIcon,
+  SendIcon,
+  Trash2Icon,
+  UndoIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stella/ui/components/alert-dialog";
+import { Button } from "@stella/ui/components/button";
+import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
+import { Field, FieldError } from "@stella/ui/components/field";
+import { Form } from "@stella/ui/components/form";
+import { Input } from "@stella/ui/components/input";
+import { Label } from "@stella/ui/components/label";
+import { Textarea } from "@stella/ui/components/textarea";
+import { toastManager } from "@stella/ui/components/toast";
+
+import { api } from "@/lib/api";
+import { toFormErrors } from "@/lib/schema";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
+import {
+  invoiceByIdOptions,
+  invoicesKeys,
+  type InvoiceStatus,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
+import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+
+export const Route = createFileRoute(
+  "/_protected/workspaces/$workspaceId/invoices/$invoiceId",
+)({
+  component: InvoiceDetailPage,
+});
+
+function InvoiceDetailPage() {
+  const t = useTranslations();
+  const { workspaceId, invoiceId } = Route.useParams();
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-3 border-b px-4 py-3">
+        <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
+          <Button size="icon" variant="ghost">
+            <ArrowLeftIcon className="size-4" />
+          </Button>
+        </Link>
+        <h1 className="text-sm font-medium">
+          {t("billing.invoices.invoiceDetail")}
+        </h1>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6">
+        <Suspense
+          fallback={
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {t("billing.loading")}
+            </div>
+          }
+        >
+          <InvoiceDetail invoiceId={invoiceId} workspaceId={workspaceId} />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+const showErrorToast = (title: string) => {
+  toastManager.add({ type: "error", title });
+};
+
+const InvoiceDetail = ({
+  workspaceId,
+  invoiceId,
+}: {
+  workspaceId: string;
+  invoiceId: string;
+}) => {
+  const t = useTranslations();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = useState(false);
+
+  const { data: invoice } = useSuspenseQuery(
+    invoiceByIdOptions(workspaceId, invoiceId),
+  );
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({
+      queryKey: invoicesKeys.all(workspaceId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: timeEntriesKeys.all(workspaceId),
+    });
+  };
+
+  type TransitionAction =
+    | "finalize"
+    | "send"
+    | "mark_paid"
+    | "void"
+    | "revert_to_draft";
+
+  const transitionMutation = useMutation({
+    mutationFn: async (action: TransitionAction) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .transition.post({
+          action,
+          queryKey: invoicesKeys.all(workspaceId),
+        });
+      if (response.error) {
+        throw response.error;
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: () => {
+      showErrorToast(t("common.somethingWentWrong"));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .delete({
+          queryKey: invoicesKeys.all(workspaceId),
+        });
+      if (response.error) {
+        throw response.error;
+      }
+      return response.data;
+    },
+    onSuccess: async () => {
+      invalidateAll();
+      await navigate({
+        to: "/workspaces/$workspaceId/invoices",
+        params: { workspaceId },
+      });
+    },
+    onError: () => {
+      showErrorToast(t("common.somethingWentWrong"));
+    },
+  });
+
+  const removeEntryMutation = useMutation({
+    mutationFn: async (timeEntryId: string) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .entries.delete({
+          timeEntryIds: [timeEntryId],
+          queryKey: invoicesKeys.all(workspaceId),
+        });
+      if (response.error) {
+        throw response.error;
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: () => {
+      showErrorToast(t("common.somethingWentWrong"));
+    },
+  });
+
+  const removeExpenseMutation = useMutation({
+    mutationFn: async (expenseId: string) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .entries.delete({
+          expenseIds: [expenseId],
+          queryKey: invoicesKeys.all(workspaceId),
+        });
+      if (response.error) {
+        throw response.error;
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      invalidateAll();
+    },
+    onError: () => {
+      showErrorToast(t("common.somethingWentWrong"));
+    },
+  });
+
+  const invoiceStatus: InvoiceStatus = invoice.status;
+
+  return (
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">{invoice.invoiceNumber}</h2>
+            <InvoiceStatusBadge status={invoiceStatus} />
+          </div>
+          {invoice.reference && (
+            <p className="text-sm text-muted-foreground">{invoice.reference}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <InvoiceActions
+            invoiceStatus={invoiceStatus}
+            onDelete={() => deleteMutation.mutate()}
+            onEdit={() => setEditOpen(true)}
+            onTransition={(action) => transitionMutation.mutate(action)}
+          />
+        </div>
+      </div>
+
+      {/* Info grid */}
+      <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
+        <InfoCell
+          label={t("billing.invoices.invoiceDate")}
+          value={invoice.invoiceDate}
+        />
+        <InfoCell
+          label={t("billing.invoices.dueDate")}
+          value={invoice.dueDate ?? "—"}
+        />
+        <InfoCell
+          label={t("billing.invoices.totalAmount")}
+          value={formatCurrencyAmount(invoice.totalAmount, invoice.currency)}
+        />
+        {invoice.paidAt && (
+          <InfoCell
+            label={t("billing.invoices.paidAt")}
+            value={new Date(invoice.paidAt).toLocaleDateString()}
+          />
+        )}
+      </div>
+
+      {/* Notes */}
+      {invoice.notes && (
+        <div className="rounded-lg border p-4">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            {t("common.notes")}
+          </p>
+          <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      )}
+
+      {/* Time entries */}
+      <div className="rounded-lg border">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h3 className="text-sm font-medium">
+            {t("billing.invoices.linkedTimeEntries")}
+          </h3>
+          <span className="text-xs text-muted-foreground">
+            {t("billing.invoices.totalEntries", {
+              count: invoice.timeEntries.length,
+            })}
+          </span>
+        </div>
+        {invoice.timeEntries.length === 0 ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            {t("billing.invoices.noEntries")}
+          </div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">
+                    {t("billing.matter")}
+                  </th>
+                  <th className="px-4 py-2 font-medium">{t("billing.date")}</th>
+                  <th className="px-4 py-2 font-medium">
+                    {t("billing.narrative")}
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    {t("billing.hours")}
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    {t("billing.amount")}
+                  </th>
+                  {invoiceStatus === "draft" && (
+                    <th className="w-10 px-4 py-2" />
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.timeEntries.map((entry) => (
+                  <tr className="border-b last:border-0" key={entry.id}>
+                    <td className="px-4 py-2">{entry.matter?.name ?? "—"}</td>
+                    <td className="px-4 py-2 tabular-nums">
+                      {entry.dateWorked}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-2">
+                      {entry.invoiceNarrative ?? entry.narrative}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {(entry.billedMinutes / 60).toFixed(1)}h
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {formatCurrencyAmount(
+                        Math.round(
+                          (entry.billedMinutes / 60) * entry.rateAtEntry,
+                        ),
+                        entry.currency,
+                      )}
+                    </td>
+                    {invoiceStatus === "draft" && (
+                      <td className="px-4 py-2">
+                        <Button
+                          className="size-6"
+                          onClick={() => removeEntryMutation.mutate(entry.id)}
+                          size="icon"
+                          variant="ghost"
+                        >
+                          <XCircleIcon className="size-3.5 text-muted-foreground" />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Expenses */}
+      {invoice.expenses.length > 0 && (
+        <div className="rounded-lg border">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h3 className="text-sm font-medium">
+              {t("billing.invoices.linkedExpenses")}
+            </h3>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">
+                    {t("billing.matter")}
+                  </th>
+                  <th className="px-4 py-2 font-medium">{t("billing.date")}</th>
+                  <th className="px-4 py-2 font-medium">
+                    {t("billing.description")}
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    {t("billing.amount")}
+                  </th>
+                  {invoiceStatus === "draft" && (
+                    <th className="w-10 px-4 py-2" />
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.expenses.map((expense) => (
+                  <tr className="border-b last:border-0" key={expense.id}>
+                    <td className="px-4 py-2">{expense.matter?.name ?? "—"}</td>
+                    <td className="px-4 py-2 tabular-nums">
+                      {expense.dateIncurred}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-2">
+                      {expense.invoiceDescription ?? expense.description}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {formatCurrencyAmount(
+                        Math.round(expense.amount * (1 + expense.markup / 100)),
+                        expense.currency,
+                      )}
+                    </td>
+                    {invoiceStatus === "draft" && (
+                      <td className="px-4 py-2">
+                        <Button
+                          className="size-6"
+                          onClick={() =>
+                            removeExpenseMutation.mutate(expense.id)
+                          }
+                          size="icon"
+                          variant="ghost"
+                        >
+                          <XCircleIcon className="size-3.5 text-muted-foreground" />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit dialog */}
+      <Dialog onOpenChange={setEditOpen} open={editOpen}>
+        <DialogPopup className="max-w-md">
+          <EditInvoiceForm
+            currency={invoice.currency}
+            dueDate={invoice.dueDate ?? ""}
+            invoiceDate={invoice.invoiceDate}
+            invoiceId={invoiceId}
+            invoiceNumber={invoice.invoiceNumber}
+            notes={invoice.notes ?? ""}
+            onClose={() => setEditOpen(false)}
+            reference={invoice.reference ?? ""}
+            workspaceId={workspaceId}
+          />
+        </DialogPopup>
+      </Dialog>
+    </div>
+  );
+};
+
+const InfoCell = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <p className="text-xs text-muted-foreground">{label}</p>
+    <p className="mt-0.5 text-sm font-medium tabular-nums">{value}</p>
+  </div>
+);
+
+const InvoiceActions = ({
+  invoiceStatus,
+  onTransition,
+  onEdit,
+  onDelete,
+}: {
+  invoiceStatus: InvoiceStatus;
+  onTransition: (
+    action: "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft",
+  ) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => {
+  const t = useTranslations("billing.invoices");
+
+  switch (invoiceStatus) {
+    case "draft":
+      return (
+        <>
+          <Button onClick={onEdit} size="sm" variant="outline">
+            <EditIcon className="size-3.5" />
+            {t("editInvoice")}
+          </Button>
+          <Button
+            onClick={() => onTransition("finalize")}
+            size="sm"
+            variant="outline"
+          >
+            <CheckIcon className="size-3.5" />
+            {t("finalize")}
+          </Button>
+          <ConfirmAction description={t("confirmDelete")} onConfirm={onDelete}>
+            <Button size="sm" variant="destructive">
+              <Trash2Icon className="size-3.5" />
+              {t("delete")}
+            </Button>
+          </ConfirmAction>
+        </>
+      );
+    case "finalized":
+      return (
+        <>
+          <Button
+            onClick={() => onTransition("send")}
+            size="sm"
+            variant="outline"
+          >
+            <SendIcon className="size-3.5" />
+            {t("send")}
+          </Button>
+          <Button
+            onClick={() => onTransition("revert_to_draft")}
+            size="sm"
+            variant="ghost"
+          >
+            <UndoIcon className="size-3.5" />
+            {t("revertToDraft")}
+          </Button>
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
+      );
+    case "sent":
+      return (
+        <>
+          <Button
+            onClick={() => onTransition("mark_paid")}
+            size="sm"
+            variant="outline"
+          >
+            <CheckIcon className="size-3.5" />
+            {t("markPaid")}
+          </Button>
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
+      );
+    case "paid":
+      return (
+        <ConfirmAction
+          description={t("confirmVoid")}
+          onConfirm={() => onTransition("void")}
+        >
+          <Button size="sm" variant="destructive">
+            <XCircleIcon className="size-3.5" />
+            {t("void")}
+          </Button>
+        </ConfirmAction>
+      );
+    case "void":
+      return null;
+    default:
+      return null;
+  }
+};
+
+const ConfirmAction = ({
+  children,
+  description,
+  onConfirm,
+}: {
+  children: React.ReactElement;
+  description: string;
+  onConfirm: () => void;
+}) => {
+  const t = useTranslations("common");
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger render={children} />
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("cancel")}
+          </AlertDialogClose>
+          <AlertDialogClose
+            render={<Button onClick={onConfirm} variant="destructive" />}
+          >
+            {t("confirm")}
+          </AlertDialogClose>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
+
+const editInvoiceSchema = v.object({
+  invoiceNumber: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  invoiceDate: v.pipe(v.string(), v.minLength(1)),
+  dueDate: v.string(),
+  reference: v.string(),
+  currency: v.pipe(v.string(), v.minLength(3), v.maxLength(3)),
+  notes: v.string(),
+});
+
+const EditInvoiceForm = ({
+  workspaceId,
+  invoiceId,
+  invoiceNumber: initialNumber,
+  invoiceDate: initialDate,
+  dueDate: initialDueDate,
+  reference: initialReference,
+  currency: initialCurrency,
+  notes: initialNotes,
+  onClose,
+}: {
+  workspaceId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  reference: string;
+  currency: string;
+  notes: string;
+  onClose: () => void;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+
+  const form = useForm({
+    defaultValues: {
+      invoiceNumber: initialNumber,
+      invoiceDate: initialDate,
+      dueDate: initialDueDate,
+      reference: initialReference,
+      currency: initialCurrency,
+      notes: initialNotes,
+    },
+    validators: {
+      onDynamic: editInvoiceSchema,
+    },
+    onSubmit: async ({ value }) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .patch({
+          invoiceNumber: value.invoiceNumber,
+          invoiceDate: value.invoiceDate,
+          dueDate: value.dueDate || null,
+          reference: value.reference || null,
+          currency: value.currency,
+          notes: value.notes || null,
+          queryKey: invoicesKeys.all(workspaceId),
+        });
+      if (response.error) {
+        showErrorToast(t("billing.failedToSave"));
+        return;
+      }
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      });
+      onClose();
+    },
+  });
+
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
+
+  return (
+    <Form
+      className="flex flex-col gap-4 p-4"
+      errors={formErrors}
+      onSubmit={(e) => {
+        e.preventDefault();
+        form.handleSubmit();
+      }}
+    >
+      <h2 className="text-sm font-semibold">
+        {t("billing.invoices.editInvoice")}
+      </h2>
+      <form.Field name="invoiceNumber">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("billing.invoices.invoiceNumber")}</Label>
+            <Input
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <div className="grid grid-cols-2 gap-3">
+        <form.Field name="invoiceDate">
+          {(field) => (
+            <Field name={field.name}>
+              <Label>{t("billing.invoices.invoiceDate")}</Label>
+              <Input
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                type="date"
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="dueDate">
+          {(field) => (
+            <Field name={field.name}>
+              <Label>{t("billing.invoices.dueDate")}</Label>
+              <Input
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                type="date"
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+      </div>
+      <form.Field name="reference">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("billing.invoices.reference")}</Label>
+            <Input
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="currency">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("common.currency")}</Label>
+            <Input
+              maxLength={3}
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="notes">
+        {(field) => (
+          <Field name={field.name}>
+            <Label>{t("common.notes")}</Label>
+            <Textarea
+              onBlur={field.handleBlur}
+              onChange={(e) => field.handleChange(e.target.value)}
+              rows={3}
+              value={field.state.value}
+            />
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+      <div className="flex justify-end gap-2">
+        <Button onClick={onClose} type="button" variant="ghost">
+          {t("common.cancel")}
+        </Button>
+        <form.Subscribe selector={(s) => s.isSubmitting}>
+          {(isSubmitting) => (
+            <Button disabled={isSubmitting} type="submit">
+              {t("common.save")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </div>
+    </Form>
+  );
+};

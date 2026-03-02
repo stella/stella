@@ -14,7 +14,13 @@ import {
 } from "@/api/handlers/clauses/create";
 import { deleteClauseHandler } from "@/api/handlers/clauses/delete";
 import {
+  exportHandler,
+  exportQuerySchema,
+} from "@/api/handlers/clauses/export";
+import { importBodySchema, importHandler } from "@/api/handlers/clauses/import";
+import {
   getClauseHandler,
+  getClauseVersionHandler,
   listClausesHandler,
   listClausesQuerySchema,
 } from "@/api/handlers/clauses/read";
@@ -104,6 +110,25 @@ export const clausesRoute = new Elysia({
     { body: createClauseBodySchema },
   )
   .get(
+    "/export",
+    (ctx) =>
+      exportHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        query: ctx.query,
+      }),
+    { query: exportQuerySchema },
+  )
+  .put(
+    "/import",
+    (ctx) =>
+      importHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+        body: ctx.body,
+      }),
+    { body: importBodySchema },
+  )
+  .get(
     "/:clauseId",
     (ctx) =>
       getClauseHandler({
@@ -133,6 +158,22 @@ export const clausesRoute = new Elysia({
         clauseId: ctx.params.clauseId,
       }),
     { params: t.Object({ clauseId: tNanoid }) },
+  )
+  // ── Versions ───────────────────────────────────
+  .get(
+    "/:clauseId/versions/:versionId",
+    (ctx) =>
+      getClauseVersionHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        clauseId: ctx.params.clauseId,
+        versionId: ctx.params.versionId,
+      }),
+    {
+      params: t.Object({
+        clauseId: tNanoid,
+        versionId: tNanoid,
+      }),
+    },
   )
   // ── Variants ────────────────────────────────────
   .get(

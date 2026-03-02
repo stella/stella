@@ -182,11 +182,15 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/analytics",
     shouldThrow: false,
   });
+  const invoicesMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/invoices",
+    shouldThrow: false,
+  });
 
   const hasPeekTabs = usePeekStore((s) => s.tabs.length > 0);
 
-  // Timesheets and analytics have their own layout
-  if (timesheetsMatch || analyticsMatch) {
+  // Timesheets, analytics, and invoices have their own layout
+  if (timesheetsMatch || analyticsMatch || invoicesMatch) {
     return <Outlet />;
   }
 
