@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
 import { containsNull } from "./fill";
 
 export const fillByIdBodySchema = t.Object({
@@ -59,16 +60,13 @@ export const fillByIdHandler = async ({
   }
 
   const parsed = parseResult.value;
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return status(400, {
       message: "'values' must be a JSON object (not null or array).",
     });
   }
 
-  // SAFETY: null, array, and non-object types are excluded
-  // by the guards above; the only remaining shape is an object.
-  const record = parsed as Record<string, unknown>;
-  if (Object.values(record).some(containsNull)) {
+  if (Object.values(parsed).some(containsNull)) {
     return status(400, {
       message: "'values' must not contain null values.",
     });
@@ -83,14 +81,14 @@ export const fillByIdHandler = async ({
   if (slots.length > 0) {
     const clausePatches = await resolveClauseSlots(templateId, slots);
     for (const [key, value] of Object.entries(clausePatches)) {
-      record[key] = value;
+      parsed[key] = value;
     }
   }
 
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
-  const result = await fillTemplate(buffer, record as TemplateData);
+  const result = await fillTemplate(buffer, parsed as TemplateData);
 
   const baseName = sanitizeFilename(template.fileName);
 

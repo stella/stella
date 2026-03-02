@@ -36,9 +36,10 @@ export const extractLangFromRequest = (
   for (const part of header.split(",")) {
     const lang = part.split(";")[0]?.trim();
     const prefix = lang?.split("-")[0];
+    const match = SUPPORTED_LANGS.find((l) => l === prefix);
 
-    if (SUPPORTED_LANGS.includes(prefix as SupportedLang)) {
-      return prefix as SupportedLang;
+    if (match) {
+      return match;
     }
   }
 

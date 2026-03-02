@@ -3,7 +3,7 @@ import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
-import { expenses } from "@/api/db/schema";
+import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -18,7 +18,9 @@ export const updateExpenseBodySchema = t.Object({
   billable: t.Optional(t.Boolean()),
   markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
   matterId: t.Optional(tNanoid),
-  status: t.Optional(t.UnionEnum(["draft", "approved"])),
+  status: t.Optional(
+    t.UnionEnum([BILLING_STATUS.DRAFT, BILLING_STATUS.APPROVED]),
+  ),
 });
 
 type UpdateExpenseBodySchema = Static<typeof updateExpenseBodySchema>;
@@ -46,7 +48,10 @@ export const updateExpenseHandler = async ({
     return status(404, { message: "Expense not found" });
   }
 
-  if (existing.status === "billed" || existing.status === "written_off") {
+  if (
+    existing.status === BILLING_STATUS.BILLED ||
+    existing.status === BILLING_STATUS.WRITTEN_OFF
+  ) {
     return status(400, {
       message: "Cannot edit a billed or written-off expense",
     });

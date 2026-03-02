@@ -159,10 +159,10 @@ export const KanbanCard = ({
 
   if (navigable && file) {
     return (
-      <div className="group/card relative" ref={dragRef} {...dragProps}>
+      <div className="group/card" ref={dragRef} {...dragProps}>
         <button
           className={cn(
-            "block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md",
+            "relative block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md",
             isActivePeek && "ring-2 ring-primary/30",
           )}
           onClick={() =>
@@ -175,23 +175,23 @@ export const KanbanCard = ({
           type="button"
         >
           {content}
+          {actionsButton}
         </button>
-        {actionsButton}
       </div>
     );
   }
 
   return (
-    <div className="group/card relative" ref={dragRef} {...dragProps}>
+    <div className="group/card" ref={dragRef} {...dragProps}>
       <div
         className={cn(
-          "rounded-lg border bg-card p-3 shadow-xs",
+          "relative rounded-lg border bg-card p-3 shadow-xs",
           isActivePeek && "ring-2 ring-primary/30",
         )}
       >
         {content}
+        {actionsButton}
       </div>
-      {actionsButton}
     </div>
   );
 };

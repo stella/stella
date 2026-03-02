@@ -3,7 +3,7 @@ import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -50,7 +50,10 @@ export const splitEntryHandler = async ({
     return status(404, { message: "Time entry not found" });
   }
 
-  if (original.status === "billed" || original.status === "written_off") {
+  if (
+    original.status === BILLING_STATUS.BILLED ||
+    original.status === BILLING_STATUS.WRITTEN_OFF
+  ) {
     return status(400, {
       message: "Cannot split a billed or written-off entry",
     });

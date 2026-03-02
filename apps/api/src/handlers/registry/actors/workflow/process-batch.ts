@@ -25,7 +25,7 @@ import {
   setFieldsContent,
 } from "@/api/handlers/registry/actors/workflow/utils";
 import { broadcastEvent } from "@/api/handlers/registry/utils";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { captureActorError } from "@/api/lib/errors/actions";
 import type { FieldContent } from "@/api/types";
 
@@ -140,8 +140,8 @@ const processWorkflowBatch = (
       abortSignal: c.abortSignal,
       batch,
       entityVersionId,
-      organizationId: organizationId as SafeId<"organization">,
-      workspaceId: workspaceId as SafeId<"workspace">,
+      organizationId: toSafeId<"organization">(organizationId),
+      workspaceId: toSafeId<"workspace">(workspaceId),
     });
 
     const isBatchPending = c.state.executionPlan

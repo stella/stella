@@ -10,6 +10,7 @@ import {
   sanitizeFilename,
 } from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const fillBodySchema = t.Object({
   file: t.File({ maxSize: "50m" }),
@@ -36,7 +37,7 @@ export const containsNull = (value: unknown): boolean => {
     return value.some(containsNull);
   }
   if (typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).some(containsNull);
+    return Object.values(value).some(containsNull);
   }
   return false;
 };
@@ -65,7 +66,7 @@ export const fillHandler = async ({
   }
 
   const parsed = parseResult.value;
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return new Response(
       JSON.stringify({
         error: "'values' must be a JSON object (not null or array).",
@@ -74,8 +75,7 @@ export const fillHandler = async ({
     );
   }
 
-  const record = parsed as Record<string, unknown>;
-  const hasNullValue = Object.values(record).some(containsNull);
+  const hasNullValue = Object.values(parsed).some(containsNull);
   if (hasNullValue) {
     return new Response(
       JSON.stringify({
@@ -89,7 +89,7 @@ export const fillHandler = async ({
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
-  const result = await fillTemplate(buffer, record as TemplateData);
+  const result = await fillTemplate(buffer, parsed as TemplateData);
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {

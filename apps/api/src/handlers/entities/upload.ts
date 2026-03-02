@@ -19,7 +19,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { processExtraction } from "@/api/lib/search/process-extraction";
 
 export const uploadEntityBodySchema = t.Object({
   file: t.File({
@@ -238,7 +238,7 @@ export const uploadEntityHandler = async ({
       return resolvedName;
     });
 
-    getSearchProvider().indexEntity(entityId).catch(captureError);
+    processExtraction(entityId).catch(captureError);
 
     return {
       entityId,

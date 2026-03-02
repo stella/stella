@@ -2,7 +2,11 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { status } from "elysia";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  TIME_ENTRY_SOURCE,
+  timeEntries,
+} from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 
 type TimerStopHandlerProps = {
@@ -20,8 +24,8 @@ export const timerStopHandler = async ({ userId }: TimerStopHandlerProps) => {
     .where(
       and(
         eq(timeEntries.userId, userId),
-        eq(timeEntries.source, "timer"),
-        eq(timeEntries.status, "draft"),
+        eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
+        eq(timeEntries.status, BILLING_STATUS.DRAFT),
         isNotNull(timeEntries.timerStartedAt),
       ),
     )

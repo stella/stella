@@ -14,6 +14,8 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
+import { toSafeId } from "@/api/lib/branded-types";
+import { getSearchProvider } from "@/api/lib/search/provider";
 
 const VITE_CACHE_DIR = resolve(
   import.meta.dir,
@@ -73,6 +75,11 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     // 4. Contacts
     await db.delete(contacts).where(eq(contacts.organizationId, orgId));
 
+    return { ok: true };
+  })
+  .post("/rebuild-search", async (ctx) => {
+    const orgId = toSafeId<"organization">(ctx.session.activeOrganizationId);
+    await getSearchProvider().rebuildIndex(orgId);
     return { ok: true };
   })
   .post("/clear-cache", () => {

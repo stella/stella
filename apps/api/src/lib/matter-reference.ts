@@ -55,9 +55,7 @@ export const validatePattern = (
   }
 
   for (const token of tokens) {
-    if (
-      !RECOGNIZED_TOKENS.includes(token as (typeof RECOGNIZED_TOKENS)[number])
-    ) {
+    if (!RECOGNIZED_TOKENS.some((t) => t === token)) {
       return Result.err(
         new PatternError({
           message: `Unrecognized token: ${token}`,
