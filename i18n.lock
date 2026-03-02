@@ -194,6 +194,11 @@ checksums:
     billing/total: f60dc0a14e9b1bace656c644de25de5b
     billing/week: 436fdd694160827dd6ea4644cdd0a8f8
     billing/writeOff: 4c25589a2735a3ea23b9a5a0170c0c28
+    chat/deleteThread: 2baeef5ad5eea6edc0761bf30bee9080
+    chat/greeting: 4baa45b6e6d953ea40b802910f235026
+    chat/newChat: 3137bd8485c6f0fee4b0bbcce4eecdad
+    chat/noThreads: 963962a6da064c88c11036051f8d8576
+    chat/threads: 6dd493bfcba36eaa4b9844e55400cc29
     clauses/addVariant: b4c1bca0a1ceb35d4fd331aa42a94234
     clauses/allClauses: 80291c34697c38769cfc882e3cbe200d
     clauses/backToList: 208c0f2ac2c480d5f8dfb0963d94b381
