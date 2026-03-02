@@ -31,6 +31,7 @@ export const LIMITS = {
   searchQueryMaxLength: 500,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  extractedContentMaxChars: 500_000,
 } as const;
 
 /**

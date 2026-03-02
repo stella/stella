@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -98,7 +98,7 @@ export const createTimeEntryHandler = async ({
       billable: body.billable ?? true,
       taskCode: body.taskCode ?? null,
       activityCode: body.activityCode ?? null,
-      source: "manual",
+      source: TIME_ENTRY_SOURCE.MANUAL,
     })
     .returning({ id: timeEntries.id });
 

@@ -1,5 +1,16 @@
+import { entityKindEnum } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+
+/** Narrow an unknown value to a valid EntityKind. */
+export const parseEntityKind = (value: unknown): EntityKind => {
+  const s = String(value);
+  const match = entityKindEnum.enumValues.find((v) => v === s);
+  if (!match) {
+    throw new Error(`Invalid entity kind: ${s}`);
+  }
+  return match;
+};
 
 export type SearchQuery = {
   query: string;

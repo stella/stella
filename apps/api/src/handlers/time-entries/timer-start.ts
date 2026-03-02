@@ -2,7 +2,11 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  TIME_ENTRY_SOURCE,
+  timeEntries,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -36,8 +40,8 @@ export const timerStartHandler = async ({
     and(
       eq(timeEntries.userId, userId),
       isNotNull(timeEntries.timerStartedAt),
-      eq(timeEntries.source, "timer"),
-      eq(timeEntries.status, "draft"),
+      eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
+      eq(timeEntries.status, BILLING_STATUS.DRAFT),
     ),
   );
 
@@ -90,8 +94,8 @@ export const timerStartHandler = async ({
       rateAtEntry: body.rateAtEntry,
       currency: body.currency,
       narrative: body.narrative ?? "",
-      source: "timer",
-      status: "draft",
+      source: TIME_ENTRY_SOURCE.TIMER,
+      status: BILLING_STATUS.DRAFT,
       timerStartedAt: now,
     })
     .returning({

@@ -26,6 +26,20 @@ const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
 
+const bytea = customType<{ data: Buffer }>({
+  dataType: () => "bytea",
+  fromDriver: (value) => {
+    if (Buffer.isBuffer(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const hex = value.startsWith("\\x") ? value.slice(2) : value;
+      return Buffer.from(hex, "hex");
+    }
+    throw new Error(`Unexpected bytea driver value: ${typeof value}`);
+  },
+});
+
 const pNanoid = p.varchar({ length: 21 }).$defaultFn(() => nanoid());
 
 export const propertyStatusEnum = p.pgEnum("property_status", [
@@ -59,6 +73,15 @@ export const timeEntryStatusEnum = p.pgEnum("time_entry_status", [
   "billed",
   "written_off",
 ]);
+export type TimeEntryStatus = (typeof timeEntryStatusEnum.enumValues)[number];
+/** Named constants for time entry and expense statuses
+ *  (both tables share timeEntryStatusEnum). */
+export const BILLING_STATUS = {
+  DRAFT: "draft",
+  APPROVED: "approved",
+  BILLED: "billed",
+  WRITTEN_OFF: "written_off",
+} as const satisfies Record<string, TimeEntryStatus>;
 
 export const expenseCategoryEnum = p.pgEnum("expense_category", [
   "filing_fee",
@@ -68,11 +91,17 @@ export const expenseCategoryEnum = p.pgEnum("expense_category", [
   "courier",
   "other",
 ]);
+export type ExpenseCategory = (typeof expenseCategoryEnum.enumValues)[number];
 
 export const timeEntrySourceEnum = p.pgEnum("time_entry_source", [
   "manual",
   "timer",
 ]);
+export type TimeEntrySource = (typeof timeEntrySourceEnum.enumValues)[number];
+export const TIME_ENTRY_SOURCE = {
+  MANUAL: "manual",
+  TIMER: "timer",
+} as const satisfies Record<string, TimeEntrySource>;
 
 // -- Contacts --
 
@@ -548,6 +577,7 @@ export const searchDocuments = p.pgTable(
     kind: entityKindEnum().notNull(),
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
+    language: p.varchar("language", { length: 10 }),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
@@ -556,6 +586,28 @@ export const searchDocuments = p.pgTable(
       .index("search_documents_org_workspace_idx")
       .on(table.organizationId, table.workspaceId),
   ],
+);
+
+export const extractedContent = p.pgTable(
+  "extracted_content",
+  {
+    entityId: p
+      .varchar("entity_id", { length: 21 })
+      .primaryKey()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    organizationId: p
+      .varchar("organization_id", { length: 128 })
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
+    ciphertext: bytea("ciphertext").notNull(),
+    iv: bytea("iv").notNull(),
+    charCount: p.integer("char_count").notNull(),
+    language: p.varchar("language", { length: 10 }),
+    extractedAt: p.timestamp("extracted_at").notNull().defaultNow(),
+  },
+  (table) => [p.index("extracted_content_org_id_idx").on(table.organizationId)],
 );
 
 // -- Views --
@@ -1045,6 +1097,7 @@ export const relations = defineRelations(
     templateCategories,
     templateClauses,
     searchDocuments,
+    extractedContent,
   },
   (r) => ({
     contacts: {
@@ -1191,6 +1244,10 @@ export const relations = defineRelations(
       searchDocument: r.one.searchDocuments({
         from: r.entities.id,
         to: r.searchDocuments.entityId,
+      }),
+      extractedContent: r.one.extractedContent({
+        from: r.entities.id,
+        to: r.extractedContent.entityId,
       }),
     },
     entityVersions: {
@@ -1387,6 +1444,12 @@ export const relations = defineRelations(
       workspace: r.one.workspaces({
         from: r.searchDocuments.workspaceId,
         to: r.workspaces.id,
+      }),
+    },
+    extractedContent: {
+      entity: r.one.entities({
+        from: r.extractedContent.entityId,
+        to: r.entities.id,
       }),
     },
   }),

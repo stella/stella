@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { invoices, timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, invoices, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -67,7 +67,9 @@ export const createInvoiceHandler = async ({
     });
   }
 
-  const invalid = entries.some((e) => e.status !== "approved" || !e.billable);
+  const invalid = entries.some(
+    (e) => e.status !== BILLING_STATUS.APPROVED || !e.billable,
+  );
   if (invalid) {
     return status(400, {
       message: "All entries must be approved and billable",
@@ -98,7 +100,7 @@ export const createInvoiceHandler = async ({
           currency: body.currency,
           totalAmount,
           notes: body.notes ?? null,
-          status: "draft",
+          status: BILLING_STATUS.DRAFT,
         })
         .returning({
           id: invoices.id,
@@ -110,14 +112,14 @@ export const createInvoiceHandler = async ({
         .update(timeEntries)
         .set({
           invoiceId: created.id,
-          status: "billed",
+          status: BILLING_STATUS.BILLED,
           updatedAt: now,
         })
         .where(
           and(
             eq(timeEntries.workspaceId, workspaceId),
             inArray(timeEntries.id, body.timeEntryIds),
-            eq(timeEntries.status, "approved"),
+            eq(timeEntries.status, BILLING_STATUS.APPROVED),
             eq(timeEntries.billable, true),
           ),
         );

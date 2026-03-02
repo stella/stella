@@ -4,12 +4,13 @@ import { nanoid } from "nanoid";
 
 import { db, type Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { processExtraction } from "@/api/lib/search/process-extraction";
 
 export const duplicateEntityBodySchema = t.Object({
   entityId: tNanoid,
@@ -99,6 +100,18 @@ const resolveEntityName = async ({
   return `${base}_${maxN + 1}${ext}`;
 };
 
+/** Extract fileName from the first file-type field. */
+const extractFileName = (
+  sourceFields: { content: FieldContent }[],
+): string | null => {
+  for (const field of sourceFields) {
+    if (field.content.type === "file") {
+      return field.content.fileName;
+    }
+  }
+  return null;
+};
+
 export const duplicateEntityHandler = async ({
   workspaceId,
   userId,
@@ -145,6 +158,10 @@ export const duplicateEntityHandler = async ({
 
   const sourceFields = source.currentVersion.fields;
 
+  // When entity.name is null (file uploads), derive the
+  // display name from the file field's fileName
+  const effectiveName = source.name ?? extractFileName(sourceFields);
+
   const result = await db.transaction(async (tx) => {
     const entityCount = await tx.$count(
       entities,
@@ -164,7 +181,7 @@ export const duplicateEntityHandler = async ({
       tx,
       workspaceId,
       parentId: source.parentId,
-      name: source.name,
+      name: effectiveName,
     });
 
     await tx.insert(entities).values({
@@ -206,7 +223,7 @@ export const duplicateEntityHandler = async ({
   });
 
   if (result && typeof result === "object" && "entityId" in result) {
-    getSearchProvider().indexEntity(result.entityId).catch(captureError);
+    processExtraction(result.entityId).catch(captureError);
   }
 
   return result;

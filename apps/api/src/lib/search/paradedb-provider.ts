@@ -2,16 +2,16 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import { db } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
-import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { buildSearchDocument } from "@/api/lib/search/index-entity";
-import type {
-  FacetBucket,
-  SearchHit,
-  SearchProvider,
-  SearchQuery,
-  SearchResult,
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import {
+  parseEntityKind,
+  type FacetBucket,
+  type SearchHit,
+  type SearchProvider,
+  type SearchQuery,
+  type SearchResult,
 } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -60,8 +60,7 @@ const mapHitRow = (row: RawRow): SearchHit => ({
   entityId: String(row.entity_id),
   workspaceId: String(row.workspace_id),
   workspaceName: String(row.workspace_name),
-  // SAFETY: kind column uses the entity_kind enum
-  kind: String(row.kind) as EntityKind,
+  kind: parseEntityKind(row.kind),
   title: String(row.title),
   headline: row.headline ? escapeAndHighlight(String(row.headline)) : null,
   updatedAt:
@@ -208,25 +207,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
 };
 
 const indexEntity = async (entityId: string): Promise<void> => {
-  const doc = await buildSearchDocument(entityId);
-  if (!doc) {
-    return;
-  }
-
-  await db
-    .insert(searchDocuments)
-    .values(doc)
-    .onConflictDoUpdate({
-      target: searchDocuments.entityId,
-      set: {
-        organizationId: doc.organizationId,
-        workspaceId: doc.workspaceId,
-        kind: doc.kind,
-        title: doc.title,
-        searchableText: doc.searchableText,
-        updatedAt: new Date(),
-      },
-    });
+  await upsertSearchDocument(entityId);
 };
 
 const removeEntity = async (entityId: string): Promise<void> => {

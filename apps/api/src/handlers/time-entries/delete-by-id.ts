@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -35,7 +35,7 @@ export const deleteTimeEntryByIdHandler = async ({
     return status(404, { message: "Time entry not found" });
   }
 
-  if (existing.status === "draft") {
+  if (existing.status === BILLING_STATUS.DRAFT) {
     await db
       .delete(timeEntries)
       .where(
@@ -51,7 +51,7 @@ export const deleteTimeEntryByIdHandler = async ({
   await db
     .update(timeEntries)
     .set({
-      status: "written_off",
+      status: BILLING_STATUS.WRITTEN_OFF,
       updatedAt: new Date(),
     })
     .where(

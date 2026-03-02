@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
-import { timeEntries } from "@/api/db/schema";
+import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -18,7 +18,12 @@ export const updateTimeEntryBodySchema = t.Object({
   matterId: t.Optional(tNanoid),
   taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  status: t.Optional(t.Union([t.Literal("draft"), t.Literal("approved")])),
+  status: t.Optional(
+    t.Union([
+      t.Literal(BILLING_STATUS.DRAFT),
+      t.Literal(BILLING_STATUS.APPROVED),
+    ]),
+  ),
   rateAtEntry: t.Optional(t.Integer({ minimum: 0 })),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
 });
@@ -48,7 +53,10 @@ export const updateTimeEntryByIdHandler = async ({
     return status(404, { message: "Time entry not found" });
   }
 
-  if (existing.status === "billed" || existing.status === "written_off") {
+  if (
+    existing.status === BILLING_STATUS.BILLED ||
+    existing.status === BILLING_STATUS.WRITTEN_OFF
+  ) {
     return status(400, {
       message: "Cannot edit a billed or written-off entry",
     });

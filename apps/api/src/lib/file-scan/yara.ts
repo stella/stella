@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { compile, type RuleMatch } from "@litko/yara-x";
 import type { Match, Scanner } from "pompelmi";
 
+import { isRecord } from "@/api/lib/type-guards";
+
 const YARA_DIR = join(import.meta.dir, "yara");
 
 const compiled = compile(
@@ -21,14 +23,16 @@ export const yaraScanner: Scanner = {
     const matches = compiled.scan(Buffer.from(bytes));
 
     return matches.map((m: RuleMatch): Match => {
-      const meta = m.meta as Record<string, unknown>;
+      const { meta } = m;
       const verdict =
-        typeof meta.verdict === "string" ? meta.verdict : undefined;
+        "verdict" in meta && typeof meta.verdict === "string"
+          ? meta.verdict
+          : undefined;
 
       return {
         rule: m.ruleIdentifier,
         severity: verdict ? YARA_SEVERITY_MAP[verdict] : "suspicious",
-        meta: typeof meta === "object" ? meta : {},
+        meta: isRecord(meta) ? meta : {},
       };
     });
   },
