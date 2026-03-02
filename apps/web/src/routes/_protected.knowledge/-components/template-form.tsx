@@ -1,9 +1,18 @@
 import { useCallback, useRef, useState } from "react";
-import { AlertTriangleIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 import { Checkbox } from "@stella/ui/components/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stella/ui/components/dialog";
 import { Field, FieldControl, FieldLabel } from "@stella/ui/components/field";
 import { Input } from "@stella/ui/components/input";
 import {
@@ -18,8 +27,12 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
+
+type FillFormat = "docx" | "pdf";
+
+const DOCX_EXT_RE = /\.docx$/i;
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -41,6 +54,8 @@ type ValidationError =
   | { kind: "required" }
   | { kind: "minLength"; min: number }
   | { kind: "maxLength"; max: number }
+  | { kind: "numberMin"; min: number }
+  | { kind: "numberMax"; max: number }
   | { kind: "pattern" };
 
 /** Validate a single field value against its manifest
@@ -61,7 +76,20 @@ const validateField = (
     return undefined;
   }
 
-  const { minLength, maxLength, pattern } = field.validation ?? {};
+  const { minLength, maxLength, min, max, pattern } = field.validation ?? {};
+
+  // Numeric range checks for number inputs
+  if (field.inputType === "number") {
+    const num = Number(str);
+    if (!Number.isNaN(num)) {
+      if (min !== undefined && num < min) {
+        return { kind: "numberMin", min };
+      }
+      if (max !== undefined && num > max) {
+        return { kind: "numberMax", max };
+      }
+    }
+  }
 
   if (minLength !== undefined && minLength > 0 && str.length < minLength) {
     return { kind: "minLength", min: minLength };
@@ -204,6 +232,7 @@ const FieldRenderer = ({
           {required && <RequiredIndicator />}
         </FieldLabel>
         <Select
+          name={field.path}
           onValueChange={(val) => {
             onChange(field.path, val);
             onBlur?.(field.path);
@@ -236,6 +265,7 @@ const FieldRenderer = ({
         <FieldControl
           render={
             <Textarea
+              name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
               value={(value as string) ?? ""}
@@ -257,6 +287,7 @@ const FieldRenderer = ({
         <FieldControl
           render={
             <Input
+              name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
               type="number"
@@ -278,6 +309,7 @@ const FieldRenderer = ({
       <FieldControl
         render={
           <Input
+            name={field.path}
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
             type={inputType === "date" ? "date" : "text"}
@@ -545,6 +577,14 @@ export const TemplateForm = ({
           return t("templates.validationMaxLength", {
             max: String(err.max),
           });
+        case "numberMin":
+          return t("templates.validationNumberMin", {
+            min: String(err.min),
+          });
+        case "numberMax":
+          return t("templates.validationNumberMax", {
+            max: String(err.max),
+          });
         case "pattern":
           return t("templates.validationPattern");
         default:
@@ -681,11 +721,26 @@ export const TemplateForm = ({
 
   const hasErrors = Object.values(errors).some(Boolean);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-
+  const handleDownload = useCallback(
+    async (format: FillFormat) => {
       if (!validateAll(values)) {
+        // Scroll to the first errored field
+        const all = collectValidatableFields(fields, values);
+        for (const { path, field: f } of all) {
+          const msg = resolveError(validateField(f, values[path]));
+          if (msg) {
+            const el = document.querySelector(`[name="${CSS.escape(path)}"]`);
+            el?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+            break;
+          }
+        }
+        toastManager.add({
+          type: "error",
+          title: t("templates.validationErrors"),
+        });
         return;
       }
 
@@ -695,20 +750,29 @@ export const TemplateForm = ({
       const valuesJson = JSON.stringify(submitValues);
 
       const response = templateId
-        ? await api.templates({ templateId }).fill.post({ values: valuesJson })
-        : await api.templates.fill.post({
-            // SAFETY: the discriminated union guarantees `file`
-            // is defined when `templateId` is absent.
-            file: file as File,
-            values: valuesJson,
-          });
+        ? await api
+            .templates({ templateId })
+            .fill.post({ values: valuesJson }, { query: { format } })
+        : await api.templates.fill.post(
+            {
+              // SAFETY: the discriminated union guarantees `file`
+              // is defined when `templateId` is absent.
+              file: file as File,
+              values: valuesJson,
+            },
+            { query: { format } },
+          );
 
       setLoading(false);
 
       if (response.error) {
+        const errorKey =
+          format === "pdf"
+            ? "templates.pdfConversionFailed"
+            : "templates.fillFailed";
         toastManager.add({
           type: "error",
-          title: t("templates.fillFailed"),
+          title: t(errorKey),
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -718,14 +782,15 @@ export const TemplateForm = ({
       }
 
       const data = response.data;
+      const mimeType = format === "pdf" ? PDF_MIME : DOCX_MIME;
       const blob =
         data instanceof Response
           ? await data.blob()
           : // SAFETY: Eden returns a typed object for the fill
-            // endpoint, but the actual response is binary DOCX
+            // endpoint, but the actual response is binary
             // data; the double cast bridges the type mismatch.
             new Blob([data as unknown as BlobPart], {
-              type: DOCX_MIME,
+              type: mimeType,
             });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -733,15 +798,93 @@ export const TemplateForm = ({
       // SAFETY: the discriminated union guarantees `file` is
       // defined when `fileName` (from server-side path) is absent.
       const baseName = fileName ?? (file as File).name;
-      const filename = `filled-${baseName}`;
+      const filename =
+        format === "pdf"
+          ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
+          : `filled-${baseName}`;
       anchor.download = filename;
       anchor.click();
       URL.revokeObjectURL(url);
 
       onDone(filename);
     },
-    [values, fields, file, templateId, fileName, t, onDone, validateAll],
+    [
+      values,
+      fields,
+      file,
+      templateId,
+      fileName,
+      t,
+      onDone,
+      validateAll,
+      resolveError,
+    ],
   );
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      // Errors are surfaced as toasts inside handleDownload
+      handleDownload("docx").catch(() => undefined);
+    },
+    [handleDownload],
+  );
+
+  // ── Fill preview ──────────────────────────────────
+  type PreviewState =
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | {
+        kind: "ready";
+        paragraphs: { text: string; source?: string }[];
+        unmatchedPlaceholders: string[];
+        unusedValues: string[];
+      };
+
+  const [preview, setPreview] = useState<PreviewState>({
+    kind: "idle",
+  });
+
+  const handlePreview = useCallback(async () => {
+    if (!templateId) {
+      return;
+    }
+
+    if (!validateAll(values)) {
+      toastManager.add({
+        type: "error",
+        title: t("templates.validationErrors"),
+      });
+      return;
+    }
+
+    setPreview({ kind: "loading" });
+
+    const submitValues = buildSubmitValues(values, fields);
+    const response = await api.templates({ templateId })["fill-preview"].post({
+      values: JSON.stringify(submitValues),
+    });
+
+    if (response.error || response.data instanceof Response) {
+      setPreview({ kind: "idle" });
+      toastManager.add({
+        type: "error",
+        title: t("templates.previewFailed"),
+        description: response.error
+          ? userErrorMessage(response.error, t("common.unexpectedError"))
+          : undefined,
+      });
+      return;
+    }
+
+    const { data } = response;
+    setPreview({
+      kind: "ready",
+      paragraphs: data.paragraphs,
+      unmatchedPlaceholders: data.unmatchedPlaceholders,
+      unusedValues: data.unusedValues,
+    });
+  }, [templateId, values, fields, validateAll, t]);
 
   const grouped = groupFieldsByPrefix(fields.filter((f) => f.kind !== "array"));
   const arrayFields = fields.filter((f) => f.kind === "array");
@@ -807,12 +950,95 @@ export const TemplateForm = ({
             />
           ))}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end gap-2 pt-2">
+            {templateId && (
+              <Button
+                disabled={loading || preview.kind === "loading"}
+                onClick={handlePreview}
+                type="button"
+                variant="ghost"
+              >
+                <EyeIcon />
+                {preview.kind === "loading"
+                  ? t("templates.previewFillLoading")
+                  : t("templates.previewFill")}
+              </Button>
+            )}
+            <Button
+              disabled={loading || hasErrors}
+              onClick={() => handleDownload("pdf").catch(() => undefined)}
+              type="button"
+              variant="outline"
+            >
+              {loading ? t("templates.generating") : t("templates.downloadPdf")}
+            </Button>
             <Button disabled={loading || hasErrors} type="submit">
-              {loading ? t("templates.generating") : t("templates.generate")}
+              {loading
+                ? t("templates.generating")
+                : t("templates.downloadDocx")}
             </Button>
           </div>
         </form>
+
+        {/* Fill Preview Dialog */}
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open) {
+              setPreview({ kind: "idle" });
+            }
+          }}
+          open={preview.kind === "ready"}
+        >
+          <DialogPopup className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{t("templates.previewFillTitle")}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              {preview.kind === "ready" && (
+                <>
+                  {preview.unmatchedPlaceholders.length > 0 && (
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-50 p-2.5 dark:bg-yellow-900/10">
+                      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-yellow-600 dark:text-yellow-500" />
+                      <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                        {t("templates.unmatchedPlaceholders", {
+                          list: preview.unmatchedPlaceholders.join(", "),
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  {preview.unusedValues.length > 0 && (
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-50 p-2.5 dark:bg-blue-900/10">
+                      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-500" />
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {t("templates.unusedValues", {
+                          list: preview.unusedValues.join(", "),
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+                    {preview.paragraphs.map((p, i) => (
+                      <p
+                        className={cn(
+                          "text-sm leading-relaxed",
+                          !p.text.trim() && "min-h-4",
+                        )}
+                        key={`${p.source ?? "body"}-${String(i)}`}
+                      >
+                        {p.text || "\u00a0"}
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
+            </DialogPanel>
+            <DialogFooter>
+              <DialogClose render={<Button variant="ghost" />}>
+                {t("common.done")}
+              </DialogClose>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       </div>
     </div>
   );

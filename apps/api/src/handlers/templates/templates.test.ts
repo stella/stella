@@ -474,6 +474,7 @@ describe("handler MIME validation", () => {
   test("fill rejects non-DOCX file", async () => {
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file: pdfFile, values: "{}" },
     });
 
@@ -513,6 +514,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file, values: "not json{" },
     });
 
@@ -528,6 +530,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file, values: "[1, 2, 3]" },
     });
 
@@ -543,6 +546,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file, values: "null" },
     });
 
@@ -558,6 +562,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file, values: '{"name": null}' },
     });
 
@@ -573,6 +578,7 @@ describe("fill handler validation", () => {
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: {
         file,
         values: '{"person": {"name": null}}',
@@ -597,6 +603,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: { file, values: JSON.stringify({ name: "Alice" }) },
     });
 
@@ -614,6 +621,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: {
         file,
         values: JSON.stringify({ name: "Alice", extra: "unused" }),
@@ -634,6 +642,7 @@ describe("fill handler diagnostic headers", () => {
 
     const result = await fillHandler({
       organizationId: fakeOrgId,
+      query: {},
       body: {
         file,
         values: JSON.stringify({ name: "Alice" }),

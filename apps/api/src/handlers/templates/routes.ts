@@ -8,6 +8,14 @@ import {
   unlinkClauseHandler,
 } from "@/api/handlers/clauses/template-links";
 import {
+  createTemplateCategoryBodySchema,
+  createTemplateCategoryHandler,
+  deleteTemplateCategoryHandler,
+  listTemplateCategoriesHandler,
+  updateTemplateCategoryBodySchema,
+  updateTemplateCategoryHandler,
+} from "@/api/handlers/templates/categories";
+import {
   createTemplateBodySchema,
   createTemplateHandler,
 } from "@/api/handlers/templates/create";
@@ -16,13 +24,25 @@ import {
   discoverBodySchema,
   discoverHandler,
 } from "@/api/handlers/templates/discover";
-import { fillBodySchema, fillHandler } from "@/api/handlers/templates/fill";
+import {
+  fillBodySchema,
+  fillHandler,
+  fillQuerySchema,
+} from "@/api/handlers/templates/fill";
 import {
   fillByIdBodySchema,
   fillByIdHandler,
+  fillByIdQuerySchema,
 } from "@/api/handlers/templates/fill-by-id";
+import {
+  fillPreviewBodySchema,
+  fillPreviewHandler,
+} from "@/api/handlers/templates/fill-preview";
 import { getTemplateHandler } from "@/api/handlers/templates/get";
-import { listTemplatesHandler } from "@/api/handlers/templates/list";
+import {
+  listTemplatesHandler,
+  listTemplatesQuerySchema,
+} from "@/api/handlers/templates/list";
 import {
   manifestBodySchema,
   manifestHandler,
@@ -62,8 +82,9 @@ export const templatesRoute = new Elysia({
       fillHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        query: ctx.query,
       }),
-    { body: fillBodySchema },
+    { body: fillBodySchema, query: fillQuerySchema },
   )
   .post(
     "/manifest",
@@ -75,10 +96,14 @@ export const templatesRoute = new Elysia({
     { body: manifestBodySchema },
   )
   // ── CRUD endpoints ─────────────────────────────────
-  .get("/", (ctx) =>
-    listTemplatesHandler({
-      organizationId: ctx.session.activeOrganizationId,
-    }),
+  .get(
+    "/",
+    (ctx) =>
+      listTemplatesHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        query: ctx.query,
+      }),
+    { query: listTemplatesQuerySchema },
   )
   .put(
     "/",
@@ -100,16 +125,31 @@ export const templatesRoute = new Elysia({
     { params: t.Object({ templateId: tNanoid }) },
   )
   .post(
-    "/:templateId/fill",
+    "/:templateId/fill-preview",
     (ctx) =>
-      fillByIdHandler({
+      fillPreviewHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         body: ctx.body,
       }),
     {
       params: t.Object({ templateId: tNanoid }),
+      body: fillPreviewBodySchema,
+    },
+  )
+  .post(
+    "/:templateId/fill",
+    (ctx) =>
+      fillByIdHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        templateId: ctx.params.templateId,
+        body: ctx.body,
+        query: ctx.query,
+      }),
+    {
+      params: t.Object({ templateId: tNanoid }),
       body: fillByIdBodySchema,
+      query: fillByIdQuerySchema,
     },
   )
   .get(
@@ -221,4 +261,48 @@ export const templatesRoute = new Elysia({
         linkId: tNanoid,
       }),
     },
+  );
+
+// ── Template Categories ────────────────────────────
+
+export const templateCategoriesRoute = new Elysia({
+  prefix: "/template-categories",
+})
+  .use(authMacro)
+  .guard({ validateAuth: true })
+  .get("/", (ctx) =>
+    listTemplateCategoriesHandler({
+      organizationId: ctx.session.activeOrganizationId,
+    }),
+  )
+  .put(
+    "/",
+    (ctx) =>
+      createTemplateCategoryHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        body: ctx.body,
+      }),
+    { body: createTemplateCategoryBodySchema },
+  )
+  .post(
+    "/:categoryId",
+    (ctx) =>
+      updateTemplateCategoryHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        categoryId: ctx.params.categoryId,
+        body: ctx.body,
+      }),
+    {
+      params: t.Object({ categoryId: tNanoid }),
+      body: updateTemplateCategoryBodySchema,
+    },
+  )
+  .delete(
+    "/:categoryId",
+    (ctx) =>
+      deleteTemplateCategoryHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        categoryId: ctx.params.categoryId,
+      }),
+    { params: t.Object({ categoryId: tNanoid }) },
   );

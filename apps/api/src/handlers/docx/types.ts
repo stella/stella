@@ -223,6 +223,8 @@ export type FieldValidation = {
   required?: boolean;
   minLength?: number;
   maxLength?: number;
+  min?: number;
+  max?: number;
   pattern?: string;
 };
 

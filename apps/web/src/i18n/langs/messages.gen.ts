@@ -584,9 +584,20 @@ type Messages = {
     "title": "Organization";
   };
   "rightPanel": {
+    "addConditional": "Add conditional";
     "askAboutMatter": "Ask questions about your matter.";
     "chatPlaceholder": "Chat will appear here.";
+    "comingSoon": "AI template assistant coming soon.";
+    "convertToPlaceholder": "Convert to placeholder";
+    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.";
+    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?";
+    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?";
+    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?";
+    "repeatForEach": "Repeat for each item";
+    "selectedText": "Selected text";
+    "templateAssistant": "Template Assistant";
     "title": "Chat";
+    "whatToDo": "What would you like to do with this text?";
   };
   "search": {
     "emptyState": "Start typing to search across all matters.";
@@ -628,10 +639,17 @@ type Messages = {
   };
   "templates": {
     "addItem": "Add item";
+    "allTemplates": "All templates";
     "backToList": "Back to templates";
     "browseFiles": "Browse files";
+    "categoryDeleteConfirm": "This will remove the category. Templates in this category will become uncategorized.";
+    "categoryDeleteFailed": "Failed to delete category";
+    "categoryName": "Category name";
+    "categorySaveFailed": "Failed to save category";
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
+    "createCategory": "New category";
+    "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
     "directiveEach": "Loop: {expression}";
     "directiveElse": "Else";
@@ -641,8 +659,11 @@ type Messages = {
     "directiveIf": "If: {expression}";
     "discovering": "Analyzing...";
     "discoveryFailed": "Failed to analyze template";
+    "downloadDocx": "Download DOCX";
+    "downloadPdf": "Download PDF";
     "downloadReady": "Document ready";
     "dragAndDrop": "or drag and drop";
+    "editCategory": "Edit category";
     "editFields": "Edit fields";
     "fieldCount": "{count, plural, one {# field} other {# fields}}";
     "fieldInputType": "Input type";
@@ -670,9 +691,13 @@ type Messages = {
     "loadFailed": "Failed to load templates";
     "newTemplate": "New template";
     "noTemplates": "No templates yet";
+    "pdfConversionFailed": "Failed to convert to PDF";
     "preview": "Preview";
     "previewEmpty": "No content to preview";
     "previewFailed": "Failed to generate preview";
+    "previewFill": "Preview";
+    "previewFillLoading": "Generating preview...";
+    "previewFillTitle": "Fill preview";
     "previewSectionBody": "Body";
     "previewSectionFooter": "Footer";
     "previewSectionHeader": "Header";
@@ -685,6 +710,8 @@ type Messages = {
     "templateRenamed": "Template renamed";
     "templateSaved": "Template saved";
     "testFill": "Test fill";
+    "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
+    "unusedValues": "Some values were not used: {list}";
     "uploadDescription": "Upload a .docx file with '{{placeholders}}' to create a template";
     "uploadDifferent": "Upload a different template";
     "uploadTitle": "Create a template";

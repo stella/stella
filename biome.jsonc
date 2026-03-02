@@ -67,7 +67,7 @@
       }
     },
     {
-      "includes": ["apps/api/scripts/**"],
+      "includes": ["apps/api/scripts/**", "scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {

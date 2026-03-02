@@ -21,7 +21,10 @@ import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { registry } from "@/api/handlers/registry";
 import { searchRoute } from "@/api/handlers/search/routes";
-import { templatesRoute } from "@/api/handlers/templates/routes";
+import {
+  templateCategoriesRoute,
+  templatesRoute,
+} from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -85,6 +88,7 @@ const api = new Elysia()
       .use(fieldsRoute)
       .use(viewsRoute)
       .use(templatesRoute)
+      .use(templateCategoriesRoute)
       .use(timeEntriesRoute)
       .use(billingCodesRoute)
       .use(ratesRoute)

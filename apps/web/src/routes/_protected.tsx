@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -31,11 +31,18 @@ import {
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { roleOptions } from "@/routes/-queries";
+
+const LazyTemplateAssistantPanel = lazy(() =>
+  import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
+    (m) => ({ default: m.TemplateAssistantPanel }),
+  ),
+);
 
 export const Route = createFileRoute("/_protected")({
   beforeLoad: ({ context, location }) => {
@@ -191,6 +198,7 @@ type RightPanelProps = {
 
 function RightPanel({ open, onToggle }: RightPanelProps) {
   const t = useTranslations();
+  const assistantActive = useTemplateAssistantStore((s) => s.active);
   const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
   const isDragging = useRef(false);
 
@@ -254,22 +262,47 @@ function RightPanel({ open, onToggle }: RightPanelProps) {
           onPointerUp={handlePointerUp}
         />
         <div className="flex h-full w-full flex-col bg-sidebar">
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
-            <Button
-              className="size-7 text-muted-foreground"
-              onClick={onToggle}
-              size="icon"
-              variant="ghost"
-            >
-              <PanelRightIcon className="size-4" />
-            </Button>
-            <span className="text-sm font-medium">{t("rightPanel.title")}</span>
-          </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
-            <MessageSquareIcon className="size-8 opacity-30" />
-            <p>{t("rightPanel.chatPlaceholder")}</p>
-            <p className="text-xs">{t("rightPanel.askAboutMatter")}</p>
-          </div>
+          {assistantActive ? (
+            <>
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
+                <Button
+                  className="size-7 text-muted-foreground"
+                  onClick={onToggle}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <PanelRightIcon className="size-4" />
+                </Button>
+                <span className="text-sm font-medium">
+                  {t("rightPanel.templateAssistant")}
+                </span>
+              </div>
+              <Suspense>
+                <LazyTemplateAssistantPanel />
+              </Suspense>
+            </>
+          ) : (
+            <>
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
+                <Button
+                  className="size-7 text-muted-foreground"
+                  onClick={onToggle}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <PanelRightIcon className="size-4" />
+                </Button>
+                <span className="text-sm font-medium">
+                  {t("rightPanel.title")}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+                <MessageSquareIcon className="size-8 opacity-30" />
+                <p>{t("rightPanel.chatPlaceholder")}</p>
+                <p className="text-xs">{t("rightPanel.askAboutMatter")}</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

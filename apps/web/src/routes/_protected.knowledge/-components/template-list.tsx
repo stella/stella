@@ -28,6 +28,10 @@ import { toastManager } from "@stella/ui/components/toast";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
+import {
+  TemplateCategorySidebar,
+  type TemplateCategoryItem,
+} from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
@@ -43,11 +47,16 @@ type TemplateItem = {
   fileName: string;
   fieldCount: number;
   sizeBytes: number;
+  categoryId: string | null;
   createdAt: Date;
 };
 
 type TemplateListProps = {
   templates: TemplateItem[];
+  categories: TemplateCategoryItem[];
+  selectedCategoryId: string | null;
+  onCategorySelect: (id: string | null) => void;
+  onCategoriesChanged: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
   onSelect: (template: TemplateItem) => void;
   onDeleted: () => void;
@@ -55,6 +64,10 @@ type TemplateListProps = {
 
 export const TemplateList = ({
   templates,
+  categories,
+  selectedCategoryId,
+  onCategorySelect,
+  onCategoriesChanged,
   onDiscovered,
   onSelect,
   onDeleted,
@@ -107,54 +120,71 @@ export const TemplateList = ({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.item(0);
       if (file) {
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
-        discover(file);
+        // Errors are surfaced as toasts inside discover
+        discover(file).catch(() => undefined);
       }
       e.target.value = "";
     },
     [discover],
   );
 
-  if (templates.length === 0) {
+  if (templates.length === 0 && !selectedCategoryId) {
     return <TemplateUpload onDiscovered={onDiscovered} />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="text-sm text-muted-foreground">
-          {String(templates.length)}
-        </span>
-        <Button
-          disabled={discovering}
-          onClick={() => inputRef.current?.click()}
-          size="sm"
-        >
-          <PlusIcon />
-          {discovering
-            ? t("templates.discovering")
-            : t("templates.newTemplate")}
-        </Button>
-        <input
-          accept=".docx"
-          className="hidden"
-          onChange={handleFileChange}
-          ref={inputRef}
-          type="file"
-        />
-      </div>
+    <div className="flex min-h-0 flex-1">
+      <TemplateCategorySidebar
+        categories={categories}
+        onCategoriesChanged={onCategoriesChanged}
+        onSelect={onCategorySelect}
+        selectedId={selectedCategoryId}
+      />
 
-      <div className="flex-1 overflow-y-auto">
-        <ul className="divide-y">
-          {templates.map((template) => (
-            <TemplateRow
-              key={template.id}
-              onDeleted={onDeleted}
-              onSelect={() => onSelect(template)}
-              template={template}
-            />
-          ))}
-        </ul>
+      <div className="flex min-h-0 flex-1 flex-col border-l">
+        <div className="flex items-center justify-between border-b px-4 py-2">
+          <span className="text-sm text-muted-foreground">
+            {String(templates.length)}
+          </span>
+          <Button
+            disabled={discovering}
+            onClick={() => inputRef.current?.click()}
+            size="sm"
+          >
+            <PlusIcon />
+            {discovering
+              ? t("templates.discovering")
+              : t("templates.newTemplate")}
+          </Button>
+          <input
+            accept=".docx"
+            className="hidden"
+            onChange={handleFileChange}
+            ref={inputRef}
+            type="file"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {templates.length === 0 && (
+            <div className="flex items-center justify-center p-8">
+              <p className="text-sm text-muted-foreground">
+                {t("templates.noTemplates")}
+              </p>
+            </div>
+          )}
+
+          <ul className="divide-y">
+            {templates.map((template) => (
+              <TemplateRow
+                key={template.id}
+                onDeleted={onDeleted}
+                onSelect={() => onSelect(template)}
+                template={template}
+              />
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );

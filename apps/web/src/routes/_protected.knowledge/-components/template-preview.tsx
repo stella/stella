@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -12,6 +12,7 @@ import {
   HighlightedText,
   type BlockDirectiveKind,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 // ── Types ────────────────────────────────────────────────
 
@@ -323,6 +324,16 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
     };
   }, [templateId, t]);
 
+  const setSelectedText = useTemplateAssistantStore((s) => s.setSelectedText);
+
+  const handleTextSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim();
+    if (text && text.length > 0) {
+      setSelectedText(text);
+    }
+  }, [setSelectedText]);
+
   if (state.kind === "loading") {
     return (
       <div className="flex items-center justify-center p-8">
@@ -360,7 +371,13 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const hasMultipleSections = sources.size > 1;
 
   return (
-    <div className="space-y-0.5 py-2">
+    // biome-ignore lint/a11y/noStaticElementInteractions: text selection handler
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: text selection handler
+    <div
+      className="space-y-0.5 py-2"
+      onKeyUp={handleTextSelection}
+      onMouseUp={handleTextSelection}
+    >
       {paragraphs.map((p, i) => {
         // Show section divider at the first paragraph of
         // each new source section (only when mixed sources)
