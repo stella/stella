@@ -219,11 +219,21 @@
     "writeOff": "Write off"
   },
   "chat": {
-    "deleteThread": "Delete conversation",
-    "greeting": "How can I help you today?",
-    "newChat": "New chat",
-    "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "deleteThread": "Konversation löschen",
+    "greeting": "Wie kann ich Ihnen heute helfen?",
+    "mention": {
+      "noResults": "Keine passenden Einträge"
+    },
+    "newChat": "Neuer Chat",
+    "noThreads": "Noch keine Konversationen",
+    "placeholder": "What would you like to know?",
+    "threads": "Konversationen",
+    "tool": {
+      "listEntities": "Einträge aufgelistet",
+      "readContent": "Inhalt gelesen",
+      "readEntity": "Eintrag gelesen",
+      "searchMatter": "Akte durchsucht"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -551,13 +561,14 @@
     "agents": "Agenten",
     "analytics": "Analytik",
     "chat": "Chat",
-    "clauses": "Clauses",
+    "chatAlreadyOpen": "Chat ist bereits geöffnet",
+    "clauses": "Klauseln",
     "clients": "Klienten",
-    "contacts": "Contacts",
-    "expenses": "Expenses",
+    "contacts": "Kontakte",
+    "expenses": "Ausgaben",
     "inbox": "Inbox",
     "invitations": "Einladungen",
-    "invoices": "Invoices",
+    "invoices": "Rechnungen",
     "knowledge": "Wissen",
     "members": "Mitglieder",
     "newMatter": "Neue Akte",
@@ -568,13 +579,14 @@
     "searchEmptyState": "Beginnen Sie zu tippen, um Dokumente, Akten und mehr zu suchen.",
     "searchPlaceholder": "In allen Arbeitsbereichen suchen...",
     "shortcutCategories": {
-      "actions": "Actions",
+      "actions": "Aktionen",
       "navigation": "Navigation"
     },
     "sidebar": "Seitenleiste",
     "sidebarDescription": "Zeigt die mobile Seitenleiste an.",
     "templates": "Vorlagen",
     "timeTracking": "Zeiterfassung",
+    "toggleChat": "Chat ein-/ausblenden",
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
   },
   "organization": {
@@ -633,20 +645,20 @@
     "title": "Organisation"
   },
   "rightPanel": {
-    "addConditional": "Add conditional",
-    "askAboutMatter": "Ask questions about your matter.",
-    "chatPlaceholder": "Chat will appear here.",
-    "comingSoon": "AI template assistant coming soon.",
-    "convertToPlaceholder": "Convert to placeholder",
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.",
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?",
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?",
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?",
-    "repeatForEach": "Repeat for each item",
-    "selectedText": "Selected text",
-    "templateAssistant": "Template Assistant",
+    "addConditional": "Bedingung hinzufügen",
+    "askAboutMatter": "Stellen Sie Fragen zu Ihrer Akte.",
+    "chatPlaceholder": "Chat wird hier angezeigt.",
+    "comingSoon": "KI-Vorlagenassistent kommt bald.",
+    "convertToPlaceholder": "In Platzhalter umwandeln",
+    "mockDisclaimer": "Dies ist eine Vorschau des KI-Assistenten. Antworten sind simuliert.",
+    "mockResponseConditional": "Ich würde diesen Text in einen bedingten Block einschließen: '{{#if condition}}...{{/if}}'. Welche Bedingung soll die Sichtbarkeit steuern?",
+    "mockResponsePlaceholder": "Ich kann den ausgewählten Text in einen Platzhalter wie '{{fieldName}}' umwandeln. Wie soll das Feld heißen?",
+    "mockResponseRepeat": "Ich würde dies in eine Schleife einschließen: '{{#each items}}...{{/each}}'. Welche Sammlung soll durchlaufen werden?",
+    "repeatForEach": "Für jedes Element wiederholen",
+    "selectedText": "Ausgewählter Text",
+    "templateAssistant": "Vorlagenassistent",
     "title": "Chat",
-    "whatToDo": "What would you like to do with this text?"
+    "whatToDo": "Was möchten Sie mit diesem Text tun?"
   },
   "search": {
     "emptyState": "Start typing to search across all matters.",

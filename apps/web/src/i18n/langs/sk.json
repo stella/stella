@@ -219,11 +219,21 @@
     "writeOff": "Write off"
   },
   "chat": {
-    "deleteThread": "Delete conversation",
-    "greeting": "How can I help you today?",
-    "newChat": "New chat",
-    "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "deleteThread": "Zmazať konverzáciu",
+    "greeting": "Ako vám môžem dnes pomôcť?",
+    "mention": {
+      "noResults": "Žiadne zodpovedajúce entity"
+    },
+    "newChat": "Nový chat",
+    "noThreads": "Zatiaľ žiadne konverzácie",
+    "placeholder": "What would you like to know?",
+    "threads": "Konverzácie",
+    "tool": {
+      "listEntities": "Výpis entít",
+      "readContent": "Čítanie obsahu",
+      "readEntity": "Čítanie entity",
+      "searchMatter": "Hľadanie v spise"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -551,13 +561,14 @@
     "agents": "Agenti",
     "analytics": "Analytika",
     "chat": "Chat",
-    "clauses": "Clauses",
+    "chatAlreadyOpen": "Chat je už otvorený",
+    "clauses": "Klauzuly",
     "clients": "Klienti",
-    "contacts": "Contacts",
-    "expenses": "Expenses",
+    "contacts": "Kontakty",
+    "expenses": "Výdavky",
     "inbox": "Inbox",
     "invitations": "Pozvánky",
-    "invoices": "Invoices",
+    "invoices": "Faktúry",
     "knowledge": "Znalosti",
     "members": "Členovia",
     "newMatter": "Nový spis",
@@ -568,13 +579,14 @@
     "searchEmptyState": "Začnite písať na vyhľadávanie dokumentov, spisov a ďalšieho.",
     "searchPlaceholder": "Hľadať vo všetkých pracovných priestoroch...",
     "shortcutCategories": {
-      "actions": "Actions",
-      "navigation": "Navigation"
+      "actions": "Akcie",
+      "navigation": "Navigácia"
     },
     "sidebar": "Bočný panel",
     "sidebarDescription": "Zobrazí mobilný bočný panel.",
     "templates": "Šablóny",
     "timeTracking": "Sledovanie času",
+    "toggleChat": "Prepnúť chat",
     "toggleSidebar": "Prepnúť bočný panel"
   },
   "organization": {
@@ -633,20 +645,20 @@
     "title": "Organizácia"
   },
   "rightPanel": {
-    "addConditional": "Add conditional",
-    "askAboutMatter": "Ask questions about your matter.",
-    "chatPlaceholder": "Chat will appear here.",
-    "comingSoon": "AI template assistant coming soon.",
-    "convertToPlaceholder": "Convert to placeholder",
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.",
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?",
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?",
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?",
-    "repeatForEach": "Repeat for each item",
-    "selectedText": "Selected text",
-    "templateAssistant": "Template Assistant",
+    "addConditional": "Pridať podmienku",
+    "askAboutMatter": "Pýtajte sa na svoj spis.",
+    "chatPlaceholder": "Chat sa zobrazí tu.",
+    "comingSoon": "AI asistent šablón čoskoro.",
+    "convertToPlaceholder": "Previesť na zástupný symbol",
+    "mockDisclaimer": "Toto je náhľad AI asistenta. Odpovede sú simulované.",
+    "mockResponseConditional": "Zabalil by som tento text do podmieneného bloku: '{{#if condition}}...{{/if}}'. Aká podmienka má riadiť jeho viditeľnosť?",
+    "mockResponsePlaceholder": "Môžem previesť vybraný text na zástupný symbol ako '{{fieldName}}'. Ako sa má pole volať?",
+    "mockResponseRepeat": "Zabalil by som to do slučky: '{{#each items}}...{{/each}}'. Akú kolekciu má prechádzať?",
+    "repeatForEach": "Opakovať pre každú položku",
+    "selectedText": "Vybraný text",
+    "templateAssistant": "Asistent šablón",
     "title": "Chat",
-    "whatToDo": "What would you like to do with this text?"
+    "whatToDo": "Čo chcete s týmto textom urobiť?"
   },
   "search": {
     "emptyState": "Start typing to search across all matters.",

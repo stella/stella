@@ -86,8 +86,8 @@ type Messages = {
     "date": "Date";
     "day": "Day";
     "decimalHours": "({hours}h)";
-    "description": "Description";
     "deleteSelected": "Delete selected";
+    "description": "Description";
     "duration": "Duration";
     "editEntry": "Edit entry";
     "elapsed": "Elapsed";
@@ -221,6 +221,23 @@ type Messages = {
     "week": "Week";
     "writeOff": "Write off";
   };
+  "chat": {
+    "deleteThread": "Delete conversation";
+    "greeting": "How can I help you today?";
+    "mention": {
+      "noResults": "No matching entities";
+    };
+    "newChat": "New chat";
+    "placeholder": "What would you like to know?";
+    "noThreads": "No conversations yet";
+    "threads": "Conversations";
+    "tool": {
+      "listEntities": "Listed entities";
+      "readContent": "Read content";
+      "readEntity": "Read entity";
+      "searchMatter": "Searched matter";
+    };
+  };
   "clauses": {
     "addVariant": "Add variant";
     "allClauses": "All clauses";
@@ -230,10 +247,12 @@ type Messages = {
     "categoryDeleteConfirm": "Clauses in this category will become uncategorized.";
     "categoryName": "Category name";
     "categoryNamePlaceholder": "e.g. Confidentiality";
+    "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
     "clauseCreated": "Clause created";
     "clauseDeleted": "Clause deleted";
     "clauseDeletedTombstone": "Clause deleted";
     "clauseUpdated": "Clause updated";
+    "compareWithCurrent": "Compared with current version";
     "confirmDeleteClause": "This will permanently delete the clause and all its variants.";
     "createCategory": "New category";
     "createClause": "New clause";
@@ -246,7 +265,14 @@ type Messages = {
     "descriptionPlaceholder": "Brief description of the clause";
     "editCategory": "Edit category";
     "editClause": "Edit clause";
+    "export": "Export";
+    "exportFailed": "Failed to export clauses";
     "history": "History";
+    "import": "Import";
+    "importFailed": "Failed to import clauses";
+    "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
+    "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
+    "importing": "Importing…";
     "language": "Language";
     "languagePlaceholder": "e.g. en";
     "limitReached": "Clause limit reached";
@@ -257,6 +283,7 @@ type Messages = {
     "loadFailed": "Failed to load clauses";
     "loadMore": "Load more";
     "loading": "Loading clauses…";
+    "noChanges": "No changes";
     "noClauses": "No clauses yet";
     "noLinkedClauses": "No linked clauses";
     "noResults": "No clauses yet";
@@ -267,7 +294,9 @@ type Messages = {
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
     "selectCategory": "Category";
+    "selectFile": "Select JSON file";
     "selectVariant": "Select variant";
+    "selectVersionToCompare": "Select a version to compare with current";
     "slotName": "Slot name";
     "slotNamePlaceholder": "e.g. NonCompete";
     "syncFailed": "Failed to sync";
@@ -292,25 +321,6 @@ type Messages = {
     "variants": "Variants";
     "version": "Version {version}";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
-    "selectVersionToCompare": "Select a version to compare with current";
-    "compareWithCurrent": "Compared with current version";
-    "noChanges": "No changes";
-    "export": "Export";
-    "exportFailed": "Failed to export clauses";
-    "import": "Import";
-    "importing": "Importing…";
-    "importFailed": "Failed to import clauses";
-    "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
-    "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
-    "selectFile": "Select JSON file";
-    "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
-  };
-  "chat": {
-    "deleteThread": "Delete conversation";
-    "greeting": "How can I help you today?";
-    "newChat": "New chat";
-    "noThreads": "No conversations yet";
-    "threads": "Conversations";
   };
   "common": {
     "accept": "Accept";
@@ -320,6 +330,8 @@ type Messages = {
     "category": "Category";
     "columns": "Columns";
     "comingSoon": "Coming soon";
+    "confirm": "Confirm";
+    "confirmAction": "Are you sure?";
     "convertTo": "Convert to";
     "createdAt": "Created at {date}";
     "currency": "Currency";
@@ -337,19 +349,17 @@ type Messages = {
     "email": "Email";
     "empty": "Empty";
     "enterKey": "↵";
+    "error": "Error";
     "filter": "Filter";
     "invite": "Invite";
     "kind": "Kind";
     "language": "Language";
     "loadMore": "Load more";
     "matters": "Matters";
-    "confirm": "Confirm";
-    "confirmAction": "Are you sure?";
-    "error": "Error";
     "metadata": "Metadata";
     "name": "Name";
-    "notes": "Notes";
     "newRow": "New row";
+    "notes": "Notes";
     "open": "Open";
     "pin": "Pin";
     "print": "Print";
@@ -554,6 +564,7 @@ type Messages = {
     "agents": "Agents";
     "analytics": "Analytics";
     "chat": "Chat";
+    "chatAlreadyOpen": "Chat is already open";
     "clauses": "Clauses";
     "clients": "Clients";
     "contacts": "Contacts";
@@ -578,6 +589,7 @@ type Messages = {
     "sidebarDescription": "Displays the mobile sidebar.";
     "templates": "Templates";
     "timeTracking": "Time tracking";
+    "toggleChat": "Toggle chat";
     "toggleSidebar": "Toggle sidebar";
   };
   "organization": {
@@ -690,21 +702,21 @@ type Messages = {
     "workspaceDeletedSuccessfully": "Matter deleted successfully";
   };
   "templateAnalytics": {
+    "errorRate": "Error rate";
+    "fills": "Fills";
+    "fillsByPeriod": "Fills over time";
+    "fillsByUser": "Fills by user";
+    "last30Days": "30 days";
+    "last7Days": "7 days";
+    "last90Days": "90 days";
+    "noData": "No data for this period";
+    "pdfRatio": "PDF exports";
+    "template": "Template";
     "title": "Template Analytics";
+    "topTemplates": "Most used templates";
     "totalFills": "Total fills";
     "uniqueTemplates": "Templates used";
-    "pdfRatio": "PDF exports";
-    "errorRate": "Error rate";
-    "fillsByPeriod": "Fills over time";
-    "topTemplates": "Most used templates";
-    "fillsByUser": "Fills by user";
-    "template": "Template";
     "user": "User";
-    "fills": "Fills";
-    "noData": "No data for this period";
-    "last7Days": "7 days";
-    "last30Days": "30 days";
-    "last90Days": "90 days";
   };
   "templates": {
     "addItem": "Add item";

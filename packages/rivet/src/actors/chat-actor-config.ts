@@ -9,10 +9,17 @@ import {
   type AuthedActorReturn,
 } from "./common";
 
+export type UserContext = {
+  userName: string;
+  locale: string;
+  timezone: string;
+};
+
 export type ThreadSummary = {
   id: string;
   title: string;
   createdAt: number;
+  workspaceId: string | null;
 };
 
 export type SequencedChunk<TChunk = unknown> = {

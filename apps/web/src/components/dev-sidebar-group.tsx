@@ -10,7 +10,11 @@ import { useShallow } from "zustand/react/shallow";
 
 import {
   MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
   MenuItem,
+  MenuRadioGroup,
+  MenuRadioItem,
   MenuSeparator,
   MenuSub,
   MenuSubPopup,
@@ -20,6 +24,19 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { useDevStore } from "@/lib/dev-store";
+
+const CHAT_MODELS = [
+  { value: "", label: "Default (Gemini 2.5 Flash)" },
+  { value: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
+  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
+  {
+    value: "anthropic/claude-3.5-haiku",
+    label: "Claude 3.5 Haiku",
+  },
+] as const;
 
 export const DevSidebarGroup = () => {
   const queryClient = useQueryClient();
@@ -34,6 +51,10 @@ export const DevSidebarGroup = () => {
       setRivetDevtools: s.setRivetDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
+      chatModelId: s.chatModelId,
+      setChatModelId: s.setChatModelId,
+      showToolCalls: s.showToolCalls,
+      setShowToolCalls: s.setShowToolCalls,
     })),
   );
 
@@ -120,6 +141,28 @@ export const DevSidebarGroup = () => {
         >
           {"Source Inspector"}
         </MenuCheckboxItem>
+        <MenuCheckboxItem
+          checked={dev.showToolCalls}
+          onClick={() => dev.setShowToolCalls(!dev.showToolCalls)}
+          variant="switch"
+        >
+          {"Show Tool Calls"}
+        </MenuCheckboxItem>
+        <MenuSeparator />
+        <MenuGroup>
+          <MenuGroupLabel>{"Chat Model"}</MenuGroupLabel>
+          <MenuRadioGroup value={dev.chatModelId ?? ""}>
+            {CHAT_MODELS.map((m) => (
+              <MenuRadioItem
+                key={m.value}
+                onClick={() => dev.setChatModelId(m.value || null)}
+                value={m.value}
+              >
+                {m.label}
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        </MenuGroup>
         <MenuSeparator />
         <MenuItem disabled={seeding} onClick={handleSeed}>
           <DatabaseIcon />

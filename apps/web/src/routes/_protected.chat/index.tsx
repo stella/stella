@@ -9,8 +9,12 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
+import { useDevStore } from "@/lib/dev-store";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
+
+const getModelId = () => useDevStore.getState().chatModelId;
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,
@@ -20,6 +24,7 @@ function ChatIndex() {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const userContext = useChatUserContext();
 
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
@@ -36,7 +41,12 @@ function ChatIndex() {
               const threadId = nanoid();
 
               const chat = await queryClient.ensureQueryData(
-                chatThreadOptions(threadId, queryClient),
+                chatThreadOptions({
+                  threadId,
+                  queryClient,
+                  userContext,
+                  getModelId,
+                }),
               );
 
               chat.sendMessage({ text });

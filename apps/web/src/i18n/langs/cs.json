@@ -219,11 +219,21 @@
     "writeOff": "Write off"
   },
   "chat": {
-    "deleteThread": "Delete conversation",
-    "greeting": "How can I help you today?",
-    "newChat": "New chat",
-    "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "deleteThread": "Smazat konverzaci",
+    "greeting": "Jak vám mohu dnes pomoci?",
+    "mention": {
+      "noResults": "Žádné odpovídající entity"
+    },
+    "newChat": "Nový chat",
+    "noThreads": "Zatím žádné konverzace",
+    "placeholder": "What would you like to know?",
+    "threads": "Konverzace",
+    "tool": {
+      "listEntities": "Výpis entit",
+      "readContent": "Čtení obsahu",
+      "readEntity": "Čtení entity",
+      "searchMatter": "Hledání ve spisu"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -342,7 +352,7 @@
     "kind": "Druh",
     "language": "Language",
     "loadMore": "Load more",
-    "matters": "Matters",
+    "matters": "Spisy",
     "metadata": "Metadata",
     "name": "Name",
     "newRow": "Nový řádek",
@@ -551,13 +561,14 @@
     "agents": "Agenti",
     "analytics": "Analytika",
     "chat": "Chat",
+    "chatAlreadyOpen": "Chat je již otevřený",
     "clauses": "Klauzule",
     "clients": "Klienti",
     "contacts": "Kontakty",
-    "expenses": "Expenses",
+    "expenses": "Výdaje",
     "inbox": "Inbox",
     "invitations": "Pozvánky",
-    "invoices": "Invoices",
+    "invoices": "Faktury",
     "knowledge": "Znalosti",
     "members": "Členové",
     "newMatter": "Nový spis",
@@ -575,6 +586,7 @@
     "sidebarDescription": "Zobrazí mobilní postranní panel.",
     "templates": "Šablony",
     "timeTracking": "Sledování času",
+    "toggleChat": "Přepnout chat",
     "toggleSidebar": "Přepnout postranní panel"
   },
   "organization": {
@@ -633,20 +645,20 @@
     "title": "Organizace"
   },
   "rightPanel": {
-    "addConditional": "Add conditional",
-    "askAboutMatter": "Ask questions about your matter.",
-    "chatPlaceholder": "Chat will appear here.",
-    "comingSoon": "AI template assistant coming soon.",
-    "convertToPlaceholder": "Convert to placeholder",
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.",
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?",
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?",
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?",
-    "repeatForEach": "Repeat for each item",
-    "selectedText": "Selected text",
-    "templateAssistant": "Template Assistant",
+    "addConditional": "Přidat podmínku",
+    "askAboutMatter": "Ptejte se na svůj spis.",
+    "chatPlaceholder": "Chat se zobrazí zde.",
+    "comingSoon": "AI asistent šablon již brzy.",
+    "convertToPlaceholder": "Převést na zástupný symbol",
+    "mockDisclaimer": "Toto je náhled AI asistenta. Odpovědi jsou simulované.",
+    "mockResponseConditional": "Zabalil bych tento text do podmíněného bloku: '{{#if condition}}...{{/if}}'. Jaká podmínka má řídit jeho viditelnost?",
+    "mockResponsePlaceholder": "Mohu převést vybraný text na zástupný symbol jako '{{fieldName}}'. Jak se má pole jmenovat?",
+    "mockResponseRepeat": "Zabalil bych to do smyčky: '{{#each items}}...{{/each}}'. Jakou kolekci má procházet?",
+    "repeatForEach": "Opakovat pro každou položku",
+    "selectedText": "Vybraný text",
+    "templateAssistant": "Asistent šablon",
     "title": "Chat",
-    "whatToDo": "What would you like to do with this text?"
+    "whatToDo": "Co chcete s tímto textem udělat?"
   },
   "search": {
     "emptyState": "Start typing to search across all matters.",

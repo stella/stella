@@ -1,0 +1,15 @@
+.chat-editor .tiptap {
+  outline: none;
+}
+
+.chat-editor .tiptap p {
+  margin: 0;
+}
+
+.chat-editor .tiptap p.is-editor-empty:first-child::before {
+  color: color-mix(in srgb, var(--color-muted-foreground) 64%, transparent);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
