@@ -41,6 +41,17 @@ export const LIMITS = {
 } as const;
 
 /**
+ * File upload size limits.
+ * Values use Elysia's human-readable format (e.g. "50m" = 50 MB).
+ */
+export const FILE_SIZE_LIMITS = {
+  /** General document uploads (entities, templates). */
+  document: "50m",
+  /** Structured data imports (clause JSON). */
+  dataImport: "10m",
+} as const;
+
+/**
  * Rate limits for auth endpoints (better-auth built-in limiter).
  * Window is in seconds, max is the request ceiling per window.
  */

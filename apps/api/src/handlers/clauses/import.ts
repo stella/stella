@@ -5,13 +5,13 @@ import { nanoid } from "nanoid";
 import { db, type Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { isClauseExportPayload } from "./import-export-schema";
 import { updateSearchVector } from "./search-vector";
 import type { ClauseBody } from "./types";
 
 export const importBodySchema = t.Object({
-  file: t.File({ maxSize: "10m" }),
+  file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
 });
 
 type ImportProps = {

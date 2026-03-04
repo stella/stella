@@ -16,14 +16,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 export const uploadEntityBodySchema = t.Object({
   file: t.File({
-    maxSize: "50m",
+    maxSize: FILE_SIZE_LIMITS.document,
   }),
   name: tDefaultVarchar,
   propertyId: tNanoid,

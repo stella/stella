@@ -4,10 +4,11 @@ import { t } from "elysia";
 import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const manifestBodySchema = t.Object({
-  file: t.File({ maxSize: "50m" }),
+  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   manifest: t.Any(),
 });
 
