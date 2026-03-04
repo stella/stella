@@ -196,9 +196,15 @@ checksums:
     billing/writeOff: 4c25589a2735a3ea23b9a5a0170c0c28
     chat/deleteThread: 2baeef5ad5eea6edc0761bf30bee9080
     chat/greeting: 4baa45b6e6d953ea40b802910f235026
+    chat/mention/noResults: 3cd5f0f62e575431f86bba66d10370bd
     chat/newChat: 3137bd8485c6f0fee4b0bbcce4eecdad
     chat/noThreads: 963962a6da064c88c11036051f8d8576
+    chat/placeholder: 0abf9d41e0b5c5567c3833fd63048398
     chat/threads: 6dd493bfcba36eaa4b9844e55400cc29
+    chat/tool/listEntities: d803bead0f756a1e6fd401c3eb78ecb1
+    chat/tool/readContent: 11c6eaa9b26b244dc9fd5fe9c62fd61f
+    chat/tool/readEntity: 4d67b87f96b3f72b804aa98837a4d46f
+    chat/tool/searchMatter: 99c147d934e6f6db3e6c280c5fd142fa
     clauses/addVariant: b4c1bca0a1ceb35d4fd331aa42a94234
     clauses/allClauses: 80291c34697c38769cfc882e3cbe200d
     clauses/backToList: 208c0f2ac2c480d5f8dfb0963d94b381
@@ -484,6 +490,7 @@ checksums:
     navigation/agents: f902c551bd769a3ae2f65b44305b1976
     navigation/analytics: ec67586974cc78f25959d47bb36683a7
     navigation/chat: 1171b63c16b3431dca319af1804de2a0
+    navigation/chatAlreadyOpen: 945aa77db1d5d372584d9f0bacb50871
     navigation/clauses: 462579754cf0f9dab85e687c243a6ed5
     navigation/clients: fc58b7c66ff46ebb5176d1b2af50cc0d
     navigation/contacts: d5b6c3f890b3904eaf5754081945c03d
@@ -506,6 +513,7 @@ checksums:
     navigation/sidebarDescription: 51aa5f202c817560f38d3527a9a1366d
     navigation/templates: 8ed62f56c81fa96c0f3182acb331bf63
     navigation/timeTracking: b903703c6323a1df9fd47fef933cf452
+    navigation/toggleChat: 78cc7c11bf20b4bdfeb179386be48a3b
     navigation/toggleSidebar: 4885c19b36525953a6f047dae1d98d2d
     organization/invitations/cancelInvitation: 0d45f29a0417e8405834c4167b9924f7
     organization/invitations/emailAddressLabel: 3ba3f099b1b9be6c35ad797da660cb9f
