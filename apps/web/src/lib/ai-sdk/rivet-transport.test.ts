@@ -99,7 +99,10 @@ describe("RivetChatTransport", () => {
   describe("sendMessages", () => {
     it("enqueues chunks into the ReadableStream", async () => {
       const { connection, emit, listeners } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.sendMessages(
         makeSendOptions([makeMessage("Hello")]),
@@ -128,7 +131,10 @@ describe("RivetChatTransport", () => {
 
     it("filters out chunks for other threads", async () => {
       const { connection, emit, listeners } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.sendMessages(
         makeSendOptions([makeMessage("Hello")]),
@@ -151,7 +157,10 @@ describe("RivetChatTransport", () => {
 
     it("resets lastSeq on each call", async () => {
       const { connection, emit } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       // First call: advance lastSeq to 5
       const s1 = await transport.sendMessages(
@@ -181,7 +190,10 @@ describe("RivetChatTransport", () => {
 
     it("throws when no messages provided", async () => {
       const { connection } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       await expect(transport.sendMessages(makeSendOptions([]))).rejects.toThrow(
         "No messages to send",
@@ -190,7 +202,10 @@ describe("RivetChatTransport", () => {
 
     it("sends the last message to the connection", async () => {
       const { connection, emit } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const messages = [makeMessage("First"), makeMessage("Second")];
 
@@ -207,7 +222,10 @@ describe("RivetChatTransport", () => {
 
     it("closes stream and calls stop on abort", async () => {
       const { connection, listeners } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const controller = new AbortController();
 
@@ -237,7 +255,10 @@ describe("RivetChatTransport", () => {
         status: "busy",
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.sendMessages(
         makeSendOptions([makeMessage("Hello")]),
@@ -261,7 +282,10 @@ describe("RivetChatTransport", () => {
         snapshot: [],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
         // suppress
@@ -299,7 +323,10 @@ describe("RivetChatTransport", () => {
         snapshot: [],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const result = await transport.reconnectToStream();
 
@@ -308,7 +335,10 @@ describe("RivetChatTransport", () => {
 
     it("requests snapshot from lastSeq + 1", async () => {
       const { connection, emit } = createMockConnection();
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       // Advance lastSeq to 2
       const s1 = await transport.sendMessages(
@@ -347,7 +377,10 @@ describe("RivetChatTransport", () => {
         snapshot: [textDelta(0, "snap-1"), textDelta(1, "snap-2")],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -386,7 +419,10 @@ describe("RivetChatTransport", () => {
         });
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -422,7 +458,10 @@ describe("RivetChatTransport", () => {
         });
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -452,7 +491,10 @@ describe("RivetChatTransport", () => {
         snapshot: [textDelta(0, "data"), finishChunk(1)],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -474,7 +516,10 @@ describe("RivetChatTransport", () => {
         snapshot: [],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       await transport.reconnectToStream();
 
@@ -491,7 +536,10 @@ describe("RivetChatTransport", () => {
         snapshot: [textDelta(0, "first")],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -522,7 +570,10 @@ describe("RivetChatTransport", () => {
         });
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -551,7 +602,10 @@ describe("RivetChatTransport", () => {
         });
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const stream = await transport.reconnectToStream();
       if (stream === null) {
@@ -581,7 +635,10 @@ describe("RivetChatTransport", () => {
         snapshot: [textDelta(0, "a"), textDelta(1, "b"), textDelta(2, "c")],
       });
 
-      const transport = new RivetChatTransport(connection, THREAD_ID);
+      const transport = new RivetChatTransport({
+        connection,
+        threadId: THREAD_ID,
+      });
 
       const s1 = await transport.reconnectToStream();
       if (s1 === null) {

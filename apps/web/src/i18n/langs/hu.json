@@ -219,11 +219,21 @@
     "writeOff": "Write off"
   },
   "chat": {
-    "deleteThread": "Delete conversation",
-    "greeting": "How can I help you today?",
-    "newChat": "New chat",
-    "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "deleteThread": "Beszélgetés törlése",
+    "greeting": "Miben segíthetek ma?",
+    "mention": {
+      "noResults": "Nincs találat"
+    },
+    "newChat": "Új csevegés",
+    "noThreads": "Még nincsenek beszélgetések",
+    "placeholder": "What would you like to know?",
+    "threads": "Beszélgetések",
+    "tool": {
+      "listEntities": "Elemek listázva",
+      "readContent": "Tartalom olvasva",
+      "readEntity": "Elem olvasva",
+      "searchMatter": "Ügy keresve"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -551,13 +561,14 @@
     "agents": "Ügynökök",
     "analytics": "Analitika",
     "chat": "Csevegés",
-    "clauses": "Clauses",
+    "chatAlreadyOpen": "A csevegés már nyitva van",
+    "clauses": "Záradékok",
     "clients": "Ügyfelek",
-    "contacts": "Contacts",
-    "expenses": "Expenses",
+    "contacts": "Kapcsolatok",
+    "expenses": "Kiadások",
     "inbox": "Inbox",
     "invitations": "Meghívók",
-    "invoices": "Invoices",
+    "invoices": "Számlák",
     "knowledge": "Tudásbázis",
     "members": "Tagok",
     "newMatter": "Új ügy",
@@ -568,13 +579,14 @@
     "searchEmptyState": "Kezdjen el gépelni dokumentumok, ügyek és egyebek kereséséhez.",
     "searchPlaceholder": "Keresés az összes munkaterületen...",
     "shortcutCategories": {
-      "actions": "Actions",
-      "navigation": "Navigation"
+      "actions": "Műveletek",
+      "navigation": "Navigáció"
     },
     "sidebar": "Oldalsáv",
     "sidebarDescription": "Megjeleníti a mobil oldalsávot.",
     "templates": "Sablonok",
     "timeTracking": "Időkövetés",
+    "toggleChat": "Csevegés be/ki",
     "toggleSidebar": "Oldalsáv be/ki"
   },
   "organization": {
@@ -633,20 +645,20 @@
     "title": "Szervezet"
   },
   "rightPanel": {
-    "addConditional": "Add conditional",
-    "askAboutMatter": "Ask questions about your matter.",
-    "chatPlaceholder": "Chat will appear here.",
-    "comingSoon": "AI template assistant coming soon.",
-    "convertToPlaceholder": "Convert to placeholder",
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.",
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?",
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?",
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?",
-    "repeatForEach": "Repeat for each item",
-    "selectedText": "Selected text",
-    "templateAssistant": "Template Assistant",
-    "title": "Chat",
-    "whatToDo": "What would you like to do with this text?"
+    "addConditional": "Feltétel hozzáadása",
+    "askAboutMatter": "Tegyen fel kérdéseket az ügyéről.",
+    "chatPlaceholder": "A csevegés itt jelenik meg.",
+    "comingSoon": "AI sablonasszisztens hamarosan.",
+    "convertToPlaceholder": "Átalakítás helyőrzővé",
+    "mockDisclaimer": "Ez az AI asszisztens előnézete. A válaszok szimuláltak.",
+    "mockResponseConditional": "Ezt a szöveget feltételes blokkba csomagolnám: '{{#if condition}}...{{/if}}'. Milyen feltétel szabályozza a láthatóságát?",
+    "mockResponsePlaceholder": "A kijelölt szöveget helyőrzővé alakíthatom, például '{{fieldName}}'. Mi legyen a mező neve?",
+    "mockResponseRepeat": "Ezt ciklusba csomagolnám: '{{#each items}}...{{/each}}'. Melyik gyűjteményen iteráljon?",
+    "repeatForEach": "Ismétlés minden elemre",
+    "selectedText": "Kijelölt szöveg",
+    "templateAssistant": "Sablonasszisztens",
+    "title": "Csevegés",
+    "whatToDo": "Mit szeretne ezzel a szöveggel?"
   },
   "search": {
     "emptyState": "Start typing to search across all matters.",

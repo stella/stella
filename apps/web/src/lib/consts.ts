@@ -4,6 +4,12 @@ export const DOCX_MIME =
 
 export const PDF_MIME = "application/pdf" as const;
 
+/**
+ * Shared layout heights so rows stay vertically aligned
+ * across the main content area and the right panel.
+ */
+export const TOOLBAR_ROW_HEIGHT = "h-10" as const;
+
 export const STALE_TIME = {
   INFINITE: Number.POSITIVE_INFINITY,
   FIVE: {

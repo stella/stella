@@ -11,7 +11,9 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { toastManager } from "@stella/ui/components/toast";
+import { cn } from "@stella/ui/lib/utils";
 
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { eventHandler } from "@/lib/rivet";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
@@ -196,7 +198,7 @@ function RouteComponent() {
 
   return (
     <DropZone workspaceId={workspaceId}>
-      <div className="flex items-center border-b">
+      <div className={cn("flex items-center border-b", TOOLBAR_ROW_HEIGHT)}>
         <ViewSwitcher
           activeViewId={activeView?.id ?? null}
           onViewChange={async (viewId) => {

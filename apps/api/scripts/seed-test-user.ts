@@ -115,6 +115,102 @@ const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
 const now = new Date();
 
+/**
+ * Ensure all test users and their memberships exist.
+ *
+ * Idempotent: uses findFirst to skip rows that already exist.
+ * Called by `seed-dev.ts` so "Clean + Seed" from the dev menu
+ * never hits FK violations on `entities.created_by`.
+ */
+export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
+  const ts = new Date();
+
+  // --- primary user ---
+  if (
+    !(await db.query.user.findFirst({
+      where: { id: TEST_USER.id },
+      columns: { id: true },
+    }))
+  ) {
+    await db.insert(user).values({
+      id: TEST_USER.id,
+      name: TEST_USER.name,
+      email: TEST_USER.email,
+      emailVerified: true,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+  }
+
+  // --- colleague users ---
+  for (const colleague of COLLEAGUES) {
+    if (
+      !(await db.query.user.findFirst({
+        where: { id: colleague.id },
+        columns: { id: true },
+      }))
+    ) {
+      await db.insert(user).values({
+        id: colleague.id,
+        name: colleague.name,
+        email: colleague.email,
+        image: colleague.image,
+        emailVerified: true,
+        createdAt: ts,
+        updatedAt: ts,
+      });
+    }
+  }
+
+  // --- org ---
+  if (
+    !(await db.query.organization.findFirst({
+      where: { id: organizationId },
+      columns: { id: true },
+    }))
+  ) {
+    await db.insert(organization).values({
+      id: organizationId,
+      name: TEST_ORG.name,
+      slug: TEST_ORG.slug,
+      createdAt: ts,
+    });
+  }
+
+  // --- memberships ---
+  if (
+    !(await db.query.member.findFirst({
+      where: { id: TEST_MEMBER.id },
+      columns: { id: true },
+    }))
+  ) {
+    await db.insert(member).values({
+      id: TEST_MEMBER.id,
+      organizationId,
+      userId: TEST_USER.id,
+      role: TEST_MEMBER.role,
+      createdAt: ts,
+    });
+  }
+
+  for (const colleague of COLLEAGUES) {
+    if (
+      !(await db.query.member.findFirst({
+        where: { id: colleague.memberId },
+        columns: { id: true },
+      }))
+    ) {
+      await db.insert(member).values({
+        id: colleague.memberId,
+        organizationId,
+        userId: colleague.id,
+        role: "member",
+        createdAt: ts,
+      });
+    }
+  }
+}
+
 async function seed() {
   if (process.env.NODE_ENV === "production") {
     console.error("Refusing to run: NODE_ENV must not be 'production'.");
@@ -291,7 +387,9 @@ async function seed() {
   process.exit(0);
 }
 
-seed().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  seed().catch((err) => {
+    console.error("Seed failed:", err);
+    process.exit(1);
+  });
+}

@@ -6,7 +6,12 @@ import type {
 } from "ai";
 import type { EventUnsubscribe } from "rivetkit/client";
 
-import type { SequencedChunk as BaseSequencedChunk } from "@stella/rivet/actors/chat-actor-config";
+import type {
+  SequencedChunk as BaseSequencedChunk,
+  UserContext,
+} from "@stella/rivet/actors/chat-actor-config";
+
+export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
 
 export type SequencedChunk = BaseSequencedChunk<UIMessageChunk>;
 
@@ -19,6 +24,9 @@ export type ChatStreamConnection = {
     threadId: string;
     chatId: string;
     message: UIMessage;
+    workspaceId?: string;
+    modelId?: string;
+    userContext?: UserContext;
   }): Promise<{ status: "started" | "busy" }>;
   stop(input: { threadId: string }): Promise<void>;
   getStreamSnapshot(input: {
@@ -41,14 +49,30 @@ type SendMessagesOptions = {
 export class RivetChatTransport implements ChatTransport<UIMessage> {
   private readonly connection: ChatStreamConnection;
   private readonly threadId: string;
+  private readonly workspaceId: string | undefined;
+  private readonly getModelId: (() => string | null) | undefined;
+  private readonly userContext: UserContext | undefined;
 
   // Highest seq successfully delivered to the SDK.
   // Used on reconnect to skip chunks already processed.
   private lastSeq = -1;
 
-  constructor(connection: ChatStreamConnection, threadId: string) {
-    this.connection = connection;
-    this.threadId = threadId;
+  // Track whether userContext was already sent (only
+  // needed on the first message of a new thread).
+  private contextSent = false;
+
+  constructor(opts: {
+    connection: ChatStreamConnection;
+    threadId: string;
+    workspaceId?: string;
+    getModelId?: () => string | null;
+    userContext?: UserContext;
+  }) {
+    this.connection = opts.connection;
+    this.threadId = opts.threadId;
+    this.workspaceId = opts.workspaceId;
+    this.getModelId = opts.getModelId;
+    this.userContext = opts.userContext;
   }
 
   /** Subscribe to stream-chunk events for this thread only. */
@@ -131,10 +155,18 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
       },
     });
 
+    // Send userContext only on the first message so the
+    // server can store it in thread metadata once.
+    const ctx = this.contextSent ? undefined : this.userContext;
+    this.contextSent = true;
+
     const { status } = await this.connection.sendMessages({
       threadId: this.threadId,
       chatId,
       message: lastMessage,
+      workspaceId: this.workspaceId,
+      modelId: this.getModelId?.() ?? undefined,
+      userContext: ctx,
     });
 
     // Another connection already owns this thread's generation.

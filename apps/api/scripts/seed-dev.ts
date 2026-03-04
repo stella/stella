@@ -47,6 +47,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { s3 } from "@/api/lib/s3";
 import { DEFAULT_VIEWS, type RequiredViewLayout } from "@/api/lib/views";
+import { ensureTestUsers } from "./seed-test-user";
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -1794,6 +1795,10 @@ export async function seed(organizationId?: string, userId?: string) {
   if (process.env.NODE_ENV === "production") {
     throw new Error("Refusing to run in production.");
   }
+
+  // Ensure all test users + memberships exist so entity
+  // FK constraints on created_by are satisfied.
+  await ensureTestUsers(ORG_ID);
 
   console.log("Seeding development data...\n");
 

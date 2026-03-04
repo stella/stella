@@ -221,9 +221,19 @@
   "chat": {
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
+    "mention": {
+      "noResults": "No matching entities"
+    },
     "newChat": "New chat",
     "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "placeholder": "What would you like to know?",
+    "threads": "Conversations",
+    "tool": {
+      "listEntities": "Listed entities",
+      "readContent": "Read content",
+      "readEntity": "Read entity",
+      "searchMatter": "Searched matter"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -551,6 +561,7 @@
     "agents": "Agentai",
     "analytics": "Analitika",
     "chat": "Pokalbis",
+    "chatAlreadyOpen": "Chat is already open",
     "clauses": "Clauses",
     "clients": "Klientai",
     "contacts": "Contacts",
@@ -575,6 +586,7 @@
     "sidebarDescription": "Rodo mobilią šoninę juostą.",
     "templates": "Šablonai",
     "timeTracking": "Laiko apskaita",
+    "toggleChat": "Toggle chat",
     "toggleSidebar": "Perjungti šoninę juostą"
   },
   "organization": {

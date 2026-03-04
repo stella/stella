@@ -1,5 +1,13 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -9,7 +17,6 @@ import {
 import {
   FolderIcon,
   FolderOpenIcon,
-  MessageSquareIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
@@ -30,10 +37,12 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
+import { HOTKEYS } from "@/lib/hotkeys";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { roleOptions } from "@/routes/-queries";
@@ -42,6 +51,12 @@ const LazyTemplateAssistantPanel = lazy(() =>
   import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
     (m) => ({ default: m.TemplateAssistantPanel }),
   ),
+);
+
+const LazyRightPanelChat = lazy(() =>
+  import("@/components/right-panel-chat").then((m) => ({
+    default: m.RightPanelChat,
+  })),
 );
 
 export const Route = createFileRoute("/_protected")({
@@ -75,24 +90,64 @@ function ProtectedComponent() {
   useSyncQueries();
   const { data: role } = useSuspenseQuery(roleOptions);
   const [rightOpen, setRightOpen] = useState(false);
-  const toggleRight = useCallback(() => setRightOpen((o) => !o), []);
+
+  const chatMatch = useMatch({
+    from: "/_protected/chat",
+    shouldThrow: false,
+  });
+  const isOnChatRoute = !!chatMatch;
+
+  const toggleRight = useCallback(() => {
+    if (isOnChatRoute) {
+      return;
+    }
+    setRightOpen((o) => !o);
+  }, [isOnChatRoute]);
+
+  // Auto-close when navigating to /chat.
+  useEffect(() => {
+    if (isOnChatRoute && rightOpen) {
+      setRightOpen(false);
+    }
+  }, [isOnChatRoute, rightOpen]);
+
+  useHotkey(HOTKEYS.TOGGLE_CHAT, toggleRight);
+
+  const workspaceMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId",
+    shouldThrow: false,
+  });
+  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
 
   return (
     <SidebarProvider>
       <AppSidebar role={role} />
-      <ProtectedContent rightOpen={rightOpen} toggleRight={toggleRight} />
-      <RightPanel open={rightOpen} onToggle={toggleRight} />
+      <ProtectedContent
+        isOnChatRoute={isOnChatRoute}
+        rightOpen={rightOpen}
+        toggleRight={toggleRight}
+      />
+      <RightPanel
+        open={rightOpen}
+        onToggle={toggleRight}
+        workspaceId={activeWorkspaceId}
+      />
       <ShortcutHintsOverlay />
     </SidebarProvider>
   );
 }
 
 type ProtectedContentProps = {
+  isOnChatRoute: boolean;
   rightOpen: boolean;
   toggleRight: () => void;
 };
 
-function ProtectedContent({ rightOpen, toggleRight }: ProtectedContentProps) {
+function ProtectedContent({
+  isOnChatRoute,
+  rightOpen,
+  toggleRight,
+}: ProtectedContentProps) {
   const t = useTranslations();
   const { open, isMobile } = useSidebar();
   const togglePin = usePinnedStore((s) => s.togglePin);
@@ -169,9 +224,14 @@ function ProtectedContent({ rightOpen, toggleRight }: ProtectedContentProps) {
               <Separator className="mx-1 h-4" orientation="vertical" />
               <Button
                 className="size-7"
+                disabled={isOnChatRoute}
                 onClick={toggleRight}
                 size="icon"
-                title="Chat"
+                title={
+                  isOnChatRoute
+                    ? t("navigation.chatAlreadyOpen")
+                    : t("navigation.toggleChat")
+                }
                 variant="ghost"
               >
                 <PanelRightIcon className="size-4" />
@@ -185,18 +245,37 @@ function ProtectedContent({ rightOpen, toggleRight }: ProtectedContentProps) {
   );
 }
 
+// -- Matter context badge --
+
+const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
+  const queryClient = useQueryClient();
+  // Read from the cache populated by the workspace route loader.
+  const workspace = queryClient.getQueryData<{ name: string }>(
+    workspacesKeys.byId(workspaceId),
+  );
+  if (!workspace?.name) {
+    return null;
+  }
+  return (
+    <span className="ml-auto max-w-[50%] truncate text-xs text-muted-foreground">
+      {workspace.name}
+    </span>
+  );
+};
+
 // -- Right panel (chat mock) --
 
-const RIGHT_PANEL_DEFAULT_WIDTH = 256;
-const RIGHT_PANEL_MIN_WIDTH = 200;
-const RIGHT_PANEL_MAX_WIDTH = 480;
+const RIGHT_PANEL_DEFAULT_WIDTH = 384;
+const RIGHT_PANEL_MIN_WIDTH = 280;
+const RIGHT_PANEL_MAX_WIDTH = 640;
 
 type RightPanelProps = {
   open: boolean;
   onToggle: () => void;
+  workspaceId?: string;
 };
 
-function RightPanel({ open, onToggle }: RightPanelProps) {
+function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
   const t = useTranslations();
   const assistantActive = useTemplateAssistantStore((s) => s.active);
   const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
@@ -295,12 +374,13 @@ function RightPanel({ open, onToggle }: RightPanelProps) {
                 <span className="text-sm font-medium">
                   {t("rightPanel.title")}
                 </span>
+                {workspaceId && (
+                  <MatterContextBadge workspaceId={workspaceId} />
+                )}
               </div>
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
-                <MessageSquareIcon className="size-8 opacity-30" />
-                <p>{t("rightPanel.chatPlaceholder")}</p>
-                <p className="text-xs">{t("rightPanel.askAboutMatter")}</p>
-              </div>
+              <Suspense>
+                <LazyRightPanelChat workspaceId={workspaceId} />
+              </Suspense>
             </>
           )}
         </div>

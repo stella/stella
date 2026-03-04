@@ -219,11 +219,21 @@
     "writeOff": "Write off"
   },
   "chat": {
-    "deleteThread": "Delete conversation",
-    "greeting": "How can I help you today?",
-    "newChat": "New chat",
-    "noThreads": "No conversations yet",
-    "threads": "Conversations"
+    "deleteThread": "Usuń rozmowę",
+    "greeting": "W czym mogę dziś pomóc?",
+    "mention": {
+      "noResults": "Brak pasujących elementów"
+    },
+    "newChat": "Nowy czat",
+    "noThreads": "Brak rozmów",
+    "placeholder": "What would you like to know?",
+    "threads": "Rozmowy",
+    "tool": {
+      "listEntities": "Wylistowano elementy",
+      "readContent": "Odczytano treść",
+      "readEntity": "Odczytano element",
+      "searchMatter": "Przeszukano sprawę"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -551,13 +561,14 @@
     "agents": "Agenci",
     "analytics": "Analityka",
     "chat": "Czat",
-    "clauses": "Clauses",
+    "chatAlreadyOpen": "Czat jest już otwarty",
+    "clauses": "Klauzule",
     "clients": "Klienci",
-    "contacts": "Contacts",
-    "expenses": "Expenses",
+    "contacts": "Kontakty",
+    "expenses": "Wydatki",
     "inbox": "Inbox",
     "invitations": "Zaproszenia",
-    "invoices": "Invoices",
+    "invoices": "Faktury",
     "knowledge": "Wiedza",
     "members": "Członkowie",
     "newMatter": "Nowa sprawa",
@@ -568,13 +579,14 @@
     "searchEmptyState": "Zacznij pisać, aby wyszukać dokumenty, sprawy i więcej.",
     "searchPlaceholder": "Szukaj we wszystkich przestrzeniach roboczych...",
     "shortcutCategories": {
-      "actions": "Actions",
-      "navigation": "Navigation"
+      "actions": "Akcje",
+      "navigation": "Nawigacja"
     },
     "sidebar": "Panel boczny",
     "sidebarDescription": "Wyświetla mobilny panel boczny.",
     "templates": "Szablony",
     "timeTracking": "Ewidencja czasu",
+    "toggleChat": "Przełącz czat",
     "toggleSidebar": "Przełącz panel boczny"
   },
   "organization": {
@@ -633,20 +645,20 @@
     "title": "Organizacja"
   },
   "rightPanel": {
-    "addConditional": "Add conditional",
-    "askAboutMatter": "Ask questions about your matter.",
-    "chatPlaceholder": "Chat will appear here.",
-    "comingSoon": "AI template assistant coming soon.",
-    "convertToPlaceholder": "Convert to placeholder",
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.",
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?",
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?",
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?",
-    "repeatForEach": "Repeat for each item",
-    "selectedText": "Selected text",
-    "templateAssistant": "Template Assistant",
-    "title": "Chat",
-    "whatToDo": "What would you like to do with this text?"
+    "addConditional": "Dodaj warunek",
+    "askAboutMatter": "Zadawaj pytania o swoją sprawę.",
+    "chatPlaceholder": "Czat pojawi się tutaj.",
+    "comingSoon": "Asystent szablonów AI wkrótce.",
+    "convertToPlaceholder": "Zamień na symbol zastępczy",
+    "mockDisclaimer": "To jest podgląd asystenta AI. Odpowiedzi są symulowane.",
+    "mockResponseConditional": "Umieściłbym ten tekst w bloku warunkowym: '{{#if condition}}...{{/if}}'. Jaki warunek powinien kontrolować jego widoczność?",
+    "mockResponsePlaceholder": "Mogę zamienić zaznaczony tekst na symbol zastępczy, np. '{{fieldName}}'. Jak powinno nazywać się pole?",
+    "mockResponseRepeat": "Umieściłbym to w pętli: '{{#each items}}...{{/each}}'. Po jakiej kolekcji ma iterować?",
+    "repeatForEach": "Powtórz dla każdego elementu",
+    "selectedText": "Zaznaczony tekst",
+    "templateAssistant": "Asystent szablonów",
+    "title": "Czat",
+    "whatToDo": "Co chcesz zrobić z tym tekstem?"
   },
   "search": {
     "emptyState": "Start typing to search across all matters.",

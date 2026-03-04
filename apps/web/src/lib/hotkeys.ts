@@ -10,6 +10,7 @@ import type { TranslationKey } from "@/i18n/types";
 export const HOTKEYS = {
   TOGGLE_SIDEBAR: "Mod+B",
   SEARCH: "Mod+K",
+  TOGGLE_CHAT: "Mod+J",
   NEW_MATTER: "Mod+Shift+E",
   TOGGLE_TIME_TRACKING: "Mod+Shift+H",
 } as const satisfies Record<string, Hotkey>;
@@ -32,6 +33,11 @@ export const SHORTCUT_HINT_GROUPS = [
       {
         hotkey: HOTKEYS.TOGGLE_SIDEBAR,
         labelKey: "navigation.toggleSidebar",
+        contexts: ["global"],
+      },
+      {
+        hotkey: HOTKEYS.TOGGLE_CHAT,
+        labelKey: "navigation.toggleChat",
         contexts: ["global"],
       },
     ],
