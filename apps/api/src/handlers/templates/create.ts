@@ -14,12 +14,12 @@ import {
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const createTemplateBodySchema = t.Object({
-  file: t.File({ maxSize: "50m" }),
+  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   name: tDefaultVarchar,
   categoryId: t.Optional(tNanoid),
   // Elysia auto-parses JSON strings from FormData, so the

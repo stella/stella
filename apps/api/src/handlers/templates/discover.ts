@@ -7,9 +7,10 @@ import {
   readManifest,
 } from "@/api/handlers/docx/template-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
 export const discoverBodySchema = t.Object({
-  file: t.File({ maxSize: "50m" }),
+  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
 });
 
 type DiscoverProps = {

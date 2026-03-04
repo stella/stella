@@ -12,10 +12,11 @@ import {
   sanitizeFilename,
 } from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const fillBodySchema = t.Object({
-  file: t.File({ maxSize: "50m" }),
+  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   values: t.String(),
 });
 
