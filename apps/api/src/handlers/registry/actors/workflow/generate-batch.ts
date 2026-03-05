@@ -2,7 +2,8 @@ import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
 import { matchError, Result } from "better-result";
 import { nanoid } from "nanoid";
 
-import { createFileKey, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { generateWorkflowData } from "@/api/handlers/registry/actors/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/handlers/registry/actors/workflow/ai-validators";
 import {

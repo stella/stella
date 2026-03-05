@@ -1,23 +1,48 @@
-import { PDF } from "@libpdf/core";
+import { resolve } from "node:path";
 import { Result, TaggedError } from "better-result";
+
+import { LIMITS } from "@/api/lib/limits";
 
 export class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
   message: string;
-  cause: unknown;
 }>() {}
 
+const WORKER_PATH = resolve(import.meta.dir, "pdf-worker.ts");
+
 export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      const pdf = await PDF.load(new Uint8Array(buffer));
-      return pdf.isEncrypted;
+  const subprocess = Bun.spawn(["bun", "run", WORKER_PATH], {
+    stdin: new Blob([buffer]),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      PATH: process.env.PATH ?? "",
     },
-    catch: (error) =>
-      new CorruptedPdfError({
-        message: "Failed to parse PDF",
-        cause: error,
-      }),
+    timeout: LIMITS.extractionTimeoutMs,
   });
 
-  return result;
+  try {
+    const [exitCode, stdout, stderr] = await Promise.all([
+      subprocess.exited,
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+    ]);
+
+    if (exitCode !== 0) {
+      return Result.err(
+        new CorruptedPdfError({
+          message: stderr.slice(0, 500),
+        }),
+      );
+    }
+
+    return Result.ok(stdout === "true");
+  } catch (err) {
+    subprocess.kill();
+    return Result.err(
+      new CorruptedPdfError({
+        message:
+          err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
 };

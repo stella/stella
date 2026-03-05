@@ -5,8 +5,6 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { awsS3 } from "@/api/lib/s3";
 
-export const PDF_MIME_TYPE = "application/pdf" as const;
-
 const fileExtensionMap: Record<string, string> = {
   "application/pdf": "pdf",
   "application/msword": "doc",

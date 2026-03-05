@@ -2,9 +2,9 @@ import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
-import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
   mergeManifestWithDiscovery,

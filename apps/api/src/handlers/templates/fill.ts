@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
-import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";

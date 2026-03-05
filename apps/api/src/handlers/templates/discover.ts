@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
   mergeManifestWithDiscovery,

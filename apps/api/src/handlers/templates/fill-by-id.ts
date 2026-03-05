@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
-import { DOCX_MIME_TYPE } from "@/api/handlers/docx/constants";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";

@@ -2,9 +2,10 @@ import { PDF } from "@libpdf/core";
 import { Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { createFileKey, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
+import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
