@@ -2,13 +2,15 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { ActionContextOf } from "rivetkit";
 
-import { parseWorkflowActorKey } from "@stella/rivet/actors/workflow-actor-config";
-
 import { db } from "@/api/db";
 import { properties } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
-import { broadcastEvent, resetActorState } from "@/api/handlers/registry/utils";
+import {
+  broadcastEvent,
+  parseBrandedWorkflowActorKey,
+  resetActorState,
+} from "@/api/handlers/registry/utils";
 
 export const finishWorkflowAction = (
   c: ActionContextOf<typeof workflowActor>,
@@ -18,7 +20,7 @@ export const finishWorkflowAction = (
       panic("Workflow is not running");
     }
 
-    const { workspaceId } = parseWorkflowActorKey(c.key);
+    const { workspaceId } = parseBrandedWorkflowActorKey(c.key);
 
     await db
       .update(properties)

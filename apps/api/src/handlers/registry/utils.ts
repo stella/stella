@@ -5,12 +5,14 @@ import {
   authedActorParamsSchema,
   parseActorKey,
 } from "@stella/rivet/actors/common";
+import { parseWorkflowActorKey } from "@stella/rivet/actors/workflow-actor-config";
 import { userErrors, type UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
 import { db } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { auth } from "@/api/lib/auth";
+// biome-ignore lint/style/noRestrictedImports: actor session validator (equivalent to authMacro)
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { posthogIdentify } from "@/api/lib/posthog";
 
@@ -174,6 +176,17 @@ export const validateActorInput = <T>(
   }
 
   return result.output;
+};
+
+/** Parse a workflow actor key and brand the IDs.
+ *  The actor key was validated at connection time, so
+ *  branding the parsed values is sound. */
+export const parseBrandedWorkflowActorKey = (key: string | string[]) => {
+  const parsed = parseWorkflowActorKey(key);
+  return {
+    organizationId: toSafeId<"organization">(parsed.organizationId),
+    workspaceId: toSafeId<"workspace">(parsed.workspaceId),
+  };
 };
 
 export const resetActorState = <TContext extends ActionContextOf<ActorsUnion>>(

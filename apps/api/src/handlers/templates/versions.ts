@@ -14,7 +14,7 @@ const verifyTemplateOwnership = async (
   organizationId: SafeId<"organization">,
 ) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: { id: true },
   });
 

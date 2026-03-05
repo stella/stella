@@ -5,7 +5,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadWorkspaceHandlerProps = {
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
 };
 

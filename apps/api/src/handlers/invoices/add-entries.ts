@@ -43,7 +43,7 @@ export const addEntriesHandler = async ({
   const invoice = await db.query.invoices.findFirst({
     where: {
       id: invoiceId,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: { id: true, status: true },
   });
@@ -140,7 +140,7 @@ export const addEntriesHandler = async ({
       const invoiceCheck = await tx.query.invoices.findFirst({
         where: {
           id: invoiceId,
-          workspaceId,
+          workspaceId: { eq: workspaceId },
           status: INVOICE_STATUS.DRAFT,
         },
         columns: { id: true },

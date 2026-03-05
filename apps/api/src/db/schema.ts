@@ -21,6 +21,7 @@ import type {
 } from "@/api/db/schema-validators";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
@@ -39,6 +40,12 @@ const bytea = customType<{ data: Buffer }>({
     throw new Error(`Unexpected bytea driver value: ${typeof value}`);
   },
 });
+
+const safeWorkspaceId = (name: string) =>
+  p.varchar(name, { length: 21 }).$type<SafeId<"workspace">>();
+
+const safeOrganizationId = (name: string) =>
+  p.varchar(name, { length: 128 }).$type<SafeId<"organization">>();
 
 const pNanoid = p.varchar({ length: 21 }).$defaultFn(() => nanoid());
 
@@ -109,8 +116,7 @@ export const contacts = p.pgTable(
   "contacts",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     type: p.text({ enum: ["person", "organization"] }).notNull(),
@@ -190,8 +196,7 @@ export const contactRelationships = p.pgTable(
   "contact_relationships",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     personId: p
@@ -232,12 +237,10 @@ export const files = p.pgTable(
   "files",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     sourceFileId: p.varchar("source_file_id", { length: 21 }),
@@ -261,8 +264,7 @@ export const workspaces = p.pgTable(
   "workspaces",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
@@ -300,12 +302,10 @@ export const workspaceContacts = p.pgTable(
   "workspace_contacts",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     contactId: p
@@ -349,8 +349,7 @@ export const properties = p.pgTable(
   "properties",
   {
     id: pNanoid.primaryKey(),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
@@ -401,8 +400,7 @@ export const entities = p.pgTable(
   "entities",
   {
     id: pNanoid.primaryKey(),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     kind: entityKindEnum().notNull().default("document"),
@@ -494,8 +492,7 @@ export const templates = p.pgTable(
   "templates",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     categoryId: p
@@ -566,12 +563,10 @@ export const searchDocuments = p.pgTable(
       .varchar("entity_id", { length: 21 })
       .primaryKey()
       .references(() => entities.id, { onDelete: "cascade" }),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     kind: entityKindEnum().notNull(),
@@ -595,8 +590,7 @@ export const extractedContent = p.pgTable(
       .varchar("entity_id", { length: 21 })
       .primaryKey()
       .references(() => entities.id, { onDelete: "cascade" }),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, {
         onDelete: "cascade",
@@ -616,8 +610,7 @@ export const views = p.pgTable(
   "views",
   {
     id: pNanoid.primaryKey(),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
 
@@ -634,12 +627,10 @@ export const timeEntries = p.pgTable(
   "time_entries",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     userId: p
@@ -705,12 +696,10 @@ export const billingCodes = p.pgTable(
   "billing_codes",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     type: billingCodeTypeEnum().notNull(),
@@ -734,12 +723,10 @@ export const rateTables = p.pgTable(
   "rate_tables",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
@@ -784,12 +771,10 @@ export const expenses = p.pgTable(
   "expenses",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     userId: p
@@ -848,12 +833,10 @@ export const invoices = p.pgTable(
   "invoices",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: p
-      .varchar("workspace_id", { length: 21 })
+    workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }).notNull(),
@@ -880,8 +863,7 @@ export const matterCounters = p.pgTable(
   "matter_counters",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     scopeKey: p.varchar("scope_key", { length: 128 }).notNull(),
@@ -896,8 +878,7 @@ export const matterCounters = p.pgTable(
 
 export const organizationSettings = p.pgTable("organization_settings", {
   id: pNanoid.primaryKey(),
-  organizationId: p
-    .varchar("organization_id", { length: 128 })
+  organizationId: safeOrganizationId("organization_id")
     .notNull()
     .unique()
     .references(() => organization.id, { onDelete: "cascade" }),
@@ -913,8 +894,7 @@ export const clauseCategories = p.pgTable(
   "clause_categories",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     parentId: p
@@ -940,8 +920,7 @@ export const clauses = p.pgTable(
   "clauses",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     categoryId: p
@@ -1016,8 +995,7 @@ export const templateCategories = p.pgTable(
   "template_categories",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     parentId: p
@@ -1080,8 +1058,7 @@ export const templateFills = p.pgTable(
   "template_fills",
   {
     id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     templateId: p

@@ -42,7 +42,7 @@ export const splitEntryHandler = async ({
   const original = await db.query.timeEntries.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
   });
 
@@ -70,7 +70,7 @@ export const splitEntryHandler = async ({
   // Validate all target matters exist
   for (const split of body.splits) {
     const matter = await db.query.entities.findFirst({
-      where: { id: split.matterId, workspaceId },
+      where: { id: split.matterId, workspaceId: { eq: workspaceId } },
       columns: { id: true },
     });
 

@@ -26,7 +26,7 @@ export const readInvoicesHandler = async ({
 
   const [rows, total] = await Promise.all([
     db.query.invoices.findMany({
-      where: { workspaceId },
+      where: { workspaceId: { eq: workspaceId } },
       columns: {
         id: true,
         invoiceNumber: true,

@@ -54,7 +54,7 @@ const formatFieldValue = (content: FieldContent): string => {
 };
 
 type MatterToolsContext = {
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
 };
 
@@ -128,7 +128,9 @@ export const createMatterTools = ({
       const [entities, properties] = await Promise.all([
         db.query.entities.findMany({
           where: {
-            workspaceId,
+            workspaceId: {
+              eq: workspaceId,
+            },
             ...(kind ? { kind } : {}),
             ...(parentId ? { parentId } : {}),
           },
@@ -157,7 +159,11 @@ export const createMatterTools = ({
           },
         }),
         db.query.properties.findMany({
-          where: { workspaceId },
+          where: {
+            workspaceId: {
+              eq: workspaceId,
+            },
+          },
           columns: { id: true, name: true },
         }),
       ]);
@@ -190,7 +196,12 @@ export const createMatterTools = ({
     }),
     execute: async ({ entityId }) => {
       const entity = await db.query.entities.findFirst({
-        where: { id: entityId, workspaceId },
+        where: {
+          id: entityId,
+          workspaceId: {
+            eq: workspaceId,
+          },
+        },
         columns: {
           id: true,
           kind: true,
@@ -225,7 +236,11 @@ export const createMatterTools = ({
       }
 
       const properties = await db.query.properties.findMany({
-        where: { workspaceId },
+        where: {
+          workspaceId: {
+            eq: workspaceId,
+          },
+        },
         columns: { id: true, name: true },
       });
       const propNameById = new Map(properties.map((p) => [p.id, p.name]));
@@ -260,7 +275,10 @@ export const createMatterTools = ({
     }),
     execute: async ({ entityId }) => {
       const row = await db.query.extractedContent.findFirst({
-        where: { entityId, organizationId },
+        where: {
+          entityId,
+          organizationId: { eq: organizationId },
+        },
         with: {
           entity: {
             columns: { workspaceId: true },

@@ -40,7 +40,7 @@ export const resolveRate = async ({
   dateWorked: string;
 }): Promise<{ hourlyRate: number; currency: string } | null> => {
   const defaultTable = await db.query.rateTables.findFirst({
-    where: { workspaceId, isDefault: true },
+    where: { workspaceId: { eq: workspaceId }, isDefault: true },
     columns: { id: true, currency: true },
   });
 

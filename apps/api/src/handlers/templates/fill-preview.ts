@@ -27,7 +27,7 @@ export const fillPreviewHandler = async ({
   body: { values: valuesJson },
 }: FillPreviewProps) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: { s3Key: true },
   });
 

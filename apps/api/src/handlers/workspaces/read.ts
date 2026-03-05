@@ -3,7 +3,8 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+// biome-ignore lint/style/noRestrictedImports: brands DB-returned workspace PKs for map lookups
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadWorkspacesHandlerProps = {
@@ -15,7 +16,7 @@ export const readWorkspacesHandler = async ({
 }: ReadWorkspacesHandlerProps) => {
   const result = await db.query.workspaces.findMany({
     where: {
-      organizationId,
+      organizationId: { eq: organizationId },
       status: "active",
     },
     columns: {
@@ -42,7 +43,7 @@ export const readWorkspacesHandler = async ({
     limit: LIMITS.workspacesCount,
   });
 
-  const workspaceIds = result.map((w) => w.id);
+  const workspaceIds = result.map((w) => toSafeId<"workspace">(w.id));
 
   const [counts, contributorRows] =
     workspaceIds.length > 0
@@ -81,7 +82,7 @@ export const readWorkspacesHandler = async ({
 
   const countMap = new Map(counts.map((c) => [c.workspaceId, c.count]));
 
-  const contributorMap = new Map<string, typeof contributorRows>();
+  const contributorMap = new Map<SafeId<"workspace">, typeof contributorRows>();
   for (const row of contributorRows) {
     const list = contributorMap.get(row.workspaceId);
     if (list) {
@@ -93,11 +94,14 @@ export const readWorkspacesHandler = async ({
     }
   }
 
-  const workspaces = result.map((w) => ({
-    ...w,
-    entityCount: countMap.get(w.id) ?? 0,
-    contributors: contributorMap.get(w.id) ?? [],
-  }));
+  const workspaces = result.map((w) => {
+    const wsId = toSafeId<"workspace">(w.id);
+    return {
+      ...w,
+      entityCount: countMap.get(wsId) ?? 0,
+      contributors: contributorMap.get(wsId) ?? [],
+    };
+  });
 
   return { workspaces, workspacesCountLimit: LIMITS.workspacesCount };
 };

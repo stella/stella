@@ -38,7 +38,7 @@ export const searchHandler = async ({
   // Validate workspace belongs to the caller's organization
   if (body.workspaceId) {
     const ws = await db.query.workspaces.findFirst({
-      where: { id: body.workspaceId, organizationId },
+      where: { id: body.workspaceId, organizationId: { eq: organizationId } },
       columns: { id: true },
     });
     if (!ws) {

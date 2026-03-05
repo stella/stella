@@ -50,7 +50,7 @@ export const exportHandler = async ({ organizationId, query }: ExportProps) => {
 
   // Load categories for path building
   const allCategories = await db.query.clauseCategories.findMany({
-    where: { organizationId },
+    where: { organizationId: { eq: organizationId } },
     columns: { id: true, name: true, parentId: true },
   });
 

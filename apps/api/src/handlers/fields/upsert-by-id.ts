@@ -55,7 +55,7 @@ export const upsertFieldHandler = async ({
 }: UpsertFieldHandlerProps) => {
   const property = await db.query.properties.findFirst({
     columns: { id: true, content: true },
-    where: { id: body.propertyId, workspaceId },
+    where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
   });
 
   if (!property) {
@@ -72,7 +72,7 @@ export const upsertFieldHandler = async ({
 
   const entity = await db.query.entities.findFirst({
     columns: { id: true, currentVersionId: true },
-    where: { id: body.entityId, workspaceId },
+    where: { id: body.entityId, workspaceId: { eq: workspaceId } },
   });
 
   if (!entity) {

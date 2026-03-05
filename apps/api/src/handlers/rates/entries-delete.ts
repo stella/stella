@@ -24,7 +24,7 @@ export const deleteRateEntryHandler = async ({
   body,
 }: DeleteRateEntryHandlerProps) => {
   const table = await db.query.rateTables.findFirst({
-    where: { id: rateTableId, workspaceId },
+    where: { id: rateTableId, workspaceId: { eq: workspaceId } },
     columns: { id: true },
   });
 

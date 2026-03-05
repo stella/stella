@@ -1,20 +1,26 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
 import { db } from "@/api/db";
 import { properties } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 type DeletePropertyHandlerProps = {
+  workspaceId: SafeId<"workspace">;
   propertyId: string;
 };
 
 export const deletePropertyHandler = async ({
+  workspaceId,
   propertyId,
 }: DeletePropertyHandlerProps) => {
   const property = await db.query.properties.findFirst({
     columns: { content: true, system: true },
-    where: { id: propertyId },
+    where: {
+      id: propertyId,
+      workspaceId: { eq: workspaceId },
+    },
   });
 
   if (!property) {
@@ -35,7 +41,14 @@ export const deletePropertyHandler = async ({
   }
 
   try {
-    await db.delete(properties).where(eq(properties.id, propertyId));
+    await db
+      .delete(properties)
+      .where(
+        and(
+          eq(properties.id, propertyId),
+          eq(properties.workspaceId, workspaceId),
+        ),
+      );
   } catch (error) {
     if (isPgError(error, PG_ERROR.FOREIGN_KEY_VIOLATION)) {
       return status(400, {

@@ -21,7 +21,7 @@ export const readJustificationsHandler = async ({
   workspaceId,
 }: ReadJustificationsHandlerProps) => {
   const result = await db.query.entities.findMany({
-    where: { workspaceId },
+    where: { workspaceId: { eq: workspaceId } },
     columns: {},
     with: {
       currentVersion: {

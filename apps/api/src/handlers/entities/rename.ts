@@ -31,7 +31,7 @@ export const renameEntityHandler = async ({
   const entity = await db.query.entities.findFirst({
     where: {
       id: body.entityId,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: { id: true },
   });

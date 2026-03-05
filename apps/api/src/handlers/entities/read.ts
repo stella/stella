@@ -12,7 +12,7 @@ export const readEntitiesHandler = async ({
   workspaceId,
 }: ReadEntitiesHandlerProps) => {
   const entityRows = await db.query.entities.findMany({
-    where: { workspaceId },
+    where: { workspaceId: { eq: workspaceId } },
     orderBy: { createdAt: "asc" },
     limit: LIMITS.entitiesCount,
     columns: {

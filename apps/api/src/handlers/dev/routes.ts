@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
+// biome-ignore lint/style/noRestrictedImports: dev-only route; brands session org ID
 import { toSafeId } from "@/api/lib/branded-types";
 import { getSearchProvider } from "@/api/lib/search/provider";
 

@@ -8,7 +8,7 @@ type ReadViewsHandlerProps = {
 export const readViewsHandler = ({ workspaceId }: ReadViewsHandlerProps) => {
   return db.query.views.findMany({
     where: {
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     orderBy: (views, { asc }) => [asc(views.position), asc(views.createdAt)],
   });

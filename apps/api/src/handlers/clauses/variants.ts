@@ -33,7 +33,10 @@ const verifyClauseOwnership = async (
   organizationId: SafeId<"organization">,
 ) => {
   const clause = await db.query.clauses.findFirst({
-    where: { id: clauseId, organizationId },
+    where: {
+      id: clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true },
   });
 

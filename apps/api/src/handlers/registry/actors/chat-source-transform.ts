@@ -1,6 +1,7 @@
 import type { UIMessageChunk } from "ai";
 
 import { db } from "@/api/db";
+import type { SafeId } from "@/api/lib/branded-types";
 
 const SOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "readEntity",
@@ -42,10 +43,13 @@ const nameFromReadEntity = (output: Record<string, unknown>): string | null => {
  *  first file field's filename when entity.name is null. */
 const nameFromDb = async (
   entityId: string,
-  workspaceId: string,
+  workspaceId: SafeId<"workspace">,
 ): Promise<{ name: string; kind: string } | null> => {
   const entity = await db.query.entities.findFirst({
-    where: { id: entityId, workspaceId },
+    where: {
+      id: entityId,
+      workspaceId: { eq: workspaceId },
+    },
     columns: { name: true, kind: true },
     with: {
       currentVersion: {
@@ -92,7 +96,9 @@ const nameFromDb = async (
  * `toUIMessageStream()` but are dropped by
  * `convertToModelMessages()` (zero extra tokens).
  */
-export const createSourceInjectionTransform = (workspaceId: string) => {
+export const createSourceInjectionTransform = (
+  workspaceId: SafeId<"workspace">,
+) => {
   const toolNames = new Map<string, string>();
   const emittedEntities = new Set<string>();
   const entityMeta = new Map<string, { name: string; kind: string }>();

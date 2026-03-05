@@ -35,7 +35,10 @@ export const updateClauseHandler = async ({
   body,
 }: UpdateClauseProps) => {
   const existing = await db.query.clauses.findFirst({
-    where: { id: clauseId, organizationId },
+    where: {
+      id: clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: {
       id: true,
       title: true,
@@ -53,7 +56,7 @@ export const updateClauseHandler = async ({
     const category = await db.query.clauseCategories.findFirst({
       where: {
         id: body.categoryId,
-        organizationId,
+        organizationId: { eq: organizationId },
       },
       columns: { id: true },
     });

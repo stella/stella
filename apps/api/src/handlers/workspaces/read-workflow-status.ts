@@ -1,10 +1,11 @@
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
 import { rivet } from "@/api/handlers/registry";
+import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadWorkflowHandlerProps = {
-  workspaceId: string;
-  organizationId: string;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
   authToken: string;
 };
 

@@ -64,7 +64,7 @@ export const updateTemplateHandler = async ({
   body,
 }: UpdateTemplateProps) => {
   const existing = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: {
       id: true,
       s3Key: true,
@@ -93,7 +93,7 @@ export const updateTemplateHandler = async ({
   if (body.categoryId !== undefined) {
     if (body.categoryId !== null) {
       const category = await db.query.templateCategories.findFirst({
-        where: { id: body.categoryId, organizationId },
+        where: { id: body.categoryId, organizationId: { eq: organizationId } },
         columns: { id: true },
       });
       if (!category) {

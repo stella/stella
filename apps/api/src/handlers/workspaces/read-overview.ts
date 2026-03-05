@@ -16,7 +16,7 @@ export const readOverviewHandler = async ({
   const [entityCount, recentEntities, kindCounts] = await Promise.all([
     db.$count(entities, eq(entities.workspaceId, workspaceId)),
     db.query.entities.findMany({
-      where: { workspaceId },
+      where: { workspaceId: { eq: workspaceId } },
       columns: {
         id: true,
         name: true,

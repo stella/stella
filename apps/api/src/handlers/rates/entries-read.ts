@@ -26,7 +26,7 @@ export const readRateEntriesHandler = async ({
 }: ReadRateEntriesHandlerProps) => {
   // Verify table belongs to workspace
   const table = await db.query.rateTables.findFirst({
-    where: { id: rateTableId, workspaceId },
+    where: { id: rateTableId, workspaceId: { eq: workspaceId } },
     columns: { id: true },
   });
 

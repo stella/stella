@@ -46,7 +46,7 @@ export const createWorkspaceContactHandler = async ({
   const contact = await db.query.contacts.findFirst({
     where: {
       id: body.contactId,
-      organizationId,
+      organizationId: { eq: organizationId },
     },
     columns: { id: true },
   });

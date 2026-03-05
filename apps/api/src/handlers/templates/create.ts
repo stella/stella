@@ -92,7 +92,7 @@ export const createTemplateHandler = async ({
 
   if (categoryId) {
     const category = await db.query.templateCategories.findFirst({
-      where: { id: categoryId, organizationId },
+      where: { id: categoryId, organizationId: { eq: organizationId } },
       columns: { id: true },
     });
     if (!category) {

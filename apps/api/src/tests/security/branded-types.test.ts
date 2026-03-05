@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
+import type {
+  contacts,
+  entities,
+  invoices,
+  properties,
+  views,
+  workspaces,
+} from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 
 describe("branded types", () => {
@@ -35,6 +44,82 @@ describe("branded types", () => {
       const orgId = toSafeId<"organization">("org_123");
       // @ts-expect-error - organization SafeId should not satisfy workspace SafeId
       acceptsWorkspaceId(orgId);
+    });
+  });
+
+  describe("branded schema columns", () => {
+    test("select model returns SafeId<organization> for org FK columns", () => {
+      type ContactSelect = InferSelectModel<typeof contacts>;
+      type OrgIdType = ContactSelect["organizationId"];
+      const check: OrgIdType = toSafeId<"organization">("test");
+      expect(check).toBeDefined();
+      // @ts-expect-error - plain string not assignable
+      const bad: OrgIdType = "plain-string";
+      expect(bad).toBeDefined();
+    });
+
+    test("select model returns SafeId<workspace> for ws FK columns", () => {
+      type EntitySelect = InferSelectModel<typeof entities>;
+      type WsIdType = EntitySelect["workspaceId"];
+      const check: WsIdType = toSafeId<"workspace">("test");
+      expect(check).toBeDefined();
+      // @ts-expect-error - plain string not assignable
+      const bad: WsIdType = "plain-string";
+      expect(bad).toBeDefined();
+    });
+
+    test("insert model requires SafeId<organization>", () => {
+      type ContactInsert = InferInsertModel<typeof contacts>;
+      type OrgIdInsert = ContactInsert["organizationId"];
+      const check: OrgIdInsert = toSafeId<"organization">("test");
+      expect(check).toBeDefined();
+      // @ts-expect-error - plain string not assignable
+      const bad: OrgIdInsert = "plain-string";
+      expect(bad).toBeDefined();
+    });
+
+    test("insert model requires SafeId<workspace>", () => {
+      type ViewInsert = InferInsertModel<typeof views>;
+      type WsIdInsert = ViewInsert["workspaceId"];
+      const check: WsIdInsert = toSafeId<"workspace">("test");
+      expect(check).toBeDefined();
+      // @ts-expect-error - plain string not assignable
+      const bad: WsIdInsert = "plain-string";
+      expect(bad).toBeDefined();
+    });
+
+    test("SafeId<organization> is not assignable to SafeId<workspace> column", () => {
+      type EntityInsert = InferInsertModel<typeof entities>;
+      type WsIdInsert = EntityInsert["workspaceId"];
+      const orgId = toSafeId<"organization">("org_test");
+      // @ts-expect-error - org SafeId should not work for ws column
+      const bad: WsIdInsert = orgId;
+      expect(bad).toBeDefined();
+    });
+
+    test("PK columns remain plain string (not branded)", () => {
+      type WorkspaceSelect = InferSelectModel<typeof workspaces>;
+      type PkType = WorkspaceSelect["id"];
+      const check: PkType = "plain-string";
+      expect(check).toBe("plain-string");
+    });
+
+    test("multiple tables share consistent branded types", () => {
+      type ContactOrg = InferSelectModel<typeof contacts>["organizationId"];
+      type InvoiceOrg = InferSelectModel<typeof invoices>["organizationId"];
+      const orgId = toSafeId<"organization">("org_test");
+      const a: ContactOrg = orgId;
+      const b: InvoiceOrg = orgId;
+      expect(a).toBe(b);
+    });
+
+    test("workspace FK from different tables are interchangeable", () => {
+      type EntityWs = InferSelectModel<typeof entities>["workspaceId"];
+      type PropertyWs = InferSelectModel<typeof properties>["workspaceId"];
+      const wsId = toSafeId<"workspace">("ws_test");
+      const a: EntityWs = wsId;
+      const b: PropertyWs = wsId;
+      expect(a).toBe(b);
     });
   });
 });
