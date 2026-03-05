@@ -1,7 +1,7 @@
 # Rabbit Round
 
 Process automated PR review comments systematically. Run this for CodeRabbit, Google
-Code Assist (Gemini), GitHub Copilot, Devin, and so on.
+Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
 
 ## Instructions
 
@@ -15,26 +15,33 @@ Code Assist (Gemini), GitHub Copilot, Devin, and so on.
    gh api user --jq '.login'
    ```
 
-2. **Fetch all review comments** from AI bots:
+2. **Fetch all bot comments** - both review comments and issue comments:
 
    ```bash
+   # Review comments (inline on code)
    gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --paginate
+
+   # Issue comments (top-level PR comments, used by Greptile and others)
+   gh api repos/{owner}/{repo}/issues/{pr_number}/comments --paginate
    ```
 
    Filter for comments from `coderabbitai[bot]`, `gemini-code-assist[bot]`,
-   `github-copilot[bot]`, `devin-ai-integration[bot]`, and similar bots.
+   `github-copilot[bot]`, `devin-ai-integration[bot]`, `greptile-apps[bot]`,
+   and similar bots.
 
-   **Human comments:** Never resolve human review comments. You may reply to push
-   back if incorrect, or ask for clarification - but leave the thread open for
-   the human to resolve.
+   **Human comments:** Never resolve or minimize human comments. You may reply
+   to push back if incorrect, or ask for clarification - but leave the thread
+   open for the human to resolve.
 
-3. **For each bot review comment**, analyze the suggestion and decide:
+3. **For each bot comment** (review or issue), analyze the suggestion and decide:
    - **Accept**: If the suggestion improves code quality, correctness, or follows
      our patterns
    - **Push back**: If the suggestion doesn't apply, is incorrect, or conflicts
      with our conventions (documented in CLAUDE.md files)
 
-4. **Reply to each comment** using `in_reply_to` parameter:
+4. **Reply to each comment**:
+
+   For **review comments**, use `in_reply_to` to thread the reply:
 
    ```bash
    gh api repos/{owner}/{repo}/pulls/{pr_number}/comments \
@@ -47,10 +54,18 @@ Code Assist (Gemini), GitHub Copilot, Devin, and so on.
      -F in_reply_to={comment_id}
    ```
 
-   Note: The `in_reply_to` parameter threads the reply correctly under the original
-   comment.
+   For **issue comments** (top-level PR comments), reply on the issue thread:
 
-5. **Resolve addressed bot conversations** using GraphQL (never resolve human comments):
+   ```bash
+   gh api repos/{owner}/{repo}/issues/{pr_number}/comments \
+     -X POST \
+     -f body="[response]
+
+   CC on behalf of @{username}"
+   ```
+
+5. **Resolve addressed bot review threads** using GraphQL (never resolve human
+   comments):
 
    ```bash
    # First, get thread IDs for the PR
@@ -80,21 +95,42 @@ Code Assist (Gemini), GitHub Copilot, Devin, and so on.
    }'
    ```
 
-6. **Check nitpick suggestions** (marked with `[nitpick]` or similar) - these
+6. **Minimize (hide) addressed bot issue comments** using GraphQL. Some bots
+   (e.g. Greptile) post as issue comments instead of review comments. These
+   cannot be "resolved" like review threads; instead, minimize them so they
+   collapse under a "hidden" fold:
+
+   ```bash
+   # Use the node_id from the issue comment JSON response
+   gh api graphql -f query='
+   mutation {
+     minimizeComment(input: {
+       subjectId: "{comment_node_id}",
+       classifier: RESOLVED
+     }) {
+       minimizedComment { isMinimized }
+     }
+   }'
+   ```
+
+   Only minimize bot comments you have already addressed (accepted or pushed
+   back on). Never minimize human comments.
+
+7. **Check nitpick suggestions** (marked with `[nitpick]` or similar) - these
    should also be addressed, not ignored.
 
-7. **Implement accepted suggestions**:
+8. **Implement accepted suggestions**:
    - Make the code changes for suggestions you agreed with
    - Group related changes logically
 
-8. **Run quality checks**:
+9. **Run quality checks**:
 
    Run the quality checks for the project (using `ruff format`, `ruff check`, `ty`
    for Python, `bun run lint`, `bun run format`, `bun run typecheck` for TypeScript).
 
-9. **Commit and push**:
-   - Create a commit with a message like `fix: address review comments`
-   - Push to the current branch
+10. **Commit and push**:
+    - Create a commit with a message like `fix: address review comments`
+    - Push to the current branch
 
 ## Decision Guidelines
 
