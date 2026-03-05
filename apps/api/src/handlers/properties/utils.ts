@@ -61,7 +61,7 @@ export const validatePropertyInputs = async ({
 }: ValidatePropertyInputsProps): Promise<Result<void, string[]>> => {
   const workspaceProperties = await db.query.properties.findMany({
     where: {
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: { id: true },
     with: {

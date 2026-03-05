@@ -28,7 +28,8 @@ import { env } from "@/api/env";
 import { createSourceInjectionTransform } from "@/api/handlers/registry/actors/chat-source-transform";
 import { createMatterTools } from "@/api/handlers/registry/actors/chat-tools";
 import { validateUserActorSession } from "@/api/handlers/registry/utils";
-import type { SafeId } from "@/api/lib/branded-types";
+// biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const MAX_TOOL_STEPS = 5;
@@ -144,17 +145,20 @@ const buildUserContextBlock = (userContext: UserContext | null): string => {
 
 /** Build a system prompt for a workspace-bound thread. */
 const buildSystemPrompt = async (
-  workspaceId: string,
-  organizationId: string,
+  workspaceId: SafeId<"workspace">,
+  organizationId: SafeId<"organization">,
   userContext: UserContext | null,
 ): Promise<string> => {
   const [workspace, properties, [entityCountRow]] = await Promise.all([
     db.query.workspaces.findFirst({
-      where: { id: workspaceId, organizationId },
+      where: {
+        id: { eq: workspaceId },
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true, name: true },
     }),
     db.query.properties.findMany({
-      where: { workspaceId },
+      where: { workspaceId: { eq: workspaceId } },
       columns: { name: true, status: true },
     }),
     db
@@ -312,13 +316,16 @@ export const chatActor = actor({
           // before granting tool access. If the workspace is
           // not found (wrong org or deleted), treat as a
           // non-workspace thread.
-          let validatedWsId: string | null = null;
+          let validatedWsId: SafeId<"workspace"> | null = null;
           if (wsId) {
             const ws = await db.query.workspaces.findFirst({
-              where: { id: wsId, organizationId: orgId },
+              where: {
+                id: wsId,
+                organizationId: { eq: orgId },
+              },
               columns: { id: true },
             });
-            validatedWsId = ws ? wsId : null;
+            validatedWsId = ws ? toSafeId<"workspace">(wsId) : null;
           }
 
           const tools = validatedWsId
@@ -450,16 +457,20 @@ export const chatActor = actor({
       if (!thread) {
         return { prompt: null };
       }
-      const wsId = thread.metadata.workspaceId;
+      const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
-      if (!wsId) {
+      if (!rawWsId) {
         return { prompt: buildUserContextBlock(ctx) || null };
       }
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
       };
       return {
-        prompt: await buildSystemPrompt(wsId, connState.organizationId, ctx),
+        prompt: await buildSystemPrompt(
+          toSafeId<"workspace">(rawWsId),
+          connState.organizationId,
+          ctx,
+        ),
       };
     },
     getThreads: (c): ThreadSummary[] => {

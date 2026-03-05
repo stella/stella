@@ -4,7 +4,8 @@ import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
 import { matterCounters, properties, views, workspaces } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+// biome-ignore lint/style/noRestrictedImports: brands freshly-inserted workspace PK for FK usage
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -38,7 +39,7 @@ export const createWorkspacesHandler = ({
         name: true,
       },
       where: {
-        organizationId,
+        organizationId: { eq: organizationId },
         status: "active",
       },
     });
@@ -60,7 +61,7 @@ export const createWorkspacesHandler = ({
 
     // Read org settings for matter numbering
     const settings = await tx.query.organizationSettings.findFirst({
-      where: { organizationId },
+      where: { organizationId: { eq: organizationId } },
       columns: {
         matterNumberPattern: true,
         matterNumberPadding: true,
@@ -100,9 +101,11 @@ export const createWorkspacesHandler = ({
       reference,
     });
 
+    const wsId = toSafeId<"workspace">(body.id);
+
     await tx.insert(properties).values([
       {
-        workspaceId: body.id,
+        workspaceId: wsId,
         name: body.filePropertyName,
         content: { type: "file", version: 1 },
         tool: { version: 1, type: "manual-input" },
@@ -113,7 +116,7 @@ export const createWorkspacesHandler = ({
 
     await tx.insert(views).values(
       DEFAULT_VIEWS.map((v) => ({
-        workspaceId: body.id,
+        workspaceId: wsId,
         ...v,
       })),
     );

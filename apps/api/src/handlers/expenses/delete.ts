@@ -24,7 +24,7 @@ export const deleteExpenseHandler = async ({
   const existing = await db.query.expenses.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: {
       status: true,

@@ -36,7 +36,7 @@ export const listCategoriesHandler = async ({
   organizationId,
 }: ListCategoriesProps) => {
   const result = await db.query.clauseCategories.findMany({
-    where: { organizationId },
+    where: { organizationId: { eq: organizationId } },
     columns: {
       id: true,
       parentId: true,
@@ -77,7 +77,10 @@ export const createCategoryHandler = async ({
 
   if (body.parentId) {
     const parent = await db.query.clauseCategories.findFirst({
-      where: { id: body.parentId, organizationId },
+      where: {
+        id: body.parentId,
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true },
     });
 
@@ -123,7 +126,10 @@ export const updateCategoryHandler = async ({
   body,
 }: UpdateCategoryProps) => {
   const existing = await db.query.clauseCategories.findFirst({
-    where: { id: categoryId, organizationId },
+    where: {
+      id: categoryId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true },
   });
 
@@ -139,7 +145,10 @@ export const updateCategoryHandler = async ({
     }
 
     const parent = await db.query.clauseCategories.findFirst({
-      where: { id: body.parentId, organizationId },
+      where: {
+        id: body.parentId,
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true },
     });
 
@@ -204,7 +213,10 @@ export const deleteCategoryHandler = async ({
   categoryId,
 }: DeleteCategoryProps) => {
   const existing = await db.query.clauseCategories.findFirst({
-    where: { id: categoryId, organizationId },
+    where: {
+      id: categoryId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true, parentId: true },
   });
 

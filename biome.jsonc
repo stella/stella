@@ -98,6 +98,26 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/handlers/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@/api/lib/branded-types": {
+                    "importNames": ["toSafeId"],
+                    "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

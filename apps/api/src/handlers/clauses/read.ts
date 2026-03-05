@@ -142,7 +142,10 @@ export const getClauseHandler = async ({
   clauseId,
 }: GetClauseProps) => {
   const clause = await db.query.clauses.findFirst({
-    where: { id: clauseId, organizationId },
+    where: {
+      id: clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: {
       id: true,
       title: true,
@@ -203,7 +206,10 @@ export const getClauseVersionHandler = async ({
 }: GetClauseVersionProps) => {
   // Verify clause belongs to this org (tenant isolation)
   const clause = await db.query.clauses.findFirst({
-    where: { id: clauseId, organizationId },
+    where: {
+      id: clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true },
   });
 

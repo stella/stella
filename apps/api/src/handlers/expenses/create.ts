@@ -59,7 +59,7 @@ export const createExpenseHandler = async ({
   }
 
   const matter = await db.query.entities.findFirst({
-    where: { id: body.matterId, workspaceId },
+    where: { id: body.matterId, workspaceId: { eq: workspaceId } },
     columns: { id: true },
   });
 

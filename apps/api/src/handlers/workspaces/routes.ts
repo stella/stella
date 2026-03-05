@@ -57,13 +57,13 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
       app
         .get("/", (ctx) =>
           readWorkspaceHandler({
-            workspaceId: ctx.params.workspaceId,
+            workspaceId: ctx.workspaceId,
             organizationId: ctx.session.activeOrganizationId,
           }),
         )
         .get("/workflow", (ctx) =>
           readWorkflowHandler({
-            workspaceId: ctx.params.workspaceId,
+            workspaceId: ctx.workspaceId,
             organizationId: ctx.session.activeOrganizationId,
             authToken: ctx.session.token,
           }),

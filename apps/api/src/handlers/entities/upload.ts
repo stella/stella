@@ -78,7 +78,7 @@ export const uploadEntityHandler = async ({
     db.$count(entities, eq(entities.workspaceId, workspaceId)),
     db.query.properties.findFirst({
       columns: { id: true, content: true },
-      where: { id: propertyId, workspaceId },
+      where: { id: propertyId, workspaceId: { eq: workspaceId } },
     }),
   ]);
 

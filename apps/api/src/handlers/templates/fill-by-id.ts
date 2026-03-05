@@ -44,7 +44,7 @@ export const fillByIdHandler = async ({
   query: { format = "docx" },
 }: FillByIdProps) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: {
       s3Key: true,
       fileName: true,

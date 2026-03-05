@@ -55,7 +55,7 @@ export const createClauseHandler = async ({
     const category = await db.query.clauseCategories.findFirst({
       where: {
         id: body.categoryId,
-        organizationId,
+        organizationId: { eq: organizationId },
       },
       columns: { id: true },
     });

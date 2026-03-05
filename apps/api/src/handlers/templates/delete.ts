@@ -17,7 +17,7 @@ export const deleteTemplateHandler = async ({
   templateId,
 }: DeleteTemplateProps) => {
   const existing = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: { id: true, s3Key: true },
     with: {
       versions: { columns: { s3Key: true } },

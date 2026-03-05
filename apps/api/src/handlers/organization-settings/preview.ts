@@ -40,7 +40,7 @@ export const previewOrganizationSettingsHandler = async ({
   const scopeKey = toScopeKey(body.matterNumberPattern, now);
 
   const counter = await db.query.matterCounters.findFirst({
-    where: { organizationId, scopeKey },
+    where: { organizationId: { eq: organizationId }, scopeKey },
     columns: { lastValue: true },
   });
 

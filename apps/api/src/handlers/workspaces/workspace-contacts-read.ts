@@ -10,7 +10,7 @@ export const readWorkspaceContactsHandler = async ({
   workspaceId,
 }: ReadWorkspaceContactsHandlerProps) => {
   return await db.query.workspaceContacts.findMany({
-    where: { workspaceId },
+    where: { workspaceId: { eq: workspaceId } },
     limit: LIMITS.workspaceContactsCount,
     with: {
       contact: {

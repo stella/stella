@@ -67,7 +67,7 @@ export const importHandler = async ({
 
   // Load existing categories for matching
   const allCategories = await db.query.clauseCategories.findMany({
-    where: { organizationId },
+    where: { organizationId: { eq: organizationId } },
     columns: { id: true, name: true, parentId: true },
   });
 

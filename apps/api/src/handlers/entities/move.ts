@@ -143,7 +143,7 @@ const checkIsDescendant = async (
       await tx.query.entities.findFirst({
         where: {
           id: currentId,
-          workspaceId,
+          workspaceId: { eq: workspaceId },
         },
         columns: {
           parentId: true,

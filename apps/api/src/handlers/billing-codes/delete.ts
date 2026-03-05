@@ -24,7 +24,7 @@ export const deleteBillingCodeHandler = async ({
   const existing = await db.query.billingCodes.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: { id: true },
   });

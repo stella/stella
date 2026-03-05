@@ -17,7 +17,7 @@ export const previewTemplateHandler = async ({
   templateId,
 }: PreviewTemplateProps) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: { s3Key: true },
   });
 

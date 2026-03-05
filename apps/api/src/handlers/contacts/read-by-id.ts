@@ -18,7 +18,7 @@ export const readContactByIdHandler = async ({
   const contact = await db.query.contacts.findFirst({
     where: {
       id: contactId,
-      organizationId,
+      organizationId: { eq: organizationId },
     },
     with: {
       originatingAttorney: {
@@ -37,7 +37,7 @@ export const readContactByIdHandler = async ({
   const clientMatters = await db.query.workspaces.findMany({
     where: {
       clientId: contactId,
-      organizationId,
+      organizationId: { eq: organizationId },
       status: "active",
     },
     columns: {

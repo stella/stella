@@ -25,7 +25,10 @@ const verifyTemplateOwnership = async (
   organizationId: SafeId<"organization">,
 ) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: {
+      id: templateId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true },
   });
 
@@ -128,7 +131,10 @@ export const linkClauseHandler = async ({
 
   // Verify clause belongs to same organization
   const clause = await db.query.clauses.findFirst({
-    where: { id: body.clauseId, organizationId },
+    where: {
+      id: body.clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true, currentVersion: true },
   });
 
@@ -265,7 +271,10 @@ export const syncClauseHandler = async ({
 
   // Verify clause still belongs to organization
   const clause = await db.query.clauses.findFirst({
-    where: { id: link.clauseId, organizationId },
+    where: {
+      id: link.clauseId,
+      organizationId: { eq: organizationId },
+    },
     columns: { id: true, currentVersion: true },
   });
 

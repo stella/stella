@@ -36,7 +36,7 @@ export const listTemplateCategoriesHandler = async ({
   organizationId,
 }: ListProps) => {
   const result = await db.query.templateCategories.findMany({
-    where: { organizationId },
+    where: { organizationId: { eq: organizationId } },
     columns: {
       id: true,
       parentId: true,
@@ -77,7 +77,7 @@ export const createTemplateCategoryHandler = async ({
 
   if (body.parentId) {
     const parent = await db.query.templateCategories.findFirst({
-      where: { id: body.parentId, organizationId },
+      where: { id: body.parentId, organizationId: { eq: organizationId } },
       columns: { id: true },
     });
 
@@ -123,7 +123,7 @@ export const updateTemplateCategoryHandler = async ({
   body,
 }: UpdateProps) => {
   const existing = await db.query.templateCategories.findFirst({
-    where: { id: categoryId, organizationId },
+    where: { id: categoryId, organizationId: { eq: organizationId } },
     columns: { id: true },
   });
 
@@ -139,7 +139,7 @@ export const updateTemplateCategoryHandler = async ({
     }
 
     const parent = await db.query.templateCategories.findFirst({
-      where: { id: body.parentId, organizationId },
+      where: { id: body.parentId, organizationId: { eq: organizationId } },
       columns: { id: true, parentId: true },
     });
 
@@ -163,7 +163,7 @@ export const updateTemplateCategoryHandler = async ({
         await db.query.templateCategories.findFirst({
           where: {
             id: checkId,
-            organizationId,
+            organizationId: { eq: organizationId },
           },
           columns: { parentId: true },
         });
@@ -225,7 +225,7 @@ export const deleteTemplateCategoryHandler = async ({
   categoryId,
 }: DeleteProps) => {
   const existing = await db.query.templateCategories.findFirst({
-    where: { id: categoryId, organizationId },
+    where: { id: categoryId, organizationId: { eq: organizationId } },
     columns: { id: true, parentId: true },
   });
 

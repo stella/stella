@@ -57,6 +57,7 @@ export const propertiesRoute = new Elysia({
         "/",
         async (ctx) =>
           deletePropertyHandler({
+            workspaceId: ctx.workspaceId,
             propertyId: ctx.params.propertyId,
           }),
         {

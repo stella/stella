@@ -15,7 +15,7 @@ export const readInvoiceByIdHandler = async ({
   const invoice = await db.query.invoices.findFirst({
     where: {
       id: invoiceId,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     with: {
       timeEntries: {

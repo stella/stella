@@ -27,7 +27,7 @@ export const createRateEntryHandler = async ({
   body,
 }: CreateRateEntryHandlerProps) => {
   const table = await db.query.rateTables.findFirst({
-    where: { id: rateTableId, workspaceId },
+    where: { id: rateTableId, workspaceId: { eq: workspaceId } },
     columns: { id: true },
   });
 

@@ -13,7 +13,7 @@ export const readOrganizationSettingsHandler = async ({
   organizationId,
 }: ReadOrganizationSettingsHandlerProps) => {
   const row = await db.query.organizationSettings.findFirst({
-    where: { organizationId },
+    where: { organizationId: { eq: organizationId } },
     columns: {
       matterNumberPattern: true,
       matterNumberPadding: true,

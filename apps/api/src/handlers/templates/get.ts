@@ -17,7 +17,7 @@ export const getTemplateHandler = async ({
   templateId,
 }: GetTemplateProps) => {
   const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId },
+    where: { id: templateId, organizationId: { eq: organizationId } },
     columns: {
       id: true,
       name: true,

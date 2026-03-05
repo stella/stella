@@ -45,6 +45,7 @@ import type {
   PropertyTool,
   ViewConfig,
 } from "@/api/db/schema-validators";
+import { toSafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { DEFAULT_VIEWS, type RequiredViewLayout } from "@/api/lib/views";
 import { ensureTestUsers } from "./seed-test-user";
@@ -1789,8 +1790,9 @@ const MORE_WORKSPACES = [
 // ─── Main ───────────────────────────────────────────────
 
 export async function seed(organizationId?: string, userId?: string) {
-  const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
+  const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
   const USER_ID = userId ?? DEFAULT_USER_ID;
+  const toWs = (id: string) => toSafeId<"workspace">(id);
 
   if (process.env.NODE_ENV === "production") {
     throw new Error("Refusing to run in production.");
@@ -1903,7 +1905,7 @@ export async function seed(organizationId?: string, userId?: string) {
         .insert(views)
         .values({
           id: seedId(`extra-ws-${mw.reference}-view-${v.layout}`),
-          workspaceId: wsId,
+          workspaceId: toWs(wsId),
           ...v,
         })
         .onConflictDoNothing();
@@ -1942,7 +1944,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(properties)
       .values({
         id: prop.id,
-        workspaceId: prop.workspaceId,
+        workspaceId: toWs(prop.workspaceId),
         name: prop.name,
         content: prop.content,
         tool: prop.tool,
@@ -1965,7 +1967,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(views)
       .values({
         id: v.id,
-        workspaceId: v.workspaceId,
+        workspaceId: toWs(v.workspaceId),
         name: v.name,
         layout: v.layout,
         config: v.config,
@@ -1990,7 +1992,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(entities)
       .values({
         id: e.entityId,
-        workspaceId: e.workspaceId,
+        workspaceId: toWs(e.workspaceId),
         kind: e.kind,
         parentId: e.parentId,
         createdBy: pickAuthor(ei),
@@ -2120,7 +2122,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: party.id,
         organizationId: ORG_ID,
-        workspaceId: party.workspaceId,
+        workspaceId: toWs(party.workspaceId),
         contactId: party.contactId,
         role: party.role,
       })
@@ -2136,7 +2138,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: bc.id,
         organizationId: ORG_ID,
-        workspaceId: bc.workspaceId,
+        workspaceId: toWs(bc.workspaceId),
         type: bc.type,
         code: bc.code,
         label: bc.label,
@@ -2154,7 +2156,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: rt.id,
         organizationId: ORG_ID,
-        workspaceId: rt.workspaceId,
+        workspaceId: toWs(rt.workspaceId),
         name: rt.name,
         currency: rt.currency,
         isDefault: true,
@@ -2186,7 +2188,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: inv.id,
         organizationId: ORG_ID,
-        workspaceId: inv.workspaceId,
+        workspaceId: toWs(inv.workspaceId),
         invoiceNumber: inv.invoiceNumber,
         status: inv.status,
         invoiceDate: inv.invoiceDate,
@@ -2207,7 +2209,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: te.id,
         organizationId: ORG_ID,
-        workspaceId: te.workspaceId,
+        workspaceId: toWs(te.workspaceId),
         userId: te.userId,
         matterId: te.matterId,
         dateWorked: te.dateWorked,
@@ -2235,7 +2237,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .values({
         id: exp.id,
         organizationId: ORG_ID,
-        workspaceId: exp.workspaceId,
+        workspaceId: toWs(exp.workspaceId),
         userId: exp.userId,
         matterId: exp.matterId,
         dateIncurred: exp.dateIncurred,

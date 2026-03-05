@@ -24,7 +24,7 @@ export const deleteTimeEntryByIdHandler = async ({
   const existing = await db.query.timeEntries.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: {
       status: true,

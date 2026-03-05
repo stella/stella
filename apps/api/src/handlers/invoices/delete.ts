@@ -27,7 +27,7 @@ export const deleteInvoiceHandler = async ({
     const invoice = await tx.query.invoices.findFirst({
       where: {
         id: invoiceId,
-        workspaceId,
+        workspaceId: { eq: workspaceId },
         status: INVOICE_STATUS.DRAFT,
       },
       columns: { id: true },

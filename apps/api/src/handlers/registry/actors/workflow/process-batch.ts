@@ -2,10 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import type { ActionContextOf } from "rivetkit";
 
-import {
-  parseWorkflowActorKey,
-  type WorkflowActorEvent,
-} from "@stella/rivet/actors/workflow-actor-config";
+import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
 import { isMockAI } from "@/api/consts";
 import { db } from "@/api/db";
@@ -24,8 +21,10 @@ import {
   runWorkflowAction,
   setFieldsContent,
 } from "@/api/handlers/registry/actors/workflow/utils";
-import { broadcastEvent } from "@/api/handlers/registry/utils";
-import { toSafeId } from "@/api/lib/branded-types";
+import {
+  broadcastEvent,
+  parseBrandedWorkflowActorKey,
+} from "@/api/handlers/registry/utils";
 import { captureActorError } from "@/api/lib/errors/actions";
 import type { FieldContent } from "@/api/types";
 
@@ -125,7 +124,7 @@ const processWorkflowBatch = (
   { entityId, entityVersionId, level, batch }: ProcessWorkflowBatchProps,
 ) =>
   Result.tryPromise(async () => {
-    const { organizationId, workspaceId } = parseWorkflowActorKey(c.key);
+    const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
 
     await setFieldsContent(c, {
       entityId,
@@ -140,8 +139,8 @@ const processWorkflowBatch = (
       abortSignal: c.abortSignal,
       batch,
       entityVersionId,
-      organizationId: toSafeId<"organization">(organizationId),
-      workspaceId: toSafeId<"workspace">(workspaceId),
+      organizationId,
+      workspaceId,
     });
 
     const isBatchPending = c.state.executionPlan

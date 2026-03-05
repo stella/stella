@@ -104,7 +104,7 @@ export const updatePropertyHandler = async ({
   }
 
   const oldProperty = await db.query.properties.findFirst({
-    where: { id: propertyId },
+    where: { id: propertyId, workspaceId: { eq: workspaceId } },
     with: {
       dependencies: {
         columns: {
@@ -179,7 +179,7 @@ export const updatePropertyHandler = async ({
 
     if (isStale) {
       const allProperties = await tx.query.properties.findMany({
-        where: { workspaceId },
+        where: { workspaceId: { eq: workspaceId } },
         columns: { id: true },
         with: {
           dependencies: {

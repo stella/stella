@@ -42,7 +42,7 @@ export const updateTimeEntryByIdHandler = async ({
   const existing = await db.query.timeEntries.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: {
       status: true,
@@ -87,7 +87,7 @@ export const updateTimeEntryByIdHandler = async ({
   }
   if (body.matterId !== undefined) {
     const matter = await db.query.entities.findFirst({
-      where: { id: body.matterId, workspaceId },
+      where: { id: body.matterId, workspaceId: { eq: workspaceId } },
       columns: { id: true },
     });
 

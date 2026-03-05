@@ -30,7 +30,7 @@ const trailingSuffixRe = /_\d+$/;
 
 type ResolveEntityNameProps = {
   tx: Transaction;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
   parentId: string | null;
   name: string | null;
 };
@@ -118,7 +118,7 @@ export const duplicateEntityHandler = async ({
   body: { entityId: sourceEntityId },
 }: DuplicateEntityHandlerProps) => {
   const source = await db.query.entities.findFirst({
-    where: { id: sourceEntityId, workspaceId },
+    where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
     columns: {
       id: true,
       kind: true,

@@ -10,7 +10,7 @@ export const readPropertiesHandler = async ({
   workspaceId,
 }: ReadPropertiesHandlerProps) => {
   const propertiesResult = await db.query.properties.findMany({
-    where: { workspaceId },
+    where: { workspaceId: { eq: workspaceId } },
     orderBy: { createdAt: "asc" },
     with: {
       dependencies: {

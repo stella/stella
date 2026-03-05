@@ -25,7 +25,7 @@ export const updateRateTableHandler = async ({
   body,
 }: UpdateRateTableHandlerProps) => {
   const existing = await db.query.rateTables.findFirst({
-    where: { id: body.id, workspaceId },
+    where: { id: body.id, workspaceId: { eq: workspaceId } },
     columns: { id: true },
   });
 

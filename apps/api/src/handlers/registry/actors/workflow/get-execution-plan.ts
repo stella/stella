@@ -8,6 +8,7 @@ import type {
   PropertyCondition,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { PropertyContent } from "@/api/types";
 
 type DependencySignature = string; // Sorted, joined property IDs
@@ -60,7 +61,7 @@ type ExecutionPlanData = {
 };
 
 export const getExecutionPlanData = async (
-  workspaceId: string,
+  workspaceId: SafeId<"workspace">,
 ): Promise<ExecutionPlanData> => {
   const propertiesResult = await db.query.properties.findMany({
     columns: {
@@ -77,7 +78,9 @@ export const getExecutionPlanData = async (
         },
       },
     },
-    where: { workspaceId },
+    where: {
+      workspaceId: { eq: workspaceId },
+    },
   });
 
   const allProperties: ExecutionPlanProperty[] = propertiesResult.map(

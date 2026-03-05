@@ -2,7 +2,7 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import { db } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -218,12 +218,13 @@ const removeEntity = async (entityId: string): Promise<void> => {
 
 const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
   const orgWorkspaces = await db.query.workspaces.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: { eq: orgId } },
     columns: { id: true },
     limit: LIMITS.workspacesCount,
   });
 
   for (const ws of orgWorkspaces) {
+    const wsId = toSafeId<"workspace">(ws.id);
     let lastId = "";
     let hasMore = true;
     while (hasMore) {
@@ -232,8 +233,8 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
         .from(entities)
         .where(
           lastId
-            ? and(eq(entities.workspaceId, ws.id), gt(entities.id, lastId))
-            : eq(entities.workspaceId, ws.id),
+            ? and(eq(entities.workspaceId, wsId), gt(entities.id, lastId))
+            : eq(entities.workspaceId, wsId),
         )
         .orderBy(asc(entities.id))
         .limit(REINDEX_BATCH_SIZE);

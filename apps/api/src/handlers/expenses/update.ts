@@ -37,7 +37,7 @@ export const updateExpenseHandler = async ({
   const existing = await db.query.expenses.findFirst({
     where: {
       id: body.id,
-      workspaceId,
+      workspaceId: { eq: workspaceId },
     },
     columns: {
       status: true,
@@ -87,7 +87,7 @@ export const updateExpenseHandler = async ({
   }
   if (body.matterId !== undefined) {
     const matter = await db.query.entities.findFirst({
-      where: { id: body.matterId, workspaceId },
+      where: { id: body.matterId, workspaceId: { eq: workspaceId } },
       columns: { id: true },
     });
 
