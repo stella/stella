@@ -8,10 +8,11 @@
 
 import { panic } from "better-result";
 
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { createFileKey, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { captureError } from "@/api/lib/posthog";

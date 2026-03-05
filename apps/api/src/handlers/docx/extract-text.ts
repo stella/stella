@@ -249,9 +249,9 @@ const extractHeaderFooterParagraphs = async (
 // ── Public API ───────────────────────────────────────────
 
 export const extractText = async (
-  docxBuffer: Buffer,
+  docxBytes: Uint8Array,
 ): Promise<ExtractedDocument> => {
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await JSZip.loadAsync(docxBytes);
   const emptyResult: ExtractedDocument = {
     paragraphs: [],
     charCount: 0,

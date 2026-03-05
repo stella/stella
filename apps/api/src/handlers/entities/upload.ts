@@ -3,6 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db, type Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
@@ -11,7 +12,7 @@ import {
   isConvertibleMimeType,
 } from "@/api/handlers/files/gotenberg";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
-import { createFileKey, PDF_MIME_TYPE } from "@/api/handlers/files/utils";
+import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -238,7 +239,7 @@ export const uploadEntityHandler = async ({
       return resolvedName;
     });
 
-    processExtraction(entityId).catch(captureError);
+    await processExtraction(entityId).catch(captureError);
 
     return {
       entityId,

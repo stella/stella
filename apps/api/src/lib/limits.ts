@@ -32,6 +32,8 @@ export const LIMITS = {
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   extractedContentMaxChars: 500_000,
+  /** Hard timeout (ms) for the sandboxed extraction subprocess. */
+  extractionTimeoutMs: 30_000,
   clauseExportLimit: 500,
   clauseImportBatchLimit: 200,
   analyticsTopTemplatesLimit: 20,
