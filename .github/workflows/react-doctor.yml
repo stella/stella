@@ -50,10 +50,32 @@ jobs:
           NO_COLOR: "1"
           FORCE_COLOR: "0"
 
+      - name: Extract minimum score from output
+        if: steps.changes.outputs.has_react_changes == 'true'
+        id: min-score
+        run: |
+          # The action writes full output to /tmp/react-doctor-output.txt.
+          # Each scanned package has a line like "85 / 100  Great".
+          # Extract all scores and take the minimum.
+          if [[ ! -f /tmp/react-doctor-output.txt ]]; then
+            echo "::warning::react-doctor output file not found; falling back to N/A label"
+            echo "score=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SCORES=$(grep -oP '[0-9]+ / 100\b' /tmp/react-doctor-output.txt | grep -oE '^[0-9]+' || true)
+          if [[ -z "$SCORES" ]]; then
+            echo "score=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MIN_SCORE=$(echo "$SCORES" | sort -n | head -1)
+          echo "Scores found: $(echo $SCORES | tr '\n' ' ')"
+          echo "Minimum: $MIN_SCORE"
+          echo "score=$MIN_SCORE" >> "$GITHUB_OUTPUT"
+
       - name: Update score label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SCORE: ${{ steps.doctor.outputs.score }}
+          SCORE: ${{ steps.min-score.outputs.score }}
           PR: ${{ github.event.pull_request.number }}
           HAS_CHANGES: ${{ steps.changes.outputs.has_react_changes }}
         run: |
