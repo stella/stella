@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -8,13 +8,13 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/shallow";
 
 import { cn } from "@stella/ui/lib/utils";
 
 import {
   ChatMention,
   createChatSuggestion,
-  type ChatMentionOption,
 } from "@/components/chat-mention-extension";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
@@ -69,27 +69,10 @@ export const ChatEditor = ({
 }: ChatEditorProps) => {
   const t = useTranslations();
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
-  const editorRef = useRef<Editor | null>(null);
 
-  const allEntities = useWorkspaceStore((s) => (workspaceId ? s.data : []));
-
-  // Keep a ref so the TipTap suggestion closure always
-  // reads the latest entities without recreating the editor.
-  const getItemsRef = useRef<() => ChatMentionOption[]>(() => []);
-  getItemsRef.current = () => {
-    if (!workspaceId) {
-      return [];
-    }
-    return allEntities.map((entity) => {
-      const file = getFirstFile(entity);
-      return {
-        id: entity.entityId,
-        label: getEntityName(entity),
-        kind: entity.kind,
-        mimeType: file?.mimeType ?? null,
-      };
-    });
-  };
+  const allEntities = useWorkspaceStore(
+    useShallow((s) => (workspaceId ? s.data : [])),
+  );
 
   const extensions = useMemo(
     () => [
@@ -101,15 +84,23 @@ export const ChatEditor = ({
       ...(workspaceId
         ? [
             ChatMention.configure({
-              suggestion: createChatSuggestion(() => getItemsRef.current()),
+              suggestion: createChatSuggestion(() => {
+                return allEntities.map((entity) => {
+                  const file = getFirstFile(entity);
+                  return {
+                    id: entity.entityId,
+                    label: getEntityName(entity),
+                    kind: entity.kind,
+                    mimeType: file?.mimeType ?? null,
+                  };
+                });
+              }),
               deleteTriggerWithBackspace: true,
             }),
           ]
         : []),
     ],
-    // Stable: getItemsRef never changes identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workspaceId, resolvedPlaceholder],
+    [workspaceId, resolvedPlaceholder, allEntities],
   );
 
   const editor = useEditor({
@@ -142,14 +133,11 @@ export const ChatEditor = ({
           }
 
           event.preventDefault();
-          const current = editorRef.current;
-          if (!current) {
-            return true;
-          }
-          const text = serializeToText(current);
+
+          const text = serializeToText(editor);
           if (text) {
             onSubmit(text);
-            current.commands.clearContent();
+            editor.commands.clearContent();
           }
           return true;
         }
@@ -157,8 +145,6 @@ export const ChatEditor = ({
       },
     },
   });
-
-  editorRef.current = editor;
 
   return (
     <div className={cn("chat-editor", className)}>

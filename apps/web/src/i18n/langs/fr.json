@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Montant facturé",
     "billedHours": "Heures facturées",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Agents",
     "analytics": "Analytique",
     "chat": "Discussion",
@@ -578,6 +595,7 @@
     "search": "Rechercher",
     "searchEmptyState": "Commencez à saisir pour rechercher des documents, des dossiers et plus encore.",
     "searchPlaceholder": "Rechercher dans tous les espaces de travail...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Actions",
       "navigation": "Navigation"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Numérotation des dossiers mise à jour",
     "memberRemoved": "Membre retiré",
     "organizationUpdated": "Organisation mise à jour",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Partie ajoutée",
     "partyRemoved": "Partie retirée",
     "roleUpdated": "Rôle mis à jour",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Dossier supprimé avec succès"
   },
   "templateAnalytics": {

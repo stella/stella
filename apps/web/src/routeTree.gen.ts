@@ -17,6 +17,7 @@ import { Route as AuthOrganizationRouteImport } from './routes/auth/organization
 import { Route as ProtectedOrganizationRouteRouteImport } from './routes/_protected.organization/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
+import { Route as ProtectedAccountRouteRouteImport } from './routes/_protected.account/route'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
@@ -29,6 +30,7 @@ import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protect
 import { Route as ProtectedKnowledgeAnalyticsRouteImport } from './routes/_protected.knowledge/analytics'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
+import { Route as ProtectedAccountSessionsRouteImport } from './routes/_protected.account/sessions'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
@@ -76,6 +78,11 @@ const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
 const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedAccountRouteRoute = ProtectedAccountRouteRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedWorkspacesIndexRoute =
@@ -146,6 +153,12 @@ const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
   path: '/$threadId',
   getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
+const ProtectedAccountSessionsRoute =
+  ProtectedAccountSessionsRouteImport.update({
+    id: '/sessions',
+    path: '/sessions',
+    getParentRoute: () => ProtectedAccountRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdRouteRoute =
   ProtectedWorkspacesWorkspaceIdRouteRouteImport.update({
     id: '/workspaces/$workspaceId',
@@ -197,6 +210,7 @@ const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof ProtectedAccountRouteRouteWithChildren
   '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
@@ -204,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/account/sessions': typeof ProtectedAccountSessionsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -226,10 +241,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof ProtectedAccountRouteRouteWithChildren
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth': typeof AuthIndexRoute
+  '/account/sessions': typeof ProtectedAccountSessionsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -254,6 +271,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_protected': typeof ProtectedRouteWithChildren
+  '/_protected/account': typeof ProtectedAccountRouteRouteWithChildren
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/_protected/organization': typeof ProtectedOrganizationRouteRouteWithChildren
@@ -261,6 +279,7 @@ export interface FileRoutesById {
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/_protected/account/sessions': typeof ProtectedAccountSessionsRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -285,6 +304,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/chat'
     | '/knowledge'
     | '/organization'
@@ -292,6 +312,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth/'
     | '/workspaces/$workspaceId'
+    | '/account/sessions'
     | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
@@ -314,10 +335,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/organization'
     | '/auth/organization'
     | '/auth/otp'
     | '/auth'
+    | '/account/sessions'
     | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
@@ -341,6 +364,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_protected'
+    | '/_protected/account'
     | '/_protected/chat'
     | '/_protected/knowledge'
     | '/_protected/organization'
@@ -348,6 +372,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth/'
     | '/_protected/workspaces/$workspaceId'
+    | '/_protected/account/sessions'
     | '/_protected/chat/$threadId'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/analytics'
@@ -436,6 +461,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedChatRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/account': {
+      id: '/_protected/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof ProtectedAccountRouteRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_protected/workspaces/': {
       id: '/_protected/workspaces/'
       path: '/workspaces'
@@ -520,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
     }
+    '/_protected/account/sessions': {
+      id: '/_protected/account/sessions'
+      path: '/sessions'
+      fullPath: '/account/sessions'
+      preLoaderRoute: typeof ProtectedAccountSessionsRouteImport
+      parentRoute: typeof ProtectedAccountRouteRoute
+    }
     '/_protected/workspaces/$workspaceId': {
       id: '/_protected/workspaces/$workspaceId'
       path: '/workspaces/$workspaceId'
@@ -578,6 +617,19 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface ProtectedAccountRouteRouteChildren {
+  ProtectedAccountSessionsRoute: typeof ProtectedAccountSessionsRoute
+}
+
+const ProtectedAccountRouteRouteChildren: ProtectedAccountRouteRouteChildren = {
+  ProtectedAccountSessionsRoute: ProtectedAccountSessionsRoute,
+}
+
+const ProtectedAccountRouteRouteWithChildren =
+  ProtectedAccountRouteRoute._addFileChildren(
+    ProtectedAccountRouteRouteChildren,
+  )
 
 interface ProtectedChatRouteRouteChildren {
   ProtectedChatThreadIdRoute: typeof ProtectedChatThreadIdRoute
@@ -675,6 +727,7 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren =
   )
 
 interface ProtectedRouteChildren {
+  ProtectedAccountRouteRoute: typeof ProtectedAccountRouteRouteWithChildren
   ProtectedChatRouteRoute: typeof ProtectedChatRouteRouteWithChildren
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedOrganizationRouteRoute: typeof ProtectedOrganizationRouteRouteWithChildren
@@ -685,6 +738,7 @@ interface ProtectedRouteChildren {
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
+  ProtectedAccountRouteRoute: ProtectedAccountRouteRouteWithChildren,
   ProtectedChatRouteRoute: ProtectedChatRouteRouteWithChildren,
   ProtectedKnowledgeRouteRoute: ProtectedKnowledgeRouteRouteWithChildren,
   ProtectedOrganizationRouteRoute: ProtectedOrganizationRouteRouteWithChildren,

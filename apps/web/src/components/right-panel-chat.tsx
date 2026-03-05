@@ -375,6 +375,7 @@ const ThreadList = ({
         >
           {sortedThreads.map((thread) => (
             <div
+              aria-selected={thread.id === activeThreadId}
               className={cn(
                 "group flex w-full cursor-pointer",
                 "items-center gap-2 px-3 py-2",
@@ -394,7 +395,6 @@ const ThreadList = ({
                 }
               }}
               role="option"
-              aria-selected={thread.id === activeThreadId}
               tabIndex={0}
             >
               <span className="flex-1 truncate">{thread.title}</span>

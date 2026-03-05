@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Abgerechneter Betrag",
     "billedHours": "Abgerechnete Stunden",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Agenten",
     "analytics": "Analytik",
     "chat": "Chat",
@@ -578,6 +595,7 @@
     "search": "Suchen",
     "searchEmptyState": "Beginnen Sie zu tippen, um Dokumente, Akten und mehr zu suchen.",
     "searchPlaceholder": "In allen Arbeitsbereichen suchen...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Aktionen",
       "navigation": "Navigation"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Aktennummerierung aktualisiert",
     "memberRemoved": "Mitglied entfernt",
     "organizationUpdated": "Organisation aktualisiert",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Partei hinzugefügt",
     "partyRemoved": "Partei entfernt",
     "roleUpdated": "Rolle aktualisiert",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Akte erfolgreich gelöscht"
   },
   "templateAnalytics": {
