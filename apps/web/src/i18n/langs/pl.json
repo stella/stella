@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Kwota rozliczona",
     "billedHours": "Godziny rozliczone",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Agenci",
     "analytics": "Analityka",
     "chat": "Czat",
@@ -578,6 +595,7 @@
     "search": "Szukaj",
     "searchEmptyState": "Zacznij pisać, aby wyszukać dokumenty, sprawy i więcej.",
     "searchPlaceholder": "Szukaj we wszystkich przestrzeniach roboczych...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Akcje",
       "navigation": "Nawigacja"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Numeracja spraw zaktualizowana",
     "memberRemoved": "Członek usunięty",
     "organizationUpdated": "Organizacja zaktualizowana",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Strona dodana",
     "partyRemoved": "Strona usunięta",
     "roleUpdated": "Rola zaktualizowana",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Sprawa usunięta pomyślnie"
   },
   "templateAnalytics": {

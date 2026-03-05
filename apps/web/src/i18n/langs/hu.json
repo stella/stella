@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Számlázott összeg",
     "billedHours": "Számlázott órák",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Ügynökök",
     "analytics": "Analitika",
     "chat": "Csevegés",
@@ -578,6 +595,7 @@
     "search": "Keresés",
     "searchEmptyState": "Kezdjen el gépelni dokumentumok, ügyek és egyebek kereséséhez.",
     "searchPlaceholder": "Keresés az összes munkaterületen...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Műveletek",
       "navigation": "Navigáció"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Ügyszámozás frissítve",
     "memberRemoved": "Tag eltávolítva",
     "organizationUpdated": "Szervezet frissítve",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Fél hozzáadva",
     "partyRemoved": "Fél eltávolítva",
     "roleUpdated": "Szerepkör frissítve",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Ügy sikeresen törölve"
   },
   "templateAnalytics": {

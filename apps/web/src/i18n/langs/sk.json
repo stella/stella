@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Fakturovaná čiastka",
     "billedHours": "Fakturované hodiny",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Agenti",
     "analytics": "Analytika",
     "chat": "Chat",
@@ -578,6 +595,7 @@
     "search": "Hľadať",
     "searchEmptyState": "Začnite písať na vyhľadávanie dokumentov, spisov a ďalšieho.",
     "searchPlaceholder": "Hľadať vo všetkých pracovných priestoroch...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Akcie",
       "navigation": "Navigácia"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Číslovanie spisov aktualizované",
     "memberRemoved": "Člen odstránený",
     "organizationUpdated": "Organizácia aktualizovaná",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Strana pridaná",
     "partyRemoved": "Strana odstránená",
     "roleUpdated": "Rola aktualizovaná",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Spis úspešne vymazaný"
   },
   "templateAnalytics": {

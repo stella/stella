@@ -2,6 +2,22 @@
 // Do not edit manually.
 
 type Messages = {
+  "account": {
+    "sessions": {
+      "currentSession": "Current";
+      "description": "Manage your active sessions";
+      "device": "Device";
+      "deviceOnOs": "{browser} on {os}";
+      "ipAddress": "IP address";
+      "lastActive": "Last active";
+      "noOtherSessions": "No other active sessions";
+      "revokeOtherSessions": "Sign out other devices";
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.";
+      "revokeSession": "Sign out";
+      "title": "Sessions";
+      "unknownDevice": "Unknown device";
+    };
+  };
   "analytics": {
     "billedAmount": "Billed amount";
     "billedHours": "Billed hours";
@@ -228,8 +244,8 @@ type Messages = {
       "noResults": "No matching entities";
     };
     "newChat": "New chat";
-    "placeholder": "What would you like to know?";
     "noThreads": "No conversations yet";
+    "placeholder": "What would you like to know?";
     "threads": "Conversations";
     "tool": {
       "listEntities": "Listed entities";
@@ -561,6 +577,7 @@ type Messages = {
     };
   };
   "navigation": {
+    "account": "Account";
     "agents": "Agents";
     "analytics": "Analytics";
     "chat": "Chat";
@@ -581,6 +598,7 @@ type Messages = {
     "search": "Search";
     "searchEmptyState": "Start typing to search documents, matters, and more.";
     "searchPlaceholder": "Search across all workspaces...";
+    "sessions": "Sessions";
     "shortcutCategories": {
       "actions": "Actions";
       "navigation": "Navigation";
@@ -696,9 +714,11 @@ type Messages = {
     "matterNumberingUpdated": "Matter numbering updated";
     "memberRemoved": "Member removed";
     "organizationUpdated": "Organization updated";
+    "otherSessionsRevoked": "Other sessions revoked";
     "partyAdded": "Party added";
     "partyRemoved": "Party removed";
     "roleUpdated": "Role updated";
+    "sessionRevoked": "Session revoked";
     "workspaceDeletedSuccessfully": "Matter deleted successfully";
   };
   "templateAnalytics": {

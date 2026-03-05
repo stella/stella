@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Rēķinā iekļautā summa",
     "billedHours": "Rēķinā iekļautās stundas",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Aģenti",
     "analytics": "Analītika",
     "chat": "Tērzēšana",
@@ -578,6 +595,7 @@
     "search": "Meklēt",
     "searchEmptyState": "Sāciet rakstīt, lai meklētu dokumentus, lietas un citu.",
     "searchPlaceholder": "Meklēt visās darba vidēs...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Actions",
       "navigation": "Navigation"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Lietu numerācija atjaunināta",
     "memberRemoved": "Dalībnieks noņemts",
     "organizationUpdated": "Organizācija atjaunināta",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Puse pievienota",
     "partyRemoved": "Puse noņemta",
     "roleUpdated": "Loma atjaunināta",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Lieta veiksmīgi dzēsta"
   },
   "templateAnalytics": {

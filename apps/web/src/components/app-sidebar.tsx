@@ -22,6 +22,7 @@ import {
   MailIcon,
   MessageCircleIcon,
   MonitorIcon,
+  MonitorSmartphoneIcon,
   MoonIcon,
   PanelLeftIcon,
   PencilIcon,
@@ -1162,6 +1163,16 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     </MenuRadioGroup>
                   </MenuSubPopup>
                 </MenuSub>
+                <MenuItem
+                  onClick={async () => {
+                    await navigate({
+                      to: "/account/sessions",
+                    });
+                  }}
+                >
+                  <MonitorSmartphoneIcon />
+                  {t("navigation.sessions")}
+                </MenuItem>
                 {isDev && <DevSidebarGroup />}
                 <MenuSeparator />
                 <MenuItem

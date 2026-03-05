@@ -1,4 +1,20 @@
 {
+  "account": {
+    "sessions": {
+      "currentSession": "Current",
+      "description": "Manage your active sessions",
+      "device": "Device",
+      "deviceOnOs": "{browser} on {os}",
+      "ipAddress": "IP address",
+      "lastActive": "Last active",
+      "noOtherSessions": "No other active sessions",
+      "revokeOtherSessions": "Sign out other devices",
+      "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "revokeSession": "Sign out",
+      "title": "Sessions",
+      "unknownDevice": "Unknown device"
+    }
+  },
   "analytics": {
     "billedAmount": "Arveldatud summa",
     "billedHours": "Arveldatud tunnid",
@@ -558,6 +574,7 @@
     }
   },
   "navigation": {
+    "account": "Account",
     "agents": "Agendid",
     "analytics": "Analüütika",
     "chat": "Vestlus",
@@ -578,6 +595,7 @@
     "search": "Otsing",
     "searchEmptyState": "Alustage tippimist, et otsida dokumente, toimikuid ja muud.",
     "searchPlaceholder": "Otsi kõigist tööruumidest...",
+    "sessions": "Sessions",
     "shortcutCategories": {
       "actions": "Actions",
       "navigation": "Navigation"
@@ -693,9 +711,11 @@
     "matterNumberingUpdated": "Toimikute nummerdamine uuendatud",
     "memberRemoved": "Liige eemaldatud",
     "organizationUpdated": "Organisatsioon uuendatud",
+    "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Osapool lisatud",
     "partyRemoved": "Osapool eemaldatud",
     "roleUpdated": "Roll uuendatud",
+    "sessionRevoked": "Session revoked",
     "workspaceDeletedSuccessfully": "Toimik edukalt kustutatud"
   },
   "templateAnalytics": {
