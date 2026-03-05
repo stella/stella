@@ -1,6 +1,18 @@
 version: 1
 checksums:
   d3a2279c00f678fef08875297dab6080:
+    account/sessions/currentSession: 27f172f76ac28e72cb062f80002b0ad5
+    account/sessions/description: 2563fc26701e94c44b7404911d6fafca
+    account/sessions/device: c009f849d689c745de9e38ad17644c7a
+    account/sessions/deviceOnOs: 97fa773854cb32c1e1b916050b015d03
+    account/sessions/ipAddress: 79ea1200f4587e52966880938ddd4651
+    account/sessions/lastActive: 833712383424618a815ba6e820028a37
+    account/sessions/noOtherSessions: f359ac634d18fc23f977ad1cb03d6b4e
+    account/sessions/revokeOtherSessions: 8616c06e44eb7774ec5ccc74bf017d6a
+    account/sessions/revokeOtherSessionsConfirm: 008e709a4dfe70b41c0d3735c7f46597
+    account/sessions/revokeSession: 6d842546a84e919c519bf8cbffdf25a0
+    account/sessions/title: c775652cb31428e3d673d928f2f644d7
+    account/sessions/unknownDevice: 89f4b6fe795be5d15823de7675cdfd85
     analytics/billedAmount: 312ca0e9934041e7b24eda0fab671668
     analytics/billedHours: b506a545cfd14c71d0a6dc952993a25d
     analytics/entries: cfe9fa2bbeedda59de54266997e94efe
@@ -487,6 +499,7 @@ checksums:
     knowledge/sections/skills/title: cd71a8472065ec65b7d7863c1e201328
     knowledge/sections/templates/description: 54ba289f88d3aef807f03e6a3bac72d5
     knowledge/sections/templates/title: 8ed62f56c81fa96c0f3182acb331bf63
+    navigation/account: 01215c12fb1cdb93bd0c84c1382bef56
     navigation/agents: f902c551bd769a3ae2f65b44305b1976
     navigation/analytics: ec67586974cc78f25959d47bb36683a7
     navigation/chat: 1171b63c16b3431dca319af1804de2a0
@@ -507,6 +520,7 @@ checksums:
     navigation/search: 49dd6c21604b5e8d4153ff1aff2177e1
     navigation/searchEmptyState: 7566cd5b1d9f15b0efae0ec153dca5cf
     navigation/searchPlaceholder: 61c473615b7553462dc022cd37d7b568
+    navigation/sessions: c775652cb31428e3d673d928f2f644d7
     navigation/shortcutCategories/actions: c46571856723b03262fd33f511116298
     navigation/shortcutCategories/navigation: 0373afd8238db1c49f4be4fa6cdf5cd3
     navigation/sidebar: 85fcd93a6f051c26d057e4b30d392317
@@ -596,9 +610,11 @@ checksums:
     success/matterNumberingUpdated: 1c294116d65d14fd7decf49e04483de9
     success/memberRemoved: c0f44b0f3e20c1bda1bc152a9cc4da84
     success/organizationUpdated: e38bc9f1b49553f765b82f9198eaa8be
+    success/otherSessionsRevoked: 7e25083f6f3cdefd8f6543da765b2864
     success/partyAdded: 4d8b3208e9d06054743313d138ced682
     success/partyRemoved: 454c1b75b749e6d457fc4b43dfc4f94d
     success/roleUpdated: 73606ae9c35101f1bb518961f68559d0
+    success/sessionRevoked: fc2859d3e58136834766e98bc3e97670
     success/workspaceDeletedSuccessfully: 000d369fe384b7d9acabfac6306baeb6
     templateAnalytics/errorRate: 760fda382f976a6a4950795cb3dc4124
     templateAnalytics/fills: 6ad25614843d6b59d66e82e26bf4ff3f
