@@ -206,6 +206,41 @@ checksums:
     billing/total: f60dc0a14e9b1bace656c644de25de5b
     billing/week: 436fdd694160827dd6ea4644cdd0a8f8
     billing/writeOff: 4c25589a2735a3ea23b9a5a0170c0c28
+    caseLaw/columns/caseNumber: ecedcc5980fdc08d78ff7ecd53e13c6b
+    caseLaw/columns/country: 73581fc33a1e83e6a56db73558e7b5c6
+    caseLaw/columns/court: aa3689e65c11ef6de213c3ff68db1901
+    caseLaw/columns/decisionDate: 56f41c5d30a76295bb087b20b7bee4c3
+    caseLaw/columns/decisionType: f04471a7ddac844b9ad145eb9911ef75
+    caseLaw/decisionNotFound: 6f845ea8fbc998ae3420eefbdabca55e
+    caseLaw/emptyState: 7fd98d53bf8493dcb57138a9a930defd
+    caseLaw/filters/country: 73581fc33a1e83e6a56db73558e7b5c6
+    caseLaw/filters/court: aa3689e65c11ef6de213c3ff68db1901
+    caseLaw/filters/dateFrom: 3d84daca8c92c8609deeab4b294b4afb
+    caseLaw/filters/dateTo: 24ef32707b456cff90a91d438df59bbe
+    caseLaw/filters/searchPlaceholder: 67ccf24ad40cb5dde8c47b5d01f554bd
+    caseLaw/loadMore: 365c2d8dfc53ac7e9188acd5274e2837
+    caseLaw/loading: 82b4ea7ed1439094d7c4be13aaba9a66
+    caseLaw/loadingMore: 265b328c20eab0c766521e63b08a774d
+    caseLaw/sectionTypes/argumentation: ddf0826ee1dbb42255caa185aad9bc4b
+    caseLaw/sectionTypes/dissent: 10192487773613df06bc23d7f1468669
+    caseLaw/sectionTypes/footer: 42e6d40460f979cecee52dabcff307f8
+    caseLaw/sectionTypes/header: a24a0d808d61b90d9feaeb238d656843
+    caseLaw/sectionTypes/history: b0578d6d225f512e42f823fbca2e3c32
+    caseLaw/sectionTypes/ruling: 7a175a6e36416a40c752581c7911c449
+    caseLaw/sectionTypes/unknown: 79acaa6cd481262bea4e743a422529d2
+    caseLaw/sources/empty: 9683be0462921eb39a51195c9cb62993
+    caseLaw/sources/lastSync: ff6d6b1c8f465faa239b3808d953f7ff
+    caseLaw/sources/neverSynced: 59ad0978100030b3a443b1cb40008652
+    caseLaw/sources/title: ecbbe6e49baa335c5afd7b04b609d006
+    caseLaw/title: 638151818de209b2e7889f72092e61be
+    caseLaw/viewer/citedBy: d605d597d34278a4d1228ef917e7c660
+    caseLaw/viewer/cites: 42d95d507c12749b039c9fe40f8eda96
+    caseLaw/viewer/language: 277fd1a41cc237a437cd1d5e4a80463b
+    caseLaw/viewer/legalSentence: ca1d1083d858cd5280ffb93a441d0a6b
+    caseLaw/viewer/metadata: 695d4f7da261ba76e3be4de495491028
+    caseLaw/viewer/sections: f544078cdd05cc83c380c571d0cc6541
+    caseLaw/viewer/source: 6e87903ef260da661b2bf6d858ba68ca
+    caseLaw/viewer/viewOriginal: 6bf44f3127eaea754aedcc4980b0016e
     chat/deleteThread: 2baeef5ad5eea6edc0761bf30bee9080
     chat/greeting: 4baa45b6e6d953ea40b802910f235026
     chat/mention/noResults: 3cd5f0f62e575431f86bba66d10370bd
@@ -502,6 +537,7 @@ checksums:
     navigation/account: 01215c12fb1cdb93bd0c84c1382bef56
     navigation/agents: f902c551bd769a3ae2f65b44305b1976
     navigation/analytics: ec67586974cc78f25959d47bb36683a7
+    navigation/caseLaw: 638151818de209b2e7889f72092e61be
     navigation/chat: 1171b63c16b3431dca319af1804de2a0
     navigation/chatAlreadyOpen: 945aa77db1d5d372584d9f0bacb50871
     navigation/clauses: 462579754cf0f9dab85e687c243a6ed5
