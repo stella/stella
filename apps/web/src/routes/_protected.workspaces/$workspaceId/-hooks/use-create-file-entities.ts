@@ -17,6 +17,18 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
+const MAX_DISPLAYED_FAILURES = 5;
+
+const formatFailedFiles = (names: string[]): string => {
+  const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
+  const remaining = names.length - shown.length;
+  const list = shown.join(", ");
+  if (remaining > 0) {
+    return `${list} (+${remaining})`;
+  }
+  return list;
+};
+
 export const uploadFileEntity = (
   file: File,
   workspaceId: string,
@@ -100,6 +112,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       });
 
       let renamedCount = 0;
+      const failedFiles: string[] = [];
 
       for (
         let i = 0;
@@ -116,28 +129,44 @@ export const useCreateFileEntities = (workspaceId: string) => {
           batch.map((file) => uploadFileEntity(file, workspaceId, propertyId)),
         );
 
-        const failed = results.find(Result.isError);
-        if (failed) {
-          toastManager.update(toastId, {
-            type: "error",
-            title: t("errors.actionFailed"),
-            description: failed.error.message,
-          });
-          throw failed.error;
-        }
-
-        for (const result of results) {
-          if (Result.isOk(result) && result.value.renamed) {
+        for (const [idx, result] of results.entries()) {
+          if (Result.isError(result)) {
+            captureError(posthog, result.error);
+            const file = batch[idx];
+            if (file) {
+              failedFiles.push(file.name);
+            }
+          } else if (result.value.renamed) {
             renamedCount++;
           }
         }
       }
 
-      toastManager.update(toastId, {
-        type: "success",
-        title: t("workspaces.files.uploadedSuccessfully"),
-        description: undefined,
-      });
+      const failedCount = failedFiles.length;
+      const successCount = filesToUpload.length - failedCount;
+
+      if (failedCount === 0) {
+        toastManager.update(toastId, {
+          type: "success",
+          title: t("workspaces.files.uploadedSuccessfully"),
+          description: undefined,
+        });
+      } else if (successCount > 0) {
+        toastManager.update(toastId, {
+          type: "warning",
+          title: t("workspaces.files.uploadedPartially", {
+            failed: failedCount,
+            total: filesToUpload.length,
+          }),
+          description: formatFailedFiles(failedFiles),
+        });
+      } else {
+        toastManager.update(toastId, {
+          type: "error",
+          title: t("errors.uploadFailed"),
+          description: formatFailedFiles(failedFiles),
+        });
+      }
 
       if (renamedCount > 0) {
         toastManager.add({

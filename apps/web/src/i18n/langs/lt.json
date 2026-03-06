@@ -869,6 +869,7 @@
       "downloadAsZip": "Download as ZIP",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
+      "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
       "uploading": "Failai keliami",
       "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti"

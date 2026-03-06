@@ -869,6 +869,7 @@
       "downloadAsZip": "Download as ZIP",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
+      "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",
       "uploading": "Augšupielādē failus",
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti"

