@@ -99,7 +99,9 @@ export const ConfigureStep = ({
   onSaved,
 }: ConfigureStepProps) => {
   const t = useTranslations();
-  const [name, setName] = useState(file.name.replace(DOCX_EXTENSION_RE, ""));
+  const [name, setName] = useState(() =>
+    file.name.replace(DOCX_EXTENSION_RE, ""),
+  );
   const [fields, setFields] = useState(() =>
     buildEditableFields(discoveredFields),
   );

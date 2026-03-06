@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",
       "uploading": "Import des fichiers",
-      "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés"
+      "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Auteur",

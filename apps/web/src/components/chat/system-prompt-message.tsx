@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDownIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -16,27 +17,18 @@ type SystemPromptMessageProps = {
 export const SystemPromptMessage = ({ threadId }: SystemPromptMessageProps) => {
   const showToolCalls = useDevStore((s) => s.showToolCalls);
   const [expanded, setExpanded] = useState(false);
-  const [prompt, setPrompt] = useState<string | null>(null);
   const actor = useChatActor();
 
-  useEffect(() => {
-    if (!showToolCalls) {
-      return;
-    }
-    let cancelled = false;
-    const fetch = async () => {
+  const { data: prompt } = useQuery({
+    queryKey: ["chat", "system-prompt", threadId],
+    queryFn: async () => {
       const result = await actor.connection?.getSystemPrompt({
         threadId,
       });
-      if (!cancelled && result) {
-        setPrompt(result.prompt);
-      }
-    };
-    fetch().catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [showToolCalls, threadId, actor.connection]);
+      return result?.prompt ?? null;
+    },
+    enabled: showToolCalls && !!actor.connection,
+  });
 
   if (!showToolCalls || !prompt) {
     return null;

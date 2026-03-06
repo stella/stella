@@ -7,10 +7,12 @@
 
 import { createHash } from "node:crypto";
 
+import { toSafeId } from "@/api/lib/branded-types";
+
 // ─── Constants ──────────────────────────────────────────
 
 export const DEFAULT_USER_ID = "test-user-stella-dev";
-export const DEFAULT_ORG_ID = "test-org-stella-dev";
+export const DEFAULT_ORG_ID = toSafeId<"organization">("test-org-stella-dev");
 
 export const ALL_USER_IDS = [
   DEFAULT_USER_ID,

@@ -123,12 +123,56 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    - Make the code changes for suggestions you agreed with
    - Group related changes logically
 
-9. **Run quality checks**:
+9. **Check and fix failing CI**:
 
-   Run the quality checks for the project (using `ruff format`, `ruff check`, `ty`
-   for Python, `bun run lint`, `bun run format`, `bun run typecheck` for TypeScript).
+   ```bash
+   # Find the latest CI run for this PR's branch
+   gh run list --branch $(git branch --show-current) --limit 5 \
+     --json status,conclusion,name,databaseId
 
-10. **Commit and push**:
+   # View failed run logs
+   gh run view {run_id} --log-failed
+   ```
+
+   - If CI is failing, read the logs and fix the root cause
+   - Common failures: formatting (run `bun run format` with `--write`),
+     lint errors, type errors, test failures
+   - Fix the issues in code, don't just suppress them
+
+10. **Check React Doctor diagnostics**:
+
+    The React Doctor CI workflow posts a score comment on the PR. Check it
+    and fix real issues.
+
+    ```bash
+    # Find the React Doctor CI run
+    gh run list --branch $(git branch --show-current) \
+      --json conclusion,name,databaseId \
+      | jq '.[] | select(.name == "React Doctor")'
+
+    # Read the output
+    gh run view {run_id} --log | grep -E "(✗|⚠|score|Score)"
+    ```
+
+    - Run React Doctor locally for full diagnostics:
+      ```bash
+      cd apps/web && npx -y react-doctor@latest .
+      ```
+    - Fix errors (✗) first, then impactful warnings (⚠)
+    - **Skip false positives** — common ones in this codebase:
+      - `useMemo` wrapping `Math.random()` (keeps value stable)
+      - `passive: false` on wheel listeners that call `preventDefault()`
+      - Zustand store syncs in useEffect (legitimate side effects)
+    - Note which issues are false positives and which are real in
+      your commit message
+
+11. **Run quality checks**:
+
+    Run the quality checks for the project (using `ruff format`,
+    `ruff check`, `ty` for Python, `bun run lint`, `bun run format`,
+    `bun run typecheck` for TypeScript).
+
+12. **Commit and push**:
     - Create a commit with a message like `fix: address review comments`
     - Push to the current branch
 

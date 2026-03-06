@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
       "uploading": "Failai keliami",
-      "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti"
+      "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autorius",

@@ -9,9 +9,14 @@ rule pdf_javascript_js
         // Match /JS followed by a PDF delimiter to avoid
         // false positives on font subset names (/JSUIQA+Arial)
         $js = /\/JS[\s\x00(<]/ ascii
+        // XFA forms use JavaScript for form logic;
+        // require both /XFA and /AcroForm to confirm a
+        // legitimate XFA form (not just a stray /XFA string).
+        $xfa = "/XFA" ascii
+        $acroform = "/AcroForm" ascii
 
     condition:
-        $header and $js
+        $header and $js and not ($xfa and $acroform)
 }
 
 rule pdf_javascript_full
@@ -23,9 +28,13 @@ rule pdf_javascript_full
     strings:
         $header = "%PDF-" ascii
         $js = "/JavaScript" ascii
+        // XFA forms use JavaScript for form logic;
+        // require both /XFA and /AcroForm (see above).
+        $xfa = "/XFA" ascii
+        $acroform = "/AcroForm" ascii
 
     condition:
-        $header and $js
+        $header and $js and not ($xfa and $acroform)
 }
 
 rule pdf_launch

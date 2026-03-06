@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",
       "uploading": "Augšupielādē failus",
-      "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti"
+      "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autors",

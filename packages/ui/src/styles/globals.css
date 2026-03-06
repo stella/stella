@@ -1008,3 +1008,15 @@
       scale(var(--min-font-size-inv));
   }
 }
+
+/*
+ * pdfjs-dist injects a measurement canvas into <body>.
+ * Without this rule it contributes height and makes the
+ * root document scrollable.
+ */
+.hiddenCanvasElement {
+  position: fixed !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+}

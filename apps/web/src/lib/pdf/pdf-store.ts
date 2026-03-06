@@ -36,7 +36,14 @@ type State = {
     string,
     {
       document: PDFDocumentProxy;
+      /** Extra documents from PDF Portfolio attachments. */
+      attachmentDocuments?: PDFDocumentProxy[];
       pageIds: string[];
+      /** Maps pageId → banner label for the first page of
+       *  each attachment in a PDF Portfolio. */
+      attachmentLabels?: Map<string, string>;
+      /** True when the PDF is an XFA form. */
+      isXfa?: boolean;
     }
   >;
   pages: Map<
@@ -161,7 +168,10 @@ export const usePdfStore = create<State & Actions>()(
           state.pdfs.get(fileId)?.document;
 
         if (!document || document.loadingTask.destroyed) {
-          const loadingTask = getDocument(fileBuffer);
+          const loadingTask = getDocument({
+            data: fileBuffer,
+            enableXfa: true,
+          });
 
           loadingTask.onPassword = (
             callback: (password: string) => void,
@@ -187,6 +197,8 @@ export const usePdfStore = create<State & Actions>()(
           }
         }
 
+        const attachmentDocuments: PDFDocumentProxy[] = [];
+
         try {
           const pageIds: string[] = [];
           const documentPages: Promise<{
@@ -194,22 +206,96 @@ export const usePdfStore = create<State & Actions>()(
             proxy: PDFPageProxy;
           }>[] = [];
 
-          for (let i = 1; i <= document.numPages; i++) {
-            const pageId = `${fileId}-${i}`;
-            pageIds.push(pageId);
-            documentPages.push(
-              document.getPage(i).then((proxy) => ({ id: pageId, proxy })),
-            );
+          // Check for PDF Portfolio (Collection) with
+          // embedded file attachments.
+          const attachments = await document.getAttachments();
+          const pdfAttachments = attachments
+            ? Object.values(attachments).filter(
+                (
+                  a,
+                ): a is {
+                  content: Uint8Array;
+                  filename: string;
+                } =>
+                  typeof a === "object" &&
+                  a !== null &&
+                  "content" in a &&
+                  "filename" in a &&
+                  typeof a.filename === "string" &&
+                  a.filename.toLowerCase().endsWith(".pdf"),
+              )
+            : [];
+
+          const isPortfolio =
+            pdfAttachments.length > 0 && document.numPages <= 1;
+
+          const attachmentLabels = new Map<string, string>();
+
+          if (isPortfolio) {
+            // Skip the cover page; load each embedded PDF.
+            let pageCounter = 1;
+            let attIndex = 1;
+            for (const att of pdfAttachments) {
+              const attDoc = await getDocument({
+                data: att.content,
+                enableXfa: true,
+              }).promise;
+              attachmentDocuments.push(attDoc);
+
+              const firstPageId = `${fileId}-${pageCounter}`;
+              attachmentLabels.set(firstPageId, `${attIndex}. ${att.filename}`);
+
+              for (let i = 1; i <= attDoc.numPages; i++) {
+                const pageId = `${fileId}-${pageCounter}`;
+                pageIds.push(pageId);
+                documentPages.push(
+                  attDoc.getPage(i).then((proxy) => ({ id: pageId, proxy })),
+                );
+                pageCounter++;
+              }
+              attIndex++;
+            }
+          } else {
+            for (let i = 1; i <= document.numPages; i++) {
+              const pageId = `${fileId}-${i}`;
+              pageIds.push(pageId);
+              documentPages.push(
+                document.getPage(i).then((proxy) => ({ id: pageId, proxy })),
+              );
+            }
           }
 
           const pagesResult = await Promise.all(documentPages);
 
+          if (pagesResult.length === 0) {
+            throw new Error("PDF has no renderable pages");
+          }
+
+          // Detect XFA forms (check the first page).
+          let isXfa = false;
+          if (!isPortfolio) {
+            try {
+              const xfaHtml = await pagesResult[0].proxy.getXfa();
+              isXfa = !!xfaHtml;
+            } catch {
+              // Not an XFA form.
+            }
+          }
+
           pdfs.set(fileId, {
             document,
+            attachmentDocuments:
+              attachmentDocuments.length > 0 ? attachmentDocuments : undefined,
             pageIds,
+            attachmentLabels:
+              attachmentLabels.size > 0 ? attachmentLabels : undefined,
+            isXfa,
           });
 
           const firstPage = pagesResult[0];
+          if (!firstPage) {
+            throw new Error("PDF has no renderable pages");
+          }
           const firstPageViewport = firstPage.proxy.getViewport({ scale: 1 });
           const scale = PDF_WIDTH / firstPageViewport.width;
 
@@ -267,6 +353,7 @@ export const usePdfStore = create<State & Actions>()(
         } catch (error) {
           // always destroy the current document, rerender will just create a new one
           await document.destroy();
+          await Promise.allSettled(attachmentDocuments.map((d) => d.destroy()));
 
           if (error instanceof Error && error.name === "AbortError") {
             return;
@@ -310,6 +397,15 @@ export const usePdfStore = create<State & Actions>()(
         if (!pdf.document.loadingTask.destroyed) {
           await pdf.document.destroy();
         }
+
+        // Destroy attachment documents from PDF Portfolios
+        if (pdf.attachmentDocuments) {
+          await Promise.allSettled(
+            pdf.attachmentDocuments.map((d) =>
+              d.loadingTask.destroyed ? null : d.destroy(),
+            ),
+          );
+        }
       },
       cleanupPdfs: async () => {
         const state = get();
@@ -338,14 +434,11 @@ export const usePdfStore = create<State & Actions>()(
         });
 
         await Promise.allSettled(
-          pdfValues.map((pdf) => {
-            // if it's already destroyed don't try to destroy it again
-            // or it will never resolve the promise
-            if (pdf.document.loadingTask.destroyed) {
-              return null;
-            }
-
-            return pdf.document.destroy();
+          pdfValues.flatMap((pdf) => {
+            const docs = [pdf.document, ...(pdf.attachmentDocuments ?? [])];
+            return docs.map((d) =>
+              d.loadingTask.destroyed ? null : d.destroy(),
+            );
           }),
         );
       },
