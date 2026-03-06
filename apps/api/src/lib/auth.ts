@@ -1,10 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
+import { and, eq } from "drizzle-orm";
 import Elysia, { t, type Context } from "elysia";
 
 import { db } from "@/api/db";
-import { authSchema } from "@/api/db/auth-schema";
+import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -79,6 +80,18 @@ export const auth = betterAuth({
       },
     }),
     organization({
+      organizationHooks: {
+        async afterRemoveMember({ member, organization }) {
+          await db
+            .delete(sessionTable)
+            .where(
+              and(
+                eq(sessionTable.userId, member.userId),
+                eq(sessionTable.activeOrganizationId, organization.id),
+              ),
+            );
+        },
+      },
       async sendInvitationEmail(data, request) {
         const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
         if (env.isDev) {
