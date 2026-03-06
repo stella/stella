@@ -1,0 +1,115 @@
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  SyncPage,
+} from "@/api/handlers/case-law/ingestion/adapter";
+
+/**
+ * Czech Supreme Administrative Court adapter.
+ *
+ * Uses the JSON POST API at vyhledavac.nssoud.cz. Results
+ * are page-based (40 items per page) with rich metadata
+ * including reporting judge, area of law, and applied
+ * EU legislation.
+ *
+ * Cursor format: page number as string (e.g. "1", "2").
+ */
+
+const BASE_URL = "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
+const PAGE_SIZE = 40;
+
+const hashResult = (input: string): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(input);
+  return hasher.digest("hex");
+};
+
+type NssoudApiItem = {
+  SpisovaZnacka?: string;
+  Ecli?: string;
+  DatumRozhodnuti?: string;
+  TypRozhodnuti?: string;
+  SoudceZpravodaj?: string;
+  OblastPrava?: string;
+  AplikovanaZakonnaUstanoveni?: Array<{
+    Cislo?: string;
+    Paragraf?: string;
+  }>;
+  AplikovanaUniiniPravniPredpis?: string[];
+  Prejudikatura?: string[];
+  PravniVeta?: string;
+  OdkazNaText?: string;
+};
+
+const parseItem = (item: NssoudApiItem): IngestionResult | null => {
+  if (!item.SpisovaZnacka) {
+    return null;
+  }
+
+  const raw = JSON.stringify(item);
+
+  return {
+    caseNumber: item.SpisovaZnacka,
+    ecli: item.Ecli,
+    court: "Nejvyšší správní soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: item.DatumRozhodnuti,
+    decisionType: item.TypRozhodnuti,
+    sourceUrl: item.OdkazNaText,
+    documentUrl: item.OdkazNaText,
+    metadata: {
+      reportingJudge: item.SoudceZpravodaj,
+      areaOfLaw: item.OblastPrava,
+      appliedLegalProvisions: item.AplikovanaZakonnaUstanoveni,
+      appliedEuLaw: item.AplikovanaUniiniPravniPredpis,
+      prejudication: item.Prejudikatura,
+      legalSentence: item.PravniVeta,
+    },
+    rawHash: hashResult(raw),
+  };
+};
+
+export const czSupremeAdminAdapter: SourceAdapter = {
+  key: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+  name: "Czech Supreme Administrative Court",
+  country: "CZE",
+  language: "cs",
+  minRequestIntervalMs: 1500,
+
+  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
+    const page = cursor ? Number.parseInt(cursor, 10) : 1;
+
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      signal: signal ?? AbortSignal.timeout(10_000),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        Page: page,
+        PageSize: PAGE_SIZE,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`CZ Supreme Admin API error: ${response.status}`);
+    }
+
+    const data: NssoudApiItem[] = await response.json();
+    const decisions: IngestionResult[] = [];
+
+    for (const item of data) {
+      const parsed = parseItem(item);
+      if (parsed) {
+        decisions.push(parsed);
+      }
+    }
+
+    const nextCursor = data.length >= PAGE_SIZE ? String(page + 1) : null;
+
+    return { decisions, nextCursor };
+  },
+};

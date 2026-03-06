@@ -234,6 +234,53 @@
     "week": "Semaine",
     "writeOff": "Write off"
   },
+  "caseLaw": {
+    "columns": {
+      "caseNumber": "Case Number",
+      "country": "Country",
+      "court": "Court",
+      "decisionDate": "Date",
+      "decisionType": "Type"
+    },
+    "decisionNotFound": "Decision not found",
+    "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
+    "filters": {
+      "country": "Country",
+      "court": "Court",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "searchPlaceholder": "Search by case number..."
+    },
+    "loadMore": "Load more",
+    "loading": "Loading...",
+    "loadingMore": "Loading more...",
+    "sectionTypes": {
+      "argumentation": "Argumentation",
+      "dissent": "Dissent",
+      "footer": "Footer",
+      "header": "Header",
+      "history": "History",
+      "ruling": "Ruling",
+      "unknown": "Other"
+    },
+    "sources": {
+      "empty": "No sources configured.",
+      "lastSync": "Last sync: {date, date, medium}",
+      "neverSynced": "Never synced",
+      "title": "Sources"
+    },
+    "title": "Case Law",
+    "viewer": {
+      "citedBy": "Cited by",
+      "cites": "Cites",
+      "language": "Language",
+      "legalSentence": "Legal sentence",
+      "metadata": "Metadata",
+      "sections": "Sections",
+      "source": "Source",
+      "viewOriginal": "View original"
+    }
+  },
   "chat": {
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
@@ -577,6 +624,7 @@
     "account": "Account",
     "agents": "Agents",
     "analytics": "Analytique",
+    "caseLaw": "Case Law",
     "chat": "Discussion",
     "chatAlreadyOpen": "Chat is already open",
     "clauses": "Clauses",

@@ -78,6 +78,13 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/contacts/$contactId"])]: (params) => {
         return <ContactBreadcrumb {...params} />;
       },
+      [serializeKey(["/knowledge/case-law/"])]: () => {
+        return (
+          <BreadcrumbLink to="/knowledge/case-law">
+            {t("navigation.caseLaw")}
+          </BreadcrumbLink>
+        );
+      },
       [serializeKey(["/organization"])]: () => {
         return <BreadcrumbItem>{t("navigation.organization")}</BreadcrumbItem>;
       },

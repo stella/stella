@@ -40,6 +40,9 @@ export const LIMITS = {
   analyticsFillsByUserLimit: 100,
   analyticsFillsByPeriodLimit: 400,
   templateFillsRetentionDays: 365,
+  caseLawMatterLinksPerWorkspace: 1000,
+  caseLawSearchPageSizeDefault: 20,
+  caseLawSearchPageSizeMax: 100,
 } as const;
 
 /**

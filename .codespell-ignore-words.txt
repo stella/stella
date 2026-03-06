@@ -1,6 +1,9 @@
 addin
 cros
+dne
 livecycle
+meni
+musil
 registr
 sherif
 te
