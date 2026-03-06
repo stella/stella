@@ -13,7 +13,8 @@
     "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
     "db:push": "bun --bun drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
-    "db:seed-dev": "bun scripts/seed-dev.ts"
+    "db:seed-dev": "bun scripts/seed-dev.ts",
+    "db:seed-templates": "bun scripts/seed-templates.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.33",

@@ -19,8 +19,6 @@
 
 import "dotenv/config";
 
-import { createHash } from "node:crypto";
-
 import { db } from "@/api/db";
 import {
   billingCodes,
@@ -48,42 +46,16 @@ import type {
 import { toSafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { DEFAULT_VIEWS, type RequiredViewLayout } from "@/api/lib/views";
+import { seedTemplates } from "./seed-templates";
 import { ensureTestUsers } from "./seed-test-user";
-
-// ─── Constants ──────────────────────────────────────────
-
-const DEFAULT_USER_ID = "test-user-stella-dev";
-const DEFAULT_ORG_ID = "test-org-stella-dev";
-
-const ALL_USER_IDS = [
+import {
+  ALL_USER_IDS,
+  at,
+  DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
-  "test-user-alice-johnson",
-  "test-user-bob-martinez",
-  "test-user-clara-novak",
-  "test-user-david-kim",
-  "test-user-eva-schmidt",
-  "test-user-frank-horvat",
-  "test-user-greta-jones",
-];
-
-const pickAuthor = (index: number): string =>
-  ALL_USER_IDS[index % ALL_USER_IDS.length];
-
-// ─── Deterministic ID generator ─────────────────────────
-
-const seedId = (label: string): string => {
-  const hash = createHash("sha256").update(label).digest("hex");
-  return hash.slice(0, 21);
-};
-
-/** Safe array access for seed data (panics on out-of-bounds). */
-const at = <T>(arr: readonly T[], i: number): T => {
-  const item = arr[i];
-  if (item === undefined) {
-    throw new Error(`Seed data: index ${i} out of bounds`);
-  }
-  return item;
-};
+  pickAuthor,
+  seedId,
+} from "./seed-utils";
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -2251,6 +2223,9 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
   }
   console.log(`  Expenses: ${expenseSeeds.length}`);
+
+  // 14. Templates & clauses (knowledge base)
+  await seedTemplates(ORG_ID);
 
   console.log("\nDone. Dev data seeded successfully.");
 }
