@@ -759,6 +759,7 @@ checksums:
     workspaces/files/uploadedSuccessfully: da51bb78ace5858a53c3d35890d99889
     workspaces/files/uploading: a08f47b401ce739d1912bf1d17a24fa1
     workspaces/files/uploadingDescription: 0872eaef37ec63df20b5e56b7f8fa5fa
+    workspaces/files/xfaFormNotSupported: bbd979a3955c0b783857c26e164e4955
     workspaces/filesystem/author: 7f27e0a04693df3ce263cd7ef649665e
     workspaces/filesystem/collapseAll: ead3c4ad7d1bfa74f40b0b259a227b42
     workspaces/filesystem/expandAll: 5cb98519a7f93196e08e0b9a73e7c41f
