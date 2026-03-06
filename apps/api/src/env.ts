@@ -55,3 +55,9 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,
 });
+
+// Prevent accidental mutation of env vars at runtime.
+// Must run AFTER createEnv has consumed process.env.
+if (process.env.NODE_ENV === "production") {
+  Object.freeze(process.env);
+}
