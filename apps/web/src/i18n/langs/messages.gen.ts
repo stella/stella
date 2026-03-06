@@ -872,6 +872,7 @@ type Messages = {
       "downloadAsZip": "Download as ZIP";
       "maxEntitiesReached": "Max entities count reached";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
+      "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}";
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";
       "uploadingDescription": "Don't close this page until the files are uploaded";

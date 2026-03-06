@@ -869,6 +869,7 @@
       "downloadAsZip": "Download as ZIP",
       "maxEntitiesReached": "Dosiahnutý maximálny počet entít",
       "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom}}",
+      "uploadedPartially": "{failed, plural, one {# súbor zlyhal} few {# súbory zlyhali} other {# súborov zlyhalo}} z {total, number}",
       "uploadedSuccessfully": "Súbory úspešne nahrané",
       "uploading": "Nahrávanie súborov",
       "uploadingDescription": "Nezatvárajte túto stránku, kým sa súbory nenahrajú"

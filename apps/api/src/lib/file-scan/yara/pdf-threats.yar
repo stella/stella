@@ -6,7 +6,9 @@ rule pdf_javascript_js
 
     strings:
         $header = "%PDF-" ascii
-        $js = "/JS" ascii
+        // Match /JS followed by a PDF delimiter to avoid
+        // false positives on font subset names (/JSUIQA+Arial)
+        $js = /\/JS[\s\x00(<]/ ascii
 
     condition:
         $header and $js
@@ -34,10 +36,66 @@ rule pdf_launch
 
     strings:
         $header = "%PDF-" ascii
-        $launch = "/Launch" ascii
+        $launch = /\/Launch[\s\x00\/<(]/ ascii
 
     condition:
         $header and $launch
+}
+
+rule pdf_submit_form
+{
+    meta:
+        description = "PDF contains /SubmitForm action (can exfiltrate form data)"
+        verdict = "suspicious"
+
+    strings:
+        $header = "%PDF-" ascii
+        $submit = /\/SubmitForm[\s\x00\/<(]/ ascii
+
+    condition:
+        $header and $submit
+}
+
+rule pdf_goto_remote
+{
+    meta:
+        description = "PDF contains /GoToR action (opens remote file)"
+        verdict = "suspicious"
+
+    strings:
+        $header = "%PDF-" ascii
+        $goto = /\/GoToR[\s\x00\/<(]/ ascii
+
+    condition:
+        $header and $goto
+}
+
+rule pdf_goto_embedded
+{
+    meta:
+        description = "PDF contains /GoToE action (opens embedded file)"
+        verdict = "suspicious"
+
+    strings:
+        $header = "%PDF-" ascii
+        $goto = /\/GoToE[\s\x00\/<(]/ ascii
+
+    condition:
+        $header and $goto
+}
+
+rule pdf_rich_media
+{
+    meta:
+        description = "PDF contains /RichMedia (embedded Flash/multimedia)"
+        verdict = "suspicious"
+
+    strings:
+        $header = "%PDF-" ascii
+        $rich = /\/RichMedia[\s\x00\/<(]/ ascii
+
+    condition:
+        $header and $rich
 }
 
 rule pdf_embedded_file

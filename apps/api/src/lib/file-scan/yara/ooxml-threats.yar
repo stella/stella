@@ -55,3 +55,31 @@ rule ooxml_remote_template
     condition:
         $attached and $http
 }
+
+rule ooxml_dde
+{
+    meta:
+        description = "Document contains DDE field code (can execute commands)"
+        verdict = "malicious"
+
+    strings:
+        $dde = /DDE(AUTO)?[\s(]/ ascii nocase
+        $instr = "instrText" ascii nocase
+
+    condition:
+        $dde and $instr
+}
+
+rule ooxml_ole_object
+{
+    meta:
+        description = "Document contains embedded OLE object"
+        verdict = "suspicious"
+
+    strings:
+        $content_types = "[Content_Types].xml" ascii
+        $ole = "oleObject" ascii nocase
+
+    condition:
+        $content_types and $ole
+}

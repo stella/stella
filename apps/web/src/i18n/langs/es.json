@@ -869,6 +869,7 @@
       "downloadAsZip": "Download as ZIP",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
+      "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
       "uploading": "Subiendo archivos",
       "uploadingDescription": "No cierre esta página hasta que se completen las subidas"
