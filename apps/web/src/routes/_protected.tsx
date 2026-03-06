@@ -379,7 +379,10 @@ function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
                 )}
               </div>
               <Suspense>
-                <LazyRightPanelChat workspaceId={workspaceId} />
+                <LazyRightPanelChat
+                  key={workspaceId}
+                  workspaceId={workspaceId}
+                />
               </Suspense>
             </>
           )}

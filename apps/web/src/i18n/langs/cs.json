@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",
       "uploading": "Nahrávání souborů",
-      "uploadingDescription": "Nezavírejte tuto stránku, dokud nebudou soubory nahrány"
+      "uploadingDescription": "Nezavírejte tuto stránku, dokud nebudou soubory nahrány",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autor",

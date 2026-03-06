@@ -190,7 +190,7 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
     };
   }, [page, fileId, pageId, advancePageRendering, shouldRenderPage]);
 
-  // Prevent memory leaks from detached text layers
+  // Prevent memory leaks from detached layers
   useEffect(() => {
     const textLayerContainer = textLayerRef.current;
 

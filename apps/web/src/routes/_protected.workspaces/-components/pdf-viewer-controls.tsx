@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
@@ -66,7 +66,8 @@ export const PdfViewerControls = () => {
   const pageIds = usePdfStore(useShallow((s) => s.pdfs.get(fieldId)?.pageIds));
   const invertPages = usePdfStore((s) => s.invertPages);
   const toggleInvertPages = usePdfStore((s) => s.toggleInvertPages);
-  const [pageInputValue, setPageInputValue] = useState(currentPage);
+  const [editingPage, setEditingPage] = useState<number | null>(null);
+  const pageInputValue = editingPage ?? currentPage;
   const setScrollTo = usePdfStore((s) => s.setScrollTo);
   const updateScale = usePdfStore((s) => s.updateScale);
   const navigate = useNavigate({
@@ -82,10 +83,6 @@ export const PdfViewerControls = () => {
       currentPageNumber: currentPage,
     });
   }, 100);
-
-  useEffect(() => {
-    setPageInputValue(currentPage);
-  }, [currentPage]);
 
   return (
     <div className="ml-auto flex items-center justify-between">
@@ -218,11 +215,10 @@ export const PdfViewerControls = () => {
           <Button
             disabled={currentPage <= 1}
             onClick={() => {
-              const pageNumber = currentPage - 1;
+              setEditingPage(null);
               setScrollTo(fieldId, {
-                pageNumber,
+                pageNumber: currentPage - 1,
               });
-              setPageInputValue(pageNumber);
             }}
             size="icon"
             variant="ghost"
@@ -237,11 +233,10 @@ export const PdfViewerControls = () => {
           <Button
             disabled={currentPage >= totalPages}
             onClick={() => {
-              const pageNumber = currentPage + 1;
+              setEditingPage(null);
               setScrollTo(fieldId, {
-                pageNumber,
+                pageNumber: currentPage + 1,
               });
-              setPageInputValue(pageNumber);
             }}
             size="icon"
             variant="ghost"
@@ -257,13 +252,16 @@ export const PdfViewerControls = () => {
           className="mr-1 w-14 rounded border px-1 text-end"
           inputMode="numeric"
           onBlur={() => {
-            if (pageInputValue < 1 || pageInputValue > totalPages) {
-              setPageInputValue(currentPage);
-              return;
+            if (
+              editingPage !== null &&
+              editingPage >= 1 &&
+              editingPage <= totalPages
+            ) {
+              setScrollTo(fieldId, {
+                pageNumber: editingPage,
+              });
             }
-            setScrollTo(fieldId, {
-              pageNumber: pageInputValue,
-            });
+            setEditingPage(null);
           }}
           onChange={(e) => {
             const value = +e.target.value;
@@ -272,7 +270,7 @@ export const PdfViewerControls = () => {
               return;
             }
 
-            setPageInputValue(value);
+            setEditingPage(value);
           }}
           onKeyDown={(e) => {
             if (e.key !== "Enter") {

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useChat, type Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isToolUIPart, type UIMessage } from "ai";
@@ -44,12 +44,6 @@ type RightPanelChatProps = {
 
 export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-
-  // Reset active thread when workspace changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId is a prop; re-run is intentional
-  useEffect(() => {
-    setActiveThreadId(null);
-  }, [workspaceId]);
 
   return activeThreadId ? (
     <Suspense>

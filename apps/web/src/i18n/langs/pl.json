@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",
       "uploading": "Przesyłanie plików",
-      "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane"
+      "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autor",

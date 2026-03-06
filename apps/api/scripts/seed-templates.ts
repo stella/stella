@@ -39,6 +39,7 @@ import type {
   NamedCondition,
   TemplateManifest,
 } from "@/api/handlers/docx/types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { ensureTestUsers } from "./seed-test-user";
 import { DEFAULT_ORG_ID, pickAuthor, seedId } from "./seed-utils";
@@ -2184,7 +2185,9 @@ const TEMPLATE_CLAUSE_LINKS: TemplateClauseLinkSeed[] = [
 // MAIN SEED FUNCTION
 // ═══════════════════════════════════════════════════════════
 
-export async function seedTemplates(organizationId?: string): Promise<void> {
+export async function seedTemplates(
+  organizationId?: SafeId<"organization">,
+): Promise<void> {
   const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
 
   console.log("  Templates & clauses:");

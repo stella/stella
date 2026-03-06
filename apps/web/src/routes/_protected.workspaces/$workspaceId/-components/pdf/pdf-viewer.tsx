@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { Skeleton } from "@stella/ui/components/skeleton";
@@ -24,6 +25,7 @@ const [, roundY] = approximateFraction(getDevicePixelRatio());
 const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/pdf");
 
 const PdfViewer = () => {
+  const t = useTranslations();
   const setPdf = usePdfStore((s) => s.setPdf);
   const workspaceId = routeApi.useParams({ select: (p) => p.workspaceId });
   const fileSearch = routeApi.useSearch({ select: (s) => s.file });
@@ -52,9 +54,12 @@ const PdfViewer = () => {
     staleTime: 0,
     retry: false,
   });
-  const pageIds = usePdfStore(
-    useShallow((s) => s.pdfs.get(fileSearch.fieldId)?.pageIds),
+  const pdfEntry = usePdfStore(
+    useShallow((s) => s.pdfs.get(fileSearch.fieldId)),
   );
+  const pageIds = pdfEntry?.pageIds;
+  const attachmentLabels = pdfEntry?.attachmentLabels;
+  const isXfa = pdfEntry?.isXfa;
   const scale = usePdfStore((s) => s.scale);
   // Active pages = rendered (in LRU buffer) + currently rendering.
   // Subscribed once here so individual PdfPage components don't
@@ -233,8 +238,12 @@ const PdfViewer = () => {
           } as CSSProperties
         }
       >
+        {isXfa && (
+          <PdfBanner label={t("workspaces.files.xfaFormNotSupported")} />
+        )}
         {pageIds?.map((pageId) => (
-          <PdfPage
+          <PdfPageWithBanner
+            attachmentLabel={attachmentLabels?.get(pageId)}
             fileId={fileSearch.fieldId}
             isActive={
               renderedPages.has(pageId) ||
@@ -253,6 +262,30 @@ const PdfViewer = () => {
 };
 
 export default PdfViewer;
+
+const PdfBanner = ({ label }: { label: string }) => (
+  <div
+    className="mx-auto flex items-center justify-center rounded-md bg-muted px-4 py-2 text-center text-sm text-muted-foreground"
+    style={{ maxWidth: PDF_WIDTH }}
+  >
+    {label}
+  </div>
+);
+
+const PdfPageWithBanner = ({
+  attachmentLabel,
+  ...props
+}: {
+  attachmentLabel?: string;
+  fileId: string;
+  isActive: boolean;
+  pageId: string;
+}) => (
+  <>
+    {attachmentLabel && <PdfBanner label={attachmentLabel} />}
+    <PdfPage {...props} />
+  </>
+);
 
 const PdfViewerSkeleton = ({ className }: { className: string }) => {
   return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (

@@ -876,6 +876,7 @@ type Messages = {
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";
       "uploadingDescription": "Don't close this page until the files are uploaded";
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly.";
     };
     "filesystem": {
       "author": "Author";

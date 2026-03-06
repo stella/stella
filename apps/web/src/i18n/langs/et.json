@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# faili} other {# faili}} üleslaadimine ebaõnnestus {total, number}-st",
       "uploadedSuccessfully": "Failid edukalt üles laaditud",
       "uploading": "Failide üleslaadimine",
-      "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud"
+      "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autor",

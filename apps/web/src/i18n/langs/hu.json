@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",
       "uploading": "Fájlok feltöltése",
-      "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik"
+      "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Szerző",

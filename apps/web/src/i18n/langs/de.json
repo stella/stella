@@ -872,7 +872,8 @@
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
       "uploading": "Dateien werden hochgeladen",
-      "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind"
+      "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind",
+      "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
       "author": "Autor",
