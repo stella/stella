@@ -755,6 +755,7 @@ checksums:
     workspaces/files/downloadAsZip: 598236c017cb7a7465a77023edd91834
     workspaces/files/maxEntitiesReached: c6b87236fa051a00ea357f9955fb9356
     workspaces/files/renamedToAvoidConflicts: 8fa1b210809c5799082af6f735c9f0b4
+    workspaces/files/uploadedPartially: e7dcbe21fa76306941c7d2dec41ba7b3
     workspaces/files/uploadedSuccessfully: da51bb78ace5858a53c3d35890d99889
     workspaces/files/uploading: a08f47b401ce739d1912bf1d17a24fa1
     workspaces/files/uploadingDescription: 0872eaef37ec63df20b5e56b7f8fa5fa
