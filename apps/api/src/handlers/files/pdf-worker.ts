@@ -19,8 +19,7 @@ try {
   process.stdout.write(String(pdf.isEncrypted));
   process.exit(0);
 } catch (err) {
-  const message =
-    err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? err.message : String(err);
   process.stderr.write(`pdf-worker error: ${message}\n`);
   process.exit(1);
 }

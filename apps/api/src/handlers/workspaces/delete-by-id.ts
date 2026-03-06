@@ -6,7 +6,6 @@ import { ActorError } from "rivetkit/errors";
 import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import {
   entities,
@@ -20,6 +19,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { rivet } from "@/api/handlers/registry";
 import type { SafeId } from "@/api/lib/branded-types";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const isActorNotFound = (error: unknown): boolean =>
   error instanceof ActorError && error.code === "not_found";

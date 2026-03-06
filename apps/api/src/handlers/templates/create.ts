@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
@@ -17,6 +16,7 @@ import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),

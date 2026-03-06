@@ -8,7 +8,6 @@
 
 import { panic } from "better-result";
 
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -19,6 +18,7 @@ import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const findFileField = (
   fields: { content: FieldContent }[],

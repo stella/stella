@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -11,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tNanoid, { minItems: 1 }),

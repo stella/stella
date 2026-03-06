@@ -10,9 +10,9 @@
 import { resolve } from "node:path";
 import { Result, TaggedError } from "better-result";
 
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 class ExtractionWorkerError extends TaggedError("ExtractionWorkerError")<{
   message: string;

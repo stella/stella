@@ -40,8 +40,7 @@ export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
     subprocess.kill();
     return Result.err(
       new CorruptedPdfError({
-        message:
-          err instanceof Error ? err.message : String(err),
+        message: err instanceof Error ? err.message : String(err),
       }),
     );
   }

@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const manifestBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),

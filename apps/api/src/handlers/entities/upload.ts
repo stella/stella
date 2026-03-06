@@ -3,7 +3,6 @@ import { and, eq, like } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { db, type Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
@@ -21,6 +20,7 @@ import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const uploadEntityBodySchema = t.Object({
   file: t.File({
