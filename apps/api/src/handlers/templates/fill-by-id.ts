@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
@@ -16,6 +15,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { containsNull } from "./fill";
 
 export const fillByIdBodySchema = t.Object({

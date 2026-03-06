@@ -23,7 +23,16 @@ export const env = createEnv({
     TRANSACTIONAL_EMAIL_FROM: v.string(),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
     REDIS_URL: v.pipe(v.string(), v.url()),
-    GOTENBERG_URL: v.pipe(v.string(), v.url()),
+    GOTENBERG_URL: v.pipe(
+      v.string(),
+      v.url(),
+      v.check(
+        (url) =>
+          process.env.NODE_ENV !== "production" ||
+          new URL(url).protocol === "https:",
+        "GOTENBERG_URL must use HTTPS in production",
+      ),
+    ),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
     SEARCH_PROVIDER: v.optional(v.picklist(["pg-fts", "paradedb"]), "pg-fts"),

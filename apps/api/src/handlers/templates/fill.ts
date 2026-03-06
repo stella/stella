@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { db } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -14,6 +13,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const fillBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
