@@ -19,6 +19,7 @@ import type {
   PropertyTool,
   ViewConfig,
 } from "@/api/db/schema-validators";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1090,6 +1091,131 @@ export const templateFills = p.pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// Case Law — Global tables (no organizationId)
+// ---------------------------------------------------------------------------
+
+export const caseLawSources = p.pgTable(
+  "case_law_sources",
+  {
+    id: pNanoid.primaryKey(),
+    adapterKey: p.varchar("adapter_key", { length: 64 }).notNull(),
+    name: p.varchar({ length: 256 }).notNull(),
+    enabled: p.boolean().default(true).notNull(),
+    syncCursor: p.text("sync_cursor"),
+    lastSyncAt: p.timestamp("last_sync_at"),
+    config: p.jsonb().$type<Record<string, unknown>>().default({}),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey)],
+);
+
+export const caseLawDecisions = p.pgTable(
+  "case_law_decisions",
+  {
+    id: pNanoid.primaryKey(),
+    sourceId: p
+      .varchar("source_id", { length: 21 })
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    ecli: p.varchar({ length: 256 }),
+    court: p.varchar({ length: 512 }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    language: p.varchar({ length: 8 }).notNull(),
+    decisionDate: p.date("decision_date"),
+    decisionType: p.varchar("decision_type", { length: 128 }),
+    fulltext: p.text(),
+    sections: p.jsonb().$type<DecisionSection[]>(),
+    searchVector: tsvector("search_vector"),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    documentUrl: p.varchar("document_url", { length: 2048 }),
+    metadata: p.jsonb().$type<Record<string, unknown>>().default({}),
+    sourceHash: p.varchar("source_hash", { length: 64 }),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_decisions_source_case_idx")
+      .on(t.sourceId, t.caseNumber),
+    p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
+    p.index("case_law_decisions_court_idx").on(t.court),
+    p.index("case_law_decisions_country_idx").on(t.country),
+    p.index("case_law_decisions_date_idx").on(t.decisionDate),
+    p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    p
+      .index("case_law_decisions_search_vector_idx")
+      .using("gin", t.searchVector),
+    p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+  ],
+);
+
+export const caseLawCitations = p.pgTable(
+  "case_law_citations",
+  {
+    id: pNanoid.primaryKey(),
+    citingDecisionId: p
+      .varchar("citing_decision_id", { length: 21 })
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    citedDecisionId: p
+      .varchar("cited_decision_id", { length: 21 })
+      .references(() => caseLawDecisions.id, {
+        onDelete: "set null",
+      }),
+    citationText: p.varchar("citation_text", { length: 512 }).notNull(),
+    sectionIndex: p.integer("section_index"),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_citations_citing_idx").on(t.citingDecisionId),
+    p
+      .index("case_law_citations_cited_idx")
+      .on(t.citedDecisionId)
+      .where(isNotNull(t.citedDecisionId)),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Case Law — Tenant-scoped tables
+// ---------------------------------------------------------------------------
+
+export const caseLawMatterLinks = p.pgTable(
+  "case_law_matter_links",
+  {
+    id: pNanoid.primaryKey(),
+    decisionId: p
+      .varchar("decision_id", { length: 21 })
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    note: p.text(),
+    linkedBy: p
+      .text("linked_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_matter_links_decision_ws_idx")
+      .on(t.decisionId, t.workspaceId),
+    p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1125,6 +1251,10 @@ export const relations = defineRelations(
     templateFills,
     searchDocuments,
     extractedContent,
+    caseLawSources,
+    caseLawDecisions,
+    caseLawCitations,
+    caseLawMatterLinks,
   },
   (r) => ({
     contacts: {
@@ -1503,6 +1633,45 @@ export const relations = defineRelations(
       entity: r.one.entities({
         from: r.extractedContent.entityId,
         to: r.entities.id,
+      }),
+    },
+    caseLawSources: {},
+    caseLawDecisions: {
+      source: r.one.caseLawSources({
+        from: r.caseLawDecisions.sourceId,
+        to: r.caseLawSources.id,
+      }),
+      citationsFrom: r.many.caseLawCitations({
+        from: r.caseLawDecisions.id,
+        to: r.caseLawCitations.citingDecisionId,
+      }),
+      citationsTo: r.many.caseLawCitations({
+        from: r.caseLawDecisions.id,
+        to: r.caseLawCitations.citedDecisionId,
+      }),
+    },
+    caseLawCitations: {
+      citingDecision: r.one.caseLawDecisions({
+        from: r.caseLawCitations.citingDecisionId,
+        to: r.caseLawDecisions.id,
+      }),
+      citedDecision: r.one.caseLawDecisions({
+        from: r.caseLawCitations.citedDecisionId,
+        to: r.caseLawDecisions.id,
+      }),
+    },
+    caseLawMatterLinks: {
+      decision: r.one.caseLawDecisions({
+        from: r.caseLawMatterLinks.decisionId,
+        to: r.caseLawDecisions.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.caseLawMatterLinks.workspaceId,
+        to: r.workspaces.id,
+      }),
+      linkedByUser: r.one.user({
+        from: r.caseLawMatterLinks.linkedBy,
+        to: r.user.id,
       }),
     },
   }),

@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   BarChart3Icon,
+  BookmarkIcon,
   BookOpenIcon,
   ChevronsUpDownIcon,
   ClockIcon,
@@ -973,6 +974,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   <span>{t("navigation.invoices")}</span>
                 </SidebarMenuButton>
               )}
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip={t("navigation.caseLaw")}>
+                <Link
+                  activeProps={{ "data-active": true }}
+                  to="/knowledge/case-law"
+                >
+                  <BookmarkIcon />
+                  <span>{t("navigation.caseLaw")}</span>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>

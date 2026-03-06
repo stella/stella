@@ -4,18 +4,14 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import type { BoundingBox } from "@stella/api/types";
+import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
-import type {
-  WorkspaceEntity,
-  WorkspaceField,
-  WorkspaceJustification,
-} from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceJustification } from "@/lib/types";
 
-type SetFieldDataProps = {
-  propertyId: string;
-  entityId: string;
-  content: Exclude<WorkspaceField["content"], { type: "file" }> | null;
-}[];
+type SetFieldDataProps = Extract<
+  WorkflowActorEvent,
+  { name: "field-content" }
+>["data"];
 
 type ActiveJustification = {
   id: string;
@@ -165,15 +161,17 @@ export const useWorkspaceStore = create<State & Actions>()(
             continue;
           }
 
-          if (state.data[entityIndex].fields[data.propertyId]) {
-            state.data[entityIndex].fields[data.propertyId].content =
-              data.content;
+          const field = state.data[entityIndex].fields[data.propertyId];
+          if (field) {
+            Object.assign(field, { content: data.content });
           } else {
-            state.data[entityIndex].fields[data.propertyId] = {
-              id: nanoid(),
-              entityId: data.entityId,
-              content: data.content,
-            };
+            Object.assign(state.data[entityIndex].fields, {
+              [data.propertyId]: {
+                id: nanoid(),
+                entityId: data.entityId,
+                content: data.content,
+              },
+            });
           }
         }
       });

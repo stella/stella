@@ -32,12 +32,15 @@ import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protec
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedAccountSessionsRouteImport } from './routes/_protected.account/sessions'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
+import { Route as ProtectedKnowledgeCaseLawRouteRouteImport } from './routes/_protected.knowledge/case-law/route'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
+import { Route as ProtectedKnowledgeCaseLawIndexRouteImport } from './routes/_protected.knowledge/case-law/index'
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdPdfRouteImport } from './routes/_protected.workspaces/$workspaceId/pdf'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
 import { Route as ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport } from './routes/_protected.workspaces/$workspaceId/analytics'
+import { Route as ProtectedKnowledgeCaseLawDecisionIdRouteImport } from './routes/_protected.knowledge/case-law/$decisionId'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 
 const ProtectedRoute = ProtectedRouteImport.update({
@@ -165,11 +168,23 @@ const ProtectedWorkspacesWorkspaceIdRouteRoute =
     path: '/workspaces/$workspaceId',
     getParentRoute: () => ProtectedRoute,
   } as any)
+const ProtectedKnowledgeCaseLawRouteRoute =
+  ProtectedKnowledgeCaseLawRouteRouteImport.update({
+    id: '/case-law',
+    path: '/case-law',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdIndexRoute =
   ProtectedWorkspacesWorkspaceIdIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
+const ProtectedKnowledgeCaseLawIndexRoute =
+  ProtectedKnowledgeCaseLawIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProtectedKnowledgeCaseLawRouteRoute,
   } as any)
 const ProtectedWorkspacesWorkspaceIdTimesheetsRoute =
   ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport.update({
@@ -201,6 +216,12 @@ const ProtectedWorkspacesWorkspaceIdAnalyticsRoute =
     path: '/analytics',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const ProtectedKnowledgeCaseLawDecisionIdRoute =
+  ProtectedKnowledgeCaseLawDecisionIdRouteImport.update({
+    id: '/$decisionId',
+    path: '/$decisionId',
+    getParentRoute: () => ProtectedKnowledgeCaseLawRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
   ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport.update({
     id: '/$invoiceId',
@@ -217,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
+  '/knowledge/case-law': typeof ProtectedKnowledgeCaseLawRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/account/sessions': typeof ProtectedAccountSessionsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
@@ -231,11 +253,13 @@ export interface FileRoutesByFullPath {
   '/contacts/': typeof ProtectedContactsIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/workspaces/': typeof ProtectedWorkspacesIndexRoute
+  '/knowledge/case-law/$decisionId': typeof ProtectedKnowledgeCaseLawDecisionIdRoute
   '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
+  '/knowledge/case-law/': typeof ProtectedKnowledgeCaseLawIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
 }
@@ -259,11 +283,13 @@ export interface FileRoutesByTo {
   '/contacts': typeof ProtectedContactsIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
+  '/knowledge/case-law/$decisionId': typeof ProtectedKnowledgeCaseLawDecisionIdRoute
   '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
+  '/knowledge/case-law': typeof ProtectedKnowledgeCaseLawIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
 }
@@ -278,6 +304,7 @@ export interface FileRoutesById {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/': typeof AuthIndexRoute
+  '/_protected/knowledge/case-law': typeof ProtectedKnowledgeCaseLawRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/_protected/account/sessions': typeof ProtectedAccountSessionsRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
@@ -292,11 +319,13 @@ export interface FileRoutesById {
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
   '/_protected/workspaces/': typeof ProtectedWorkspacesIndexRoute
+  '/_protected/knowledge/case-law/$decisionId': typeof ProtectedKnowledgeCaseLawDecisionIdRoute
   '/_protected/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/_protected/workspaces/$workspaceId/pdf': typeof ProtectedWorkspacesWorkspaceIdPdfRoute
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
+  '/_protected/knowledge/case-law/': typeof ProtectedKnowledgeCaseLawIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
 }
@@ -311,6 +340,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/'
+    | '/knowledge/case-law'
     | '/workspaces/$workspaceId'
     | '/account/sessions'
     | '/chat/$threadId'
@@ -325,11 +355,13 @@ export interface FileRouteTypes {
     | '/contacts/'
     | '/knowledge/'
     | '/workspaces/'
+    | '/knowledge/case-law/$decisionId'
     | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/pdf'
     | '/workspaces/$workspaceId/timesheets'
+    | '/knowledge/case-law/'
     | '/workspaces/$workspaceId/'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
   fileRoutesByTo: FileRoutesByTo
@@ -353,11 +385,13 @@ export interface FileRouteTypes {
     | '/contacts'
     | '/knowledge'
     | '/workspaces'
+    | '/knowledge/case-law/$decisionId'
     | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/pdf'
     | '/workspaces/$workspaceId/timesheets'
+    | '/knowledge/case-law'
     | '/workspaces/$workspaceId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
   id:
@@ -371,6 +405,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/'
+    | '/_protected/knowledge/case-law'
     | '/_protected/workspaces/$workspaceId'
     | '/_protected/account/sessions'
     | '/_protected/chat/$threadId'
@@ -385,11 +420,13 @@ export interface FileRouteTypes {
     | '/_protected/contacts/'
     | '/_protected/knowledge/'
     | '/_protected/workspaces/'
+    | '/_protected/knowledge/case-law/$decisionId'
     | '/_protected/workspaces/$workspaceId/analytics'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
     | '/_protected/workspaces/$workspaceId/pdf'
     | '/_protected/workspaces/$workspaceId/timesheets'
+    | '/_protected/knowledge/case-law/'
     | '/_protected/workspaces/$workspaceId/'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
   fileRoutesById: FileRoutesById
@@ -566,12 +603,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/knowledge/case-law': {
+      id: '/_protected/knowledge/case-law'
+      path: '/case-law'
+      fullPath: '/knowledge/case-law'
+      preLoaderRoute: typeof ProtectedKnowledgeCaseLawRouteRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/': {
       id: '/_protected/workspaces/$workspaceId/'
       path: '/'
       fullPath: '/workspaces/$workspaceId/'
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/knowledge/case-law/': {
+      id: '/_protected/knowledge/case-law/'
+      path: '/'
+      fullPath: '/knowledge/case-law/'
+      preLoaderRoute: typeof ProtectedKnowledgeCaseLawIndexRouteImport
+      parentRoute: typeof ProtectedKnowledgeCaseLawRouteRoute
     }
     '/_protected/workspaces/$workspaceId/timesheets': {
       id: '/_protected/workspaces/$workspaceId/timesheets'
@@ -607,6 +658,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/workspaces/$workspaceId/analytics'
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/knowledge/case-law/$decisionId': {
+      id: '/_protected/knowledge/case-law/$decisionId'
+      path: '/$decisionId'
+      fullPath: '/knowledge/case-law/$decisionId'
+      preLoaderRoute: typeof ProtectedKnowledgeCaseLawDecisionIdRouteImport
+      parentRoute: typeof ProtectedKnowledgeCaseLawRouteRoute
     }
     '/_protected/workspaces/$workspaceId/invoices/$invoiceId': {
       id: '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
@@ -644,7 +702,25 @@ const ProtectedChatRouteRouteChildren: ProtectedChatRouteRouteChildren = {
 const ProtectedChatRouteRouteWithChildren =
   ProtectedChatRouteRoute._addFileChildren(ProtectedChatRouteRouteChildren)
 
+interface ProtectedKnowledgeCaseLawRouteRouteChildren {
+  ProtectedKnowledgeCaseLawDecisionIdRoute: typeof ProtectedKnowledgeCaseLawDecisionIdRoute
+  ProtectedKnowledgeCaseLawIndexRoute: typeof ProtectedKnowledgeCaseLawIndexRoute
+}
+
+const ProtectedKnowledgeCaseLawRouteRouteChildren: ProtectedKnowledgeCaseLawRouteRouteChildren =
+  {
+    ProtectedKnowledgeCaseLawDecisionIdRoute:
+      ProtectedKnowledgeCaseLawDecisionIdRoute,
+    ProtectedKnowledgeCaseLawIndexRoute: ProtectedKnowledgeCaseLawIndexRoute,
+  }
+
+const ProtectedKnowledgeCaseLawRouteRouteWithChildren =
+  ProtectedKnowledgeCaseLawRouteRoute._addFileChildren(
+    ProtectedKnowledgeCaseLawRouteRouteChildren,
+  )
+
 interface ProtectedKnowledgeRouteRouteChildren {
+  ProtectedKnowledgeCaseLawRouteRoute: typeof ProtectedKnowledgeCaseLawRouteRouteWithChildren
   ProtectedKnowledgeAnalyticsRoute: typeof ProtectedKnowledgeAnalyticsRoute
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
@@ -653,6 +729,8 @@ interface ProtectedKnowledgeRouteRouteChildren {
 
 const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren =
   {
+    ProtectedKnowledgeCaseLawRouteRoute:
+      ProtectedKnowledgeCaseLawRouteRouteWithChildren,
     ProtectedKnowledgeAnalyticsRoute: ProtectedKnowledgeAnalyticsRoute,
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
