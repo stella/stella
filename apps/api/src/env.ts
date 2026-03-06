@@ -3,6 +3,9 @@ import "dotenv/config";
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
+const HTTPS_PROTOCOL = "https:";
+const REDISS_PROTOCOL = "rediss:";
+
 export const env = createEnv({
   server: {
     DATABASE_URL: v.pipe(v.string(), v.url()),
@@ -22,14 +25,23 @@ export const env = createEnv({
     RESEND_API_KEY: v.string(),
     TRANSACTIONAL_EMAIL_FROM: v.string(),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
-    REDIS_URL: v.pipe(v.string(), v.url()),
+    REDIS_URL: v.pipe(
+      v.string(),
+      v.url(),
+      v.check(
+        (url) =>
+          process.env.NODE_ENV !== "production" ||
+          new URL(url).protocol === REDISS_PROTOCOL,
+        "REDIS_URL must use rediss:// (TLS) in production",
+      ),
+    ),
     GOTENBERG_URL: v.pipe(
       v.string(),
       v.url(),
       v.check(
         (url) =>
           process.env.NODE_ENV !== "production" ||
-          new URL(url).protocol === "https:",
+          new URL(url).protocol === HTTPS_PROTOCOL,
         "GOTENBERG_URL must use HTTPS in production",
       ),
     ),
