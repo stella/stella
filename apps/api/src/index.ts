@@ -58,10 +58,15 @@ const api = new Elysia()
       allowedHeaders: ["Content-Type", "Authorization"],
     }),
   )
-  .onError(({ error }) => {
+  .onError(({ error, set }) => {
+    // biome-ignore lint/performance/noDelete: headers value type is string | number
+    delete set.headers["X-Powered-By"];
     captureError(error);
   })
-  .onAfterHandle(async () => {
+  .onAfterHandle(async ({ set }) => {
+    // biome-ignore lint/performance/noDelete: headers value type is string | number; delete is the correct way to remove a key
+    delete set.headers["X-Powered-By"];
+
     const posthog = getPostHog();
 
     await posthog.flush().catch((error) => {
