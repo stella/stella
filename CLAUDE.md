@@ -130,6 +130,10 @@ For these, use `WebFetch` or `WebSearch` directly.
   `.push()` or pre-allocated arrays instead)
 - Security is extremely important given the volume and nature of
   data we handle.
+- If you encounter a pre-existing bug or lint error while
+  working on something else, investigate and confirm it, then
+  fix it (in a separate commit). Don't leave known defects
+  behind.
 
 ## Regulated Industry
 
@@ -473,6 +477,29 @@ premium. Linear is a good reference.
   Fetch by an indexed column, then validate the JSONB content
   in application code. Narrow the discriminated union with a
   type guard instead of using `as` casts.
+
+### Testing
+
+**Only test what can actually go wrong.** A test earns its
+place by catching a bug that the type system, framework, or
+linter would miss. Don't test identity functions, ORM round-
+trips, or that a component renders without crashing.
+
+**Test when code has:** parsing/transformation logic, security
+boundaries, business rules with arithmetic, state machines,
+non-obvious edge cases. **Skip:** simple CRUD handlers,
+library wrappers, layout components, constants.
+
+**Structure:** colocate `foo.test.ts` next to `foo.ts`. For
+frontend, extract logic into `foo.logic.ts` and test that
+(no React/DOM needed). Structural invariant tests (auth
+enforcement, branded types) live in `apps/api/src/tests/security/`.
+
+**Rules:** `bun:test` only. Describe by behaviour, not by
+function name. No `beforeEach` / shared mutable state. Prefer
+plain fakes over mocking libraries for simple cases; use mocks
+when simulating failure modes, testing varied edge-case inputs,
+or isolating external services. Every bug fix gets a regression test.
 
 ## Internationalization (i18n)
 
