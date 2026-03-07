@@ -1,9 +1,10 @@
 import type { SourceDocumentUIPart, UIMessage } from "ai";
-import { FileTextIcon } from "lucide-react";
+import { FileTextIcon, FolderIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
 import { openEntityInPeek } from "@/components/chat/entity-link";
+import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SourceChipsProps = {
   messageId: string;
@@ -37,6 +38,24 @@ export const SourceChips = ({
   );
 };
 
+const cls = "size-3 shrink-0";
+
+const SourceIcon = ({
+  kind,
+  mimeType,
+}: {
+  kind: string;
+  mimeType: string | null;
+}) => {
+  if (kind === "folder") {
+    return <FolderIcon className={cls} />;
+  }
+  if (mimeType) {
+    return <DocumentIcon className={cls} mimeType={mimeType} />;
+  }
+  return <FileTextIcon className={cn(cls, "text-muted-foreground")} />;
+};
+
 const SourceChip = ({
   part,
   workspaceId,
@@ -61,6 +80,22 @@ const SourceChip = ({
     openEntityInPeek(entityId, part.title);
   };
 
+  const stella = part.providerMetadata?.stella;
+  const mimeType =
+    stella &&
+    typeof stella === "object" &&
+    "mimeType" in stella &&
+    typeof stella.mimeType === "string"
+      ? stella.mimeType
+      : null;
+  const kind =
+    stella &&
+    typeof stella === "object" &&
+    "kind" in stella &&
+    typeof stella.kind === "string"
+      ? stella.kind
+      : "document";
+
   return (
     <button
       className={cn(
@@ -71,7 +106,7 @@ const SourceChip = ({
       onClick={handleClick}
       type="button"
     >
-      <FileTextIcon className="size-3 shrink-0 text-muted-foreground" />
+      <SourceIcon kind={kind} mimeType={mimeType} />
       <span className="max-w-[20ch] truncate">{part.title}</span>
     </button>
   );

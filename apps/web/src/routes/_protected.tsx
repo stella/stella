@@ -28,6 +28,7 @@ import { Separator } from "@stella/ui/components/separator";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
+import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
@@ -121,18 +122,20 @@ function ProtectedComponent() {
 
   return (
     <SidebarProvider>
-      <AppSidebar role={role} />
-      <ProtectedContent
-        isOnChatRoute={isOnChatRoute}
-        rightOpen={rightOpen}
-        toggleRight={toggleRight}
-      />
-      <RightPanel
-        open={rightOpen}
-        onToggle={toggleRight}
-        workspaceId={activeWorkspaceId}
-      />
-      <ShortcutHintsOverlay />
+      <ChatMentionProviders>
+        <AppSidebar role={role} />
+        <ProtectedContent
+          isOnChatRoute={isOnChatRoute}
+          rightOpen={rightOpen}
+          toggleRight={toggleRight}
+        />
+        <RightPanel
+          open={rightOpen}
+          onToggle={toggleRight}
+          workspaceId={activeWorkspaceId}
+        />
+        <ShortcutHintsOverlay />
+      </ChatMentionProviders>
     </SidebarProvider>
   );
 }

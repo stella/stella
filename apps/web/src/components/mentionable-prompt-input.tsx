@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -15,14 +15,18 @@ import { cn } from "@stella/ui/lib/utils";
 import {
   ChatMention,
   createChatSuggestion,
+  MENTION_HASH_PREFIX,
+  type ChatMentionOption,
+  type MentionCategory,
 } from "@/components/chat-mention-extension";
+import { useMentionProviders } from "@/components/chat-mention-providers";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getEntityName,
   getFirstFile,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-/** Serialize TipTap content to plain text with entity
+/** Serialize TipTap content to plain text with
  *  references as markdown links the model can parse. */
 const serializeToText = (editor: Editor): string => {
   const parts: string[] = [];
@@ -34,8 +38,16 @@ const serializeToText = (editor: Editor): string => {
     }
 
     if (node.type.name === "mention") {
-      const { id, label } = node.attrs;
-      parts.push(`[${label}](#stella-entity=${id})`);
+      const { id, label, category = "entity", sourceWorkspaceId } = node.attrs;
+      const prefix =
+        MENTION_HASH_PREFIX[category as MentionCategory] ??
+        MENTION_HASH_PREFIX.entity;
+      // Encode workspace context for cross-workspace entities
+      const encodedId =
+        category === "entity" && sourceWorkspaceId
+          ? `${sourceWorkspaceId}:${id}`
+          : id;
+      parts.push(`[${label}](${prefix}${encodedId})`);
       return false;
     }
 
@@ -52,16 +64,28 @@ const serializeToText = (editor: Editor): string => {
   return parts.join("").trim();
 };
 
-type ChatEditorProps = {
+export type MentionContext = {
+  /** When set, entity mentions from this workspace are available. */
   workspaceId?: string;
+  /** Additional mention categories beyond entities. */
+  categories?: MentionCategory[];
+};
+
+type MentionSourceProvider = () => ChatMentionOption[];
+
+type ChatEditorProps = {
+  mentionContext?: MentionContext;
   className?: string;
   onSubmit: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** @deprecated Use mentionContext instead. */
+  workspaceId?: string;
 };
 
 export const ChatEditor = ({
-  workspaceId,
+  mentionContext,
+  workspaceId: legacyWorkspaceId,
   className,
   onSubmit,
   placeholder,
@@ -70,37 +94,78 @@ export const ChatEditor = ({
   const t = useTranslations();
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
 
+  // Support both legacy workspaceId and new mentionContext
+  const ctx: MentionContext | undefined =
+    mentionContext ??
+    (legacyWorkspaceId ? { workspaceId: legacyWorkspaceId } : undefined);
+
+  const wsId = ctx?.workspaceId;
+  const categories = ctx?.categories ?? [];
+  const hasMentions = !!wsId || categories.length > 0;
+
   const allEntities = useWorkspaceStore(
-    useShallow((s) => (workspaceId ? s.data : [])),
+    useShallow((s) => (wsId ? s.data : [])),
   );
+
+  const mentionProviders = useMentionProviders();
+
+  // Build the items list. Updated whenever store or providers
+  // change, but consumed via a ref so TipTap's suggestion
+  // plugin always reads the latest data without needing the
+  // editor to fully recreate.
+  const getItems: MentionSourceProvider = useMemo(() => {
+    return () => {
+      const items: ChatMentionOption[] = [];
+
+      // Entity mentions from current workspace
+      if (wsId) {
+        for (const entity of allEntities) {
+          const file = getFirstFile(entity);
+          items.push({
+            id: entity.entityId,
+            label: getEntityName(entity),
+            category: "entity",
+            kind: entity.kind,
+            mimeType: file?.mimeType ?? null,
+          });
+        }
+      }
+
+      // Additional categories from org-level providers
+      if (categories.length > 0) {
+        const extra = mentionProviders.getItems(categories);
+        items.push(...extra);
+      }
+
+      return items;
+    };
+  }, [wsId, allEntities, categories, mentionProviders]);
+
+  // Stable ref so the suggestion plugin always calls the
+  // latest getItems without requiring editor recreation.
+  const getItemsRef = useRef(getItems);
+  getItemsRef.current = getItems;
+  const stableGetItems = useCallback(() => getItemsRef.current(), []);
 
   const extensions = useMemo(
     () => [
       Document,
       Paragraph,
       Text,
-      Placeholder.configure({ placeholder: resolvedPlaceholder }),
+      Placeholder.configure({
+        placeholder: resolvedPlaceholder,
+      }),
       History,
-      ...(workspaceId
+      ...(hasMentions
         ? [
             ChatMention.configure({
-              suggestion: createChatSuggestion(() => {
-                return allEntities.map((entity) => {
-                  const file = getFirstFile(entity);
-                  return {
-                    id: entity.entityId,
-                    label: getEntityName(entity),
-                    kind: entity.kind,
-                    mimeType: file?.mimeType ?? null,
-                  };
-                });
-              }),
+              suggestion: createChatSuggestion(stableGetItems),
               deleteTriggerWithBackspace: true,
             }),
           ]
         : []),
     ],
-    [workspaceId, resolvedPlaceholder, allEntities],
+    [hasMentions, resolvedPlaceholder, stableGetItems],
   );
 
   const editor = useEditor({
@@ -147,7 +212,14 @@ export const ChatEditor = ({
   });
 
   return (
-    <div className={cn("chat-editor", className)}>
+    // Stop keyboard events from reaching parent handlers
+    // (e.g. workspace table arrow-key navigation).
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: intentional isolation
+    // biome-ignore lint/a11y/noStaticElementInteractions: intentional isolation
+    <div
+      className={cn("chat-editor", className)}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       <EditorContent editor={editor} />
     </div>
   );

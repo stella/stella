@@ -285,6 +285,13 @@
     "deleteThread": "Usuń rozmowę",
     "greeting": "W czym mogę dziś pomóc?",
     "mention": {
+      "category": {
+        "clauses": "Clauses",
+        "contacts": "Contacts",
+        "entities": "In this matter",
+        "matters": "Matters",
+        "templates": "Templates"
+      },
       "noResults": "Brak pasujących elementów"
     },
     "newChat": "Nowy czat",

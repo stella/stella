@@ -285,6 +285,13 @@
     "deleteThread": "Konversation löschen",
     "greeting": "Wie kann ich Ihnen heute helfen?",
     "mention": {
+      "category": {
+        "clauses": "Clauses",
+        "contacts": "Contacts",
+        "entities": "In this matter",
+        "matters": "Matters",
+        "templates": "Templates"
+      },
       "noResults": "Keine passenden Einträge"
     },
     "newChat": "Neuer Chat",

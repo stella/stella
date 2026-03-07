@@ -3,12 +3,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
-import {
-  PromptInput,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-} from "@/components/ai-elements/prompt-input";
+import { ChatEditor } from "@/components/mentionable-prompt-input";
+import { GLOBAL_MENTION_CONTEXT } from "@/lib/chat-mention-context";
 import { useDevStore } from "@/lib/dev-store";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -36,8 +32,11 @@ function ChatIndex() {
           {t("chat.greeting")}
         </h1>
         <div className="w-full">
-          <PromptInput
-            onSubmit={async ({ text }) => {
+          <ChatEditor
+            autoFocus
+            className="min-h-16 rounded-lg border px-3 py-2"
+            mentionContext={GLOBAL_MENTION_CONTEXT}
+            onSubmit={async (text) => {
               const threadId = nanoid();
 
               const chat = await queryClient.ensureQueryData(
@@ -56,12 +55,7 @@ function ChatIndex() {
                 params: { threadId },
               });
             }}
-          >
-            <PromptInputTextarea />
-            <PromptInputFooter className="justify-end">
-              <PromptInputSubmit />
-            </PromptInputFooter>
-          </PromptInput>
+          />
         </div>
       </div>
     </div>

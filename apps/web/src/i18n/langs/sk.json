@@ -285,6 +285,13 @@
     "deleteThread": "Zmazať konverzáciu",
     "greeting": "Ako vám môžem dnes pomôcť?",
     "mention": {
+      "category": {
+        "clauses": "Clauses",
+        "contacts": "Contacts",
+        "entities": "In this matter",
+        "matters": "Matters",
+        "templates": "Templates"
+      },
       "noResults": "Žiadne zodpovedajúce entity"
     },
     "newChat": "Nový chat",

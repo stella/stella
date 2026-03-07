@@ -288,7 +288,14 @@ type Messages = {
     "deleteThread": "Delete conversation";
     "greeting": "How can I help you today?";
     "mention": {
-      "noResults": "No matching entities";
+      "category": {
+        "clauses": "Clauses";
+        "contacts": "Contacts";
+        "entities": "In this matter";
+        "matters": "Matters";
+        "templates": "Templates";
+      };
+      "noResults": "No results";
     };
     "newChat": "New chat";
     "noThreads": "No conversations yet";

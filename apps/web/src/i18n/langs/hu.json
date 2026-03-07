@@ -285,6 +285,13 @@
     "deleteThread": "Beszélgetés törlése",
     "greeting": "Miben segíthetek ma?",
     "mention": {
+      "category": {
+        "clauses": "Clauses",
+        "contacts": "Contacts",
+        "entities": "In this matter",
+        "matters": "Matters",
+        "templates": "Templates"
+      },
       "noResults": "Nincs találat"
     },
     "newChat": "Új csevegés",
