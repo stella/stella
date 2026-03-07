@@ -25,7 +25,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
 
-      - uses: lingodotdev/lingo.dev@2d676c852703695abad82157fe2863d802d7b2b7 # main (2026-02-19)
+      - uses: lingodotdev/lingo.dev@c7110cacc7a495364b0fb0c4ad3245f391e8f182 # main (2026-02-19)
         with:
           api-key: ${{ secrets.LINGO_DEV_API_KEY }}
           pull-request: true
