@@ -3,6 +3,7 @@ import { getToolName } from "ai";
 import {
   ChevronDownIcon,
   FileTextIcon,
+  LandmarkIcon,
   ListIcon,
   SearchIcon,
 } from "lucide-react";
@@ -10,11 +11,12 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
-const TOOL_ICONS: Record<string, typeof SearchIcon | undefined> = {
+const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   searchMatter: SearchIcon,
   listEntities: ListIcon,
   readEntity: FileTextIcon,
   readContent: FileTextIcon,
+  searchCaseLaw: LandmarkIcon,
 };
 
 export const ToolCallCard = ({
@@ -31,6 +33,7 @@ export const ToolCallCard = ({
     listEntities: t("chat.tool.listEntities"),
     readEntity: t("chat.tool.readEntity"),
     readContent: t("chat.tool.readContent"),
+    searchCaseLaw: t("chat.tool.searchCaseLaw"),
   };
   const label = toolLabels[name] ?? name;
 

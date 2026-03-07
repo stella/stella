@@ -305,6 +305,7 @@ type Messages = {
       "listEntities": "Listed entities";
       "readContent": "Read content";
       "readEntity": "Read entity";
+      "searchCaseLaw": "Searched case law";
       "searchMatter": "Searched matter";
     };
   };
