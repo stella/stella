@@ -3,6 +3,7 @@ import {
   convertToModelMessages,
   stepCountIs,
   streamText,
+  type ToolSet,
   type UIMessage,
   type UIMessageChunk,
 } from "ai";
@@ -25,8 +26,20 @@ import type {
 import { db } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  collectThreadMentions,
+  extractEntityWorkspaceMap,
+  extractWorkspaceIds,
+  stripEntityWorkspacePrefixes,
+} from "@/api/handlers/registry/actors/chat-mention-parser";
 import { createSourceInjectionTransform } from "@/api/handlers/registry/actors/chat-source-transform";
-import { createMatterTools } from "@/api/handlers/registry/actors/chat-tools";
+import {
+  createCrossMatterTools,
+  createMatterTools,
+  createMultiMatterTools,
+  createOrgTools,
+  validateWorkspaceIds,
+} from "@/api/handlers/registry/actors/chat-tools";
 import { validateUserActorSession } from "@/api/handlers/registry/utils";
 // biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -58,6 +71,8 @@ type ThreadMetadata = {
   createdAt: number;
   workspaceId: string | null;
   userContext: UserContext | null;
+  /** Workspace IDs mentioned across all messages. */
+  mentionedWorkspaceIds: Set<string>;
 };
 
 type ThreadState = {
@@ -102,6 +117,7 @@ const getOrCreateThread = (
       createdAt: Date.now(),
       workspaceId: null,
       userContext: null,
+      mentionedWorkspaceIds: new Set(),
     },
   };
   threads.set(threadId, thread);
@@ -131,9 +147,9 @@ const buildUserContextBlock = (userContext: UserContext | null): string => {
   if (!userContext) {
     return "";
   }
-  const lines = [`User: ${userContext.userName}`];
+  const lines = [`User registered as: ${userContext.userName}`];
   if (userContext.locale) {
-    lines.push(`User language: ${userContext.locale}`);
+    lines.push(`UX language: ${userContext.locale}`);
   }
   if (userContext.timezone) {
     lines.push(
@@ -186,6 +202,25 @@ const buildSystemPrompt = async (
       "themselves. Never describe tools to the user. " +
       "Just use them directly.",
     "",
+    "CRITICAL: You must NEVER guess, infer, or fabricate " +
+      "document content based on file names, user messages, " +
+      "or general knowledge. Always call readContent to read " +
+      "the actual text before describing, comparing, or " +
+      "summarizing any document. If a tool call fails, report " +
+      "the error honestly; do not make up content.",
+    "",
+    "SCOPE: By default, use searchMatter, listEntities, " +
+      "readEntity, and readContent to work within the " +
+      "current matter. You also have " +
+      "searchAcrossMatters and readContentAcrossMatters " +
+      "which search across ALL matters in the " +
+      "organization. Only use these cross-matter tools " +
+      "when the user EXPLICITLY asks to search outside " +
+      'this matter (e.g. "across matters", "in other ' +
+      'cases", "across all my files"). If the user asks ' +
+      "a question that could be answered from the " +
+      "current matter, stay within it.",
+    "",
     "Never expose internal IDs to the user in plain text; " +
       "they are meaningless to humans.",
     "",
@@ -198,6 +233,74 @@ const buildSystemPrompt = async (
     "",
     `The matter contains ${entityCount.toLocaleString()} entities.`,
     propList ? `\nAvailable metadata columns:\n${propList}` : "",
+    buildUserContextBlock(userContext),
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+/** Build a system prompt for multi-workspace or global threads. */
+const buildMultiContextPrompt = async (
+  mentionedWsIds: SafeId<"workspace">[],
+  organizationId: SafeId<"organization">,
+  userContext: UserContext | null,
+  entityMentions?: { entityId: string; workspaceId: string }[],
+): Promise<string> => {
+  const workspaces =
+    mentionedWsIds.length > 0
+      ? await db.query.workspaces.findMany({
+          where: {
+            id: { in: mentionedWsIds },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true, name: true },
+        })
+      : [];
+
+  const wsMap = new Map(workspaces.map((w) => [w.id, w.name]));
+
+  const matterLines = mentionedWsIds
+    .map((id) => `- "${wsMap.get(id) ?? "Unknown"}" (ID: ${id})`)
+    .join("\n");
+
+  // Entity-workspace mapping so the model knows which
+  // workspace to pass when calling tools for each entity.
+  const entityLines =
+    entityMentions && entityMentions.length > 0
+      ? entityMentions
+          .map(
+            (e) => `- entityId: ${e.entityId} → workspaceId: ${e.workspaceId}`,
+          )
+          .join("\n")
+      : "";
+
+  return [
+    "You are Stella, an AI assistant for legal professionals.",
+    "",
+    "The user may reference matters, contacts, templates, " +
+      "or clauses in their messages. Use the available tools " +
+      "to explore these resources when answering.",
+    "",
+    "CRITICAL: You must NEVER guess, infer, or fabricate " +
+      "document content based on file names, user messages, " +
+      "or general knowledge. Always call readContent to read " +
+      "the actual text before describing, comparing, or " +
+      "summarizing any document. If a tool call fails, report " +
+      "the error honestly; do not make up content.",
+    "",
+    "Never expose internal IDs to the user in plain text.",
+    "",
+    "When citing documents, use markdown links:\n" +
+      "[Document Name](#stella-entity=ENTITY_ID)\n" +
+      "When citing matters, use:\n" +
+      "[Matter Name](#stella-workspace=WORKSPACE_ID)",
+    "",
+    matterLines ? `Referenced matters:\n${matterLines}` : "",
+    entityLines
+      ? "Entity-workspace mapping (use these when " +
+        "calling tools):\n" +
+        entityLines
+      : "",
     buildUserContextBlock(userContext),
   ]
     .filter(Boolean)
@@ -272,9 +375,10 @@ export const chatActor = actor({
       // Sliding window: send only the last N messages to keep
       // token usage predictable. Tool-enabled threads get a
       // larger window because agentic steps expand messages.
-      const windowSize = thread.metadata.workspaceId
-        ? MESSAGE_WINDOW_TOOLS
-        : MESSAGE_WINDOW;
+      const hasToolContext =
+        !!thread.metadata.workspaceId ||
+        thread.metadata.mentionedWorkspaceIds.size > 0;
+      const windowSize = hasToolContext ? MESSAGE_WINDOW_TOOLS : MESSAGE_WINDOW;
       const allMessages = [...thread.messages];
       const messages = allMessages.slice(-windowSize);
 
@@ -312,6 +416,21 @@ export const chatActor = actor({
           const wsId = thread.metadata.workspaceId;
           const ctx = thread.metadata.userContext;
 
+          // Collect mentions from all messages in the thread
+          // to accumulate context across the conversation.
+          const mentions = collectThreadMentions(
+            allMessages as {
+              parts: { type: string; text?: string }[];
+            }[],
+          );
+          const mentionedWsRawIds = extractWorkspaceIds(mentions);
+          const entityWsMap = extractEntityWorkspaceMap(mentions);
+
+          // Track mentioned workspace IDs across messages
+          for (const id of mentionedWsRawIds) {
+            thread.metadata.mentionedWorkspaceIds.add(id);
+          }
+
           // Validate workspace belongs to this organization
           // before granting tool access. If the workspace is
           // not found (wrong org or deleted), treat as a
@@ -328,25 +447,100 @@ export const chatActor = actor({
             validatedWsId = ws ? toSafeId<"workspace">(wsId) : null;
           }
 
-          const tools = validatedWsId
-            ? createMatterTools({
+          // Validate mentioned workspace IDs from mentions
+          const allMentionedWsIds = [...thread.metadata.mentionedWorkspaceIds];
+          const validatedMentionedIds = await validateWorkspaceIds(
+            allMentionedWsIds,
+            orgId,
+          );
+
+          // Determine tool configuration based on context:
+          // 1. Single workspace thread → single-workspace tools
+          // 2. Workspace + mentioned others → multi-matter tools
+          //    (includes the bound workspace in the allowed set)
+          // 3. No workspace + mentions → multi-matter tools
+          // 4. No workspace + no mentions → org tools only
+          const hasMentionedWorkspaces = validatedMentionedIds.length > 0;
+          const hasAnyContext = !!validatedWsId || hasMentionedWorkspaces;
+
+          let tools: ToolSet | undefined;
+          let system: string | undefined;
+
+          if (validatedWsId && !hasMentionedWorkspaces) {
+            // Single workspace thread: local + cross-matter
+            tools = {
+              ...createMatterTools({
                 workspaceId: validatedWsId,
                 organizationId: orgId,
-              })
-            : undefined;
+              }),
+              ...createCrossMatterTools({
+                organizationId: orgId,
+              }),
+            };
+            system = await buildSystemPrompt(validatedWsId, orgId, ctx);
+          } else if (validatedWsId && hasMentionedWorkspaces) {
+            // Workspace thread with cross-workspace mentions:
+            // use only multi-matter tools to avoid name conflicts.
+            // The bound workspace is included in the allowed set.
+            const allIds = [
+              validatedWsId,
+              ...validatedMentionedIds.filter((id) => id !== validatedWsId),
+            ];
+            tools = {
+              ...createMultiMatterTools({
+                allowedWorkspaceIds: allIds,
+                organizationId: orgId,
+              }),
+              ...createOrgTools({ organizationId: orgId }),
+            };
+            system = await buildMultiContextPrompt(
+              allIds,
+              orgId,
+              ctx,
+              entityWsMap,
+            );
+          } else if (hasMentionedWorkspaces) {
+            // Global thread with mentioned workspaces
+            tools = {
+              ...createMultiMatterTools({
+                allowedWorkspaceIds: validatedMentionedIds,
+                organizationId: orgId,
+              }),
+              ...createOrgTools({ organizationId: orgId }),
+            };
+            system = await buildMultiContextPrompt(
+              validatedMentionedIds,
+              orgId,
+              ctx,
+              entityWsMap,
+            );
+          } else {
+            // No workspace context at all
+            system = buildUserContextBlock(ctx) || undefined;
+          }
 
-          const system = validatedWsId
-            ? await buildSystemPrompt(validatedWsId, orgId, ctx)
-            : buildUserContextBlock(ctx) || undefined;
+          // Strip workspace prefixes from entity mention links
+          // so the model sees clean entity IDs (not WS:ENTITY).
+          const cleanMessages = messages.map((m) => ({
+            ...m,
+            parts: m.parts.map((p) =>
+              p.type === "text" && "text" in p && p.text
+                ? {
+                    ...p,
+                    text: stripEntityWorkspacePrefixes(p.text),
+                  }
+                : p,
+            ),
+          }));
 
           const stream = streamText({
             model: getModel(modelId),
             system,
             tools,
-            stopWhen: validatedWsId
+            stopWhen: hasAnyContext
               ? stepCountIs(MAX_TOOL_STEPS)
               : stepCountIs(1),
-            messages: await convertToModelMessages(messages),
+            messages: await convertToModelMessages(cleanMessages),
             abortSignal: runSignal,
           });
 
@@ -366,13 +560,13 @@ export const chatActor = actor({
             onError: () => "error",
           });
 
-          // Inject source-document UI parts for workspace-bound
-          // threads so the frontend can render clickable chips.
-          // pipeThrough returns ReadableStream (no AsyncIterable
-          // in TS stdlib), so use the reader API for both paths.
-          const outputStream: ReadableStream<UIMessageChunk> = validatedWsId
+          // Inject source-document UI parts for any thread that
+          // has tool access so the frontend can render clickable
+          // source chips. pipeThrough returns ReadableStream (no
+          // AsyncIterable in TS stdlib), so use the reader API.
+          const outputStream: ReadableStream<UIMessageChunk> = hasAnyContext
             ? uiStream.pipeThrough(
-                createSourceInjectionTransform(validatedWsId),
+                createSourceInjectionTransform(validatedWsId, orgId),
               )
             : uiStream;
 

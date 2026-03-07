@@ -1,13 +1,94 @@
+import { useNavigate } from "@tanstack/react-router";
+import {
+  ContactIcon,
+  FileTextIcon,
+  LayersIcon,
+  ScrollTextIcon,
+} from "lucide-react";
+
 import { cn } from "@stella/ui/lib/utils";
 
+import type { MentionCategory } from "@/components/chat-mention-extension";
 import {
   EntityMentionIcon,
   openEntityInPeek,
 } from "@/components/chat/entity-link";
 
-const MENTION_RE = /\[([^\]]+)\]\(#stella-entity=([^)]+)\)/g;
+/** Matches all stella mention link formats:
+ *  `[Label](#stella-entity=ID)`,
+ *  `[Label](#stella-workspace=ID)`, etc. */
+const MENTION_RE =
+  /\[([^\]]+)\]\(#stella-(entity|workspace|contact|template|clause)=([^)]+)\)/g;
 
-/** Parse user text containing `[Name](#stella-entity=ID)` links
+const CATEGORY_ICON: Record<
+  Exclude<MentionCategory, "entity">,
+  React.ComponentType<{ className?: string }>
+> = {
+  workspace: LayersIcon,
+  contact: ContactIcon,
+  template: FileTextIcon,
+  clause: ScrollTextIcon,
+};
+
+/** Strip optional `WS_ID:` prefix from cross-workspace entity IDs. */
+const stripWsPrefix = (id: string) => {
+  const idx = id.indexOf(":");
+  return idx >= 0 ? id.slice(idx + 1) : id;
+};
+
+const MentionChip = ({
+  label,
+  category,
+  id,
+}: {
+  label: string;
+  category: MentionCategory;
+  id: string;
+}) => {
+  const navigate = useNavigate();
+  const entityId = category === "entity" ? stripWsPrefix(id) : id;
+
+  const handleClick = () => {
+    if (category === "entity") {
+      openEntityInPeek(entityId, label);
+      return;
+    }
+    if (category === "workspace") {
+      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      navigate({ to: "/workspaces/$workspaceId", params: { workspaceId: id } });
+      return;
+    }
+    // Phase 2: contact, template, clause navigation
+  };
+
+  const icon =
+    category === "entity" ? (
+      <EntityMentionIcon entityId={entityId} />
+    ) : (
+      (() => {
+        const Icon = CATEGORY_ICON[category];
+        return <Icon className="inline size-3 shrink-0" />;
+      })()
+    );
+
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center gap-0.5",
+        "rounded bg-accent px-1 py-0.5",
+        "text-xs font-medium text-accent-foreground",
+        "cursor-pointer hover:bg-accent/80",
+      )}
+      onClick={handleClick}
+      type="button"
+    >
+      {icon}
+      {label}
+    </button>
+  );
+};
+
+/** Parse user text containing `[Name](#stella-{type}=ID)` links
  *  and render mentions as inline chips, plain text as spans. */
 export const UserMessageText = ({ text }: { text: string }) => {
   const parts: React.ReactNode[] = [];
@@ -17,22 +98,14 @@ export const UserMessageText = ({ text }: { text: string }) => {
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
-    const [, label, entityId] = match;
+    const [, label, category, id] = match;
     parts.push(
-      <button
-        className={cn(
-          "inline-flex items-center gap-0.5",
-          "rounded bg-accent px-1 py-0.5",
-          "text-xs font-medium text-accent-foreground",
-          "cursor-pointer hover:bg-accent/80",
-        )}
+      <MentionChip
+        category={category as MentionCategory}
+        id={id}
         key={match.index}
-        onClick={() => openEntityInPeek(entityId, label)}
-        type="button"
-      >
-        <EntityMentionIcon entityId={entityId} />
-        {label}
-      </button>,
+        label={label}
+      />,
     );
     lastIndex = match.index + match[0].length;
   }

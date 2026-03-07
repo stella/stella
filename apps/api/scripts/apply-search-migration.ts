@@ -131,7 +131,6 @@ const main = async () => {
 };
 
 main().catch((err) => {
-  // biome-ignore lint/suspicious/noConsole: CLI script
   console.error("Migration failed:", err);
   process.exit(1);
 });

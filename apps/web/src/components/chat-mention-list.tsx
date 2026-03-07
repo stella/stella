@@ -1,31 +1,131 @@
-import { forwardRef, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
-import { FileTextIcon, FolderIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  ContactIcon,
+  FileTextIcon,
+  FolderIcon,
+  LayersIcon,
+  LoaderIcon,
+  ScrollTextIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 import { Popover, PopoverPopup } from "@stella/ui/components/popover";
 import { cn } from "@stella/ui/lib/utils";
 
-import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import type {
+  ChatMentionOption,
+  MentionCategory,
+} from "@/components/chat-mention-extension";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+
+const CATEGORY_ORDER: MentionCategory[] = [
+  "entity",
+  "workspace",
+  "contact",
+  "template",
+  "clause",
+];
+
+const useCategoryLabel = () => {
+  const t = useTranslations("chat.mention.category");
+  return (category: MentionCategory): string => {
+    switch (category) {
+      case "entity":
+        return t("entities");
+      case "workspace":
+        return t("matters");
+      case "contact":
+        return t("contacts");
+      case "template":
+        return t("templates");
+      case "clause":
+        return t("clauses");
+      default:
+        return category;
+    }
+  };
+};
 
 const MentionIcon = ({
+  category,
   kind,
   mimeType,
 }: {
+  category: MentionCategory;
   kind: string;
   mimeType: string | null;
 }) => {
-  if (kind === "folder") {
-    return <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />;
+  const cls = "size-3.5 shrink-0 text-muted-foreground";
+
+  if (category === "workspace") {
+    return <LayersIcon className={cls} />;
+  }
+  if (category === "contact") {
+    return <ContactIcon className={cls} />;
+  }
+  if (category === "template") {
+    return <FileTextIcon className={cls} />;
+  }
+  if (category === "clause") {
+    return <ScrollTextIcon className={cls} />;
   }
 
+  // Entity category: use document/folder icons
+  if (kind === "folder") {
+    return <FolderIcon className={cls} />;
+  }
   if (mimeType) {
     return <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />;
   }
+  return <FileTextIcon className={cls} />;
+};
 
-  return <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />;
+/** Group items by category, preserving a stable order. */
+const groupByCategory = (
+  items: ChatMentionOption[],
+): { category: MentionCategory; items: ChatMentionOption[] }[] => {
+  const groups = new Map<MentionCategory, ChatMentionOption[]>();
+
+  for (const item of items) {
+    const list = groups.get(item.category);
+    if (list) {
+      list.push(item);
+    } else {
+      groups.set(item.category, [item]);
+    }
+  }
+
+  const result: {
+    category: MentionCategory;
+    items: ChatMentionOption[];
+  }[] = [];
+
+  for (const cat of CATEGORY_ORDER) {
+    const group = groups.get(cat);
+    if (group && group.length > 0) {
+      result.push({ category: cat, items: group });
+    }
+  }
+
+  return result;
+};
+
+type DrillDownState = {
+  workspaceId: string;
+  name: string;
 };
 
 export const ChatMentionList = forwardRef<
@@ -33,45 +133,127 @@ export const ChatMentionList = forwardRef<
   SuggestionProps<ChatMentionOption>
 >(({ items, command, decorationNode }, ref) => {
   const t = useTranslations();
+  const categoryLabel = useCategoryLabel();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Clamp index when the list shrinks below the current selection.
-  const safeIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));
+  // Fetch entities when drilling into a matter
+  const { data: wsEntities, isPending: entitiesLoading } = useQuery({
+    ...entitiesOptions(drillDown?.workspaceId ?? ""),
+    enabled: !!drillDown,
+  });
+
+  const drillDownItems = useMemo<ChatMentionOption[]>(() => {
+    if (!wsEntities || !drillDown) {
+      return [];
+    }
+    return wsEntities.map((entity) => {
+      const fileField = entity.fields.find((f) => f.content.type === "file");
+      const mimeType =
+        fileField?.content.type === "file" ? fileField.content.mimeType : null;
+      const fileName =
+        fileField?.content.type === "file" ? fileField.content.fileName : null;
+
+      return {
+        id: entity.entityId,
+        label: entity.name ?? fileName ?? entity.entityId,
+        category: "entity" as const,
+        kind: entity.kind,
+        mimeType,
+        sourceWorkspaceId: drillDown.workspaceId,
+      };
+    });
+  }, [wsEntities, drillDown]);
+
+  const activeItems = drillDown ? drillDownItems : items;
+  const safeIndex = Math.min(
+    selectedIndex,
+    Math.max(0, activeItems.length - 1),
+  );
+
+  // Scroll the selected item into view on index change
+  useEffect(() => {
+    const el = listRef.current?.querySelector(
+      `[data-mention-index="${safeIndex}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest" });
+  }, [safeIndex]);
 
   const selectItem = (index: number) => {
-    const item = items.at(index);
+    const item = activeItems.at(index);
     if (item) {
       command(item);
     }
   };
 
+  const handleDrillDown = (workspace: ChatMentionOption) => {
+    setDrillDown({ workspaceId: workspace.id, name: workspace.label });
+    setSelectedIndex(0);
+  };
+
+  const handleBack = () => {
+    setDrillDown(null);
+    setSelectedIndex(0);
+  };
+
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
       if (event.key === "Escape") {
+        if (drillDown) {
+          handleBack();
+          return true;
+        }
         event.stopPropagation();
         setIsOpen(false);
         return true;
       }
 
       if (event.key === "ArrowUp") {
-        setSelectedIndex((safeIndex + items.length - 1) % items.length);
+        if (activeItems.length > 0) {
+          setSelectedIndex(
+            (safeIndex + activeItems.length - 1) % activeItems.length,
+          );
+        }
         return true;
       }
 
       if (event.key === "ArrowDown") {
-        setSelectedIndex((safeIndex + 1) % items.length);
+        if (activeItems.length > 0) {
+          setSelectedIndex((safeIndex + 1) % activeItems.length);
+        }
         return true;
       }
 
       if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
         selectItem(safeIndex);
+        return true;
+      }
+
+      // ArrowRight on a workspace item drills down
+      if (event.key === "ArrowRight" && !drillDown) {
+        const item = activeItems.at(safeIndex);
+        if (item?.category === "workspace") {
+          handleDrillDown(item);
+          return true;
+        }
+      }
+
+      // ArrowLeft exits drill-down
+      if (event.key === "ArrowLeft" && drillDown) {
+        handleBack();
         return true;
       }
 
       return false;
     },
   }));
+
+  const groups = groupByCategory(activeItems);
+  const hasMultipleCategories = groups.length > 1;
 
   return (
     <Popover modal={true} onOpenChange={setIsOpen} open={isOpen}>
@@ -82,27 +264,119 @@ export const ChatMentionList = forwardRef<
         initialFocus={false}
         side="top"
       >
-        <div className="flex max-h-48 min-w-48 flex-col gap-0.5 overflow-y-auto">
-          {items.length === 0 && (
+        <div
+          className="flex max-h-64 min-w-52 flex-col gap-0.5 overflow-y-auto"
+          ref={listRef}
+        >
+          {drillDown && (
+            <Button
+              className="justify-start gap-2 font-normal text-muted-foreground"
+              onClick={handleBack}
+              size="sm"
+              variant="ghost"
+            >
+              <ArrowLeftIcon className="size-3.5 shrink-0" />
+              <LayersIcon className="size-3.5 shrink-0" />
+              <span className="truncate">{drillDown.name}</span>
+            </Button>
+          )}
+
+          {drillDown && entitiesLoading && (
+            <div className="flex items-center justify-center p-2">
+              <LoaderIcon className="size-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {!drillDown && activeItems.length === 0 && (
             <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
               {t("chat.mention.noResults")}
             </div>
           )}
-          {items.map((item, index) => (
-            <Button
-              className={cn(
-                "justify-start gap-2 font-normal",
-                safeIndex === index && "bg-accent text-accent-foreground",
-              )}
-              key={item.id}
-              onClick={() => selectItem(index)}
-              size="sm"
-              variant="ghost"
-            >
-              <MentionIcon kind={item.kind} mimeType={item.mimeType} />
-              <span className="truncate">{item.label}</span>
-            </Button>
-          ))}
+
+          {drillDown && !entitiesLoading && drillDownItems.length === 0 && (
+            <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
+              {t("chat.mention.noResults")}
+            </div>
+          )}
+
+          {!drillDown &&
+            groups.map((group) => {
+              const groupStartIndex = activeItems.indexOf(group.items[0]);
+
+              return (
+                <div key={group.category}>
+                  {hasMultipleCategories && (
+                    <div className="px-2 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground">
+                      {categoryLabel(group.category)}
+                    </div>
+                  )}
+                  {group.items.map((item, i) => {
+                    const flatIndex = groupStartIndex + i;
+                    const isWorkspace = item.category === "workspace";
+
+                    return (
+                      <div
+                        className="flex items-center"
+                        data-mention-index={flatIndex}
+                        key={item.id}
+                      >
+                        <Button
+                          className={cn(
+                            "flex-1 justify-start gap-2 font-normal",
+                            safeIndex === flatIndex &&
+                              "bg-accent text-accent-foreground",
+                          )}
+                          key={item.id}
+                          onClick={() => selectItem(flatIndex)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <MentionIcon
+                            category={item.category}
+                            kind={item.kind}
+                            mimeType={item.mimeType}
+                          />
+                          <span className="truncate">{item.label}</span>
+                        </Button>
+                        {isWorkspace && (
+                          <Button
+                            className="size-7 shrink-0 text-muted-foreground"
+                            onClick={() => handleDrillDown(item)}
+                            size="icon-sm"
+                            variant="ghost"
+                          >
+                            <ChevronRightIcon className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+          {drillDown &&
+            !entitiesLoading &&
+            drillDownItems.map((item, i) => (
+              <Button
+                className={cn(
+                  "justify-start gap-2 font-normal",
+                  safeIndex === i && "bg-accent text-accent-foreground",
+                )}
+                data-mention-index={i}
+                key={item.id}
+                onClick={() => selectItem(i)}
+                size="sm"
+                variant="ghost"
+              >
+                <MentionIcon
+                  category={item.category}
+                  kind={item.kind}
+                  mimeType={item.mimeType}
+                />
+                <span className="truncate">{item.label}</span>
+              </Button>
+            ))}
         </div>
       </PopoverPopup>
     </Popover>

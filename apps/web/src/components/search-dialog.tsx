@@ -467,7 +467,7 @@ const SearchResultItem = ({
   return (
     <Button
       className={cn(
-        "h-auto w-full items-start justify-start gap-3 px-2 py-2 text-left",
+        "h-auto w-full items-start justify-start gap-3 px-2 py-2 text-left whitespace-normal sm:h-auto",
         isSelected && "bg-accent",
       )}
       data-selected={isSelected || undefined}
@@ -488,7 +488,7 @@ const SearchResultItem = ({
         </p>
         {hit.headline && (
           <p
-            className="mt-0.5 line-clamp-2 text-xs font-normal text-wrap text-muted-foreground [&_mark]:bg-yellow-200/50 [&_mark]:font-medium [&_mark]:text-foreground dark:[&_mark]:bg-yellow-500/20"
+            className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground [&_mark]:bg-highlight [&_mark]:font-medium [&_mark]:text-highlight-foreground"
             // biome-ignore lint/security/noDangerouslySetInnerHtml: headline is escaped server-side (escapeAndHighlight) and only contains <mark> tags
             dangerouslySetInnerHTML={{
               __html: hit.headline,

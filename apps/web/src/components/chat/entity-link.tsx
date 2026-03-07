@@ -1,14 +1,41 @@
-import { FileTextIcon, FolderIcon } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  ContactIcon,
+  FileTextIcon,
+  FolderIcon,
+  LayersIcon,
+  ScrollTextIcon,
+} from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
+import type { MentionCategory } from "@/components/chat-mention-extension";
 import { isFileDisplayable } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-export const ENTITY_HASH_PREFIX = "#stella-entity=";
+/** Hash prefix → category mapping. */
+const HASH_PREFIXES: { prefix: string; category: MentionCategory }[] = [
+  { prefix: "#stella-entity=", category: "entity" },
+  { prefix: "#stella-workspace=", category: "workspace" },
+  { prefix: "#stella-contact=", category: "contact" },
+  { prefix: "#stella-template=", category: "template" },
+  { prefix: "#stella-clause=", category: "clause" },
+];
+
+/** Parse a href into category + id, or null if not a stella link. */
+const parseStellaMentionHref = (
+  href: string,
+): { category: MentionCategory; id: string } | null => {
+  for (const { prefix, category } of HASH_PREFIXES) {
+    if (href.startsWith(prefix)) {
+      return { category, id: href.slice(prefix.length) };
+    }
+  }
+  return null;
+};
 
 /** Open the entity's file in the peek panel. */
 export const openEntityInPeek = (entityId: string, label: string) => {
@@ -52,37 +79,89 @@ export const EntityMentionIcon = ({ entityId }: { entityId: string }) => {
   return <FileTextIcon className="inline size-3 shrink-0" />;
 };
 
-/** Renders `#stella-entity=` links as clickable document
- *  references; all other links render as normal anchors. */
+const CATEGORY_ICON: Record<
+  Exclude<MentionCategory, "entity">,
+  React.ComponentType<{ className?: string }>
+> = {
+  workspace: LayersIcon,
+  contact: ContactIcon,
+  template: FileTextIcon,
+  clause: ScrollTextIcon,
+};
+
+/** Renders `#stella-*=` links as clickable references;
+ *  all other links render as normal anchors. */
 export const EntityLink = ({
   href,
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-  if (href?.startsWith(ENTITY_HASH_PREFIX)) {
-    const entityId = href.slice(ENTITY_HASH_PREFIX.length);
-    const label = typeof children === "string" ? children : "Document";
+  const navigate = useNavigate();
 
+  if (!href) {
     return (
-      <button
-        className={cn(
-          "inline-flex items-center gap-0.5",
-          "text-foreground underline decoration-muted-foreground/40",
-          "underline-offset-2 transition-colors",
-          "cursor-pointer hover:decoration-foreground",
-        )}
-        onClick={() => openEntityInPeek(entityId, label)}
-        type="button"
-      >
-        <EntityMentionIcon entityId={entityId} />
+      <a href={href} {...props}>
         {children}
-      </button>
+      </a>
     );
   }
 
+  const parsed = parseStellaMentionHref(href);
+  if (!parsed) {
+    return (
+      <a href={href} rel="noopener noreferrer" target="_blank" {...props}>
+        {children}
+      </a>
+    );
+  }
+
+  const { category, id: rawId } = parsed;
+  // Cross-workspace entity mentions use WS_ID:ENTITY_ID format
+  const id =
+    category === "entity" && rawId.includes(":")
+      ? rawId.slice(rawId.indexOf(":") + 1)
+      : rawId;
+  const label = typeof children === "string" ? children : "Reference";
+
+  const handleClick = () => {
+    if (category === "entity") {
+      openEntityInPeek(id, label);
+      return;
+    }
+    if (category === "workspace") {
+      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: id },
+      });
+      return;
+    }
+    // Phase 2: contact, template, clause navigation
+  };
+
+  const icon =
+    category === "entity" ? (
+      <EntityMentionIcon entityId={id} />
+    ) : (
+      (() => {
+        const Icon = CATEGORY_ICON[category];
+        return <Icon className="inline size-3 shrink-0" />;
+      })()
+    );
+
   return (
-    <a href={href} rel="noopener noreferrer" target="_blank" {...props}>
+    <button
+      className={cn(
+        "inline-flex items-center gap-0.5",
+        "text-foreground underline decoration-muted-foreground/40",
+        "underline-offset-2 transition-colors",
+        "cursor-pointer hover:decoration-foreground",
+      )}
+      onClick={handleClick}
+      type="button"
+    >
+      {icon}
       {children}
-    </a>
+    </button>
   );
 };

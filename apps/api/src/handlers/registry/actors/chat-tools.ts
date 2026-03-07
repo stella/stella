@@ -1,10 +1,14 @@
 import { tool } from "ai";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/api/db";
+import { workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type { SafeId } from "@/api/lib/branded-types";
+// biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -319,3 +323,497 @@ export const createMatterTools = ({
     },
   }),
 });
+
+// -----------------------------------------------------------------
+// Cross-matter search (available in workspace-scoped threads)
+// -----------------------------------------------------------------
+
+type CrossMatterContext = {
+  organizationId: SafeId<"organization">;
+};
+
+export const createCrossMatterTools = ({
+  organizationId,
+}: CrossMatterContext) => ({
+  searchAcrossMatters: tool({
+    description:
+      "Search for documents across ALL matters in the " +
+      "organization. Only use this when the user explicitly " +
+      "asks to search outside the current matter.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .max(LIMITS.searchQueryMaxLength)
+        .describe("Search query (keywords or phrases)"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .default(10)
+        .describe("Max results to return"),
+    }),
+    execute: async ({ query, limit }) => {
+      const provider = getSearchProvider();
+      const result = await provider.search({
+        query,
+        organizationId,
+        limit,
+      });
+      return {
+        totalCount: result.totalCount,
+        hits: result.hits.map((hit) => ({
+          entityId: hit.entityId,
+          workspaceId: hit.workspaceId,
+          workspaceName: hit.workspaceName,
+          name: hit.title,
+          kind: hit.kind,
+          headline: hit.headline,
+        })),
+      };
+    },
+  }),
+
+  readContentAcrossMatters: tool({
+    description:
+      "Read the extracted text content of a document from " +
+      "any matter. Use after searchAcrossMatters finds a " +
+      "document outside the current matter.",
+    inputSchema: z.object({
+      entityId: z.string().describe("The entity ID whose content to read"),
+    }),
+    execute: async ({ entityId }) => {
+      const row = await db.query.extractedContent.findFirst({
+        where: {
+          entityId,
+          organizationId: { eq: organizationId },
+        },
+        with: {
+          entity: {
+            columns: {
+              workspaceId: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!row) {
+        return {
+          error: "No extracted content available for this entity.",
+        };
+      }
+
+      const plaintext = await decryptContent(
+        organizationId,
+        row.ciphertext,
+        row.iv,
+      );
+
+      const truncated = plaintext.length > CONTENT_MAX_CHARS;
+      const text = truncated
+        ? plaintext.slice(0, CONTENT_MAX_CHARS)
+        : plaintext;
+
+      return {
+        entityId,
+        workspaceId: row.entity?.workspaceId ?? null,
+        name: row.entity?.name ?? null,
+        charCount: row.charCount,
+        truncated,
+        text,
+      };
+    },
+  }),
+});
+
+// -----------------------------------------------------------------
+// Multi-matter tools (for cross-workspace mentions)
+// -----------------------------------------------------------------
+
+type MultiMatterToolsContext = {
+  /** Validated workspace IDs the user has mentioned. */
+  allowedWorkspaceIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
+};
+
+const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) =>
+  z
+    .string()
+    .describe(
+      "The workspace/matter ID to operate on. " +
+        `Allowed values: ${allowedIds.join(", ")}`,
+    )
+    .refine((id) => allowedIds.includes(id as SafeId<"workspace">), {
+      message: "Workspace not in the allowed set",
+    })
+    .transform((id) => toSafeId<"workspace">(id));
+
+export const createMultiMatterTools = ({
+  allowedWorkspaceIds,
+  organizationId,
+}: MultiMatterToolsContext) => {
+  const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
+
+  return {
+    searchMatter: tool({
+      description:
+        "Search for documents and files within a specified " +
+        "matter using full-text search.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        query: z
+          .string()
+          .max(LIMITS.searchQueryMaxLength)
+          .describe("Search query"),
+        limit: z.number().int().min(1).max(20).optional().default(10),
+      }),
+      execute: async ({ workspaceId, query, limit }) => {
+        const provider = getSearchProvider();
+        const result = await provider.search({
+          query,
+          organizationId,
+          workspaceId,
+          limit,
+        });
+        return {
+          workspaceId,
+          totalCount: result.totalCount,
+          hits: result.hits.map((hit) => ({
+            entityId: hit.entityId,
+            name: hit.title,
+            kind: hit.kind,
+            headline: hit.headline,
+          })),
+        };
+      },
+    }),
+
+    listEntities: tool({
+      description:
+        "List documents, files, tasks, and folders in a specified matter.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        kind: z.enum(["document", "folder", "task", "message"]).optional(),
+        parentId: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional().default(50),
+      }),
+      execute: async ({ workspaceId, kind, parentId, limit }) => {
+        const [ents, properties] = await Promise.all([
+          db.query.entities.findMany({
+            where: {
+              workspaceId: { eq: workspaceId },
+              ...(kind ? { kind } : {}),
+              ...(parentId ? { parentId } : {}),
+            },
+            orderBy: { createdAt: "asc" },
+            limit,
+            columns: {
+              id: true,
+              kind: true,
+              name: true,
+              parentId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            with: {
+              currentVersion: {
+                columns: { id: true },
+                with: {
+                  fields: {
+                    columns: {
+                      propertyId: true,
+                      content: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+          db.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: { id: true, name: true },
+          }),
+        ]);
+        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
+
+        return ents.map((entity) => ({
+          workspaceId,
+          entityId: entity.id,
+          kind: entity.kind,
+          name: entity.name,
+          parentId: entity.parentId,
+          createdAt: entity.createdAt.toISOString(),
+          updatedAt: entity.updatedAt?.toISOString() ?? null,
+          fields:
+            entity.currentVersion?.fields
+              .map((f) => ({
+                property: propNameById.get(f.propertyId) ?? f.propertyId,
+                value: formatFieldValue(f.content),
+              }))
+              .filter((f) => f.value !== "") ?? [],
+        }));
+      },
+    }),
+
+    readEntity: tool({
+      description:
+        "Get detailed information about a specific entity " +
+        "in a specified matter.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        entityId: z.string(),
+      }),
+      execute: async ({ workspaceId, entityId }) => {
+        const entity = await db.query.entities.findFirst({
+          where: {
+            id: entityId,
+            workspaceId: { eq: workspaceId },
+          },
+          columns: {
+            id: true,
+            kind: true,
+            name: true,
+            parentId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          with: {
+            createdByUser: { columns: { name: true } },
+            versions: { columns: { id: true } },
+            currentVersion: {
+              columns: { id: true },
+              with: {
+                fields: {
+                  columns: {
+                    propertyId: true,
+                    content: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!entity) {
+          return { error: "Entity not found in this matter" };
+        }
+
+        const properties = await db.query.properties.findMany({
+          where: { workspaceId: { eq: workspaceId } },
+          columns: { id: true, name: true },
+        });
+        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
+
+        return {
+          workspaceId,
+          entityId: entity.id,
+          kind: entity.kind,
+          name: entity.name,
+          createdBy: entity.createdByUser?.name ?? null,
+          versionCount: entity.versions.length,
+          fields:
+            entity.currentVersion?.fields
+              .map((f) => ({
+                property: propNameById.get(f.propertyId) ?? f.propertyId,
+                value: formatFieldValue(f.content),
+              }))
+              .filter((f) => f.value !== "") ?? [],
+        };
+      },
+    }),
+
+    readContent: tool({
+      description:
+        "Read the extracted text content of a document " +
+        "in a specified matter.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        entityId: z.string(),
+      }),
+      execute: async ({ workspaceId, entityId }) => {
+        const row = await db.query.extractedContent.findFirst({
+          where: {
+            entityId,
+            organizationId: { eq: organizationId },
+          },
+          with: {
+            entity: { columns: { workspaceId: true } },
+          },
+        });
+
+        if (!row) {
+          return {
+            error: "No extracted content available for this entity.",
+          };
+        }
+
+        if (row.entity?.workspaceId !== workspaceId) {
+          return { error: "Entity not found in this matter" };
+        }
+
+        const plaintext = await decryptContent(
+          organizationId,
+          row.ciphertext,
+          row.iv,
+        );
+
+        const truncated = plaintext.length > CONTENT_MAX_CHARS;
+        const text = truncated
+          ? plaintext.slice(0, CONTENT_MAX_CHARS)
+          : plaintext;
+
+        return {
+          workspaceId,
+          entityId,
+          charCount: row.charCount,
+          truncated,
+          text,
+        };
+      },
+    }),
+  };
+};
+
+// -----------------------------------------------------------------
+// Org-level tools (contacts, templates, clauses)
+// -----------------------------------------------------------------
+
+type OrgToolsContext = {
+  organizationId: SafeId<"organization">;
+};
+
+export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
+  readContact: tool({
+    description: "Get details about a contact (person or organization).",
+    inputSchema: z.object({
+      contactId: z.string().describe("The contact ID to read"),
+    }),
+    execute: async ({ contactId }) => {
+      const contact = await db.query.contacts.findFirst({
+        where: {
+          id: contactId,
+          organizationId: { eq: organizationId },
+        },
+        columns: {
+          id: true,
+          type: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          organizationName: true,
+          emails: true,
+          phones: true,
+        },
+      });
+
+      if (!contact) {
+        return { error: "Contact not found" };
+      }
+
+      return {
+        contactId: contact.id,
+        type: contact.type,
+        displayName: contact.displayName,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        organizationName: contact.organizationName,
+        emails: contact.emails ?? [],
+        phones: contact.phones ?? [],
+      };
+    },
+  }),
+
+  listTemplates: tool({
+    description: "List available document templates.",
+    inputSchema: z.object({
+      query: z.string().optional().describe("Filter by name (substring match)"),
+      limit: z.number().int().min(1).max(50).optional().default(20),
+    }),
+    execute: async ({ query, limit }) => {
+      const templates = await db.query.templates.findMany({
+        where: {
+          organizationId: { eq: organizationId },
+          ...(query ? { name: { ilike: `%${escapeLike(query)}%` } } : {}),
+        },
+        columns: {
+          id: true,
+          name: true,
+          fileName: true,
+          createdAt: true,
+        },
+        limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return templates.map((t) => ({
+        templateId: t.id,
+        name: t.name,
+        fileName: t.fileName,
+        createdAt: t.createdAt.toISOString(),
+      }));
+    },
+  }),
+
+  readClause: tool({
+    description: "Read a legal clause including its full text body.",
+    inputSchema: z.object({
+      clauseId: z.string().describe("The clause ID to read"),
+    }),
+    execute: async ({ clauseId }) => {
+      const clause = await db.query.clauses.findFirst({
+        where: {
+          id: clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: {
+          id: true,
+          title: true,
+          language: true,
+          description: true,
+          body: true,
+          currentVersion: true,
+        },
+      });
+
+      if (!clause) {
+        return { error: "Clause not found" };
+      }
+
+      return {
+        clauseId: clause.id,
+        title: clause.title,
+        language: clause.language,
+        description: clause.description,
+        version: clause.currentVersion,
+        body: clause.body,
+      };
+    },
+  }),
+});
+
+// -----------------------------------------------------------------
+// Validation: check workspace IDs belong to an organization
+// -----------------------------------------------------------------
+
+export const validateWorkspaceIds = async (
+  rawIds: string[],
+  organizationId: SafeId<"organization">,
+): Promise<SafeId<"workspace">[]> => {
+  if (rawIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, rawIds),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    );
+
+  return rows.map((w) => toSafeId<"workspace">(w.id));
+};

@@ -24,8 +24,15 @@ import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { UserMessageText } from "@/components/chat/user-message-text";
-import { ChatEditor } from "@/components/mentionable-prompt-input";
+import {
+  ChatEditor,
+  type MentionContext,
+} from "@/components/mentionable-prompt-input";
 import type { ChatActor } from "@/lib/api";
+import {
+  GLOBAL_MENTION_CONTEXT,
+  workspaceMentionContext,
+} from "@/lib/chat-mention-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { eventHandlerV2 } from "@/lib/rivet";
@@ -45,9 +52,20 @@ type RightPanelChatProps = {
 export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
+  // Workspace chat gets entity + org-level mentions;
+  // non-workspace chat gets org-level mentions only.
+  const mentionContext = useMemo(
+    () =>
+      workspaceId
+        ? workspaceMentionContext(workspaceId)
+        : GLOBAL_MENTION_CONTEXT,
+    [workspaceId],
+  );
+
   return activeThreadId ? (
     <Suspense>
       <ActiveThread
+        mentionContext={mentionContext}
         onBack={() => setActiveThreadId(null)}
         onSwitchThread={setActiveThreadId}
         threadId={activeThreadId}
@@ -55,7 +73,11 @@ export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
       />
     </Suspense>
   ) : (
-    <NewChat onThreadCreated={setActiveThreadId} workspaceId={workspaceId} />
+    <NewChat
+      mentionContext={mentionContext}
+      onThreadCreated={setActiveThreadId}
+      workspaceId={workspaceId}
+    />
   );
 };
 
@@ -64,11 +86,16 @@ export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
 type NewChatProps = {
   onThreadCreated: (threadId: string) => void;
   workspaceId?: string;
+  mentionContext: MentionContext;
 };
 
 const getModelId = () => useDevStore.getState().chatModelId;
 
-const NewChat = ({ onThreadCreated, workspaceId }: NewChatProps) => {
+const NewChat = ({
+  onThreadCreated,
+  workspaceId,
+  mentionContext,
+}: NewChatProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
@@ -99,7 +126,7 @@ const NewChat = ({ onThreadCreated, workspaceId }: NewChatProps) => {
             chat.sendMessage({ text });
             onThreadCreated(threadId);
           }}
-          workspaceId={workspaceId}
+          mentionContext={mentionContext}
         />
       </div>
     </div>
@@ -111,6 +138,7 @@ const NewChat = ({ onThreadCreated, workspaceId }: NewChatProps) => {
 type ActiveThreadProps = {
   threadId: string;
   workspaceId?: string;
+  mentionContext: MentionContext;
   onBack: () => void;
   onSwitchThread: (threadId: string) => void;
 };
@@ -118,6 +146,7 @@ type ActiveThreadProps = {
 const ActiveThread = ({
   threadId,
   workspaceId,
+  mentionContext,
   onBack,
   onSwitchThread,
 }: ActiveThreadProps) => {
@@ -144,6 +173,7 @@ const ActiveThread = ({
   return (
     <ActiveThreadInner
       chat={chat}
+      mentionContext={mentionContext}
       onBack={onBack}
       onSwitchThread={onSwitchThread}
       threadId={threadId}
@@ -155,6 +185,7 @@ const ActiveThread = ({
 type ActiveThreadInnerProps = {
   threadId: string;
   workspaceId?: string;
+  mentionContext: MentionContext;
   chat: Chat<UIMessage>;
   onBack: () => void;
   onSwitchThread: (threadId: string) => void;
@@ -163,6 +194,7 @@ type ActiveThreadInnerProps = {
 const ActiveThreadInner = ({
   threadId,
   workspaceId,
+  mentionContext,
   chat,
   onBack,
   onSwitchThread,
@@ -176,11 +208,8 @@ const ActiveThreadInner = ({
     resume: true,
   });
 
-  // Stable Streamdown overrides for entity links.
-  const streamdownComponents = useMemo(
-    () => (workspaceId ? { a: EntityLink } : undefined),
-    [workspaceId],
-  );
+  // Stable Streamdown overrides for mention links.
+  const streamdownComponents = useMemo(() => ({ a: EntityLink }), []);
 
   const chatEvent = eventHandlerV2<ChatActor>();
 
@@ -277,8 +306,8 @@ const ActiveThreadInner = ({
         <ChatEditor
           autoFocus
           className="min-h-10 rounded-lg border px-3 py-2"
+          mentionContext={mentionContext}
           onSubmit={(text) => sendMessage({ text })}
-          workspaceId={workspaceId}
         />
       </div>
     </div>

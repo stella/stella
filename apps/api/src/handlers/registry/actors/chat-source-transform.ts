@@ -1,11 +1,15 @@
 import type { UIMessageChunk } from "ai";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/api/db";
-import type { SafeId } from "@/api/lib/branded-types";
+import { entities, workspaces } from "@/api/db/schema";
+// biome-ignore lint/style/noRestrictedImports: brands verified workspace IDs
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 
 const SOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "readEntity",
   "readContent",
+  "readContentAcrossMatters",
 ]);
 
 const DEFAULT_KIND = "document";
@@ -39,12 +43,46 @@ const nameFromReadEntity = (output: Record<string, unknown>): string | null => {
   return null;
 };
 
+/** Extract mimeType from a readEntity tool output's fields.
+ *  The file field value is formatted as `[file: name.ext]`. */
+const extractMimeType = (output: Record<string, unknown>): string | null => {
+  if (!Array.isArray(output.fields)) {
+    return null;
+  }
+  for (const field of output.fields) {
+    if (
+      typeof field === "object" &&
+      field !== null &&
+      "value" in field &&
+      typeof field.value === "string"
+    ) {
+      const match = field.value.match(FILE_FIELD_RE);
+      if (match) {
+        const name = match[1];
+        if (name.endsWith(".pdf")) {
+          return "application/pdf";
+        }
+        if (name.endsWith(".docx")) {
+          return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        }
+      }
+    }
+  }
+  return null;
+};
+
+type EntityMeta = {
+  name: string;
+  kind: string;
+  mimeType: string | null;
+};
+
 /** Look up entity display name via DB. Falls back to the
  *  first file field's filename when entity.name is null. */
 const nameFromDb = async (
   entityId: string,
   workspaceId: SafeId<"workspace">,
-): Promise<{ name: string; kind: string } | null> => {
+): Promise<EntityMeta | null> => {
   const entity = await db.query.entities.findFirst({
     where: {
       id: entityId,
@@ -68,25 +106,67 @@ const nameFromDb = async (
   }
 
   let name = entity.name;
-  if (!name) {
-    const fileField = entity.currentVersion?.fields.find(
-      (f) =>
-        f.content !== null &&
-        typeof f.content === "object" &&
-        "type" in f.content &&
-        f.content.type === "file",
-    );
-    if (
-      fileField?.content &&
-      typeof fileField.content === "object" &&
-      "fileName" in fileField.content &&
-      typeof fileField.content.fileName === "string"
-    ) {
+  let mimeType: string | null = null;
+
+  const fileField = entity.currentVersion?.fields.find(
+    (f) =>
+      f.content !== null &&
+      typeof f.content === "object" &&
+      "type" in f.content &&
+      f.content.type === "file",
+  );
+
+  if (
+    fileField?.content &&
+    typeof fileField.content === "object" &&
+    "fileName" in fileField.content
+  ) {
+    if (typeof fileField.content.fileName === "string" && !name) {
       name = fileField.content.fileName;
+    }
+    if (
+      "mimeType" in fileField.content &&
+      typeof fileField.content.mimeType === "string"
+    ) {
+      mimeType = fileField.content.mimeType;
     }
   }
 
-  return { name: name ?? "Untitled", kind: entity.kind };
+  return {
+    name: name ?? "Untitled",
+    kind: entity.kind,
+    mimeType,
+  };
+};
+
+/** Org-scoped fallback: look up entity by ID within the
+ *  organization (no workspace filter). Used for cross-matter
+ *  results from searchAcrossMatters / readContentAcrossMatters. */
+const nameFromDbOrgScoped = async (
+  entityId: string,
+  organizationId: SafeId<"organization">,
+): Promise<EntityMeta | null> => {
+  // Find which workspace this entity belongs to within
+  // the organization. Uses a JOIN so the DB never returns
+  // data from another org (no fetch-then-check).
+  const [row] = await db
+    .select({ workspaceId: entities.workspaceId })
+    .from(entities)
+    .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+    .where(
+      and(
+        eq(entities.id, entityId),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  // Delegate to workspace-scoped lookup for full metadata.
+  return nameFromDb(entityId, toSafeId<"workspace">(row.workspaceId));
 };
 
 /**
@@ -97,11 +177,12 @@ const nameFromDb = async (
  * `convertToModelMessages()` (zero extra tokens).
  */
 export const createSourceInjectionTransform = (
-  workspaceId: SafeId<"workspace">,
+  workspaceId: SafeId<"workspace"> | null,
+  organizationId: SafeId<"organization">,
 ) => {
   const toolNames = new Map<string, string>();
   const emittedEntities = new Set<string>();
-  const entityMeta = new Map<string, { name: string; kind: string }>();
+  const entityMeta = new Map<string, EntityMeta>();
 
   return new TransformStream<UIMessageChunk, UIMessageChunk>({
     async transform(chunk, controller) {
@@ -147,17 +228,36 @@ export const createSourceInjectionTransform = (
         const name = nameFromReadEntity(output);
         const kind =
           typeof output.kind === "string" ? output.kind : DEFAULT_KIND;
+        const mimeType = extractMimeType(output);
         if (name) {
-          entityMeta.set(entityId, { name, kind });
+          entityMeta.set(entityId, { name, kind, mimeType });
         }
+      }
+
+      // Cache metadata from readContentAcrossMatters output.
+      if (
+        toolName === "readContentAcrossMatters" &&
+        typeof output.name === "string" &&
+        output.name
+      ) {
+        entityMeta.set(entityId, {
+          name: output.name,
+          kind: DEFAULT_KIND,
+          mimeType: null,
+        });
       }
 
       let meta = entityMeta.get(entityId);
 
-      // Fallback: look up entity display name from DB.
+      // Fallback: look up entity from DB.
+      // Try workspace-scoped first, then org-scoped
+      // for cross-matter results.
       if (!meta) {
         try {
-          const dbMeta = await nameFromDb(entityId, workspaceId);
+          const dbMeta = workspaceId
+            ? ((await nameFromDb(entityId, workspaceId)) ??
+              (await nameFromDbOrgScoped(entityId, organizationId)))
+            : await nameFromDbOrgScoped(entityId, organizationId);
           if (dbMeta) {
             meta = dbMeta;
             entityMeta.set(entityId, meta);
@@ -171,13 +271,14 @@ export const createSourceInjectionTransform = (
       controller.enqueue({
         type: "source-document",
         sourceId: entityId,
-        mediaType: "application/octet-stream",
+        mediaType: meta?.mimeType ?? "application/octet-stream",
         title: meta?.name ?? "Untitled",
         providerMetadata: {
           stella: {
             entityId,
             workspaceId,
             kind: meta?.kind ?? DEFAULT_KIND,
+            mimeType: meta?.mimeType ?? null,
           },
         },
       });
