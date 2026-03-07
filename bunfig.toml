@@ -1,2 +1,5 @@
 [install]
 linker = "hoisted"
+
+[install.scopes]
+"@stella" = "https://registry.invalid/"
