@@ -43,6 +43,7 @@ export const LIMITS = {
   caseLawMatterLinksPerWorkspace: 1000,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawFacetLimit: 20,
 } as const;
 
 /**

@@ -22,7 +22,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { updateDecisionSearchVector } from "@/api/handlers/case-law/search-vector";
+import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 
 const SOURCE_ID = "seed-src-cz-regional";
@@ -872,13 +872,7 @@ async function seed() {
       updatedAt: now,
     });
 
-    await updateDecisionSearchVector(
-      d.id,
-      d.caseNumber,
-      d.court,
-      d.fulltext ?? null,
-      d.sections ?? null,
-    );
+    await indexDecision(d.id);
 
     insertedCount++;
   }

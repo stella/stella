@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
-type Decision = {
+export type Decision = {
   id: string;
   caseNumber: string;
   ecli: string | null;

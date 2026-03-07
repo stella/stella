@@ -104,9 +104,28 @@ const applyParadedbMigration = async () => {
   console.log("ParadeDB BM25 index created.");
 };
 
+const applyCaseLawSearchMigration = async () => {
+  console.log("Adding tsvector column to case_law_search_documents...");
+
+  await db.execute(sql`
+    ALTER TABLE case_law_search_documents
+      ADD COLUMN IF NOT EXISTS tsv tsvector
+  `);
+
+  console.log("Creating GIN index on case_law tsv column...");
+
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS case_law_search_docs_tsv_idx
+      ON case_law_search_documents USING gin (tsv)
+  `);
+
+  console.log("Case law search migration applied.");
+};
+
 const main = async () => {
   await applyPgFtsMigration();
   await applyParadedbMigration();
+  await applyCaseLawSearchMigration();
   console.log("Search migration applied successfully.");
   process.exit(0);
 };

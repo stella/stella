@@ -4,6 +4,12 @@ import { db } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
+import {
+  escapeAndHighlight,
+  HIGHLIGHT_START,
+  HIGHLIGHT_STOP,
+} from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   parseEntityKind,
@@ -15,44 +21,6 @@ import {
 } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;
-
-// Non-HTML delimiters for pdb.snippet(). The snippet is
-// HTML-escaped server-side, then markers are replaced with
-// <mark> tags. Same approach as the pg-fts provider.
-const HIGHLIGHT_START = "__HL_START__";
-const HIGHLIGHT_STOP = "__HL_STOP__";
-
-const decodeCursor = (
-  cursor: string,
-): { score: number; entityId: string } | null => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString();
-    const [scoreStr, entityId] = decoded.split(":");
-    const score = Number(scoreStr);
-    if (Number.isNaN(score) || !entityId) {
-      return null;
-    }
-    return { score, entityId };
-  } catch {
-    return null;
-  }
-};
-
-const encodeCursor = (score: number, entityId: string): string =>
-  Buffer.from(`${score}:${entityId}`).toString("base64");
-
-/** HTML-escape text, then replace highlight markers. */
-const escapeAndHighlight = (text: string): string => {
-  const escaped = text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#x27;");
-  return escaped
-    .replaceAll(HIGHLIGHT_START, "<mark>")
-    .replaceAll(HIGHLIGHT_STOP, "</mark>");
-};
 
 type RawRow = Record<string, unknown>;
 
@@ -98,7 +66,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
         return sql`AND (
           pdb.score(sd.entity_id)::float8,
           sd.entity_id
-        ) < (${parsed.score}::float8, ${parsed.entityId})`;
+        ) < (${parsed.score}::float8, ${parsed.id})`;
       })()
     : sql``;
 
