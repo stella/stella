@@ -389,6 +389,7 @@ type Messages = {
     "accept": "Accept";
     "actions": "Actions";
     "add": "Add";
+    "all": "All";
     "cancel": "Cancel";
     "category": "Category";
     "columns": "Columns";
@@ -604,6 +605,10 @@ type Messages = {
       "analytics": {
         "description": "Template usage and fill statistics";
         "title": "Analytics";
+      };
+      "caseLaw": {
+        "description": "Court decisions and case law database";
+        "title": "Case Law";
       };
       "clauses": {
         "description": "Reusable clause library";

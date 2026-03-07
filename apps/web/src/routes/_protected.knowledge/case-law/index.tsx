@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -13,6 +13,7 @@ import {
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
+  type SearchFacets,
 } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
 
 export const Route = createFileRoute("/_protected/knowledge/case-law/")({
@@ -24,7 +25,10 @@ function CaseLawIndex() {
   const [filters, setFilters] = useState<DecisionListFilters>({});
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery(decisionsInfiniteOptions(filters));
+    useInfiniteQuery({
+      ...decisionsInfiniteOptions(filters),
+      placeholderData: keepPreviousData,
+    });
 
   // SAFETY: Both list and search branches return the same
   // Decision shape. TS can't unify Eden-inferred and
@@ -34,13 +38,24 @@ function CaseLawIndex() {
     [data],
   );
 
+  // SAFETY: facets shape matches SearchFacets; TS can't unify
+  // Eden-inferred type across the search/list union.
+  const facets = useMemo(
+    () => (data?.pages.at(0)?.facets ?? null) as SearchFacets,
+    [data],
+  );
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">{t("caseLaw.title")}</h1>
       </div>
 
-      <DecisionFilters filters={filters} onFiltersChange={setFilters} />
+      <DecisionFilters
+        facets={facets}
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
 
       <DecisionTable decisions={decisions} isLoading={isLoading} />
 

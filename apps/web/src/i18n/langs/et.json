@@ -386,6 +386,7 @@
     "accept": "Nõustu",
     "actions": "Toimingud",
     "add": "Lisa",
+    "all": "All",
     "cancel": "Tühista",
     "category": "Category",
     "columns": "Columns",
@@ -601,6 +602,10 @@
       "analytics": {
         "description": "Template usage and fill statistics",
         "title": "Analytics"
+      },
+      "caseLaw": {
+        "description": "Browse court decisions across jurisdictions",
+        "title": "Case Law"
       },
       "clauses": {
         "description": "Korduvkasutatav klauslite kogu",

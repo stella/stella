@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BarChart3Icon,
   BotIcon,
+  LandmarkIcon,
   LayoutTemplateIcon,
   LightbulbIcon,
   PlugIcon,
@@ -21,16 +22,22 @@ type Section = {
     | "templates"
     | "clauses"
     | "analytics"
+    | "caseLaw"
     | "skills"
     | "agents"
     | "connectors";
   icon: LucideIcon;
-  to?: "/knowledge/templates" | "/knowledge/clauses" | "/knowledge/analytics";
+  to?:
+    | "/knowledge/templates"
+    | "/knowledge/clauses"
+    | "/knowledge/analytics"
+    | "/knowledge/case-law";
 };
 
 const sections: Section[] = [
   { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
   { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
+  { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case-law" },
   { key: "analytics", icon: BarChart3Icon, to: "/knowledge/analytics" },
   { key: "skills", icon: LightbulbIcon },
   { key: "agents", icon: BotIcon },
