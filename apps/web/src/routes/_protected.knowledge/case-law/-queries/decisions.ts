@@ -25,6 +25,13 @@ export type DecisionListFilters = {
   sourceId?: string;
 };
 
+export type FacetBucket = { value: string; count: number };
+
+export type SearchFacets = {
+  court: FacetBucket[];
+  country: FacetBucket[];
+} | null;
+
 export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
   infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list(filters),
@@ -56,8 +63,12 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,
+            headline: h.headline,
             createdAt: new Date(h.createdAt),
           })),
+          // SAFETY: Eden infers a compatible shape but TS can't
+          // unify it with our hand-defined SearchFacets type.
+          facets: response.data.facets as SearchFacets,
           nextCursor: response.data.nextCursor,
         };
       }
@@ -75,7 +86,9 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      // SAFETY: List branch has no facets; null is a valid
+      // SearchFacets value.
+      return { ...response.data, facets: null as SearchFacets };
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,

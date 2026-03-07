@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
@@ -17,6 +18,7 @@ export type Decision = {
   decisionDate: string | null;
   decisionType: string | null;
   sourceUrl: string | null;
+  headline?: string | null;
   createdAt: Date;
 };
 
@@ -30,42 +32,57 @@ const columnHelper = createColumnHelper<Decision>();
 export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
   const t = useTranslations();
 
-  const columns = [
-    columnHelper.accessor("caseNumber", {
-      header: t("caseLaw.columns.caseNumber"),
-      cell: (info) => (
-        <Link
-          className="font-medium text-foreground hover:underline"
-          params={{ decisionId: info.row.original.id }}
-          to="/knowledge/case-law/$decisionId"
-        >
-          {info.getValue()}
-        </Link>
-      ),
-    }),
-    columnHelper.accessor("court", {
-      header: t("caseLaw.columns.court"),
-    }),
-    columnHelper.accessor("country", {
-      header: t("caseLaw.columns.country"),
-      cell: (info) => (
-        <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-          {info.getValue()}
-        </span>
-      ),
-    }),
-    columnHelper.accessor("decisionDate", {
-      header: t("caseLaw.columns.decisionDate"),
-      cell: (info) => {
-        const value = info.getValue();
-        return value ?? "—";
-      },
-    }),
-    columnHelper.accessor("decisionType", {
-      header: t("caseLaw.columns.decisionType"),
-      cell: (info) => info.getValue() ?? "—",
-    }),
-  ];
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor("caseNumber", {
+        header: t("caseLaw.columns.caseNumber"),
+        cell: (info) => {
+          const { id, headline } = info.row.original;
+          return (
+            <div>
+              <Link
+                className="font-medium text-foreground hover:underline"
+                params={{ decisionId: id }}
+                to="/knowledge/case-law/$decisionId"
+              >
+                {info.getValue()}
+              </Link>
+              {headline && (
+                <p
+                  className="mt-0.5 line-clamp-2 text-xs text-muted-foreground [&_mark]:bg-yellow-200/50 [&_mark]:font-medium [&_mark]:text-foreground dark:[&_mark]:bg-yellow-500/20"
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: headline is escaped server-side (escapeAndHighlight) and only contains <mark> tags
+                  dangerouslySetInnerHTML={{ __html: headline }}
+                />
+              )}
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor("court", {
+        header: t("caseLaw.columns.court"),
+      }),
+      columnHelper.accessor("country", {
+        header: t("caseLaw.columns.country"),
+        cell: (info) => (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            {info.getValue()}
+          </span>
+        ),
+      }),
+      columnHelper.accessor("decisionDate", {
+        header: t("caseLaw.columns.decisionDate"),
+        cell: (info) => {
+          const value = info.getValue();
+          return value ?? "—";
+        },
+      }),
+      columnHelper.accessor("decisionType", {
+        header: t("caseLaw.columns.decisionType"),
+        cell: (info) => info.getValue() ?? "—",
+      }),
+    ],
+    [t],
+  );
 
   const table = useReactTable({
     data: decisions,
