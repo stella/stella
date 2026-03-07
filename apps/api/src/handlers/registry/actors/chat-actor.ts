@@ -26,6 +26,7 @@ import type {
 import { db } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { createCaseLawTools } from "@/api/handlers/registry/actors/chat-case-law-tools";
 import {
   collectThreadMentions,
   extractEntityWorkspaceMap,
@@ -45,12 +46,14 @@ import { validateUserActorSession } from "@/api/handlers/registry/utils";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
+const caseLawTools = createCaseLawTools();
 const MAX_TOOL_STEPS = 5;
-/** User turns to keep in the sliding window. Tool-enabled
- *  threads need a larger window because each agentic step
- *  produces multiple intermediate messages (tool-call +
- *  tool-result pairs). */
-const MESSAGE_WINDOW = 4;
+/** User turns to keep in the sliding window. All threads
+ *  have tools (at minimum case law search), so the window
+ *  must accommodate intermediate messages (tool-call +
+ *  tool-result pairs). Workspace threads get a larger
+ *  window due to more tool variety. */
+const MESSAGE_WINDOW = 10;
 const MESSAGE_WINDOW_TOOLS = 20;
 
 const openrouter = createOpenRouter({
@@ -198,7 +201,9 @@ const buildSystemPrompt = async (
       "contents, documents, or files, you MUST call the " +
       "available tools (listEntities, searchMatter, " +
       "readEntity, readContent) to retrieve real data " +
-      "before answering. Never ask the user to call tools " +
+      "before answering. When the user asks about case " +
+      "law, court decisions, or legal precedents, use " +
+      "searchCaseLaw. Never ask the user to call tools " +
       "themselves. Never describe tools to the user. " +
       "Just use them directly.",
     "",
@@ -227,9 +232,11 @@ const buildSystemPrompt = async (
     "When citing a specific document or file, always use a " +
       "markdown link with this exact format:\n" +
       "[Document Name](#stella-entity=ENTITY_ID)\n" +
-      "The system renders this as a clickable reference. " +
-      "Every document mention in your response MUST use " +
-      "this link syntax.",
+      "When citing a court decision, use:\n" +
+      "[Case Number](#stella-decision=DECISION_ID)\n" +
+      "The system renders these as clickable references. " +
+      "Every document or decision mention MUST use " +
+      "the appropriate link syntax.",
     "",
     `The matter contains ${entityCount.toLocaleString()} entities.`,
     propList ? `\nAvailable metadata columns:\n${propList}` : "",
@@ -279,7 +286,9 @@ const buildMultiContextPrompt = async (
     "",
     "The user may reference matters, contacts, templates, " +
       "or clauses in their messages. Use the available tools " +
-      "to explore these resources when answering.",
+      "to explore these resources when answering. When the " +
+      "user asks about case law, court decisions, or legal " +
+      "precedents, use searchCaseLaw.",
     "",
     "CRITICAL: You must NEVER guess, infer, or fabricate " +
       "document content based on file names, user messages, " +
@@ -293,7 +302,9 @@ const buildMultiContextPrompt = async (
     "When citing documents, use markdown links:\n" +
       "[Document Name](#stella-entity=ENTITY_ID)\n" +
       "When citing matters, use:\n" +
-      "[Matter Name](#stella-workspace=WORKSPACE_ID)",
+      "[Matter Name](#stella-workspace=WORKSPACE_ID)\n" +
+      "When citing court decisions, use:\n" +
+      "[Case Number](#stella-decision=DECISION_ID)",
     "",
     matterLines ? `Referenced matters:\n${matterLines}` : "",
     entityLines
@@ -301,6 +312,32 @@ const buildMultiContextPrompt = async (
         "calling tools):\n" +
         entityLines
       : "",
+    buildUserContextBlock(userContext),
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+/** Build a system prompt for a non-workspace thread. Case law
+ *  search is available globally for all authenticated users. */
+const buildGlobalSystemPrompt = (userContext: UserContext | null): string => {
+  return [
+    "You are Stella, an AI assistant for legal professionals.",
+    "",
+    "You can search the case law library for court decisions " +
+      "using the searchCaseLaw tool. Use it when the user " +
+      "asks about case law, court decisions, legal " +
+      "precedents, or judicial rulings. Never ask the " +
+      "user to call tools themselves. Just use them " +
+      "directly.",
+    "",
+    "Never expose internal IDs to the user in plain text.",
+    "",
+    "When citing a court decision, use this format:\n" +
+      "[Case Number](#stella-decision=DECISION_ID)\n" +
+      "The system renders this as a clickable link to " +
+      "the decision viewer.",
+    "",
     buildUserContextBlock(userContext),
   ]
     .filter(Boolean)
@@ -459,11 +496,11 @@ export const chatActor = actor({
           // 2. Workspace + mentioned others → multi-matter tools
           //    (includes the bound workspace in the allowed set)
           // 3. No workspace + mentions → multi-matter tools
-          // 4. No workspace + no mentions → org tools only
+          // 4. No workspace + no mentions → case law only
           const hasMentionedWorkspaces = validatedMentionedIds.length > 0;
           const hasAnyContext = !!validatedWsId || hasMentionedWorkspaces;
 
-          let tools: ToolSet | undefined;
+          let tools: ToolSet;
           let system: string | undefined;
 
           if (validatedWsId && !hasMentionedWorkspaces) {
@@ -476,6 +513,7 @@ export const chatActor = actor({
               ...createCrossMatterTools({
                 organizationId: orgId,
               }),
+              ...caseLawTools,
             };
             system = await buildSystemPrompt(validatedWsId, orgId, ctx);
           } else if (validatedWsId && hasMentionedWorkspaces) {
@@ -492,6 +530,7 @@ export const chatActor = actor({
                 organizationId: orgId,
               }),
               ...createOrgTools({ organizationId: orgId }),
+              ...caseLawTools,
             };
             system = await buildMultiContextPrompt(
               allIds,
@@ -507,6 +546,7 @@ export const chatActor = actor({
                 organizationId: orgId,
               }),
               ...createOrgTools({ organizationId: orgId }),
+              ...caseLawTools,
             };
             system = await buildMultiContextPrompt(
               validatedMentionedIds,
@@ -515,8 +555,9 @@ export const chatActor = actor({
               entityWsMap,
             );
           } else {
-            // No workspace context at all
-            system = buildUserContextBlock(ctx) || undefined;
+            // No workspace context: case law search only
+            tools = { ...caseLawTools };
+            system = buildGlobalSystemPrompt(ctx);
           }
 
           // Strip workspace prefixes from entity mention links
@@ -537,9 +578,7 @@ export const chatActor = actor({
             model: getModel(modelId),
             system,
             tools,
-            stopWhen: hasAnyContext
-              ? stepCountIs(MAX_TOOL_STEPS)
-              : stepCountIs(1),
+            stopWhen: stepCountIs(MAX_TOOL_STEPS),
             messages: await convertToModelMessages(cleanMessages),
             abortSignal: runSignal,
           });
@@ -654,7 +693,7 @@ export const chatActor = actor({
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
       if (!rawWsId) {
-        return { prompt: buildUserContextBlock(ctx) || null };
+        return { prompt: buildGlobalSystemPrompt(ctx) };
       }
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
