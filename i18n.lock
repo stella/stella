@@ -243,7 +243,12 @@ checksums:
     caseLaw/viewer/viewOriginal: 6bf44f3127eaea754aedcc4980b0016e
     chat/deleteThread: 2baeef5ad5eea6edc0761bf30bee9080
     chat/greeting: 4baa45b6e6d953ea40b802910f235026
-    chat/mention/noResults: 3cd5f0f62e575431f86bba66d10370bd
+    chat/mention/category/clauses: 462579754cf0f9dab85e687c243a6ed5
+    chat/mention/category/contacts: d5b6c3f890b3904eaf5754081945c03d
+    chat/mention/category/entities: 596f3af8f0de5f87ce3fde05eaf69c4a
+    chat/mention/category/matters: f898530912102eca13389d49c63c05ae
+    chat/mention/category/templates: 8ed62f56c81fa96c0f3182acb331bf63
+    chat/mention/noResults: 0e9b73265c6542240f5a3bf6b43e9280
     chat/newChat: 3137bd8485c6f0fee4b0bbcce4eecdad
     chat/noThreads: 963962a6da064c88c11036051f8d8576
     chat/placeholder: 0abf9d41e0b5c5567c3833fd63048398
