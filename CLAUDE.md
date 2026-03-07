@@ -63,9 +63,10 @@ fetch the relevant docs first using `list_doc_sources` and
 `fetch_docs` tools.
 
 **Covered libraries:** Elysia, Drizzle, TanStack (Router, Query,
-Form, Table), React, Valibot, Zod, TipTap, Bun, better-auth.
+Form, Table), React, Valibot, Zod, TipTap, Bun, better-auth,
+PostHog, Zustand.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, Biome, Zustand.
+**Not covered (no `llms.txt`):** Tailwind CSS, Biome.
 For these, use `WebFetch` or `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

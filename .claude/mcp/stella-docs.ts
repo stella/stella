@@ -14,6 +14,8 @@ const SOURCES: Record<string, string> = {
   BetterAuth: "https://www.better-auth.com/llms.txt",
   Turborepo: "https://turborepo.dev/llms.txt",
   Rivet: "https://rivet.dev/llms.txt",
+  PostHog: "https://posthog.com/llms.txt",
+  Zustand: "https://zustand.docs.pmnd.rs/llms.txt",
 };
 
 const server = new McpServer({
