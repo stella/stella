@@ -9,7 +9,6 @@ import type {
   ClauseExportItem,
   ClauseExportPayload,
 } from "./import-export-schema";
-import type { ClauseBody } from "./types";
 
 export const exportQuerySchema = t.Object({
   ids: t.Optional(t.String()),
@@ -83,8 +82,7 @@ export const exportHandler = async ({ organizationId, query }: ExportProps) => {
     description: row.description,
     usageNotes: row.usageNotes,
     language: row.language,
-    // SAFETY: body is ClauseBody stored as JSONB
-    body: row.body as unknown as ClauseBody,
+    body: row.body,
     // SAFETY: metadata is Record<string, unknown> stored as JSONB
     metadata: row.metadata as Record<string, unknown> | null,
     categoryName: row.categoryId

@@ -55,12 +55,19 @@ export const ClauseImportDialog = ({
       selected
         .text()
         .then((text) => {
-          const parsed = JSON.parse(text) as {
-            clauses?: unknown[];
-          };
-          setPreviewCount(
-            Array.isArray(parsed.clauses) ? parsed.clauses.length : 0,
-          );
+          const parsed: unknown = JSON.parse(text);
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "clauses" in parsed &&
+            Array.isArray((parsed as Record<string, unknown>).clauses)
+          ) {
+            setPreviewCount(
+              ((parsed as Record<string, unknown>).clauses as unknown[]).length,
+            );
+          } else {
+            setPreviewCount(0);
+          }
         })
         .catch(() => {
           setPreviewCount(null);

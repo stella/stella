@@ -8,7 +8,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { isClauseExportPayload } from "./import-export-schema";
 import { updateSearchVector } from "./search-vector";
-import type { ClauseBody } from "./types";
 
 export const importBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
@@ -131,8 +130,7 @@ export const importHandler = async ({
         description: item.description ?? null,
         usageNotes: item.usageNotes ?? null,
         language: item.language ?? null,
-        // SAFETY: body validated by isClauseExportPayload
-        body: item.body as unknown as ClauseBody,
+        body: item.body,
         metadata: item.metadata ?? null,
         currentVersion: 1,
         createdBy: userId,
@@ -142,8 +140,7 @@ export const importHandler = async ({
         id: versionId,
         clauseId,
         version: 1,
-        // SAFETY: body validated by isClauseExportPayload
-        body: item.body as unknown as ClauseBody,
+        body: item.body,
       });
 
       insertedIds.push(clauseId);
@@ -169,8 +166,7 @@ export const importHandler = async ({
         c.id,
         c.title,
         c.description,
-        // SAFETY: body is ClauseBody stored as JSONB
-        c.body as unknown as ClauseBody,
+        c.body,
         // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
       ).catch(() => {});
     }

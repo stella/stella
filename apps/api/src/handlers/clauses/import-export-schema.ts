@@ -1,4 +1,4 @@
-import type { ClauseBody } from "./types";
+import { isClauseBody, type ClauseBody } from "./types";
 
 export type ClauseExportItem = {
   title: string;
@@ -43,7 +43,7 @@ export const isClauseExportPayload = (
     if (typeof c.title !== "string" || !c.title) {
       return false;
     }
-    if (!Array.isArray(c.body)) {
+    if (!isClauseBody(c.body)) {
       return false;
     }
   }

@@ -10,25 +10,12 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
-const TOOL_META: Record<string, { icon: typeof SearchIcon; labelKey: string }> =
-  {
-    searchMatter: {
-      icon: SearchIcon,
-      labelKey: "chat.tool.searchMatter",
-    },
-    listEntities: {
-      icon: ListIcon,
-      labelKey: "chat.tool.listEntities",
-    },
-    readEntity: {
-      icon: FileTextIcon,
-      labelKey: "chat.tool.readEntity",
-    },
-    readContent: {
-      icon: FileTextIcon,
-      labelKey: "chat.tool.readContent",
-    },
-  };
+const TOOL_ICONS: Record<string, typeof SearchIcon | undefined> = {
+  searchMatter: SearchIcon,
+  listEntities: ListIcon,
+  readEntity: FileTextIcon,
+  readContent: FileTextIcon,
+};
 
 export const ToolCallCard = ({
   part,
@@ -38,10 +25,14 @@ export const ToolCallCard = ({
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
   const name = getToolName(part);
-  const meta = TOOL_META[name];
-  const Icon = meta?.icon ?? SearchIcon;
-  // biome-ignore lint/suspicious/noExplicitAny: i18n key is dynamic
-  const label = meta ? t(meta.labelKey as any) : name;
+  const Icon = TOOL_ICONS[name] ?? SearchIcon;
+  const toolLabels: Record<string, string> = {
+    searchMatter: t("chat.tool.searchMatter"),
+    listEntities: t("chat.tool.listEntities"),
+    readEntity: t("chat.tool.readEntity"),
+    readContent: t("chat.tool.readContent"),
+  };
+  const label = toolLabels[name] ?? name;
 
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available";

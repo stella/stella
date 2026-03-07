@@ -120,7 +120,11 @@ export const WorkspaceBreadcrumb = ({
           onClick={() => {
             try {
               const raw = localStorage.getItem("matters_overview_config");
-              const config = raw ? JSON.parse(raw) : {};
+              const parsed: unknown = raw ? JSON.parse(raw) : null;
+              const config: Record<string, unknown> =
+                typeof parsed === "object" && parsed !== null
+                  ? (parsed as Record<string, unknown>)
+                  : {};
               config.clientFilter = workspace.client?.id ?? null;
               localStorage.setItem(
                 "matters_overview_config",
