@@ -8,12 +8,14 @@ import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
 import { readWorkspacesHandler } from "@/api/handlers/workspaces/read";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
+import { readLastActiveWorkspaceHandler } from "@/api/handlers/workspaces/read-last-active";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
 import {
   updateWorkspaceBodySchema,
   updateWorkspaceHandler,
 } from "@/api/handlers/workspaces/update-by-id";
+import { updateLastActiveWorkspaceHandler } from "@/api/handlers/workspaces/update-last-active";
 import {
   createWorkspaceContactBodySchema,
   createWorkspaceContactHandler,
@@ -47,6 +49,12 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
       invalidateQuery: true,
       body: createWorkspacesBodySchema,
     },
+  )
+  .get("/last-active", (ctx) =>
+    readLastActiveWorkspaceHandler({
+      userId: ctx.user.id,
+      organizationId: ctx.session.activeOrganizationId,
+    }),
   )
   .group(
     "/:workspaceId",
@@ -90,6 +98,13 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             body: updateWorkspaceBodySchema,
             invalidateQuery: true,
           },
+        )
+        .post("/last-active", (ctx) =>
+          updateLastActiveWorkspaceHandler({
+            userId: ctx.user.id,
+            organizationId: ctx.session.activeOrganizationId,
+            workspaceId: ctx.workspaceId,
+          }),
         )
         .delete(
           "/",
