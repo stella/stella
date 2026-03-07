@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { eventHandler } from "@/lib/rivet";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
@@ -84,6 +85,13 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       qc.ensureQueryData(propertiesOptions(wsId)),
       qc.ensureQueryData(justificationsOptions(wsId)),
     ]);
+
+    // Fire-and-forget: track last active workspace for
+    // redirect-on-load.
+    api
+      .workspaces({ workspaceId: wsId })
+      ["last-active"].post()
+      .catch(() => undefined);
   },
 });
 

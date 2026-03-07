@@ -7,6 +7,7 @@ import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
 import { db } from "@/api/db";
+import { member } from "@/api/db/auth-schema";
 import {
   entities,
   entityVersions,
@@ -167,6 +168,14 @@ export const deleteWorkspaceHandler = async ({
       // Delete entities: cascades to entityVersions →
       // fields → justifications.
       await tx.delete(entities).where(eq(entities.workspaceId, workspaceId));
+
+      // Clear lastActiveWorkspaceId for members pointing
+      // to this workspace (no FK constraint due to circular
+      // schema dependency).
+      await tx
+        .update(member)
+        .set({ lastActiveWorkspaceId: null })
+        .where(eq(member.lastActiveWorkspaceId, workspaceId));
 
       // Delete workspace: cascades to properties →
       // propertyDependencies. Entities already gone.

@@ -17,14 +17,15 @@ export const isAcceptInvitationRedirect = (path: string) =>
 const isSafeRedirectPath = (s: string) =>
   s.startsWith("/") && !s.startsWith("//");
 
-const WORKSPACES_ROUTE: FileRouteTypes["to"] = "/workspaces";
+const DEFAULT_REDIRECT: FileRouteTypes["to"] = "/";
 
 /**
  * Valibot schema for redirectTo search param.
- * Validates that the URL is safe (prevents open-redirect attacks) and defaults to /workspaces.
+ * Validates that the URL is safe (prevents open-redirect attacks)
+ * and defaults to "/" (which resolves last-active workspace).
  * Only allows relative paths starting with "/" but not "//".
  */
 export const redirectToSchema = v.pipe(
-  v.optional(v.string(), WORKSPACES_ROUTE),
-  v.transform((s) => (isSafeRedirectPath(s) ? s : WORKSPACES_ROUTE)),
+  v.optional(v.string(), DEFAULT_REDIRECT),
+  v.transform((s) => (isSafeRedirectPath(s) ? s : DEFAULT_REDIRECT)),
 );
