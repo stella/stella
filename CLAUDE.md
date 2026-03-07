@@ -273,11 +273,11 @@ transactions as short as possible. Design for an external pooler
 These exist, are known, and do not need fixing right now; but
 new code must not make them worse:
 
-- No Redis / caching layer (session lookups hit DB every request)
-- No rate limiting middleware
+- No session caching (session lookups hit DB every request;
+  Redis is available for rate limiting but not yet used as a
+  general cache)
 - No granular RBAC (auth and workspace-level access control are
   enforced; role-based permissions within a workspace are not)
-- No full-text search engine
 - Frontend entity table has no virtualization or server pagination
 - Random nanoid PKs (B-tree insert fragmentation at scale;
   prefer time-ordered IDs like ULIDs for new high-volume tables)
