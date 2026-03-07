@@ -256,6 +256,7 @@ checksums:
     chat/tool/listEntities: d803bead0f756a1e6fd401c3eb78ecb1
     chat/tool/readContent: 11c6eaa9b26b244dc9fd5fe9c62fd61f
     chat/tool/readEntity: 4d67b87f96b3f72b804aa98837a4d46f
+    chat/tool/searchCaseLaw: a2c53deea65c6ad307941beb63b64791
     chat/tool/searchMatter: 99c147d934e6f6db3e6c280c5fd142fa
     clauses/addVariant: b4c1bca0a1ceb35d4fd331aa42a94234
     clauses/allClauses: 80291c34697c38769cfc882e3cbe200d
