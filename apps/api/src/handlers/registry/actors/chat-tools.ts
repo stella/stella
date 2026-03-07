@@ -57,89 +57,174 @@ const formatFieldValue = (content: FieldContent): string => {
   }
 };
 
+// -----------------------------------------------------------------
+// Matter tools (workspace-scoped, explicit workspaceId)
+// -----------------------------------------------------------------
+
 type MatterToolsContext = {
-  workspaceId: SafeId<"workspace">;
+  /** Validated workspace IDs the AI is allowed to access. */
+  allowedWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
 };
 
-export const createMatterTools = ({
-  workspaceId,
-  organizationId,
-}: MatterToolsContext) => ({
-  searchMatter: tool({
-    description:
-      "Search for documents and files within the current " +
-      "matter using full-text search. Returns matching " +
-      "entity names with highlighted excerpts.",
-    inputSchema: z.object({
-      query: z
-        .string()
-        .max(LIMITS.searchQueryMaxLength)
-        .describe("Search query (keywords or phrases)"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(20)
-        .optional()
-        .default(10)
-        .describe("Max results to return"),
-    }),
-    execute: async ({ query, limit }) => {
-      const provider = getSearchProvider();
-      const result = await provider.search({
-        query,
-        organizationId,
-        workspaceId,
-        limit,
-      });
-      return {
-        totalCount: result.totalCount,
-        hits: result.hits.map((hit) => ({
-          entityId: hit.entityId,
-          name: hit.title,
-          kind: hit.kind,
-          headline: hit.headline,
-        })),
-      };
-    },
-  }),
+const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
+  const allowedSet: ReadonlySet<string> = new Set(allowedIds);
+  return z
+    .string()
+    .describe(
+      "The workspace/matter ID to operate on. " +
+        `Allowed values: ${allowedIds.join(", ")}`,
+    )
+    .refine((id) => allowedSet.has(id), {
+      message: "Workspace not in the allowed set",
+    })
+    .transform((id) => toSafeId<"workspace">(id));
+};
 
-  listEntities: tool({
-    description:
-      "List documents, files, tasks, and folders in the " +
-      "current matter. Returns names, types, dates, and " +
-      "custom property values (metadata columns).",
-    inputSchema: z.object({
-      kind: z
-        .enum(["document", "folder", "task", "message"])
-        .optional()
-        .describe("Filter by entity type"),
-      parentId: z
-        .string()
-        .optional()
-        .describe("List contents of a specific folder"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .default(50)
-        .describe("Max entities to return"),
-    }),
-    execute: async ({ kind, parentId, limit }) => {
-      const [entities, properties] = await Promise.all([
-        db.query.entities.findMany({
-          where: {
-            workspaceId: {
-              eq: workspaceId,
-            },
-            ...(kind ? { kind } : {}),
-            ...(parentId ? { parentId } : {}),
-          },
-          orderBy: { createdAt: "asc" },
+export const createMatterTools = ({
+  allowedWorkspaceIds,
+  organizationId,
+}: MatterToolsContext) => {
+  const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
+
+  return {
+    searchMatter: tool({
+      description:
+        "Search for documents and files within a matter " +
+        "using full-text search. Returns matching entity " +
+        "names with highlighted excerpts.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        query: z
+          .string()
+          .max(LIMITS.searchQueryMaxLength)
+          .describe("Search query (keywords or phrases)"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .default(10)
+          .describe("Max results to return"),
+      }),
+      execute: async ({ workspaceId, query, limit }) => {
+        const provider = getSearchProvider();
+        const result = await provider.search({
+          query,
+          organizationId,
+          workspaceId,
           limit,
+        });
+        return {
+          workspaceId,
+          totalCount: result.totalCount,
+          hits: result.hits.map((hit) => ({
+            entityId: hit.entityId,
+            name: hit.title,
+            kind: hit.kind,
+            headline: hit.headline,
+          })),
+        };
+      },
+    }),
+
+    listEntities: tool({
+      description:
+        "List documents, files, tasks, and folders in a " +
+        "matter. Returns names, types, dates, and custom " +
+        "property values (metadata columns).",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        kind: z
+          .enum(["document", "folder", "task", "message"])
+          .optional()
+          .describe("Filter by entity type"),
+        parentId: z
+          .string()
+          .optional()
+          .describe("List contents of a specific folder"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .default(50)
+          .describe("Max entities to return"),
+      }),
+      execute: async ({ workspaceId, kind, parentId, limit }) => {
+        const [ents, properties] = await Promise.all([
+          db.query.entities.findMany({
+            where: {
+              workspaceId: { eq: workspaceId },
+              ...(kind ? { kind } : {}),
+              ...(parentId ? { parentId } : {}),
+            },
+            orderBy: { createdAt: "asc" },
+            limit,
+            columns: {
+              id: true,
+              kind: true,
+              name: true,
+              parentId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            with: {
+              currentVersion: {
+                columns: { id: true },
+                with: {
+                  fields: {
+                    columns: {
+                      propertyId: true,
+                      content: true,
+                    },
+                  },
+                },
+              },
+            },
+          }),
+          db.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: { id: true, name: true },
+          }),
+        ]);
+        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
+
+        return ents.map((entity) => ({
+          workspaceId,
+          entityId: entity.id,
+          kind: entity.kind,
+          name: entity.name,
+          parentId: entity.parentId,
+          createdAt: entity.createdAt.toISOString(),
+          updatedAt: entity.updatedAt?.toISOString() ?? null,
+          fields:
+            entity.currentVersion?.fields
+              .map((f) => ({
+                property: propNameById.get(f.propertyId) ?? f.propertyId,
+                value: formatFieldValue(f.content),
+              }))
+              .filter((f) => f.value !== "") ?? [],
+        }));
+      },
+    }),
+
+    readEntity: tool({
+      description:
+        "Get detailed information about a specific entity " +
+        "including all its property values (metadata).",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        entityId: z.string().describe("The entity ID to read"),
+      }),
+      execute: async ({ workspaceId, entityId }) => {
+        const entity = await db.query.entities.findFirst({
+          where: {
+            id: entityId,
+            workspaceId: { eq: workspaceId },
+          },
           columns: {
             id: true,
             kind: true,
@@ -149,6 +234,8 @@ export const createMatterTools = ({
             updatedAt: true,
           },
           with: {
+            createdByUser: { columns: { name: true } },
+            versions: { columns: { id: true } },
             currentVersion: {
               columns: { id: true },
               with: {
@@ -161,180 +248,152 @@ export const createMatterTools = ({
               },
             },
           },
-        }),
-        db.query.properties.findMany({
-          where: {
-            workspaceId: {
-              eq: workspaceId,
-            },
-          },
+        });
+
+        if (!entity) {
+          return { error: "Entity not found in this matter" };
+        }
+
+        const properties = await db.query.properties.findMany({
+          where: { workspaceId: { eq: workspaceId } },
           columns: { id: true, name: true },
-        }),
-      ]);
-      const propNameById = new Map(properties.map((p) => [p.id, p.name]));
+        });
+        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
 
-      return entities.map((entity) => ({
-        entityId: entity.id,
-        kind: entity.kind,
-        name: entity.name,
-        parentId: entity.parentId,
-        createdAt: entity.createdAt.toISOString(),
-        updatedAt: entity.updatedAt?.toISOString() ?? null,
-        fields:
-          entity.currentVersion?.fields
-            .map((f) => ({
-              property: propNameById.get(f.propertyId) ?? f.propertyId,
-              value: formatFieldValue(f.content),
-            }))
-            .filter((f) => f.value !== "") ?? [],
-      }));
-    },
-  }),
-
-  readEntity: tool({
-    description:
-      "Get detailed information about a specific entity " +
-      "including all its property values (metadata).",
-    inputSchema: z.object({
-      entityId: z.string().describe("The entity ID to read"),
-    }),
-    execute: async ({ entityId }) => {
-      const entity = await db.query.entities.findFirst({
-        where: {
-          id: entityId,
-          workspaceId: {
-            eq: workspaceId,
-          },
-        },
-        columns: {
-          id: true,
-          kind: true,
-          name: true,
-          parentId: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        with: {
-          createdByUser: {
-            columns: { name: true },
-          },
-          versions: {
-            columns: { id: true },
-          },
-          currentVersion: {
-            columns: { id: true },
-            with: {
-              fields: {
-                columns: {
-                  propertyId: true,
-                  content: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!entity) {
-        return { error: "Entity not found in this matter" };
-      }
-
-      const properties = await db.query.properties.findMany({
-        where: {
-          workspaceId: {
-            eq: workspaceId,
-          },
-        },
-        columns: { id: true, name: true },
-      });
-      const propNameById = new Map(properties.map((p) => [p.id, p.name]));
-
-      return {
-        entityId: entity.id,
-        kind: entity.kind,
-        name: entity.name,
-        parentId: entity.parentId,
-        createdAt: entity.createdAt.toISOString(),
-        updatedAt: entity.updatedAt?.toISOString() ?? null,
-        createdBy: entity.createdByUser?.name ?? null,
-        versionCount: entity.versions.length,
-        fields:
-          entity.currentVersion?.fields
-            .map((f) => ({
-              property: propNameById.get(f.propertyId) ?? f.propertyId,
-              value: formatFieldValue(f.content),
-            }))
-            .filter((f) => f.value !== "") ?? [],
-      };
-    },
-  }),
-
-  readContent: tool({
-    description:
-      "Read the extracted text content of a document. Use " +
-      "this to read actual file contents, not just metadata. " +
-      "Returns up to 8000 characters of extracted text.",
-    inputSchema: z.object({
-      entityId: z.string().describe("The entity ID whose content to read"),
-    }),
-    execute: async ({ entityId }) => {
-      const row = await db.query.extractedContent.findFirst({
-        where: {
-          entityId,
-          organizationId: { eq: organizationId },
-        },
-        with: {
-          entity: {
-            columns: { workspaceId: true },
-          },
-        },
-      });
-
-      if (!row) {
         return {
-          error:
-            "No extracted content available for this entity. " +
-            "The file may not have been processed yet or its " +
-            "format is not supported for text extraction.",
+          workspaceId,
+          entityId: entity.id,
+          kind: entity.kind,
+          name: entity.name,
+          parentId: entity.parentId,
+          createdAt: entity.createdAt.toISOString(),
+          updatedAt: entity.updatedAt?.toISOString() ?? null,
+          createdBy: entity.createdByUser?.name ?? null,
+          versionCount: entity.versions.length,
+          fields:
+            entity.currentVersion?.fields
+              .map((f) => ({
+                property: propNameById.get(f.propertyId) ?? f.propertyId,
+                value: formatFieldValue(f.content),
+              }))
+              .filter((f) => f.value !== "") ?? [],
         };
-      }
+      },
+    }),
 
-      if (row.entity?.workspaceId !== workspaceId) {
-        return { error: "Entity not found in this matter" };
-      }
+    readContent: tool({
+      description:
+        "Read the extracted text content of a document. Use " +
+        "this to read actual file contents, not just metadata. " +
+        "Returns up to 8000 characters of extracted text.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        entityId: z.string().describe("The entity ID whose content to read"),
+      }),
+      execute: async ({ workspaceId, entityId }) => {
+        const row = await db.query.extractedContent.findFirst({
+          where: {
+            entityId,
+            organizationId: { eq: organizationId },
+          },
+          with: {
+            entity: { columns: { workspaceId: true } },
+          },
+        });
 
-      const plaintext = await decryptContent(
-        organizationId,
-        row.ciphertext,
-        row.iv,
-      );
+        if (!row) {
+          return {
+            error:
+              "No extracted content available for this entity. " +
+              "The file may not have been processed yet or its " +
+              "format is not supported for text extraction.",
+          };
+        }
 
-      const truncated = plaintext.length > CONTENT_MAX_CHARS;
-      const text = truncated
-        ? plaintext.slice(0, CONTENT_MAX_CHARS)
-        : plaintext;
+        if (row.entity?.workspaceId !== workspaceId) {
+          return { error: "Entity not found in this matter" };
+        }
 
-      return {
-        entityId,
-        charCount: row.charCount,
-        truncated,
-        text,
-      };
-    },
-  }),
-});
+        const plaintext = await decryptContent(
+          organizationId,
+          row.ciphertext,
+          row.iv,
+        );
+
+        const truncated = plaintext.length > CONTENT_MAX_CHARS;
+        const text = truncated
+          ? plaintext.slice(0, CONTENT_MAX_CHARS)
+          : plaintext;
+
+        return {
+          workspaceId,
+          entityId,
+          charCount: row.charCount,
+          truncated,
+          text,
+        };
+      },
+    }),
+
+    searchContent: tool({
+      description:
+        "Search across document text content within a " +
+        "matter. Returns matching passages from documents " +
+        "with document name and entity ID. Use this to find " +
+        "specific clauses, terms, or information across " +
+        "all documents without reading each one individually.",
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        query: z
+          .string()
+          .max(LIMITS.searchQueryMaxLength)
+          .describe("Text or keywords to search for"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .default(5)
+          .describe("Max results (default: 5)"),
+      }),
+      execute: async ({ workspaceId, query, limit }) => {
+        const provider = getSearchProvider();
+        const result = await provider.searchContent({
+          query,
+          organizationId,
+          workspaceId,
+          limit,
+        });
+        const truncated = result.totalCount > result.hits.length;
+        return {
+          workspaceId,
+          totalCount: result.totalCount,
+          truncated,
+          ...(truncated && {
+            note: `Showing ${result.hits.length} of ${result.totalCount} matches. Refine your query for more targeted results.`,
+          }),
+          results: result.hits.map((hit) => ({
+            entityId: hit.entityId,
+            name: hit.title,
+            kind: hit.kind,
+            passage: hit.passage,
+          })),
+        };
+      },
+    }),
+  };
+};
 
 // -----------------------------------------------------------------
-// Cross-matter search (available in workspace-scoped threads)
+// Org-level tools (always available)
 // -----------------------------------------------------------------
 
-type CrossMatterContext = {
+type OrgToolsContext = {
   organizationId: SafeId<"organization">;
 };
 
-export const createCrossMatterTools = ({
-  organizationId,
-}: CrossMatterContext) => ({
+export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
   searchAcrossMatters: tool({
     description:
       "Search for documents across ALL matters in the " +
@@ -426,265 +485,7 @@ export const createCrossMatterTools = ({
       };
     },
   }),
-});
 
-// -----------------------------------------------------------------
-// Multi-matter tools (for cross-workspace mentions)
-// -----------------------------------------------------------------
-
-type MultiMatterToolsContext = {
-  /** Validated workspace IDs the user has mentioned. */
-  allowedWorkspaceIds: SafeId<"workspace">[];
-  organizationId: SafeId<"organization">;
-};
-
-const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) =>
-  z
-    .string()
-    .describe(
-      "The workspace/matter ID to operate on. " +
-        `Allowed values: ${allowedIds.join(", ")}`,
-    )
-    .refine((id) => allowedIds.includes(id as SafeId<"workspace">), {
-      message: "Workspace not in the allowed set",
-    })
-    .transform((id) => toSafeId<"workspace">(id));
-
-export const createMultiMatterTools = ({
-  allowedWorkspaceIds,
-  organizationId,
-}: MultiMatterToolsContext) => {
-  const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
-
-  return {
-    searchMatter: tool({
-      description:
-        "Search for documents and files within a specified " +
-        "matter using full-text search.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        query: z
-          .string()
-          .max(LIMITS.searchQueryMaxLength)
-          .describe("Search query"),
-        limit: z.number().int().min(1).max(20).optional().default(10),
-      }),
-      execute: async ({ workspaceId, query, limit }) => {
-        const provider = getSearchProvider();
-        const result = await provider.search({
-          query,
-          organizationId,
-          workspaceId,
-          limit,
-        });
-        return {
-          workspaceId,
-          totalCount: result.totalCount,
-          hits: result.hits.map((hit) => ({
-            entityId: hit.entityId,
-            name: hit.title,
-            kind: hit.kind,
-            headline: hit.headline,
-          })),
-        };
-      },
-    }),
-
-    listEntities: tool({
-      description:
-        "List documents, files, tasks, and folders in a specified matter.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        kind: z.enum(["document", "folder", "task", "message"]).optional(),
-        parentId: z.string().optional(),
-        limit: z.number().int().min(1).max(100).optional().default(50),
-      }),
-      execute: async ({ workspaceId, kind, parentId, limit }) => {
-        const [ents, properties] = await Promise.all([
-          db.query.entities.findMany({
-            where: {
-              workspaceId: { eq: workspaceId },
-              ...(kind ? { kind } : {}),
-              ...(parentId ? { parentId } : {}),
-            },
-            orderBy: { createdAt: "asc" },
-            limit,
-            columns: {
-              id: true,
-              kind: true,
-              name: true,
-              parentId: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-            with: {
-              currentVersion: {
-                columns: { id: true },
-                with: {
-                  fields: {
-                    columns: {
-                      propertyId: true,
-                      content: true,
-                    },
-                  },
-                },
-              },
-            },
-          }),
-          db.query.properties.findMany({
-            where: { workspaceId: { eq: workspaceId } },
-            columns: { id: true, name: true },
-          }),
-        ]);
-        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
-
-        return ents.map((entity) => ({
-          workspaceId,
-          entityId: entity.id,
-          kind: entity.kind,
-          name: entity.name,
-          parentId: entity.parentId,
-          createdAt: entity.createdAt.toISOString(),
-          updatedAt: entity.updatedAt?.toISOString() ?? null,
-          fields:
-            entity.currentVersion?.fields
-              .map((f) => ({
-                property: propNameById.get(f.propertyId) ?? f.propertyId,
-                value: formatFieldValue(f.content),
-              }))
-              .filter((f) => f.value !== "") ?? [],
-        }));
-      },
-    }),
-
-    readEntity: tool({
-      description:
-        "Get detailed information about a specific entity " +
-        "in a specified matter.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        entityId: z.string(),
-      }),
-      execute: async ({ workspaceId, entityId }) => {
-        const entity = await db.query.entities.findFirst({
-          where: {
-            id: entityId,
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            id: true,
-            kind: true,
-            name: true,
-            parentId: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-          with: {
-            createdByUser: { columns: { name: true } },
-            versions: { columns: { id: true } },
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: {
-                    propertyId: true,
-                    content: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-
-        if (!entity) {
-          return { error: "Entity not found in this matter" };
-        }
-
-        const properties = await db.query.properties.findMany({
-          where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true, name: true },
-        });
-        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
-
-        return {
-          workspaceId,
-          entityId: entity.id,
-          kind: entity.kind,
-          name: entity.name,
-          createdBy: entity.createdByUser?.name ?? null,
-          versionCount: entity.versions.length,
-          fields:
-            entity.currentVersion?.fields
-              .map((f) => ({
-                property: propNameById.get(f.propertyId) ?? f.propertyId,
-                value: formatFieldValue(f.content),
-              }))
-              .filter((f) => f.value !== "") ?? [],
-        };
-      },
-    }),
-
-    readContent: tool({
-      description:
-        "Read the extracted text content of a document " +
-        "in a specified matter.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        entityId: z.string(),
-      }),
-      execute: async ({ workspaceId, entityId }) => {
-        const row = await db.query.extractedContent.findFirst({
-          where: {
-            entityId,
-            organizationId: { eq: organizationId },
-          },
-          with: {
-            entity: { columns: { workspaceId: true } },
-          },
-        });
-
-        if (!row) {
-          return {
-            error: "No extracted content available for this entity.",
-          };
-        }
-
-        if (row.entity?.workspaceId !== workspaceId) {
-          return { error: "Entity not found in this matter" };
-        }
-
-        const plaintext = await decryptContent(
-          organizationId,
-          row.ciphertext,
-          row.iv,
-        );
-
-        const truncated = plaintext.length > CONTENT_MAX_CHARS;
-        const text = truncated
-          ? plaintext.slice(0, CONTENT_MAX_CHARS)
-          : plaintext;
-
-        return {
-          workspaceId,
-          entityId,
-          charCount: row.charCount,
-          truncated,
-          text,
-        };
-      },
-    }),
-  };
-};
-
-// -----------------------------------------------------------------
-// Org-level tools (contacts, templates, clauses)
-// -----------------------------------------------------------------
-
-type OrgToolsContext = {
-  organizationId: SafeId<"organization">;
-};
-
-export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
   readContact: tool({
     description: "Get details about a contact (person or organization).",
     inputSchema: z.object({

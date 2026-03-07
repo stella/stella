@@ -12,6 +12,9 @@ import {
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   parseEntityKind,
+  type ContentSearchHit,
+  type ContentSearchQuery,
+  type ContentSearchResult,
   type FacetBucket,
   type SearchHit,
   type SearchProvider,
@@ -173,6 +176,57 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   };
 };
 
+const CONTENT_HEADLINE_CONFIG =
+  "MaxWords=80, MinWords=30, MaxFragments=2, " +
+  'FragmentDelimiter=" ... ", StartSel="", StopSel=""';
+
+const searchContent = async (
+  query: ContentSearchQuery,
+): Promise<ContentSearchResult> => {
+  const { organizationId, workspaceId, limit } = query;
+  const tsQuery = sql`plainto_tsquery('simple', ${query.query})`;
+
+  const [hitsResult, countResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        sd.entity_id,
+        sd.kind,
+        sd.title,
+        ts_headline(
+          coalesce(sd.language, 'simple')::regconfig,
+          left(sd.searchable_text, 10000),
+          ${tsQuery},
+          ${CONTENT_HEADLINE_CONFIG}
+        ) AS passage,
+        ts_rank(sd.tsv, ${tsQuery})::float8 AS score
+      FROM search_documents sd
+      WHERE sd.organization_id = ${organizationId}
+        AND sd.workspace_id = ${workspaceId}
+        AND sd.tsv @@ ${tsQuery}
+      ORDER BY score DESC, sd.entity_id DESC
+      LIMIT ${limit}
+    `),
+    db.execute(sql`
+      SELECT count(*)::int AS total
+      FROM search_documents sd
+      WHERE sd.organization_id = ${organizationId}
+        AND sd.workspace_id = ${workspaceId}
+        AND sd.tsv @@ ${tsQuery}
+    `),
+  ]);
+
+  const hits: ContentSearchHit[] = hitsResult.rows.map((row) => ({
+    entityId: String(row.entity_id),
+    kind: parseEntityKind(row.kind),
+    title: String(row.title),
+    passage: row.passage ? String(row.passage) : "",
+  }));
+
+  const totalCount = Number(countResult.rows.at(0)?.total) || 0;
+
+  return { hits, totalCount };
+};
+
 const indexEntity = async (entityId: string): Promise<void> => {
   await upsertSearchDocument(entityId);
 };
@@ -224,6 +278,7 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
 
 export const pgFtsProvider: SearchProvider = {
   search,
+  searchContent,
   indexEntity,
   removeEntity,
   rebuildIndex,
