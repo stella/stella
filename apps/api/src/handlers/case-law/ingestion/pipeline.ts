@@ -11,7 +11,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
-import { updateDecisionSearchVector } from "@/api/handlers/case-law/search-vector";
+import { indexDecision } from "@/api/handlers/case-law/search-index";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
@@ -132,19 +132,14 @@ const processDecision = async (
     decisionId = decision.id;
   });
 
-  // Update search vector after transaction commits
+  // Index into search table after transaction commits
   let searchVectorFailed = false;
   if (decisionId) {
     try {
-      await updateDecisionSearchVector(
-        decisionId,
-        result.caseNumber,
-        result.court,
-        result.fulltext ?? null,
-        sections.length > 0 ? sections : null,
-      );
+      await indexDecision(decisionId);
     } catch (err) {
-      console.error(`Failed to update search vector for ${decisionId}:`, err);
+      // biome-ignore lint/suspicious/noConsole: ingestion pipeline
+      console.error(`Failed to index decision ${decisionId}:`, err);
       searchVectorFailed = true;
     }
   }

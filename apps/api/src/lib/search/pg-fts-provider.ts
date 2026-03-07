@@ -4,6 +4,11 @@ import { db } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
+import {
+  escapeAndHighlight,
+  TS_HEADLINE_CONFIG,
+} from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   parseEntityKind,
@@ -15,44 +20,6 @@ import {
 } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;
-
-// Non-HTML delimiters for ts_headline. The headline is HTML-escaped
-// server-side, then these markers are replaced with <mark> tags.
-const HIGHLIGHT_START = "__HL_START__";
-const HIGHLIGHT_STOP = "__HL_STOP__";
-const TS_HEADLINE_CONFIG = `MaxWords=35, MinWords=15, StartSel=${HIGHLIGHT_START}, StopSel=${HIGHLIGHT_STOP}`;
-
-const decodeCursor = (
-  cursor: string,
-): { score: number; entityId: string } | null => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString();
-    const [scoreStr, entityId] = decoded.split(":");
-    const score = Number(scoreStr);
-    if (Number.isNaN(score) || !entityId) {
-      return null;
-    }
-    return { score, entityId };
-  } catch {
-    return null;
-  }
-};
-
-const encodeCursor = (score: number, entityId: string): string =>
-  Buffer.from(`${score}:${entityId}`).toString("base64");
-
-/** HTML-escape text, then replace highlight markers with <mark> tags. */
-const escapeAndHighlight = (text: string): string => {
-  const escaped = text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#x27;");
-  return escaped
-    .replaceAll(HIGHLIGHT_START, "<mark>")
-    .replaceAll(HIGHLIGHT_STOP, "</mark>");
-};
 
 type RawRow = Record<string, unknown>;
 
@@ -95,7 +62,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
           return sql``;
         }
         // Cast to float8 to avoid float4→float64 precision loss
-        return sql`AND (ts_rank(sd.tsv, ${tsQuery})::float8, sd.entity_id) < (${parsed.score}::float8, ${parsed.entityId})`;
+        return sql`AND (ts_rank(sd.tsv, ${tsQuery})::float8, sd.entity_id) < (${parsed.score}::float8, ${parsed.id})`;
       })()
     : sql``;
 

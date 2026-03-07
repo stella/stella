@@ -36,6 +36,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           {
             query: search,
             limit: DEFAULT_PAGE_SIZE,
+            cursor: pageParam ?? undefined,
             ...listFilters,
           },
           { fetch: { signal } },
@@ -45,8 +46,19 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           throw toAPIError(response.error);
         }
         return {
-          decisions: response.data.decisions,
-          nextCursor: null,
+          decisions: response.data.hits.map((h) => ({
+            id: h.decisionId,
+            caseNumber: h.caseNumber,
+            ecli: h.ecli,
+            court: h.court,
+            country: h.country,
+            language: h.language,
+            decisionDate: h.decisionDate,
+            decisionType: h.decisionType,
+            sourceUrl: h.sourceUrl,
+            createdAt: new Date(h.createdAt),
+          })),
+          nextCursor: response.data.nextCursor,
         };
       }
 

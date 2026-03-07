@@ -284,9 +284,23 @@ describe("idempotent operations", () => {
     const first = await fillTemplate(buf, values);
     const second = await fillTemplate(buf, values);
 
-    // Buffers should be byte-identical
-    expect(first.buffer.length).toBe(second.buffer.length);
-    expect(Buffer.compare(first.buffer, second.buffer)).toBe(0);
+    // Compare logical content, not raw bytes: ZIP entry
+    // timestamps make byte-identical comparison unreliable.
+    const zip1 = await JSZip.loadAsync(first.buffer);
+    const zip2 = await JSZip.loadAsync(second.buffer);
+
+    const file1 = zip1.file("word/document.xml");
+    const file2 = zip2.file("word/document.xml");
+    expect(file1).not.toBeNull();
+    expect(file2).not.toBeNull();
+
+    const doc1 = await file1?.async("string");
+    const doc2 = await file2?.async("string");
+    expect(doc1).toBe(doc2);
+
+    const entries1 = Object.keys(zip1.files).sort();
+    const entries2 = Object.keys(zip2.files).sort();
+    expect(entries1).toEqual(entries2);
   });
 
   test("SPA discover is idempotent", async () => {

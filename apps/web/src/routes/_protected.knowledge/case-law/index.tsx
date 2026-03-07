@@ -6,7 +6,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 
 import { DecisionFilters } from "@/routes/_protected.knowledge/case-law/-components/decision-filters";
-import { DecisionTable } from "@/routes/_protected.knowledge/case-law/-components/decision-table";
+import {
+  DecisionTable,
+  type Decision,
+} from "@/routes/_protected.knowledge/case-law/-components/decision-table";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,
@@ -23,8 +26,11 @@ function CaseLawIndex() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery(decisionsInfiniteOptions(filters));
 
+  // SAFETY: Both list and search branches return the same
+  // Decision shape. TS can't unify Eden-inferred and
+  // hand-mapped types across the union.
   const decisions = useMemo(
-    () => data?.pages.flatMap((page) => page.decisions) ?? [],
+    () => (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
     [data],
   );
 

@@ -1132,7 +1132,6 @@ export const caseLawDecisions = p.pgTable(
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
     sections: p.jsonb().$type<DecisionSection[]>(),
-    searchVector: tsvector("search_vector"),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
     metadata: p.jsonb().$type<Record<string, unknown>>().default({}),
@@ -1153,9 +1152,6 @@ export const caseLawDecisions = p.pgTable(
     p.index("case_law_decisions_country_idx").on(t.country),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
-    p
-      .index("case_law_decisions_search_vector_idx")
-      .using("gin", t.searchVector),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
   ],
 );
@@ -1216,6 +1212,28 @@ export const caseLawMatterLinks = p.pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// Case Law — Search index (global, no tenant column)
+// ---------------------------------------------------------------------------
+
+export const caseLawSearchDocuments = p.pgTable(
+  "case_law_search_documents",
+  {
+    decisionId: p
+      .varchar("decision_id", { length: 21 })
+      .primaryKey()
+      .references(() => caseLawDecisions.id, {
+        onDelete: "cascade",
+      }),
+    title: p.text().notNull().default(""),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    language: p.varchar("language", { length: 10 }),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  // tsv column + GIN index added via apply-search-migration.ts
+  // (Drizzle cannot express tsvector natively)
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1255,6 +1273,7 @@ export const relations = defineRelations(
     caseLawDecisions,
     caseLawCitations,
     caseLawMatterLinks,
+    caseLawSearchDocuments,
   },
   (r) => ({
     contacts: {
@@ -1649,6 +1668,10 @@ export const relations = defineRelations(
         from: r.caseLawDecisions.id,
         to: r.caseLawCitations.citedDecisionId,
       }),
+      searchDocument: r.one.caseLawSearchDocuments({
+        from: r.caseLawDecisions.id,
+        to: r.caseLawSearchDocuments.decisionId,
+      }),
     },
     caseLawCitations: {
       citingDecision: r.one.caseLawDecisions({
@@ -1672,6 +1695,12 @@ export const relations = defineRelations(
       linkedByUser: r.one.user({
         from: r.caseLawMatterLinks.linkedBy,
         to: r.user.id,
+      }),
+    },
+    caseLawSearchDocuments: {
+      decision: r.one.caseLawDecisions({
+        from: r.caseLawSearchDocuments.decisionId,
+        to: r.caseLawDecisions.id,
       }),
     },
   }),
