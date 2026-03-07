@@ -49,8 +49,28 @@ export type SearchResult = {
   nextCursor: string | null;
 };
 
+export type ContentSearchQuery = {
+  query: string;
+  organizationId: SafeId<"organization">;
+  workspaceId: string;
+  limit: number;
+};
+
+export type ContentSearchHit = {
+  entityId: string;
+  kind: EntityKind;
+  title: string;
+  passage: string;
+};
+
+export type ContentSearchResult = {
+  hits: ContentSearchHit[];
+  totalCount: number;
+};
+
 export type SearchProvider = {
   search: (query: SearchQuery) => Promise<SearchResult>;
+  searchContent: (query: ContentSearchQuery) => Promise<ContentSearchResult>;
   indexEntity: (entityId: string) => Promise<void>;
   removeEntity: (entityId: string) => Promise<void>;
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;

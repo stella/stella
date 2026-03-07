@@ -35,9 +35,7 @@ import {
 } from "@/api/handlers/registry/actors/chat-mention-parser";
 import { createSourceInjectionTransform } from "@/api/handlers/registry/actors/chat-source-transform";
 import {
-  createCrossMatterTools,
   createMatterTools,
-  createMultiMatterTools,
   createOrgTools,
   validateWorkspaceIds,
 } from "@/api/handlers/registry/actors/chat-tools";
@@ -48,13 +46,10 @@ import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const caseLawTools = createCaseLawTools();
 const MAX_TOOL_STEPS = 5;
-/** User turns to keep in the sliding window. All threads
- *  have tools (at minimum case law search), so the window
- *  must accommodate intermediate messages (tool-call +
- *  tool-result pairs). Workspace threads get a larger
- *  window due to more tool variety. */
-const MESSAGE_WINDOW = 10;
-const MESSAGE_WINDOW_TOOLS = 20;
+/** User turns to keep in the sliding window. Tools are always
+ *  available, so we use a larger window to accommodate
+ *  tool-call + tool-result message pairs. */
+const MESSAGE_WINDOW = 20;
 
 const openrouter = createOpenRouter({
   apiKey: env.OPENROUTER_API_KEY,
@@ -199,10 +194,10 @@ const buildSystemPrompt = async (
     "",
     "IMPORTANT: When the user asks about the matter, its " +
       "contents, documents, or files, you MUST call the " +
-      "available tools (listEntities, searchMatter, " +
-      "readEntity, readContent) to retrieve real data " +
-      "before answering. When the user asks about case " +
-      "law, court decisions, or legal precedents, use " +
+      "available tools (searchMatter, searchContent, " +
+      "listEntities, readEntity, readContent) to retrieve " +
+      "real data before answering. When the user asks about " +
+      "case law, court decisions, or legal precedents, use " +
       "searchCaseLaw. Never ask the user to call tools " +
       "themselves. Never describe tools to the user. " +
       "Just use them directly.",
@@ -214,10 +209,10 @@ const buildSystemPrompt = async (
       "summarizing any document. If a tool call fails, report " +
       "the error honestly; do not make up content.",
     "",
-    "SCOPE: By default, use searchMatter, listEntities, " +
-      "readEntity, and readContent to work within the " +
-      "current matter. You also have " +
-      "searchAcrossMatters and readContentAcrossMatters " +
+    "SCOPE: By default, use matter-scoped tools " +
+      "(searchMatter, searchContent, listEntities, " +
+      "readEntity, readContent) for this matter. You also " +
+      "have searchAcrossMatters and readContentAcrossMatters " +
       "which search across ALL matters in the " +
       "organization. Only use these cross-matter tools " +
       "when the user EXPLICITLY asks to search outside " +
@@ -237,6 +232,9 @@ const buildSystemPrompt = async (
       "The system renders these as clickable references. " +
       "Every document or decision mention MUST use " +
       "the appropriate link syntax.",
+    "",
+    `Your workspace ID is ${workspaceId}. Pass this as ` +
+      "workspaceId when calling matter-scoped tools.",
     "",
     `The matter contains ${entityCount.toLocaleString()} entities.`,
     propList ? `\nAvailable metadata columns:\n${propList}` : "",
@@ -318,25 +316,32 @@ const buildMultiContextPrompt = async (
     .join("\n");
 };
 
-/** Build a system prompt for a non-workspace thread. Case law
- *  search is available globally for all authenticated users. */
-const buildGlobalSystemPrompt = (userContext: UserContext | null): string => {
+/** Build a system prompt for global chat (no workspace). */
+const buildGlobalPrompt = (userContext: UserContext | null): string => {
   return [
     "You are Stella, an AI assistant for legal professionals.",
     "",
-    "You can search the case law library for court decisions " +
-      "using the searchCaseLaw tool. Use it when the user " +
-      "asks about case law, court decisions, legal " +
-      "precedents, or judicial rulings. Never ask the " +
-      "user to call tools themselves. Just use them " +
-      "directly.",
+    "You have tools to search across all matters, look up " +
+      "contacts, browse templates, read clauses, and search " +
+      "case law. Use them when the user asks about their " +
+      "data. When the user asks about case law, court " +
+      "decisions, or legal precedents, use searchCaseLaw. " +
+      "Never ask the user to call tools themselves; just " +
+      "use them.",
+    "",
+    "CRITICAL: You must NEVER guess, infer, or fabricate " +
+      "document content. Always call the appropriate tool " +
+      "to retrieve real data before answering. If a tool " +
+      "call fails, report the error honestly.",
     "",
     "Never expose internal IDs to the user in plain text.",
     "",
-    "When citing a court decision, use this format:\n" +
-      "[Case Number](#stella-decision=DECISION_ID)\n" +
-      "The system renders this as a clickable link to " +
-      "the decision viewer.",
+    "When citing documents, use markdown links:\n" +
+      "[Document Name](#stella-entity=ENTITY_ID)\n" +
+      "When citing matters, use:\n" +
+      "[Matter Name](#stella-workspace=WORKSPACE_ID)\n" +
+      "When citing court decisions, use:\n" +
+      "[Case Number](#stella-decision=DECISION_ID)",
     "",
     buildUserContextBlock(userContext),
   ]
@@ -409,15 +414,8 @@ export const chatActor = actor({
       c.vars.stopControllers.set(threadId, stopController);
       const runSignal = joinSignals(c.abortSignal, stopController.signal);
 
-      // Sliding window: send only the last N messages to keep
-      // token usage predictable. Tool-enabled threads get a
-      // larger window because agentic steps expand messages.
-      const hasToolContext =
-        !!thread.metadata.workspaceId ||
-        thread.metadata.mentionedWorkspaceIds.size > 0;
-      const windowSize = hasToolContext ? MESSAGE_WINDOW_TOOLS : MESSAGE_WINDOW;
       const allMessages = [...thread.messages];
-      const messages = allMessages.slice(-windowSize);
+      const messages = allMessages.slice(-MESSAGE_WINDOW);
 
       if (isNew) {
         c.broadcast("thread-created", {
@@ -491,73 +489,48 @@ export const chatActor = actor({
             orgId,
           );
 
-          // Determine tool configuration based on context:
-          // 1. Single workspace thread → single-workspace tools
-          // 2. Workspace + mentioned others → multi-matter tools
-          //    (includes the bound workspace in the allowed set)
-          // 3. No workspace + mentions → multi-matter tools
-          // 4. No workspace + no mentions → case law only
-          const hasMentionedWorkspaces = validatedMentionedIds.length > 0;
-          const hasAnyContext = !!validatedWsId || hasMentionedWorkspaces;
+          // Build the set of workspace IDs the AI can access:
+          // bound workspace (if any) + mentioned workspaces.
+          const allWorkspaceIds: SafeId<"workspace">[] = [];
+          if (validatedWsId) {
+            allWorkspaceIds.push(validatedWsId);
+          }
+          for (const id of validatedMentionedIds) {
+            if (!allWorkspaceIds.includes(id)) {
+              allWorkspaceIds.push(id);
+            }
+          }
 
-          let tools: ToolSet;
+          // Org tools and case law are always available. Matter
+          // tools are added when there are accessible workspaces.
+          const orgTools = createOrgTools({ organizationId: orgId });
+          const matterTools =
+            allWorkspaceIds.length > 0
+              ? createMatterTools({
+                  allowedWorkspaceIds: allWorkspaceIds,
+                  organizationId: orgId,
+                })
+              : {};
+          const tools: ToolSet = {
+            ...orgTools,
+            ...caseLawTools,
+            ...matterTools,
+          };
+
+          // System prompt: single-workspace gets a focused prompt,
+          // multi-workspace or global gets the multi-context prompt.
           let system: string | undefined;
-
-          if (validatedWsId && !hasMentionedWorkspaces) {
-            // Single workspace thread: local + cross-matter
-            tools = {
-              ...createMatterTools({
-                workspaceId: validatedWsId,
-                organizationId: orgId,
-              }),
-              ...createCrossMatterTools({
-                organizationId: orgId,
-              }),
-              ...caseLawTools,
-            };
+          if (validatedWsId && allWorkspaceIds.length === 1) {
             system = await buildSystemPrompt(validatedWsId, orgId, ctx);
-          } else if (validatedWsId && hasMentionedWorkspaces) {
-            // Workspace thread with cross-workspace mentions:
-            // use only multi-matter tools to avoid name conflicts.
-            // The bound workspace is included in the allowed set.
-            const allIds = [
-              validatedWsId,
-              ...validatedMentionedIds.filter((id) => id !== validatedWsId),
-            ];
-            tools = {
-              ...createMultiMatterTools({
-                allowedWorkspaceIds: allIds,
-                organizationId: orgId,
-              }),
-              ...createOrgTools({ organizationId: orgId }),
-              ...caseLawTools,
-            };
+          } else if (allWorkspaceIds.length > 0) {
             system = await buildMultiContextPrompt(
-              allIds,
-              orgId,
-              ctx,
-              entityWsMap,
-            );
-          } else if (hasMentionedWorkspaces) {
-            // Global thread with mentioned workspaces
-            tools = {
-              ...createMultiMatterTools({
-                allowedWorkspaceIds: validatedMentionedIds,
-                organizationId: orgId,
-              }),
-              ...createOrgTools({ organizationId: orgId }),
-              ...caseLawTools,
-            };
-            system = await buildMultiContextPrompt(
-              validatedMentionedIds,
+              allWorkspaceIds,
               orgId,
               ctx,
               entityWsMap,
             );
           } else {
-            // No workspace context: case law search only
-            tools = { ...caseLawTools };
-            system = buildGlobalSystemPrompt(ctx);
+            system = buildGlobalPrompt(ctx);
           }
 
           // Strip workspace prefixes from entity mention links
@@ -585,7 +558,7 @@ export const chatActor = actor({
 
           // Messages before the window — preserved in thread
           // state but not sent to the model.
-          const priorMessages = allMessages.slice(0, -windowSize);
+          const priorMessages = allMessages.slice(0, -MESSAGE_WINDOW);
 
           const uiStream = stream.toUIMessageStream({
             generateMessageId: nanoid,
@@ -599,15 +572,14 @@ export const chatActor = actor({
             onError: () => "error",
           });
 
-          // Inject source-document UI parts for any thread that
-          // has tool access so the frontend can render clickable
-          // source chips. pipeThrough returns ReadableStream (no
-          // AsyncIterable in TS stdlib), so use the reader API.
-          const outputStream: ReadableStream<UIMessageChunk> = hasAnyContext
-            ? uiStream.pipeThrough(
-                createSourceInjectionTransform(validatedWsId, orgId),
-              )
-            : uiStream;
+          // Inject source-document UI parts so the frontend can
+          // render clickable source chips. pipeThrough returns
+          // ReadableStream (no AsyncIterable in TS stdlib), so
+          // use the reader API.
+          const outputStream: ReadableStream<UIMessageChunk> =
+            uiStream.pipeThrough(
+              createSourceInjectionTransform(validatedWsId, orgId),
+            );
 
           const reader = outputStream.getReader();
           let seq = 0;
@@ -692,19 +664,19 @@ export const chatActor = actor({
       }
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
-      if (!rawWsId) {
-        return { prompt: buildGlobalSystemPrompt(ctx) };
-      }
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
       };
-      return {
-        prompt: await buildSystemPrompt(
-          toSafeId<"workspace">(rawWsId),
-          connState.organizationId,
-          ctx,
-        ),
-      };
+      if (rawWsId) {
+        return {
+          prompt: await buildSystemPrompt(
+            toSafeId<"workspace">(rawWsId),
+            connState.organizationId,
+            ctx,
+          ),
+        };
+      }
+      return { prompt: buildGlobalPrompt(ctx) };
     },
     getThreads: (c): ThreadSummary[] => {
       const summaries: ThreadSummary[] = [];

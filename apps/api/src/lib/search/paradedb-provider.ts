@@ -13,6 +13,9 @@ import {
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   parseEntityKind,
+  type ContentSearchHit,
+  type ContentSearchQuery,
+  type ContentSearchResult,
   type FacetBucket,
   type SearchHit,
   type SearchProvider,
@@ -174,6 +177,54 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   };
 };
 
+const searchContent = async (
+  query: ContentSearchQuery,
+): Promise<ContentSearchResult> => {
+  const { organizationId, workspaceId, limit } = query;
+
+  const textMatch = sql`sd.searchable_text ||| ${query.query}`;
+
+  const [hitsResult, countResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        sd.entity_id,
+        sd.kind,
+        sd.title,
+        pdb.snippet(
+          sd.searchable_text,
+          start_tag => '',
+          end_tag => '',
+          max_num_chars => 400
+        ) AS passage,
+        pdb.score(sd.entity_id)::float8 AS score
+      FROM search_documents sd
+      WHERE sd.organization_id = ${organizationId}
+        AND sd.workspace_id = ${workspaceId}
+        AND ${textMatch}
+      ORDER BY score DESC, sd.entity_id DESC
+      LIMIT ${limit}
+    `),
+    db.execute(sql`
+      SELECT count(*)::int AS total
+      FROM search_documents sd
+      WHERE sd.organization_id = ${organizationId}
+        AND sd.workspace_id = ${workspaceId}
+        AND ${textMatch}
+    `),
+  ]);
+
+  const hits: ContentSearchHit[] = hitsResult.rows.map((row) => ({
+    entityId: String(row.entity_id),
+    kind: parseEntityKind(row.kind),
+    title: String(row.title),
+    passage: row.passage ? String(row.passage) : "",
+  }));
+
+  const totalCount = Number(countResult.rows.at(0)?.total) || 0;
+
+  return { hits, totalCount };
+};
+
 const indexEntity = async (entityId: string): Promise<void> => {
   await upsertSearchDocument(entityId);
 };
@@ -222,6 +273,7 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
 
 export const paradedbProvider: SearchProvider = {
   search,
+  searchContent,
   indexEntity,
   removeEntity,
   rebuildIndex,
