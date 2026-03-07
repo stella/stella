@@ -46,10 +46,12 @@ type StringArrayOperators = Extract<
 
 type ConditionData = {
   version: 1;
-  operator: string;
+  operator: ConditionOperator;
   value: string | string[];
   options: WorkspacePropertyOption[] | undefined;
 };
+
+type ConditionOperator = PropertyCondition["operator"];
 
 type Condition = PropertyDependency["condition"];
 
@@ -194,8 +196,6 @@ export const PropertyConditions = ({
   );
 };
 
-type ConditionOperator = PropertyCondition["operator"];
-
 const getOperatorLabels = (): Record<ConditionOperator, string> => {
   const t = getTranslator();
   return {
@@ -204,36 +204,28 @@ const getOperatorLabels = (): Record<ConditionOperator, string> => {
   };
 };
 
+const STRING_OPERATORS: StringOperators[] = ["eq"];
+const STRING_ARRAY_OPERATORS: StringArrayOperators[] = ["contains-every"];
+
 const getOperatorOptions = (
   value: string | string[],
   operatorLabels: Record<ConditionOperator, string>,
 ) => {
-  let operatorKeys: string[] = [];
-
-  if (typeof value === "string") {
-    const stringOperatorsMap: Record<StringOperators, null> = {
-      eq: null,
-    };
-
-    operatorKeys = Object.keys(stringOperatorsMap);
-  }
-
-  if (Array.isArray(value)) {
-    const stringArrayOperatorsMap: Record<StringArrayOperators, null> = {
-      "contains-every": null,
-    };
-
-    operatorKeys = Object.keys(stringArrayOperatorsMap);
-  }
+  const operatorKeys: ConditionOperator[] =
+    typeof value === "string"
+      ? STRING_OPERATORS
+      : Array.isArray(value)
+        ? STRING_ARRAY_OPERATORS
+        : [];
 
   return operatorKeys.map((operator) => ({
     value: operator,
-    label: operatorLabels[operator as keyof typeof operatorLabels],
+    label: operatorLabels[operator],
   }));
 };
 
 type BuildConditionArgs = {
-  operator: string;
+  operator: ConditionOperator;
   value: string | string[] | null;
 };
 

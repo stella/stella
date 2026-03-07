@@ -176,7 +176,13 @@ const readConfig = (): MattersConfig => {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (raw) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed === "object" && parsed !== null) {
+        return {
+          ...DEFAULT_CONFIG,
+          ...(parsed as Partial<MattersConfig>),
+        };
+      }
     }
   } catch {
     // localStorage or JSON.parse may throw
