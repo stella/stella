@@ -184,12 +184,12 @@ export const workspaceAccessMacro = new Elysia({
         },
       });
 
-      if (!workspace || workspace.status !== "active") {
+      if (
+        !workspace ||
+        workspace.status !== "active" ||
+        workspace.organizationId !== ctx.session.activeOrganizationId
+      ) {
         return ctx.status(404);
-      }
-
-      if (workspace.organizationId !== ctx.session.activeOrganizationId) {
-        return ctx.status(403);
       }
 
       return {
