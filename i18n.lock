@@ -337,6 +337,7 @@ checksums:
     common/accept: f8cc1de4f5e3c850cfdbbc0ec831ade7
     common/actions: c46571856723b03262fd33f511116298
     common/add: 87c4a663507f2bcbbf79934af8164e13
+    common/all: 5e2e93f8e2a5f315b6fecdd0a0e6f55f
     common/cancel: 2e2a849c2223911717de8caa2c71bade
     common/category: 1b0340cd175aa5a2be745a0d54908466
     common/columns: 14896556dc1535d70198854757f704ec
@@ -526,6 +527,8 @@ checksums:
     knowledge/sections/agents/title: f902c551bd769a3ae2f65b44305b1976
     knowledge/sections/analytics/description: b5fd1d39b2bfaaeb82a31a48b524b6c6
     knowledge/sections/analytics/title: ec67586974cc78f25959d47bb36683a7
+    knowledge/sections/caseLaw/description: eaba116756c595d19bfb1fd51cd31f5d
+    knowledge/sections/caseLaw/title: 638151818de209b2e7889f72092e61be
     knowledge/sections/clauses/description: 7f74a1dad0ff0094563e834597688def
     knowledge/sections/clauses/title: 462579754cf0f9dab85e687c243a6ed5
     knowledge/sections/connectors/description: e750d6bdd299871771fa58da4fe71c6b
