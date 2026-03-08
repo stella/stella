@@ -61,8 +61,8 @@ export const indexDecision = async (decisionId: string): Promise<void> => {
       now(),
       to_tsvector(
         'simple',
-        coalesce(${title}, '') || ' ' ||
-        coalesce(${searchableText}, '')
+        unaccent(coalesce(${title}, '') || ' ' ||
+        coalesce(${searchableText}, ''))
       )
     )
     ON CONFLICT (decision_id) DO UPDATE SET

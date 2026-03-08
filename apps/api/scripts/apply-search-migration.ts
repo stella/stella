@@ -119,10 +119,34 @@ const applyCaseLawSearchMigration = async () => {
       ON case_law_search_documents USING gin (tsv)
   `);
 
+  // One-time backfill: re-index all existing rows with unaccent()
+  // so their tsvectors match the new accent-stripped query path.
+  // New rows are indexed via indexDecision() which already uses
+  // unaccent(). This UPDATE is expensive on large tables; after
+  // the first deployment it is a no-op in effect but still runs.
+  console.log("Backfilling case_law tsv with unaccent...");
+
+  await db.execute(sql`
+    UPDATE case_law_search_documents
+    SET tsv = to_tsvector(
+      'simple',
+      unaccent(coalesce(title, '') || ' ' ||
+      coalesce(searchable_text, ''))
+    )
+    WHERE title IS NOT NULL OR searchable_text IS NOT NULL
+  `);
+
   console.log("Case law search migration applied.");
 };
 
+const ensureUnaccentExtension = async () => {
+  // biome-ignore lint/suspicious/noConsole: migration script
+  console.log("Ensuring unaccent extension...");
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+};
+
 const main = async () => {
+  await ensureUnaccentExtension();
   await applyPgFtsMigration();
   await applyParadedbMigration();
   await applyCaseLawSearchMigration();
