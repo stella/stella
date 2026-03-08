@@ -1,10 +1,16 @@
+import { Result } from "better-result";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { captureError } from "@/api/lib/posthog";
+import {
+  adapterCatch,
+  hashContent,
+  parseCeDate,
+  stripHtml,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
 
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
@@ -46,27 +52,9 @@ const sleep = (ms: number) =>
 const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
 
-const CZ_DATE_PATTERN = /(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/;
 const REGISTRY_SIGN_PATTERN = /^(.+?)\s+ze\s+dne\s+(.+)$/;
 const DOC_CONTENT_PATTERN = /class="DocContent">([\s\S]*?)<\/table>/;
 const JUDGE_PATTERN = /(\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/i;
-
-const hashResult = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
-
-const stripHtml = (html: string): string =>
-  html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 
 /** Extract text from a labeled span. */
 const extractLabel = (html: string, labelId: string): string | undefined => {
@@ -76,15 +64,6 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
     return;
   }
   return stripHtml(match[1]).trim() || undefined;
-};
-
-/** Parse CZ date "D. M. YYYY" to ISO "YYYY-MM-DD". */
-const parseCzDate = (dateStr: string): string | undefined => {
-  const m = dateStr.trim().match(CZ_DATE_PATTERN);
-  if (!m) {
-    return;
-  }
-  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 };
 
 /** Extract case number and date from the registry sign. */
@@ -99,7 +78,7 @@ const parseRegistrySign = (
 
   return {
     caseNumber: match[1].trim(),
-    decisionDate: parseCzDate(match[2]),
+    decisionDate: parseCeDate(match[2]),
   };
 };
 
@@ -158,7 +137,7 @@ const parseDecisionPage = (
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
     },
-    rawHash: hashResult(raw),
+    rawHash: hashContent(raw),
   };
 };
 
@@ -188,95 +167,102 @@ export const czConstitutionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1000,
 
-  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
-    // Use the caller's signal if provided; per-request
-    // timeouts are applied individually below so we don't
-    // share a single deadline across the entire page scan.
-    const callerSignal = signal;
+  fetchPage(cursor, _config, signal) {
+    return Result.tryPromise({
+      try: async () => {
+        const callerSignal = signal;
 
-    let state: CursorState;
-    if (cursor) {
-      state = parseCursor(cursor);
-    } else {
-      state = { number: 1, year: new Date().getFullYear() };
-    }
+        const state: CursorState = cursor
+          ? parseCursor(cursor)
+          : { number: 1, year: new Date().getFullYear() };
 
-    const decisions: IngestionResult[] = [];
-    let consecutiveMisses = 0;
+        const decisions: IngestionResult[] = [];
+        let consecutiveMisses = 0;
 
-    while (decisions.length < PAGE_SIZE) {
-      const url = `${BASE_URL}?sz=I-${state.number}-${toYearSuffix(state.year)}_1`;
+        while (decisions.length < PAGE_SIZE) {
+          const url = `${BASE_URL}?sz=I-${state.number}-${toYearSuffix(state.year)}_1`;
 
-      try {
-        const response = await fetch(url, {
-          signal: callerSignal
-            ? AbortSignal.any([
-                callerSignal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-              ])
-            : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-        });
+          try {
+            const response = await fetch(url, {
+              signal: callerSignal
+                ? AbortSignal.any([
+                    callerSignal,
+                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                  ])
+                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+            });
 
-        if (response.ok) {
-          const html = await response.text();
-          const decision = parseDecisionPage(html, state.number, state.year);
+            if (response.ok) {
+              const html = await response.text();
+              const decision = parseDecisionPage(
+                html,
+                state.number,
+                state.year,
+              );
 
-          if (decision) {
-            decisions.push(decision);
-            consecutiveMisses = 0;
-          } else {
-            consecutiveMisses++;
+              if (decision) {
+                decisions.push(decision);
+                consecutiveMisses = 0;
+              } else {
+                consecutiveMisses++;
+              }
+            } else {
+              consecutiveMisses++;
+            }
+          } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+              // Caller cancelled: return partial results
+              // so the pipeline can persist cursor progress
+              return {
+                decisions,
+                nextCursor: makeCursor(state),
+              };
+            }
+            if (err instanceof DOMException && err.name === "TimeoutError") {
+              // Per-request timeout: treat as a miss
+              consecutiveMisses++;
+              await sleep(1000);
+              state.number++;
+              if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
+                if (state.year <= FIRST_YEAR) {
+                  return {
+                    decisions,
+                    nextCursor: null,
+                  };
+                }
+                state.number = 1;
+                state.year -= 1;
+                consecutiveMisses = 0;
+              }
+              continue;
+            }
+            // Unknown per-request error: propagate up
+            // via the outer Result.tryPromise catch
+            throw err;
           }
-        } else {
-          consecutiveMisses++;
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          // Caller cancelled — return partial results so the
-          // pipeline can persist cursor progress.
-          return { decisions, nextCursor: makeCursor(state) };
-        }
-        if (err instanceof DOMException && err.name === "TimeoutError") {
-          // Per-request timeout — treat as a miss, continue scan
-          consecutiveMisses++;
+
+          // Rate limit: 1 req/s to avoid overwhelming NALUS
           await sleep(1000);
+
           state.number++;
-          // Check year rollback before continuing; the check
-          // at the bottom of the loop is bypassed by continue.
+
+          // Too many misses: year exhausted, move back
           if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
             if (state.year <= FIRST_YEAR) {
               return { decisions, nextCursor: null };
             }
-            state = { number: 1, year: state.year - 1 };
+            state.number = 1;
+            state.year -= 1;
             consecutiveMisses = 0;
           }
-          continue;
         }
-        captureError(err, {
-          adapter: "cz-constitutional",
-          cursor: makeCursor(state),
-        });
-        consecutiveMisses++;
-      }
 
-      // Rate limit: 1 request/second to avoid overwhelming NALUS
-      await sleep(1000);
-
-      state.number++;
-
-      // Too many misses → year exhausted, move back
-      if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
-        if (state.year <= FIRST_YEAR) {
-          return { decisions, nextCursor: null };
-        }
-        state = { number: 1, year: state.year - 1 };
-        consecutiveMisses = 0;
-      }
-    }
-
-    return {
-      decisions,
-      nextCursor: makeCursor(state),
-    };
+        return {
+          decisions,
+          nextCursor: makeCursor(state),
+        };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.CZ_CONSTITUTIONAL, cursor),
+    });
   },
 };

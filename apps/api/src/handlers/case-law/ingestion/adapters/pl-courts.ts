@@ -1,9 +1,15 @@
+import { Result } from "better-result";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  adapterCatch,
+  hashContent,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Polish Courts adapter (SAOS).
@@ -16,12 +22,6 @@ import type {
 
 const BASE_URL = "https://www.saos.org.pl/api/search/judgments";
 const PAGE_SIZE = 50;
-
-const hashResult = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
 
 /** Court type hierarchy from SAOS. */
 const COURT_TYPE_MAP: Record<string, string> = {
@@ -118,7 +118,7 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
         additionalCaseNumbers,
       }),
     },
-    rawHash: hashResult(raw),
+    rawHash: hashContent(raw),
   };
 };
 
@@ -129,54 +129,74 @@ export const plCourtsAdapter: SourceAdapter = {
   language: "pl",
   minRequestIntervalMs: 1000,
 
-  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
-    const page = cursor ? Number.parseInt(cursor, 10) : 0;
-    if (Number.isNaN(page)) {
-      throw new Error("SAOS adapter: invalid cursor format");
-    }
+  fetchPage(cursor, _config, signal) {
+    return Result.tryPromise({
+      try: async () => {
+        const page = cursor ? Number.parseInt(cursor, 10) : 0;
+        if (Number.isNaN(page)) {
+          throw new AdapterFetchError({
+            message: "SAOS adapter: invalid cursor format",
+            adapterKey: ADAPTER_KEYS.PL_COURTS,
+            cursor,
+          });
+        }
 
-    const params = new URLSearchParams({
-      pageSize: String(PAGE_SIZE),
-      pageNumber: String(page),
-      sortingField: "JUDGMENT_DATE",
-      sortingDirection: "DESC",
+        const params = new URLSearchParams({
+          pageSize: String(PAGE_SIZE),
+          pageNumber: String(page),
+          sortingField: "JUDGMENT_DATE",
+          sortingDirection: "DESC",
+        });
+
+        const url = `${BASE_URL}?${params}`;
+
+        const response = await fetch(url, {
+          signal: signal
+            ? AbortSignal.any([
+                signal,
+                AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
+              ])
+            : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new AdapterFetchError({
+            message: `SAOS API error: ${response.status}`,
+            adapterKey: ADAPTER_KEYS.PL_COURTS,
+            cursor,
+            httpStatus: response.status,
+          });
+        }
+
+        const json: unknown = await response.json();
+        // SAFETY: structural check confirms object; all
+        // fields are optional so missing properties
+        // degrade gracefully.
+        const data: SaosResponse =
+          typeof json === "object" && json !== null
+            ? (json as SaosResponse)
+            : {};
+        const items = data.items ?? [];
+        const decisions: IngestionResult[] = [];
+
+        for (const item of items) {
+          const parsed = parseItem(item);
+          if (parsed) {
+            decisions.push(parsed);
+          }
+        }
+
+        const total = data.info?.totalResults;
+        const fetched = page * PAGE_SIZE + items.length;
+        const nextCursor =
+          items.length >= PAGE_SIZE && (total == null || fetched < total)
+            ? String(page + 1)
+            : null;
+
+        return { decisions, nextCursor };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.PL_COURTS, cursor),
     });
-
-    const url = `${BASE_URL}?${params}`;
-
-    const response = await fetch(url, {
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.LIST)])
-        : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      throw new Error(`SAOS API error: ${response.status}`);
-    }
-
-    const json: unknown = await response.json();
-    // SAFETY: structural check confirms object; all fields
-    // are optional so missing properties degrade gracefully.
-    const data: SaosResponse =
-      typeof json === "object" && json !== null ? (json as SaosResponse) : {};
-    const items = data.items ?? [];
-    const decisions: IngestionResult[] = [];
-
-    for (const item of items) {
-      const parsed = parseItem(item);
-      if (parsed) {
-        decisions.push(parsed);
-      }
-    }
-
-    const total = data.info?.totalResults;
-    const fetched = page * PAGE_SIZE + items.length;
-    const nextCursor =
-      items.length >= PAGE_SIZE && (total == null || fetched < total)
-        ? String(page + 1)
-        : null;
-
-    return { decisions, nextCursor };
   },
 };

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/api/db";
@@ -173,11 +174,21 @@ export const runIngestionPipeline = async ({
   let pagesProcessed = 0;
 
   while (pagesProcessed < MAX_SYNC_PAGES) {
-    const page = await adapter.fetchPage(
+    const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
       AbortSignal.timeout(ADAPTER_TIMEOUT.PAGE),
     );
+
+    if (Result.isError(pageResult)) {
+      captureError(pageResult.error, {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+      });
+      break;
+    }
+
+    const page = pageResult.value;
 
     for (const result of page.decisions) {
       const outcome = await processDecision(result, source.id);

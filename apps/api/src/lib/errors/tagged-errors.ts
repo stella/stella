@@ -62,3 +62,27 @@ export class TemplateDirectiveError extends TaggedError(
     directive: string;
   }>;
 }>() {}
+
+/** Case-law adapter page-fetch failure. */
+export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
+  message: string;
+  adapterKey: string;
+  cursor: string | null;
+  httpStatus?: number;
+  cause?: unknown;
+}>() {}
+
+/** Subprocess execution failure. */
+export class SubprocessError extends TaggedError("SubprocessError")<{
+  message: string;
+  exitCode: number | null;
+  cause?: unknown;
+}>() {}
+
+/** File content extraction failure. */
+export class ExtractionWorkerError extends TaggedError(
+  "ExtractionWorkerError",
+)<{
+  message: string;
+  exitCode: number | null;
+}>() {}

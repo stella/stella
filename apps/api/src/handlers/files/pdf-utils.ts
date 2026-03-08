@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { Result, TaggedError } from "better-result";
 
 import { LIMITS } from "@/api/lib/limits";
+import { spawnWorker } from "@/api/lib/subprocess";
 
 export class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
   message: string;
@@ -10,38 +11,19 @@ export class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
 const WORKER_PATH = resolve(import.meta.dir, "pdf-worker.ts");
 
 export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
-  const subprocess = Bun.spawn(["bun", "run", WORKER_PATH], {
+  const result = await spawnWorker({
+    workerPath: WORKER_PATH,
     stdin: new Blob([buffer]),
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      PATH: process.env.PATH ?? "",
-    },
-    timeout: LIMITS.extractionTimeoutMs,
+    timeoutMs: LIMITS.extractionTimeoutMs,
   });
 
-  try {
-    const [exitCode, stdout] = await Promise.all([
-      subprocess.exited,
-      new Response(subprocess.stdout).text(),
-      new Response(subprocess.stderr).text(),
-    ]);
-
-    if (exitCode !== 0) {
-      return Result.err(
-        new CorruptedPdfError({
-          message: `PDF validation failed (exit ${exitCode})`,
-        }),
-      );
-    }
-
-    return Result.ok(stdout === "true");
-  } catch (err) {
-    subprocess.kill();
+  if (Result.isError(result)) {
     return Result.err(
       new CorruptedPdfError({
-        message: err instanceof Error ? err.message : String(err),
+        message: result.error.message,
       }),
     );
   }
+
+  return Result.ok(result.value === "true");
 };
