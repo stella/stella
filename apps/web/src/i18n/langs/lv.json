@@ -295,8 +295,18 @@
       "placeholder": "Jūsu atbilde",
       "submit": "Iesniegt atbildes"
     },
+    "attachFile": "Pievienot failu",
+    "chatAbout": "Ievietot AI čatā",
     "deleteThread": "Delete conversation",
+    "documentView": {
+      "original": "Oriģināls",
+      "simple": "Pieņemts",
+      "trackedChanges": "Izmaiņu izsekošana"
+    },
+    "extractingContent": "Satura izgūšana...",
+    "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "greeting": "How can I help you today?",
+    "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "New chat",
     "noThreads": "No conversations yet",
     "placeholder": "What would you like to know?",
+    "send": "Nosūtīt ziņu",
+    "thinking": "Domāju...",
     "threads": "Conversations",
     "tool": {
       "askUser": "Precizējoši jautājumi",
       "createDocument": "Izveidot dokumentu",
+      "displayDocument": "Dokumenta skatīšana",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Searched matter",
       "updateEntityFields": "Atjaunināt lauku"
-    }
+    },
+    "unsupportedFileType": "Neatbalstīts faila tips",
+    "uploadFailed": "Neizdevās apstrādāt failu"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Ko varam uzlabot?",
-    "describeIssuePlaceholder": "Kļūda, nepilnība vai funkcijas ideja; jebkas noderēs\u2026",
+    "describeIssuePlaceholder": "Kļūda, nepilnība vai funkcijas ideja; jebkas noderēs…",
     "description": "Jūsu atsauksme tiek nosūtīta tieši komandai.",
     "includeScreenshot": "Pievienot ekrānuzņēmumu",
     "screenshotFailed": "Ekrānuzņēmuma uzņemšana neizdevās",

@@ -1,6 +1,7 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   convertToModelMessages,
+  hasToolCall,
   stepCountIs,
   streamText,
   type ToolSet,
@@ -26,7 +27,12 @@ import type {
 import { db } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type {
+  ExtractedTextAttachment,
+  ProcessedAttachment,
+} from "@/api/handlers/registry/actors/chat-attachment-types";
 import { createCaseLawTools } from "@/api/handlers/registry/actors/chat-case-law-tools";
+import { createDocumentViewTools } from "@/api/handlers/registry/actors/chat-document-tools";
 import {
   collectThreadMentions,
   extractEntityWorkspaceMap,
@@ -177,10 +183,8 @@ const CORE_RULES = [
   "",
   "PLANNING: For complex or ambiguous tasks (drafting " +
     "documents, multi-step workflows), call askUser to " +
-    "gather requirements BEFORE acting. After calling " +
-    "askUser, STOP and present your analysis and " +
-    "questions. Wait for the user's response, then " +
-    "synthesize a plan and execute.",
+    "gather requirements BEFORE acting. Wait for the " +
+    "user's response, then synthesize a plan and execute.",
   "",
   "Never expose internal IDs to the user in plain text.",
   "",
@@ -368,10 +372,18 @@ export const chatActor = actor({
         workspaceId?: string;
         modelId?: string;
         userContext?: UserContext;
+        attachments?: ProcessedAttachment[];
       },
     ) => {
-      const { threadId, chatId, message, workspaceId, modelId, userContext } =
-        input;
+      const {
+        threadId,
+        chatId,
+        message,
+        workspaceId,
+        modelId,
+        userContext,
+        attachments,
+      } = input;
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
 
@@ -509,10 +521,32 @@ export const chatActor = actor({
                   userId: connState.userId,
                 })
               : {};
+          // Extract text attachments for system prompt injection.
+          // Native file attachments (images, PDFs) are included
+          // as file parts in the user message by the frontend,
+          // so convertToModelMessages handles them automatically.
+          const textAttachments: ExtractedTextAttachment[] = [];
+
+          if (attachments) {
+            for (const att of attachments) {
+              if (att.type === "extracted-text") {
+                textAttachments.push(att);
+              }
+            }
+          }
+
+          // Document view tool (only when text attachments
+          // are present so we don't pollute the tool list).
+          const docTools =
+            textAttachments.length > 0
+              ? createDocumentViewTools(textAttachments)
+              : {};
+
           const tools: ToolSet = {
             ...orgTools,
             ...caseLawTools,
             ...matterTools,
+            ...docTools,
           };
 
           // System prompt: single-workspace gets a focused prompt,
@@ -531,6 +565,27 @@ export const chatActor = actor({
             system = buildGlobalPrompt(ctx);
           }
 
+          // Inject extracted-text attachments into the system
+          // prompt so the model can reason about their content.
+          if (textAttachments.length > 0) {
+            const attachmentBlock = textAttachments
+              .map((att) => {
+                const view = att.views.trackedChanges ?? att.views.simple;
+                const label = att.views.trackedChanges
+                  ? `${att.filename} (tracked changes)`
+                  : att.filename;
+                return `--- ${label} ---\n${view}\n---`;
+              })
+              .join("\n\n");
+            system =
+              (system ?? "") +
+              "\n\nThe user has attached these files " +
+              "for context. These are uploaded files, " +
+              "NOT workspace entities; do not use " +
+              "#stella-entity links for them:\n\n" +
+              attachmentBlock;
+          }
+
           // Strip workspace prefixes from entity mention links
           // so the model sees clean entity IDs (not WS:ENTITY).
           const cleanMessages = messages.map((m) => ({
@@ -545,12 +600,14 @@ export const chatActor = actor({
             ),
           }));
 
+          const modelMessages = await convertToModelMessages(cleanMessages);
+
           const stream = streamText({
             model: getModel(modelId),
             system,
             tools,
-            stopWhen: stepCountIs(MAX_TOOL_STEPS),
-            messages: await convertToModelMessages(cleanMessages),
+            stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("askUser")],
+            messages: modelMessages,
             abortSignal: runSignal,
           });
 

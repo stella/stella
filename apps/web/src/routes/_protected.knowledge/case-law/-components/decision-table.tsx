@@ -15,11 +15,11 @@ export type Decision = {
   court: string;
   country: string;
   language: string;
-  decisionDate: string | null;
+  decisionDate: Date | string | null;
   decisionType: string | null;
   sourceUrl: string | null;
   headline?: string | null;
-  createdAt: Date;
+  createdAt: Date | string;
 };
 
 type DecisionTableProps = {
@@ -73,7 +73,13 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         header: t("caseLaw.columns.decisionDate"),
         cell: (info) => {
           const value = info.getValue();
-          return value ?? "—";
+          if (value == null) {
+            return "—";
+          }
+          if (value instanceof Date) {
+            return value.toLocaleDateString();
+          }
+          return value;
         },
       }),
       columnHelper.accessor("decisionType", {

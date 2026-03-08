@@ -39,6 +39,7 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
+import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -116,6 +117,14 @@ function ProtectedComponent() {
 
   useHotkey(HOTKEYS.TOGGLE_CHAT, toggleRight);
 
+  // Open panel when a component requests "chat about this".
+  const chatRequestSeq = useChatPanelStore((s) => s.requestSeq);
+  useEffect(() => {
+    if (chatRequestSeq > 0 && !isOnChatRoute) {
+      setRightOpen(true);
+    }
+  }, [chatRequestSeq, isOnChatRoute]);
+
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
@@ -183,7 +192,9 @@ function ProtectedContent({
         )}
         <AppBreadcrumbs />
         {projectMatch && (
-          <TableControls workspaceId={projectMatch.params.workspaceId} />
+          <Suspense>
+            <TableControls workspaceId={projectMatch.params.workspaceId} />
+          </Suspense>
         )}
         {pdfMatch && <PdfViewerControls />}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">

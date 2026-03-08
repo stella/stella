@@ -1,4 +1,4 @@
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useParams, useRouteContext } from "@tanstack/react-router";
 
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
@@ -57,9 +57,14 @@ export const workflowOptions = ({
         workspaceId,
       });
 
+      const timeoutSignal = AbortSignal.timeout(10_000);
+      const combinedSignal = signal
+        ? AbortSignal.any([signal, timeoutSignal])
+        : timeoutSignal;
+
       const rivetActor = rivet.workflow.getOrCreate(actorConfig[0], {
         ...actorConfig[1],
-        signal,
+        signal: combinedSignal,
       });
 
       const workflowStatus = await rivetActor.getWorkflowStatus();
@@ -78,13 +83,15 @@ export const useIsWorkflowRunning = () => {
     select: (s) => s.workspaceId,
   });
 
-  return useSuspenseQuery({
+  const { data } = useQuery({
     ...workflowOptions({
       workspaceId,
       organizationId,
     }),
-    select: (data) => data.running,
-  }).data;
+    select: (d) => d.running,
+  });
+
+  return data ?? false;
 };
 
 export const justificationsOptions = (workspaceId: string) =>

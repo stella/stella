@@ -889,10 +889,9 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
       "a complex task. Use this when the request is " +
       "ambiguous or requires decisions you cannot make " +
       "alone (jurisdiction, parties, preferences, scope). " +
-      "After calling this tool, STOP and present the " +
-      "questions to the user. Do NOT proceed until they " +
-      "respond. Once they answer, synthesize their input " +
-      "into a plan and execute it.",
+      "The UI renders the questions automatically. Once " +
+      "the user answers, synthesize their input into a " +
+      "plan and execute it.",
     inputSchema: z.object({
       analysis: z
         .string()

@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -79,6 +79,15 @@ type ChatEditorProps = {
   onSubmit: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Ref populated with a submit function so the parent can
+   *  trigger submit externally (e.g., from a send button). */
+  submitRef?: React.MutableRefObject<(() => void) | null>;
+  /** Called when the editor transitions between empty and
+   *  non-empty. Useful for showing/hiding a send button. */
+  onEmptyChange?: (isEmpty: boolean) => void;
+  /** Ref populated with the TipTap editor instance so the
+   *  parent can programmatically insert content. */
+  editorRef?: React.MutableRefObject<Editor | null>;
   /** @deprecated Use mentionContext instead. */
   workspaceId?: string;
 };
@@ -90,6 +99,9 @@ export const ChatEditor = ({
   onSubmit,
   placeholder,
   autoFocus,
+  submitRef,
+  onEmptyChange,
+  editorRef,
 }: ChatEditorProps) => {
   const t = useTranslations();
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
@@ -168,9 +180,20 @@ export const ChatEditor = ({
     [hasMentions, resolvedPlaceholder, stableGetItems],
   );
 
+  const onEmptyChangeRef = useRef(onEmptyChange);
+  onEmptyChangeRef.current = onEmptyChange;
+  const wasEmptyRef = useRef(true);
+
   const editor = useEditor({
     extensions,
     autofocus: autoFocus ? "end" : false,
+    onUpdate: ({ editor: e }) => {
+      const isEmpty = e.isEmpty;
+      if (isEmpty !== wasEmptyRef.current) {
+        wasEmptyRef.current = isEmpty;
+        onEmptyChangeRef.current?.(isEmpty);
+      }
+    },
     editorProps: {
       attributes: {
         class: cn(
@@ -210,6 +233,36 @@ export const ChatEditor = ({
       },
     },
   });
+
+  // Expose a submit function so parent components (e.g. a
+  // send button) can trigger submit without keyboard events.
+  useEffect(() => {
+    if (!submitRef || !editor) {
+      return;
+    }
+    submitRef.current = () => {
+      const text = serializeToText(editor);
+      if (text) {
+        onSubmit(text);
+        editor.commands.clearContent();
+      }
+    };
+    return () => {
+      submitRef.current = null;
+    };
+  }, [submitRef, editor, onSubmit]);
+
+  // Expose the editor instance for programmatic content
+  // insertion (e.g., inserting a mention from context menu).
+  useEffect(() => {
+    if (!editorRef) {
+      return;
+    }
+    editorRef.current = editor;
+    return () => {
+      editorRef.current = null;
+    };
+  }, [editorRef, editor]);
 
   return (
     // Stop keyboard events from reaching parent handlers

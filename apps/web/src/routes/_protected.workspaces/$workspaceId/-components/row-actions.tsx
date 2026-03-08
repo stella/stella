@@ -6,6 +6,7 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileOutputIcon,
+  MessageSquareIcon,
   PencilIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { api } from "@/lib/api";
+import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { WorkspaceEntity } from "@/lib/types";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useDeleteEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
@@ -223,6 +225,21 @@ export const RowActions = ({
             {t("common.rename")}
           </MenuItem>
         )}
+        <MenuItem
+          onClick={() =>
+            useChatPanelStore.getState().requestChatAbout({
+              id: entity.entityId,
+              label: name,
+              category: "entity",
+              kind: entity.kind,
+              mimeType: file?.mimeType ?? null,
+              workspaceId,
+            })
+          }
+        >
+          <MessageSquareIcon />
+          {t("chat.chatAbout")}
+        </MenuItem>
         {file && (
           <MenuItem onClick={() => handleDownload()}>
             <DownloadIcon />

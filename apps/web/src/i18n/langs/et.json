@@ -295,8 +295,18 @@
       "placeholder": "Teie vastus",
       "submit": "Esita vastused"
     },
+    "attachFile": "Lisa fail",
+    "chatAbout": "Lisa AI vestlusesse",
     "deleteThread": "Delete conversation",
+    "documentView": {
+      "original": "Originaal",
+      "simple": "Aktsepteeritud",
+      "trackedChanges": "Muudatuste jälgimine"
+    },
+    "extractingContent": "Sisu ekstraktimine...",
+    "fileTooLarge": "Fail ületab {maxSize} piirangu",
     "greeting": "How can I help you today?",
+    "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "New chat",
     "noThreads": "No conversations yet",
     "placeholder": "What would you like to know?",
+    "send": "Saada sõnum",
+    "thinking": "Mõtlen...",
     "threads": "Conversations",
     "tool": {
       "askUser": "Täpsustavad küsimused",
       "createDocument": "Loo dokument",
+      "displayDocument": "Dokumendi kuvamine",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Searched matter",
       "updateEntityFields": "Uuenda välja"
-    }
+    },
+    "unsupportedFileType": "Toetamata failitüüp",
+    "uploadFailed": "Faili töötlemine ebaõnnestus"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Mida saaksime paremini teha?",
-    "describeIssuePlaceholder": "Viga, kitsaskoht või funktsiooniidee; kõik aitab\u2026",
+    "describeIssuePlaceholder": "Viga, kitsaskoht või funktsiooniidee; kõik aitab…",
     "description": "Teie tagasiside saadetakse otse meeskonnale.",
     "includeScreenshot": "Lisa ekraanipilt",
     "screenshotFailed": "Ekraanipildi tegemine ebaõnnestus",

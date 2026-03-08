@@ -295,8 +295,18 @@
       "placeholder": "Votre réponse",
       "submit": "Envoyer les réponses"
     },
+    "attachFile": "Joindre un fichier",
+    "chatAbout": "Insérer dans le chat IA",
     "deleteThread": "Delete conversation",
+    "documentView": {
+      "original": "Original",
+      "simple": "Accepté",
+      "trackedChanges": "Suivi des modifications"
+    },
+    "extractingContent": "Extraction du contenu...",
+    "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "greeting": "How can I help you today?",
+    "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "New chat",
     "noThreads": "No conversations yet",
     "placeholder": "What would you like to know?",
+    "send": "Envoyer le message",
+    "thinking": "Réflexion...",
     "threads": "Conversations",
     "tool": {
       "askUser": "Questions de clarification",
       "createDocument": "Créer un document",
+      "displayDocument": "Affichage du document",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Searched matter",
       "updateEntityFields": "Mettre à jour le champ"
-    }
+    },
+    "unsupportedFileType": "Type de fichier non pris en charge",
+    "uploadFailed": "Échec du traitement du fichier"
   },
   "clauses": {
     "addVariant": "Add variant",

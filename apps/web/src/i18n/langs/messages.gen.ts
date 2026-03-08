@@ -298,8 +298,19 @@ type Messages = {
       "placeholder": "Your answer";
       "submit": "Submit answers";
     };
+    "attachFile": "Attach file";
+    "chatAbout": "Chat about this";
     "deleteThread": "Delete conversation";
+    "documentView": {
+      "original": "Original";
+      "simple": "Accepted";
+      "trackedChanges": "Tracked changes";
+    };
+    "extractingContent": "Extracting content...";
+    "fileTooLarge": "File exceeds {maxSize} limit";
     "greeting": "How can I help you today?";
+    "thinking": "Thinking...";
+    "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
         "clauses": "Clauses";
@@ -313,17 +324,21 @@ type Messages = {
     "newChat": "New chat";
     "noThreads": "No conversations yet";
     "placeholder": "What would you like to know?";
+    "send": "Send message";
     "threads": "Conversations";
     "tool": {
-      "askUser": "Clarifying questions";
-      "createDocument": "Create document";
-      "listEntities": "Listed entities";
-      "readContent": "Read content";
-      "readEntity": "Read entity";
-      "searchCaseLaw": "Searched case law";
-      "searchMatter": "Searched matter";
-      "updateEntityFields": "Update metadata";
+      "askUser": "Asking for clarification";
+      "createDocument": "Creating document";
+      "displayDocument": "Viewing document";
+      "listEntities": "Browsing documents";
+      "readContent": "Reading content";
+      "readEntity": "Reading document details";
+      "searchCaseLaw": "Searching case law";
+      "searchMatter": "Searching the matter";
+      "updateEntityFields": "Updating metadata";
     };
+    "unsupportedFileType": "Unsupported file type";
+    "uploadFailed": "Failed to process file";
   };
   "clauses": {
     "addVariant": "Add variant";
@@ -625,8 +640,8 @@ type Messages = {
     "describeIssuePlaceholder": "Bug, rough edge, or feature idea; anything helps…";
     "description": "Your feedback is sent directly to the team.";
     "includeScreenshot": "Attach screenshot";
-    "screenshotHint": "Captures the current page (without this dialog) and sends it with your feedback.";
     "screenshotFailed": "Screenshot capture failed";
+    "screenshotHint": "Captures the current page (without this dialog) and sends it with your feedback.";
     "submit": "Send feedback";
     "suggestedFix": "Suggested fix (optional)";
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";

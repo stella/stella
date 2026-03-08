@@ -34,16 +34,18 @@ const MetadataField = ({
   value,
 }: {
   label: string;
-  value: string | null | undefined;
+  value: Date | string | null | undefined;
 }) => {
   if (!value) {
     return null;
   }
 
+  const display = value instanceof Date ? value.toLocaleDateString() : value;
+
   return (
     <div>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value}</dd>
+      <dd className="text-sm">{display}</dd>
     </div>
   );
 };

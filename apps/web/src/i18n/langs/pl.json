@@ -295,8 +295,18 @@
       "placeholder": "Twoja odpowiedź",
       "submit": "Wyślij odpowiedzi"
     },
+    "attachFile": "Załącz plik",
+    "chatAbout": "Wstaw do czatu AI",
     "deleteThread": "Usuń rozmowę",
+    "documentView": {
+      "original": "Oryginał",
+      "simple": "Zaakceptowane",
+      "trackedChanges": "Śledzenie zmian"
+    },
+    "extractingContent": "Wyodrębnianie treści...",
+    "fileTooLarge": "Plik przekracza limit {maxSize}",
     "greeting": "W czym mogę dziś pomóc?",
+    "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "Nowy czat",
     "noThreads": "Brak rozmów",
     "placeholder": "Co chciałbyś wiedzieć?",
+    "send": "Wyślij wiadomość",
+    "thinking": "Myślę...",
     "threads": "Rozmowy",
     "tool": {
       "askUser": "Pytania wyjaśniające",
       "createDocument": "Utwórz dokument",
+      "displayDocument": "Wyświetlanie dokumentu",
       "listEntities": "Wylistowano elementy",
       "readContent": "Odczytano treść",
       "readEntity": "Odczytano element",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Przeszukano sprawę",
       "updateEntityFields": "Zaktualizuj metadane"
-    }
+    },
+    "unsupportedFileType": "Nieobsługiwany typ pliku",
+    "uploadFailed": "Przetwarzanie pliku nie powiodło się"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Co możemy poprawić?",
-    "describeIssuePlaceholder": "Błąd, niedogodność lub pomysł na funkcję; wszystko się przyda\u2026",
+    "describeIssuePlaceholder": "Błąd, niedogodność lub pomysł na funkcję; wszystko się przyda…",
     "description": "Twoja opinia trafia bezpośrednio do zespołu.",
     "includeScreenshot": "Dołącz zrzut ekranu",
     "screenshotFailed": "Nie udało się przechwycić zrzutu ekranu",

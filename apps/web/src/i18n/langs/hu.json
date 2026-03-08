@@ -295,8 +295,18 @@
       "placeholder": "Az Ön válasza",
       "submit": "Válaszok elküldése"
     },
+    "attachFile": "Fájl csatolása",
+    "chatAbout": "Beszúrás az AI chatbe",
     "deleteThread": "Beszélgetés törlése",
+    "documentView": {
+      "original": "Eredeti",
+      "simple": "Elfogadott",
+      "trackedChanges": "Változáskövetés"
+    },
+    "extractingContent": "Tartalom kinyerése...",
+    "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "greeting": "Miben segíthetek ma?",
+    "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "Új csevegés",
     "noThreads": "Még nincsenek beszélgetések",
     "placeholder": "Mit szeretne tudni?",
+    "send": "Üzenet küldése",
+    "thinking": "Gondolkodom...",
     "threads": "Beszélgetések",
     "tool": {
       "askUser": "Pontosító kérdések",
       "createDocument": "Dokumentum létrehozása",
+      "displayDocument": "Dokumentum megtekintése",
       "listEntities": "Elemek listázva",
       "readContent": "Tartalom olvasva",
       "readEntity": "Elem olvasva",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Ügy keresve",
       "updateEntityFields": "Metaadatok frissítése"
-    }
+    },
+    "unsupportedFileType": "Nem támogatott fájltípus",
+    "uploadFailed": "A fájl feldolgozása sikertelen"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Min javíthatunk?",
-    "describeIssuePlaceholder": "Hiba, döccenő vagy ötlet; bármi segít\u2026",
+    "describeIssuePlaceholder": "Hiba, döccenő vagy ötlet; bármi segít…",
     "description": "Visszajelzése közvetlenül a csapathoz érkezik.",
     "includeScreenshot": "Képernyőkép csatolása",
     "screenshotFailed": "A képernyőkép rögzítése sikertelen",

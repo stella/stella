@@ -295,8 +295,18 @@
       "placeholder": "Vaša odpoveď",
       "submit": "Odoslať odpovede"
     },
+    "attachFile": "Priložiť súbor",
+    "chatAbout": "Vložiť do AI chatu",
     "deleteThread": "Zmazať konverzáciu",
+    "documentView": {
+      "original": "Originál",
+      "simple": "Prijaté",
+      "trackedChanges": "Sledované zmeny"
+    },
+    "extractingContent": "Extrahovanie obsahu...",
+    "fileTooLarge": "Súbor prekračuje limit {maxSize}",
     "greeting": "Ako vám môžem dnes pomôcť?",
+    "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "Nový chat",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "placeholder": "Čo by ste chceli vedieť?",
+    "send": "Odoslať správu",
+    "thinking": "Premýšľam...",
     "threads": "Konverzácie",
     "tool": {
       "askUser": "Upresňujúce otázky",
       "createDocument": "Vytvoriť dokument",
+      "displayDocument": "Zobrazenie dokumentu",
       "listEntities": "Výpis entít",
       "readContent": "Čítanie obsahu",
       "readEntity": "Čítanie entity",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Hľadanie v spise",
       "updateEntityFields": "Aktualizovať metadáta"
-    }
+    },
+    "unsupportedFileType": "Nepodporovaný typ súboru",
+    "uploadFailed": "Spracovanie súboru zlyhalo"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Čo môžeme zlepšiť?",
-    "describeIssuePlaceholder": "Chyba, nedostatok alebo nápad na funkciu; čokoľvek pomôže\u2026",
+    "describeIssuePlaceholder": "Chyba, nedostatok alebo nápad na funkciu; čokoľvek pomôže…",
     "description": "Vaša spätná väzba je odoslaná priamo tímu.",
     "includeScreenshot": "Priložiť snímku obrazovky",
     "screenshotFailed": "Zachytenie snímky obrazovky zlyhalo",
