@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Ce slug est déjà utilisé",
     "uploadFailed": "Échec de l'import"
   },
+  "feedback": {
+    "describeIssue": "Décrivez le problème",
+    "describeIssuePlaceholder": "Vous avez trouvé un bug ? Dites-nous ce qui s'est passé…",
+    "description": "Aidez-nous à nous améliorer en décrivant ce qui n'a pas fonctionné.",
+    "includeScreenshot": "Inclure une capture d'écran",
+    "screenshotFailed": "Échec de la capture d'écran",
+    "submit": "Envoyer",
+    "suggestedFix": "Correction suggérée (facultatif)",
+    "suggestedFixPlaceholder": "p. ex. Désactiver le bouton d'envoi lorsque le formulaire est vide",
+    "title": "Signaler un problème",
+    "trigger": "Commentaires"
+  },
   "knowledge": {
     "sections": {
       "agents": {

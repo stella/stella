@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Este slug ya está en uso",
     "uploadFailed": "Error al subir"
   },
+  "feedback": {
+    "describeIssue": "Describe el problema",
+    "describeIssuePlaceholder": "¿Encontraste un error? Cuéntanos qué ocurrió…",
+    "description": "Ayúdanos a mejorar describiendo qué salió mal.",
+    "includeScreenshot": "Incluir captura de pantalla",
+    "screenshotFailed": "Error al capturar la pantalla",
+    "submit": "Enviar comentario",
+    "suggestedFix": "Corrección sugerida (opcional)",
+    "suggestedFixPlaceholder": "p. ej. Desactivar el botón de envío cuando el formulario esté vacío",
+    "title": "Reportar un problema",
+    "trigger": "Comentarios"
+  },
   "knowledge": {
     "sections": {
       "agents": {

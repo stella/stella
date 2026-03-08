@@ -72,7 +72,7 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
   const pattern = new RegExp(`id="${labelId}"[^>]*>([\\s\\S]*?)</span>`, "i");
   const match = html.match(pattern);
   if (!match) {
-    return undefined;
+    return;
   }
   return stripHtml(match[1]).trim() || undefined;
 };
@@ -81,7 +81,7 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
 const parseCzDate = (dateStr: string): string | undefined => {
   const m = dateStr.trim().match(CZ_DATE_PATTERN);
   if (!m) {
-    return undefined;
+    return;
   }
   return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 };
@@ -106,7 +106,7 @@ const parseRegistrySign = (
 const extractFulltext = (html: string): string | undefined => {
   const match = html.match(DOC_CONTENT_PATTERN);
   if (!match) {
-    return undefined;
+    return;
   }
 
   const text = stripHtml(match[1]);

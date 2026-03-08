@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Šis slug jau užimtas",
     "uploadFailed": "Įkėlimas nepavyko"
   },
+  "feedback": {
+    "describeIssue": "Aprašykite problemą",
+    "describeIssuePlaceholder": "Radote klaidą? Praneškite mums, kas nutiko…",
+    "description": "Padėkite mums tobulėti aprašydami, kas nutiko ne taip.",
+    "includeScreenshot": "Pridėti ekrano kopiją",
+    "screenshotFailed": "Nepavyko užfiksuoti ekrano kopijos",
+    "submit": "Siųsti atsiliepimą",
+    "suggestedFix": "Siūlomas pataisymas (neprivaloma)",
+    "suggestedFixPlaceholder": "pvz., Išjungti siuntimo mygtuką, kai forma tuščia",
+    "title": "Pranešti apie problemą",
+    "trigger": "Atsiliepimai"
+  },
   "knowledge": {
     "sections": {
       "agents": {

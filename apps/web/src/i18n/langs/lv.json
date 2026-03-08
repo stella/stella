@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Šis slug jau ir aizņemts",
     "uploadFailed": "Augšupielāde neizdevās"
   },
+  "feedback": {
+    "describeIssue": "Aprakstiet problēmu",
+    "describeIssuePlaceholder": "Atradāt kļūdu? Pastāstiet mums, kas notika…",
+    "description": "Palīdziet mums uzlaboties, aprakstot, kas nogāja greizi.",
+    "includeScreenshot": "Pievienot ekrānuzņēmumu",
+    "screenshotFailed": "Ekrānuzņēmuma uzņemšana neizdevās",
+    "submit": "Nosūtīt atsauksmi",
+    "suggestedFix": "Ieteiktais labojums (neobligāti)",
+    "suggestedFixPlaceholder": "piem., Atspējot sūtīšanas pogu, kad forma ir tukša",
+    "title": "Ziņot par problēmu",
+    "trigger": "Atsauksmes"
+  },
   "knowledge": {
     "sections": {
       "agents": {
