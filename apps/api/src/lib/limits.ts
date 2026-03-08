@@ -44,6 +44,7 @@ export const LIMITS = {
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   caseLawFacetLimit: 20,
+  caseLawPolarityRulesPerLanguage: 500,
 } as const;
 
 /**

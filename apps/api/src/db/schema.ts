@@ -1,4 +1,4 @@
-import { defineRelations, isNotNull, sql } from "drizzle-orm";
+import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
@@ -1171,6 +1171,12 @@ export const caseLawCitations = p.pgTable(
       }),
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
     sectionIndex: p.integer("section_index"),
+    polarity: p.varchar("polarity", { length: 16 }),
+    polarityRuleId: p
+      .varchar("polarity_rule_id", { length: 21 })
+      .references(() => caseLawPolarityRules.id, {
+        onDelete: "set null",
+      }),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1179,6 +1185,48 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_cited_idx")
       .on(t.citedDecisionId)
       .where(isNotNull(t.citedDecisionId)),
+    p
+      .index("case_law_citations_polarity_null_idx")
+      .on(t.polarity)
+      .where(isNull(t.polarity)),
+    p.check(
+      "citations_polarity_values",
+      sql`${t.polarity} IN ('positive','neutral','negative','unknown')`,
+    ),
+  ],
+);
+
+export const caseLawPolarityRules = p.pgTable(
+  "case_law_polarity_rules",
+  {
+    id: pNanoid.primaryKey(),
+    pattern: p.varchar("pattern", { length: 512 }).notNull(),
+    polarity: p.varchar("polarity", { length: 16 }).notNull(),
+    language: p.varchar("language", { length: 8 }).notNull(),
+    source: p.varchar("source", { length: 16 }).notNull().default("manual"),
+    confidence: p.doublePrecision("confidence").notNull().default(1.0),
+    matchCount: p.integer("match_count").notNull().default(0),
+    surfaceForms: p.jsonb("surface_forms").$type<string[]>().default([]),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.index("case_law_polarity_rules_lang_idx").on(t.language),
+    p
+      .uniqueIndex("case_law_polarity_rules_pattern_lang_idx")
+      .on(t.pattern, t.language),
+    p.check(
+      "polarity_rules_polarity_values",
+      sql`${t.polarity} IN ('positive','neutral','negative','unknown')`,
+    ),
+    p.check(
+      "polarity_rules_source_values",
+      sql`${t.source} IN ('manual','llm-proposed','llm-promoted')`,
+    ),
   ],
 );
 
@@ -1272,6 +1320,7 @@ export const relations = defineRelations(
     caseLawSources,
     caseLawDecisions,
     caseLawCitations,
+    caseLawPolarityRules,
     caseLawMatterLinks,
     caseLawSearchDocuments,
   },
@@ -1682,7 +1731,12 @@ export const relations = defineRelations(
         from: r.caseLawCitations.citedDecisionId,
         to: r.caseLawDecisions.id,
       }),
+      polarityRule: r.one.caseLawPolarityRules({
+        from: r.caseLawCitations.polarityRuleId,
+        to: r.caseLawPolarityRules.id,
+      }),
     },
+    caseLawPolarityRules: {},
     caseLawMatterLinks: {
       decision: r.one.caseLawDecisions({
         from: r.caseLawMatterLinks.decisionId,
