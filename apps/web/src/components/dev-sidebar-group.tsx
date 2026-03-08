@@ -34,13 +34,49 @@ import { useDevStore } from "@/lib/dev-store";
 const CHAT_MODELS = [
   // Default: uses CHAT_MODEL from ai-models.ts
   { value: "", label: "Default (Gemini 3 Flash)" },
-  // Role-equivalent models (match ai-models.ts constants)
-  { value: "google/gemini-3-flash-preview", label: "Fast / PDF Native" },
-  { value: "google/gemini-3-pro-preview", label: "Reasoning" },
-  // Manual overrides
-  { value: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-  { value: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
-  { value: "anthropic/claude-3.5-haiku", label: "Claude 3.5 Haiku" },
+
+  // --- Low ($0.50–$3/M output) ---
+  { value: "openai/gpt-5-mini", label: "GPT-5 Mini · Low" },
+  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash · Low" },
+  {
+    value: "google/gemini-3-flash-preview",
+    label: "Gemini 3.0 Flash · Low",
+  },
+  {
+    value: "perplexity/sonar",
+    label: "Sonar (web search) · Low",
+  },
+
+  // --- Mid ($5–$12/M output) ---
+  {
+    value: "anthropic/claude-haiku-4-5",
+    label: "Claude Haiku 4.5 · Mid",
+  },
+  { value: "openai/o3", label: "o3 · Mid" },
+  { value: "openai/gpt-5", label: "GPT-5 · Mid" },
+  {
+    value: "google/gemini-3-pro-preview",
+    label: "Gemini 3.0 Pro · Mid",
+  },
+  {
+    value: "google/gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro · Mid",
+  },
+
+  // --- High ($14–$15/M output) ---
+  {
+    value: "openai/gpt-5.3-codex",
+    label: "GPT-5.3 Codex · High",
+  },
+  { value: "openai/gpt-5.4", label: "GPT-5.4 · High" },
+  {
+    value: "perplexity/sonar-pro",
+    label: "Sonar Pro (web search) · High",
+  },
+  {
+    value: "anthropic/claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6 · High",
+  },
 ] as const;
 
 export const DevSidebarGroup = () => {
