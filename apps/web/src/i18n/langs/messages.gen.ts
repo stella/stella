@@ -621,15 +621,16 @@ type Messages = {
     "uploadFailed": "Upload failed";
   };
   "feedback": {
-    "describeIssue": "Describe the issue";
-    "describeIssuePlaceholder": "Found a bug? Let us know what happened…";
-    "description": "Help us improve by describing what went wrong.";
-    "includeScreenshot": "Include screenshot";
+    "describeIssue": "What can we do better?";
+    "describeIssuePlaceholder": "Bug, rough edge, or feature idea; anything helps…";
+    "description": "Your feedback is sent directly to the team.";
+    "includeScreenshot": "Attach screenshot";
+    "screenshotHint": "Captures the current page (without this dialog) and sends it with your feedback.";
     "screenshotFailed": "Screenshot capture failed";
     "submit": "Send feedback";
     "suggestedFix": "Suggested fix (optional)";
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";
-    "title": "Report an issue";
+    "title": "Feedback";
     "trigger": "Feedback";
   };
   "knowledge": {

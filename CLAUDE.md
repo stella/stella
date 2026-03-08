@@ -114,6 +114,11 @@ For these, use `WebFetch` or `WebSearch` directly.
   thread it through the full stack (URL params, component
   props) instead of hardcoding a default on the frontend
 - TypeScript strict mode throughout
+- If TypeScript can make a class of bug structurally
+  impossible (branded types, discriminated unions, exhaustive
+  checks), prefer that over runtime validation or manual
+  discipline. This applies equally to security boundaries
+  (e.g., `SafeId`, tenant-scoped types) and business logic.
 - "One obvious way" — consistent patterns across the codebase
 - Conventional Commits: `feat:`, `chore:`, `fix:`, `docs:`
 - Rebase feature branches onto main instead of merging. This
@@ -157,8 +162,7 @@ Principles derived from these standards that apply to every change:
 - **Access control** — every endpoint must enforce auth and
   authorisation. No "internal-only" endpoints without guards.
 - **Dependency hygiene** — keep dependencies minimal, pinned, and
-  audited. A CycloneDX SBOM (`sbom.cdx.json`) is auto-generated
-  on every push to main and committed to the repo.
+  audited.
 - **Logging without leaking** — log enough to investigate incidents,
   never log secrets, tokens, PII, or document contents.
 - **Change management** — all changes go through PR review. No
@@ -574,54 +578,3 @@ Import order (enforced by Prettier plugin):
 3. `@stella/*` workspace packages
 4. `@/*` path aliases
 5. Relative imports
-
-## Browser Testing (Playwright MCP)
-
-The project includes a Playwright MCP server for visual verification
-of UI changes. Configuration lives in `.claude/settings.json`.
-
-### Setup (one-time)
-
-```bash
-# Seed the test user and generate storage-state
-bun run --filter @stella/api db:seed-test-user
-```
-
-This creates:
-
-| Entity       | Value                         |
-| ------------ | ----------------------------- |
-| Email        | `test@stella.dev`             |
-| Organization | "Test Firm" (`test-firm`)     |
-| Role         | owner                         |
-| Session      | 30-day token in storage-state |
-
-The storage state is written to `.playwright/storage-state.json`
-(gitignored; it contains the session token).
-
-### Using Playwright MCP
-
-When verifying UI changes:
-
-1. Ensure `bun run dev` is running (web :3000, api :3001)
-2. Use Playwright MCP to navigate to `http://localhost:3000`
-3. The session cookie is loaded automatically from storage state
-4. Navigate to the relevant page and verify the change
-5. Use `browser_console_messages` to check for errors
-6. Use `browser_take_screenshot` to capture visual state
-
-To load the storage state, start the MCP server with:
-
-```bash
-bunx @playwright/mcp@latest \
-  --storage-state .playwright/storage-state.json \
-  --viewport-size 1280x720
-```
-
-### Re-seeding
-
-If the session expires, re-run the seed script:
-
-```bash
-bun run --filter @stella/api db:seed-test-user
-```

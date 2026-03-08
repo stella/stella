@@ -76,6 +76,7 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,
@@ -1034,6 +1035,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       {/* User avatar at bottom */}
       <SidebarFooter>
         <SidebarMenu>
+          <FeedbackDialog />
           <SidebarMenuItem>
             <Menu>
               <MenuTrigger className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">

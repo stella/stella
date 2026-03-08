@@ -28,6 +28,33 @@
         document.documentElement.classList.add(`palette-${palette}`);
       }
     </script>
+    <script type="module">
+      import { getStorageKey } from "/src/consts.ts";
+
+      if (import.meta.env.DEV) {
+        try {
+          const raw = localStorage.getItem(getStorageKey("dev"));
+          const enabled = raw
+            ? JSON.parse(raw).state?.reactGrab === true
+            : false;
+          if (enabled) {
+            window.addEventListener(
+              "react-grab:init",
+              () => {
+                window.__REACT_GRAB__?.setEnabled(true);
+                window.__REACT_GRAB__?.activate();
+              },
+              { once: true },
+            );
+            import("react-grab").catch(() => {
+              // react-grab failed to load; stays unloaded
+            });
+          }
+        } catch {
+          // react-grab stays unloaded
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

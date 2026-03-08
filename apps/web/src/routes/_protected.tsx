@@ -30,7 +30,6 @@ import { Separator } from "@stella/ui/components/separator";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
-import { FeedbackDialog } from "@/components/feedback-dialog";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
@@ -138,7 +137,6 @@ function ProtectedComponent() {
           workspaceId={activeWorkspaceId}
         />
         <ShortcutHintsOverlay />
-        <FeedbackDialog />
       </ChatMentionProviders>
     </SidebarProvider>
   );
