@@ -15,6 +15,25 @@ export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
 
 export type SequencedChunk = BaseSequencedChunk<UIMessageChunk>;
 
+/** A file processed by the upload-context-file endpoint. */
+export type ProcessedAttachment =
+  | {
+      type: "native-file";
+      dataUrl: string;
+      mediaType: string;
+      filename: string;
+    }
+  | {
+      type: "extracted-text";
+      filename: string;
+      mediaType: string;
+      views: {
+        simple: string;
+        original?: string;
+        trackedChanges?: string;
+      };
+    };
+
 export type ChatStreamConnection = {
   on(
     eventName: "stream-chunk",
@@ -27,6 +46,7 @@ export type ChatStreamConnection = {
     workspaceId?: string;
     modelId?: string;
     userContext?: UserContext;
+    attachments?: ProcessedAttachment[];
   }): Promise<{ status: "started" | "busy" }>;
   stop(input: { threadId: string }): Promise<void>;
   getStreamSnapshot(input: {
@@ -52,6 +72,10 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
   private readonly workspaceId: string | undefined;
   private readonly getModelId: (() => string | null) | undefined;
   private readonly userContext: UserContext | undefined;
+
+  /** Attachments queued for the next sendMessages call.
+   *  Drained (cleared) on each send. */
+  pendingAttachments: ProcessedAttachment[] = [];
 
   // Highest seq successfully delivered to the SDK.
   // Used on reconnect to skip chunks already processed.
@@ -160,6 +184,13 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
     const ctx = this.contextSent ? undefined : this.userContext;
     this.contextSent = true;
 
+    // Drain pending attachments so they travel with this
+    // message only; subsequent messages start clean.
+    const attachments =
+      this.pendingAttachments.length > 0
+        ? this.pendingAttachments.splice(0)
+        : undefined;
+
     const { status } = await this.connection.sendMessages({
       threadId: this.threadId,
       chatId,
@@ -167,6 +198,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
       workspaceId: this.workspaceId,
       modelId: this.getModelId?.() ?? undefined,
       userContext: ctx,
+      attachments,
     });
 
     // Another connection already owns this thread's generation.

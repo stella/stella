@@ -29,7 +29,7 @@ export const useDevStore = create<State & Actions>()(
       rivetDevtools: true,
       chatModelId: null,
       showToolCalls: true,
-      reactGrab: false,
+      reactGrab: true,
 
       setTanstackDevtools: (tanstackDevtools) => set({ tanstackDevtools }),
       setSourceInspector: (sourceInspector) => set({ sourceInspector }),

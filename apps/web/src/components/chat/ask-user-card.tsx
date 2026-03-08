@@ -6,9 +6,12 @@ import {
   LoaderIcon,
   PencilIcon,
 } from "lucide-react";
+import { Streamdown } from "streamdown";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
+
+import { EntityLink } from "@/components/chat/entity-link";
 
 type ToolPart = Parameters<typeof getToolName>[0];
 
@@ -28,6 +31,8 @@ type AskUserCardProps = {
   part: ToolPart;
   onSubmit: (text: string) => void;
 };
+
+const ANALYSIS_COMPONENTS = { a: EntityLink };
 
 export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
   const t = useTranslations();
@@ -76,7 +81,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
 
     const lines = input.questions.map((q, i) => {
       const answer = answers[i] ?? "";
-      return `**${q.question}**\n${answer || "(no answer)"}`;
+      return `${q.question}: ${answer || "(no answer)"}`;
     });
 
     onSubmit(lines.join("\n\n"));
@@ -116,8 +121,10 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
 
       {/* Analysis */}
       {input.analysis && (
-        <div className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          {input.analysis}
+        <div className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+          <Streamdown components={ANALYSIS_COMPONENTS}>
+            {input.analysis}
+          </Streamdown>
         </div>
       )}
 

@@ -295,8 +295,18 @@
       "placeholder": "Vaše odpověď",
       "submit": "Odeslat odpovědi"
     },
+    "attachFile": "Připojit soubor",
+    "chatAbout": "Vložit do AI chatu",
     "deleteThread": "Smazat konverzaci",
+    "documentView": {
+      "original": "Originál",
+      "simple": "Přijaté",
+      "trackedChanges": "Sledované změny"
+    },
+    "extractingContent": "Extrahování obsahu...",
+    "fileTooLarge": "Soubor překračuje limit {maxSize}",
     "greeting": "Jak vám mohu dnes pomoci?",
+    "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "Nový chat",
     "noThreads": "Zatím žádné konverzace",
     "placeholder": "Co byste chtěli vědět?",
+    "send": "Odeslat zprávu",
+    "thinking": "Přemýšlím...",
     "threads": "Konverzace",
     "tool": {
-      "askUser": "Upřesňující otázky",
-      "createDocument": "Vytvořit dokument",
-      "listEntities": "Výpis entit",
-      "readContent": "Čtení obsahu",
-      "readEntity": "Čtení entity",
-      "searchCaseLaw": "Searched case law",
-      "searchMatter": "Hledání ve spisu",
-      "updateEntityFields": "Aktualizovat metadata"
-    }
+      "askUser": "Upřesňuji dotaz",
+      "createDocument": "Vytvářím dokument",
+      "displayDocument": "Zobrazuji dokument",
+      "listEntities": "Procházím dokumenty",
+      "readContent": "Čtu obsah",
+      "readEntity": "Čtu detail dokumentu",
+      "searchCaseLaw": "Hledám v judikatuře",
+      "searchMatter": "Prohledávám spis",
+      "updateEntityFields": "Aktualizuji metadata"
+    },
+    "unsupportedFileType": "Nepodporovaný typ souboru",
+    "uploadFailed": "Zpracování souboru selhalo"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Co můžeme zlepšit?",
-    "describeIssuePlaceholder": "Chyba, nedostatek nebo nápad na funkci; cokoliv pomůže\u2026",
+    "describeIssuePlaceholder": "Chyba, nedostatek nebo nápad na funkci; cokoliv pomůže…",
     "description": "Vaše zpětná vazba je odeslána přímo týmu.",
     "includeScreenshot": "Přiložit snímek obrazovky",
     "screenshotFailed": "Pořízení snímku obrazovky selhalo",

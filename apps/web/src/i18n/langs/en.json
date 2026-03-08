@@ -295,8 +295,18 @@
       "placeholder": "Your answer",
       "submit": "Submit answers"
     },
+    "attachFile": "Attach file",
+    "chatAbout": "Chat about this",
     "deleteThread": "Delete conversation",
+    "documentView": {
+      "original": "Original",
+      "simple": "Accepted",
+      "trackedChanges": "Tracked changes"
+    },
+    "extractingContent": "Extracting content...",
+    "fileTooLarge": "File exceeds {maxSize} limit",
     "greeting": "How can I help you today?",
+    "maxAttachmentsReached": "Maximum {count} files per message",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "New chat",
     "noThreads": "No conversations yet",
     "placeholder": "What would you like to know?",
+    "send": "Send message",
+    "thinking": "Thinking...",
     "threads": "Conversations",
     "tool": {
-      "askUser": "Clarifying questions",
-      "createDocument": "Create document",
-      "listEntities": "Listed entities",
-      "readContent": "Read content",
-      "readEntity": "Read entity",
-      "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter",
-      "updateEntityFields": "Update metadata"
-    }
+      "askUser": "Asking for clarification",
+      "createDocument": "Creating document",
+      "displayDocument": "Viewing document",
+      "listEntities": "Browsing documents",
+      "readContent": "Reading content",
+      "readEntity": "Reading document details",
+      "searchCaseLaw": "Searching case law",
+      "searchMatter": "Searching the matter",
+      "updateEntityFields": "Updating metadata"
+    },
+    "unsupportedFileType": "Unsupported file type",
+    "uploadFailed": "Failed to process file"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "What can we do better?",
-    "describeIssuePlaceholder": "Bug, rough edge, or feature idea; anything helps\u2026",
+    "describeIssuePlaceholder": "Bug, rough edge, or feature idea; anything helps…",
     "description": "Your feedback is sent directly to the team.",
     "includeScreenshot": "Attach screenshot",
     "screenshotFailed": "Screenshot capture failed",

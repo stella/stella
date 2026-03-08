@@ -6,6 +6,7 @@ import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
 import {
   RivetChatTransport,
+  type ProcessedAttachment,
   type UserContext,
 } from "@/lib/ai-sdk/rivet-transport";
 import { rivet } from "@/lib/api";
@@ -64,11 +65,18 @@ export const chatThreadOptions = (opts: {
         userContext: opts.userContext,
       });
 
-      return new Chat({
+      const chat = new Chat({
         messages: initialMessages,
         transport,
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,
+      });
+
+      return Object.assign(chat, {
+        /** Queue attachments for the next message. */
+        setAttachments: (atts: ProcessedAttachment[]) => {
+          transport.pendingAttachments = atts;
+        },
       });
     },
   });

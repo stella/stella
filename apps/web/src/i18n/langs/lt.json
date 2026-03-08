@@ -295,8 +295,18 @@
       "placeholder": "Jūsų atsakymas",
       "submit": "Pateikti atsakymus"
     },
+    "attachFile": "Prisegti failą",
+    "chatAbout": "Įterpti į AI pokalbį",
     "deleteThread": "Delete conversation",
+    "documentView": {
+      "original": "Originalas",
+      "simple": "Priimta",
+      "trackedChanges": "Pakeitimų sekimas"
+    },
+    "extractingContent": "Turinio ištraukimas...",
+    "fileTooLarge": "Failas viršija {maxSize} limitą",
     "greeting": "How can I help you today?",
+    "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "New chat",
     "noThreads": "No conversations yet",
     "placeholder": "What would you like to know?",
+    "send": "Siųsti žinutę",
+    "thinking": "Galvoju...",
     "threads": "Conversations",
     "tool": {
       "askUser": "Patikslinantys klausimai",
       "createDocument": "Sukurti dokumentą",
+      "displayDocument": "Dokumento peržiūra",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Searched matter",
       "updateEntityFields": "Atnaujinti lauką"
-    }
+    },
+    "unsupportedFileType": "Nepalaikomas failo tipas",
+    "uploadFailed": "Nepavyko apdoroti failo"
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -619,7 +634,7 @@
   },
   "feedback": {
     "describeIssue": "Ką galime pagerinti?",
-    "describeIssuePlaceholder": "Klaida, nepatogumas ar funkcijos idėja; bet kas padės\u2026",
+    "describeIssuePlaceholder": "Klaida, nepatogumas ar funkcijos idėja; bet kas padės…",
     "description": "Jūsų atsiliepimai siunčiami tiesiogiai komandai.",
     "includeScreenshot": "Pridėti ekrano kopiją",
     "screenshotFailed": "Nepavyko užfiksuoti ekrano kopijos",

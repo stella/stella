@@ -45,6 +45,12 @@ export const LIMITS = {
   caseLawSearchPageSizeMax: 100,
   caseLawFacetLimit: 20,
   caseLawPolarityRulesPerLanguage: 500,
+  /** Max chat context file attachment size per file. */
+  chatContextFileMaxChars: 16_000,
+  /** Max total chars across all text attachments per message. */
+  chatContextTextMaxChars: 32_000,
+  /** Max number of file attachments per chat message. */
+  chatContextFilesPerMessage: 5,
 } as const;
 
 /**
@@ -56,6 +62,8 @@ export const FILE_SIZE_LIMITS = {
   document: "50m",
   /** Structured data imports (clause JSON). */
   dataImport: "10m",
+  /** Chat context file attachments. */
+  chatContextFile: "10m",
 } as const;
 
 /**

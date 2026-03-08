@@ -6,6 +6,7 @@ import { env } from "@/api/env";
 import { analyticsRoute } from "@/api/handlers/analytics/routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
+import { chatRoute } from "@/api/handlers/chat/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -109,6 +110,7 @@ const api = new Elysia()
       .use(analyticsRoute)
       .use(templateAnalyticsRoute)
       .use(caseLawRoute)
+      .use(chatRoute)
       .use(devRoute),
   );
 

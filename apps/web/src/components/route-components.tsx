@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useTransition } from "react";
+import { useCallback, useEffect, useEffectEvent, useTransition } from "react";
 import { usePostHog } from "@posthog/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, type ErrorComponentProps } from "@tanstack/react-router";
@@ -17,6 +17,29 @@ type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
 };
 
+/** Network errors that indicate a transient connectivity
+ *  issue (API down, DNS failure, etc.).
+ *  Message varies by browser engine:
+ *  - Chromium: "Failed to fetch"
+ *  - Firefox:  "NetworkError when attempting to fetch resource."
+ *  - Safari:   "Load failed" */
+const NETWORK_ERROR_MESSAGES = new Set([
+  "Failed to fetch",
+  "NetworkError when attempting to fetch resource.",
+  "Load failed",
+]);
+
+const isNetworkError = (error: unknown): boolean =>
+  error instanceof TypeError && NETWORK_ERROR_MESSAGES.has(error.message);
+
+/** Max number of automatic recovery attempts before
+ *  falling back to the manual "Try again" button.
+ *  Module-scoped so the counter survives error boundary
+ *  remounts (which re-create the component instance). */
+const AUTO_RETRY_LIMIT = 5;
+const AUTO_RETRY_DELAY_MS = 3000;
+let networkRetryCount = 0;
+
 export const DefaultErrorComponent = ({
   error,
   reset,
@@ -28,6 +51,23 @@ export const DefaultErrorComponent = ({
   const showUnauthorizedError =
     isUnauthorizedError(error) || isMemberError(error);
 
+  const retryErroredQueries = useCallback(() => {
+    startTransition(async () => {
+      await queryClient
+        .refetchQueries({
+          predicate: (query) =>
+            query.state.fetchStatus === "idle" &&
+            query.state.status === "error",
+        })
+        .catch((e) => {
+          captureError(posthog, e);
+        });
+
+      networkRetryCount = 0;
+      reset();
+    });
+  }, [queryClient, posthog, reset]);
+
   useEffect(() => {
     if (showUnauthorizedError) {
       return;
@@ -36,33 +76,32 @@ export const DefaultErrorComponent = ({
     captureError(posthog, error);
   }, [error, posthog, showUnauthorizedError]);
 
+  // Auto-retry on transient network errors.
+  useEffect(() => {
+    if (!isNetworkError(error) || networkRetryCount >= AUTO_RETRY_LIMIT) {
+      return;
+    }
+    networkRetryCount += 1;
+    const timer = setTimeout(retryErroredQueries, AUTO_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [error, retryErroredQueries]);
+
   const t = useTranslations();
 
   if (showUnauthorizedError) {
     return <UnauthorizedError />;
   }
 
+  // While auto-retrying, show a "Reconnecting" state
+  // instead of the error message.
+  if (isNetworkError(error) && isPending) {
+    return <DefaultPendingComponent className={className} />;
+  }
+
   return (
     <StatusMessage
       actionButton={
-        <Button
-          disabled={isPending}
-          onClick={() => {
-            startTransition(async () => {
-              await queryClient
-                .refetchQueries({
-                  predicate: (query) =>
-                    query.state.fetchStatus === "idle" &&
-                    query.state.status === "error",
-                })
-                .catch((e) => {
-                  captureError(posthog, e);
-                });
-
-              reset();
-            });
-          }}
-        >
+        <Button disabled={isPending} onClick={retryErroredQueries}>
           <RefreshCcwIcon /> {t("common.tryAgain")}
         </Button>
       }

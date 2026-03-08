@@ -295,8 +295,18 @@
       "placeholder": "Ihre Antwort",
       "submit": "Antworten absenden"
     },
+    "attachFile": "Datei anhängen",
+    "chatAbout": "In AI-Chat einfügen",
     "deleteThread": "Konversation löschen",
+    "documentView": {
+      "original": "Original",
+      "simple": "Akzeptiert",
+      "trackedChanges": "Änderungsverfolgung"
+    },
+    "extractingContent": "Inhalt wird extrahiert...",
+    "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
     "greeting": "Wie kann ich Ihnen heute helfen?",
+    "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
         "clauses": "Clauses",
@@ -310,17 +320,22 @@
     "newChat": "Neuer Chat",
     "noThreads": "Noch keine Konversationen",
     "placeholder": "Was möchten Sie wissen?",
+    "send": "Nachricht senden",
+    "thinking": "Denke nach...",
     "threads": "Konversationen",
     "tool": {
       "askUser": "Rückfragen",
       "createDocument": "Dokument erstellen",
+      "displayDocument": "Dokument anzeigen",
       "listEntities": "Einträge aufgelistet",
       "readContent": "Inhalt gelesen",
       "readEntity": "Eintrag gelesen",
       "searchCaseLaw": "Searched case law",
       "searchMatter": "Akte durchsucht",
       "updateEntityFields": "Metadaten aktualisieren"
-    }
+    },
+    "unsupportedFileType": "Nicht unterstützter Dateityp",
+    "uploadFailed": "Datei konnte nicht verarbeitet werden"
   },
   "clauses": {
     "addVariant": "Add variant",

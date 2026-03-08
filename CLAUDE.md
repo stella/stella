@@ -508,28 +508,21 @@ or isolating external services. Every bug fix gets a regression test.
 
 ## Internationalization (i18n)
 
-**Stack:** `use-intl` for runtime, Lingo.dev for automated
-translation via CI.
+**Stack:** `use-intl` for runtime.
 
 **Supported languages:** en (source), cs, de, hu, pl, sk.
-Config: `i18n.json` (at project root).
 
-**Translation flow (you only edit `en.json`):**
+**Translation flow:**
 
 1. Add or modify keys in
    `apps/web/src/i18n/langs/en.json`.
-2. Run `i18n-typegen src/i18n/langs` (from `apps/web`) to
+2. Add corresponding translations to all target language
+   files (`cs.json`, `de.json`, `hu.json`, `pl.json`,
+   `sk.json`). Write natural, idiomatic translations;
+   avoid literal/robotic phrasing.
+3. Run `i18n-typegen src/i18n/langs` (from `apps/web`) to
    regenerate type declarations (also runs automatically
    before `bun run typecheck`).
-3. Push to `main`. The `i18n` GitHub Actions workflow
-   triggers on changes to `en.json`, calls Lingo.dev to
-   translate all target languages, and opens a PR with the
-   updated translation files.
-4. Review and merge the translation PR.
-
-**Never edit non-English language files by hand.** Lingo.dev
-owns `cs.json`, `de.json`, `hu.json`, `pl.json`, `sk.json`.
-Manual edits will be overwritten on the next CI run.
 
 **Prefer generic, reusable keys over feature-specific ones.**
 Before adding any new i18n key, search `en.json` for an existing

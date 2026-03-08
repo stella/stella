@@ -27,7 +27,11 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const messages: AbstractIntlMessages = langMessages[lang];
 
   return (
-    <IntlProvider locale={lang} messages={messages}>
+    <IntlProvider
+      locale={lang}
+      messages={messages}
+      timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+    >
       {children}
     </IntlProvider>
   );

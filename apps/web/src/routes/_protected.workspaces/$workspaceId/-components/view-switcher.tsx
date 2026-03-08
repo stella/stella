@@ -373,9 +373,10 @@ const ViewTab = ({
         {isActive && (
           <Menu>
             <MenuTrigger
+              nativeButton={false}
               onClick={(e) => e.stopPropagation()}
               render={
-                // biome-ignore lint/a11y/useSemanticElements: nested inside a button
+                // biome-ignore lint/a11y/useSemanticElements: nested inside a tab element
                 <span
                   className="inline-flex size-5 items-center justify-center rounded opacity-60 hover:bg-accent hover:opacity-100"
                   role="button"
