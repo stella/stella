@@ -192,8 +192,8 @@ const repeatedText = fc
 // ── Property: diff → apply roundtrip ─────────────────────
 
 describe("property: diff → apply roundtrip", () => {
-  test("rewriting a paragraph preserves the new text", () => {
-    fc.assert(
+  test("rewriting a paragraph preserves the new text", async () => {
+    await fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         // Skip trivially equal inputs
         if (oldText === newText) {
@@ -221,8 +221,8 @@ describe("property: diff → apply roundtrip", () => {
     );
   });
 
-  test("unchanged text produces no edits", () => {
-    fc.assert(
+  test("unchanged text produces no edits", async () => {
+    await fc.assert(
       fc.property(sentence, (text) => {
         const extracted = {
           paragraphs: [{ index: 0, text }],
@@ -240,8 +240,8 @@ describe("property: diff → apply roundtrip", () => {
     );
   });
 
-  test("deletion produces shorter accepted text", () => {
-    fc.assert(
+  test("deletion produces shorter accepted text", async () => {
+    await fc.assert(
       fc.property(
         sentence.filter((s) => s.length > 5),
         (text) => {
@@ -278,8 +278,8 @@ describe("property: diff → apply roundtrip", () => {
     );
   });
 
-  test("insertion produces longer accepted text", () => {
-    fc.assert(
+  test("insertion produces longer accepted text", async () => {
+    await fc.assert(
       fc.property(sentence, sentence, (text, extra) => {
         const extended = `${text} ${extra}`;
         const xml = WRAP(P(text));
@@ -308,8 +308,8 @@ describe("property: diff → apply roundtrip", () => {
 // ── Property: multi-paragraph roundtrip ──────────────────
 
 describe("property: multi-paragraph editing", () => {
-  test("editing one paragraph doesn't affect others", () => {
-    fc.assert(
+  test("editing one paragraph doesn't affect others", async () => {
+    await fc.assert(
       fc.property(sentence, sentence, sentence, (text1, text2, newText2) => {
         if (text2 === newText2) {
           return;
@@ -346,8 +346,8 @@ describe("property: multi-paragraph editing", () => {
 // ── Property: ID generation ──────────────────────────────
 
 describe("property: ID generation", () => {
-  test("generated IDs never collide with existing", () => {
-    fc.assert(
+  test("generated IDs never collide with existing", async () => {
+    await fc.assert(
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -369,8 +369,8 @@ describe("property: ID generation", () => {
     );
   });
 
-  test("generated IDs are always unique", () => {
-    fc.assert(
+  test("generated IDs are always unique", async () => {
+    await fc.assert(
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -396,8 +396,8 @@ describe("property: ID generation", () => {
 // ── Property: run map coverage ───────────────────────────
 
 describe("property: run map coverage", () => {
-  test("offsets are contiguous and cover full text", () => {
-    fc.assert(
+  test("offsets are contiguous and cover full text", async () => {
+    await fc.assert(
       fc.property(xmlSafeWord, (text) => {
         const xml = WRAP(P(text));
         const doc = slimdom.parseXmlDocument(xml);
@@ -541,8 +541,8 @@ describe("snapshot: tracked change XML structure", () => {
 // ── Property: tokenization roundtrip ─────────────────────
 
 describe("property: tokenization roundtrip", () => {
-  test("tokenize(text).join('') === text for any Unicode", () => {
-    fc.assert(
+  test("tokenize(text).join('') === text for any Unicode", async () => {
+    await fc.assert(
       fc.property(
         fc.string({ minLength: 1, maxLength: 80, unit: "grapheme" }),
         (text) => {
@@ -557,8 +557,8 @@ describe("property: tokenization roundtrip", () => {
 // ── Property: output w:id uniqueness ─────────────────────
 
 describe("property: output w:id uniqueness", () => {
-  test("all w:id values are unique after editing", () => {
-    fc.assert(
+  test("all w:id values are unique after editing", async () => {
+    await fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         if (oldText === newText) {
           return;
@@ -590,8 +590,8 @@ describe("property: output w:id uniqueness", () => {
 // ── Property: multi-w:t per run ──────────────────────────
 
 describe("property: multi-w:t per run", () => {
-  test("replacing text that spans two w:t elements doesn't crash", () => {
-    fc.assert(
+  test("replacing text that spans two w:t elements doesn't crash", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -632,8 +632,8 @@ describe("property: multi-w:t per run", () => {
     );
   });
 
-  test("deleting trailing w:t preserves leading w:t text", () => {
-    fc.assert(
+  test("deleting trailing w:t preserves leading w:t text", async () => {
+    await fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, (textA, textB) => {
         const multiT =
           "<w:p><w:r>" +
@@ -668,8 +668,8 @@ describe("property: multi-w:t per run", () => {
     );
   });
 
-  test("deleting leading w:t preserves trailing w:t text", () => {
-    fc.assert(
+  test("deleting leading w:t preserves trailing w:t text", async () => {
+    await fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, (textA, textB) => {
         const multiT =
           "<w:p><w:r>" +
@@ -704,8 +704,8 @@ describe("property: multi-w:t per run", () => {
     );
   });
 
-  test("three w:t nodes, editing middle preserves siblings", () => {
-    fc.assert(
+  test("three w:t nodes, editing middle preserves siblings", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -745,8 +745,8 @@ describe("property: multi-w:t per run", () => {
     );
   });
 
-  test("multi-w:t output passes OOXML validation", () => {
-    fc.assert(
+  test("multi-w:t output passes OOXML validation", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -792,8 +792,8 @@ describe("property: multi-w:t per run", () => {
 // ── Property: OOXML validation passes on all output ──────
 
 describe("property: OOXML validation on generated output", () => {
-  test("applyEdits output passes validation", () => {
-    fc.assert(
+  test("applyEdits output passes validation", async () => {
+    await fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         if (oldText === newText) {
           return;
@@ -824,8 +824,8 @@ describe("property: OOXML validation on generated output", () => {
     );
   });
 
-  test("multi-paragraph edits pass validation", () => {
-    fc.assert(
+  test("multi-paragraph edits pass validation", async () => {
+    await fc.assert(
       fc.property(
         sentence,
         sentence,
@@ -955,8 +955,8 @@ const multiRunP = (texts: string[]) => {
 };
 
 describe("property: structural isolation", () => {
-  test("editing one run in a multi-run paragraph preserves other runs", () => {
-    fc.assert(
+  test("editing one run in a multi-run paragraph preserves other runs", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -991,8 +991,8 @@ describe("property: structural isolation", () => {
     );
   });
 
-  test("runs inside w:hyperlink are edited correctly", () => {
-    fc.assert(
+  test("runs inside w:hyperlink are edited correctly", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -1034,8 +1034,8 @@ describe("property: structural isolation", () => {
     );
   });
 
-  test("insert in middle of multi-w:t run preserves sibling w:t text", () => {
-    fc.assert(
+  test("insert in middle of multi-w:t run preserves sibling w:t text", async () => {
+    await fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -1085,8 +1085,8 @@ describe("property: structural isolation", () => {
     );
   });
 
-  test("multiple edits in the same paragraph produce correct result", () => {
-    fc.assert(
+  test("multiple edits in the same paragraph produce correct result", async () => {
+    await fc.assert(
       fc.property(word, word, word, word, word, (w1, w2, w3, newW1, newW3) => {
         const oldText = `${w1} ${w2} ${w3}`;
         // Replace first and last words, keep middle
@@ -1116,8 +1116,8 @@ describe("property: structural isolation", () => {
     );
   });
 
-  test("deleting all text produces empty accepted text", () => {
-    fc.assert(
+  test("deleting all text produces empty accepted text", async () => {
+    await fc.assert(
       fc.property(sentence, (text) => {
         const xml = WRAP(P(text));
         const extracted = {
@@ -1234,8 +1234,8 @@ describe("regression: multi-w:t text ordering", () => {
     expect(accepted[0]).toBe("Hello brave world");
   });
 
-  test("property: partial edit of non-first w:t roundtrips", () => {
-    fc.assert(
+  test("property: partial edit of non-first w:t roundtrips", async () => {
+    await fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, word, (textA, textB, insert) => {
         if (textB.length < 2) {
           return;
@@ -1304,30 +1304,41 @@ const assertRoundtrip = (oldText: string, newText: string) => {
 };
 
 describe("property: adversarial text roundtrip", () => {
-  test("punctuation-heavy text (legal citations)", () => {
-    fc.assert(fc.property(punctuatedText, punctuatedText, assertRoundtrip), {
+  test("punctuation-heavy text (legal citations)", async () => {
+    await fc.assert(
+      fc.property(punctuatedText, punctuatedText, assertRoundtrip),
+      {
+        numRuns: 100,
+      },
+    );
+  });
+
+  test("whitespace variants (tabs, double spaces)", async () => {
+    await fc.assert(
+      fc.property(whitespaceText, whitespaceText, assertRoundtrip),
+      {
+        numRuns: 100,
+      },
+    );
+  });
+
+  test("CJK text roundtrip", async () => {
+    await fc.assert(fc.property(cjkText, cjkText, assertRoundtrip), {
       numRuns: 100,
     });
   });
 
-  test("whitespace variants (tabs, double spaces)", () => {
-    fc.assert(fc.property(whitespaceText, whitespaceText, assertRoundtrip), {
-      numRuns: 100,
-    });
+  test("long paragraph roundtrip (50-200 words)", async () => {
+    await fc.assert(
+      fc.property(longParagraph, longParagraph, assertRoundtrip),
+      {
+        numRuns: 20,
+      },
+    );
   });
 
-  test("CJK text roundtrip", () => {
-    fc.assert(fc.property(cjkText, cjkText, assertRoundtrip), { numRuns: 100 });
-  });
-
-  test("long paragraph roundtrip (50-200 words)", () => {
-    fc.assert(fc.property(longParagraph, longParagraph, assertRoundtrip), {
-      numRuns: 20,
-    });
-  });
-
-  test("repeated words: removing one occurrence", () => {
-    fc.assert(
+  test("repeated words: removing one occurrence", async () => {
+    await fc.assert(
       fc.property(repeatedText, (text) => {
         const words = text.split(" ");
         if (words.length < 3) {
@@ -1342,8 +1353,8 @@ describe("property: adversarial text roundtrip", () => {
     );
   });
 
-  test("repeated words: replacing one occurrence", () => {
-    fc.assert(
+  test("repeated words: replacing one occurrence", async () => {
+    await fc.assert(
       fc.property(repeatedText, word, (text, replacement) => {
         const words = text.split(" ");
         if (words.length < 3) {
@@ -1357,8 +1368,8 @@ describe("property: adversarial text roundtrip", () => {
     );
   });
 
-  test("single character edit in long text", () => {
-    fc.assert(
+  test("single character edit in long text", async () => {
+    await fc.assert(
       fc.property(
         longParagraph,
         word,
@@ -1381,14 +1392,14 @@ describe("property: adversarial text roundtrip", () => {
     );
   });
 
-  test("full Unicode graphemes roundtrip (emoji, combining marks, CJK)", () => {
-    fc.assert(fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip), {
+  test("full Unicode graphemes roundtrip (emoji, combining marks, CJK)", async () => {
+    await fc.assert(fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip), {
       numRuns: 200,
     });
   });
 
-  test("token boundary edit: adding/removing spaces between words", () => {
-    fc.assert(
+  test("token boundary edit: adding/removing spaces between words", async () => {
+    await fc.assert(
       fc.property(word, word, word, (a, b, c) => {
         const spaced = `${a} ${b} ${c}`;
         // Collapse one space (merge two words)
@@ -1473,14 +1484,17 @@ const binaryUnicode = fc
   .filter((s) => s.length > 0);
 
 describe("property: binary Unicode stress test", () => {
-  test("roundtrip with arbitrary Unicode (binary unit)", () => {
-    fc.assert(fc.property(binaryUnicode, binaryUnicode, assertRoundtrip), {
-      numRuns: 300,
-    });
+  test("roundtrip with arbitrary Unicode (binary unit)", async () => {
+    await fc.assert(
+      fc.property(binaryUnicode, binaryUnicode, assertRoundtrip),
+      {
+        numRuns: 300,
+      },
+    );
   });
 
-  test("binary Unicode multi-w:t roundtrip", () => {
-    fc.assert(
+  test("binary Unicode multi-w:t roundtrip", async () => {
+    await fc.assert(
       fc.property(
         binaryUnicode,
         binaryUnicode,
@@ -1521,8 +1535,8 @@ describe("property: binary Unicode stress test", () => {
     );
   });
 
-  test("binary Unicode OOXML validation", () => {
-    fc.assert(
+  test("binary Unicode OOXML validation", async () => {
+    await fc.assert(
       fc.property(binaryUnicode, binaryUnicode, (oldText, newText) => {
         if (oldText === newText || oldText.length === 0) {
           return;

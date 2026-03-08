@@ -353,6 +353,7 @@ const ActiveThreadInner = ({
                         return (
                           <MessageResponse
                             components={streamdownComponents}
+                            // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
                             key={`${message.id}-text-${i}`}
                           >
                             {part.text}
@@ -363,7 +364,7 @@ const ActiveThreadInner = ({
                         if (getToolName(part) === "askUser") {
                           return (
                             <AskUserCard
-                              key={`${message.id}-tool-${i}`}
+                              key={part.toolCallId}
                               onSubmit={(text) => sendMessage({ text })}
                               part={part}
                             />
@@ -379,7 +380,7 @@ const ActiveThreadInner = ({
                           return (
                             <ToolApprovalCard
                               autoApprovedTools={autoApprovedTools}
-                              key={`${message.id}-tool-${i}`}
+                              key={part.toolCallId}
                               onAlwaysAllow={handleAlwaysAllow}
                               onApprove={handleApprove}
                               onDeny={handleDeny}
@@ -390,10 +391,7 @@ const ActiveThreadInner = ({
                         }
                         if (showToolCalls) {
                           return (
-                            <ToolCallCard
-                              key={`${message.id}-tool-${i}`}
-                              part={part}
-                            />
+                            <ToolCallCard key={part.toolCallId} part={part} />
                           );
                         }
                       }
@@ -409,7 +407,8 @@ const ActiveThreadInner = ({
                   message.parts.map((part, i) =>
                     part.type === "text" ? (
                       <UserMessageText
-                        key={`${message.id}-${i}`}
+                        // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
+                        key={`${message.id}-text-${i}`}
                         text={part.text}
                       />
                     ) : null,

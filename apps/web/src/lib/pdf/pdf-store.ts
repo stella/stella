@@ -654,7 +654,7 @@ export const usePdfStore = create<State & Actions>()(
         invertPages: state.invertPages,
       }),
       migrate: () => {
-        return undefined;
+        return;
       },
     },
   ),

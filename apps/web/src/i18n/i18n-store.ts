@@ -96,7 +96,7 @@ export const useI18nStore = create<State & Actions>()(
       name: getStorageKey("i18n"),
       version: 0,
       migrate: () => {
-        return undefined;
+        return;
       },
       onRehydrateStorage: () => (state) => {
         if (!state) {

@@ -60,7 +60,7 @@ export const resolvePath = (
   let current: unknown = data;
   for (const part of parts) {
     if (!isRecord(current)) {
-      return undefined;
+      return;
     }
     current = current[part];
   }
@@ -116,7 +116,7 @@ const tokenize = (expr: string): Token[] => {
 /** Parse a numeric literal, supporting `_` separators. */
 const parseNumeric = (raw: string): number | undefined => {
   if (!STARTS_WITH_DIGIT_RE.test(raw)) {
-    return undefined;
+    return;
   }
   const cleaned = raw.replace(/_/g, "");
   const n = Number(cleaned);
@@ -172,7 +172,7 @@ const resolveToken = (
     // Resolve as path
     return resolvePath(token.raw, data);
   }
-  return undefined;
+  return;
 };
 
 /** Evaluate a comparison between two resolved values. */

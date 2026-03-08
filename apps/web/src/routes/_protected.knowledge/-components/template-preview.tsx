@@ -136,7 +136,7 @@ const computeActiveLines = (
 /** Convert DOCX half-points to a CSS-friendly rem value. */
 const fontSizeToRem = (halfPoints: number | undefined): string | undefined => {
   if (!halfPoints) {
-    return undefined;
+    return;
   }
   // DOCX stores font size in half-points (24 = 12pt).
   // Base UI text-sm is ~14px ≈ 10.5pt ≈ 21 half-points.
@@ -145,7 +145,7 @@ const fontSizeToRem = (halfPoints: number | undefined): string | undefined => {
     return "0.75rem"; // ~12px, small
   }
   if (halfPoints <= 22) {
-    return undefined; // ~11pt, close to default
+    return; // ~11pt, close to default
   }
   if (halfPoints <= 28) {
     return "1rem"; // ~14pt

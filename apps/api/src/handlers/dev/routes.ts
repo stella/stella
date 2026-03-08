@@ -33,7 +33,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           status: 404,
         });
       }
-      return undefined;
+      return;
     },
   })
   .post("/seed", async (ctx) => {
