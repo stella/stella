@@ -38,7 +38,7 @@ const spawnExtraction = async (
   });
 
   try {
-    const [exitCode, stdout, stderr] = await Promise.all([
+    const [exitCode, stdout] = await Promise.all([
       subprocess.exited,
       new Response(subprocess.stdout).text(),
       new Response(subprocess.stderr).text(),
@@ -47,7 +47,7 @@ const spawnExtraction = async (
     if (exitCode !== 0) {
       return Result.err(
         new ExtractionWorkerError({
-          message: stderr.slice(0, 500),
+          message: `Content extraction failed (exit ${exitCode})`,
           exitCode,
         }),
       );
@@ -68,6 +68,7 @@ const spawnExtraction = async (
 export const extractFileText = async (
   buffer: ArrayBuffer,
   mimeType: string,
+  context?: Record<string, string>,
 ) => {
   if (!SUPPORTED_MIMES.includes(mimeType)) {
     return null;
@@ -76,7 +77,12 @@ export const extractFileText = async (
   const result = await spawnExtraction(buffer, mimeType);
 
   if (Result.isError(result)) {
-    captureError(result.error);
+    captureError(result.error, {
+      mimeType,
+      sizeBytes: String(buffer.byteLength),
+      exitCode: String(result.error.exitCode),
+      ...context,
+    });
     return null;
   }
 

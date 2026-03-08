@@ -138,6 +138,10 @@ export const uploadEntityHandler = async ({
     const result = await isEncryptedPdf(fileBuffer);
 
     if (Result.isError(result)) {
+      captureError(result.error, {
+        mimeType: PDF_MIME_TYPE,
+        sizeBytes: String(fileBuffer.byteLength),
+      });
       return status(422, {
         message: "Failed to open PDF: file appears corrupted",
       });
@@ -167,6 +171,10 @@ export const uploadEntityHandler = async ({
   // If conversion was expected but failed, clean up and
   // return error so the client can retry
   if (conversionResult && Result.isError(conversionResult)) {
+    captureError(conversionResult.error, {
+      mimeType: file.type,
+      sizeBytes: String(fileBuffer.byteLength),
+    });
     await s3.delete(sourceKey);
     return status(502, {
       message: "File conversion to PDF failed",
@@ -239,7 +247,9 @@ export const uploadEntityHandler = async ({
       return resolvedName;
     });
 
-    await processExtraction(entityId).catch(captureError);
+    await processExtraction(entityId).catch((err) =>
+      captureError(err, { entityId, mimeType: file.type }),
+    );
 
     return {
       entityId,

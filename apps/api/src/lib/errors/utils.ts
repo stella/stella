@@ -1,15 +1,19 @@
-export const extractErrorMessage = (error: unknown) => {
+import { isTaggedError } from "better-result";
+
+/**
+ * Extract a safe, structural error identifier for observability.
+ *
+ * Returns the TaggedError `_tag`, the Error constructor name, or
+ * "UnknownError". Never includes messages, causes, or stack
+ * traces; those may contain privileged document content, file
+ * names, or client data that must not reach analytics dashboards.
+ */
+export const errorTag = (error: unknown): string => {
+  if (isTaggedError(error)) {
+    return error._tag;
+  }
   if (error instanceof Error) {
-    return error.message;
+    return error.constructor.name;
   }
-
-  return "Unknown error";
-};
-
-export const serializeCause = (cause: unknown): unknown => {
-  if (cause instanceof Error) {
-    return { name: cause.name, message: cause.message, stack: cause.stack };
-  }
-
-  return cause;
+  return "UnknownError";
 };

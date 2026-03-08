@@ -4,6 +4,7 @@ import type {
   SourceAdapter,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { captureError } from "@/api/lib/posthog";
 
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
@@ -172,7 +173,7 @@ const parseCursor = (cursor: string): CursorState => {
   );
 
   if (Number.isNaN(number) || Number.isNaN(year)) {
-    throw new Error(`Invalid cz-constitutional cursor: "${cursor}"`);
+    throw new Error("Invalid cz-constitutional cursor format");
   }
 
   return { number, year };
@@ -251,11 +252,10 @@ export const czConstitutionalAdapter: SourceAdapter = {
           }
           continue;
         }
-        // biome-ignore lint/suspicious/noConsole: ingestion adapter
-        console.error(
-          `NALUS fetch error (${state.number}/${state.year}):`,
-          err instanceof Error ? err.message : err,
-        );
+        captureError(err, {
+          adapter: "cz-constitutional",
+          cursor: makeCursor(state),
+        });
         consecutiveMisses++;
       }
 

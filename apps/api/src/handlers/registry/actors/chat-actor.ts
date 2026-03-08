@@ -625,7 +625,10 @@ export const chatActor = actor({
               cleanupStream();
             },
             onError: (err) => {
-              captureError(err);
+              captureError(err, {
+                threadId,
+                ...(modelId && { modelId }),
+              });
               return "error";
             },
           });

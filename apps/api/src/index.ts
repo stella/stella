@@ -32,6 +32,7 @@ import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { auth } from "@/api/lib/auth";
+import { httpError } from "@/api/lib/errors/http-error";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { captureError, getPostHog } from "@/api/lib/posthog";
 import { RedisRateLimitContext, scopedGenerator } from "@/api/lib/rate-limit";
@@ -60,10 +61,34 @@ const api = new Elysia()
       allowedHeaders: ["Content-Type", "Authorization"],
     }),
   )
-  .onError(({ error, set }) => {
+  .onError(({ error, set, code, request }) => {
     // biome-ignore lint/performance/noDelete: headers value type is string | number
     delete set.headers["X-Powered-By"];
-    captureError(error);
+
+    const url = new URL(request.url);
+    captureError(error, {
+      method: request.method,
+      path: url.pathname,
+      elysiaCode: String(code),
+    });
+
+    // Return a sanitized response for unhandled errors.
+    // Elysia's default would serialize error.message, which
+    // may contain DB internals, file names, or document content.
+    if (code === "VALIDATION") {
+      set.status = 422;
+      return httpError("Invalid request");
+    }
+    if (code === "NOT_FOUND") {
+      set.status = 404;
+      return httpError("Not found");
+    }
+    if (code === "PARSE") {
+      set.status = 400;
+      return httpError("Malformed request");
+    }
+    set.status = 500;
+    return httpError("Internal server error");
   })
   .onAfterHandle(async ({ set }) => {
     // biome-ignore lint/performance/noDelete: headers value type is string | number; delete is the correct way to remove a key

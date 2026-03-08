@@ -15,6 +15,7 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
+import { captureError } from "@/api/lib/posthog";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
@@ -141,8 +142,7 @@ const processDecision = async (
     try {
       await indexDecision(decisionId);
     } catch (err) {
-      // biome-ignore lint/suspicious/noConsole: ingestion pipeline
-      console.error(`Failed to index decision ${decisionId}:`, err);
+      captureError(err, { decisionId, sourceId });
       searchVectorFailed = true;
     }
   }

@@ -132,7 +132,7 @@ export const plCourtsAdapter: SourceAdapter = {
   async fetchPage(cursor, _config, signal): Promise<SyncPage> {
     const page = cursor ? Number.parseInt(cursor, 10) : 0;
     if (Number.isNaN(page)) {
-      throw new Error(`SAOS adapter: invalid cursor "${cursor}"`);
+      throw new Error("SAOS adapter: invalid cursor format");
     }
 
     const params = new URLSearchParams({

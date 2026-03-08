@@ -4,7 +4,7 @@ import type { ActionContextOf } from "rivetkit";
 import { env } from "@/api/env";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
-import { extractErrorMessage, serializeCause } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { getPostHog } from "@/api/lib/posthog";
 
 export type CaptureActorErrorProps = {
@@ -20,51 +20,43 @@ export const captureActorError = ({
   error,
   metadata,
 }: CaptureActorErrorProps) => {
-  const posthog = getPostHog();
+  const tag = errorTag(error);
 
-  const errorMetadata = {
+  const safeMetadata = {
     ...metadata,
     actorName: c.name,
     actorKey: c.key,
     actorId: c.actorId,
     requestId,
+    errorTag: tag,
   };
 
   if (env.isDev) {
-    // biome-ignore lint/suspicious/noConsole: debug
+    // biome-ignore lint/suspicious/noConsole: full error in dev only
     console.error(error);
   }
 
+  // Structured log with tag only; never log .message, .cause,
+  // or .stack (may contain privileged document content).
   if (isTaggedError(error)) {
-    const data = {
-      _tag: error._tag,
-      name: error.name,
-      message: error.message,
-      cause: serializeCause(error.cause),
-      stack: error.stack,
-    };
-    if (Panic.is(error) || Panic.is(error.cause) || Unreachable.is(error)) {
-      c.log.fatal(data);
-    } else {
-      c.log.error(data);
-    }
-  } else if (error instanceof Error) {
-    c.log.error({
-      name: error.name,
-      message: error.message,
-      cause: serializeCause(error.cause),
-      stack: error.stack,
-    });
+    const level =
+      Panic.is(error) || Panic.is(error.cause) || Unreachable.is(error)
+        ? "fatal"
+        : "error";
+    c.log[level]({ _tag: tag, ...safeMetadata });
   } else {
-    c.log.error({
-      name: "Unknown error",
-      message: extractErrorMessage(error),
-      rawError:
-        typeof error === "object" ? JSON.stringify(error) : String(error),
-    });
+    c.log.error({ _tag: tag, ...safeMetadata });
   }
 
-  c.waitUntil(
-    posthog.captureExceptionImmediate(error, undefined, errorMetadata),
-  );
+  // Send only the structural tag + safe IDs to PostHog.
+  // capture() is synchronous (queues internally); no await needed.
+  const posthog = getPostHog();
+  posthog.capture({
+    distinctId: "server",
+    event: "$exception",
+    properties: {
+      $exception_type: tag,
+      ...safeMetadata,
+    },
+  });
 };

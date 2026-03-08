@@ -101,7 +101,10 @@ export const processExtraction = async (entityId: string): Promise<void> => {
       const s3File = s3.file(key);
       const buffer = await s3File.arrayBuffer();
 
-      const text = await extractFileText(buffer, source.mimeType);
+      const text = await extractFileText(buffer, source.mimeType, {
+        entityId,
+        fileId: source.fileId,
+      });
 
       if (text) {
         const encrypted = await encryptContent(workspace.organizationId, text);
@@ -133,7 +136,10 @@ export const processExtraction = async (entityId: string): Promise<void> => {
       // Extraction failures must not prevent search
       // indexing; the entity is still searchable by its
       // field-level text.
-      captureError(err);
+      captureError(err, {
+        entityId,
+        mimeType: fileField.mimeType,
+      });
     }
   }
 

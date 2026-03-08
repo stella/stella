@@ -26,6 +26,7 @@ import {
   matchRule,
   type RuleCache,
 } from "@/api/handlers/case-law/polarity/rule-engine";
+import { captureError } from "@/api/lib/posthog";
 
 // biome-ignore lint/performance/noBarrelFile: re-export for public API
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
@@ -60,8 +61,7 @@ export const classifyCitation = async (
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
       incrementMatchCount(ruleMatch.ruleId).catch((err) => {
-        // biome-ignore lint/suspicious/noConsole: fire-and-forget logging
-        console.error("[polarity] incrementMatchCount failed:", err);
+        captureError(err, { ruleId: ruleMatch.ruleId });
       });
     }
     return {
@@ -94,8 +94,7 @@ export const classifyCitation = async (
   // Track surface form for potential rule promotion
   if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
     trackSurfaceForm(keyPhrase, polarity, language).catch((err) => {
-      // biome-ignore lint/suspicious/noConsole: fire-and-forget logging
-      console.error("[polarity] trackSurfaceForm failed:", err);
+      captureError(err, { language, polarity });
     });
   }
 
