@@ -24,7 +24,9 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
       });
 
       if (Result.isError(result)) {
-        captureError(result.error);
+        captureError(result.error, {
+          queryKey: ctx.body.queryKey.join("/"),
+        });
         return ctx.status(500);
       }
 

@@ -20,6 +20,7 @@ import {
   type Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
 
 type CompiledRule = {
   id: string;
@@ -89,10 +90,9 @@ export const loadRules = async (
     }
 
     if (!isValidPolarity(row.polarity)) {
-      // biome-ignore lint/suspicious/noConsole: log invalid DB data
-      console.error(
-        `[polarity] Skipping rule ${row.id}: invalid polarity "${row.polarity}"`,
-      );
+      captureError(new Error("Invalid polarity value in rule"), {
+        ruleId: row.id,
+      });
       continue;
     }
 

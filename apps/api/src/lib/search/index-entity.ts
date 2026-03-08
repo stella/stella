@@ -128,7 +128,7 @@ export const buildSearchDocument = async (
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
       // added or rotated after this content was stored.
       // Skip extracted content; re-extract to fix.
-      captureError(err);
+      captureError(err, { entityId });
     }
   }
 

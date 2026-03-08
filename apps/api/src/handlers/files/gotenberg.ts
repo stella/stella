@@ -85,9 +85,8 @@ export const convertToPdf = (
         );
 
         if (!response.ok) {
-          const body = await response.text().catch(() => "");
           throw new GotenbergError({
-            message: `Gotenberg returned ${response.status}: ${body}`,
+            message: `Gotenberg returned ${response.status}`,
             statusCode: response.status,
           });
         }

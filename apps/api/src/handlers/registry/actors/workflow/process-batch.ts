@@ -96,6 +96,7 @@ export const processBatchAction = (
         c,
         requestId: c.state.requestId,
         error: result.error,
+        metadata: { entityId, batchId, level: String(level) },
       });
 
       await setFieldsContent(c, {

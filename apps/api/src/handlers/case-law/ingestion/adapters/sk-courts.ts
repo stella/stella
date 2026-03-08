@@ -4,6 +4,7 @@ import type {
   SourceAdapter,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { captureError } from "@/api/lib/posthog";
 
 /**
  * Slovak Courts adapter.
@@ -80,8 +81,9 @@ const parseSkDate = (raw: string | undefined): string | undefined => {
   }
   const match = raw.match(SK_DATE_PATTERN);
   if (!match) {
-    // biome-ignore lint/suspicious/noConsole: adapter logging
-    console.error(`SK Courts adapter: unexpected date format: "${raw}"`);
+    captureError(new Error("SK Courts adapter: unexpected date format"), {
+      adapter: "sk-courts",
+    });
     return;
   }
   return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
@@ -104,8 +106,10 @@ const fetchDetail = async (
   });
 
   if (!response.ok) {
-    // biome-ignore lint/suspicious/noConsole: adapter logging
-    console.error(`SK Courts detail error for ${guid}: ${response.status}`);
+    captureError(new Error("SK Courts detail fetch failed"), {
+      adapter: "sk-courts",
+      httpStatus: String(response.status),
+    });
     return null;
   }
 
@@ -169,7 +173,7 @@ export const skCourtsAdapter: SourceAdapter = {
   async fetchPage(cursor, _config, signal): Promise<SyncPage> {
     const page = cursor ? Number.parseInt(cursor, 10) : 0;
     if (Number.isNaN(page)) {
-      throw new Error(`SK Courts adapter: invalid cursor "${cursor}"`);
+      throw new Error("SK Courts adapter: invalid cursor format");
     }
 
     const params = new URLSearchParams({

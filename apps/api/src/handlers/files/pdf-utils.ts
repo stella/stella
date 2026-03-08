@@ -21,7 +21,7 @@ export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
   });
 
   try {
-    const [exitCode, stdout, stderr] = await Promise.all([
+    const [exitCode, stdout] = await Promise.all([
       subprocess.exited,
       new Response(subprocess.stdout).text(),
       new Response(subprocess.stderr).text(),
@@ -30,7 +30,7 @@ export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
     if (exitCode !== 0) {
       return Result.err(
         new CorruptedPdfError({
-          message: stderr.slice(0, 500),
+          message: `PDF validation failed (exit ${exitCode})`,
         }),
       );
     }

@@ -6,6 +6,7 @@ import { db } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
+import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 
 type DownloadZipHandlerProps = {
@@ -122,7 +123,7 @@ export const downloadZipHandler = async ({
     });
 
     if (!response.ok) {
-      errors.push(`Failed to fetch ${file.fileName}: ${response.status}`);
+      errors.push(file.fileId);
       continue;
     }
 
@@ -150,8 +151,10 @@ export const downloadZipHandler = async ({
   }
 
   if (errors.length > 0) {
-    // biome-ignore lint/suspicious/noConsole: log S3 fetch failures
-    console.error(`[download-zip] ${errors.length} file(s) failed:`, errors);
+    captureError(
+      new Error(`${errors.length} file(s) failed to fetch from S3`),
+      { fileIds: errors.join(","), entityId },
+    );
   }
 
   const zipBuffer = await zip.generateAsync({

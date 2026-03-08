@@ -25,14 +25,16 @@ const CONTENT_MAX_CHARS = 8000;
 const safeExecute =
   <TArgs, TResult>(
     fn: (args: TArgs) => Promise<TResult>,
+    toolName?: string,
   ): ((args: TArgs) => Promise<TResult | { error: string }>) =>
   async (args) => {
     try {
       return await fn(args);
     } catch (err) {
-      captureError(err);
-      const msg = err instanceof Error ? err.message : String(err);
-      return { error: `Tool failed: ${msg}` };
+      captureError(err, {
+        ...(toolName && { toolName }),
+      });
+      return { error: "Tool execution failed" };
     }
   };
 
@@ -149,7 +151,7 @@ export const createMatterTools = ({
             headline: hit.headline,
           })),
         };
-      }),
+      }, "searchMatter"),
     }),
 
     listEntities: tool({
@@ -358,7 +360,7 @@ export const createMatterTools = ({
           truncated,
           text,
         };
-      }),
+      }, "readContent"),
     }),
 
     updateEntityFields: tool({
@@ -583,6 +585,7 @@ export const createMatterTools = ({
             newValue: isEmpty ? "" : formatFieldValue(content),
           };
         },
+        "updateEntityFields",
       ),
     }),
 
@@ -623,7 +626,7 @@ export const createMatterTools = ({
           entityId: result.entityId,
           fileName: result.fileName,
         };
-      }),
+      }, "createDocument"),
     }),
 
     searchContent: tool({
@@ -670,7 +673,7 @@ export const createMatterTools = ({
             passage: hit.passage,
           })),
         };
-      }),
+      }, "searchContent"),
     }),
   };
 };
@@ -721,7 +724,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
           headline: hit.headline,
         })),
       };
-    }),
+    }, "searchAcrossMatters"),
   }),
 
   readContentAcrossMatters: tool({
@@ -773,7 +776,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
         truncated,
         text,
       };
-    }),
+    }, "readContentAcrossMatters"),
   }),
 
   readContact: tool({
