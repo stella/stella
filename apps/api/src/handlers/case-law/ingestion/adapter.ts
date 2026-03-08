@@ -1,3 +1,7 @@
+import type { Result } from "better-result";
+
+import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
@@ -36,7 +40,7 @@ export type SourceAdapter = {
     cursor: string | null,
     config: Record<string, unknown>,
     signal?: AbortSignal,
-  ) => Promise<SyncPage>;
+  ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
 };

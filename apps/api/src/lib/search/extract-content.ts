@@ -8,62 +8,17 @@
  */
 
 import { resolve } from "node:path";
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
+import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
+import { spawnWorker } from "@/api/lib/subprocess";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
-
-class ExtractionWorkerError extends TaggedError("ExtractionWorkerError")<{
-  message: string;
-  exitCode: number | null;
-}>() {}
 
 const WORKER_PATH = resolve(import.meta.dir, "extraction-worker.ts");
 
 const SUPPORTED_MIMES: string[] = [PDF_MIME_TYPE, DOCX_MIME_TYPE];
-
-const spawnExtraction = async (
-  buffer: ArrayBuffer,
-  mimeType: string,
-): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const subprocess = Bun.spawn(["bun", "run", WORKER_PATH, mimeType], {
-    stdin: new Blob([buffer]),
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      PATH: process.env.PATH ?? "",
-    },
-    timeout: LIMITS.extractionTimeoutMs,
-  });
-
-  try {
-    const [exitCode, stdout] = await Promise.all([
-      subprocess.exited,
-      new Response(subprocess.stdout).text(),
-      new Response(subprocess.stderr).text(),
-    ]);
-
-    if (exitCode !== 0) {
-      return Result.err(
-        new ExtractionWorkerError({
-          message: `Content extraction failed (exit ${exitCode})`,
-          exitCode,
-        }),
-      );
-    }
-
-    return Result.ok(stdout || null);
-  } catch (err) {
-    subprocess.kill();
-    return Result.err(
-      new ExtractionWorkerError({
-        message: err instanceof Error ? err.message : String(err),
-        exitCode: null,
-      }),
-    );
-  }
-};
 
 export const extractFileText = async (
   buffer: ArrayBuffer,
@@ -74,10 +29,19 @@ export const extractFileText = async (
     return null;
   }
 
-  const result = await spawnExtraction(buffer, mimeType);
+  const result = await spawnWorker({
+    workerPath: WORKER_PATH,
+    args: [mimeType],
+    stdin: new Blob([buffer]),
+    timeoutMs: LIMITS.extractionTimeoutMs,
+  });
 
   if (Result.isError(result)) {
-    captureError(result.error, {
+    const error = new ExtractionWorkerError({
+      message: result.error.message,
+      exitCode: result.error.exitCode,
+    });
+    captureError(error, {
       mimeType,
       sizeBytes: String(buffer.byteLength),
       exitCode: String(result.error.exitCode),
@@ -86,5 +50,5 @@ export const extractFileText = async (
     return null;
   }
 
-  return result.value;
+  return result.value || null;
 };

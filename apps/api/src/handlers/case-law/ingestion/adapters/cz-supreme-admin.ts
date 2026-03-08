@@ -1,9 +1,15 @@
+import { Result } from "better-result";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  adapterCatch,
+  hashContent,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Czech Supreme Administrative Court adapter.
@@ -18,12 +24,6 @@ import type {
 
 const BASE_URL = "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
 const PAGE_SIZE = 40;
-
-const hashResult = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
 
 type NssoudApiItem = {
   SpisovaZnacka?: string;
@@ -67,7 +67,7 @@ const parseItem = (item: NssoudApiItem): IngestionResult | null => {
       prejudication: item.Prejudikatura,
       legalSentence: item.PravniVeta,
     },
-    rawHash: hashResult(raw),
+    rawHash: hashContent(raw),
   };
 };
 
@@ -78,39 +78,49 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1500,
 
-  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
-    const page = cursor ? Number.parseInt(cursor, 10) : 1;
+  fetchPage(cursor, _config, signal) {
+    return Result.tryPromise({
+      try: async () => {
+        const page = cursor ? Number.parseInt(cursor, 10) : 1;
 
-    const response = await fetch(BASE_URL, {
-      method: "POST",
-      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
+        const response = await fetch(BASE_URL, {
+          method: "POST",
+          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            Page: page,
+            PageSize: PAGE_SIZE,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new AdapterFetchError({
+            message: `CZ Supreme Admin API error: ${response.status}`,
+            adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+            cursor,
+            httpStatus: response.status,
+          });
+        }
+
+        const json: unknown = await response.json();
+        const data: NssoudApiItem[] = Array.isArray(json) ? json : [];
+        const decisions: IngestionResult[] = [];
+
+        for (const item of data) {
+          const parsed = parseItem(item);
+          if (parsed) {
+            decisions.push(parsed);
+          }
+        }
+
+        const nextCursor = data.length >= PAGE_SIZE ? String(page + 1) : null;
+
+        return { decisions, nextCursor };
       },
-      body: JSON.stringify({
-        Page: page,
-        PageSize: PAGE_SIZE,
-      }),
+      catch: adapterCatch(ADAPTER_KEYS.CZ_SUPREME_ADMIN, cursor),
     });
-
-    if (!response.ok) {
-      throw new Error(`CZ Supreme Admin API error: ${response.status}`);
-    }
-
-    const json: unknown = await response.json();
-    const data: NssoudApiItem[] = Array.isArray(json) ? json : [];
-    const decisions: IngestionResult[] = [];
-
-    for (const item of data) {
-      const parsed = parseItem(item);
-      if (parsed) {
-        decisions.push(parsed);
-      }
-    }
-
-    const nextCursor = data.length >= PAGE_SIZE ? String(page + 1) : null;
-
-    return { decisions, nextCursor };
   },
 };

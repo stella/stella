@@ -1,9 +1,17 @@
+import { Result } from "better-result";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  adapterCatch,
+  hashContent,
+  parseCeDate,
+  stripHtml,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Czech Supreme Court adapter.
@@ -18,18 +26,6 @@ import type {
 const BASE_URL = "https://nsoud.cz/Judikatura/judikatura_ns.nsf";
 const PAGE_SIZE = 15;
 
-const hashResult = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
-
-/**
- * Extract text content from an HTML element-like string.
- * Simple extraction without a full DOM parser.
- */
-const stripHtml = (html: string): string => html.replace(/<[^>]*>/g, "").trim();
-
 // Top-level regex patterns (useTopLevelRegex)
 const ENTRY_PATTERN =
   /<tr[^>]*class="[^"]*judikatura[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -40,8 +36,7 @@ const LINK_PATTERN = /href="([^"]*WebSearch[^"]*)"/i;
 
 /**
  * Parse the nsoud.cz search result HTML page to extract
- * decision entries. Each entry contains case number, date,
- * legal sentence, and a link to the full decision.
+ * decision entries.
  */
 type ParseResult = {
   decisions: IngestionResult[];
@@ -72,7 +67,7 @@ const parseSearchResults = (html: string): ParseResult => {
 
     const dateMatch = block.match(DATE_PATTERN);
     const decisionDate = dateMatch
-      ? `${dateMatch[3]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[1].padStart(2, "0")}`
+      ? parseCeDate(`${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`)
       : undefined;
 
     const sentenceMatch = block.match(SENTENCE_PATTERN);
@@ -95,7 +90,7 @@ const parseSearchResults = (html: string): ParseResult => {
       metadata: {
         legalSentence,
       },
-      rawHash: hashResult(raw),
+      rawHash: hashContent(raw),
     });
   }
 
@@ -109,25 +104,35 @@ export const czSupremeAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 2000,
 
-  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
-    const start = cursor ? Number.parseInt(cursor, 10) : 0;
+  fetchPage(cursor, _config, signal) {
+    return Result.tryPromise({
+      try: async () => {
+        const start = cursor ? Number.parseInt(cursor, 10) : 0;
 
-    const url = `${BASE_URL}/WebSearch?SearchOrder=4&Start=${start}&Count=${PAGE_SIZE}`;
+        const url = `${BASE_URL}/WebSearch?SearchOrder=4&Start=${start}&Count=${PAGE_SIZE}`;
 
-    const response = await fetch(url, {
-      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+        const response = await fetch(url, {
+          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+        });
+
+        if (!response.ok) {
+          throw new AdapterFetchError({
+            message: `CZ Supreme Court error: ${response.status}`,
+            adapterKey: ADAPTER_KEYS.CZ_SUPREME,
+            cursor,
+            httpStatus: response.status,
+          });
+        }
+
+        const html = await response.text();
+        const { decisions, rawEntryCount } = parseSearchResults(html);
+
+        const nextCursor =
+          rawEntryCount >= PAGE_SIZE ? String(start + PAGE_SIZE) : null;
+
+        return { decisions, nextCursor };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.CZ_SUPREME, cursor),
     });
-
-    if (!response.ok) {
-      throw new Error(`CZ Supreme Court error: ${response.status}`);
-    }
-
-    const html = await response.text();
-    const { decisions, rawEntryCount } = parseSearchResults(html);
-
-    const nextCursor =
-      rawEntryCount >= PAGE_SIZE ? String(start + PAGE_SIZE) : null;
-
-    return { decisions, nextCursor };
   },
 };

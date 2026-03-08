@@ -1,9 +1,15 @@
+import { Result } from "better-result";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  adapterCatch,
+  hashContent,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Czech Regional Courts adapter.
@@ -17,12 +23,6 @@ import type {
  */
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api/opendata";
-
-const hashResult = (input: string): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(input);
-  return hasher.digest("hex");
-};
 
 type CzRegionalApiItem = {
   case_number?: string;
@@ -58,13 +58,11 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       subjectOfProceeding: item.subject_of_proceeding,
       mentionedStatutes: item.mentioned_statutes,
     },
-    rawHash: hashResult(raw),
+    rawHash: hashContent(raw),
   };
 };
 
-/**
- * Advance the cursor by one day.
- */
+/** Advance the cursor by one day. */
 const nextDay = (dateStr: string): string => {
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + 1));
@@ -78,53 +76,63 @@ export const czRegionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1000,
 
-  async fetchPage(cursor, _config, signal): Promise<SyncPage> {
-    // Default cursor: 30 days ago
-    const date =
-      cursor ??
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0];
+  fetchPage(cursor, _config, signal) {
+    return Result.tryPromise({
+      try: async () => {
+        // Default cursor: 30 days ago
+        const date =
+          cursor ??
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0];
 
-    const url = `${BASE_URL}/${date}`;
+        const url = `${BASE_URL}/${date}`;
 
-    const response = await fetch(url, {
-      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-      headers: { Accept: "application/json" },
-    });
+        const response = await fetch(url, {
+          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+          headers: { Accept: "application/json" },
+        });
 
-    if (!response.ok) {
-      // If 404, the date has no data; advance cursor
-      if (response.status === 404) {
+        if (!response.ok) {
+          // 404 means no data for this date; advance cursor
+          if (response.status === 404) {
+            const today = new Date().toISOString().split("T")[0];
+            const next = nextDay(date);
+
+            return {
+              decisions: [],
+              nextCursor: next <= today ? next : null,
+            };
+          }
+
+          throw new AdapterFetchError({
+            message: `CZ Regional API error: ${response.status}`,
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            cursor,
+            httpStatus: response.status,
+          });
+        }
+
+        const json: unknown = await response.json();
+        const items: CzRegionalApiItem[] = Array.isArray(json) ? json : [];
+
+        const decisions: IngestionResult[] = [];
+        for (const item of items) {
+          const parsed = parseItem(item);
+          if (parsed) {
+            decisions.push(parsed);
+          }
+        }
+
         const today = new Date().toISOString().split("T")[0];
         const next = nextDay(date);
 
         return {
-          decisions: [],
+          decisions,
           nextCursor: next <= today ? next : null,
         };
-      }
-
-      throw new Error(`CZ Regional API error: ${response.status}`);
-    }
-
-    const json: unknown = await response.json();
-    const items: CzRegionalApiItem[] = Array.isArray(json) ? json : [];
-
-    const decisions: IngestionResult[] = [];
-    for (const item of items) {
-      const parsed = parseItem(item);
-      if (parsed) {
-        decisions.push(parsed);
-      }
-    }
-
-    const today = new Date().toISOString().split("T")[0];
-    const next = nextDay(date);
-
-    return {
-      decisions,
-      nextCursor: next <= today ? next : null,
-    };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),
+    });
   },
 };
