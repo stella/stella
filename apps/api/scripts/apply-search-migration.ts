@@ -140,7 +140,6 @@ const applyCaseLawSearchMigration = async () => {
 };
 
 const ensureUnaccentExtension = async () => {
-  // biome-ignore lint/suspicious/noConsole: migration script
   console.log("Ensuring unaccent extension...");
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
 };
