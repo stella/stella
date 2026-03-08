@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Atļaut",
+      "alwaysAllow": "Vienmēr atļaut",
+      "approved": "Apstiprināts",
+      "denied": "Noraidīts",
+      "deny": "Noraidīt"
+    },
+    "askUser": {
+      "custom": "Rakstīt savu",
+      "default": "Noklusējuma",
+      "placeholder": "Jūsu atbilde",
+      "submit": "Iesniegt atbildes"
+    },
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
     "mention": {
@@ -299,11 +312,14 @@
     "placeholder": "What would you like to know?",
     "threads": "Conversations",
     "tool": {
+      "askUser": "Precizējoši jautājumi",
+      "createDocument": "Izveidot dokumentu",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter"
+      "searchMatter": "Searched matter",
+      "updateEntityFields": "Atjaunināt lauku"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",
       "defaultPropertyName": "Dokumenti",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Lejupielādēt .zip failu",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",

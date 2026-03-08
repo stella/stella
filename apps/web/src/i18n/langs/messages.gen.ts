@@ -285,6 +285,19 @@ type Messages = {
     };
   };
   "chat": {
+    "approval": {
+      "allow": "Allow";
+      "alwaysAllow": "Always allow in this thread";
+      "approved": "Approved";
+      "denied": "Denied";
+      "deny": "Deny";
+    };
+    "askUser": {
+      "custom": "Write your own";
+      "default": "Default";
+      "placeholder": "Your answer";
+      "submit": "Submit answers";
+    };
     "deleteThread": "Delete conversation";
     "greeting": "How can I help you today?";
     "mention": {
@@ -302,11 +315,14 @@ type Messages = {
     "placeholder": "What would you like to know?";
     "threads": "Conversations";
     "tool": {
+      "askUser": "Clarifying questions";
+      "createDocument": "Create document";
       "listEntities": "Listed entities";
       "readContent": "Read content";
       "readEntity": "Read entity";
       "searchCaseLaw": "Searched case law";
       "searchMatter": "Searched matter";
+      "updateEntityFields": "Update metadata";
     };
   };
   "clauses": {

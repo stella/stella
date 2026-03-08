@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Permitir",
+      "alwaysAllow": "Permitir siempre",
+      "approved": "Aprobado",
+      "denied": "Denegado",
+      "deny": "Denegar"
+    },
+    "askUser": {
+      "custom": "Escribir propia",
+      "default": "Predeterminada",
+      "placeholder": "Su respuesta",
+      "submit": "Enviar respuestas"
+    },
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
     "mention": {
@@ -299,11 +312,14 @@
     "placeholder": "What would you like to know?",
     "threads": "Conversations",
     "tool": {
+      "askUser": "Preguntas de aclaración",
+      "createDocument": "Crear documento",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter"
+      "searchMatter": "Searched matter",
+      "updateEntityFields": "Actualizar campo"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Añada una propiedad de archivo para subir archivos",
       "defaultPropertyName": "Documentos",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Descargar archivo .zip",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",

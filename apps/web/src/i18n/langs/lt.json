@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Leisti",
+      "alwaysAllow": "Visada leisti",
+      "approved": "Patvirtinta",
+      "denied": "Atmesta",
+      "deny": "Atmesti"
+    },
+    "askUser": {
+      "custom": "Rašyti savo",
+      "default": "Numatytasis",
+      "placeholder": "Jūsų atsakymas",
+      "submit": "Pateikti atsakymus"
+    },
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
     "mention": {
@@ -299,11 +312,14 @@
     "placeholder": "What would you like to know?",
     "threads": "Conversations",
     "tool": {
+      "askUser": "Patikslinantys klausimai",
+      "createDocument": "Sukurti dokumentą",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter"
+      "searchMatter": "Searched matter",
+      "updateEntityFields": "Atnaujinti lauką"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Pridėkite failo savybę norėdami įkelti failus",
       "defaultPropertyName": "Dokumentai",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Atsisiųsti .zip failą",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",

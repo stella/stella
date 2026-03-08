@@ -1,5 +1,6 @@
 import { Chat } from "@ai-sdk/react";
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
 import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
@@ -66,6 +67,8 @@ export const chatThreadOptions = (opts: {
       return new Chat({
         messages: initialMessages,
         transport,
+        sendAutomaticallyWhen:
+          lastAssistantMessageIsCompleteWithApprovalResponses,
       });
     },
   });

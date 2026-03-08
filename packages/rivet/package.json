@@ -10,7 +10,7 @@
     "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
   },
   "dependencies": {
-    "@tamtamchik/json-deep-sort": "^1.4.1",
+    "@tamtamchik/json-deep-sort": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

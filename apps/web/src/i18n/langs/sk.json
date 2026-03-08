@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Povoliť",
+      "alwaysAllow": "Vždy povoliť v tomto vlákne",
+      "approved": "Povolené",
+      "denied": "Zamietnuté",
+      "deny": "Zamietnuť"
+    },
+    "askUser": {
+      "custom": "Napísať vlastnú",
+      "default": "Predvolená",
+      "placeholder": "Vaša odpoveď",
+      "submit": "Odoslať odpovede"
+    },
     "deleteThread": "Zmazať konverzáciu",
     "greeting": "Ako vám môžem dnes pomôcť?",
     "mention": {
@@ -296,14 +309,17 @@
     },
     "newChat": "Nový chat",
     "noThreads": "Zatiaľ žiadne konverzácie",
-    "placeholder": "What would you like to know?",
+    "placeholder": "Čo by ste chceli vedieť?",
     "threads": "Konverzácie",
     "tool": {
+      "askUser": "Upresňujúce otázky",
+      "createDocument": "Vytvoriť dokument",
       "listEntities": "Výpis entít",
       "readContent": "Čítanie obsahu",
       "readEntity": "Čítanie entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Hľadanie v spise"
+      "searchMatter": "Hľadanie v spise",
+      "updateEntityFields": "Aktualizovať metadáta"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Pridajte vlastnosť typu súbor na nahrávanie súborov",
       "defaultPropertyName": "Dokumenty",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Stiahnuť .zip súbor",
       "maxEntitiesReached": "Dosiahnutý maximálny počet entít",
       "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom}}",
       "uploadedPartially": "{failed, plural, one {# súbor zlyhal} few {# súbory zlyhali} other {# súborov zlyhalo}} z {total, number}",
@@ -973,12 +989,12 @@
       "equals": "Rovná sa"
     },
     "overview": {
-      "atAGlance": "At a glance",
+      "atAGlance": "Prehľad",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
-      "recentActivity": "Recent activity",
+      "recentActivity": "Nedávna aktivita",
       "title": "Overview",
-      "totalDocuments": "Total documents",
+      "totalDocuments": "Celkom dokumentov",
       "totalItems": "Items"
     },
     "parties": {

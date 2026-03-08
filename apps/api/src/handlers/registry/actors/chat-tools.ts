@@ -3,16 +3,38 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/api/db";
-import { workspaces } from "@/api/db/schema";
+import { entities, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
+import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 // biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CONTENT_MAX_CHARS = 8000;
+
+/** Wrap a tool execute function so unhandled errors are
+ *  returned as structured error objects the model can act
+ *  on, instead of throwing and causing an opaque
+ *  output-error state. */
+const safeExecute =
+  <TArgs, TResult>(
+    fn: (args: TArgs) => Promise<TResult>,
+  ): ((args: TArgs) => Promise<TResult | { error: string }>) =>
+  async (args) => {
+    try {
+      return await fn(args);
+    } catch (err) {
+      captureError(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      return { error: `Tool failed: ${msg}` };
+    }
+  };
 
 /** Summarize a field value into a human-readable string. */
 const formatFieldValue = (content: FieldContent): string => {
@@ -65,6 +87,7 @@ type MatterToolsContext = {
   /** Validated workspace IDs the AI is allowed to access. */
   allowedWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  userId: string;
 };
 
 const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
@@ -84,6 +107,7 @@ const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
 export const createMatterTools = ({
   allowedWorkspaceIds,
   organizationId,
+  userId,
 }: MatterToolsContext) => {
   const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
 
@@ -108,7 +132,7 @@ export const createMatterTools = ({
           .default(10)
           .describe("Max results to return"),
       }),
-      execute: async ({ workspaceId, query, limit }) => {
+      execute: safeExecute(async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.search({
           query,
@@ -117,7 +141,6 @@ export const createMatterTools = ({
           limit,
         });
         return {
-          workspaceId,
           totalCount: result.totalCount,
           hits: result.hits.map((hit) => ({
             entityId: hit.entityId,
@@ -126,7 +149,7 @@ export const createMatterTools = ({
             headline: hit.headline,
           })),
         };
-      },
+      }),
     }),
 
     listEntities: tool({
@@ -168,8 +191,6 @@ export const createMatterTools = ({
               kind: true,
               name: true,
               parentId: true,
-              createdAt: true,
-              updatedAt: true,
             },
             with: {
               currentVersion: {
@@ -192,22 +213,26 @@ export const createMatterTools = ({
         ]);
         const propNameById = new Map(properties.map((p) => [p.id, p.name]));
 
-        return ents.map((entity) => ({
-          workspaceId,
-          entityId: entity.id,
-          kind: entity.kind,
-          name: entity.name,
-          parentId: entity.parentId,
-          createdAt: entity.createdAt.toISOString(),
-          updatedAt: entity.updatedAt?.toISOString() ?? null,
-          fields:
-            entity.currentVersion?.fields
-              .map((f) => ({
-                property: propNameById.get(f.propertyId) ?? f.propertyId,
-                value: formatFieldValue(f.content),
-              }))
-              .filter((f) => f.value !== "") ?? [],
-        }));
+        // Build a compact { propertyName: value } map per
+        // entity to minimize token usage in AI context.
+        return ents.map((entity) => {
+          const fieldMap: Record<string, string> = {};
+          for (const f of entity.currentVersion?.fields ?? []) {
+            const val = formatFieldValue(f.content);
+            if (val === "") {
+              continue;
+            }
+            const key = propNameById.get(f.propertyId) ?? f.propertyId;
+            fieldMap[key] = val;
+          }
+          return {
+            id: entity.id,
+            kind: entity.kind,
+            name: entity.name,
+            parentId: entity.parentId,
+            fields: fieldMap,
+          };
+        });
       },
     }),
 
@@ -261,19 +286,19 @@ export const createMatterTools = ({
         const propNameById = new Map(properties.map((p) => [p.id, p.name]));
 
         return {
-          workspaceId,
           entityId: entity.id,
           kind: entity.kind,
           name: entity.name,
           parentId: entity.parentId,
           createdAt: entity.createdAt.toISOString(),
-          updatedAt: entity.updatedAt?.toISOString() ?? null,
           createdBy: entity.createdByUser?.name ?? null,
           versionCount: entity.versions.length,
           fields:
             entity.currentVersion?.fields
               .map((f) => ({
+                propertyId: f.propertyId,
                 property: propNameById.get(f.propertyId) ?? f.propertyId,
+                type: f.content.type,
                 value: formatFieldValue(f.content),
               }))
               .filter((f) => f.value !== "") ?? [],
@@ -290,7 +315,7 @@ export const createMatterTools = ({
         workspaceId: wsSchema,
         entityId: z.string().describe("The entity ID whose content to read"),
       }),
-      execute: async ({ workspaceId, entityId }) => {
+      execute: safeExecute(async ({ workspaceId, entityId }) => {
         const row = await db.query.extractedContent.findFirst({
           where: {
             entityId,
@@ -304,14 +329,16 @@ export const createMatterTools = ({
         if (!row) {
           return {
             error:
-              "No extracted content available for this entity. " +
-              "The file may not have been processed yet or its " +
-              "format is not supported for text extraction.",
+              "No extracted content available. The file " +
+              "may not have been processed yet, or its " +
+              "format is not supported for extraction.",
           };
         }
 
         if (row.entity?.workspaceId !== workspaceId) {
-          return { error: "Entity not found in this matter" };
+          return {
+            error: "Entity not found in this matter.",
+          };
         }
 
         const plaintext = await decryptContent(
@@ -326,13 +353,277 @@ export const createMatterTools = ({
           : plaintext;
 
         return {
-          workspaceId,
           entityId,
           charCount: row.charCount,
           truncated,
           text,
         };
-      },
+      }),
+    }),
+
+    updateEntityFields: tool({
+      description:
+        "Update a metadata field on an entity (document, " +
+        "task, file). The property type is looked up " +
+        "automatically; just pass the value. For " +
+        "single-select: pass the option label as a string. " +
+        "For text: pass a string. For date: pass an ISO " +
+        "date string (YYYY-MM-DD) or null. For int: pass " +
+        "a number. For multi-select: pass an array of " +
+        "strings.",
+      needsApproval: true,
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        entityId: z.string().describe("The entity ID to update"),
+        propertyId: z.string().describe("The property ID (from readEntity)"),
+        value: z
+          .union([z.string(), z.number(), z.array(z.string()), z.null()])
+          .describe("New value for the field"),
+        entityName: z
+          .string()
+          .optional()
+          .describe("Entity name (for display in approval)"),
+        propertyName: z
+          .string()
+          .optional()
+          .describe("Property name (for display in approval)"),
+        oldValue: z
+          .string()
+          .optional()
+          .describe(
+            "Current value before the change (for display in approval)",
+          ),
+      }),
+      execute: safeExecute(
+        async ({ workspaceId, entityId, propertyId, value }) => {
+          const property = await db.query.properties.findFirst({
+            columns: { id: true, content: true },
+            where: {
+              id: propertyId,
+              workspaceId: { eq: workspaceId },
+            },
+          });
+
+          if (!property) {
+            return {
+              error:
+                `Property "${propertyId}" not found. ` +
+                "Check the system prompt for available " +
+                "property IDs.",
+            };
+          }
+
+          const propType = property.content.type;
+
+          // Build typed content from the flat value,
+          // validating against the property type.
+          // SAFETY: content is always assigned in the switch
+          // for non-null values; null values hit the isEmpty
+          // path which skips the insert.
+          let content!: FieldContent;
+          switch (propType) {
+            case "text": {
+              if (typeof value !== "string") {
+                return {
+                  error:
+                    `Property is "text"; pass a string ` +
+                    `value, not ${typeof value}.`,
+                };
+              }
+              content = { version: 1, type: "text", value };
+              break;
+            }
+            case "single-select": {
+              if (value !== null && typeof value !== "string") {
+                return {
+                  error:
+                    `Property is "single-select"; pass ` +
+                    `a string or null, not ${typeof value}.`,
+                };
+              }
+              // Validate option exists.
+              if (
+                value !== null &&
+                "options" in property.content &&
+                Array.isArray(property.content.options)
+              ) {
+                const valid = new Set(
+                  (
+                    property.content.options as {
+                      value: string;
+                    }[]
+                  ).map((o) => o.value),
+                );
+                if (!valid.has(value)) {
+                  return {
+                    error:
+                      `Invalid option "${value}". ` +
+                      `Valid: ${[...valid].join(", ")}`,
+                  };
+                }
+              }
+              content = {
+                version: 1,
+                type: "single-select",
+                value,
+              };
+              break;
+            }
+            case "multi-select": {
+              if (!Array.isArray(value)) {
+                return {
+                  error:
+                    'Property is "multi-select"; pass ' +
+                    "an array of strings.",
+                };
+              }
+              content = {
+                version: 1,
+                type: "multi-select",
+                value,
+              };
+              break;
+            }
+            case "date": {
+              if (value !== null && typeof value !== "string") {
+                return {
+                  error:
+                    'Property is "date"; pass an ISO ' +
+                    "date string (YYYY-MM-DD) or null.",
+                };
+              }
+              content = { version: 1, type: "date", value };
+              break;
+            }
+            case "int": {
+              if (value !== null && typeof value !== "number") {
+                return {
+                  error:
+                    `Property is "int"; pass a number ` +
+                    `or null, not ${typeof value}.`,
+                };
+              }
+              if (value !== null) {
+                content = {
+                  version: 1,
+                  type: "int",
+                  value,
+                  currency: null,
+                };
+              }
+              break;
+            }
+            default:
+              return {
+                error: `Unsupported property type "${propType}".`,
+              };
+          }
+
+          const entity = await db.query.entities.findFirst({
+            columns: { id: true, currentVersionId: true },
+            where: {
+              id: entityId,
+              workspaceId: { eq: workspaceId },
+            },
+          });
+
+          if (!entity) {
+            return {
+              error:
+                `Entity "${entityId}" not found. Use ` +
+                "listEntities to get valid entity IDs.",
+            };
+          }
+
+          if (!entity.currentVersionId) {
+            return {
+              error:
+                `Entity "${entityId}" has no current ` +
+                "version and cannot be updated.",
+            };
+          }
+
+          const versionId = entity.currentVersionId;
+
+          const isEmpty =
+            value === null ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0);
+
+          await db.transaction(async (tx) => {
+            await tx
+              .delete(fields)
+              .where(
+                and(
+                  eq(fields.propertyId, propertyId),
+                  eq(fields.entityVersionId, versionId),
+                ),
+              );
+
+            if (!isEmpty) {
+              await tx.insert(fields).values({
+                propertyId,
+                entityVersionId: versionId,
+                content,
+              });
+            }
+
+            await tx
+              .update(entities)
+              .set({ updatedAt: new Date() })
+              .where(eq(entities.id, entityId));
+          });
+
+          getSearchProvider().indexEntity(entityId).catch(captureError);
+
+          return {
+            success: true,
+            entityId,
+            propertyId,
+            newValue: isEmpty ? "" : formatFieldValue(content),
+          };
+        },
+      ),
+    }),
+
+    createDocument: tool({
+      description:
+        "Create a new DOCX document in the matter from " +
+        "markdown content. Write the document body as " +
+        "markdown; it is converted to a styled DOCX file " +
+        "and stored in the matter.",
+      needsApproval: true,
+      inputSchema: z.object({
+        workspaceId: wsSchema,
+        name: z
+          .string()
+          .max(256)
+          .describe("Document file name (without .docx extension)"),
+        markdown: z.string().describe("Document content as markdown"),
+      }),
+      execute: safeExecute(async ({ workspaceId, name, markdown }) => {
+        const buffer = await markdownToDocx(markdown);
+        const fileName = `${name}.docx`;
+
+        const result = await createEntityFromBuffer({
+          organizationId,
+          workspaceId,
+          userId,
+          buffer,
+          fileName,
+          mimeType: DOCX_MIME_TYPE,
+        });
+
+        if (!result.success) {
+          return { error: result.error };
+        }
+
+        return {
+          success: true,
+          entityId: result.entityId,
+          fileName: result.fileName,
+        };
+      }),
     }),
 
     searchContent: tool({
@@ -357,7 +648,7 @@ export const createMatterTools = ({
           .default(5)
           .describe("Max results (default: 5)"),
       }),
-      execute: async ({ workspaceId, query, limit }) => {
+      execute: safeExecute(async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.searchContent({
           query,
@@ -367,7 +658,6 @@ export const createMatterTools = ({
         });
         const truncated = result.totalCount > result.hits.length;
         return {
-          workspaceId,
           totalCount: result.totalCount,
           truncated,
           ...(truncated && {
@@ -380,7 +670,7 @@ export const createMatterTools = ({
             passage: hit.passage,
           })),
         };
-      },
+      }),
     }),
   };
 };
@@ -413,7 +703,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
         .default(10)
         .describe("Max results to return"),
     }),
-    execute: async ({ query, limit }) => {
+    execute: safeExecute(async ({ query, limit }) => {
       const provider = getSearchProvider();
       const result = await provider.search({
         query,
@@ -431,7 +721,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
           headline: hit.headline,
         })),
       };
-    },
+    }),
   }),
 
   readContentAcrossMatters: tool({
@@ -442,7 +732,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
     inputSchema: z.object({
       entityId: z.string().describe("The entity ID whose content to read"),
     }),
-    execute: async ({ entityId }) => {
+    execute: safeExecute(async ({ entityId }) => {
       const row = await db.query.extractedContent.findFirst({
         where: {
           entityId,
@@ -483,7 +773,7 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
         truncated,
         text,
       };
-    },
+    }),
   }),
 
   readContact: tool({
@@ -591,6 +881,52 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
         body: clause.body,
       };
     },
+  }),
+
+  askUser: tool({
+    description:
+      "Ask the user clarifying questions before executing " +
+      "a complex task. Use this when the request is " +
+      "ambiguous or requires decisions you cannot make " +
+      "alone (jurisdiction, parties, preferences, scope). " +
+      "After calling this tool, STOP and present the " +
+      "questions to the user. Do NOT proceed until they " +
+      "respond. Once they answer, synthesize their input " +
+      "into a plan and execute it.",
+    inputSchema: z.object({
+      analysis: z
+        .string()
+        .describe(
+          "Brief analysis of the task and what you " +
+            "already know from context",
+        ),
+      questions: z
+        .array(
+          z.object({
+            question: z.string(),
+            reason: z.string().describe("Why this matters for the task"),
+            options: z
+              .array(z.string())
+              .optional()
+              .describe(
+                "Suggested options (A/B/C style). The " +
+                  "user can also write their own answer.",
+              ),
+            default: z
+              .string()
+              .optional()
+              .describe("Preselected option or default value"),
+          }),
+        )
+        .min(1)
+        .max(10)
+        .describe("Clarifying questions to ask"),
+    }),
+    execute: async ({ analysis, questions }) => ({
+      status: "awaiting_response",
+      analysis,
+      questionCount: questions.length,
+    }),
   }),
 });
 

@@ -42,6 +42,7 @@ import {
 import { validateUserActorSession } from "@/api/handlers/registry/utils";
 // biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { captureError } from "@/api/lib/posthog";
 
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const caseLawTools = createCaseLawTools();
@@ -157,6 +158,48 @@ const buildUserContextBlock = (userContext: UserContext | null): string => {
   return lines.join("\n");
 };
 
+// -- Shared prompt building blocks --
+
+const CORE_RULES = [
+  "You are Stella, an AI assistant for legal professionals.",
+  "",
+  "CRITICAL: Never guess, infer, or fabricate document " +
+    "content. Always call readContent (or the appropriate " +
+    "tool) to retrieve real data before answering. If a " +
+    "tool call fails, report the error honestly.",
+  "",
+  "IDENTITY: You work on behalf of the user. When drafting " +
+    "documents, emails, or letters, NEVER sign as 'Stella' " +
+    "or identify yourself as the author. Always sign using " +
+    "the user's registered name (provided below). The user " +
+    "is the author; you are their tool.",
+  "",
+  "PLANNING: For complex or ambiguous tasks (drafting " +
+    "documents, multi-step workflows), call askUser to " +
+    "gather requirements BEFORE acting. After calling " +
+    "askUser, STOP and present your analysis and " +
+    "questions. Wait for the user's response, then " +
+    "synthesize a plan and execute.",
+  "",
+  "Never expose internal IDs to the user in plain text.",
+  "",
+  "When citing documents, use markdown links:\n" +
+    "[Document Name](#stella-entity=ENTITY_ID)\n" +
+    "When citing matters:\n" +
+    "[Matter Name](#stella-workspace=WORKSPACE_ID)\n" +
+    "When citing court decisions:\n" +
+    "[Case Number](#stella-decision=DECISION_ID)",
+];
+
+/** Assemble a system prompt from shared core + context. */
+const buildPrompt = (
+  contextLines: string[],
+  userContext: UserContext | null,
+): string =>
+  [...CORE_RULES, "", ...contextLines, buildUserContextBlock(userContext)]
+    .filter(Boolean)
+    .join("\n");
+
 /** Build a system prompt for a workspace-bound thread. */
 const buildSystemPrompt = async (
   workspaceId: SafeId<"workspace">,
@@ -173,7 +216,7 @@ const buildSystemPrompt = async (
     }),
     db.query.properties.findMany({
       where: { workspaceId: { eq: workspaceId } },
-      columns: { name: true, status: true },
+      columns: { id: true, name: true, status: true, content: true },
     }),
     db
       .select({ value: count() })
@@ -185,63 +228,44 @@ const buildSystemPrompt = async (
 
   const propList = properties
     .filter((p) => p.status !== "uninitialized")
-    .map((p) => `- ${p.name}`)
+    .map((p) => {
+      let line = `- ${p.name} (id: ${p.id}, type: ${p.content.type})`;
+      if ("options" in p.content && Array.isArray(p.content.options)) {
+        const opts = p.content.options
+          .map((o: { value: string }) => o.value)
+          .join(", ");
+        line += ` [options: ${opts}]`;
+      }
+      return line;
+    })
     .join("\n");
 
-  return [
-    "You are Stella, an AI assistant for legal professionals.",
-    `You are connected to the matter "${workspace?.name ?? "Unknown"}".`,
-    "",
-    "IMPORTANT: When the user asks about the matter, its " +
-      "contents, documents, or files, you MUST call the " +
-      "available tools (searchMatter, searchContent, " +
-      "listEntities, readEntity, readContent) to retrieve " +
-      "real data before answering. When the user asks about " +
-      "case law, court decisions, or legal precedents, use " +
-      "searchCaseLaw. Never ask the user to call tools " +
-      "themselves. Never describe tools to the user. " +
-      "Just use them directly.",
-    "",
-    "CRITICAL: You must NEVER guess, infer, or fabricate " +
-      "document content based on file names, user messages, " +
-      "or general knowledge. Always call readContent to read " +
-      "the actual text before describing, comparing, or " +
-      "summarizing any document. If a tool call fails, report " +
-      "the error honestly; do not make up content.",
-    "",
-    "SCOPE: By default, use matter-scoped tools " +
-      "(searchMatter, searchContent, listEntities, " +
-      "readEntity, readContent) for this matter. You also " +
-      "have searchAcrossMatters and readContentAcrossMatters " +
-      "which search across ALL matters in the " +
-      "organization. Only use these cross-matter tools " +
-      "when the user EXPLICITLY asks to search outside " +
-      'this matter (e.g. "across matters", "in other ' +
-      'cases", "across all my files"). If the user asks ' +
-      "a question that could be answered from the " +
-      "current matter, stay within it.",
-    "",
-    "Never expose internal IDs to the user in plain text; " +
-      "they are meaningless to humans.",
-    "",
-    "When citing a specific document or file, always use a " +
-      "markdown link with this exact format:\n" +
-      "[Document Name](#stella-entity=ENTITY_ID)\n" +
-      "When citing a court decision, use:\n" +
-      "[Case Number](#stella-decision=DECISION_ID)\n" +
-      "The system renders these as clickable references. " +
-      "Every document or decision mention MUST use " +
-      "the appropriate link syntax.",
-    "",
-    `Your workspace ID is ${workspaceId}. Pass this as ` +
-      "workspaceId when calling matter-scoped tools.",
-    "",
-    `The matter contains ${entityCount.toLocaleString()} entities.`,
-    propList ? `\nAvailable metadata columns:\n${propList}` : "",
-    buildUserContextBlock(userContext),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return buildPrompt(
+    [
+      `Connected to matter "${workspace?.name ?? "Unknown"}".`,
+      "",
+      "Use the available tools (searchMatter, searchContent, " +
+        "listEntities, readEntity, readContent) to retrieve " +
+        "real data. Use searchCaseLaw for case law. Never " +
+        "ask the user to call tools; just use them.",
+      "",
+      "SCOPE: By default, use matter-scoped tools for this " +
+        "matter. Only use searchAcrossMatters / " +
+        "readContentAcrossMatters when the user EXPLICITLY " +
+        'asks to search outside (e.g. "across matters", ' +
+        '"in other cases").',
+      "",
+      `Workspace ID: ${workspaceId} (pass as workspaceId).`,
+      `The matter contains ${entityCount.toLocaleString()} entities.`,
+      propList
+        ? `\nAvailable metadata columns:\n${propList}\n` +
+          "\nModify metadata with updateEntityFields; create " +
+          "DOCX documents with createDocument. Both require " +
+          "user approval."
+        : "",
+    ],
+    userContext,
+  );
 };
 
 /** Build a system prompt for multi-workspace or global threads. */
@@ -268,8 +292,6 @@ const buildMultiContextPrompt = async (
     .map((id) => `- "${wsMap.get(id) ?? "Unknown"}" (ID: ${id})`)
     .join("\n");
 
-  // Entity-workspace mapping so the model knows which
-  // workspace to pass when calling tools for each entity.
   const entityLines =
     entityMentions && entityMentions.length > 0
       ? entityMentions
@@ -279,75 +301,34 @@ const buildMultiContextPrompt = async (
           .join("\n")
       : "";
 
-  return [
-    "You are Stella, an AI assistant for legal professionals.",
-    "",
-    "The user may reference matters, contacts, templates, " +
-      "or clauses in their messages. Use the available tools " +
-      "to explore these resources when answering. When the " +
-      "user asks about case law, court decisions, or legal " +
-      "precedents, use searchCaseLaw.",
-    "",
-    "CRITICAL: You must NEVER guess, infer, or fabricate " +
-      "document content based on file names, user messages, " +
-      "or general knowledge. Always call readContent to read " +
-      "the actual text before describing, comparing, or " +
-      "summarizing any document. If a tool call fails, report " +
-      "the error honestly; do not make up content.",
-    "",
-    "Never expose internal IDs to the user in plain text.",
-    "",
-    "When citing documents, use markdown links:\n" +
-      "[Document Name](#stella-entity=ENTITY_ID)\n" +
-      "When citing matters, use:\n" +
-      "[Matter Name](#stella-workspace=WORKSPACE_ID)\n" +
-      "When citing court decisions, use:\n" +
-      "[Case Number](#stella-decision=DECISION_ID)",
-    "",
-    matterLines ? `Referenced matters:\n${matterLines}` : "",
-    entityLines
-      ? "Entity-workspace mapping (use these when " +
-        "calling tools):\n" +
-        entityLines
-      : "",
-    buildUserContextBlock(userContext),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return buildPrompt(
+    [
+      "The user may reference matters, contacts, templates, " +
+        "or clauses. Use the available tools to explore them. " +
+        "Use searchCaseLaw for case law.",
+      "",
+      matterLines ? `Referenced matters:\n${matterLines}` : "",
+      entityLines
+        ? "Entity-workspace mapping (use these when " +
+          "calling tools):\n" +
+          entityLines
+        : "",
+    ],
+    userContext,
+  );
 };
 
 /** Build a system prompt for global chat (no workspace). */
-const buildGlobalPrompt = (userContext: UserContext | null): string => {
-  return [
-    "You are Stella, an AI assistant for legal professionals.",
-    "",
-    "You have tools to search across all matters, look up " +
-      "contacts, browse templates, read clauses, and search " +
-      "case law. Use them when the user asks about their " +
-      "data. When the user asks about case law, court " +
-      "decisions, or legal precedents, use searchCaseLaw. " +
-      "Never ask the user to call tools themselves; just " +
-      "use them.",
-    "",
-    "CRITICAL: You must NEVER guess, infer, or fabricate " +
-      "document content. Always call the appropriate tool " +
-      "to retrieve real data before answering. If a tool " +
-      "call fails, report the error honestly.",
-    "",
-    "Never expose internal IDs to the user in plain text.",
-    "",
-    "When citing documents, use markdown links:\n" +
-      "[Document Name](#stella-entity=ENTITY_ID)\n" +
-      "When citing matters, use:\n" +
-      "[Matter Name](#stella-workspace=WORKSPACE_ID)\n" +
-      "When citing court decisions, use:\n" +
-      "[Case Number](#stella-decision=DECISION_ID)",
-    "",
-    buildUserContextBlock(userContext),
-  ]
-    .filter(Boolean)
-    .join("\n");
-};
+const buildGlobalPrompt = (userContext: UserContext | null): string =>
+  buildPrompt(
+    [
+      "You have tools to search across all matters, look up " +
+        "contacts, browse templates, read clauses, and search " +
+        "case law. Use them when the user asks about their " +
+        "data. Never ask the user to call tools; just use them.",
+    ],
+    userContext,
+  );
 
 /** Run `fn` in the background via `c.waitUntil`. Errors
  *  are caught and logged instead of crashing the actor. */
@@ -408,7 +389,21 @@ export const chatActor = actor({
 
       thread.running = true;
       thread.pendingChunks = [];
-      thread.messages.push(message);
+
+      // Approval flow: the AI SDK sends the assistant message
+      // (with tool-approval-response parts) back through the
+      // transport. Replace the last stored assistant message
+      // instead of appending a new one.
+      if (message.role === "assistant") {
+        const lastIdx = thread.messages.length - 1;
+        if (lastIdx >= 0 && thread.messages[lastIdx].role === "assistant") {
+          thread.messages[lastIdx] = message;
+        } else {
+          thread.messages.push(message);
+        }
+      } else {
+        thread.messages.push(message);
+      }
 
       const stopController = new AbortController();
       c.vars.stopControllers.set(threadId, stopController);
@@ -439,10 +434,11 @@ export const chatActor = actor({
       });
 
       // SAFETY: createConnState (validateUserActorSession) returns
-      // UserActorConnState which types organizationId as SafeId,
+      // UserActorConnState which types organizationId and userId,
       // but RivetKit erases the type on c.conn.state.
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
+        userId: string;
       };
       const orgId = connState.organizationId;
 
@@ -509,6 +505,7 @@ export const chatActor = actor({
               ? createMatterTools({
                   allowedWorkspaceIds: allWorkspaceIds,
                   organizationId: orgId,
+                  userId: connState.userId,
                 })
               : {};
           const tools: ToolSet = {
@@ -569,7 +566,10 @@ export const chatActor = actor({
               thread.messages = [...priorMessages, ...finishedMessages];
               cleanupStream();
             },
-            onError: () => "error",
+            onError: (err) => {
+              captureError(err);
+              return "error";
+            },
           });
 
           // Inject source-document UI parts so the frontend can
