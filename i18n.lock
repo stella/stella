@@ -541,15 +541,16 @@ checksums:
     errors/partyAlreadyExists: d489886d3458725872d3ad018747adbb
     errors/slugAlreadyTaken: 1c53f69ae9dc7c8cc4a17219a1aca656
     errors/uploadFailed: 5b7b755f05330164dbfb00096c500ee3
-    feedback/describeIssue: 60036e9cff3d814b640e60a27f80a8fa
-    feedback/describeIssuePlaceholder: b15799dffeb5084b240cbdc54674a8ab
-    feedback/description: fde014ff7e6bfda862d1688c1f859512
-    feedback/includeScreenshot: 7e6607f51c08506bddc8fa1a201985ee
+    feedback/describeIssue: 3bae8b182f4691e052b65f356c58330b
+    feedback/describeIssuePlaceholder: d4efe22249297fb46ce78f64979490f7
+    feedback/description: 11431ee1523d03979f43e9b47c176ccd
+    feedback/includeScreenshot: b2eed916e28cab3e41cf0fd61875663f
     feedback/screenshotFailed: ee38b22b38af404fd690c314e5afb561
+    feedback/screenshotHint: 842e3e07bfad520eb3ae40a6c29cbdb4
     feedback/submit: 9631cc08d49da04475b30a0d320ce97c
     feedback/suggestedFix: ad1aeb58899a162dce132b67c0760514
     feedback/suggestedFixPlaceholder: 9361be2315150e0652395495232e7956
-    feedback/title: 7721eed8892b1101ff9198b735bfa0ed
+    feedback/title: 6fac88806e0c269a30777b283988c61c
     feedback/trigger: 6fac88806e0c269a30777b283988c61c
     knowledge/sections/agents/description: 6e30f42346b678a15fe00d88355cde67
     knowledge/sections/agents/title: f902c551bd769a3ae2f65b44305b1976
