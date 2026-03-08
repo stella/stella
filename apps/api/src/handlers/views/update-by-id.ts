@@ -45,7 +45,7 @@ export const updateViewHandler = async ({
   }
 
   if (Object.keys(updates).length === 0) {
-    return undefined;
+    return;
   }
 
   const [updated] = await db
@@ -58,5 +58,5 @@ export const updateViewHandler = async ({
     return status(404, { message: "View not found" });
   }
 
-  return undefined;
+  return;
 };

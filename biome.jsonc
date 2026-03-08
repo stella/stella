@@ -18,7 +18,9 @@
       },
       "complexity": {
         "useSimplifiedLogicExpression": "off",
-        "noExcessiveCognitiveComplexity": "off"
+        "noExcessiveCognitiveComplexity": "off",
+        "noUselessUndefined": "error",
+        "noUselessCatchBinding": "error"
       },
       "style": {
         "useFilenamingConvention": "off",
@@ -40,7 +42,10 @@
       },
       "suspicious": {
         "noConsole": "warn",
-        "noImportCycles": "error"
+        "noDeprecatedImports": "error",
+        "noDuplicateDependencies": "error",
+        "noImportCycles": "error",
+        "noReactForwardRef": "error"
       },
       "security": {
         "noSecrets": {

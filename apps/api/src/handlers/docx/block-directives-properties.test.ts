@@ -83,13 +83,13 @@ const leafValue = fc.stringMatching(LEAF_RE).filter((s) => s.trim().length > 0);
 // ── Tests ────────────────────────────────────────────────
 
 describe("property: parseNumeric rejects non-numeric identifiers", () => {
-  test("identifiers with underscores and letters resolve as paths, not numbers", () => {
+  test("identifiers with underscores and letters resolve as paths, not numbers", async () => {
     // Bug: `_` parsed as 0, `_0` parsed as 0
     const identifiersWithUnderscores = fc
       .stringMatching(IDENT_UNDERSCORE_RE)
       .filter((s) => s.length > 0 && HAS_LETTER_RE.test(s));
 
-    fc.assert(
+    await fc.assert(
       fc.property(identifiersWithUnderscores, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
@@ -99,12 +99,12 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
     );
   });
 
-  test("underscore-only strings never resolve as numeric", () => {
+  test("underscore-only strings never resolve as numeric", async () => {
     const underscoreOnly = fc
       .integer({ min: 1, max: 10 })
       .map((n) => "_".repeat(n));
 
-    fc.assert(
+    await fc.assert(
       fc.property(underscoreOnly, (ident) => {
         // Should resolve as a path lookup, not a number
         const data: Record<string, unknown> = {};
@@ -115,13 +115,13 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
     );
   });
 
-  test("underscore-prefixed digits resolve as paths, not numbers", () => {
+  test("underscore-prefixed digits resolve as paths, not numbers", async () => {
     // Bug: _0, _1, _123 parsed as numeric after stripping _
     const underscoreDigit = fc
       .integer({ min: 0, max: 999 })
       .map((n) => `_${n}`);
 
-    fc.assert(
+    await fc.assert(
       fc.property(underscoreDigit, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
@@ -208,7 +208,7 @@ describe("property: nested objects in #each items resolve", () => {
 });
 
 describe("property: arrays inside loop items are not recursed into", () => {
-  test("array fields in items do not produce nonsensical patch keys", () => {
+  test("array fields in items do not produce nonsensical patch keys", async () => {
     // Bug: isRecord returned true for arrays, causing
     // registerItemPatchValues to recurse into array indices.
 
@@ -217,7 +217,7 @@ describe("property: arrays inside loop items are not recursed into", () => {
         "",
       ),
     );
-    fc.assert(
+    await fc.assert(
       fc.property(
         identifier,
         fc.array(leafValue, { minLength: 1, maxLength: 5 }),
@@ -431,7 +431,7 @@ describe("property: MAX_PASSES reports an error", () => {
 });
 
 describe("property: flattenTemplateData roundtrip", () => {
-  test("all leaf values are accessible via dot-path keys", () => {
+  test("all leaf values are accessible via dot-path keys", async () => {
     // Generate nested objects and verify that flattening
     // produces keys that match resolvePath on the original.
 
@@ -443,7 +443,7 @@ describe("property: flattenTemplateData roundtrip", () => {
       }),
     });
 
-    fc.assert(
+    await fc.assert(
       fc.property(nestedObject, (obj) => {
         const flattened = flattenTemplateData(obj);
 
@@ -466,8 +466,8 @@ describe("property: flattenTemplateData roundtrip", () => {
 });
 
 describe("property: evaluateCondition consistency", () => {
-  test("negation inverts truthiness for any path", () => {
-    fc.assert(
+  test("negation inverts truthiness for any path", async () => {
+    await fc.assert(
       fc.property(identifier, leafValue, (path, value) => {
         const data = { [path]: value };
         const pos = evaluateCondition(path, data);
@@ -478,8 +478,8 @@ describe("property: evaluateCondition consistency", () => {
     );
   });
 
-  test("comparison is symmetric for ==", () => {
-    fc.assert(
+  test("comparison is symmetric for ==", async () => {
+    await fc.assert(
       fc.property(identifier, identifier, leafValue, (a, b, value) => {
         const data = { [a]: value, [b]: value };
         const forward = evaluateCondition(`${a} == ${b}`, data);

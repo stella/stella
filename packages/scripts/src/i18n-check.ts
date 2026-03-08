@@ -39,7 +39,7 @@ const getNestedValue = (
 
   for (const part of parts) {
     if (typeof current === "string" || !(part in current)) {
-      return undefined;
+      return;
     }
     current = current[part];
   }

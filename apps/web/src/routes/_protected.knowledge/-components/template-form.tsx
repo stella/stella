@@ -73,7 +73,7 @@ const validateField = (
 
   // Length / pattern only apply to string inputs
   if (str.length === 0) {
-    return undefined;
+    return;
   }
 
   const { minLength, maxLength, min, max, pattern } = field.validation ?? {};
@@ -110,7 +110,7 @@ const validateField = (
     }
   }
 
-  return undefined;
+  return;
 };
 
 type TemplateFormBaseProps = {
@@ -564,7 +564,7 @@ export const TemplateForm = ({
   const resolveError = useCallback(
     (err: ValidationError | undefined): string | undefined => {
       if (!err) {
-        return undefined;
+        return;
       }
       switch (err.kind) {
         case "required":
@@ -588,7 +588,7 @@ export const TemplateForm = ({
         case "pattern":
           return t("templates.validationPattern");
         default:
-          return undefined;
+          return;
       }
     },
     [t],
@@ -614,7 +614,7 @@ export const TemplateForm = ({
           }
         }
       }
-      return undefined;
+      return;
     },
     [fields],
   );

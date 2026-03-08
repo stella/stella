@@ -54,6 +54,6 @@ export const reorderViewsHandler = ({
       ),
     );
 
-    return undefined;
+    return;
   });
 };

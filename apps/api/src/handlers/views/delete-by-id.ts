@@ -52,6 +52,6 @@ export const deleteViewHandler = ({
       .delete(views)
       .where(and(eq(views.id, viewId), eq(views.workspaceId, workspaceId)));
 
-    return undefined;
+    return;
   });
 };

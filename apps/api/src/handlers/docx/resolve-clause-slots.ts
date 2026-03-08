@@ -87,7 +87,7 @@ const resolveVersion = async (
     });
 
     if (!clause) {
-      return undefined;
+      return;
     }
 
     return db.query.clauseVersions.findFirst({
@@ -124,7 +124,7 @@ const resolveVersion = async (
   });
 
   if (!clause) {
-    return undefined;
+    return;
   }
 
   return db.query.clauseVersions.findFirst({
