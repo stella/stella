@@ -241,6 +241,15 @@ checksums:
     caseLaw/viewer/sections: f544078cdd05cc83c380c571d0cc6541
     caseLaw/viewer/source: 6e87903ef260da661b2bf6d858ba68ca
     caseLaw/viewer/viewOriginal: 6bf44f3127eaea754aedcc4980b0016e
+    chat/approval/allow: 3e39cc5940255e6bff0fea95c817dd43
+    chat/approval/alwaysAllow: 5e139f7ba4f2dfe6265635b5aaaff0db
+    chat/approval/approved: e5231b13f1fb9008823144a21a81a1b3
+    chat/approval/denied: 14571edbcf40a34ba476a0e9feb16009
+    chat/approval/deny: 5e4572e4d0e5bce1f27f74f857be1c6a
+    chat/askUser/custom: 5d15a33c721d1dfbd923cd007c4c3b80
+    chat/askUser/default: d9c6dc5c412fe94143dfd1d332ec81d4
+    chat/askUser/placeholder: 016cfa0eceeaa32f8ed699a0668a278b
+    chat/askUser/submit: afe2363df579ec56a102431d366f730a
     chat/deleteThread: 2baeef5ad5eea6edc0761bf30bee9080
     chat/greeting: 4baa45b6e6d953ea40b802910f235026
     chat/mention/category/clauses: 462579754cf0f9dab85e687c243a6ed5
@@ -253,11 +262,14 @@ checksums:
     chat/noThreads: 963962a6da064c88c11036051f8d8576
     chat/placeholder: 0abf9d41e0b5c5567c3833fd63048398
     chat/threads: 6dd493bfcba36eaa4b9844e55400cc29
+    chat/tool/askUser: 90e4fb8bb56b69071a43c1a2d4efd982
+    chat/tool/createDocument: 59564da8a5da25474c75258ec3aced95
     chat/tool/listEntities: d803bead0f756a1e6fd401c3eb78ecb1
     chat/tool/readContent: 11c6eaa9b26b244dc9fd5fe9c62fd61f
     chat/tool/readEntity: 4d67b87f96b3f72b804aa98837a4d46f
     chat/tool/searchCaseLaw: a2c53deea65c6ad307941beb63b64791
     chat/tool/searchMatter: 99c147d934e6f6db3e6c280c5fd142fa
+    chat/tool/updateEntityFields: b18bd96a9fbac02d5efba7f6c0282c8f
     clauses/addVariant: b4c1bca0a1ceb35d4fd331aa42a94234
     clauses/allClauses: 80291c34697c38769cfc882e3cbe200d
     clauses/backToList: 208c0f2ac2c480d5f8dfb0963d94b381
