@@ -25,17 +25,22 @@ import { toastManager } from "@stella/ui/components/toast";
 import { api } from "@/lib/api";
 import { useDevStore } from "@/lib/dev-store";
 
+/**
+ * Models available in the dev model selector.
+ *
+ * Grouped by role (matching ai-models.ts constants on the
+ * backend) and by provider for manual overrides.
+ */
 const CHAT_MODELS = [
-  { value: "", label: "Default (Gemini 2.5 Flash)" },
+  // Default: uses CHAT_MODEL from ai-models.ts
+  { value: "", label: "Default (Gemini 3 Flash)" },
+  // Role-equivalent models (match ai-models.ts constants)
+  { value: "google/gemini-3-flash-preview", label: "Fast / PDF Native" },
+  { value: "google/gemini-3-pro-preview", label: "Reasoning" },
+  // Manual overrides
   { value: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
-  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { value: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
-  {
-    value: "anthropic/claude-3.5-haiku",
-    label: "Claude 3.5 Haiku",
-  },
+  { value: "anthropic/claude-3.5-haiku", label: "Claude 3.5 Haiku" },
 ] as const;
 
 export const DevSidebarGroup = () => {

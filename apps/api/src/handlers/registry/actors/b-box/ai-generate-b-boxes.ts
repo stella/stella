@@ -1,15 +1,14 @@
-import { google, type GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 
-import { env } from "@/api/env";
 import {
   BBOX_SYSTEM_PROMPT,
   bboxSchema,
   buildBBoxUserMessage,
 } from "@/api/handlers/registry/actors/b-box/ai-prompts";
+import { getModel, PDF_NATIVE_MODEL } from "@/api/lib/ai-models";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 type GenerateBBoxDataProps = {
@@ -19,13 +18,6 @@ type GenerateBBoxDataProps = {
   justificationText: string;
   abortSignal: AbortSignal;
 };
-
-const getAIModel = () =>
-  env.OPENROUTER_API_KEY
-    ? createOpenRouter({
-        apiKey: env.OPENROUTER_API_KEY,
-      }).chat("google/gemini-3-flash-preview")
-    : google("gemini-3-flash-preview");
 
 export const generateBBoxData = ({
   pdfData,
@@ -39,7 +31,7 @@ export const generateBBoxData = ({
   Result.tryPromise({
     try: async () => {
       const result = await generateText({
-        model: getAIModel(),
+        model: getModel(PDF_NATIVE_MODEL),
         system: BBOX_SYSTEM_PROMPT,
         messages: [
           {
