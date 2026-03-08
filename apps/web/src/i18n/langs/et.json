@@ -305,7 +305,7 @@
     },
     "extractingContent": "Sisu ekstraktimine...",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
-    "greeting": "How can I help you today?",
+    "greeting": "Millega soovite tegeleda?",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {

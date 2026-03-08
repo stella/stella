@@ -305,7 +305,7 @@
     },
     "extractingContent": "Tartalom kinyerése...",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
-    "greeting": "Miben segíthetek ma?",
+    "greeting": "Min szeretne dolgozni?",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
