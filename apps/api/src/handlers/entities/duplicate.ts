@@ -7,6 +7,7 @@ import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
@@ -184,6 +185,11 @@ export const duplicateEntityHandler = async ({
       name: effectiveName,
     });
 
+    const entityStamp =
+      source.kind === "document"
+        ? await allocateEntityStamp(tx, workspaceId)
+        : null;
+
     await tx.insert(entities).values({
       id: newEntityId,
       workspaceId,
@@ -191,11 +197,16 @@ export const duplicateEntityHandler = async ({
       parentId: source.parentId,
       name: duplicateName,
       createdBy: userId,
+      docSequence: entityStamp?.docSequence ?? null,
     });
 
-    await tx
-      .insert(entityVersions)
-      .values({ id: newVersionId, entityId: newEntityId });
+    await tx.insert(entityVersions).values({
+      id: newVersionId,
+      entityId: newEntityId,
+      versionNumber: 1,
+      stamp: entityStamp?.stamp ?? null,
+      verificationCode: entityStamp?.verificationCode ?? null,
+    });
 
     await tx
       .update(entities)

@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
+import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
@@ -107,13 +108,22 @@ export const createEntityFromBuffer = async ({
         throw new Error("Entity limit reached");
       }
 
+      const entityStamp = await allocateEntityStamp(tx, workspaceId);
+
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
         createdBy: userId,
+        docSequence: entityStamp.docSequence,
       });
 
-      await tx.insert(entityVersions).values({ id: entityVersionId, entityId });
+      await tx.insert(entityVersions).values({
+        id: entityVersionId,
+        entityId,
+        versionNumber: 1,
+        stamp: entityStamp.stamp,
+        verificationCode: entityStamp.verificationCode,
+      });
 
       await tx
         .update(entities)

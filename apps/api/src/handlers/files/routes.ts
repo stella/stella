@@ -1,6 +1,9 @@
 import Elysia, { t } from "elysia";
 
-import { readFileHandler } from "@/api/handlers/files/read-by-id";
+import {
+  readFileHandler,
+  stampedDownloadHandler,
+} from "@/api/handlers/files/read-by-id";
 import { workspaceAccessMacro } from "@/api/lib/auth";
 
 export const filesRoute = new Elysia({
@@ -24,4 +27,11 @@ export const filesRoute = new Elysia({
         purpose: t.UnionEnum(["download", "display"]),
       }),
     },
+  )
+  .get("/stamped/:fieldId", (ctx) =>
+    stampedDownloadHandler({
+      fieldId: ctx.params.fieldId,
+      organizationId: ctx.session.activeOrganizationId,
+      workspaceId: ctx.workspaceId,
+    }),
   );

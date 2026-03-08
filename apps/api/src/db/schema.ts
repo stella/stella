@@ -419,6 +419,8 @@ export const entities = p.pgTable(
       .references((): AnyPgColumn => entityVersions.id, {
         onDelete: "restrict",
       }),
+    /** Sequential document number within the workspace (null for folders). */
+    docSequence: p.integer("doc_sequence"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
   },
@@ -429,6 +431,10 @@ export const entities = p.pgTable(
       .on(table.parentId)
       .where(isNotNull(table.parentId)),
     p.index("entities_workspace_name_idx").on(table.workspaceId, table.name),
+    p
+      .uniqueIndex("entities_ws_doc_seq_uidx")
+      .on(table.workspaceId, table.docSequence)
+      .where(isNotNull(table.docSequence)),
   ],
 );
 
@@ -440,9 +446,26 @@ export const entityVersions = p.pgTable(
       .varchar("entity_id", { length: 21 })
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
+    versionNumber: p.integer("version_number").notNull().default(1),
+    /** Frozen human-readable reference (e.g. "2026/001/015.v3"). */
+    stamp: p.varchar("stamp", { length: 128 }),
+    /** Globally unique verification code (no stl: prefix). */
+    verificationCode: p.varchar("verification_code", {
+      length: 16,
+    }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [p.index("entity_versions_entity_id_idx").on(table.entityId)],
+  (table) => [
+    p.index("entity_versions_entity_id_idx").on(table.entityId),
+    p
+      .index("entity_versions_stamp_idx")
+      .on(table.stamp)
+      .where(isNotNull(table.stamp)),
+    p
+      .uniqueIndex("entity_versions_vcode_uidx")
+      .on(table.verificationCode)
+      .where(isNotNull(table.verificationCode)),
+  ],
 );
 
 export const fields = p.pgTable(
@@ -877,6 +900,18 @@ export const matterCounters = p.pgTable(
   ],
 );
 
+export const documentCounters = p.pgTable(
+  "document_counters",
+  {
+    id: pNanoid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    lastValue: p.integer("last_value").notNull().default(0),
+  },
+  (table) => [p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId)],
+);
+
 export const organizationSettings = p.pgTable("organization_settings", {
   id: pNanoid.primaryKey(),
   organizationId: safeOrganizationId("organization_id")
@@ -888,6 +923,10 @@ export const organizationSettings = p.pgTable("organization_settings", {
     .notNull()
     .default("{SEQ}"),
   matterNumberPadding: p.integer("matter_number_padding").notNull().default(3),
+  documentStampEnabled: p
+    .boolean("document_stamp_enabled")
+    .notNull()
+    .default(true),
   updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -1307,6 +1346,7 @@ export const relations = defineRelations(
     expenses,
     invoices,
     matterCounters,
+    documentCounters,
     organizationSettings,
     clauseCategories,
     clauses,
@@ -1596,6 +1636,7 @@ export const relations = defineRelations(
       }),
     },
     matterCounters: {},
+    documentCounters: {},
     organizationSettings: {},
     clauseCategories: {
       parent: r.one.clauseCategories({
