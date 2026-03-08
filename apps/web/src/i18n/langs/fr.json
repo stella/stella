@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Autoriser",
+      "alwaysAllow": "Toujours autoriser",
+      "approved": "Approuvé",
+      "denied": "Refusé",
+      "deny": "Refuser"
+    },
+    "askUser": {
+      "custom": "Écrire la vôtre",
+      "default": "Par défaut",
+      "placeholder": "Votre réponse",
+      "submit": "Envoyer les réponses"
+    },
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
     "mention": {
@@ -299,11 +312,14 @@
     "placeholder": "What would you like to know?",
     "threads": "Conversations",
     "tool": {
+      "askUser": "Questions de clarification",
+      "createDocument": "Créer un document",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter"
+      "searchMatter": "Searched matter",
+      "updateEntityFields": "Mettre à jour le champ"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
       "defaultPropertyName": "Documents",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Télécharger en .zip",
       "maxEntitiesReached": "Nombre maximal d'entités atteint",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}",

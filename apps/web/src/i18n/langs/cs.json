@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Povolit",
+      "alwaysAllow": "Vždy povolit v tomto vlákně",
+      "approved": "Povoleno",
+      "denied": "Zamítnuto",
+      "deny": "Zamítnout"
+    },
+    "askUser": {
+      "custom": "Napsat vlastní",
+      "default": "Výchozí",
+      "placeholder": "Vaše odpověď",
+      "submit": "Odeslat odpovědi"
+    },
     "deleteThread": "Smazat konverzaci",
     "greeting": "Jak vám mohu dnes pomoci?",
     "mention": {
@@ -296,14 +309,17 @@
     },
     "newChat": "Nový chat",
     "noThreads": "Zatím žádné konverzace",
-    "placeholder": "What would you like to know?",
+    "placeholder": "Co byste chtěli vědět?",
     "threads": "Konverzace",
     "tool": {
+      "askUser": "Upřesňující otázky",
+      "createDocument": "Vytvořit dokument",
       "listEntities": "Výpis entit",
       "readContent": "Čtení obsahu",
       "readEntity": "Čtení entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Hledání ve spisu"
+      "searchMatter": "Hledání ve spisu",
+      "updateEntityFields": "Aktualizovat metadata"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
       "defaultPropertyName": "Dokumenty",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Stáhnout .zip soubor",
       "maxEntitiesReached": "Dosažen maximální počet entit",
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo}} z {total, number}",
@@ -973,12 +989,12 @@
       "equals": "Rovná se"
     },
     "overview": {
-      "atAGlance": "At a glance",
+      "atAGlance": "Přehled",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
-      "recentActivity": "Recent activity",
+      "recentActivity": "Nedávná aktivita",
       "title": "Overview",
-      "totalDocuments": "Total documents",
+      "totalDocuments": "Celkem dokumentů",
       "totalItems": "Items"
     },
     "parties": {

@@ -1,12 +1,13 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { isToolUIPart } from "ai";
+import { getToolName, isToolUIPart } from "ai";
 import { PlusIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@stella/ui/components/button";
+import { cn } from "@stella/ui/lib/utils";
 
 import {
   Conversation,
@@ -18,9 +19,11 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { AskUserCard } from "@/components/chat/ask-user-card";
 import { EntityLink } from "@/components/chat/entity-link";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
+import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { UserMessageText } from "@/components/chat/user-message-text";
 import { ChatEditor } from "@/components/mentionable-prompt-input";
@@ -50,16 +53,56 @@ function ThreadRoute() {
     chatThreadOptions({ threadId, queryClient, userContext, getModelId }),
   );
 
-  const { messages, sendMessage, setMessages, stop, status } = useChat({
+  const [autoApprovedTools, setAutoApprovedTools] = useState(
+    () => new Set<string>(),
+  );
+
+  const {
+    messages,
+    sendMessage,
+    setMessages,
+    stop,
+    status,
+    addToolApprovalResponse,
+  } = useChat({
     chat,
     resume: true,
   });
+
+  const handleApprove = useCallback(
+    (id: string) => addToolApprovalResponse({ id, approved: true }),
+    [addToolApprovalResponse],
+  );
+  const handleDeny = useCallback(
+    (id: string) => addToolApprovalResponse({ id, approved: false }),
+    [addToolApprovalResponse],
+  );
+  const handleAlwaysAllow = useCallback(
+    (toolName: string) =>
+      setAutoApprovedTools((prev) => new Set(prev).add(toolName)),
+    [],
+  );
 
   const actor = useChatActor();
   const chatEvent = eventHandlerV2<ChatActor>();
 
   // Stable Streamdown overrides for mention links.
   const streamdownComponents = useMemo(() => ({ a: EntityLink }), []);
+
+  // Dim non-approval messages when an approval is pending.
+  const approvalPendingMessageId = useMemo(() => {
+    for (const msg of messages) {
+      if (msg.role !== "assistant") {
+        continue;
+      }
+      for (const part of msg.parts) {
+        if (isToolUIPart(part) && part.state === "approval-requested") {
+          return msg.id;
+        }
+      }
+    }
+    return null;
+  }, [messages]);
 
   // When another connection starts streaming for this
   // thread, stop any local stream, sync messages, and
@@ -101,7 +144,16 @@ function ThreadRoute() {
         <ConversationContent>
           <SystemPromptMessage threadId={threadId} />
           {messages.map((message) => (
-            <Message from={message.role} key={message.id}>
+            <Message
+              className={cn(
+                "transition-opacity duration-200",
+                approvalPendingMessageId &&
+                  approvalPendingMessageId !== message.id &&
+                  "opacity-40",
+              )}
+              from={message.role}
+              key={message.id}
+            >
               <MessageContent>
                 {message.role === "assistant" ? (
                   <>
@@ -116,13 +168,42 @@ function ThreadRoute() {
                           </MessageResponse>
                         );
                       }
-                      if (showToolCalls && isToolUIPart(part)) {
-                        return (
-                          <ToolCallCard
-                            key={`${message.id}-tool-${i}`}
-                            part={part}
-                          />
-                        );
+                      if (isToolUIPart(part)) {
+                        if (getToolName(part) === "askUser") {
+                          return (
+                            <AskUserCard
+                              key={`${message.id}-tool-${i}`}
+                              onSubmit={(text) => sendMessage({ text })}
+                              part={part}
+                            />
+                          );
+                        }
+                        if (
+                          part.state === "approval-requested" ||
+                          part.state === "approval-responded" ||
+                          (part.state === "output-available" &&
+                            "approval" in part) ||
+                          (part.state === "output-error" && "approval" in part)
+                        ) {
+                          return (
+                            <ToolApprovalCard
+                              autoApprovedTools={autoApprovedTools}
+                              key={`${message.id}-tool-${i}`}
+                              onAlwaysAllow={handleAlwaysAllow}
+                              onApprove={handleApprove}
+                              onDeny={handleDeny}
+                              part={part}
+                            />
+                          );
+                        }
+                        if (showToolCalls) {
+                          return (
+                            <ToolCallCard
+                              key={`${message.id}-tool-${i}`}
+                              part={part}
+                            />
+                          );
+                        }
                       }
                       return null;
                     })}

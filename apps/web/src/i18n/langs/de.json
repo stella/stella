@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Erlauben",
+      "alwaysAllow": "Immer in diesem Thread erlauben",
+      "approved": "Genehmigt",
+      "denied": "Abgelehnt",
+      "deny": "Ablehnen"
+    },
+    "askUser": {
+      "custom": "Eigene Antwort",
+      "default": "Standard",
+      "placeholder": "Ihre Antwort",
+      "submit": "Antworten absenden"
+    },
     "deleteThread": "Konversation löschen",
     "greeting": "Wie kann ich Ihnen heute helfen?",
     "mention": {
@@ -296,14 +309,17 @@
     },
     "newChat": "Neuer Chat",
     "noThreads": "Noch keine Konversationen",
-    "placeholder": "What would you like to know?",
+    "placeholder": "Was möchten Sie wissen?",
     "threads": "Konversationen",
     "tool": {
+      "askUser": "Rückfragen",
+      "createDocument": "Dokument erstellen",
       "listEntities": "Einträge aufgelistet",
       "readContent": "Inhalt gelesen",
       "readEntity": "Eintrag gelesen",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Akte durchsucht"
+      "searchMatter": "Akte durchsucht",
+      "updateEntityFields": "Metadaten aktualisieren"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
       "defaultPropertyName": "Dokumente",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Als .zip herunterladen",
       "maxEntitiesReached": "Maximale Anzahl an Entitäten erreicht",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
@@ -973,12 +989,12 @@
       "equals": "Gleich"
     },
     "overview": {
-      "atAGlance": "At a glance",
+      "atAGlance": "Auf einen Blick",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
-      "recentActivity": "Recent activity",
+      "recentActivity": "Letzte Aktivität",
       "title": "Overview",
-      "totalDocuments": "Total documents",
+      "totalDocuments": "Dokumente gesamt",
       "totalItems": "Items"
     },
     "parties": {

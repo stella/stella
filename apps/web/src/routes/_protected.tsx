@@ -17,6 +17,7 @@ import {
 import {
   FolderIcon,
   FolderOpenIcon,
+  LayersIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
@@ -39,6 +40,7 @@ import {
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
 import { HOTKEYS } from "@/lib/hotkeys";
+import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
@@ -253,15 +255,25 @@ function ProtectedContent({
 const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
   const queryClient = useQueryClient();
   // Read from the cache populated by the workspace route loader.
-  const workspace = queryClient.getQueryData<{ name: string }>(
-    workspacesKeys.byId(workspaceId),
-  );
+  const workspace = queryClient.getQueryData<{
+    name: string;
+    color?: string | null;
+  }>(workspacesKeys.byId(workspaceId));
   if (!workspace?.name) {
     return null;
   }
+  const swatch = workspace.color
+    ? `var(${workspace.color})`
+    : `var(${getMatterSwatch(workspaceId)})`;
   return (
-    <span className="ml-auto max-w-[50%] truncate text-xs text-muted-foreground">
-      {workspace.name}
+    <span
+      className="ml-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground"
+      style={{
+        backgroundColor: `color-mix(in srgb, ${swatch} 10%, transparent)`,
+      }}
+    >
+      <LayersIcon className="size-3 shrink-0" style={{ color: swatch }} />
+      <span className="truncate">{workspace.name}</span>
     </span>
   );
 };

@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Zezwól",
+      "alwaysAllow": "Zawsze zezwalaj w tym wątku",
+      "approved": "Zatwierdzono",
+      "denied": "Odrzucono",
+      "deny": "Odmów"
+    },
+    "askUser": {
+      "custom": "Napisz własną",
+      "default": "Domyślna",
+      "placeholder": "Twoja odpowiedź",
+      "submit": "Wyślij odpowiedzi"
+    },
     "deleteThread": "Usuń rozmowę",
     "greeting": "W czym mogę dziś pomóc?",
     "mention": {
@@ -296,14 +309,17 @@
     },
     "newChat": "Nowy czat",
     "noThreads": "Brak rozmów",
-    "placeholder": "What would you like to know?",
+    "placeholder": "Co chciałbyś wiedzieć?",
     "threads": "Rozmowy",
     "tool": {
+      "askUser": "Pytania wyjaśniające",
+      "createDocument": "Utwórz dokument",
       "listEntities": "Wylistowano elementy",
       "readContent": "Odczytano treść",
       "readEntity": "Odczytano element",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Przeszukano sprawę"
+      "searchMatter": "Przeszukano sprawę",
+      "updateEntityFields": "Zaktualizuj metadane"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
       "defaultPropertyName": "Dokumenty",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Pobierz plik .zip",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę encji",
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
@@ -973,12 +989,12 @@
       "equals": "Równa się"
     },
     "overview": {
-      "atAGlance": "At a glance",
+      "atAGlance": "W skrócie",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
-      "recentActivity": "Recent activity",
+      "recentActivity": "Ostatnia aktywność",
       "title": "Overview",
-      "totalDocuments": "Total documents",
+      "totalDocuments": "Łącznie dokumentów",
       "totalItems": "Items"
     },
     "parties": {

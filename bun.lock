@@ -10,7 +10,7 @@
         "@stella/typescript-config": "workspace:^0.0.0",
         "i18n-unused": "^0.19.0",
         "prettier": "catalog:",
-        "turbo": "^2.8.12",
+        "turbo": "^2.8.14",
         "typescript": "catalog:",
         "ultracite": "catalog:ultracite",
       },
@@ -33,11 +33,11 @@
         "@stella/rivet": "workspace:*",
         "@stella/transactional": "workspace:*",
         "@t3-oss/env-core": "catalog:",
-        "@tamtamchik/json-deep-sort": "^1.4.1",
+        "@tamtamchik/json-deep-sort": "catalog:",
         "ai": "^6.0.104",
         "better-auth": "catalog:",
         "better-result": "catalog:",
-        "diff-match-patch": "^1.0.5",
+        "diff-match-patch": "catalog:",
         "docx": "^9.6.0",
         "dompurify": "^3.3.1",
         "dotenv": "^17.3.1",
@@ -55,12 +55,12 @@
         "rivetkit": "catalog:rivet",
         "slimdom": "^4.3.5",
         "unpdf": "^1.4.0",
-        "valibot": "^1.2.0",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stella/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "@types/diff-match-patch": "^1.0.36",
+        "@types/diff-match-patch": "catalog:",
         "@types/jsdom": "^28.0.0",
         "@types/pg": "^8.16.0",
         "bun-types": "latest",
@@ -72,8 +72,8 @@
       "name": "web",
       "version": "0.0.0",
       "dependencies": {
-        "@ai-sdk/react": "^3.0.105",
-        "@base-ui/react": "^1.2.0",
+        "@ai-sdk/react": "3.0.108",
+        "@base-ui/react": "catalog:",
         "@elysiajs/eden": "^1.4.8",
         "@posthog/react": "^1.8.1",
         "@radix-ui/react-slot": "^1.2.4",
@@ -110,7 +110,7 @@
         "@vitejs/plugin-react-swc": "^4.2.3",
         "better-auth": "catalog:",
         "better-result": "catalog:",
-        "diff-match-patch": "^1.0.5",
+        "diff-match-patch": "catalog:",
         "html-react-parser": "^5.2.17",
         "immer": "^11.1.4",
         "lru-cache": "^11.2.6",
@@ -128,7 +128,7 @@
         "use-debounce": "^10.1.0",
         "use-intl": "catalog:",
         "use-stick-to-bottom": "^1.1.3",
-        "valibot": "^1.2.0",
+        "valibot": "catalog:",
         "vite": "^7.3.1",
         "zustand": "^5.0.11",
       },
@@ -137,7 +137,7 @@
         "@stella/typescript-config": "workspace:*",
         "@tailwindcss/vite": "^4.2.1",
         "@tanstack/router-plugin": "^1.163.3",
-        "@types/diff-match-patch": "^1.0.36",
+        "@types/diff-match-patch": "catalog:",
         "@types/papaparse": "^5.5.2",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
@@ -164,7 +164,7 @@
       "name": "@stella/rivet",
       "version": "0.0.0",
       "dependencies": {
-        "@tamtamchik/json-deep-sort": "^1.4.1",
+        "@tamtamchik/json-deep-sort": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -217,7 +217,7 @@
       "name": "@stella/ui",
       "version": "0.0.0",
       "dependencies": {
-        "@base-ui/react": "^1.2.0",
+        "@base-ui/react": "catalog:",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "input-otp": "^1.4.2",
@@ -238,10 +238,14 @@
     },
   },
   "catalog": {
+    "@base-ui/react": "1.2.0",
     "@t3-oss/env-core": "0.13.10",
+    "@tamtamchik/json-deep-sort": "1.4.1",
     "@types/bun": "1.3.9",
+    "@types/diff-match-patch": "1.0.36",
     "better-auth": "1.4.20",
     "better-result": "2.7.0",
+    "diff-match-patch": "1.0.5",
     "elysia": "1.4.26",
     "lucide-react": "0.575.0",
     "nanoid": "5.1.6",
@@ -507,9 +511,9 @@
 
     "@chevrotain/utils": ["@chevrotain/utils@11.1.2", "", {}, "sha512-4mudFAQ6H+MqBTfqLmU7G1ZwRzCLfJEooL/fsF6rCX5eePMbGhoy5n4g+G4vlh2muDcsCTJtL+uKbOzWxs5LHA=="],
 
-    "@clack/core": ["@clack/core@1.0.1", "", { "dependencies": { "picocolors": "^1.0.0", "sisteransi": "^1.0.5" } }, "sha512-WKeyK3NOBwDOzagPR5H08rFk9D/WuN705yEbuZvKqlkmoLM2woKtXb10OO2k1NoSU4SFG947i2/SCYh+2u5e4g=="],
+    "@clack/core": ["@clack/core@1.1.0", "", { "dependencies": { "sisteransi": "^1.0.5" } }, "sha512-SVcm4Dqm2ukn64/8Gub2wnlA5nS2iWJyCkdNHcvNHPIeBTGojpdJ+9cZKwLfmqy7irD4N5qLteSilJlE0WLAtA=="],
 
-    "@clack/prompts": ["@clack/prompts@1.0.1", "", { "dependencies": { "@clack/core": "1.0.1", "picocolors": "^1.0.0", "sisteransi": "^1.0.5" } }, "sha512-/42G73JkuYdyWZ6m8d/CJtBrGl1Hegyc7Fy78m5Ob+jF85TOUmLR5XLce/U3LxYAw0kJ8CT5aI99RIvPHcGp/Q=="],
+    "@clack/prompts": ["@clack/prompts@1.1.0", "", { "dependencies": { "@clack/core": "1.1.0", "sisteransi": "^1.0.5" } }, "sha512-pkqbPGtohJAvm4Dphs2M8xE29ggupihHdy1x84HNojZuMtFsHiUlRvqD24tM2+XmI+61LlfNceM3Wr7U5QES5g=="],
 
     "@csstools/color-helpers": ["@csstools/color-helpers@6.0.2", "", {}, "sha512-LMGQLS9EuADloEFkcTBR3BwV/CGHV7zyDxVRtVDTwdI2Ca4it0CCVTT9wCkxSgokjE5Ho41hEPgb8OEUwoXr6Q=="],
 
@@ -2817,19 +2821,19 @@
 
     "tsx": ["tsx@4.21.0", "", { "dependencies": { "esbuild": "~0.27.0", "get-tsconfig": "^4.7.5" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "bin": { "tsx": "dist/cli.mjs" } }, "sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw=="],
 
-    "turbo": ["turbo@2.8.12", "", { "optionalDependencies": { "turbo-darwin-64": "2.8.12", "turbo-darwin-arm64": "2.8.12", "turbo-linux-64": "2.8.12", "turbo-linux-arm64": "2.8.12", "turbo-windows-64": "2.8.12", "turbo-windows-arm64": "2.8.12" }, "bin": { "turbo": "bin/turbo" } }, "sha512-auUAMLmi0eJhxDhQrxzvuhfEbICnVt0CTiYQYY8WyRJ5nwCDZxD0JG8bCSxT4nusI2CwJzmZAay5BfF6LmK7Hw=="],
+    "turbo": ["turbo@2.8.14", "", { "optionalDependencies": { "turbo-darwin-64": "2.8.14", "turbo-darwin-arm64": "2.8.14", "turbo-linux-64": "2.8.14", "turbo-linux-arm64": "2.8.14", "turbo-windows-64": "2.8.14", "turbo-windows-arm64": "2.8.14" }, "bin": { "turbo": "bin/turbo" } }, "sha512-UCTxeMNYT1cKaHiIFdLCQ7ulI+jw5i5uOnJOrRXsgUD7G3+OjlUjwVd7JfeVt2McWSVGjYA3EVW/v1FSsJ5DtA=="],
 
-    "turbo-darwin-64": ["turbo-darwin-64@2.8.12", "", { "os": "darwin", "cpu": "x64" }, "sha512-EiHJmW2MeQQx+21x8hjMHw/uPhXt9PIxvDrxzOtyVwrXzL0tQmsxtO4qHf2l7uA+K6PUJ4+TjY1MHZDuCvWXrw=="],
+    "turbo-darwin-64": ["turbo-darwin-64@2.8.14", "", { "os": "darwin", "cpu": "x64" }, "sha512-9sFi7n2lLfEsGWi5OEoA/eTtQU2BPKtzSYKqufMtDeRmqMT9vKjbv9gJCRkllSVE9BOXA0qXC3diyX8V8rKIKw=="],
 
-    "turbo-darwin-arm64": ["turbo-darwin-arm64@2.8.12", "", { "os": "darwin", "cpu": "arm64" }, "sha512-cbqqGN0vd7ly2TeuaM8k9AK9u1CABO4kBA5KPSqovTiLL3sORccn/mZzJSbvQf0EsYRfU34MgW5FotfwW3kx8Q=="],
+    "turbo-darwin-arm64": ["turbo-darwin-arm64@2.8.14", "", { "os": "darwin", "cpu": "arm64" }, "sha512-aS4yJuy6A1PCLws+PJpZP0qCURG8Y5iVx13z/WAbKyeDTY6W6PiGgcEllSaeLGxyn++382ztN/EZH85n2zZ6VQ=="],
 
-    "turbo-linux-64": ["turbo-linux-64@2.8.12", "", { "os": "linux", "cpu": "x64" }, "sha512-jXKw9j4r4q6s0goSXuKI3aKbQK2qiNeP25lGGEnq018TM6SWRW1CCpPMxyG91aCKrub7wDm/K45sGNT4ZFBcFQ=="],
+    "turbo-linux-64": ["turbo-linux-64@2.8.14", "", { "os": "linux", "cpu": "x64" }, "sha512-XC6wPUDJkakjhNLaS0NrHDMiujRVjH+naEAwvKLArgqRaFkNxjmyNDRM4eu3soMMFmjym6NTxYaF74rvET+Orw=="],
 
-    "turbo-linux-arm64": ["turbo-linux-arm64@2.8.12", "", { "os": "linux", "cpu": "arm64" }, "sha512-BRJCMdyXjyBoL0GYpvj9d2WNfMHwc3tKmJG5ATn2Efvil9LsiOsd/93/NxDqW0jACtHFNVOPnd/CBwXRPiRbwA=="],
+    "turbo-linux-arm64": ["turbo-linux-arm64@2.8.14", "", { "os": "linux", "cpu": "arm64" }, "sha512-ChfE7isyVNjZrVSPDwcfqcHLG/FuIBbOFxnt1FM8vSuBGzHAs8AlTdwFNIxlEMJfZ8Ad9mdMxdmsCUPIWiQ6cg=="],
 
-    "turbo-windows-64": ["turbo-windows-64@2.8.12", "", { "os": "win32", "cpu": "x64" }, "sha512-vyFOlpFFzQFkikvSVhVkESEfzIopgs2J7J1rYvtSwSHQ4zmHxkC95Q8Kjkus8gg+8X2mZyP1GS5jirmaypGiPw=="],
+    "turbo-windows-64": ["turbo-windows-64@2.8.14", "", { "os": "win32", "cpu": "x64" }, "sha512-FTbIeQL1ycLFW2t9uQNMy+bRSzi3Xhwun/e7ZhFBdM+U0VZxxrtfYEBM9CHOejlfqomk6Jh7aRz0sJoqYn39Hg=="],
 
-    "turbo-windows-arm64": ["turbo-windows-arm64@2.8.12", "", { "os": "win32", "cpu": "arm64" }, "sha512-9nRnlw5DF0LkJClkIws1evaIF36dmmMEO84J5Uj4oQ8C0QTHwlH7DNe5Kq2Jdmu8GXESCNDNuUYG8Cx6W/vm3g=="],
+    "turbo-windows-arm64": ["turbo-windows-arm64@2.8.14", "", { "os": "win32", "cpu": "arm64" }, "sha512-KgZX12cTyhY030qS7ieT8zRkhZZE2VWJasDFVUSVVn17nR7IShpv68/7j5UqJNeRLIGF1XPK0phsP5V5yw3how=="],
 
     "tw-animate-css": ["tw-animate-css@1.4.0", "", {}, "sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ=="],
 

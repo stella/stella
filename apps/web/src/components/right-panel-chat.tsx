@@ -1,7 +1,14 @@
-import { Suspense, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useChat, type Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { isToolUIPart, type UIMessage } from "ai";
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { MessageSquareIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
@@ -19,9 +26,11 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { AskUserCard } from "@/components/chat/ask-user-card";
 import { EntityLink } from "@/components/chat/entity-link";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
+import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { UserMessageText } from "@/components/chat/user-message-text";
 import {
@@ -44,6 +53,7 @@ import {
   chatThreadsOptions,
   chatWorkspaceThreadsOptions,
 } from "@/routes/_protected.chat/-queries";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type RightPanelChatProps = {
   workspaceId?: string;
@@ -191,6 +201,9 @@ type ActiveThreadInnerProps = {
   onSwitchThread: (threadId: string) => void;
 };
 
+/** Tool names that mutate workspace entities. */
+const MUTATING_TOOLS = new Set(["createDocument", "updateEntityFields"]);
+
 const ActiveThreadInner = ({
   threadId,
   workspaceId,
@@ -200,16 +213,83 @@ const ActiveThreadInner = ({
   onSwitchThread,
 }: ActiveThreadInnerProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const actor = useChatActor();
   const showToolCalls = useDevStore((s) => s.showToolCalls);
 
-  const { messages, sendMessage, setMessages, stop } = useChat({
-    chat,
-    resume: true,
-  });
+  const [autoApprovedTools, setAutoApprovedTools] = useState(
+    () => new Set<string>(),
+  );
+
+  const { messages, sendMessage, setMessages, stop, addToolApprovalResponse } =
+    useChat({
+      chat,
+      resume: true,
+    });
+
+  const handleApprove = useCallback(
+    (id: string) => addToolApprovalResponse({ id, approved: true }),
+    [addToolApprovalResponse],
+  );
+  const handleDeny = useCallback(
+    (id: string) => addToolApprovalResponse({ id, approved: false }),
+    [addToolApprovalResponse],
+  );
+  const handleAlwaysAllow = useCallback(
+    (toolName: string) =>
+      setAutoApprovedTools((prev) => new Set(prev).add(toolName)),
+    [],
+  );
 
   // Stable Streamdown overrides for mention links.
   const streamdownComponents = useMemo(() => ({ a: EntityLink }), []);
+
+  // Dim non-approval messages when an approval is pending.
+  const approvalPendingMessageId = useMemo(() => {
+    for (const msg of messages) {
+      if (msg.role !== "assistant") {
+        continue;
+      }
+      for (const part of msg.parts) {
+        if (isToolUIPart(part) && part.state === "approval-requested") {
+          return msg.id;
+        }
+      }
+    }
+    return null;
+  }, [messages]);
+
+  // Invalidate workspace entities when a mutating tool
+  // completes so the table and entity links update.
+  const invalidatedToolsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+    for (const msg of messages) {
+      if (msg.role !== "assistant") {
+        continue;
+      }
+      for (const part of msg.parts) {
+        if (
+          !isToolUIPart(part) ||
+          part.state !== "output-available" ||
+          !MUTATING_TOOLS.has(getToolName(part))
+        ) {
+          continue;
+        }
+        const key = `${msg.id}-${getToolName(part)}`;
+        if (invalidatedToolsRef.current.has(key)) {
+          continue;
+        }
+        invalidatedToolsRef.current.add(key);
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        });
+        return;
+      }
+    }
+  }, [messages, workspaceId, queryClient]);
 
   const chatEvent = eventHandlerV2<ChatActor>();
 
@@ -255,7 +335,16 @@ const ActiveThreadInner = ({
         <ConversationContent className="gap-4 p-3">
           <SystemPromptMessage threadId={threadId} />
           {messages.map((message) => (
-            <Message from={message.role} key={message.id}>
+            <Message
+              className={cn(
+                "transition-opacity duration-200",
+                approvalPendingMessageId &&
+                  approvalPendingMessageId !== message.id &&
+                  "opacity-40",
+              )}
+              from={message.role}
+              key={message.id}
+            >
               <MessageContent>
                 {message.role === "assistant" ? (
                   <>
@@ -270,13 +359,43 @@ const ActiveThreadInner = ({
                           </MessageResponse>
                         );
                       }
-                      if (showToolCalls && isToolUIPart(part)) {
-                        return (
-                          <ToolCallCard
-                            key={`${message.id}-tool-${i}`}
-                            part={part}
-                          />
-                        );
+                      if (isToolUIPart(part)) {
+                        if (getToolName(part) === "askUser") {
+                          return (
+                            <AskUserCard
+                              key={`${message.id}-tool-${i}`}
+                              onSubmit={(text) => sendMessage({ text })}
+                              part={part}
+                            />
+                          );
+                        }
+                        if (
+                          part.state === "approval-requested" ||
+                          part.state === "approval-responded" ||
+                          (part.state === "output-available" &&
+                            "approval" in part) ||
+                          (part.state === "output-error" && "approval" in part)
+                        ) {
+                          return (
+                            <ToolApprovalCard
+                              autoApprovedTools={autoApprovedTools}
+                              key={`${message.id}-tool-${i}`}
+                              onAlwaysAllow={handleAlwaysAllow}
+                              onApprove={handleApprove}
+                              onDeny={handleDeny}
+                              part={part}
+                              workspaceId={workspaceId}
+                            />
+                          );
+                        }
+                        if (showToolCalls) {
+                          return (
+                            <ToolCallCard
+                              key={`${message.id}-tool-${i}`}
+                              part={part}
+                            />
+                          );
+                        }
                       }
                       return null;
                     })}

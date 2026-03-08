@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Luba",
+      "alwaysAllow": "Luba alati",
+      "approved": "Lubatud",
+      "denied": "Keelatud",
+      "deny": "Keela"
+    },
+    "askUser": {
+      "custom": "Kirjuta oma",
+      "default": "Vaikimisi",
+      "placeholder": "Teie vastus",
+      "submit": "Esita vastused"
+    },
     "deleteThread": "Delete conversation",
     "greeting": "How can I help you today?",
     "mention": {
@@ -299,11 +312,14 @@
     "placeholder": "What would you like to know?",
     "threads": "Conversations",
     "tool": {
+      "askUser": "Täpsustavad küsimused",
+      "createDocument": "Loo dokument",
       "listEntities": "Listed entities",
       "readContent": "Read content",
       "readEntity": "Read entity",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Searched matter"
+      "searchMatter": "Searched matter",
+      "updateEntityFields": "Uuenda välja"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
       "defaultPropertyName": "Dokumendid",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": "Laadi alla .zip-fail",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",
       "uploadedPartially": "{failed, plural, one {# faili} other {# faili}} üleslaadimine ebaõnnestus {total, number}-st",

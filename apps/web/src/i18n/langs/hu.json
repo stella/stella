@@ -282,6 +282,19 @@
     }
   },
   "chat": {
+    "approval": {
+      "allow": "Engedélyezés",
+      "alwaysAllow": "Mindig engedélyezze ebben a szálban",
+      "approved": "Engedélyezve",
+      "denied": "Elutasítva",
+      "deny": "Elutasítás"
+    },
+    "askUser": {
+      "custom": "Saját válasz",
+      "default": "Alapértelmezett",
+      "placeholder": "Az Ön válasza",
+      "submit": "Válaszok elküldése"
+    },
     "deleteThread": "Beszélgetés törlése",
     "greeting": "Miben segíthetek ma?",
     "mention": {
@@ -296,14 +309,17 @@
     },
     "newChat": "Új csevegés",
     "noThreads": "Még nincsenek beszélgetések",
-    "placeholder": "What would you like to know?",
+    "placeholder": "Mit szeretne tudni?",
     "threads": "Beszélgetések",
     "tool": {
+      "askUser": "Pontosító kérdések",
+      "createDocument": "Dokumentum létrehozása",
       "listEntities": "Elemek listázva",
       "readContent": "Tartalom olvasva",
       "readEntity": "Elem olvasva",
       "searchCaseLaw": "Searched case law",
-      "searchMatter": "Ügy keresve"
+      "searchMatter": "Ügy keresve",
+      "updateEntityFields": "Metaadatok frissítése"
     }
   },
   "clauses": {
@@ -927,7 +943,7 @@
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
       "defaultPropertyName": "Dokumentumok",
-      "downloadAsZip": "Download as ZIP",
+      "downloadAsZip": ".zip fájl letöltése",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
@@ -973,12 +989,12 @@
       "equals": "Egyenlő"
     },
     "overview": {
-      "atAGlance": "At a glance",
+      "atAGlance": "Áttekintés",
       "getStarted": "Get started by uploading documents or creating your first folder.",
       "matterDetails": "Matter details",
-      "recentActivity": "Recent activity",
+      "recentActivity": "Legutóbbi tevékenység",
       "title": "Overview",
-      "totalDocuments": "Total documents",
+      "totalDocuments": "Összes dokumentum",
       "totalItems": "Items"
     },
     "parties": {
