@@ -7,8 +7,8 @@ import { clauseVariants } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { pickDefined } from "@/api/lib/pick-defined";
 import { clauseBodySchema } from "./shared-schemas";
-import type { ClauseBody } from "./types";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -155,22 +155,10 @@ export const updateVariantHandler = async ({
     return status(404, { message: "Variant not found" });
   }
 
-  const updates: Partial<{
-    label: string;
-    body: ClauseBody;
-    sortOrder: number;
-    updatedAt: Date;
-  }> = { updatedAt: new Date() };
-
-  if (body.label !== undefined) {
-    updates.label = body.label;
-  }
-  if (body.body !== undefined) {
-    updates.body = body.body;
-  }
-  if (body.sortOrder !== undefined) {
-    updates.sortOrder = body.sortOrder;
-  }
+  const updates = {
+    ...pickDefined(body, ["label", "body", "sortOrder"]),
+    updatedAt: new Date(),
+  };
 
   const [updated] = await db
     .update(clauseVariants)

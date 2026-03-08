@@ -71,7 +71,7 @@ export const transitionInvoiceHandler = async ({
   const transition = TRANSITIONS[body.action];
   const now = new Date();
 
-  const set: Record<string, unknown> = {
+  const set: Partial<typeof invoices.$inferInsert> = {
     status: transition.to,
     updatedAt: now,
   };

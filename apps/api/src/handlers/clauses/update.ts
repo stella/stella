@@ -7,6 +7,7 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { pickDefined } from "@/api/lib/pick-defined";
 import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
@@ -78,26 +79,17 @@ export const updateClauseHandler = async ({
     metadata: Record<string, unknown> | null;
     currentVersion: number;
     updatedAt: Date;
-  }> = { updatedAt: new Date() };
-
-  if (body.title !== undefined) {
-    updates.title = body.title;
-  }
-  if (body.categoryId !== undefined) {
-    updates.categoryId = body.categoryId;
-  }
-  if (body.language !== undefined) {
-    updates.language = body.language;
-  }
-  if (body.description !== undefined) {
-    updates.description = body.description;
-  }
-  if (body.usageNotes !== undefined) {
-    updates.usageNotes = body.usageNotes;
-  }
-  if (body.metadata !== undefined) {
-    updates.metadata = body.metadata;
-  }
+  }> = {
+    ...pickDefined(body, [
+      "title",
+      "categoryId",
+      "language",
+      "description",
+      "usageNotes",
+      "metadata",
+    ]),
+    updatedAt: new Date(),
+  };
 
   // If body changes, bump version and create snapshot
   let newVersion: number | null = null;

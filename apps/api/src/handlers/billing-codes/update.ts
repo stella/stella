@@ -6,6 +6,7 @@ import { billingCodes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateBillingCodeBodySchema = t.Object({
   id: tNanoid,
@@ -38,20 +39,7 @@ export const updateBillingCodeHandler = async ({
     return status(404, { message: "Billing code not found" });
   }
 
-  const updates: Record<string, unknown> = {};
-
-  if (body.code !== undefined) {
-    updates.code = body.code;
-  }
-  if (body.label !== undefined) {
-    updates.label = body.label;
-  }
-  if (body.active !== undefined) {
-    updates.active = body.active;
-  }
-  if (body.sortOrder !== undefined) {
-    updates.sortOrder = body.sortOrder;
-  }
+  const updates = pickDefined(body, ["code", "label", "active", "sortOrder"]);
 
   if (Object.keys(updates).length === 0) {
     return { id: body.id };

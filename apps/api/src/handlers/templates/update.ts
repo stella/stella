@@ -9,6 +9,7 @@ import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { pickDefined } from "@/api/lib/pick-defined";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -76,6 +77,16 @@ export const updateTemplateHandler = async ({
     return status(404, { message: "Template not found" });
   }
 
+  if (body.categoryId !== undefined && body.categoryId !== null) {
+    const category = await db.query.templateCategories.findFirst({
+      where: { id: body.categoryId, organizationId: { eq: organizationId } },
+      columns: { id: true },
+    });
+    if (!category) {
+      return status(400, { message: "Category not found" });
+    }
+  }
+
   const updates: Partial<{
     name: string;
     categoryId: string | null;
@@ -85,23 +96,10 @@ export const updateTemplateHandler = async ({
     s3Key: string;
     currentVersion: number;
     updatedAt: Date;
-  }> = { updatedAt: new Date() };
-
-  if (body.name !== undefined) {
-    updates.name = body.name;
-  }
-  if (body.categoryId !== undefined) {
-    if (body.categoryId !== null) {
-      const category = await db.query.templateCategories.findFirst({
-        where: { id: body.categoryId, organizationId: { eq: organizationId } },
-        columns: { id: true },
-      });
-      if (!category) {
-        return status(400, { message: "Category not found" });
-      }
-    }
-    updates.categoryId = body.categoryId;
-  }
+  }> = {
+    ...pickDefined(body, ["name", "categoryId"]),
+    updatedAt: new Date(),
+  };
 
   if (body.manifest !== undefined) {
     const manifest = parseManifest(body.manifest);
