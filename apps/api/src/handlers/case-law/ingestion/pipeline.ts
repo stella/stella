@@ -6,7 +6,10 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { MAX_SYNC_PAGES } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_TIMEOUT,
+  MAX_SYNC_PAGES,
+} from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -173,7 +176,7 @@ export const runIngestionPipeline = async ({
     const page = await adapter.fetchPage(
       cursor,
       source.config ?? {},
-      AbortSignal.timeout(30_000),
+      AbortSignal.timeout(ADAPTER_TIMEOUT.PAGE),
     );
 
     for (const result of page.decisions) {

@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -146,8 +146,8 @@ export const plCourtsAdapter: SourceAdapter = {
 
     const response = await fetch(url, {
       signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-        : AbortSignal.timeout(15_000),
+        ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.LIST)])
+        : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
       headers: { Accept: "application/json" },
     });
 
@@ -155,7 +155,11 @@ export const plCourtsAdapter: SourceAdapter = {
       throw new Error(`SAOS API error: ${response.status}`);
     }
 
-    const data: SaosResponse = await response.json();
+    const json: unknown = await response.json();
+    // SAFETY: structural check confirms object; all fields
+    // are optional so missing properties degrade gracefully.
+    const data: SaosResponse =
+      typeof json === "object" && json !== null ? (json as SaosResponse) : {};
     const items = data.items ?? [];
     const decisions: IngestionResult[] = [];
 

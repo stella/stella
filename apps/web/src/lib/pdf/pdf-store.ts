@@ -115,20 +115,25 @@ type Actions = {
 const pageBuffers = new Map<string, LRUCache<string, true>>();
 
 /**
- * Collects page IDs evicted by the LRU during a single
- * buffer.set() call. Read and cleared by advancePageRendering
- * so all state changes happen in one set().
+ * Per-file arrays collecting page IDs evicted by the LRU
+ * during a single buffer.set() call. Read and cleared by
+ * advancePageRendering so all state changes happen in one
+ * set(). Keyed per-file to prevent concurrent PDF loads from
+ * leaking evictions across files.
  */
-const pendingEvictions: string[] = [];
+const pendingEvictions = new Map<string, string[]>();
 
 const getOrCreateBuffer = (fileId: string): LRUCache<string, true> => {
   let buffer = pageBuffers.get(fileId);
 
   if (!buffer) {
+    const evictions: string[] = [];
+    pendingEvictions.set(fileId, evictions);
+
     buffer = new LRUCache<string, true>({
       max: DEFAULT_PAGE_BUFFER_SIZE,
       dispose: (_value, pageId) => {
-        pendingEvictions.push(pageId);
+        evictions.push(pageId);
       },
     });
     pageBuffers.set(fileId, buffer);
@@ -384,6 +389,7 @@ export const usePdfStore = create<State & Actions>()(
           buffer.clear();
           pageBuffers.delete(fileId);
         }
+        pendingEvictions.delete(fileId);
 
         // Remove rendered page IDs belonging to this file
         for (const pageId of renderedPages) {
@@ -419,10 +425,11 @@ export const usePdfStore = create<State & Actions>()(
         renderMap.clear();
 
         // Clear all page buffers
-        for (const [fileId, buffer] of pageBuffers) {
+        for (const [fId, buffer] of pageBuffers) {
           buffer.clear();
-          pageBuffers.delete(fileId);
+          pageBuffers.delete(fId);
         }
+        pendingEvictions.clear();
 
         // commit the changes instantly, otherwise setPdf can be blocked by the cleanupPdfs promise
         set({
@@ -514,10 +521,13 @@ export const usePdfStore = create<State & Actions>()(
         // Apply evictions and addition in a single set()
         // so the stale-snapshot problem doesn't occur.
         const renderedPages = new Set(state.renderedPages);
-        for (const evictedId of pendingEvictions) {
-          renderedPages.delete(evictedId);
+        const fileEvictions = pendingEvictions.get(fileId);
+        if (fileEvictions) {
+          for (const evictedId of fileEvictions) {
+            renderedPages.delete(evictedId);
+          }
+          fileEvictions.length = 0;
         }
-        pendingEvictions.length = 0;
         renderedPages.add(justRenderedPageId);
 
         // Remove the finished page from the active set

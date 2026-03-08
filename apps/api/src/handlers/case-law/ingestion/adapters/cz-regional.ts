@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -89,7 +89,7 @@ export const czRegionalAdapter: SourceAdapter = {
     const url = `${BASE_URL}/${date}`;
 
     const response = await fetch(url, {
-      signal: signal ?? AbortSignal.timeout(10_000),
+      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
       headers: { Accept: "application/json" },
     });
 
@@ -108,7 +108,8 @@ export const czRegionalAdapter: SourceAdapter = {
       throw new Error(`CZ Regional API error: ${response.status}`);
     }
 
-    const items: CzRegionalApiItem[] = await response.json();
+    const json: unknown = await response.json();
+    const items: CzRegionalApiItem[] = Array.isArray(json) ? json : [];
 
     const decisions: IngestionResult[] = [];
     for (const item of items) {
