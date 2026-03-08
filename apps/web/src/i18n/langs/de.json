@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Dieser Slug ist bereits vergeben",
     "uploadFailed": "Upload fehlgeschlagen"
   },
+  "feedback": {
+    "describeIssue": "Problem beschreiben",
+    "describeIssuePlaceholder": "Einen Fehler gefunden? Lassen Sie uns wissen, was passiert ist…",
+    "description": "Helfen Sie uns, indem Sie beschreiben, was schiefgelaufen ist.",
+    "includeScreenshot": "Screenshot anhängen",
+    "screenshotFailed": "Screenshot-Aufnahme fehlgeschlagen",
+    "submit": "Feedback senden",
+    "suggestedFix": "Lösungsvorschlag (optional)",
+    "suggestedFixPlaceholder": "z. B. Senden-Schaltfläche deaktivieren, wenn das Formular leer ist",
+    "title": "Problem melden",
+    "trigger": "Feedback"
+  },
   "knowledge": {
     "sections": {
       "agents": {

@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "See slug on juba kasutusel",
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
+  "feedback": {
+    "describeIssue": "Kirjelda probleemi",
+    "describeIssuePlaceholder": "Leidsid vea? Anna meile teada, mis juhtus…",
+    "description": "Aita meil paremaks muutuda, kirjeldades, mis läks valesti.",
+    "includeScreenshot": "Lisa ekraanipilt",
+    "screenshotFailed": "Ekraanipildi tegemine ebaõnnestus",
+    "submit": "Saada tagasiside",
+    "suggestedFix": "Soovituslik parandus (valikuline)",
+    "suggestedFixPlaceholder": "nt Keela saatmisnupp, kui vorm on tühi",
+    "title": "Teata probleemist",
+    "trigger": "Tagasiside"
+  },
   "knowledge": {
     "sections": {
       "agents": {

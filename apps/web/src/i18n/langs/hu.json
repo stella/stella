@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Ez a slug már foglalt",
     "uploadFailed": "Feltöltés sikertelen"
   },
+  "feedback": {
+    "describeIssue": "Írja le a problémát",
+    "describeIssuePlaceholder": "Hibát talált? Tudassa velünk, mi történt…",
+    "description": "Segítsen nekünk javulni: írja le, mi ment rosszul.",
+    "includeScreenshot": "Képernyőkép csatolása",
+    "screenshotFailed": "A képernyőkép rögzítése sikertelen",
+    "submit": "Visszajelzés küldése",
+    "suggestedFix": "Javasolt javítás (opcionális)",
+    "suggestedFixPlaceholder": "pl. A küldés gomb legyen inaktív, ha az űrlap üres",
+    "title": "Probléma bejelentése",
+    "trigger": "Visszajelzés"
+  },
   "knowledge": {
     "sections": {
       "agents": {

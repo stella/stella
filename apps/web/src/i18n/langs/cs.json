@@ -617,6 +617,18 @@
     "slugAlreadyTaken": "Tento slug je již obsazený",
     "uploadFailed": "Nahrávání selhalo"
   },
+  "feedback": {
+    "describeIssue": "Popište problém",
+    "describeIssuePlaceholder": "Našli jste chybu? Dejte nám vědět, co se stalo…",
+    "description": "Pomozte nám zlepšit se popisem toho, co se pokazilo.",
+    "includeScreenshot": "Přiložit snímek obrazovky",
+    "screenshotFailed": "Pořízení snímku obrazovky selhalo",
+    "submit": "Odeslat zpětnou vazbu",
+    "suggestedFix": "Navrhovaná oprava (nepovinné)",
+    "suggestedFixPlaceholder": "např. Tlačítko odeslat by mělo být neaktivní, když je formulář prázdný",
+    "title": "Nahlásit problém",
+    "trigger": "Zpětná vazba"
+  },
   "knowledge": {
     "sections": {
       "agents": {

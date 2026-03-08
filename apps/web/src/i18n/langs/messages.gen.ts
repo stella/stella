@@ -620,6 +620,18 @@ type Messages = {
     "slugAlreadyTaken": "This slug is already taken";
     "uploadFailed": "Upload failed";
   };
+  "feedback": {
+    "describeIssue": "Describe the issue";
+    "describeIssuePlaceholder": "Found a bug? Let us know what happened…";
+    "description": "Help us improve by describing what went wrong.";
+    "includeScreenshot": "Include screenshot";
+    "screenshotFailed": "Screenshot capture failed";
+    "submit": "Send feedback";
+    "suggestedFix": "Suggested fix (optional)";
+    "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";
+    "title": "Report an issue";
+    "trigger": "Feedback";
+  };
   "knowledge": {
     "sections": {
       "agents": {
