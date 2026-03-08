@@ -49,6 +49,23 @@ const SECTION_PATTERNS: Array<{
     pattern:
       /^(Pr[uů]b[eě]h\s+[řr][ií]zen[ií]|Procesn[ií]\s+historie)\s*[:.]?\s*$/im,
   },
+  // Polish patterns
+  {
+    type: "ruling",
+    pattern: /^(Sentencja|Tenor)\s*[:.]?\s*$/im,
+  },
+  {
+    type: "argumentation",
+    pattern: /^Uzasadnienie\s*[:.]?\s*$/im,
+  },
+  {
+    type: "dissent",
+    pattern: /^Zdanie\s+odr[eę]bne\s*[:.]?\s*$/im,
+  },
+  {
+    type: "footer",
+    pattern: /^Pouczenie\s*[:.]?\s*$/im,
+  },
 ];
 
 /**
