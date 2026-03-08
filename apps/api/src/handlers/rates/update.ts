@@ -5,6 +5,7 @@ import { db } from "@/api/db";
 import { rateTables } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateRateTableBodySchema = t.Object({
   id: tNanoid,
@@ -33,19 +34,10 @@ export const updateRateTableHandler = async ({
     return status(404, { message: "Rate table not found" });
   }
 
-  const updates: Record<string, unknown> = {
+  const updates = {
+    ...pickDefined(body, ["name", "currency", "isDefault"]),
     updatedAt: new Date(),
   };
-
-  if (body.name !== undefined) {
-    updates.name = body.name;
-  }
-  if (body.currency !== undefined) {
-    updates.currency = body.currency;
-  }
-  if (body.isDefault !== undefined) {
-    updates.isDefault = body.isDefault;
-  }
 
   // Prevent unsetting isDefault if no other default exists
   if (body.isDefault === false) {

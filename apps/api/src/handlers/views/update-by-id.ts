@@ -6,6 +6,7 @@ import { views } from "@/api/db/schema";
 import { viewConfigSchema, viewLayoutSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateViewBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -33,16 +34,7 @@ export const updateViewHandler = async ({
   // NOTE: Elysia coerces absent optional UnionEnum fields to
   // their first value (e.g. layout → "table"). All callers
   // must send the current layout/config to prevent corruption.
-  const updates: Partial<typeof views.$inferInsert> = {};
-  if (body.name !== undefined) {
-    updates.name = body.name;
-  }
-  if (body.layout !== undefined) {
-    updates.layout = body.layout;
-  }
-  if (body.config !== undefined) {
-    updates.config = body.config;
-  }
+  const updates = pickDefined(body, ["name", "layout", "config"]);
 
   if (Object.keys(updates).length === 0) {
     return;

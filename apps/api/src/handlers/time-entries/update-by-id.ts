@@ -6,6 +6,7 @@ import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateTimeEntryBodySchema = t.Object({
   id: tNanoid,
@@ -62,29 +63,6 @@ export const updateTimeEntryByIdHandler = async ({
     });
   }
 
-  const updates: Record<string, unknown> = {
-    updatedAt: new Date(),
-  };
-
-  if (body.dateWorked !== undefined) {
-    updates.dateWorked = body.dateWorked;
-  }
-  if (body.durationMinutes !== undefined) {
-    updates.durationMinutes = body.durationMinutes;
-    updates.billedMinutes = roundToIncrement(body.durationMinutes);
-  }
-  if (body.narrative !== undefined) {
-    updates.narrative = body.narrative;
-  }
-  if (body.invoiceNarrative !== undefined) {
-    updates.invoiceNarrative = body.invoiceNarrative;
-  }
-  if (body.billable !== undefined) {
-    updates.billable = body.billable;
-  }
-  if (body.noCharge !== undefined) {
-    updates.noCharge = body.noCharge;
-  }
   if (body.matterId !== undefined) {
     const matter = await db.query.entities.findFirst({
       where: { id: body.matterId, workspaceId: { eq: workspaceId } },
@@ -96,24 +74,28 @@ export const updateTimeEntryByIdHandler = async ({
         message: "Matter not found in this workspace",
       });
     }
+  }
 
-    updates.matterId = body.matterId;
-  }
-  if (body.taskCode !== undefined) {
-    updates.taskCode = body.taskCode;
-  }
-  if (body.activityCode !== undefined) {
-    updates.activityCode = body.activityCode;
-  }
-  if (body.status !== undefined) {
-    updates.status = body.status;
-  }
-  if (body.rateAtEntry !== undefined) {
-    updates.rateAtEntry = body.rateAtEntry;
-  }
-  if (body.currency !== undefined) {
-    updates.currency = body.currency;
-  }
+  const updates = {
+    ...pickDefined(body, [
+      "dateWorked",
+      "durationMinutes",
+      "narrative",
+      "invoiceNarrative",
+      "billable",
+      "noCharge",
+      "matterId",
+      "taskCode",
+      "activityCode",
+      "status",
+      "rateAtEntry",
+      "currency",
+    ]),
+    ...(body.durationMinutes !== undefined
+      ? { billedMinutes: roundToIncrement(body.durationMinutes) }
+      : {}),
+    updatedAt: new Date(),
+  };
 
   await db
     .update(timeEntries)

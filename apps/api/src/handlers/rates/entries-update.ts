@@ -5,6 +5,7 @@ import { db } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateRateEntryBodySchema = t.Object({
   id: tNanoid,
@@ -97,17 +98,11 @@ export const updateRateEntryHandler = async ({
     }
   }
 
-  const updates: Record<string, unknown> = {};
-
-  if (body.hourlyRate !== undefined) {
-    updates.hourlyRate = body.hourlyRate;
-  }
-  if (body.effectiveFrom !== undefined) {
-    updates.effectiveFrom = body.effectiveFrom;
-  }
-  if (body.effectiveTo !== undefined) {
-    updates.effectiveTo = body.effectiveTo;
-  }
+  const updates = pickDefined(body, [
+    "hourlyRate",
+    "effectiveFrom",
+    "effectiveTo",
+  ]);
 
   if (Object.keys(updates).length === 0) {
     return { id: body.id };

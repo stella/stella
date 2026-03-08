@@ -7,6 +7,7 @@ import { clauseCategories } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -159,26 +160,10 @@ export const updateCategoryHandler = async ({
     }
   }
 
-  const updates: Partial<{
-    name: string;
-    description: string | null;
-    parentId: string | null;
-    sortOrder: number;
-    updatedAt: Date;
-  }> = { updatedAt: new Date() };
-
-  if (body.name !== undefined) {
-    updates.name = body.name;
-  }
-  if (body.description !== undefined) {
-    updates.description = body.description;
-  }
-  if (body.parentId !== undefined) {
-    updates.parentId = body.parentId;
-  }
-  if (body.sortOrder !== undefined) {
-    updates.sortOrder = body.sortOrder;
-  }
+  const updates = {
+    ...pickDefined(body, ["name", "description", "parentId", "sortOrder"]),
+    updatedAt: new Date(),
+  };
 
   const [updated] = await db
     .update(clauseCategories)

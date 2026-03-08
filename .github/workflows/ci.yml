@@ -91,6 +91,9 @@ jobs:
       - name: Lint colors
         run: bash scripts/lint-colors.sh
 
+      - name: Lint untyped updates
+        run: bash scripts/lint-untyped-updates.sh
+
       - name: Format
         run: bun run format
 

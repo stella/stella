@@ -4,6 +4,7 @@ import { status, t, type Static } from "elysia";
 import { db } from "@/api/db";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateInvoiceBodySchema = t.Object({
   invoiceNumber: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
@@ -27,28 +28,17 @@ export const updateInvoiceHandler = async ({
   invoiceId,
   body,
 }: UpdateInvoiceHandlerProps) => {
-  const now = new Date();
-
-  const set: Record<string, unknown> = { updatedAt: now };
-
-  if (body.invoiceNumber !== undefined) {
-    set.invoiceNumber = body.invoiceNumber;
-  }
-  if (body.invoiceDate !== undefined) {
-    set.invoiceDate = body.invoiceDate;
-  }
-  if (body.dueDate !== undefined) {
-    set.dueDate = body.dueDate;
-  }
-  if (body.reference !== undefined) {
-    set.reference = body.reference;
-  }
-  if (body.notes !== undefined) {
-    set.notes = body.notes;
-  }
-  if (body.currency !== undefined) {
-    set.currency = body.currency;
-  }
+  const set = {
+    ...pickDefined(body, [
+      "invoiceNumber",
+      "invoiceDate",
+      "dueDate",
+      "reference",
+      "notes",
+      "currency",
+    ]),
+    updatedAt: new Date(),
+  };
 
   const result = await db
     .update(invoices)

@@ -6,6 +6,7 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 export const updateExpenseBodySchema = t.Object({
   id: tNanoid,
@@ -57,34 +58,6 @@ export const updateExpenseHandler = async ({
     });
   }
 
-  const updates: Record<string, unknown> = {
-    updatedAt: new Date(),
-  };
-
-  if (body.dateIncurred !== undefined) {
-    updates.dateIncurred = body.dateIncurred;
-  }
-  if (body.amount !== undefined) {
-    updates.amount = body.amount;
-  }
-  if (body.currency !== undefined) {
-    updates.currency = body.currency;
-  }
-  if (body.category !== undefined) {
-    updates.category = body.category;
-  }
-  if (body.description !== undefined) {
-    updates.description = body.description;
-  }
-  if (body.invoiceDescription !== undefined) {
-    updates.invoiceDescription = body.invoiceDescription;
-  }
-  if (body.billable !== undefined) {
-    updates.billable = body.billable;
-  }
-  if (body.markup !== undefined) {
-    updates.markup = body.markup;
-  }
   if (body.matterId !== undefined) {
     const matter = await db.query.entities.findFirst({
       where: { id: body.matterId, workspaceId: { eq: workspaceId } },
@@ -96,12 +69,23 @@ export const updateExpenseHandler = async ({
         message: "Matter not found in this workspace",
       });
     }
+  }
 
-    updates.matterId = body.matterId;
-  }
-  if (body.status !== undefined) {
-    updates.status = body.status;
-  }
+  const updates = {
+    ...pickDefined(body, [
+      "dateIncurred",
+      "amount",
+      "currency",
+      "category",
+      "description",
+      "invoiceDescription",
+      "billable",
+      "markup",
+      "matterId",
+      "status",
+    ]),
+    updatedAt: new Date(),
+  };
 
   await db
     .update(expenses)
