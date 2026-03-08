@@ -1,12 +1,5 @@
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useChat, type Chat } from "@ai-sdk/react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { Chat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { MessageSquareIcon, PlusIcon, TrashIcon } from "lucide-react";
@@ -27,7 +20,6 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { AskUserCard } from "@/components/chat/ask-user-card";
-import { EntityLink } from "@/components/chat/entity-link";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
@@ -46,6 +38,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { eventHandlerV2 } from "@/lib/rivet";
 import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
+import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import {
   chatKeys,
@@ -214,50 +207,18 @@ const ActiveThreadInner = ({
 }: ActiveThreadInnerProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const actor = useChatActor();
   const showToolCalls = useDevStore((s) => s.showToolCalls);
 
-  const [autoApprovedTools, setAutoApprovedTools] = useState(
-    () => new Set<string>(),
-  );
-
-  const { messages, sendMessage, setMessages, stop, addToolApprovalResponse } =
-    useChat({
-      chat,
-      resume: true,
-    });
-
-  const handleApprove = useCallback(
-    (id: string) => addToolApprovalResponse({ id, approved: true }),
-    [addToolApprovalResponse],
-  );
-  const handleDeny = useCallback(
-    (id: string) => addToolApprovalResponse({ id, approved: false }),
-    [addToolApprovalResponse],
-  );
-  const handleAlwaysAllow = useCallback(
-    (toolName: string) =>
-      setAutoApprovedTools((prev) => new Set(prev).add(toolName)),
-    [],
-  );
-
-  // Stable Streamdown overrides for mention links.
-  const streamdownComponents = useMemo(() => ({ a: EntityLink }), []);
-
-  // Dim non-approval messages when an approval is pending.
-  const approvalPendingMessageId = useMemo(() => {
-    for (const msg of messages) {
-      if (msg.role !== "assistant") {
-        continue;
-      }
-      for (const part of msg.parts) {
-        if (isToolUIPart(part) && part.state === "approval-requested") {
-          return msg.id;
-        }
-      }
-    }
-    return null;
-  }, [messages]);
+  const {
+    messages,
+    sendMessage,
+    autoApprovedTools,
+    handleApprove,
+    handleDeny,
+    handleAlwaysAllow,
+    streamdownComponents,
+    approvalPendingMessageId,
+  } = useChatSession({ chat, threadId });
 
   // Invalidate workspace entities when a mutating tool
   // completes so the table and entity links update.
@@ -290,24 +251,6 @@ const ActiveThreadInner = ({
       }
     }
   }, [messages, workspaceId, queryClient]);
-
-  const chatEvent = eventHandlerV2<ChatActor>();
-
-  actor.useEvent(
-    ...chatEvent("stream-started", async (data) => {
-      if (data.threadId !== threadId || data.chatId === chat.id) {
-        return;
-      }
-      await stop();
-      const latest = await actor.connection?.getMessages({
-        threadId,
-      });
-      if (latest) {
-        setMessages(latest);
-      }
-      await chat.resumeStream();
-    }),
-  );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
