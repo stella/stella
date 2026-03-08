@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
+import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -33,7 +34,7 @@ type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
 export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = sql`plainto_tsquery('simple', ${body.query})`;
+  const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
 
   // Validate cursor early so a tampered value fails visibly
   let parsedCursor: { score: number; id: string } | null = null;
@@ -64,7 +65,8 @@ export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
 
   const cursorFilter = parsedCursor
     ? sql`AND (
-        ts_rank(sd.tsv, ${tsQuery})::float8,
+        (ts_rank(sd.tsv, ${tsQuery})::float8
+          + 0.3 * ln(1 + cb.boost)),
         sd.decision_id
       ) < (
         ${parsedCursor.score}::float8,
@@ -80,6 +82,28 @@ export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
     ${typeFilter}
     ${sourceFilter}
   `;
+
+  const courtWeightExpr = courtWeightSql("citing_d.court");
+
+  const citationBoost = sql.raw(`
+    LATERAL (
+      SELECT coalesce(
+        sum(
+          (${courtWeightExpr})
+          * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
+        ),
+        0
+      ) / GREATEST(
+        extract(epoch FROM (now() - d.decision_date)) / (365.25 * 86400),
+        1.0
+      ) AS boost,
+      count(*)::int AS cnt
+      FROM case_law_citations c
+      JOIN case_law_decisions citing_d
+        ON citing_d.id = c.citing_decision_id
+      WHERE c.cited_decision_id = d.id
+    ) cb
+  `);
 
   const hitsQuery = sql`
     SELECT
@@ -99,11 +123,15 @@ export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
         ${tsQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
-      ts_rank(sd.tsv, ${tsQuery})::float8 AS score,
+      (ts_rank(sd.tsv, ${tsQuery})::float8
+        + 0.3 * ln(1 + cb.boost)
+      ) AS score,
+      cb.cnt AS citation_count,
       d.created_at
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    LEFT JOIN ${citationBoost} ON true
     WHERE sd.tsv @@ ${tsQuery}
       ${allFilters}
       ${cursorFilter}
@@ -192,6 +220,7 @@ export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
     decisionType: row.decision_type ? String(row.decision_type) : null,
     sourceUrl: row.source_url ? String(row.source_url) : null,
     headline: row.headline ? escapeAndHighlight(String(row.headline)) : null,
+    citationCount: Number(row.citation_count) || 0,
     createdAt:
       row.created_at instanceof Date
         ? row.created_at.toISOString()

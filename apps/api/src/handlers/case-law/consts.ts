@@ -3,6 +3,7 @@ export const ADAPTER_KEYS = {
   CZ_REGIONAL: "cz-regional",
   CZ_SUPREME: "cz-supreme",
   CZ_SUPREME_ADMIN: "cz-supreme-admin",
+  CZ_CONSTITUTIONAL: "cz-constitutional",
   SK_COURTS: "sk-courts",
 } as const;
 
