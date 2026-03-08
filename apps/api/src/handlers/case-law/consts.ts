@@ -5,6 +5,7 @@ export const ADAPTER_KEYS = {
   CZ_SUPREME_ADMIN: "cz-supreme-admin",
   CZ_CONSTITUTIONAL: "cz-constitutional",
   SK_COURTS: "sk-courts",
+  PL_COURTS: "pl-courts",
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];

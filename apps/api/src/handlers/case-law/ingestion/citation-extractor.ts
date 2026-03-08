@@ -16,6 +16,12 @@ export type ExtractedCitation = {
  * Based on analysis of 770K citation instances in the CzCDC
  * corpus (Harasta, Masaryk University).
  */
+// Polish prefixed pattern: "sygn. akt II CSK 123/20".
+// Group 1 captures the bare case number to deduplicate
+// against the unprefixed pattern below.
+const PL_PREFIXED_PATTERN =
+  /sygn\.\s*(?:akt\s+)?([IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/g;
+
 const CITATION_PATTERNS: RegExp[] = [
   // Czech case number: "sp. zn. 21 Cdo 1234/2020"
   /sp\.\s*zn\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/g,
@@ -31,6 +37,11 @@ const CITATION_PATTERNS: RegExp[] = [
 
   // Generic: "rozsudek č.j. 5 As 123/2020"
   /[čc]\.\s*j\.\s*\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4}/g,
+
+  PL_PREFIXED_PATTERN,
+
+  // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20"
+  /\b[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d{1,6}\/\d{2,4}\b/g,
 ];
 
 /**
@@ -56,11 +67,17 @@ export const extractCitations = (
         match = pattern.exec(section.text)
       ) {
         const citationText = match[0].trim();
+        // For patterns with a capture group (e.g. the Polish
+        // prefixed pattern), use the bare case number as the
+        // canonical dedup key so both "sygn. akt II CSK 123/20"
+        // and "II CSK 123/20" resolve to the same key regardless
+        // of which fires first.
+        const dedupKey = match[1]?.trim() ?? citationText;
 
-        if (seen.has(citationText)) {
+        if (seen.has(dedupKey)) {
           continue;
         }
-        seen.add(citationText);
+        seen.add(dedupKey);
 
         citations.push({
           citationText,
