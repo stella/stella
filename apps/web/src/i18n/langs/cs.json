@@ -305,7 +305,7 @@
     },
     "extractingContent": "Extrahování obsahu...",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
-    "greeting": "Jak vám mohu dnes pomoci?",
+    "greeting": "Na čem chcete pracovat?",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {

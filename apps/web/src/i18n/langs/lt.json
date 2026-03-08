@@ -305,7 +305,7 @@
     },
     "extractingContent": "Turinio ištraukimas...",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
-    "greeting": "How can I help you today?",
+    "greeting": "Prie ko norėtumėte dirbti?",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {

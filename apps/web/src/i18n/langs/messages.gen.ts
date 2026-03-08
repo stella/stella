@@ -308,7 +308,7 @@ type Messages = {
     };
     "extractingContent": "Extracting content...";
     "fileTooLarge": "File exceeds {maxSize} limit";
-    "greeting": "How can I help you today?";
+    "greeting": "What would you like to work on?";
     "thinking": "Thinking...";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {

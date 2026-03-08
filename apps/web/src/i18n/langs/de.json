@@ -305,7 +305,7 @@
     },
     "extractingContent": "Inhalt wird extrahiert...",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
-    "greeting": "Wie kann ich Ihnen heute helfen?",
+    "greeting": "Woran möchten Sie arbeiten?",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {

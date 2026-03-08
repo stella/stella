@@ -305,7 +305,7 @@
     },
     "extractingContent": "Wyodrębnianie treści...",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
-    "greeting": "W czym mogę dziś pomóc?",
+    "greeting": "Nad czym chcesz pracować?",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {

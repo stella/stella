@@ -195,6 +195,12 @@ The legal profession has ethical obligations that predate software by
 centuries. We design around them from the start. AI outputs are
 grounded by citations and traceable to source material.
 
+### AI is a tool, not a persona.
+
+Do not anthropomorphize AI with names or personas
+("I am Stella, your assistant"). Be honest about
+AI capabilities.
+
 ### Performance is non-negotiable.
 
 This is a professional tool. Every interaction should feel fast.
