@@ -40,11 +40,12 @@ import {
   validateWorkspaceIds,
 } from "@/api/handlers/registry/actors/chat-tools";
 import { validateUserActorSession } from "@/api/handlers/registry/utils";
+import { CHAT_MODEL } from "@/api/lib/ai-models";
 // biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { captureError } from "@/api/lib/posthog";
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash";
+const DEFAULT_MODEL = CHAT_MODEL;
 const caseLawTools = createCaseLawTools();
 const MAX_TOOL_STEPS = 5;
 /** User turns to keep in the sliding window. Tools are always
