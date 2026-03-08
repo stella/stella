@@ -618,15 +618,16 @@
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
-    "describeIssue": "Opíšte problém",
-    "describeIssuePlaceholder": "Našli ste chybu? Dajte nám vedieť, čo sa stalo…",
-    "description": "Pomôžte nám zlepšiť sa opisom toho, čo sa pokazilo.",
+    "describeIssue": "Čo môžeme zlepšiť?",
+    "describeIssuePlaceholder": "Chyba, nedostatok alebo nápad na funkciu; čokoľvek pomôže\u2026",
+    "description": "Vaša spätná väzba je odoslaná priamo tímu.",
     "includeScreenshot": "Priložiť snímku obrazovky",
     "screenshotFailed": "Zachytenie snímky obrazovky zlyhalo",
+    "screenshotHint": "Zachytí aktuálnu stránku (bez tohto dialógu) a odošle ju s vašou spätnou väzbou.",
     "submit": "Odoslať spätnú väzbu",
     "suggestedFix": "Navrhovaná oprava (nepovinné)",
     "suggestedFixPlaceholder": "napr. Tlačidlo odoslať by malo byť neaktívne, keď je formulár prázdny",
-    "title": "Nahlásiť problém",
+    "title": "Spätná väzba",
     "trigger": "Spätná väzba"
   },
   "knowledge": {

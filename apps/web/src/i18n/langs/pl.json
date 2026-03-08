@@ -618,15 +618,16 @@
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
-    "describeIssue": "Opisz problem",
-    "describeIssuePlaceholder": "Znalazłeś błąd? Daj nam znać, co się stało…",
-    "description": "Pomóż nam się poprawić, opisując, co poszło nie tak.",
+    "describeIssue": "Co możemy poprawić?",
+    "describeIssuePlaceholder": "Błąd, niedogodność lub pomysł na funkcję; wszystko się przyda\u2026",
+    "description": "Twoja opinia trafia bezpośrednio do zespołu.",
     "includeScreenshot": "Dołącz zrzut ekranu",
     "screenshotFailed": "Nie udało się przechwycić zrzutu ekranu",
+    "screenshotHint": "Przechwytuje bieżącą stronę (bez tego okna dialogowego) i wysyła ją wraz z Twoją opinią.",
     "submit": "Wyślij opinię",
     "suggestedFix": "Sugerowana poprawka (opcjonalnie)",
     "suggestedFixPlaceholder": "np. Wyłącz przycisk wysyłania, gdy formularz jest pusty",
-    "title": "Zgłoś problem",
+    "title": "Opinia",
     "trigger": "Opinia"
   },
   "knowledge": {

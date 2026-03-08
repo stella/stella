@@ -86,6 +86,7 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "elysia": "catalog:",
+    "react-grab": "^0.1.26",
     "typescript": "catalog:",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.0.18"

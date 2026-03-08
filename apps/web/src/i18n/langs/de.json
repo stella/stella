@@ -618,15 +618,16 @@
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
-    "describeIssue": "Problem beschreiben",
-    "describeIssuePlaceholder": "Einen Fehler gefunden? Lassen Sie uns wissen, was passiert ist…",
-    "description": "Helfen Sie uns, indem Sie beschreiben, was schiefgelaufen ist.",
+    "describeIssue": "Was können wir besser machen?",
+    "describeIssuePlaceholder": "Fehler, Stolperstelle oder Feature-Idee; alles hilft…",
+    "description": "Ihr Feedback wird direkt an das Team gesendet.",
     "includeScreenshot": "Screenshot anhängen",
     "screenshotFailed": "Screenshot-Aufnahme fehlgeschlagen",
+    "screenshotHint": "Erfasst die aktuelle Seite (ohne diesen Dialog) und sendet sie mit Ihrem Feedback.",
     "submit": "Feedback senden",
     "suggestedFix": "Lösungsvorschlag (optional)",
     "suggestedFixPlaceholder": "z. B. Senden-Schaltfläche deaktivieren, wenn das Formular leer ist",
-    "title": "Problem melden",
+    "title": "Feedback",
     "trigger": "Feedback"
   },
   "knowledge": {

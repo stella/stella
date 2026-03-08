@@ -60,6 +60,8 @@ export const DevSidebarGroup = () => {
       setChatModelId: s.setChatModelId,
       showToolCalls: s.showToolCalls,
       setShowToolCalls: s.setShowToolCalls,
+      reactGrab: s.reactGrab,
+      setReactGrab: s.setReactGrab,
     })),
   );
 
@@ -152,6 +154,17 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           {"Show Tool Calls"}
+        </MenuCheckboxItem>
+        <MenuCheckboxItem
+          checked={dev.reactGrab}
+          onClick={() => {
+            const next = !dev.reactGrab;
+            dev.setReactGrab(next);
+            window.location.reload();
+          }}
+          variant="switch"
+        >
+          {"React Grab"}
         </MenuCheckboxItem>
         <MenuSeparator />
         <MenuGroup>

@@ -618,15 +618,16 @@
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
-    "describeIssue": "Aprašykite problemą",
-    "describeIssuePlaceholder": "Radote klaidą? Praneškite mums, kas nutiko…",
-    "description": "Padėkite mums tobulėti aprašydami, kas nutiko ne taip.",
+    "describeIssue": "Ką galime pagerinti?",
+    "describeIssuePlaceholder": "Klaida, nepatogumas ar funkcijos idėja; bet kas padės\u2026",
+    "description": "Jūsų atsiliepimai siunčiami tiesiogiai komandai.",
     "includeScreenshot": "Pridėti ekrano kopiją",
     "screenshotFailed": "Nepavyko užfiksuoti ekrano kopijos",
+    "screenshotHint": "Užfiksuoja dabartinį puslapį (be šio dialogo) ir išsiunčia kartu su jūsų atsiliepimu.",
     "submit": "Siųsti atsiliepimą",
     "suggestedFix": "Siūlomas pataisymas (neprivaloma)",
     "suggestedFixPlaceholder": "pvz., Išjungti siuntimo mygtuką, kai forma tuščia",
-    "title": "Pranešti apie problemą",
+    "title": "Atsiliepimai",
     "trigger": "Atsiliepimai"
   },
   "knowledge": {

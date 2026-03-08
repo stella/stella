@@ -9,6 +9,7 @@ type State = {
   rivetDevtools: boolean;
   chatModelId: string | null;
   showToolCalls: boolean;
+  reactGrab: boolean;
 };
 
 type Actions = {
@@ -17,6 +18,7 @@ type Actions = {
   setRivetDevtools: (value: boolean) => void;
   setChatModelId: (value: string | null) => void;
   setShowToolCalls: (value: boolean) => void;
+  setReactGrab: (value: boolean) => void;
 };
 
 export const useDevStore = create<State & Actions>()(
@@ -27,12 +29,14 @@ export const useDevStore = create<State & Actions>()(
       rivetDevtools: true,
       chatModelId: null,
       showToolCalls: true,
+      reactGrab: false,
 
       setTanstackDevtools: (tanstackDevtools) => set({ tanstackDevtools }),
       setSourceInspector: (sourceInspector) => set({ sourceInspector }),
       setRivetDevtools: (rivetDevtools) => set({ rivetDevtools }),
       setChatModelId: (chatModelId) => set({ chatModelId }),
       setShowToolCalls: (showToolCalls) => set({ showToolCalls }),
+      setReactGrab: (reactGrab) => set({ reactGrab }),
     }),
     {
       name: getStorageKey("dev"),

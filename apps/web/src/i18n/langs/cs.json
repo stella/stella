@@ -618,15 +618,16 @@
     "uploadFailed": "Nahrávání selhalo"
   },
   "feedback": {
-    "describeIssue": "Popište problém",
-    "describeIssuePlaceholder": "Našli jste chybu? Dejte nám vědět, co se stalo…",
-    "description": "Pomozte nám zlepšit se popisem toho, co se pokazilo.",
+    "describeIssue": "Co můžeme zlepšit?",
+    "describeIssuePlaceholder": "Chyba, nedostatek nebo nápad na funkci; cokoliv pomůže\u2026",
+    "description": "Vaše zpětná vazba je odeslána přímo týmu.",
     "includeScreenshot": "Přiložit snímek obrazovky",
     "screenshotFailed": "Pořízení snímku obrazovky selhalo",
+    "screenshotHint": "Zachytí aktuální stránku (bez tohoto dialogu) a odešle ji s vaší zpětnou vazbou.",
     "submit": "Odeslat zpětnou vazbu",
     "suggestedFix": "Navrhovaná oprava (nepovinné)",
     "suggestedFixPlaceholder": "např. Tlačítko odeslat by mělo být neaktivní, když je formulář prázdný",
-    "title": "Nahlásit problém",
+    "title": "Zpětná vazba",
     "trigger": "Zpětná vazba"
   },
   "knowledge": {

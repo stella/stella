@@ -618,15 +618,16 @@
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
-    "describeIssue": "Kirjelda probleemi",
-    "describeIssuePlaceholder": "Leidsid vea? Anna meile teada, mis juhtus…",
-    "description": "Aita meil paremaks muutuda, kirjeldades, mis läks valesti.",
+    "describeIssue": "Mida saaksime paremini teha?",
+    "describeIssuePlaceholder": "Viga, kitsaskoht või funktsiooniidee; kõik aitab\u2026",
+    "description": "Teie tagasiside saadetakse otse meeskonnale.",
     "includeScreenshot": "Lisa ekraanipilt",
     "screenshotFailed": "Ekraanipildi tegemine ebaõnnestus",
+    "screenshotHint": "Jäädvustab praeguse lehe (ilma selle dialoogita) ja saadab selle koos tagasisidega.",
     "submit": "Saada tagasiside",
     "suggestedFix": "Soovituslik parandus (valikuline)",
     "suggestedFixPlaceholder": "nt Keela saatmisnupp, kui vorm on tühi",
-    "title": "Teata probleemist",
+    "title": "Tagasiside",
     "trigger": "Tagasiside"
   },
   "knowledge": {

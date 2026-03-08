@@ -618,15 +618,16 @@
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
-    "describeIssue": "Aprakstiet problēmu",
-    "describeIssuePlaceholder": "Atradāt kļūdu? Pastāstiet mums, kas notika…",
-    "description": "Palīdziet mums uzlaboties, aprakstot, kas nogāja greizi.",
+    "describeIssue": "Ko varam uzlabot?",
+    "describeIssuePlaceholder": "Kļūda, nepilnība vai funkcijas ideja; jebkas noderēs\u2026",
+    "description": "Jūsu atsauksme tiek nosūtīta tieši komandai.",
     "includeScreenshot": "Pievienot ekrānuzņēmumu",
     "screenshotFailed": "Ekrānuzņēmuma uzņemšana neizdevās",
+    "screenshotHint": "Uzņem pašreizējo lapu (bez šī dialoga) un nosūta to kopā ar jūsu atsauksmi.",
     "submit": "Nosūtīt atsauksmi",
     "suggestedFix": "Ieteiktais labojums (neobligāti)",
     "suggestedFixPlaceholder": "piem., Atspējot sūtīšanas pogu, kad forma ir tukša",
-    "title": "Ziņot par problēmu",
+    "title": "Atsauksmes",
     "trigger": "Atsauksmes"
   },
   "knowledge": {

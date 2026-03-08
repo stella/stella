@@ -618,15 +618,16 @@
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
-    "describeIssue": "Írja le a problémát",
-    "describeIssuePlaceholder": "Hibát talált? Tudassa velünk, mi történt…",
-    "description": "Segítsen nekünk javulni: írja le, mi ment rosszul.",
+    "describeIssue": "Min javíthatunk?",
+    "describeIssuePlaceholder": "Hiba, döccenő vagy ötlet; bármi segít\u2026",
+    "description": "Visszajelzése közvetlenül a csapathoz érkezik.",
     "includeScreenshot": "Képernyőkép csatolása",
     "screenshotFailed": "A képernyőkép rögzítése sikertelen",
+    "screenshotHint": "Rögzíti az aktuális oldalt (e párbeszédablak nélkül), és elküldi a visszajelzéssel együtt.",
     "submit": "Visszajelzés küldése",
     "suggestedFix": "Javasolt javítás (opcionális)",
     "suggestedFixPlaceholder": "pl. A küldés gomb legyen inaktív, ha az űrlap üres",
-    "title": "Probléma bejelentése",
+    "title": "Visszajelzés",
     "trigger": "Visszajelzés"
   },
   "knowledge": {

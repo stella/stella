@@ -618,15 +618,16 @@
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
-    "describeIssue": "Décrivez le problème",
-    "describeIssuePlaceholder": "Vous avez trouvé un bug ? Dites-nous ce qui s'est passé…",
-    "description": "Aidez-nous à nous améliorer en décrivant ce qui n'a pas fonctionné.",
-    "includeScreenshot": "Inclure une capture d'écran",
+    "describeIssue": "Que pouvons-nous améliorer ?",
+    "describeIssuePlaceholder": "Bug, aspérité ou idée de fonctionnalité; tout retour est utile…",
+    "description": "Vos commentaires sont envoyés directement à l'équipe.",
+    "includeScreenshot": "Joindre une capture d'écran",
     "screenshotFailed": "Échec de la capture d'écran",
+    "screenshotHint": "Capture la page actuelle (sans cette fenêtre) et l'envoie avec vos commentaires.",
     "submit": "Envoyer",
     "suggestedFix": "Correction suggérée (facultatif)",
     "suggestedFixPlaceholder": "p. ex. Désactiver le bouton d'envoi lorsque le formulaire est vide",
-    "title": "Signaler un problème",
+    "title": "Commentaires",
     "trigger": "Commentaires"
   },
   "knowledge": {
