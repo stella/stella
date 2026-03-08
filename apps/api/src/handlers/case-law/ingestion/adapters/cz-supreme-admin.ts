@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -83,7 +83,7 @@ export const czSupremeAdminAdapter: SourceAdapter = {
 
     const response = await fetch(BASE_URL, {
       method: "POST",
-      signal: signal ?? AbortSignal.timeout(10_000),
+      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -98,7 +98,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
       throw new Error(`CZ Supreme Admin API error: ${response.status}`);
     }
 
-    const data: NssoudApiItem[] = await response.json();
+    const json: unknown = await response.json();
+    const data: NssoudApiItem[] = Array.isArray(json) ? json : [];
     const decisions: IngestionResult[] = [];
 
     for (const item of data) {

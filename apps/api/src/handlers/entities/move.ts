@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
 import { db } from "@/api/db";
@@ -117,11 +117,13 @@ export const moveEntityHandler = ({
 };
 
 /**
- * Walk up the parent chain from `startId` to see if we ever
- * reach `targetAncestorId`. Returns true if the start is a
- * descendant of the target.
+ * Walk up the parent chain from `startId` using a recursive
+ * CTE (single query) to check if `targetAncestorId` is an
+ * ancestor. Returns true if the start is a descendant of the
+ * target.
  *
- * Reads within the provided transaction to see locked rows.
+ * The CTE is bounded to 100 levels to guard against data
+ * corruption (circular parent references).
  */
 const checkIsDescendant = async (
   tx: Transaction,
@@ -129,29 +131,23 @@ const checkIsDescendant = async (
   targetAncestorId: string,
   workspaceId: SafeId<"workspace">,
 ): Promise<boolean> => {
-  let currentId: string | null = startId;
+  const result = await tx.execute<{ found: boolean }>(sql`
+    WITH RECURSIVE ancestors AS (
+      SELECT ${entities.id}, ${entities.parentId}, 1 AS depth
+      FROM ${entities}
+      WHERE ${entities.id} = ${startId}
+        AND ${entities.workspaceId} = ${workspaceId}
+      UNION ALL
+      SELECT e.id, e.parent_id, a.depth + 1
+      FROM ${entities} e
+      INNER JOIN ancestors a ON e.id = a.parent_id
+      WHERE e.workspace_id = ${workspaceId}
+        AND a.depth < 100
+    )
+    SELECT EXISTS (
+      SELECT 1 FROM ancestors WHERE id = ${targetAncestorId}
+    ) AS found
+  `);
 
-  // Bounded loop to prevent infinite iteration in case of
-  // data corruption. 100 levels of nesting is far beyond
-  // any real usage.
-  for (let i = 0; i < 100 && currentId; i++) {
-    if (currentId === targetAncestorId) {
-      return true;
-    }
-
-    const current: { parentId: string | null } | undefined =
-      await tx.query.entities.findFirst({
-        where: {
-          id: currentId,
-          workspaceId: { eq: workspaceId },
-        },
-        columns: {
-          parentId: true,
-        },
-      });
-
-    currentId = current?.parentId ?? null;
-  }
-
-  return false;
+  return result.rows.at(0)?.found ?? false;
 };

@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -209,8 +209,11 @@ export const czConstitutionalAdapter: SourceAdapter = {
       try {
         const response = await fetch(url, {
           signal: callerSignal
-            ? AbortSignal.any([callerSignal, AbortSignal.timeout(10_000)])
-            : AbortSignal.timeout(10_000),
+            ? AbortSignal.any([
+                callerSignal,
+                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+              ])
+            : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
         });
 
         if (response.ok) {

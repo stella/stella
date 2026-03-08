@@ -17,6 +17,12 @@ type JustificationResponse = {
   fileFieldIds: string[];
 };
 
+// TODO DAMIAN: please add it to the general pagination issue,
+// it is inconsistent across repo + here the issue is that
+// findMany loads ALL entities in a workspace with nested
+// relations (currentVersion → fields → justifications) and
+// no limit. A workspace with 10k entities loads everything
+// into memory.
 export const readJustificationsHandler = async ({
   workspaceId,
 }: ReadJustificationsHandlerProps) => {

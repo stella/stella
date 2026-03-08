@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -324,6 +324,112 @@ function RouteComponent() {
   );
 }
 
+type RenameState = {
+  active: boolean;
+  draft: string;
+  displayName: string;
+  saving: boolean;
+};
+
+type RenameAction =
+  | { type: "start"; displayName: string }
+  | { type: "cancel" }
+  | { type: "setDraft"; value: string }
+  | { type: "savingStart" }
+  | { type: "saved"; name: string }
+  | { type: "saveFailed" };
+
+const renameReducer = (
+  state: RenameState,
+  action: RenameAction,
+): RenameState => {
+  switch (action.type) {
+    case "start":
+      return {
+        ...state,
+        active: true,
+        draft: action.displayName,
+      };
+    case "cancel":
+      return { ...state, active: false };
+    case "setDraft":
+      return { ...state, draft: action.value };
+    case "savingStart":
+      return { ...state, saving: true };
+    case "saved":
+      return {
+        active: false,
+        saving: false,
+        draft: action.name,
+        displayName: action.name,
+      };
+    case "saveFailed":
+      return { ...state, saving: false };
+    default:
+      return state;
+  }
+};
+
+type FieldEditState = {
+  active: boolean;
+  fields: EditableField[];
+  expandedPath: string | null;
+  saving: boolean;
+};
+
+type FieldEditAction =
+  | { type: "start"; fields: EditableField[] }
+  | { type: "cancel" }
+  | { type: "setExpanded"; path: string | null }
+  | { type: "updateField"; path: string; patch: Partial<EditableField> }
+  | { type: "savingStart" }
+  | { type: "saveFailed" }
+  | { type: "saved" };
+
+const fieldEditReducer = (
+  state: FieldEditState,
+  action: FieldEditAction,
+): FieldEditState => {
+  switch (action.type) {
+    case "start":
+      return {
+        active: true,
+        fields: action.fields,
+        expandedPath: null,
+        saving: false,
+      };
+    case "cancel":
+      return {
+        active: false,
+        fields: [],
+        expandedPath: null,
+        saving: false,
+      };
+    case "setExpanded":
+      return { ...state, expandedPath: action.path };
+    case "updateField":
+      return {
+        ...state,
+        fields: state.fields.map((f) =>
+          f.path === action.path ? { ...f, ...action.patch } : f,
+        ),
+      };
+    case "savingStart":
+      return { ...state, saving: true };
+    case "saveFailed":
+      return { ...state, saving: false };
+    case "saved":
+      return {
+        active: false,
+        fields: [],
+        expandedPath: null,
+        saving: false,
+      };
+    default:
+      return state;
+  }
+};
+
 /** Template detail view: shows metadata, fields, and
  *  actions (test fill, delete). */
 const TemplateDetail = ({
@@ -351,19 +457,21 @@ const TemplateDetail = ({
     | { kind: "error" }
   >({ kind: "loading" });
 
-  // Inline rename state
-  const [displayName, setDisplayName] = useState(template.name);
-  const [renaming, setRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState(template.name);
-  const [renameSaving, setRenameSaving] = useState(false);
+  const [rename, renameDispatch] = useReducer(renameReducer, {
+    active: false,
+    draft: template.name,
+    displayName: template.name,
+    saving: false,
+  });
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameCancelledRef = useRef(false);
 
-  // Field editing state
-  const [editingFields, setEditingFields] = useState(false);
-  const [editableFields, setEditableFields] = useState<EditableField[]>([]);
-  const [expandedField, setExpandedField] = useState<string | null>(null);
-  const [fieldsSaving, setFieldsSaving] = useState(false);
+  const [fieldEdit, fieldEditDispatch] = useReducer(fieldEditReducer, {
+    active: false,
+    fields: [],
+    expandedPath: null,
+    saving: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -407,21 +515,20 @@ const TemplateDetail = ({
 
   // Focus input when entering rename mode
   useEffect(() => {
-    if (renaming) {
+    if (rename.active) {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     }
-  }, [renaming]);
+  }, [rename.active]);
 
   const startRename = useCallback(() => {
     renameCancelledRef.current = false;
-    setRenameDraft(displayName);
-    setRenaming(true);
-  }, [displayName]);
+    renameDispatch({ type: "start", displayName: rename.displayName });
+  }, [rename.displayName]);
 
   const cancelRename = useCallback(() => {
     renameCancelledRef.current = true;
-    setRenaming(false);
+    renameDispatch({ type: "cancel" });
   }, []);
 
   const saveRename = useCallback(async () => {
@@ -429,20 +536,20 @@ const TemplateDetail = ({
       return;
     }
 
-    const trimmed = renameDraft.trim();
-    if (!trimmed || trimmed === displayName) {
-      setRenaming(false);
+    const trimmed = rename.draft.trim();
+    if (!trimmed || trimmed === rename.displayName) {
+      renameDispatch({ type: "cancel" });
       return;
     }
 
     renameCancelledRef.current = true;
-    setRenameSaving(true);
+    renameDispatch({ type: "savingStart" });
     const response = await api
       .templates({ templateId: template.id })
       .post({ name: trimmed });
-    setRenameSaving(false);
 
     if (response.error) {
+      renameDispatch({ type: "saveFailed" });
       renameCancelledRef.current = false;
       toastManager.add({
         type: "error",
@@ -455,14 +562,13 @@ const TemplateDetail = ({
       return;
     }
 
-    setDisplayName(trimmed);
+    renameDispatch({ type: "saved", name: trimmed });
     onRenamed(trimmed);
-    setRenaming(false);
     toastManager.add({
       type: "success",
       title: t("templates.templateRenamed"),
     });
-  }, [renameDraft, displayName, template.id, t, onRenamed]);
+  }, [rename.draft, rename.displayName, template.id, t, onRenamed]);
 
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -503,22 +609,19 @@ const TemplateDetail = ({
       options: f.options,
       required: f.required,
     }));
-    setEditableFields(buildEditableFields(resolved));
-    setExpandedField(null);
-    setEditingFields(true);
+    fieldEditDispatch({
+      type: "start",
+      fields: buildEditableFields(resolved),
+    });
   }, [state]);
 
   const cancelEditFields = useCallback(() => {
-    setEditingFields(false);
-    setEditableFields([]);
-    setExpandedField(null);
+    fieldEditDispatch({ type: "cancel" });
   }, []);
 
   const updateField = useCallback(
     (path: string, patch: Partial<EditableField>) => {
-      setEditableFields((prev) =>
-        prev.map((f) => (f.path === path ? { ...f, ...patch } : f)),
-      );
+      fieldEditDispatch({ type: "updateField", path, patch });
     },
     [],
   );
@@ -528,11 +631,11 @@ const TemplateDetail = ({
       return;
     }
 
-    setFieldsSaving(true);
+    fieldEditDispatch({ type: "savingStart" });
 
     const manifest = {
       version: 1,
-      fields: editableFields.map((f) => ({
+      fields: fieldEdit.fields.map((f) => ({
         path: f.path,
         label: f.label || undefined,
         inputType: f.inputType,
@@ -549,9 +652,8 @@ const TemplateDetail = ({
       .templates({ templateId: template.id })
       .post({ manifest: JSON.stringify(manifest) });
 
-    setFieldsSaving(false);
-
     if (response.error) {
+      fieldEditDispatch({ type: "saveFailed" });
       toastManager.add({
         type: "error",
         title: t("templates.fieldUpdateFailed"),
@@ -574,15 +676,13 @@ const TemplateDetail = ({
       setState({ kind: "ready", detail: refreshed.data });
     }
 
-    setEditingFields(false);
-    setEditableFields([]);
-    setExpandedField(null);
+    fieldEditDispatch({ type: "saved" });
 
     toastManager.add({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });
-  }, [state, editableFields, template.id, t]);
+  }, [state, fieldEdit.fields, template.id, t]);
 
   const fields =
     state.kind === "ready" ? (state.detail.manifest?.fields ?? []) : [];
@@ -620,16 +720,18 @@ const TemplateDetail = ({
         <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
           <div className="mb-6 flex items-start justify-between">
             <div>
-              {renaming ? (
+              {rename.active ? (
                 <Input
                   aria-label={t("templates.templateName")}
                   className="h-8 text-lg font-semibold"
-                  disabled={renameSaving}
+                  disabled={rename.saving}
                   onBlur={saveRename}
-                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onChange={(e) =>
+                    renameDispatch({ type: "setDraft", value: e.target.value })
+                  }
                   onKeyDown={handleRenameKeyDown}
                   ref={renameInputRef}
-                  value={renameDraft}
+                  value={rename.draft}
                 />
               ) : (
                 <button
@@ -637,7 +739,9 @@ const TemplateDetail = ({
                   onClick={startRename}
                   type="button"
                 >
-                  <h2 className="text-lg font-semibold">{displayName}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {rename.displayName}
+                  </h2>
                   <PencilIcon className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                 </button>
               )}
@@ -671,25 +775,29 @@ const TemplateDetail = ({
             </TabsList>
 
             <TabsPanel value="fields">
-              {editingFields ? (
+              {fieldEdit.active ? (
                 <div className="mt-4">
                   <div className="rounded-lg border">
                     <div className="border-b px-4 py-3">
                       <h3 className="text-sm font-medium text-muted-foreground">
                         {t("templates.fieldCount", {
-                          count: editableFields.length,
+                          count: fieldEdit.fields.length,
                         })}
                       </h3>
                     </div>
                     <ul className="divide-y">
-                      {editableFields.map((field) => {
-                        const isExpanded = expandedField === field.path;
+                      {fieldEdit.fields.map((field) => {
+                        const isExpanded =
+                          fieldEdit.expandedPath === field.path;
                         return (
                           <li key={field.path}>
                             <button
                               className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50"
                               onClick={() =>
-                                setExpandedField(isExpanded ? null : field.path)
+                                fieldEditDispatch({
+                                  type: "setExpanded",
+                                  path: isExpanded ? null : field.path,
+                                })
                               }
                               type="button"
                             >
@@ -725,7 +833,7 @@ const TemplateDetail = ({
                   </div>
                   <div className="mt-4 flex justify-end gap-2">
                     <Button
-                      disabled={fieldsSaving}
+                      disabled={fieldEdit.saving}
                       onClick={cancelEditFields}
                       size="sm"
                       variant="outline"
@@ -733,7 +841,7 @@ const TemplateDetail = ({
                       {t("common.cancel")}
                     </Button>
                     <Button
-                      disabled={fieldsSaving}
+                      disabled={fieldEdit.saving}
                       onClick={saveFields}
                       size="sm"
                     >

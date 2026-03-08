@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -115,7 +115,7 @@ export const czSupremeAdapter: SourceAdapter = {
     const url = `${BASE_URL}/WebSearch?SearchOrder=4&Start=${start}&Count=${PAGE_SIZE}`;
 
     const response = await fetch(url, {
-      signal: signal ?? AbortSignal.timeout(10_000),
+      signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
     });
 
     if (!response.ok) {

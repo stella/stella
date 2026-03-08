@@ -1,4 +1,4 @@
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -98,8 +98,8 @@ const fetchDetail = async (
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
   const response = await fetch(url, {
     signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
-      : AbortSignal.timeout(10_000),
+      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
+      : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
     headers: { Accept: "application/json" },
   });
 
@@ -109,7 +109,13 @@ const fetchDetail = async (
     return null;
   }
 
-  return response.json() as Promise<SkDetailItem>;
+  const json: unknown = await response.json();
+  if (typeof json !== "object" || json === null) {
+    return null;
+  }
+  // SAFETY: structural check above confirms object; fields
+  // are all optional so parseItem handles missing properties.
+  return json as SkDetailItem;
 };
 
 const sourceUrlForGuid = (guid: string): string => {
@@ -177,8 +183,8 @@ export const skCourtsAdapter: SourceAdapter = {
 
     const response = await fetch(url, {
       signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-        : AbortSignal.timeout(15_000),
+        ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.LIST)])
+        : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
       headers: { Accept: "application/json" },
     });
 
@@ -186,7 +192,11 @@ export const skCourtsAdapter: SourceAdapter = {
       throw new Error(`SK Courts API error: ${response.status}`);
     }
 
-    const data: SkApiResponse = await response.json();
+    const json: unknown = await response.json();
+    // SAFETY: structural check confirms object; all fields
+    // are optional so missing properties degrade gracefully.
+    const data: SkApiResponse =
+      typeof json === "object" && json !== null ? (json as SkApiResponse) : {};
     const items = data.rozhodnutieList ?? [];
     const decisions: IngestionResult[] = [];
 
