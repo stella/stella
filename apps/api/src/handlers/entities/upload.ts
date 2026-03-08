@@ -14,6 +14,7 @@ import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -206,15 +207,21 @@ export const uploadEntityHandler = async ({
     const fileName = await db.transaction(async (tx) => {
       const resolvedName = await resolveFileName({ tx, propertyId, name });
 
+      const entityStamp = await allocateEntityStamp(tx, workspaceId);
+
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
         createdBy: userId,
+        docSequence: entityStamp.docSequence,
       });
 
       await tx.insert(entityVersions).values({
         id: entityVersionId,
         entityId,
+        versionNumber: 1,
+        stamp: entityStamp.stamp,
+        verificationCode: entityStamp.verificationCode,
       });
 
       await tx

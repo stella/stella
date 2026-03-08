@@ -8,6 +8,7 @@ import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -105,6 +106,12 @@ export const createEntitiesHandler = async ({
     }
 
     const entityId = nanoid();
+    const effectiveKind = kind ?? "document";
+
+    const entityStamp =
+      effectiveKind === "document"
+        ? await allocateEntityStamp(tx, workspaceId)
+        : null;
 
     await tx.insert(entities).values({
       id: entityId,
@@ -113,11 +120,18 @@ export const createEntitiesHandler = async ({
       parentId,
       name,
       createdBy: userId,
+      docSequence: entityStamp?.docSequence ?? null,
     });
 
     const entityVersionId = nanoid();
 
-    await tx.insert(entityVersions).values({ id: entityVersionId, entityId });
+    await tx.insert(entityVersions).values({
+      id: entityVersionId,
+      entityId,
+      versionNumber: 1,
+      stamp: entityStamp?.stamp ?? null,
+      verificationCode: entityStamp?.verificationCode ?? null,
+    });
 
     await tx
       .update(entities)

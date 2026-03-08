@@ -105,6 +105,32 @@ describe("toScopeKey", () => {
   test("resolves duplicate date tokens", () => {
     expect(toScopeKey("{YYYY}-{YYYY}/{SEQ}", feb20)).toBe("2026-2026/");
   });
+
+  test("year rollover produces different scope key", () => {
+    const dec31 = new Date(2025, 11, 31);
+    const jan1 = new Date(2026, 0, 1);
+    const pattern = "{YYYY}/{SEQ}";
+    expect(toScopeKey(pattern, dec31)).toBe("2025/");
+    expect(toScopeKey(pattern, jan1)).toBe("2026/");
+    // Different scope keys mean counters reset
+    expect(toScopeKey(pattern, dec31)).not.toBe(toScopeKey(pattern, jan1));
+  });
+
+  test("month rollover produces different scope key", () => {
+    const jan = new Date(2026, 0, 15);
+    const feb = new Date(2026, 1, 15);
+    const pattern = "{YYYY}-{MM}/{SEQ}";
+    expect(toScopeKey(pattern, jan)).toBe("2026-01/");
+    expect(toScopeKey(pattern, feb)).toBe("2026-02/");
+  });
+
+  test("pattern without date tokens has stable scope key", () => {
+    const jan = new Date(2026, 0, 1);
+    const dec = new Date(2026, 11, 31);
+    const pattern = "LIT-{SEQ}";
+    // Same scope key regardless of date, so counter never resets
+    expect(toScopeKey(pattern, jan)).toBe(toScopeKey(pattern, dec));
+  });
 });
 
 describe("toReference", () => {
@@ -134,5 +160,19 @@ describe("toReference", () => {
     expect(toReference("CORP-{SEQ}-{YYYY}", feb20, 1, 3)).toBe("CORP-001-2026");
     expect(toReference("{SEQ}/{YYYY}", feb20, 1, 3)).toBe("001/2026");
     expect(toReference("{SEQ}-{YYYY}-{MM}", feb20, 42, 3)).toBe("042-2026-02");
+  });
+
+  test("padding overflow: seq exceeds padding width", () => {
+    // padStart only sets a minimum; larger numbers are not truncated
+    expect(toReference("{SEQ}", feb20, 9999, 3)).toBe("9999");
+    expect(toReference("{YYYY}/{SEQ}", feb20, 100_000, 3)).toBe("2026/100000");
+  });
+
+  test("year rollover changes the rendered reference", () => {
+    const dec = new Date(2025, 11, 31);
+    const jan = new Date(2026, 0, 1);
+    // Same seq but different date yields different reference
+    expect(toReference("{YYYY}/{SEQ}", dec, 1, 3)).toBe("2025/001");
+    expect(toReference("{YYYY}/{SEQ}", jan, 1, 3)).toBe("2026/001");
   });
 });

@@ -25,6 +25,7 @@ export const env = createEnv({
     RESEND_API_KEY: v.string(),
     TRANSACTIONAL_EMAIL_FROM: v.string(),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
+    PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
     REDIS_URL: v.pipe(
       v.string(),
       v.url(),

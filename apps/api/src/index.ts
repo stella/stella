@@ -29,6 +29,7 @@ import {
   templatesRoute,
 } from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
+import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { auth } from "@/api/lib/auth";
@@ -101,6 +102,7 @@ const api = new Elysia()
       console.error("Error flushing posthog", error);
     });
   })
+  .use(verifyRoute)
   .mount(auth.handler)
   .group("/v1", (app) =>
     app
@@ -136,7 +138,8 @@ const api = new Elysia()
       .use(templateAnalyticsRoute)
       .use(caseLawRoute)
       .use(chatRoute)
-      .use(devRoute),
+      .use(devRoute)
+      .use(verifyAuthRoute),
   );
 
 export default api;

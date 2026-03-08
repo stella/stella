@@ -51,6 +51,8 @@ export const LIMITS = {
   chatContextTextMaxChars: 32_000,
   /** Max number of file attachments per chat message. */
   chatContextFilesPerMessage: 5,
+  /** Max DOCX size for stamp injection (bytes). */
+  docxStampMaxBytes: 50 * 1024 * 1024,
 } as const;
 
 /**

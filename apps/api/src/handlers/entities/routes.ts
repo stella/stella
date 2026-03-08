@@ -1,6 +1,10 @@
 import Elysia, { t } from "elysia";
 
 import {
+  checkStampBodySchema,
+  checkStampHandler,
+} from "@/api/handlers/entities/check-stamp";
+import {
   createEntitiesHandler,
   createEntityBodySchema,
 } from "@/api/handlers/entities/create";
@@ -117,6 +121,17 @@ export const entitiesRoute = new Elysia({
     {
       invalidateQuery: true,
       body: duplicateEntityBodySchema,
+    },
+  )
+  .post(
+    "/check-stamp",
+    (ctx) =>
+      checkStampHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        body: ctx.body,
+      }),
+    {
+      body: checkStampBodySchema,
     },
   )
   .get(
