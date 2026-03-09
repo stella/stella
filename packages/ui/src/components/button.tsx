@@ -4,6 +4,7 @@ import type * as React from "react";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
+import { LoaderIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -51,15 +52,34 @@ const buttonVariants = cva(
 interface ButtonProps extends useRender.ComponentProps<"button"> {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
+  loading?: boolean;
 }
 
-function Button({ className, variant, size, render, ...props }: ButtonProps) {
+function Button({
+  className,
+  variant,
+  size,
+  render,
+  loading,
+  children,
+  disabled,
+  ...props
+}: ButtonProps) {
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
     render ? undefined : "button";
 
   const defaultProps = {
+    children: loading ? (
+      <>
+        <LoaderIcon className="animate-spin" />
+        {children}
+      </>
+    ) : (
+      children
+    ),
     className: cn(buttonVariants({ className, size, variant })),
     "data-slot": "button",
+    disabled: loading || disabled,
     type: typeValue,
   };
 

@@ -122,7 +122,7 @@ function OTP() {
           </div>
           <Button
             className="w-full"
-            disabled={verifyOtp.isPending}
+            loading={verifyOtp.isPending}
             onClick={() => verifyOtp.mutate({ email, otp })}
           >
             {t("common.verify")}

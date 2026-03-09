@@ -140,7 +140,8 @@ function AcceptInvitation() {
         <FramePanel className="flex flex-col gap-2">
           <Button
             className="w-full"
-            disabled={acceptInvitation.isPending || rejectInvitation.isPending}
+            disabled={rejectInvitation.isPending}
+            loading={acceptInvitation.isPending}
             onClick={() => acceptInvitation.mutate()}
             type="button"
           >
@@ -148,7 +149,8 @@ function AcceptInvitation() {
           </Button>
           <Button
             className="w-full"
-            disabled={acceptInvitation.isPending || rejectInvitation.isPending}
+            disabled={acceptInvitation.isPending}
+            loading={rejectInvitation.isPending}
             onClick={() => rejectInvitation.mutate()}
             type="button"
             variant="outline"

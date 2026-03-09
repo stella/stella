@@ -776,7 +776,7 @@ const EditInvoiceForm = ({
         </Button>
         <form.Subscribe selector={(s) => s.isSubmitting}>
           {(isSubmitting) => (
-            <Button disabled={isSubmitting} type="submit">
+            <Button loading={isSubmitting} type="submit">
               {t("common.save")}
             </Button>
           )}

@@ -266,7 +266,7 @@ const UpdateRoleDialog = ({ memberId, email, role }: UpdateRoleDialogProps) => {
             </DialogClose>
             <form.Subscribe selector={(s) => s.isSubmitting}>
               {(isSubmitting) => (
-                <Button disabled={isSubmitting} type="submit">
+                <Button loading={isSubmitting} type="submit">
                   {t("organization.members.updateRole")}
                 </Button>
               )}

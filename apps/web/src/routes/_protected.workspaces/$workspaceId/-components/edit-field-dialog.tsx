@@ -344,20 +344,13 @@ export const EditFieldDialog = ({
                 <DialogClose render={<Button variant="ghost" />}>
                   {t("common.cancel")}
                 </DialogClose>
-                <form.Subscribe selector={(s) => s.isSubmitting}>
-                  {(isSubmitting) => (
-                    <Button
-                      disabled={
-                        isSubmitting ||
-                        isWorkflowRunning ||
-                        upsertField.isPending
-                      }
-                      type="submit"
-                    >
-                      {t("common.save")}
-                    </Button>
-                  )}
-                </form.Subscribe>
+                <Button
+                  disabled={isWorkflowRunning}
+                  loading={upsertField.isPending}
+                  type="submit"
+                >
+                  {t("common.save")}
+                </Button>
               </DialogFooter>
             </Form>
           )}

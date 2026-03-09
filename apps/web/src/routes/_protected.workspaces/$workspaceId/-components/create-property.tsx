@@ -153,7 +153,8 @@ export const CreateProperty = ({ workspaceId }: CreatePropertyProps) => {
               {t("common.cancel")}
             </DialogClose>
             <Button
-              disabled={!name.trim() || createProperty.isPending}
+              disabled={!name.trim()}
+              loading={createProperty.isPending}
               onClick={handleCreate}
             >
               {t("common.add")}

@@ -271,7 +271,7 @@ const CreateOrganizationForm = () => {
           </form.Field>
           <form.Subscribe selector={(s) => s.isSubmitting}>
             {(isSubmitting) => (
-              <Button className="w-full" disabled={isSubmitting} type="submit">
+              <Button className="w-full" loading={isSubmitting} type="submit">
                 {t("auth.createOrganizationButton")}
               </Button>
             )}
