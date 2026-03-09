@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useEffectEvent, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useState,
+  useTransition,
+} from "react";
 import { usePostHog } from "@posthog/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, type ErrorComponentProps } from "@tanstack/react-router";
@@ -50,6 +56,10 @@ export const DefaultErrorComponent = ({
   const [isPending, startTransition] = useTransition();
   const showUnauthorizedError =
     isUnauthorizedError(error) || isMemberError(error);
+  const networkError = isNetworkError(error);
+  const [isAutoRetrying, setIsAutoRetrying] = useState(
+    () => networkError && networkRetryCount < AUTO_RETRY_LIMIT,
+  );
 
   const retryErroredQueries = useCallback(() => {
     startTransition(async () => {
@@ -63,28 +73,55 @@ export const DefaultErrorComponent = ({
           captureError(posthog, e);
         });
 
-      networkRetryCount = 0;
+      setIsAutoRetrying(false);
       reset();
+      // Don't reset networkRetryCount here. If the error
+      // persists, the error boundary re-catches and the
+      // counter keeps accumulating toward AUTO_RETRY_LIMIT.
+      // The counter resets when a non-network error occurs
+      // or when recovery succeeds (component unmounts).
     });
   }, [queryClient, posthog, reset]);
 
+  // Reset the retry counter when the component unmounts
+  // (successful recovery) or when the error is no longer
+  // a network error.
   useEffect(() => {
-    if (showUnauthorizedError) {
+    if (!networkError) {
+      networkRetryCount = 0;
+    }
+    return () => {
+      networkRetryCount = 0;
+    };
+  }, [networkError]);
+
+  useEffect(() => {
+    if (showUnauthorizedError || networkError) {
       return;
     }
 
     captureError(posthog, error);
-  }, [error, posthog, showUnauthorizedError]);
+  }, [error, posthog, showUnauthorizedError, networkError]);
+
+  // Capture network errors only once retries are exhausted,
+  // avoiding inflated PostHog counts during transient outages.
+  useEffect(() => {
+    if (networkError && networkRetryCount >= AUTO_RETRY_LIMIT) {
+      captureError(posthog, error);
+    }
+  }, [networkError, error, posthog]);
 
   // Auto-retry on transient network errors.
   useEffect(() => {
-    if (!isNetworkError(error) || networkRetryCount >= AUTO_RETRY_LIMIT) {
+    if (!networkError || networkRetryCount >= AUTO_RETRY_LIMIT) {
+      setIsAutoRetrying(false);
       return;
     }
     networkRetryCount += 1;
+    setIsAutoRetrying(true);
     const timer = setTimeout(retryErroredQueries, AUTO_RETRY_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [error, retryErroredQueries]);
+  }, [networkError, retryErroredQueries]);
 
   const t = useTranslations();
 
@@ -92,10 +129,31 @@ export const DefaultErrorComponent = ({
     return <UnauthorizedError />;
   }
 
-  // While auto-retrying, show a "Reconnecting" state
-  // instead of the error message.
-  if (isNetworkError(error) && isPending) {
-    return <DefaultPendingComponent className={className} />;
+  // Network error: show "Connection lost" with reconnecting
+  // indicator instead of generic "Something went wrong".
+  if (networkError) {
+    const retriesExhausted =
+      networkRetryCount >= AUTO_RETRY_LIMIT && !isPending;
+
+    return (
+      <StatusMessage
+        actionButton={
+          retriesExhausted ? (
+            <Button disabled={isPending} onClick={retryErroredQueries}>
+              <RefreshCcwIcon /> {t("common.tryAgain")}
+            </Button>
+          ) : null
+        }
+        className={className}
+        description={
+          !retriesExhausted && (isAutoRetrying || isPending)
+            ? t("common.reconnecting")
+            : t("common.connectionLostDescription")
+        }
+        status="error"
+        title={t("common.connectionLost")}
+      />
+    );
   }
 
   return (
