@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  HeadContent,
+  Outlet,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useShallow } from "zustand/react/shallow";
 
@@ -100,9 +104,12 @@ function RootComponent() {
   useSuspenseQuery(sessionOptions);
 
   return (
-    <div className="flex h-screen w-full flex-col">
-      <Outlet />
-      {isDev && <DevRoot />}
-    </div>
+    <>
+      <HeadContent />
+      <div className="flex h-screen w-full flex-col">
+        <Outlet />
+        {isDev && <DevRoot />}
+      </div>
+    </>
   );
 }

@@ -1,8 +1,8 @@
 /**
  * Tiny store for requesting the right panel chat to open
- * with a pre-filled @mention. Any component (row actions,
+ * with pre-filled @mentions. Any component (row actions,
  * context menus) can call `requestChatAbout` to open the
- * panel and mention an entity.
+ * panel and mention one or more entities.
  */
 
 import { create } from "zustand";
@@ -17,25 +17,25 @@ type PendingMention = {
 };
 
 type ChatPanelStore = {
-  pendingMention: PendingMention | null;
+  pendingMentions: PendingMention[];
   /** Incremented on each request so the panel can detect
    *  new requests even for the same entity. */
   requestSeq: number;
-  requestChatAbout: (mention: PendingMention) => void;
-  consumeMention: () => PendingMention | null;
+  requestChatAbout: (mentions: PendingMention | PendingMention[]) => void;
+  consumeMentions: () => PendingMention[];
 };
 
 export const useChatPanelStore = create<ChatPanelStore>((set, get) => ({
-  pendingMention: null,
+  pendingMentions: [],
   requestSeq: 0,
-  requestChatAbout: (mention) =>
+  requestChatAbout: (mentions) =>
     set({
-      pendingMention: mention,
+      pendingMentions: Array.isArray(mentions) ? mentions : [mentions],
       requestSeq: get().requestSeq + 1,
     }),
-  consumeMention: () => {
-    const mention = get().pendingMention;
-    set({ pendingMention: null });
-    return mention;
+  consumeMentions: () => {
+    const mentions = get().pendingMentions;
+    set({ pendingMentions: [] });
+    return mentions;
   },
 }));

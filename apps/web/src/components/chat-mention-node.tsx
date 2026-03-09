@@ -10,23 +10,29 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { MentionCategory } from "@/components/chat-mention-extension";
+import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const cls = "size-3 shrink-0";
 
 const CategoryIcon = ({
   category,
+  attrId,
   attrKind,
   attrMimeType,
 }: {
   category: MentionCategory;
+  /** Entity/workspace ID stored in the TipTap node. */
+  attrId: string;
   /** Kind stored in the TipTap node (fallback). */
   attrKind: string;
   /** MIME type stored in the TipTap node (fallback). */
   attrMimeType: string | null;
 }) => {
   if (category === "workspace") {
-    return <LayersIcon className={cls} />;
+    return (
+      <LayersIcon className={cls} style={{ color: getMatterColor(attrId) }} />
+    );
   }
   if (category === "contact") {
     return <ContactIcon className={cls} />;
@@ -66,6 +72,7 @@ export const ChatMentionNode = (props: NodeViewProps) => {
         )}
       >
         <CategoryIcon
+          attrId={attrs.id ?? ""}
           attrKind={attrs.kind ?? "document"}
           attrMimeType={attrs.mimeType}
           category={attrs.category ?? "entity"}

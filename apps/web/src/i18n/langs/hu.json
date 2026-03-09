@@ -449,6 +449,7 @@
     "decline": "Elutasítás",
     "delete": "Törlés",
     "deleteConfirmDescription": "Biztosan törölni szeretné a következőt: „{name}“? Ez a művelet nem vonható vissza.",
+    "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Description",
     "done": "Kész",
     "download": "Letöltés",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
     "deleteItem": "Elem törlése",
+    "deleteItems": "{count, plural, one {# elem} other {# elem}} törlése",
+    "deleteItemsDescription": "Biztosan törölni szeretne {count, plural, one {# elemet} other {# elemet}}? Ez a művelet nem vonható vissza.",
     "deleteSelectedRows": "Kijelölt sorok törlése",
     "deleteSelectedRowsDescription": "{count, plural, one {Biztosan törölni szeretné a kijelölt # sort? Ez a művelet nem vonható vissza.} other {Biztosan törölni szeretné a kijelölt # sort? Ez a művelet nem vonható vissza.}}",
     "deleteSelection": "Kijelölés törlése",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Utoljára frissítve",
+      "moveToRoot": "Húzza ide a gyökérszintre helyezéshez",
       "noFilesYet": "Még nincsenek fájlok",
       "version": "Verzió"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
       "groupBy": "Csoportosítás:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Lista",
         "grid": "Rács",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Lista",
+        "overview": "Áttekintés",
+        "table": "Táblázat"
       },
-      "newView": "New {layout}",
+      "newView": "Új {layout}",
       "selectProperty": "Tulajdonság kiválasztása"
     },
     "workflow": {

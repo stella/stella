@@ -449,6 +449,7 @@
     "decline": "Rechazar",
     "delete": "Eliminar",
     "deleteConfirmDescription": "¿Está seguro de que desea eliminar \"{name}\"? Esta acción no se puede deshacer.",
+    "deletedCount": "{count, plural, one {# elemento eliminado} other {# elementos eliminados}}",
     "description": "Description",
     "done": "Hecho",
     "download": "Descargar",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
     "deleteItem": "Eliminar elemento",
+    "deleteItems": "Eliminar {count, plural, one {# elemento} other {# elementos}}",
+    "deleteItemsDescription": "¿Está seguro de que desea eliminar {count, plural, one {# elemento} other {# elementos}}? Esta acción no se puede deshacer.",
     "deleteSelectedRows": "Eliminar filas seleccionadas",
     "deleteSelectedRowsDescription": "{count, plural, one {¿Está seguro de que desea eliminar # fila seleccionada? Esta acción no se puede deshacer.} other {¿Está seguro de que desea eliminar # filas seleccionadas? Esta acción no se puede deshacer.}}",
     "deleteSelection": "Eliminar selección",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Última actualización",
+      "moveToRoot": "Suelta aquí para mover al nivel raíz",
       "noFilesYet": "Aún no hay archivos",
       "version": "Versión"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# seleccionado} other {# seleccionados}}",
       "groupBy": "Agrupar por:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Lista",
         "grid": "Cuadrícula",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Lista",
+        "overview": "Resumen",
+        "table": "Tabla"
       },
-      "newView": "New {layout}",
+      "newView": "Nueva {layout}",
       "selectProperty": "Seleccionar propiedad"
     },
     "workflow": {

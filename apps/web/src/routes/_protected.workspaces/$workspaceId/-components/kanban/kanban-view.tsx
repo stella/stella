@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
+import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
+import {
+  extractClosestEdge,
+  type Edge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { usePostHog } from "@posthog/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -14,6 +22,9 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+// -- Auto-scrolling board container with forgiving column drop --
+
+import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { optionColorsMap } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -301,7 +312,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       });
     };
 
-    const handleReorderColumn = (sourceValue: string, targetValue: string) => {
+    const handleReorderColumn = (
+      sourceValue: string,
+      targetValue: string,
+      edge: Edge | null,
+    ) => {
       if (
         groupByProperty.content.type !== "single-select" &&
         groupByProperty.content.type !== "multi-select"
@@ -314,9 +329,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       if (srcIdx === -1 || tgtIdx === -1) {
         return;
       }
+      // Compute insertion index based on closest edge.
+      // "left" means insert before the target, "right" after.
+      const insertBeforeTarget = edge === "left";
+      const rawDestIdx = insertBeforeTarget ? tgtIdx : tgtIdx + 1;
+      // Adjust for the source removal.
+      const destIdx = srcIdx < rawDestIdx ? rawDestIdx - 1 : rawDestIdx;
+      if (destIdx === srcIdx) {
+        return;
+      }
       const [moved] = opts.splice(srcIdx, 1);
-      const adjustedIdx = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx;
-      opts.splice(adjustedIdx, 0, moved);
+      opts.splice(destIdx, 0, moved);
       updateProperty.mutate({
         workspaceId,
         propertyId: groupByPropertyId,
@@ -331,7 +354,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     );
 
     return (
-      <div className="flex h-full gap-4 overflow-x-auto p-4">
+      <KanbanBoard onReorderColumn={handleReorderColumn}>
         {visibleGroups.map((group) => {
           const { value } = group;
           return (
@@ -369,7 +392,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             />
           );
         })}
-      </div>
+      </KanbanBoard>
     );
   }
 
@@ -387,7 +410,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 
   return (
-    <div className="flex h-full gap-4 overflow-x-auto p-4">
+    <KanbanBoard>
       {builtInGroups.map((group) => (
         <KanbanColumn
           cardFields={cardFields}
@@ -402,6 +425,87 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           workspaceId={workspaceId}
         />
       ))}
+    </KanbanBoard>
+  );
+};
+
+type ColumnDragPosition = {
+  sourceValue: string;
+  targetValue: string;
+  edge: Edge;
+};
+
+type KanbanBoardProps = {
+  children: ReactNode;
+  onReorderColumn?: (
+    sourceValue: string,
+    targetValue: string,
+    edge: Edge | null,
+  ) => void;
+};
+
+const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Track the last valid drop position so drops in the
+  // gap between columns still work (monitors always fire).
+  const lastPosition = useRef<ColumnDragPosition | null>(null);
+  const onReorderRef = useRef(onReorderColumn);
+  onReorderRef.current = onReorderColumn;
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
+    return combine(
+      autoScrollForElements({
+        element: el,
+        getAllowedAxis: () => "horizontal",
+      }),
+      autoScrollForExternal({
+        element: el,
+        getAllowedAxis: () => "horizontal",
+      }),
+      monitorForElements({
+        canMonitor: ({ source }) => source.data.type === COLUMN_DRAG_TYPE,
+        onDragStart: () => {
+          lastPosition.current = null;
+        },
+        onDrag: ({ source, location }) => {
+          const target = location.current.dropTargets.at(0);
+          if (!target) {
+            return;
+          }
+          const edge = extractClosestEdge(target.data);
+          const targetValue = target.data.columnValue;
+          const sourceValue = source.data.columnValue;
+          if (
+            edge &&
+            typeof targetValue === "string" &&
+            typeof sourceValue === "string" &&
+            targetValue !== sourceValue
+          ) {
+            lastPosition.current = {
+              sourceValue,
+              targetValue,
+              edge,
+            };
+          }
+        },
+        onDrop: () => {
+          const pos = lastPosition.current;
+          lastPosition.current = null;
+          if (pos) {
+            onReorderRef.current?.(pos.sourceValue, pos.targetValue, pos.edge);
+          }
+        },
+      }),
+    );
+  }, []);
+
+  return (
+    <div className="flex h-full gap-4 overflow-x-auto p-4" ref={scrollRef}>
+      {children}
     </div>
   );
 };

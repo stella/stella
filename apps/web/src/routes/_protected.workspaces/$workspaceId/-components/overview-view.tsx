@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { FolderIcon, LayoutDashboardIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -10,11 +12,13 @@ import {
 } from "@stella/ui/components/avatar";
 import { cn } from "@stella/ui/lib/utils";
 
+import { renderDragPreview } from "@/components/drag-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { isFileDisplayable } from "@/lib/types";
+import { isFileDisplayable, type WorkspaceEntity } from "@/lib/types";
 import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
@@ -123,26 +127,53 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
   );
+  const rowRef = useRef<HTMLDivElement>(null);
 
-  // Look up the full entity from the workspace store so
-  // RowActions has the complete data (fields, etc.).
-  const fullEntity = undefined;
+  // Construct a WorkspaceEntity from overview data so RowActions
+  // can render. The overview endpoint returns enough metadata to
+  // build a synthetic fields record for the primary file.
+  // Previously TODO by @nnad3N — now resolved.
+  const fullEntity = useMemo((): WorkspaceEntity => {
+    const fields: WorkspaceEntity["fields"] = {};
+    if (entity.fieldId && entity.mimeType) {
+      fields[entity.fieldId] = {
+        id: entity.fieldId,
+        entityId: entity.entityId,
+        content: {
+          type: "file",
+          version: 1,
+          id: entity.fieldId,
+          fileName: entity.name,
+          mimeType: entity.mimeType,
+          sizeBytes: 0,
+          encrypted: entity.encrypted,
+          sha256Hex: "",
+          pdfFileId: entity.pdfFileId,
+        },
+      };
+    }
+    return {
+      entityId: entity.entityId,
+      kind: entity.kind as WorkspaceEntity["kind"],
+      name: entity.name,
+      parentId: null,
+      createdAt: entity.updatedAt ?? "",
+      createdBy: entity.createdBy,
+      createdByImage: entity.createdByImage,
+      updatedAt: entity.updatedAt,
+      version: 0,
+      fields,
+    };
+  }, [entity]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO: fix me
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      if (!fullEntity) {
-        return;
-      }
-      e.preventDefault();
-      const { clientX: x, clientY: y } = e;
-      setContextAnchor({
-        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-      });
-      setContextOpen(true);
-    },
-    [fullEntity],
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const { clientX: x, clientY: y } = e;
+    setContextAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+    setContextOpen(true);
+  }, []);
 
   const navigable =
     entity.mimeType !== null &&
@@ -159,6 +190,44 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     ) : entity.mimeType ? (
       <DocumentIcon className="size-4 shrink-0" mimeType={entity.mimeType} />
     ) : null;
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) {
+      return;
+    }
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: ENTITY_DRAG_TYPE,
+        entityId: entity.entityId,
+        name: entity.name,
+        kind: entity.kind,
+        mimeType: entity.mimeType,
+        entityIds: [entity.entityId],
+        entities: [
+          {
+            entityId: entity.entityId,
+            name: entity.name,
+            kind: entity.kind,
+            mimeType: entity.mimeType,
+            parentId: null,
+          },
+        ],
+      }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) => {
+        setCustomNativeDragPreview({
+          nativeSetDragImage,
+          render: ({ container }) =>
+            renderDragPreview(container, {
+              name: entity.name,
+              kind: entity.kind,
+              mimeType: entity.mimeType,
+            }),
+        });
+      },
+    });
+  }, [entity.entityId, entity.name, entity.kind, entity.mimeType]);
 
   const { fieldId } = entity;
 
@@ -199,26 +268,24 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           {formatRelativeTime(entity.updatedAt, lang)}
         </span>
       )}
-      {fullEntity && (
-        // biome-ignore lint/a11y/noNoninteractiveElementInteractions: event-capture wrapper
-        // biome-ignore lint/a11y/useKeyWithClickEvents: event-capture wrapper
-        // biome-ignore lint/a11y/noStaticElementInteractions: event-capture wrapper
-        <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <RowActions
-            anchor={contextAnchor}
-            entity={fullEntity}
-            onOpen={handleOpen}
-            onOpenChange={(o) => {
-              setContextOpen(o);
-              if (!o) {
-                setContextAnchor(null);
-              }
-            }}
-            open={contextOpen}
-            workspaceId={workspaceId}
-          />
-        </span>
-      )}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: event-capture wrapper */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: event-capture wrapper */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: event-capture wrapper */}
+      <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <RowActions
+          anchor={contextAnchor}
+          entity={fullEntity}
+          onOpen={handleOpen}
+          onOpenChange={(o) => {
+            setContextOpen(o);
+            if (!o) {
+              setContextAnchor(null);
+            }
+          }}
+          open={contextOpen}
+          workspaceId={workspaceId}
+        />
+      </span>
     </>
   );
 
@@ -245,6 +312,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       onClick={handleOpen}
       onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}
+      ref={rowRef}
       role={handleOpen ? "button" : undefined}
       tabIndex={handleOpen ? 0 : undefined}
     >

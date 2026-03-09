@@ -26,6 +26,7 @@ import type {
   ChatMentionOption,
   MentionCategory,
 } from "@/components/chat-mention-extension";
+import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const CATEGORY_ORDER: MentionCategory[] = [
@@ -57,10 +58,12 @@ const useCategoryLabel = () => {
 };
 
 const MentionIcon = ({
+  id,
   category,
   kind,
   mimeType,
 }: {
+  id: string;
   category: MentionCategory;
   kind: string;
   mimeType: string | null;
@@ -68,7 +71,12 @@ const MentionIcon = ({
   const cls = "size-3.5 shrink-0 text-muted-foreground";
 
   if (category === "workspace") {
-    return <LayersIcon className={cls} />;
+    return (
+      <LayersIcon
+        className="size-3.5 shrink-0"
+        style={{ color: getMatterColor(id) }}
+      />
+    );
   }
   if (category === "contact") {
     return <ContactIcon className={cls} />;
@@ -341,6 +349,7 @@ export const ChatMentionList = forwardRef<
                         >
                           <MentionIcon
                             category={item.category}
+                            id={item.id}
                             kind={item.kind}
                             mimeType={item.mimeType}
                           />
@@ -379,6 +388,7 @@ export const ChatMentionList = forwardRef<
               >
                 <MentionIcon
                   category={item.category}
+                  id={item.id}
                   kind={item.kind}
                   mimeType={item.mimeType}
                 />

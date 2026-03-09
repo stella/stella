@@ -449,6 +449,7 @@
     "decline": "Atmesti",
     "delete": "Ištrinti",
     "deleteConfirmDescription": "Ar tikrai norite ištrinti \"{name}\"? Šio veiksmo negalima atšaukti.",
+    "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Description",
     "done": "Atlikta",
     "download": "Atsisiųsti",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
     "deleteItem": "Ištrinti elementą",
+    "deleteItems": "Ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}",
+    "deleteItemsDescription": "Ar tikrai norite ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}? Šio veiksmo negalima atšaukti.",
     "deleteSelectedRows": "Ištrinti pasirinktas eilutes",
     "deleteSelectedRowsDescription": "{count, plural, one {Ar tikrai norite ištrinti # pasirinktą eilutę? Šio veiksmo negalima atšaukti.} few {Ar tikrai norite ištrinti # pasirinktas eilutes? Šio veiksmo negalima atšaukti.} many {Ar tikrai norite ištrinti # pasirinktų eilučių? Šio veiksmo negalima atšaukti.} other {Ar tikrai norite ištrinti # pasirinktų eilučių? Šio veiksmo negalima atšaukti.}}",
     "deleteSelection": "Ištrinti pasirinktus",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Paskutinis atnaujinimas",
+      "moveToRoot": "Numeskite čia, kad perkeltumėte į šakninį lygį",
       "noFilesYet": "Failų dar nėra",
       "version": "Versija"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
       "groupBy": "Grupuoti pagal:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Sąrašas",
         "grid": "Tinklelis",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Sąrašas",
+        "overview": "Apžvalga",
+        "table": "Lentelė"
       },
-      "newView": "New {layout}",
+      "newView": "Naujas {layout}",
       "selectProperty": "Pasirinkti savybę"
     },
     "workflow": {

@@ -449,6 +449,7 @@
     "decline": "Odmietnuť",
     "delete": "Vymazať",
     "deleteConfirmDescription": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
+    "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Description",
     "done": "Hotovo",
     "download": "Stiahnuť",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Vytvoriť nový spis",
     "defaultName": "Bez názvu",
     "deleteItem": "Vymazať položku",
+    "deleteItems": "Vymazať {count, plural, one {# položku} few {# položky} other {# položiek}}",
+    "deleteItemsDescription": "Naozaj chcete vymazať {count, plural, one {# položku} few {# položky} other {# položiek}}? Túto akciu nemožno vrátiť späť.",
     "deleteSelectedRows": "Vymazať vybrané riadky",
     "deleteSelectedRowsDescription": "{count, plural, one {Naozaj chcete vymazať # vybraný riadok? Túto akciu nemožno vrátiť.} few {Naozaj chcete vymazať # vybrané riadky? Túto akciu nemožno vrátiť.} other {Naozaj chcete vymazať # vybraných riadkov? Túto akciu nemožno vrátiť.}}",
     "deleteSelection": "Vymazať výber",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Naposledy aktualizované",
+      "moveToRoot": "Presuňte sem pre presun do koreňovej úrovne",
       "noFilesYet": "Zatiaľ žiadne súbory",
       "version": "Verzia"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
       "groupBy": "Zoskupiť podľa:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Zoznam",
         "grid": "Mriežka",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Zoznam",
+        "overview": "Prehľad",
+        "table": "Tabuľka"
       },
-      "newView": "New {layout}",
+      "newView": "Nový {layout}",
       "selectProperty": "Vybrať vlastnosť"
     },
     "workflow": {

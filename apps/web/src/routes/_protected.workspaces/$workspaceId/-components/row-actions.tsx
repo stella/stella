@@ -33,7 +33,6 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
-import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -60,6 +59,8 @@ type RowActionsProps = {
   onRename?: () => void;
   triggerClassName?: string;
   anchor?: VirtualAnchor | null;
+  /** Extra entities included in bulk actions. */
+  selectedEntities?: WorkspaceEntity[];
 };
 
 export const RowActions = ({
@@ -71,121 +72,98 @@ export const RowActions = ({
   onRename,
   triggerClassName,
   anchor,
+  selectedEntities,
 }: RowActionsProps) => {
   const t = useTranslations();
-  const canDeleteEntity = usePermissions({ entity: ["delete"] });
-  const canCreateEntity = usePermissions({ entity: ["create"] });
   const deleteEntities = useDeleteEntities();
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
+  const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
 
+  const msg: Msg = {
+    downloading: t("workspaces.files.downloadAsZip"),
+    failed: t("errors.actionFailed"),
+  };
+
   const handleZipDownload = async () => {
-    const toastId = toastManager.add({
-      type: "loading",
-      title: t("workspaces.files.downloadAsZip"),
-    });
-
-    const blobResult = await Result.tryPromise(async () => {
-      const response = await fetch(
-        `/api/entities/${workspaceId}/zip/${entity.entityId}`,
-        { credentials: "include" },
-      );
-      if (!response.ok) {
-        throw new Error("Failed to download ZIP");
+    if (isBulk) {
+      for (const e of selectedEntities) {
+        await downloadEntityAsZip(workspaceId, e, msg);
       }
-      return await response.blob();
-    });
-
-    if (Result.isError(blobResult)) {
-      toastManager.update(toastId, {
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
       return;
     }
 
-    toastManager.close(toastId);
-    downloadFile(blobResult.value, `${name}.zip`);
+    await downloadEntityAsZip(workspaceId, entity, msg);
   };
 
   const handleDownload = async (asPdf?: boolean) => {
-    if (!file) {
-      return;
-    }
-
-    const response = await api
-      .files({ workspaceId })
-      .url({ fieldId: file.fieldId })
-      .get({
-        query: {
-          purpose: asPdf ? "display" : "download",
-        },
-      });
-
-    if (response.error) {
-      toastManager.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      return;
-    }
-
-    const blobResult = await Result.tryPromise(async () => {
-      const s3Response = await fetch(response.data.presignedUrl);
-
-      if (!s3Response.ok) {
-        throw new Error("Failed to fetch file from storage");
+    if (isBulk) {
+      for (const e of selectedEntities) {
+        const f = getFirstFile(e);
+        if (f) {
+          await downloadSingleFile(workspaceId, f, asPdf, msg);
+        }
       }
-
-      return await s3Response.blob();
-    });
-
-    if (Result.isError(blobResult)) {
-      toastManager.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
       return;
     }
 
-    const fileName = asPdf
-      ? response.data.fileName.replace(EXT_RE, ".pdf")
-      : response.data.fileName;
-    downloadFile(blobResult.value, fileName);
+    if (file) {
+      await downloadSingleFile(workspaceId, file, asPdf, msg);
+    }
+  };
+
+  const handleChatAbout = () => {
+    const targets = isBulk ? selectedEntities : [entity];
+    const mentions = targets.map((e) => {
+      const f = getFirstFile(e);
+      return {
+        id: e.entityId,
+        label: getEntityName(e),
+        category: "entity" as const,
+        kind: e.kind,
+        mimeType: f?.mimeType ?? null,
+        workspaceId,
+      };
+    });
+    useChatPanelStore.getState().requestChatAbout(mentions);
   };
 
   const handleDuplicate = async () => {
-    const result = await Result.tryPromise(() =>
-      api.entities({ workspaceId }).duplicate.post({
-        queryKey: entitiesKeys.all(workspaceId),
-        entityId: entity.entityId,
-      }),
-    );
-
-    if (Result.isError(result) || result.value.error) {
-      toastManager.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      return;
+    const targets = isBulk ? selectedEntities : [entity];
+    let failed = false;
+    for (const e of targets) {
+      const result = await Result.tryPromise(() =>
+        api.entities({ workspaceId }).duplicate.post({
+          queryKey: entitiesKeys.all(workspaceId),
+          entityId: e.entityId,
+        }),
+      );
+      if (Result.isError(result) || result.value.error) {
+        failed = true;
+      }
     }
 
     toastManager.add({
-      title: t("common.duplicated"),
-      type: "success",
+      title: failed ? t("errors.actionFailed") : t("common.duplicated"),
+      type: failed ? "error" : "success",
     });
   };
 
   const handleDelete = () => {
+    const ids = isBulk
+      ? selectedEntities.map((e) => e.entityId)
+      : [entity.entityId];
     deleteEntities.mutate(
-      { workspaceId, entityIds: [entity.entityId] },
+      { workspaceId, entityIds: ids },
       {
         onSuccess: () => {
           toastManager.add({
-            title: `"${name}" deleted`,
+            title: isBulk
+              ? t("common.deletedCount", { count: ids.length })
+              : `"${name}" deleted`,
             type: "success",
           });
         },
@@ -198,6 +176,14 @@ export const RowActions = ({
       },
     );
   };
+
+  // Whether any selected entity has a downloadable file.
+  const hasAnyFile = isBulk
+    ? selectedEntities.some((e) => getFirstFile(e) !== null)
+    : file !== null;
+  const hasAnyFolder = isBulk
+    ? selectedEntities.some((e) => e.kind === "folder")
+    : isFolder;
 
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
@@ -222,84 +208,151 @@ export const RowActions = ({
             {t("common.open")}
           </MenuItem>
         )}
-        {onRename && (
+        {!isBulk && onRename && (
           <MenuItem onClick={onRename}>
             <PencilIcon />
             {t("common.rename")}
           </MenuItem>
         )}
-        <MenuItem
-          onClick={() =>
-            useChatPanelStore.getState().requestChatAbout({
-              id: entity.entityId,
-              label: name,
-              category: "entity",
-              kind: entity.kind,
-              mimeType: file?.mimeType ?? null,
-              workspaceId,
-            })
-          }
-        >
+        <MenuItem onClick={handleChatAbout}>
           <MessageSquareIcon />
           {t("chat.chatAbout")}
         </MenuItem>
-        {file && (
+        {hasAnyFile && (
           <MenuItem onClick={() => handleDownload()}>
             <DownloadIcon />
             {t("common.download")}
           </MenuItem>
         )}
-        {hasPdfConversion && (
+        {!isBulk && hasPdfConversion && (
           <MenuItem onClick={() => handleDownload(true)}>
             <FileOutputIcon />
             {t("common.saveAsPdf")}
           </MenuItem>
         )}
-        {isFolder && (
+        {hasAnyFolder && (
           <MenuItem onClick={handleZipDownload}>
             <ArchiveIcon />
             {t("workspaces.files.downloadAsZip")}
           </MenuItem>
         )}
-        {!isFolder && canCreateEntity && (
-          <MenuItem onClick={handleDuplicate}>
-            <CopyIcon />
-            {t("common.duplicate")}
-          </MenuItem>
-        )}
-        {canDeleteEntity && (
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={<MenuItem closeOnClick={false} variant="destructive" />}
-            >
-              <Trash2Icon />
-              {t("common.delete")}
-            </AlertDialogTrigger>
-            <AlertDialogPopup>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {t("workspaces.deleteItem")}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("common.deleteConfirmDescription", { name })}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogClose render={<Button variant="ghost" />}>
-                  {t("common.cancel")}
-                </AlertDialogClose>
-                <AlertDialogClose
-                  render={
-                    <Button onClick={handleDelete} variant="destructive" />
-                  }
-                >
-                  {t("common.delete")}
-                </AlertDialogClose>
-              </AlertDialogFooter>
-            </AlertDialogPopup>
-          </AlertDialog>
-        )}
+        <MenuItem onClick={handleDuplicate}>
+          <CopyIcon />
+          {t("common.duplicate")}
+        </MenuItem>
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={<MenuItem closeOnClick={false} variant="destructive" />}
+          >
+            <Trash2Icon />
+            {t("common.delete")}
+          </AlertDialogTrigger>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {isBulk
+                  ? t("workspaces.deleteItems", {
+                      count: selectedEntities.length,
+                    })
+                  : t("workspaces.deleteItem")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {isBulk
+                  ? t("workspaces.deleteItemsDescription", {
+                      count: selectedEntities.length,
+                    })
+                  : t("common.deleteConfirmDescription", {
+                      name,
+                    })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <AlertDialogClose
+                render={<Button onClick={handleDelete} variant="destructive" />}
+              >
+                {t("common.delete")}
+              </AlertDialogClose>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
       </MenuPopup>
     </Menu>
   );
+};
+
+// -- Helpers (avoid duplicating logic between single/bulk) --
+
+type FileRef = { fieldId: string; mimeType: string | null };
+type Msg = { downloading: string; failed: string };
+
+const downloadEntityAsZip = async (
+  workspaceId: string,
+  entity: WorkspaceEntity,
+  msg: Msg,
+) => {
+  const name = getEntityName(entity);
+  const toastId = toastManager.add({
+    type: "loading",
+    title: msg.downloading,
+  });
+
+  const blobResult = await Result.tryPromise(async () => {
+    const response = await fetch(
+      `/api/entities/${workspaceId}/zip/${entity.entityId}`,
+      { credentials: "include" },
+    );
+    if (!response.ok) {
+      throw new Error("Failed to download ZIP");
+    }
+    return await response.blob();
+  });
+
+  if (Result.isError(blobResult)) {
+    toastManager.update(toastId, {
+      title: msg.failed,
+      type: "error",
+    });
+    return;
+  }
+
+  toastManager.close(toastId);
+  downloadFile(blobResult.value, `${name}.zip`);
+};
+
+const downloadSingleFile = async (
+  workspaceId: string,
+  file: FileRef,
+  asPdf: boolean | undefined,
+  msg: Msg,
+) => {
+  const response = await api
+    .files({ workspaceId })
+    .url({ fieldId: file.fieldId })
+    .get({ query: { purpose: asPdf ? "display" : "download" } });
+
+  if (response.error) {
+    toastManager.add({ title: msg.failed, type: "error" });
+    return;
+  }
+
+  const blobResult = await Result.tryPromise(async () => {
+    const s3Response = await fetch(response.data.presignedUrl);
+    if (!s3Response.ok) {
+      throw new Error("Failed to fetch file from storage");
+    }
+    return await s3Response.blob();
+  });
+
+  if (Result.isError(blobResult)) {
+    toastManager.add({ title: msg.failed, type: "error" });
+    return;
+  }
+
+  const fileName = asPdf
+    ? response.data.fileName.replace(EXT_RE, ".pdf")
+    : response.data.fileName;
+  downloadFile(blobResult.value, fileName);
 };

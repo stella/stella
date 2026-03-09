@@ -449,6 +449,7 @@
     "decline": "Keeldu",
     "delete": "Kustuta",
     "deleteConfirmDescription": "Kas olete kindel, et soovite kustutada \"{name}\"? Seda toimingut ei saa tagasi võtta.",
+    "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Description",
     "done": "Valmis",
     "download": "Laadi alla",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
     "deleteItem": "Kustuta element",
+    "deleteItems": "Kustuta {count, plural, one {# element} other {# elementi}}",
+    "deleteItemsDescription": "Kas soovite kindlasti kustutada {count, plural, one {# elemendi} other {# elementi}}? Seda toimingut ei saa tagasi võtta.",
     "deleteSelectedRows": "Kustuta valitud read",
     "deleteSelectedRowsDescription": "{count, plural, one {Kas olete kindel, et soovite kustutada # valitud rea? Seda toimingut ei saa tagasi võtta.} other {Kas olete kindel, et soovite kustutada # valitud rida? Seda toimingut ei saa tagasi võtta.}}",
     "deleteSelection": "Kustuta valik",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Viimati uuendatud",
+      "moveToRoot": "Lohistage siia, et liigutada juuretasemele",
       "noFilesYet": "Faile pole veel",
       "version": "Versioon"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "groupBy": "Rühmita:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Loend",
         "grid": "Ruudustik",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Loend",
+        "overview": "Ülevaade",
+        "table": "Tabel"
       },
-      "newView": "New {layout}",
+      "newView": "Uus {layout}",
       "selectProperty": "Valige omadus"
     },
     "workflow": {

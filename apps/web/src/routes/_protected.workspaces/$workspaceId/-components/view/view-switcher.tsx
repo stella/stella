@@ -1,4 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   CopyIcon,
@@ -12,7 +17,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useDrag, useDrop } from "react-aria";
 import { useTranslations } from "use-intl";
 
 import type { ViewLayout, ViewLayoutType } from "@stella/api/types";
@@ -253,27 +257,42 @@ const ViewTab = ({
   const canDeleteView = usePermissions({ view: ["delete"] });
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(name);
+  const [isDropTarget, setIsDropTarget] = useState(false);
   const updateView = useUpdateView(workspaceId);
-  const dropRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
 
-  const { dragProps } = useDrag({
-    getItems: () => [{ [VIEW_DRAG_TYPE]: id }],
-    isDisabled: !canUpdateView,
-  });
-
-  const { dropProps, isDropTarget } = useDrop({
-    ref: dropRef,
-    async onDrop(e) {
-      for (const item of e.items) {
-        if (item.kind === "text" && item.types.has(VIEW_DRAG_TYPE)) {
-          const draggedId = await item.getText(VIEW_DRAG_TYPE);
-          if (draggedId !== id) {
-            onReorder(draggedId, id);
-          }
-        }
-      }
-    },
-  });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    return combine(
+      ...(canUpdateView
+        ? [
+            draggable({
+              element: el,
+              getInitialData: () => ({
+                type: VIEW_DRAG_TYPE,
+                viewId: id,
+              }),
+            }),
+          ]
+        : []),
+      dropTargetForElements({
+        element: el,
+        canDrop: ({ source }) =>
+          source.data.type === VIEW_DRAG_TYPE && source.data.viewId !== id,
+        onDragEnter: () => setIsDropTarget(true),
+        onDragLeave: () => setIsDropTarget(false),
+        onDrop: ({ source }) => {
+          setIsDropTarget(false);
+          onReorderRef.current(source.data.viewId as string, id);
+        },
+      }),
+    );
+  }, [id, canUpdateView]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -322,11 +341,9 @@ const ViewTab = ({
   return (
     <div
       className={cn("relative", isDropTarget && "rounded ring-2 ring-primary")}
-      ref={dropRef}
-      {...dropProps}
+      ref={containerRef}
     >
       <TabsTab
-        {...dragProps}
         className={cn(isActive && "pr-6.5")}
         onClick={onSelect}
         onDoubleClick={(e) => {

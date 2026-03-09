@@ -32,8 +32,14 @@ export function ShortcutHintsOverlay() {
 
   // Cancel overlay when any non-modifier key is pressed with Mod
   // held (the user is executing a shortcut, not browsing hints).
+  // Also cancel on Mod+Click (e.g. multi-select in filesystem).
   // Uses capture phase so it fires before React hotkey handlers.
   useEffect(() => {
+    const cancel = () => {
+      showDialog.cancel();
+      setIsVisible(false);
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) {
         return;
@@ -47,12 +53,21 @@ export function ShortcutHintsOverlay() {
       ) {
         return;
       }
-      showDialog.cancel();
-      setIsVisible(false);
+      cancel();
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        cancel();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    window.addEventListener("mousedown", onMouseDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("mousedown", onMouseDown, true);
+    };
   }, [showDialog]);
 
   useEffect(() => {
