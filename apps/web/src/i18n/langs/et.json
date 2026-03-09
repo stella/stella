@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Failid edukalt üles laaditud",
       "uploading": "Failide üleslaadimine",
       "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud",
+      "uploadingProgress": "{completed, number}/{total, number} üles laaditud",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

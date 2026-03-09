@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",
       "uploading": "Przesyłanie plików",
       "uploadingDescription": "Nie zamykaj tej strony, dopóki pliki nie zostaną przesłane",
+      "uploadingProgress": "{completed, number} z {total, number} przesłano",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

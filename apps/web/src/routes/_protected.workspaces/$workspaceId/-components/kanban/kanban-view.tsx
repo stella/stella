@@ -28,7 +28,10 @@ import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { optionColorsMap } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { uploadFileEntity } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import {
+  uploadFileEntitiesBatched,
+  useBatchUploadLabels,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import {
   useDeleteEntities,
@@ -51,6 +54,7 @@ type KanbanViewProps = {
 
 export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const t = useTranslations();
+  const labels = useBatchUploadLabels();
   const posthog = usePostHog();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
@@ -182,32 +186,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         return;
       }
 
-      const toastId = toastManager.add({
-        type: "loading",
-        title: t("workspaces.files.uploading"),
-        description: t("workspaces.files.uploadingDescription"),
-      });
-
-      const results = await Promise.all(
-        files.map((file) =>
-          uploadFileEntity(file, workspaceId, filePropertyId),
-        ),
-      );
-
-      const failed = results.find(Result.isError);
-      if (failed) {
-        toastManager.update(toastId, {
-          type: "error",
-          title: t("errors.actionFailed"),
-          description: failed.error.message,
-        });
-        return;
-      }
-
-      toastManager.update(toastId, {
-        type: "success",
-        title: t("workspaces.files.uploadedSuccessfully"),
-        description: undefined,
+      const results = await uploadFileEntitiesBatched({
+        files,
+        workspaceId,
+        propertyId: filePropertyId,
+        labels,
+        onError: (error) => captureError(posthog, error),
       });
 
       if (columnValue === null) {

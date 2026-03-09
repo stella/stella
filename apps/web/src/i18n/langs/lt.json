@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
       "uploading": "Failai keliami",
       "uploadingDescription": "Neuždarykite šio puslapio, kol failai bus įkelti",
+      "uploadingProgress": "{completed, number} iš {total, number} įkelta",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

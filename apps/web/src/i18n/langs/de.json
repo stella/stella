@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
       "uploading": "Dateien werden hochgeladen",
       "uploadingDescription": "Schließen Sie diese Seite nicht, bis die Dateien hochgeladen sind",
+      "uploadingProgress": "{completed, number} von {total, number} hochgeladen",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

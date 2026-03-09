@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Súbory úspešne nahrané",
       "uploading": "Nahrávanie súborov",
       "uploadingDescription": "Nezatvárajte túto stránku, kým sa súbory nenahrajú",
+      "uploadingProgress": "{completed, number} z {total, number} nahraných",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

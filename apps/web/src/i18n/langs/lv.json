@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",
       "uploading": "Augšupielādē failus",
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
+      "uploadingProgress": "{completed, number} no {total, number} augšupielādēti",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
