@@ -646,6 +646,8 @@ checksums:
     organization/members/removeMember: 1d77c2ca3768e486fd1fb5df30cb60d9
     organization/members/updateRole: 821c6a0de0b1c94804da5cd2bc871d5e
     organization/roles/admin: 90eb20f1400db82ab874744e47836dc6
+    organization/roles/external: 35eaca00b3aaeb332fea5d0d440bc859
+    organization/roles/intern: e9b130cee343e1e7a517d2a75f831050
     organization/roles/member: 1606dc30b369856b9dba1fe9aec425d2
     organization/roles/owner: 9c0b3aeca046c3ebd3bdc352edc83e88
     organization/settings: 11528aa89ae9935e55dcb54478058775
