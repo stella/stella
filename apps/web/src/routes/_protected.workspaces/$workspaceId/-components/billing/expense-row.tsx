@@ -4,6 +4,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
+
 type Expense = {
   id: string;
   matterId: string;
@@ -52,6 +54,8 @@ export const ExpenseRow = ({
   onDelete,
 }: ExpenseRowProps) => {
   const t = useTranslations();
+  const canUpdateExpense = usePermissions({ expense: ["update"] });
+  const canDeleteExpense = usePermissions({ expense: ["delete"] });
 
   return (
     <div className="group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50">
@@ -103,25 +107,25 @@ export const ExpenseRow = ({
       </span>
 
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {expense.status === "draft" && (
-          <>
-            <Button
-              className="size-7"
-              onClick={() => onEdit(expense.id)}
-              size="icon"
-              variant="ghost"
-            >
-              <PencilIcon className="size-3.5" />
-            </Button>
-            <Button
-              className="size-7 text-destructive"
-              onClick={() => onDelete(expense.id)}
-              size="icon"
-              variant="ghost"
-            >
-              <TrashIcon className="size-3.5" />
-            </Button>
-          </>
+        {expense.status === "draft" && canUpdateExpense && (
+          <Button
+            className="size-7"
+            onClick={() => onEdit(expense.id)}
+            size="icon"
+            variant="ghost"
+          >
+            <PencilIcon className="size-3.5" />
+          </Button>
+        )}
+        {expense.status === "draft" && canDeleteExpense && (
+          <Button
+            className="size-7 text-destructive"
+            onClick={() => onDelete(expense.id)}
+            size="icon"
+            variant="ghost"
+          >
+            <TrashIcon className="size-3.5" />
+          </Button>
         )}
       </div>
     </div>

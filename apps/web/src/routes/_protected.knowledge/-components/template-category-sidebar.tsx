@@ -35,6 +35,7 @@ import {
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 
@@ -63,6 +64,7 @@ export const TemplateCategorySidebar = ({
   onCategoriesChanged,
 }: TemplateCategorySidebarProps) => {
   const t = useTranslations();
+  const canCreateTemplate = usePermissions({ template: ["create"] });
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -102,17 +104,19 @@ export const TemplateCategorySidebar = ({
         ))}
       </nav>
 
-      <div className="border-t p-2">
-        <Button
-          className="w-full justify-start"
-          onClick={() => setCreateOpen(true)}
-          size="sm"
-          variant="ghost"
-        >
-          <PlusIcon />
-          {t("templates.createCategory")}
-        </Button>
-      </div>
+      {canCreateTemplate && (
+        <div className="border-t p-2">
+          <Button
+            className="w-full justify-start"
+            onClick={() => setCreateOpen(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("templates.createCategory")}
+          </Button>
+        </div>
+      )}
 
       <CategoryFormDialog
         onOpenChange={setCreateOpen}
@@ -137,6 +141,8 @@ const CategoryRow = ({
   onCategoriesChanged: () => void;
 }) => {
   const t = useTranslations();
+  const canUpdateTemplate = usePermissions({ template: ["update"] });
+  const canDeleteTemplate = usePermissions({ template: ["delete"] });
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -191,17 +197,21 @@ const CategoryRow = ({
             <MoreHorizontalIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              <PencilIcon />
-              {t("templates.editCategory")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive-foreground"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2Icon />
-              {t("templates.deleteCategory")}
-            </DropdownMenuItem>
+            {canUpdateTemplate && (
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <PencilIcon />
+                {t("templates.editCategory")}
+              </DropdownMenuItem>
+            )}
+            {canDeleteTemplate && (
+              <DropdownMenuItem
+                className="text-destructive-foreground"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2Icon />
+                {t("templates.deleteCategory")}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

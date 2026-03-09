@@ -14,7 +14,7 @@ import {
   updateViewBodySchema,
   updateViewHandler,
 } from "@/api/handlers/views/update-by-id";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const viewsRoute = new Elysia({
@@ -22,6 +22,7 @@ export const viewsRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -33,6 +34,7 @@ export const viewsRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { view: ["create"] },
       invalidateQuery: true,
       body: createViewBodySchema,
     },
@@ -50,6 +52,7 @@ export const viewsRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { view: ["update"] },
       invalidateQuery: true,
       body: reorderViewsBodySchema,
     },
@@ -65,6 +68,7 @@ export const viewsRoute = new Elysia({
             body: ctx.body,
           }),
         {
+          permissions: { view: ["update"] },
           invalidateQuery: true,
           body: updateViewBodySchema,
         },
@@ -77,6 +81,7 @@ export const viewsRoute = new Elysia({
             workspaceId: ctx.workspaceId,
           }),
         {
+          permissions: { view: ["delete"] },
           invalidateQuery: true,
         },
       ),

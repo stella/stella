@@ -9,12 +9,13 @@ import {
   updateOrganizationSettingsBodySchema,
   updateOrganizationSettingsHandler,
 } from "@/api/handlers/organization-settings/update";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const organizationSettingsRoute = new Elysia({
   prefix: "/organization-settings",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({
     validateAuth: true,
   })
@@ -31,6 +32,7 @@ export const organizationSettingsRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { organizationSettings: ["update"] },
       body: updateOrganizationSettingsBodySchema,
     },
   )
@@ -42,6 +44,7 @@ export const organizationSettingsRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { organizationSettings: ["update"] },
       body: previewOrganizationSettingsBodySchema,
     },
   );

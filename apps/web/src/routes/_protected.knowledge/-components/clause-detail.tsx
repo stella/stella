@@ -39,6 +39,7 @@ import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
@@ -118,6 +119,8 @@ export const ClauseDetailView = ({
   onDeleted,
 }: ClauseDetailViewProps) => {
   const t = useTranslations();
+  const canEditClause = usePermissions({ clause: ["update"] });
+  const canDeleteClause = usePermissions({ clause: ["delete"] });
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "ready"; detail: ClauseDetail }
@@ -208,44 +211,48 @@ export const ClauseDetailView = ({
 
         {state.kind === "ready" && (
           <div className="flex gap-1">
-            <Button
-              onClick={() => setEditOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              {t("common.edit")}
-            </Button>
-            <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+            {canEditClause && (
               <Button
-                onClick={() => setDeleteOpen(true)}
+                onClick={() => setEditOpen(true)}
                 size="sm"
-                variant="ghost"
+                variant="outline"
               >
-                <Trash2Icon className="size-4" />
+                {t("common.edit")}
               </Button>
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {t("clauses.deleteClause")}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("clauses.confirmDeleteClause")}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="ghost" />}>
-                    {t("common.cancel")}
-                  </AlertDialogClose>
-                  <Button
-                    disabled={deleting}
-                    onClick={handleDelete}
-                    variant="destructive"
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
+            )}
+            {canDeleteClause && (
+              <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+                <Button
+                  onClick={() => setDeleteOpen(true)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+                <AlertDialogPopup>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("clauses.deleteClause")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("clauses.confirmDeleteClause")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogClose render={<Button variant="ghost" />}>
+                      {t("common.cancel")}
+                    </AlertDialogClose>
+                    <Button
+                      disabled={deleting}
+                      onClick={handleDelete}
+                      variant="destructive"
+                    >
+                      {t("common.delete")}
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogPopup>
+              </AlertDialog>
+            )}
           </div>
         )}
       </div>

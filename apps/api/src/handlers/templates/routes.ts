@@ -56,13 +56,14 @@ import {
   getTemplateVersionHandler,
   listTemplateVersionsHandler,
 } from "@/api/handlers/templates/versions";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 export const templatesRoute = new Elysia({
   prefix: "/templates",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({
     validateAuth: true,
   })
@@ -85,7 +86,11 @@ export const templatesRoute = new Elysia({
         body: ctx.body,
         query: ctx.query,
       }),
-    { body: fillBodySchema, query: fillQuerySchema },
+    {
+      permissions: { template: ["create"] },
+      body: fillBodySchema,
+      query: fillQuerySchema,
+    },
   )
   .post(
     "/manifest",
@@ -114,7 +119,10 @@ export const templatesRoute = new Elysia({
         userId: ctx.user.id,
         body: ctx.body,
       }),
-    { body: createTemplateBodySchema },
+    {
+      permissions: { template: ["create"] },
+      body: createTemplateBodySchema,
+    },
   )
   .get(
     "/:templateId/preview",
@@ -149,6 +157,7 @@ export const templatesRoute = new Elysia({
         query: ctx.query,
       }),
     {
+      permissions: { template: ["create"] },
       params: t.Object({ templateId: tNanoid }),
       body: fillByIdBodySchema,
       query: fillByIdQuerySchema,
@@ -173,6 +182,7 @@ export const templatesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { template: ["update"] },
       params: t.Object({ templateId: tNanoid }),
       body: updateTemplateBodySchema,
     },
@@ -184,7 +194,10 @@ export const templatesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
       }),
-    { params: t.Object({ templateId: tNanoid }) },
+    {
+      permissions: { template: ["delete"] },
+      params: t.Object({ templateId: tNanoid }),
+    },
   )
   // ── Versions ──────────────────────────────────────
   .get(
@@ -230,6 +243,7 @@ export const templatesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { template: ["update"] },
       params: t.Object({ templateId: tNanoid }),
       body: linkClauseBodySchema,
     },
@@ -243,6 +257,7 @@ export const templatesRoute = new Elysia({
         linkId: ctx.params.linkId,
       }),
     {
+      permissions: { template: ["update"] },
       params: t.Object({
         templateId: tNanoid,
         linkId: tNanoid,
@@ -258,6 +273,7 @@ export const templatesRoute = new Elysia({
         linkId: ctx.params.linkId,
       }),
     {
+      permissions: { template: ["update"] },
       params: t.Object({
         templateId: tNanoid,
         linkId: tNanoid,
@@ -284,7 +300,10 @@ export const templateCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
       }),
-    { body: createTemplateCategoryBodySchema },
+    {
+      permissions: { template: ["create"] },
+      body: createTemplateCategoryBodySchema,
+    },
   )
   .post(
     "/:categoryId",
@@ -295,6 +314,7 @@ export const templateCategoriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { template: ["update"] },
       params: t.Object({ categoryId: tNanoid }),
       body: updateTemplateCategoryBodySchema,
     },
@@ -306,5 +326,8 @@ export const templateCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
       }),
-    { params: t.Object({ categoryId: tNanoid }) },
+    {
+      permissions: { template: ["delete"] },
+      params: t.Object({ categoryId: tNanoid }),
+    },
   );

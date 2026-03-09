@@ -25,7 +25,7 @@ export const sessionOptions = queryOptions({
 });
 
 export const roleOptions = queryOptions({
-  staleTime: STALE_TIME.INFINITE,
+  staleTime: STALE_TIME.FIVE.MINUTES,
   queryKey: rootKeys.role,
   queryFn: async () => {
     const result = await authClient.organization.getActiveMemberRole();

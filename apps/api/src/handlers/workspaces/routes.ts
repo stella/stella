@@ -22,13 +22,14 @@ import {
 } from "@/api/handlers/workspaces/workspace-contacts-create";
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateAuth: true,
   })
@@ -46,6 +47,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
       }),
 
     {
+      permissions: { workspace: ["create"] },
       invalidateQuery: true,
       body: createWorkspacesBodySchema,
     },
@@ -95,6 +97,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               body: ctx.body,
             }),
           {
+            permissions: { workspace: ["update"] },
             body: updateWorkspaceBodySchema,
             invalidateQuery: true,
           },
@@ -115,6 +118,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               authToken: ctx.session.token,
             }),
           {
+            permissions: { workspace: ["delete"] },
             invalidateQuery: true,
           },
         )
@@ -132,6 +136,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               body: ctx.body,
             }),
           {
+            permissions: { workspace: ["update"] },
             body: createWorkspaceContactBodySchema,
             invalidateQuery: true,
           },
@@ -144,6 +149,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               workspaceContactId: ctx.params.workspaceContactId,
             }),
           {
+            permissions: { workspace: ["update"] },
             params: t.Object({ workspaceContactId: tNanoid }),
             invalidateQuery: true,
           },

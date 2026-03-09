@@ -10,7 +10,7 @@ import {
   updatePropertyBodySchema,
   updatePropertyHandler,
 } from "@/api/handlers/properties/update-by-id";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const propertiesRoute = new Elysia({
@@ -18,6 +18,7 @@ export const propertiesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -29,6 +30,7 @@ export const propertiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { property: ["create"] },
       invalidateQuery: true,
       body: createPropertyBodySchema,
     },
@@ -49,6 +51,7 @@ export const propertiesRoute = new Elysia({
             body: ctx.body,
           }),
         {
+          permissions: { property: ["update"] },
           invalidateQuery: true,
           body: updatePropertyBodySchema,
         },
@@ -61,6 +64,7 @@ export const propertiesRoute = new Elysia({
             propertyId: ctx.params.propertyId,
           }),
         {
+          permissions: { property: ["delete"] },
           invalidateQuery: true,
         },
       ),

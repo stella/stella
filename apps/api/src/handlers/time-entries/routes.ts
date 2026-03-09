@@ -1,6 +1,10 @@
 import Elysia from "elysia";
 
 import {
+  batchDeleteBodySchema,
+  batchDeleteHandler,
+} from "@/api/handlers/time-entries/batch-delete";
+import {
   batchUpdateBodySchema,
   batchUpdateHandler,
 } from "@/api/handlers/time-entries/batch-update";
@@ -42,7 +46,7 @@ import {
   updateTimeEntryBodySchema,
   updateTimeEntryByIdHandler,
 } from "@/api/handlers/time-entries/update-by-id";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const timeEntriesRoute = new Elysia({
@@ -50,6 +54,7 @@ export const timeEntriesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -80,6 +85,7 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["create"] },
       invalidateQuery: true,
       body: createTimeEntryBodySchema,
     },
@@ -92,6 +98,7 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["update"] },
       invalidateQuery: true,
       body: updateTimeEntryBodySchema,
     },
@@ -104,6 +111,7 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["delete"] },
       invalidateQuery: true,
       body: deleteTimeEntryBodySchema,
     },
@@ -118,6 +126,7 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["create"] },
       invalidateQuery: true,
       body: timerStartBodySchema,
     },
@@ -129,6 +138,7 @@ export const timeEntriesRoute = new Elysia({
         userId: ctx.user.id,
       }),
     {
+      permissions: { timeEntry: ["update"] },
       invalidateQuery: true,
     },
   )
@@ -140,8 +150,22 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["update"] },
       invalidateQuery: true,
       body: batchUpdateBodySchema,
+    },
+  )
+  .delete(
+    "/batch",
+    (ctx) =>
+      batchDeleteHandler({
+        workspaceId: ctx.workspaceId,
+        body: ctx.body,
+      }),
+    {
+      permissions: { timeEntry: ["delete"] },
+      invalidateQuery: true,
+      body: batchDeleteBodySchema,
     },
   )
   .post(
@@ -152,6 +176,7 @@ export const timeEntriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { timeEntry: ["update"] },
       invalidateQuery: true,
       body: splitEntryBodySchema,
     },

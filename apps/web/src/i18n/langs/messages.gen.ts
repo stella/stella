@@ -763,6 +763,8 @@ type Messages = {
     };
     "roles": {
       "admin": "Admin";
+      "external": "External";
+      "intern": "Intern";
       "member": "Member";
       "owner": "Owner";
     };

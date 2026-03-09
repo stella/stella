@@ -30,6 +30,7 @@
         "@libpdf/core": "^0.2.10",
         "@litko/yara-x": "^0.5.0",
         "@openrouter/ai-sdk-provider": "^2.2.3",
+        "@stella/permissions": "workspace:*",
         "@stella/rivet": "workspace:*",
         "@stella/transactional": "workspace:*",
         "@t3-oss/env-core": "catalog:",
@@ -79,6 +80,7 @@
         "@radix-ui/react-slot": "^1.2.4",
         "@rivetkit/react": "catalog:rivet",
         "@stella/api": "workspace:*",
+        "@stella/permissions": "workspace:*",
         "@stella/rivet": "workspace:*",
         "@stella/ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
@@ -147,6 +149,17 @@
         "typescript": "catalog:",
         "vite-tsconfig-paths": "^6.1.1",
         "vitest": "^4.0.18",
+      },
+    },
+    "packages/permissions": {
+      "name": "@stella/permissions",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-auth": "catalog:",
+      },
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
+        "typescript": "catalog:",
       },
     },
     "packages/prettier-config": {
@@ -1318,6 +1331,8 @@
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
     "@stella/api": ["@stella/api@workspace:apps/api"],
+
+    "@stella/permissions": ["@stella/permissions@workspace:packages/permissions"],
 
     "@stella/prettier-config": ["@stella/prettier-config@workspace:packages/prettier-config"],
 

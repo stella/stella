@@ -12,6 +12,7 @@ import { Button } from "@stella/ui/components/button";
 import { Checkbox } from "@stella/ui/components/checkbox";
 import { cn } from "@stella/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
@@ -55,6 +56,8 @@ export const TimeEntryRow = ({
   workspaceId,
 }: TimeEntryRowProps) => {
   const t = useTranslations();
+  const canUpdateEntry = usePermissions({ timeEntry: ["update"] });
+  const canDeleteEntry = usePermissions({ timeEntry: ["delete"] });
   const [splitOpen, setSplitOpen] = useState(false);
 
   const isActive = entry.timerStartedAt !== null;
@@ -129,7 +132,7 @@ export const TimeEntryRow = ({
 
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {/* Approval actions */}
-          {entry.status === "draft" && onStatusChange && (
+          {entry.status === "draft" && onStatusChange && canUpdateEntry && (
             <Button
               className="size-7"
               onClick={() => onStatusChange(entry.id, "approved")}
@@ -140,7 +143,7 @@ export const TimeEntryRow = ({
               <CheckCheckIcon className="size-3.5" />
             </Button>
           )}
-          {entry.status === "approved" && onStatusChange && (
+          {entry.status === "approved" && onStatusChange && canUpdateEntry && (
             <Button
               className="size-7"
               onClick={() => onStatusChange(entry.id, "draft")}
@@ -153,37 +156,38 @@ export const TimeEntryRow = ({
           )}
 
           {/* Split */}
-          {(entry.status === "draft" || entry.status === "approved") && (
-            <Button
-              className="size-7"
-              onClick={() => setSplitOpen(true)}
-              size="icon"
-              title={t("billing.split.splitEntry")}
-              variant="ghost"
-            >
-              <ScissorsIcon className="size-3.5" />
-            </Button>
-          )}
-
-          {entry.status === "draft" && (
-            <>
+          {(entry.status === "draft" || entry.status === "approved") &&
+            canUpdateEntry && (
               <Button
                 className="size-7"
-                onClick={() => onEdit(entry.id)}
+                onClick={() => setSplitOpen(true)}
                 size="icon"
+                title={t("billing.split.splitEntry")}
                 variant="ghost"
               >
-                <PencilIcon className="size-3.5" />
+                <ScissorsIcon className="size-3.5" />
               </Button>
-              <Button
-                className="size-7 text-destructive"
-                onClick={() => onDelete(entry.id)}
-                size="icon"
-                variant="ghost"
-              >
-                <TrashIcon className="size-3.5" />
-              </Button>
-            </>
+            )}
+
+          {entry.status === "draft" && canUpdateEntry && (
+            <Button
+              className="size-7"
+              onClick={() => onEdit(entry.id)}
+              size="icon"
+              variant="ghost"
+            >
+              <PencilIcon className="size-3.5" />
+            </Button>
+          )}
+          {entry.status === "draft" && canDeleteEntry && (
+            <Button
+              className="size-7 text-destructive"
+              onClick={() => onDelete(entry.id)}
+              size="icon"
+              variant="ghost"
+            >
+              <TrashIcon className="size-3.5" />
+            </Button>
           )}
         </div>
       </div>

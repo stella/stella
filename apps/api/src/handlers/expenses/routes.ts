@@ -16,7 +16,7 @@ import {
   updateExpenseBodySchema,
   updateExpenseHandler,
 } from "@/api/handlers/expenses/update";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const expensesRoute = new Elysia({
@@ -24,6 +24,7 @@ export const expensesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -48,6 +49,7 @@ export const expensesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { expense: ["create"] },
       invalidateQuery: true,
       body: createExpenseBodySchema,
     },
@@ -60,6 +62,7 @@ export const expensesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { expense: ["update"] },
       invalidateQuery: true,
       body: updateExpenseBodySchema,
     },
@@ -72,6 +75,7 @@ export const expensesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { expense: ["delete"] },
       invalidateQuery: true,
       body: deleteExpenseBodySchema,
     },

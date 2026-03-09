@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Adminisztrátor",
+      "external": "Külső",
+      "intern": "Gyakornok",
       "member": "Tag",
       "owner": "Tulajdonos"
     },

@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Administratorius",
+      "external": "Išorinis",
+      "intern": "Praktikantas",
       "member": "Narys",
       "owner": "Savininkas"
     },

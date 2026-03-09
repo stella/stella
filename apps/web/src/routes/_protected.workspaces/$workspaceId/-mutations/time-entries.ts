@@ -171,12 +171,7 @@ export const useStopTimer = () => {
 type BatchUpdateVars = {
   workspaceId: string;
   ids: string[];
-  action:
-    | "approve"
-    | "revert_to_draft"
-    | "mark_billable"
-    | "mark_non_billable"
-    | "delete";
+  action: "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
 };
 
 export const useBatchUpdateTimeEntries = () => {
@@ -189,6 +184,35 @@ export const useBatchUpdateTimeEntries = () => {
       }).batch.post({
         queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      captureError(posthog, error);
+    },
+  });
+};
+
+type BatchDeleteVars = {
+  workspaceId: string;
+  ids: string[];
+};
+
+export const useBatchDeleteTimeEntries = () => {
+  const posthog = usePostHog();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
+      const response = await api["time-entries"]({
+        workspaceId,
+      }).batch.delete({
+        queryKey: timeEntriesKeys.all(workspaceId),
+        ids,
       });
 
       if (response.error) {

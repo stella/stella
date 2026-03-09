@@ -40,6 +40,7 @@ import {
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
@@ -94,6 +95,7 @@ export const ClauseList = ({
   loading,
 }: ClauseListProps) => {
   const t = useTranslations();
+  const canCreateClause = usePermissions({ clause: ["create"] });
   const [searchInput, setSearchInput] = useState("");
   const [importOpen, setImportOpen] = useState(false);
 
@@ -164,22 +166,26 @@ export const ClauseList = ({
             />
           </div>
           <div className="flex gap-1">
-            <Button
-              onClick={() => setImportOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              <UploadIcon />
-              {t("clauses.import")}
-            </Button>
+            {canCreateClause && (
+              <Button
+                onClick={() => setImportOpen(true)}
+                size="sm"
+                variant="outline"
+              >
+                <UploadIcon />
+                {t("clauses.import")}
+              </Button>
+            )}
             <Button onClick={handleExport} size="sm" variant="outline">
               <DownloadIcon />
               {t("clauses.export")}
             </Button>
-            <Button onClick={onNewClause} size="sm">
-              <PlusIcon />
-              {t("clauses.createClause")}
-            </Button>
+            {canCreateClause && (
+              <Button onClick={onNewClause} size="sm">
+                <PlusIcon />
+                {t("clauses.createClause")}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -201,8 +207,8 @@ export const ClauseList = ({
           <ul className="divide-y">
             {clauses.map((clause) => (
               <ClauseRow
-                clause={clause}
                 categories={categories}
+                clause={clause}
                 key={clause.id}
                 onSelect={() => onClauseSelect(clause)}
               />
@@ -289,6 +295,7 @@ const CategorySidebar = ({
   onCategoriesChanged: () => void;
 }) => {
   const t = useTranslations();
+  const canCreateClause = usePermissions({ clause: ["create"] });
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -328,17 +335,19 @@ const CategorySidebar = ({
         ))}
       </nav>
 
-      <div className="border-t p-2">
-        <Button
-          className="w-full justify-start"
-          onClick={() => setCreateOpen(true)}
-          size="sm"
-          variant="ghost"
-        >
-          <PlusIcon />
-          {t("clauses.createCategory")}
-        </Button>
-      </div>
+      {canCreateClause && (
+        <div className="border-t p-2">
+          <Button
+            className="w-full justify-start"
+            onClick={() => setCreateOpen(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("clauses.createCategory")}
+          </Button>
+        </div>
+      )}
 
       <CategoryFormDialog
         onOpenChange={setCreateOpen}
@@ -363,6 +372,8 @@ const CategoryRow = ({
   onCategoriesChanged: () => void;
 }) => {
   const t = useTranslations();
+  const canUpdateClause = usePermissions({ clause: ["update"] });
+  const canDeleteClause = usePermissions({ clause: ["delete"] });
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -417,17 +428,21 @@ const CategoryRow = ({
             <MoreHorizontalIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              <PencilIcon />
-              {t("clauses.editCategory")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive-foreground"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2Icon />
-              {t("clauses.deleteCategory")}
-            </DropdownMenuItem>
+            {canUpdateClause && (
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <PencilIcon />
+                {t("clauses.editCategory")}
+              </DropdownMenuItem>
+            )}
+            {canDeleteClause && (
+              <DropdownMenuItem
+                className="text-destructive-foreground"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2Icon />
+                {t("clauses.deleteCategory")}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

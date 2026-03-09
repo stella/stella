@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@stella/ui/components/skeleton";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { getMatterSwatch, MATTER_SWATCHES } from "@/lib/matter-colors";
 import {
   useDeleteContact,
@@ -62,6 +63,7 @@ function ContactDetailPage() {
   const queryClient = useQueryClient();
   const { data: contact } = useSuspenseQuery(contactOptions(contactId));
   const deleteContact = useDeleteContact();
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const handleDelete = () => {
@@ -115,16 +117,18 @@ function ContactDetailPage() {
             {t(`contacts.type.${contact.type}`)}
           </span>
         </div>
-        <div className="ml-auto">
-          <Button
-            disabled={deleteContact.isPending}
-            onClick={() => setIsDeleteOpen(true)}
-            size="sm"
-            variant="destructive"
-          >
-            {t("contacts.deleteContact")}
-          </Button>
-        </div>
+        {canDeleteContact && (
+          <div className="ml-auto">
+            <Button
+              disabled={deleteContact.isPending}
+              onClick={() => setIsDeleteOpen(true)}
+              size="sm"
+              variant="destructive"
+            >
+              {t("contacts.deleteContact")}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

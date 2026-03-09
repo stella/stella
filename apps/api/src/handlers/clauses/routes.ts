@@ -36,7 +36,7 @@ import {
   updateVariantBodySchema,
   updateVariantHandler,
 } from "@/api/handlers/clauses/variants";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 // ── Categories ──────────────────────────────────────
@@ -45,6 +45,7 @@ export const clauseCategoriesRoute = new Elysia({
   prefix: "/clause-categories",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
   .get("/", (ctx) =>
     listCategoriesHandler({
@@ -58,7 +59,10 @@ export const clauseCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
       }),
-    { body: createCategoryBodySchema },
+    {
+      permissions: { clause: ["create"] },
+      body: createCategoryBodySchema,
+    },
   )
   .post(
     "/:categoryId",
@@ -69,6 +73,7 @@ export const clauseCategoriesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { clause: ["update"] },
       params: t.Object({ categoryId: tNanoid }),
       body: updateCategoryBodySchema,
     },
@@ -80,7 +85,10 @@ export const clauseCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
       }),
-    { params: t.Object({ categoryId: tNanoid }) },
+    {
+      permissions: { clause: ["delete"] },
+      params: t.Object({ categoryId: tNanoid }),
+    },
   );
 
 // ── Clauses ─────────────────────────────────────────
@@ -89,6 +97,7 @@ export const clausesRoute = new Elysia({
   prefix: "/clauses",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
   .get(
     "/",
@@ -107,7 +116,10 @@ export const clausesRoute = new Elysia({
         userId: ctx.user.id,
         body: ctx.body,
       }),
-    { body: createClauseBodySchema },
+    {
+      permissions: { clause: ["create"] },
+      body: createClauseBodySchema,
+    },
   )
   .get(
     "/export",
@@ -126,7 +138,10 @@ export const clausesRoute = new Elysia({
         userId: ctx.user.id,
         body: ctx.body,
       }),
-    { body: importBodySchema },
+    {
+      permissions: { clause: ["create"] },
+      body: importBodySchema,
+    },
   )
   .get(
     "/:clauseId",
@@ -146,6 +161,7 @@ export const clausesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { clause: ["update"] },
       params: t.Object({ clauseId: tNanoid }),
       body: updateClauseBodySchema,
     },
@@ -157,7 +173,10 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
       }),
-    { params: t.Object({ clauseId: tNanoid }) },
+    {
+      permissions: { clause: ["delete"] },
+      params: t.Object({ clauseId: tNanoid }),
+    },
   )
   // ── Versions ───────────────────────────────────
   .get(
@@ -194,6 +213,7 @@ export const clausesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { clause: ["create"] },
       params: t.Object({ clauseId: tNanoid }),
       body: createVariantBodySchema,
     },
@@ -208,6 +228,7 @@ export const clausesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { clause: ["update"] },
       params: t.Object({
         clauseId: tNanoid,
         variantId: tNanoid,
@@ -224,6 +245,7 @@ export const clausesRoute = new Elysia({
         variantId: ctx.params.variantId,
       }),
     {
+      permissions: { clause: ["delete"] },
       params: t.Object({
         clauseId: tNanoid,
         variantId: tNanoid,

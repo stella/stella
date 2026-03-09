@@ -16,7 +16,7 @@ import {
   updateBillingCodeBodySchema,
   updateBillingCodeHandler,
 } from "@/api/handlers/billing-codes/update";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const billingCodesRoute = new Elysia({
@@ -24,6 +24,7 @@ export const billingCodesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -47,6 +48,7 @@ export const billingCodesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { billingCode: ["create"] },
       invalidateQuery: true,
       body: createBillingCodeBodySchema,
     },
@@ -59,6 +61,7 @@ export const billingCodesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { billingCode: ["update"] },
       invalidateQuery: true,
       body: updateBillingCodeBodySchema,
     },
@@ -71,6 +74,7 @@ export const billingCodesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { billingCode: ["delete"] },
       invalidateQuery: true,
       body: deleteBillingCodeBodySchema,
     },

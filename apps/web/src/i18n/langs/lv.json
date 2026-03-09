@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Administrators",
+      "external": "Ārējais",
+      "intern": "Praktikants",
       "member": "Dalībnieks",
       "owner": "Īpašnieks"
     },

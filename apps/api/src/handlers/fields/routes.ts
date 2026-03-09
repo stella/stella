@@ -4,12 +4,13 @@ import {
   upsertFieldBodySchema,
   upsertFieldHandler,
 } from "@/api/handlers/fields/upsert-by-id";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -21,6 +22,7 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["update"] },
       invalidateQuery: true,
       body: upsertFieldBodySchema,
     },
