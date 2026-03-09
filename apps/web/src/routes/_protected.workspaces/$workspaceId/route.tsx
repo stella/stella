@@ -3,6 +3,8 @@ import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
 import { api } from "@/lib/api";
+import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { PeekPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-panel";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
@@ -20,6 +22,17 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       ["last-active"].post()
       .catch(() => undefined);
   },
+  loader: ({ context, params }) =>
+    context.queryClient.ensureQueryData(workspaceOptions(params.workspaceId)),
+  head: ({ loaderData }) => ({
+    meta: [
+      {
+        title: loaderData?.name
+          ? pageTitleLiteral(loaderData.name)
+          : pageTitle("common.matters"),
+      },
+    ],
+  }),
 });
 
 function RouteComponent() {

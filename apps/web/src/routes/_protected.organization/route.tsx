@@ -51,6 +51,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { pageTitle } from "@/lib/page-title";
 import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
 import {
@@ -77,6 +78,9 @@ const searchSchema = v.object({
 });
 
 export const Route = createFileRoute("/_protected/organization")({
+  head: () => ({
+    meta: [{ title: pageTitle("navigation.organization") }],
+  }),
   beforeLoad: async ({ context }) => {
     const role = await context.queryClient.ensureQueryData(roleOptions);
 

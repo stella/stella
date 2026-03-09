@@ -76,7 +76,7 @@
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
-    "signInToStella": "Prihlásiť sa do Stella",
+    "signInToStella": "Prihlásiť sa do stella",
     "signOut": "Odhlásiť sa",
     "slugLabel": "Slug",
     "slugPlaceholder": "moja-organizacia",
@@ -652,6 +652,12 @@
     "title": "Spätná väzba",
     "trigger": "Spätná väzba"
   },
+  "filters": {
+    "contains": "obsahuje",
+    "eq": "rovná sa",
+    "is_empty": "je prázdne",
+    "neq": "nerovná sa"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Pridať polia",
       "aiGenerated": "Vygenerované AI",
-      "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Vymazať pohľad",
       "failedToChangeViewType": "Failed to change view type",

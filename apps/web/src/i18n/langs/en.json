@@ -76,7 +76,7 @@
     "selectOrganization": "Select an organization",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
-    "signInToStella": "Sign in to Stella",
+    "signInToStella": "Sign in to stella",
     "signOut": "Sign Out",
     "slugLabel": "Slug",
     "slugPlaceholder": "my-organization",
@@ -589,12 +589,6 @@
       "person": "Person"
     }
   },
-  "filters": {
-    "contains": "contains",
-    "eq": "equals",
-    "is_empty": "is empty",
-    "neq": "not equals"
-  },
   "errors": {
     "actionFailed": "Action failed",
     "failedToAcceptInvitation": "Failed to accept invitation",
@@ -657,6 +651,12 @@
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty",
     "title": "Feedback",
     "trigger": "Feedback"
+  },
+  "filters": {
+    "contains": "contains",
+    "eq": "equals",
+    "is_empty": "is empty",
+    "neq": "not equals"
   },
   "knowledge": {
     "sections": {

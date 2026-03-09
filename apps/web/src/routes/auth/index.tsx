@@ -19,6 +19,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
+import { pageTitle } from "@/lib/page-title";
 import { captureError } from "@/lib/posthog/utils";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
 import { toFormErrors } from "@/lib/schema";
@@ -28,6 +29,9 @@ const searchSchema = v.object({
 });
 
 export const Route = createFileRoute("/auth/")({
+  head: () => ({
+    meta: [{ title: pageTitle("auth.signIn") }],
+  }),
   validateSearch: searchSchema,
   beforeLoad: ({ context, search }) => {
     if (context.session) {

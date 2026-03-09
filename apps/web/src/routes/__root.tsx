@@ -19,6 +19,11 @@ export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
   component: RootComponent,
+  // Document head management via route `head` option.
+  // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
+  head: () => ({
+    meta: [{ title: "stella" }],
+  }),
   beforeLoad: async ({ context }) => {
     const sessionData =
       await context.queryClient.ensureQueryData(sessionOptions);

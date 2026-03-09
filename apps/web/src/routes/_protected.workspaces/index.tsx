@@ -64,6 +64,7 @@ import { cn } from "@stella/ui/lib/utils";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
+import { pageTitle } from "@/lib/page-title";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
@@ -81,6 +82,9 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 export const Route = createFileRoute("/_protected/workspaces/")({
+  head: () => ({
+    meta: [{ title: pageTitle("common.matters") }],
+  }),
   component: RouteComponent,
   pendingComponent: () => (
     <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">

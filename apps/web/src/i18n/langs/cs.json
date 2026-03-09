@@ -76,7 +76,7 @@
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
-    "signInToStella": "Přihlásit se do Stella",
+    "signInToStella": "Přihlásit se do stella",
     "signOut": "Odhlásit se",
     "slugLabel": "Slug",
     "slugPlaceholder": "moje-organizace",
@@ -652,6 +652,12 @@
     "title": "Zpětná vazba",
     "trigger": "Zpětná vazba"
   },
+  "filters": {
+    "contains": "obsahuje",
+    "eq": "rovná se",
+    "is_empty": "je prázdné",
+    "neq": "nerovná se"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Přidat pole",
       "aiGenerated": "Generováno AI",
-      "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Smazat pohled",
       "failedToChangeViewType": "Failed to change view type",

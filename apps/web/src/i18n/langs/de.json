@@ -76,7 +76,7 @@
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
-    "signInToStella": "Bei Stella anmelden",
+    "signInToStella": "Bei stella anmelden",
     "signOut": "Abmelden",
     "slugLabel": "Slug",
     "slugPlaceholder": "meine-organisation",
@@ -652,6 +652,12 @@
     "title": "Feedback",
     "trigger": "Feedback"
   },
+  "filters": {
+    "contains": "enthält",
+    "eq": "gleich",
+    "is_empty": "ist leer",
+    "neq": "ungleich"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Felder hinzufügen",
       "aiGenerated": "KI-generiert",
-      "cannotDeleteRequired": "Mindestens eine Ansicht dieses Typs ist erforderlich",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ansicht löschen",
       "failedToChangeViewType": "Failed to change view type",
