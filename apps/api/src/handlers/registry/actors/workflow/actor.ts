@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actor, UserError } from "rivetkit";
 
-import { db } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { advanceQueueAction } from "@/api/handlers/registry/actors/workflow/advance-queue";
 import { finishWorkflowAction } from "@/api/handlers/registry/actors/workflow/finish-workflow";
@@ -74,7 +73,7 @@ export const workflowActor = actor({
       rawInput: StartWorkflowSchema,
     ): Promise<StartWorkflowReturn> => {
       const input = validateActorInput(startWorkflowSchema, rawInput);
-      const { workspaceId } = c.conn.state;
+      const { workspaceId, scopedDb } = c.conn.state;
       if (c.state.isRunning) {
         c.log.warn("Workflow already running");
         return { status: "already-running" };
@@ -88,30 +87,17 @@ export const workflowActor = actor({
       });
 
       const nestedResult = await Result.tryPromise(async () => {
-        const BATCH_SIZE = 200;
-        const entityRows: {
-          id: string;
-          kind: string;
-        }[] = [];
-        let offset = 0;
-        for (;;) {
-          const batch = await db
-            .select({
-              id: entities.id,
-              kind: entities.kind,
-            })
+        const entityRows = await scopedDb((tx) =>
+          tx
+            .select({ id: entities.id, kind: entities.kind })
             .from(entities)
-            .where(eq(entities.workspaceId, workspaceId))
-            .limit(BATCH_SIZE)
-            .offset(offset);
-          entityRows.push(...batch);
-          if (batch.length < BATCH_SIZE) {
-            break;
-          }
-          offset += BATCH_SIZE;
-        }
+            .where(eq(entities.workspaceId, workspaceId)),
+        );
 
-        const executionPlanData = await getExecutionPlanData(workspaceId);
+        const executionPlanData = await getExecutionPlanData(
+          workspaceId,
+          scopedDb,
+        );
         const executionPlan = getPropertyExecutionPlan(executionPlanData);
 
         c.state.executionPlan = executionPlan;

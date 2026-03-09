@@ -85,6 +85,7 @@ export const templatesRoute = new Elysia({
         userId: ctx.user.id,
         body: ctx.body,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["create"] },
@@ -108,6 +109,7 @@ export const templatesRoute = new Elysia({
       listTemplatesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: listTemplatesQuerySchema },
   )
@@ -118,6 +120,7 @@ export const templatesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["create"] },
@@ -130,6 +133,7 @@ export const templatesRoute = new Elysia({
       previewTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
+        scopedDb: ctx.scopedDb,
       }),
     { params: t.Object({ templateId: tNanoid }) },
   )
@@ -171,6 +175,7 @@ export const templatesRoute = new Elysia({
       getTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
+        scopedDb: ctx.scopedDb,
       }),
     { params: t.Object({ templateId: tNanoid }) },
   )
@@ -182,6 +187,7 @@ export const templatesRoute = new Elysia({
         userId: ctx.user.id,
         templateId: ctx.params.templateId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["update"] },
@@ -195,6 +201,7 @@ export const templatesRoute = new Elysia({
       deleteTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["delete"] },
@@ -208,6 +215,7 @@ export const templatesRoute = new Elysia({
       listTemplateVersionsHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
+        scopedDb: ctx.scopedDb,
       }),
     { params: t.Object({ templateId: tNanoid }) },
   )
@@ -218,6 +226,7 @@ export const templatesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         versionId: ctx.params.versionId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       params: t.Object({
@@ -297,6 +306,7 @@ export const templateCategoriesRoute = new Elysia({
   .get("/", (ctx) =>
     listTemplateCategoriesHandler({
       organizationId: ctx.session.activeOrganizationId,
+      scopedDb: ctx.scopedDb,
     }),
   )
   .put(
@@ -305,6 +315,7 @@ export const templateCategoriesRoute = new Elysia({
       createTemplateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["create"] },
@@ -318,6 +329,7 @@ export const templateCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["update"] },
@@ -331,6 +343,7 @@ export const templateCategoriesRoute = new Elysia({
       deleteTemplateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { template: ["delete"] },

@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateCategories } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -30,26 +30,30 @@ type UpdateBody = Static<typeof updateTemplateCategoryBodySchema>;
 // ── List ────────────────────────────────────────────
 
 type ListProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
 };
 
 export const listTemplateCategoriesHandler = async ({
+  scopedDb,
   organizationId,
 }: ListProps) => {
-  const result = await db.query.templateCategories.findMany({
-    where: { organizationId: { eq: organizationId } },
-    columns: {
-      id: true,
-      parentId: true,
-      name: true,
-      description: true,
-      sortOrder: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: { sortOrder: "asc" },
-    limit: LIMITS.templateCategoriesCount,
-  });
+  const result = await scopedDb((tx) =>
+    tx.query.templateCategories.findMany({
+      where: { organizationId: { eq: organizationId } },
+      columns: {
+        id: true,
+        parentId: true,
+        name: true,
+        description: true,
+        sortOrder: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { sortOrder: "asc" },
+      limit: LIMITS.templateCategoriesCount,
+    }),
+  );
 
   return { categories: result };
 };
@@ -57,30 +61,26 @@ export const listTemplateCategoriesHandler = async ({
 // ── Create ──────────────────────────────────────────
 
 type CreateProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   body: CreateBody;
 };
 
 export const createTemplateCategoryHandler = async ({
+  scopedDb,
   organizationId,
   body,
 }: CreateProps) => {
-  const existingCount = await db.$count(
-    templateCategories,
-    eq(templateCategories.organizationId, organizationId),
-  );
-
-  if (existingCount >= LIMITS.templateCategoriesCount) {
-    return status(400, {
-      message: "Category limit reached",
-    });
-  }
-
   if (body.parentId) {
-    const parent = await db.query.templateCategories.findFirst({
-      where: { id: body.parentId, organizationId: { eq: organizationId } },
-      columns: { id: true },
-    });
+    const parent = await scopedDb((tx) =>
+      tx.query.templateCategories.findFirst({
+        where: {
+          id: body.parentId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    );
 
     if (!parent) {
       return status(404, {
@@ -89,60 +89,86 @@ export const createTemplateCategoryHandler = async ({
     }
   }
 
-  const [inserted] = await db
-    .insert(templateCategories)
-    .values({
-      id: nanoid(),
-      organizationId,
-      parentId: body.parentId ?? null,
-      name: body.name,
-      description: body.description ?? null,
-    })
-    .returning({
-      id: templateCategories.id,
-      parentId: templateCategories.parentId,
-      name: templateCategories.name,
-      description: templateCategories.description,
-      sortOrder: templateCategories.sortOrder,
-      createdAt: templateCategories.createdAt,
-    });
+  // Advisory lock + count + insert in one transaction to
+  // prevent TOCTOU on the category limit.
+  return scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
+    );
 
-  return inserted;
+    const existingCount = await tx.$count(
+      templateCategories,
+      eq(templateCategories.organizationId, organizationId),
+    );
+
+    if (existingCount >= LIMITS.templateCategoriesCount) {
+      return status(400, {
+        message: "Category limit reached",
+      });
+    }
+
+    const [inserted] = await tx
+      .insert(templateCategories)
+      .values({
+        id: nanoid(),
+        organizationId,
+        parentId: body.parentId ?? null,
+        name: body.name,
+        description: body.description ?? null,
+      })
+      .returning({
+        id: templateCategories.id,
+        parentId: templateCategories.parentId,
+        name: templateCategories.name,
+        description: templateCategories.description,
+        sortOrder: templateCategories.sortOrder,
+        createdAt: templateCategories.createdAt,
+      });
+
+    return inserted;
+  });
 };
 
 // ── Update ──────────────────────────────────────────
 
 type UpdateProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   categoryId: string;
   body: UpdateBody;
 };
 
 export const updateTemplateCategoryHandler = async ({
+  scopedDb,
   organizationId,
   categoryId,
   body,
 }: UpdateProps) => {
-  const existing = await db.query.templateCategories.findFirst({
-    where: { id: categoryId, organizationId: { eq: organizationId } },
-    columns: { id: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.templateCategories.findFirst({
+      where: { id: categoryId, organizationId: { eq: organizationId } },
+      columns: { id: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Category not found" });
   }
 
-  if (body.parentId) {
-    if (body.parentId === categoryId) {
+  const parentId = body.parentId;
+  if (parentId) {
+    if (parentId === categoryId) {
       return status(400, {
         message: "Category cannot be its own parent",
       });
     }
 
-    const parent = await db.query.templateCategories.findFirst({
-      where: { id: body.parentId, organizationId: { eq: organizationId } },
-      columns: { id: true, parentId: true },
-    });
+    const parent = await scopedDb((tx) =>
+      tx.query.templateCategories.findFirst({
+        where: { id: parentId, organizationId: { eq: organizationId } },
+        columns: { id: true, parentId: true },
+      }),
+    );
 
     if (!parent) {
       return status(404, {
@@ -152,7 +178,7 @@ export const updateTemplateCategoryHandler = async ({
 
     // Walk the ancestor chain to detect cycles
     const visited = new Set([categoryId]);
-    let checkId: string | null = body.parentId;
+    let checkId: string | null = parentId;
     while (checkId) {
       if (visited.has(checkId)) {
         return status(400, {
@@ -160,14 +186,17 @@ export const updateTemplateCategoryHandler = async ({
         });
       }
       visited.add(checkId);
-      const ancestor: { parentId: string | null } | undefined =
-        await db.query.templateCategories.findFirst({
-          where: {
-            id: checkId,
-            organizationId: { eq: organizationId },
-          },
-          columns: { parentId: true },
-        });
+      const currentId: string = checkId;
+      const ancestor: { parentId: string | null } | undefined = await scopedDb(
+        (tx) =>
+          tx.query.templateCategories.findFirst({
+            where: {
+              id: currentId,
+              organizationId: { eq: organizationId },
+            },
+            columns: { parentId: true },
+          }),
+      );
       checkId = ancestor?.parentId ?? null;
     }
   }
@@ -177,23 +206,25 @@ export const updateTemplateCategoryHandler = async ({
     updatedAt: new Date(),
   };
 
-  const [updated] = await db
-    .update(templateCategories)
-    .set(updates)
-    .where(
-      and(
-        eq(templateCategories.id, categoryId),
-        eq(templateCategories.organizationId, organizationId),
-      ),
-    )
-    .returning({
-      id: templateCategories.id,
-      parentId: templateCategories.parentId,
-      name: templateCategories.name,
-      description: templateCategories.description,
-      sortOrder: templateCategories.sortOrder,
-      updatedAt: templateCategories.updatedAt,
-    });
+  const [updated] = await scopedDb((tx) =>
+    tx
+      .update(templateCategories)
+      .set(updates)
+      .where(
+        and(
+          eq(templateCategories.id, categoryId),
+          eq(templateCategories.organizationId, organizationId),
+        ),
+      )
+      .returning({
+        id: templateCategories.id,
+        parentId: templateCategories.parentId,
+        name: templateCategories.name,
+        description: templateCategories.description,
+        sortOrder: templateCategories.sortOrder,
+        updatedAt: templateCategories.updatedAt,
+      }),
+  );
 
   return updated;
 };
@@ -201,24 +232,28 @@ export const updateTemplateCategoryHandler = async ({
 // ── Delete ──────────────────────────────────────────
 
 type DeleteProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   categoryId: string;
 };
 
 export const deleteTemplateCategoryHandler = async ({
+  scopedDb,
   organizationId,
   categoryId,
 }: DeleteProps) => {
-  const existing = await db.query.templateCategories.findFirst({
-    where: { id: categoryId, organizationId: { eq: organizationId } },
-    columns: { id: true, parentId: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.templateCategories.findFirst({
+      where: { id: categoryId, organizationId: { eq: organizationId } },
+      columns: { id: true, parentId: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Category not found" });
   }
 
-  await db.transaction(async (tx) => {
+  await scopedDb(async (tx) => {
     // Reassign children to this category's parent (or
     // null). Must happen before the delete; otherwise the
     // FK onDelete: "set null" would null children's

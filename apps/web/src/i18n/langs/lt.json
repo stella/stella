@@ -76,7 +76,7 @@
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
-    "signInToStella": "Prisijunkite prie Stella",
+    "signInToStella": "Prisijungti prie Stella",
     "signOut": "Atsijungti",
     "slugLabel": "Slug",
     "slugPlaceholder": "mano-organizacija",
@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Ryšys nutrūko",
-    "connectionLostDescription": "Nepavyksta pasiekti serverio. Patikrinkite tinklo ryšį.",
     "convertTo": "Konvertuoti į",
     "createdAt": "Sukurta {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Prisegti",
     "print": "Print",
     "properties": "Savybės",
-    "reconnecting": "Jungiamasi iš naujo...",
     "reference": "Reference",
     "rename": "Pervadinti",
     "required": "Privalomas",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "pvz., Išjungti siuntimo mygtuką, kai forma tuščia",
     "title": "Atsiliepimai",
     "trigger": "Atsiliepimai"
-  },
-  "filters": {
-    "contains": "apima",
-    "eq": "lygu",
-    "is_empty": "tuščia",
-    "neq": "nelygu"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Pridėti laukus",
       "aiGenerated": "Sugeneruota AI",
+      "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ištrinti rodinį",
       "failedToChangeViewType": "Failed to change view type",

@@ -1,7 +1,7 @@
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -16,34 +16,27 @@ export const createRateEntryBodySchema = t.Object({
 type CreateRateEntryBodySchema = Static<typeof createRateEntryBodySchema>;
 
 type CreateRateEntryHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   rateTableId: string;
   body: CreateRateEntryBodySchema;
 };
 
 export const createRateEntryHandler = async ({
+  scopedDb,
   workspaceId,
   rateTableId,
   body,
 }: CreateRateEntryHandlerProps) => {
-  const table = await db.query.rateTables.findFirst({
-    where: { id: rateTableId, workspaceId: { eq: workspaceId } },
-    columns: { id: true },
-  });
+  const table = await scopedDb((tx) =>
+    tx.query.rateTables.findFirst({
+      where: { id: rateTableId, workspaceId: { eq: workspaceId } },
+      columns: { id: true },
+    }),
+  );
 
   if (!table) {
     return status(404, { message: "Rate table not found" });
-  }
-
-  const totalEntries = await db.$count(
-    rateEntries,
-    eq(rateEntries.rateTableId, rateTableId),
-  );
-
-  if (totalEntries >= LIMITS.rateEntriesPerTable) {
-    return status(400, {
-      message: "Rate entries limit reached for this table",
-    });
   }
 
   if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
@@ -52,7 +45,8 @@ export const createRateEntryHandler = async ({
     });
   }
 
-  // Check for overlapping date ranges with the same userId
+  // Build overlap conditions outside the transaction
+  // (pure computation, no DB access).
   const userCondition = body.userId
     ? eq(rateEntries.userId, body.userId)
     : isNull(rateEntries.userId);
@@ -75,28 +69,47 @@ export const createRateEntryHandler = async ({
     overlapConditions.push(overlapFromCondition);
   }
 
-  const [overlap] = await db
-    .select({ id: rateEntries.id })
-    .from(rateEntries)
-    .where(and(...overlapConditions))
-    .limit(1);
+  // Advisory lock + count + overlap check + insert in one
+  // transaction to prevent TOCTOU on the limit and overlap.
+  return scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${rateTableId}))`,
+    );
 
-  if (overlap) {
-    return status(400, {
-      message: "Date range overlaps with an existing entry for this user",
-    });
-  }
+    const totalEntries = await tx.$count(
+      rateEntries,
+      eq(rateEntries.rateTableId, rateTableId),
+    );
 
-  const [entry] = await db
-    .insert(rateEntries)
-    .values({
-      rateTableId,
-      userId: body.userId ?? null,
-      hourlyRate: body.hourlyRate,
-      effectiveFrom: body.effectiveFrom,
-      effectiveTo: body.effectiveTo ?? null,
-    })
-    .returning({ id: rateEntries.id });
+    if (totalEntries >= LIMITS.rateEntriesPerTable) {
+      return status(400, {
+        message: "Rate entries limit reached for this table",
+      });
+    }
 
-  return { id: entry.id };
+    const [overlap] = await tx
+      .select({ id: rateEntries.id })
+      .from(rateEntries)
+      .where(and(...overlapConditions))
+      .limit(1);
+
+    if (overlap) {
+      return status(400, {
+        message: "Date range overlaps with an existing entry for this user",
+      });
+    }
+
+    const [entry] = await tx
+      .insert(rateEntries)
+      .values({
+        rateTableId,
+        userId: body.userId ?? null,
+        hourlyRate: body.hourlyRate,
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo ?? null,
+      })
+      .returning({ id: rateEntries.id });
+
+    return { id: entry.id };
+  });
 };

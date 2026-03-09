@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { properties } from "@/api/db/schema";
 import {
   propertyContentTypeSchema,
@@ -20,25 +20,16 @@ export const createPropertyBodySchema = t.Object({
 type CreatePropertyBodySchema = Static<typeof createPropertyBodySchema>;
 
 type CreatePropertyHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: CreatePropertyBodySchema;
 };
 
-export const createPropertyHandler = async ({
+export const createPropertyHandler = ({
+  scopedDb,
   workspaceId,
   body,
 }: CreatePropertyHandlerProps) => {
-  const totalProperties = await db.$count(
-    properties,
-    eq(properties.workspaceId, workspaceId),
-  );
-
-  if (totalProperties >= LIMITS.propertiesCount) {
-    return status(400, {
-      message: "Properties limit reached",
-    });
-  }
-
   let content: PropertyContent | null = null;
   let tool: PropertyTool | null = null;
 
@@ -74,15 +65,31 @@ export const createPropertyHandler = async ({
     return status(422);
   }
 
-  const [inserted] = await db
-    .insert(properties)
-    .values({
-      workspaceId,
-      name: body.name,
-      content,
-      tool,
-    })
-    .returning({ id: properties.id });
+  return scopedDb(async (tx) => {
+    // Lock rows then count to serialize concurrent adds.
+    // PG rejects FOR UPDATE with aggregate functions.
+    const lockedRows = await tx
+      .select({ id: properties.id })
+      .from(properties)
+      .where(eq(properties.workspaceId, workspaceId))
+      .for("update");
 
-  return { id: inserted.id };
+    if (lockedRows.length >= LIMITS.propertiesCount) {
+      return status(400, {
+        message: "Properties limit reached",
+      });
+    }
+
+    const [inserted] = await tx
+      .insert(properties)
+      .values({
+        workspaceId,
+        name: body.name,
+        content,
+        tool,
+      })
+      .returning({ id: properties.id });
+
+    return { id: inserted.id };
+  });
 };

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
@@ -25,6 +25,7 @@ export const fillQuerySchema = t.Object({
 const PDF_MIME_TYPE = "application/pdf";
 
 type FillProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: { file: File; values: string };
@@ -45,6 +46,7 @@ export const containsNull = (value: unknown): boolean => {
 };
 
 export const fillHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   body: { file, values: valuesJson },
@@ -99,8 +101,8 @@ export const fillHandler = async ({
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
 
   // Best-effort analytics; don't block the download
-  db.insert(templateFills)
-    .values({
+  scopedDb((tx) =>
+    tx.insert(templateFills).values({
       organizationId,
       userId,
       format,
@@ -109,7 +111,8 @@ export const fillHandler = async ({
       unusedCount: result.unusedValues.length,
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
-    })
+    }),
+  )
     // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
     .catch(() => {});
 

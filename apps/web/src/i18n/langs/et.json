@@ -76,7 +76,7 @@
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
-    "signInToStella": "Logi sisse Stellasse",
+    "signInToStella": "Logi Stella sisse",
     "signOut": "Logi välja",
     "slugLabel": "Slug",
     "slugPlaceholder": "minu-organisatsioon",
@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Ühendus katkes",
-    "connectionLostDescription": "Serveriga ei saa ühendust. Kontrollige oma võrguühendust.",
     "convertTo": "Teisenda",
     "createdAt": "Loodud {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Kinnita",
     "print": "Print",
     "properties": "Omadused",
-    "reconnecting": "Taasühendamine...",
     "reference": "Reference",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "nt Keela saatmisnupp, kui vorm on tühi",
     "title": "Tagasiside",
     "trigger": "Tagasiside"
-  },
-  "filters": {
-    "contains": "sisaldab",
-    "eq": "võrdub",
-    "is_empty": "on tühi",
-    "neq": "ei võrdu"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Lisa väljad",
       "aiGenerated": "Tehisintellektiga loodud",
+      "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
       "copySuffix": "{name} (copy)",
       "deleteView": "Kustuta vaade",
       "failedToChangeViewType": "Failed to change view type",

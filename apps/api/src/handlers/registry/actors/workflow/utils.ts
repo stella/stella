@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ActionContextOf, ActorContextOf } from "rivetkit";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { fields } from "@/api/db/schema";
 import type {
   FieldContent,
@@ -58,10 +58,11 @@ type SetFieldsContentProps = {
 export const setFieldsContent = async (
   c: ActionContextOf<typeof workflowActor>,
   { entityId, entityVersionId, batch, contentType }: SetFieldsContentProps,
+  scopedDb: ScopedDb,
 ) => {
   const propertyIds = batch.properties.map((p) => p.id);
 
-  const updatedFields = await db.transaction(async (tx) => {
+  const updatedFields = await scopedDb(async (tx) => {
     await tx
       .delete(fields)
       .where(

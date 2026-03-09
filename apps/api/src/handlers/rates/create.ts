@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { rateTables } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
@@ -16,28 +16,33 @@ export const createRateTableBodySchema = t.Object({
 type CreateRateTableBodySchema = Static<typeof createRateTableBodySchema>;
 
 type CreateRateTableHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   body: CreateRateTableBodySchema;
 };
 
-export const createRateTableHandler = async ({
+export const createRateTableHandler = ({
+  scopedDb,
   organizationId,
   workspaceId,
   body,
-}: CreateRateTableHandlerProps) => {
-  const totalTables = await db.$count(
-    rateTables,
-    eq(rateTables.workspaceId, workspaceId),
-  );
+}: CreateRateTableHandlerProps) =>
+  scopedDb(async (tx) => {
+    // Lock rows then count to serialize concurrent adds.
+    // PG rejects FOR UPDATE with aggregate functions.
+    const lockedRows = await tx
+      .select({ id: rateTables.id })
+      .from(rateTables)
+      .where(eq(rateTables.workspaceId, workspaceId))
+      .for("update");
 
-  if (totalTables >= LIMITS.rateTablesPerWorkspace) {
-    return status(400, {
-      message: "Rate tables limit reached for this workspace",
-    });
-  }
+    if (lockedRows.length >= LIMITS.rateTablesPerWorkspace) {
+      return status(400, {
+        message: "Rate tables limit reached for this workspace",
+      });
+    }
 
-  const [table] = await db.transaction(async (tx) => {
     if (body.isDefault) {
       await tx
         .update(rateTables)
@@ -50,7 +55,7 @@ export const createRateTableHandler = async ({
         );
     }
 
-    return tx
+    const [table] = await tx
       .insert(rateTables)
       .values({
         organizationId,
@@ -60,7 +65,6 @@ export const createRateTableHandler = async ({
         isDefault: body.isDefault ?? false,
       })
       .returning({ id: rateTables.id });
-  });
 
-  return { id: table.id };
-};
+    return { id: table.id };
+  });

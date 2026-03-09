@@ -21,6 +21,7 @@ export const templateAnalyticsRoute = new Elysia({
       summaryHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -30,6 +31,7 @@ export const templateAnalyticsRoute = new Elysia({
       fillsByPeriodHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: periodQuerySchema },
   )
@@ -39,6 +41,7 @@ export const templateAnalyticsRoute = new Elysia({
       topTemplatesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -48,6 +51,7 @@ export const templateAnalyticsRoute = new Elysia({
       fillsByUserHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   );

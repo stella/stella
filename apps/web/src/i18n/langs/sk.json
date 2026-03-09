@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Spojenie bolo prerušené",
-    "connectionLostDescription": "Nedá sa pripojiť k serveru. Skontrolujte sieťové pripojenie.",
     "convertTo": "Previesť na",
     "createdAt": "Vytvorené {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Pripnúť",
     "print": "Print",
     "properties": "Vlastnosti",
-    "reconnecting": "Obnovenie spojenia...",
     "reference": "Reference",
     "rename": "Premenovať",
     "required": "Povinné",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "napr. Tlačidlo odoslať by malo byť neaktívne, keď je formulár prázdny",
     "title": "Spätná väzba",
     "trigger": "Spätná väzba"
-  },
-  "filters": {
-    "contains": "obsahuje",
-    "eq": "rovná sa",
-    "is_empty": "je prázdne",
-    "neq": "nerovná sa"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Pridať polia",
       "aiGenerated": "Vygenerované AI",
+      "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Vymazať pohľad",
       "failedToChangeViewType": "Failed to change view type",

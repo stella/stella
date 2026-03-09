@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { ActionContextOf } from "rivetkit";
 
-import { db } from "@/api/db";
+import { createScopedDb } from "@/api/db";
 import { properties } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
@@ -21,11 +21,14 @@ export const finishWorkflowAction = (
     }
 
     const { workspaceId } = parseBrandedWorkflowActorKey(c.key);
+    const scopedDb = createScopedDb([workspaceId]);
 
-    await db
-      .update(properties)
-      .set({ status: "fresh" })
-      .where(eq(properties.workspaceId, workspaceId));
+    await scopedDb((tx) =>
+      tx
+        .update(properties)
+        .set({ status: "fresh" })
+        .where(eq(properties.workspaceId, workspaceId)),
+    );
 
     resetActorState(c, defaultWorkflowState());
 

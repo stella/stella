@@ -55,6 +55,7 @@ export const ratesRoute = new Elysia({
       readRateTablesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readRateTablesQuerySchema,
@@ -67,6 +68,7 @@ export const ratesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["create"] },
@@ -80,6 +82,7 @@ export const ratesRoute = new Elysia({
       updateRateTableHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["update"] },
@@ -93,6 +96,7 @@ export const ratesRoute = new Elysia({
       deleteRateTableHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["delete"] },
@@ -107,6 +111,7 @@ export const ratesRoute = new Elysia({
       resolveRateHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: resolveRateQuerySchema,
@@ -120,6 +125,7 @@ export const ratesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readRateEntriesQuerySchema,
@@ -132,6 +138,7 @@ export const ratesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["create"] },
@@ -146,6 +153,7 @@ export const ratesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["update"] },
@@ -160,6 +168,7 @@ export const ratesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { rate: ["delete"] },

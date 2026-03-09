@@ -64,6 +64,7 @@ export const timeEntriesRoute = new Elysia({
       readTimeEntriesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readTimeEntriesQuerySchema,
@@ -73,6 +74,7 @@ export const timeEntriesRoute = new Elysia({
     readTimeEntryByIdHandler({
       workspaceId: ctx.workspaceId,
       id: ctx.params.id,
+      scopedDb: ctx.scopedDb,
     }),
   )
   .put(
@@ -83,6 +85,7 @@ export const timeEntriesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["create"] },
@@ -96,6 +99,7 @@ export const timeEntriesRoute = new Elysia({
       updateTimeEntryByIdHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["update"] },
@@ -109,6 +113,7 @@ export const timeEntriesRoute = new Elysia({
       deleteTimeEntryByIdHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["delete"] },
@@ -124,6 +129,7 @@ export const timeEntriesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["create"] },
@@ -136,6 +142,7 @@ export const timeEntriesRoute = new Elysia({
     (ctx) =>
       timerStopHandler({
         userId: ctx.user.id,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["update"] },
@@ -148,6 +155,7 @@ export const timeEntriesRoute = new Elysia({
       batchUpdateHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["update"] },
@@ -161,6 +169,7 @@ export const timeEntriesRoute = new Elysia({
       batchDeleteHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["delete"] },
@@ -174,6 +183,7 @@ export const timeEntriesRoute = new Elysia({
       splitEntryHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { timeEntry: ["update"] },
@@ -187,6 +197,7 @@ export const timeEntriesRoute = new Elysia({
       exportCsvHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: exportCsvQuerySchema,
@@ -198,6 +209,7 @@ export const timeEntriesRoute = new Elysia({
       exportLedesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: exportLedesQuerySchema,
@@ -209,6 +221,7 @@ export const timeEntriesRoute = new Elysia({
       exportPdfHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: exportPdfQuerySchema,

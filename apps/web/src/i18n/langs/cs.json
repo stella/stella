@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Spojení ztraceno",
-    "connectionLostDescription": "Nelze se spojit se serverem. Zkontrolujte připojení k síti.",
     "convertTo": "Převést na",
     "createdAt": "Vytvořeno {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Připnout",
     "print": "Print",
     "properties": "Vlastnosti",
-    "reconnecting": "Opětovné připojování...",
     "reference": "Reference",
     "rename": "Přejmenovat",
     "required": "Povinné",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "např. Tlačítko odeslat by mělo být neaktivní, když je formulář prázdný",
     "title": "Zpětná vazba",
     "trigger": "Zpětná vazba"
-  },
-  "filters": {
-    "contains": "obsahuje",
-    "eq": "rovná se",
-    "is_empty": "je prázdný",
-    "neq": "nerovná se"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Přidat pole",
       "aiGenerated": "Generováno AI",
+      "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Smazat pohled",
       "failedToChangeViewType": "Failed to change view type",

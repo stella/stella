@@ -1,16 +1,18 @@
 import { and, countDistinct, eq, gte, lte, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateFills, templates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateRangeQuery } from "../analytics/date-range-schema";
 
 type SummaryHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   query: DateRangeQuery;
 };
 
 export const summaryHandler = async ({
+  scopedDb,
   organizationId,
   query,
 }: SummaryHandlerProps) => {
@@ -24,16 +26,18 @@ export const summaryHandler = async ({
     );
   }
 
-  const rows = await db
-    .select({
-      totalFills: sql<number>`count(*)::int`,
-      uniqueTemplates: countDistinct(templateFills.templateId),
-      pdfCount: sql<number>`count(*) filter (where ${templateFills.format} = 'pdf')::int`,
-      errorCount: sql<number>`count(*) filter (where ${templateFills.status} = 'error')::int`,
-      partialCount: sql<number>`count(*) filter (where ${templateFills.status} = 'partial')::int`,
-    })
-    .from(templateFills)
-    .where(and(...conditions));
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        totalFills: sql<number>`count(*)::int`,
+        uniqueTemplates: countDistinct(templateFills.templateId),
+        pdfCount: sql<number>`count(*) filter (where ${templateFills.format} = 'pdf')::int`,
+        errorCount: sql<number>`count(*) filter (where ${templateFills.status} = 'error')::int`,
+        partialCount: sql<number>`count(*) filter (where ${templateFills.status} = 'partial')::int`,
+      })
+      .from(templateFills)
+      .where(and(...conditions)),
+  );
 
   const result = rows[0];
   if (!result || result.totalFills === 0) {
@@ -48,10 +52,12 @@ export const summaryHandler = async ({
   }
 
   // Total stored templates for context
-  const templateRows = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(templates)
-    .where(eq(templates.organizationId, organizationId));
+  const templateRows = await scopedDb((tx) =>
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(templates)
+      .where(eq(templates.organizationId, organizationId)),
+  );
 
   const templateCount = templateRows[0]?.count ?? 0;
 

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { rateTables } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -13,18 +13,22 @@ export const deleteRateTableBodySchema = t.Object({
 type DeleteRateTableBodySchema = Static<typeof deleteRateTableBodySchema>;
 
 type DeleteRateTableHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: DeleteRateTableBodySchema;
 };
 
 export const deleteRateTableHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: DeleteRateTableHandlerProps) => {
-  const existing = await db.query.rateTables.findFirst({
-    where: { id: body.id, workspaceId: { eq: workspaceId } },
-    columns: { id: true, isDefault: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.rateTables.findFirst({
+      where: { id: body.id, workspaceId: { eq: workspaceId } },
+      columns: { id: true, isDefault: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Rate table not found" });
@@ -38,11 +42,16 @@ export const deleteRateTableHandler = async ({
     });
   }
 
-  await db
-    .delete(rateTables)
-    .where(
-      and(eq(rateTables.id, body.id), eq(rateTables.workspaceId, workspaceId)),
-    );
+  await scopedDb((tx) =>
+    tx
+      .delete(rateTables)
+      .where(
+        and(
+          eq(rateTables.id, body.id),
+          eq(rateTables.workspaceId, workspaceId),
+        ),
+      ),
+  );
 
   return { deleted: true };
 };

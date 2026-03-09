@@ -22,6 +22,7 @@ export const organizationSettingsRoute = new Elysia({
   .get("/", (ctx) =>
     readOrganizationSettingsHandler({
       organizationId: ctx.session.activeOrganizationId,
+      scopedDb: ctx.scopedDb,
     }),
   )
   .post(
@@ -30,6 +31,7 @@ export const organizationSettingsRoute = new Elysia({
       updateOrganizationSettingsHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { organizationSettings: ["update"] },
@@ -42,6 +44,7 @@ export const organizationSettingsRoute = new Elysia({
       previewOrganizationSettingsHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { organizationSettings: ["update"] },

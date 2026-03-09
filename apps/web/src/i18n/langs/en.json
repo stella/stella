@@ -76,7 +76,7 @@
     "selectOrganization": "Select an organization",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
-    "signInToStella": "Sign in to stella",
+    "signInToStella": "Sign in to Stella",
     "signOut": "Sign Out",
     "slugLabel": "Slug",
     "slugPlaceholder": "my-organization",
@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Connection lost",
-    "connectionLostDescription": "Unable to reach the server. Check your network connection.",
     "convertTo": "Convert to",
     "createdAt": "Created at {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Pin",
     "print": "Print",
     "properties": "Properties",
-    "reconnecting": "Reconnecting...",
     "reference": "Reference",
     "rename": "Rename",
     "required": "Required",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty",
     "title": "Feedback",
     "trigger": "Feedback"
-  },
-  "filters": {
-    "contains": "contains",
-    "eq": "equals",
-    "is_empty": "is empty",
-    "neq": "not equals"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Add fields",
       "aiGenerated": "AI-generated",
+      "cannotDeleteRequired": "At least one view of this type is required",
       "copySuffix": "{name} (copy)",
       "deleteView": "Delete view",
       "failedToChangeViewType": "Failed to change view type",

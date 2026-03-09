@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
@@ -18,6 +18,7 @@ export const exportPdfQuerySchema = t.Object({
 type ExportPdfQuerySchema = Static<typeof exportPdfQuerySchema>;
 
 type ExportPdfHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ExportPdfQuerySchema;
 };
@@ -27,6 +28,7 @@ type ExportPdfHandlerProps = {
  * This avoids adding a PDF generation dependency.
  */
 export const exportPdfHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ExportPdfHandlerProps) => {
@@ -45,24 +47,26 @@ export const exportPdfHandler = async ({
     conditions.push(eq(timeEntries.matterId, query.matterId));
   }
 
-  const rows = await db
-    .select({
-      id: timeEntries.id,
-      userId: timeEntries.userId,
-      matterId: timeEntries.matterId,
-      dateWorked: timeEntries.dateWorked,
-      durationMinutes: timeEntries.durationMinutes,
-      billedMinutes: timeEntries.billedMinutes,
-      rateAtEntry: timeEntries.rateAtEntry,
-      currency: timeEntries.currency,
-      narrative: timeEntries.narrative,
-      billable: timeEntries.billable,
-      status: timeEntries.status,
-    })
-    .from(timeEntries)
-    .where(and(...conditions))
-    .orderBy(timeEntries.dateWorked)
-    .limit(LIMITS.exportPdfRowLimit);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        id: timeEntries.id,
+        userId: timeEntries.userId,
+        matterId: timeEntries.matterId,
+        dateWorked: timeEntries.dateWorked,
+        durationMinutes: timeEntries.durationMinutes,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        currency: timeEntries.currency,
+        narrative: timeEntries.narrative,
+        billable: timeEntries.billable,
+        status: timeEntries.status,
+      })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(timeEntries.dateWorked)
+      .limit(LIMITS.exportPdfRowLimit),
+  );
 
   // Batch-fetch user names
   const userIds = new Set<string>();
@@ -74,10 +78,12 @@ export const exportPdfHandler = async ({
 
   const usersResult =
     userIds.size > 0
-      ? await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, Array.from(userIds)))
+      ? await scopedDb((tx) =>
+          tx
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, Array.from(userIds))),
+        )
       : [];
 
   const userMap = new Map(usersResult.map((u) => [u.id, u.name]));

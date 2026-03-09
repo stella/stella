@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
@@ -28,6 +28,7 @@ export const updateTemplateBodySchema = t.Object({
 type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
 
 type UpdateTemplateProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   templateId: string;
@@ -59,29 +60,35 @@ const parseManifest = (json: string): TemplateManifest | null => {
 };
 
 export const updateTemplateHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   templateId,
   body,
 }: UpdateTemplateProps) => {
-  const existing = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: {
-      id: true,
-      s3Key: true,
-      currentVersion: true,
-    },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: {
+        id: true,
+        s3Key: true,
+        currentVersion: true,
+      },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Template not found" });
   }
 
-  if (body.categoryId !== undefined && body.categoryId !== null) {
-    const category = await db.query.templateCategories.findFirst({
-      where: { id: body.categoryId, organizationId: { eq: organizationId } },
-      columns: { id: true },
-    });
+  const categoryId = body.categoryId;
+  if (categoryId !== undefined && categoryId !== null) {
+    const category = await scopedDb((tx) =>
+      tx.query.templateCategories.findFirst({
+        where: { id: categoryId, organizationId: { eq: organizationId } },
+        columns: { id: true },
+      }),
+    );
     if (!category) {
       return status(400, { message: "Category not found" });
     }
@@ -118,18 +125,6 @@ export const updateTemplateHandler = async ({
     updates.fieldCount = manifest.fields.length;
     updates.sizeBytes = updatedDocx.byteLength;
 
-    // Bump version and create snapshot
-    const versionCount = await db.$count(
-      templateVersions,
-      eq(templateVersions.templateId, templateId),
-    );
-
-    if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-      return status(400, {
-        message: "Version limit reached for this template",
-      });
-    }
-
     const newVersion = existing.currentVersion + 1;
     updates.currentVersion = newVersion;
 
@@ -146,7 +141,22 @@ export const updateTemplateHandler = async ({
     // the transaction to keep it short).
     await s3.write(versionS3Key, new Uint8Array(updatedDocx));
 
-    const row = await db.transaction(async (tx) => {
+    // Advisory lock + version count + update + insert in one
+    // transaction to prevent TOCTOU on the version limit.
+    const row = await scopedDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
+      );
+
+      const versionCount = await tx.$count(
+        templateVersions,
+        eq(templateVersions.templateId, templateId),
+      );
+
+      if (versionCount >= LIMITS.templateVersionsPerTemplate) {
+        return null;
+      }
+
       const [r] = await tx
         .update(templates)
         .set(updates)
@@ -176,24 +186,32 @@ export const updateTemplateHandler = async ({
       return r;
     });
 
+    if (!row) {
+      return status(400, {
+        message: "Version limit reached for this template",
+      });
+    }
+
     return row;
   }
 
-  const [updated] = await db
-    .update(templates)
-    .set(updates)
-    .where(
-      and(
-        eq(templates.id, templateId),
-        eq(templates.organizationId, organizationId),
-      ),
-    )
-    .returning({
-      id: templates.id,
-      name: templates.name,
-      fieldCount: templates.fieldCount,
-      updatedAt: templates.updatedAt,
-    });
+  const [updated] = await scopedDb((tx) =>
+    tx
+      .update(templates)
+      .set(updates)
+      .where(
+        and(
+          eq(templates.id, templateId),
+          eq(templates.organizationId, organizationId),
+        ),
+      )
+      .returning({
+        id: templates.id,
+        name: templates.name,
+        fieldCount: templates.fieldCount,
+        updatedAt: templates.updatedAt,
+      }),
+  );
 
   return updated;
 };

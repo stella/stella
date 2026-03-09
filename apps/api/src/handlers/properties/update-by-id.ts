@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import {
   aiModelToolSchema,
@@ -83,12 +83,14 @@ export const updatePropertyBodySchema = t.Object({
 export type UpdatePropertyBodySchema = Static<typeof updatePropertyBodySchema>;
 
 type UpdatePropertyHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   propertyId: string;
   body: UpdatePropertyBodySchema;
 };
 
 export const updatePropertyHandler = async ({
+  scopedDb,
   workspaceId,
   propertyId,
   body,
@@ -103,17 +105,19 @@ export const updatePropertyHandler = async ({
     });
   }
 
-  const oldProperty = await db.query.properties.findFirst({
-    where: { id: propertyId, workspaceId: { eq: workspaceId } },
-    with: {
-      dependencies: {
-        columns: {
-          dependsOnPropertyId: true,
-          condition: true,
+  const oldProperty = await scopedDb((tx) =>
+    tx.query.properties.findFirst({
+      where: { id: propertyId, workspaceId: { eq: workspaceId } },
+      with: {
+        dependencies: {
+          columns: {
+            dependsOnPropertyId: true,
+            condition: true,
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!oldProperty) {
     return status(404);
@@ -135,6 +139,7 @@ export const updatePropertyHandler = async ({
 
   if (tool.type === "ai-model") {
     const validation = await validatePropertyInputs({
+      scopedDb,
       propertyId,
       workspaceId,
       proposedInputs: tool.dependencies.map((d) => d.dependsOnPropertyId),
@@ -160,7 +165,7 @@ export const updatePropertyHandler = async ({
         }
       : tool;
 
-  await db.transaction(async (tx) => {
+  await scopedDb(async (tx) => {
     const updateProperty = tx
       .update(properties)
       .set({

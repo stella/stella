@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type {
@@ -40,6 +40,7 @@ export type GenerateBatchProps = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  scopedDb: ScopedDb;
   batch: PropertyBatch;
   entityVersionId: string;
 };
@@ -102,29 +103,33 @@ type InputFieldRow = {
 type FetchInputFieldsForBatchProps = {
   entityVersionId: string;
   inputPropertyIds: string[];
+  scopedDb: ScopedDb;
 };
 
 export const fetchInputFieldsForBatch = ({
   entityVersionId,
   inputPropertyIds,
+  scopedDb,
 }: FetchInputFieldsForBatchProps): Promise<InputFieldRow[]> => {
   if (inputPropertyIds.length === 0) {
     return Promise.resolve([]);
   }
 
-  return db
-    .select({
-      id: fields.id,
-      propertyId: fields.propertyId,
-      content: fields.content,
-    })
-    .from(fields)
-    .where(
-      and(
-        eq(fields.entityVersionId, entityVersionId),
-        inArray(fields.propertyId, inputPropertyIds),
+  return scopedDb((tx) =>
+    tx
+      .select({
+        id: fields.id,
+        propertyId: fields.propertyId,
+        content: fields.content,
+      })
+      .from(fields)
+      .where(
+        and(
+          eq(fields.entityVersionId, entityVersionId),
+          inArray(fields.propertyId, inputPropertyIds),
+        ),
       ),
-    );
+  );
 };
 
 export type ResolvedFile = {

@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Utracono połączenie",
-    "connectionLostDescription": "Nie można połączyć się z serwerem. Sprawdź połączenie sieciowe.",
     "convertTo": "Konwertuj na",
     "createdAt": "Utworzono {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Przypnij",
     "print": "Print",
     "properties": "Właściwości",
-    "reconnecting": "Ponowne łączenie...",
     "reference": "Reference",
     "rename": "Zmień nazwę",
     "required": "Wymagane",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "np. Wyłącz przycisk wysyłania, gdy formularz jest pusty",
     "title": "Opinia",
     "trigger": "Opinia"
-  },
-  "filters": {
-    "contains": "zawiera",
-    "eq": "równa się",
-    "is_empty": "jest puste",
-    "neq": "nie równa się"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Dodaj pola",
       "aiGenerated": "Wygenerowane przez AI",
+      "cannotDeleteRequired": "Wymagany jest co najmniej jeden widok tego typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Usuń widok",
       "failedToChangeViewType": "Failed to change view type",

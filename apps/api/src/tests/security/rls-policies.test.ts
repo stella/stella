@@ -14,18 +14,11 @@ const MIGRATION_PATH = resolve(
   "../../../drizzle/0001_workspace_rls.sql",
 );
 
-/** Tables that have `safeWorkspaceId` but don't need their own
- *  RLS policy because they're only reachable through FK joins
- *  on an already-filtered parent table (e.g., entity_versions
- *  via entities). This set should shrink over time as we add
- *  RLS to more tables for defense in depth. */
-const RLS_EXEMPT_TABLES = new Set([
-  "entity_versions",
-  "fields",
-  "justifications",
-  "extracted_content",
-  "property_dependencies",
-]);
+/** No tables are exempt: every table with a workspace_id column
+ *  must have its own RLS policy. Relying on FK joins through a
+ *  parent table is an application convention, not a database
+ *  guarantee; a direct query by ID bypasses the parent filter. */
+const RLS_EXEMPT_TABLES = new Set<string>([]);
 
 describe("RLS policies", () => {
   test("every workspace-scoped table has an RLS policy", () => {

@@ -47,14 +47,19 @@ ALTER TABLE document_counters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE case_law_matter_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE entity_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fields ENABLE ROW LEVEL SECURITY;
+ALTER TABLE justifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extracted_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE property_dependencies ENABLE ROW LEVEL SECURITY;
+
 -- ============================================================
 -- 4. Create RLS policies
 -- ============================================================
 
--- Helper: reusable expression for workspace membership check
--- (repeated in each policy because PG doesn't support policy macros)
---   id-based:         id = ANY(string_to_array(...))
---   workspace_id-based: workspace_id = ANY(string_to_array(...))
+-- Per-command policies: FOR ALL USING(x) implicitly sets
+-- WITH CHECK = USING, which blocks INSERTs because new rows
+-- can't satisfy the check before they exist.
 
 -- ---- workspaces ----
 -- SELECT/UPDATE/DELETE: only rows whose id is in the session's workspace list
@@ -189,6 +194,142 @@ CREATE POLICY ws_update ON case_law_matter_links FOR UPDATE TO stella_app
 CREATE POLICY ws_delete ON case_law_matter_links FOR DELETE TO stella_app
   USING (workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ',')));
 
+-- ---- child tables (no workspace_id; join through parent FK) ----
+
+-- entity_versions → entities.workspace_id
+CREATE POLICY ws_select ON entity_versions FOR SELECT TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = entity_versions.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_insert ON entity_versions FOR INSERT TO stella_app
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = entity_versions.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_update ON entity_versions FOR UPDATE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = entity_versions.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_delete ON entity_versions FOR DELETE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = entity_versions.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+
+-- fields → properties.workspace_id
+CREATE POLICY ws_select ON fields FOR SELECT TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = fields.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_insert ON fields FOR INSERT TO stella_app
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = fields.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_update ON fields FOR UPDATE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = fields.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_delete ON fields FOR DELETE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = fields.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+
+-- justifications → fields → properties.workspace_id
+CREATE POLICY ws_select ON justifications FOR SELECT TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM fields
+    JOIN properties ON properties.id = fields.property_id
+    WHERE fields.id = justifications.field_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_insert ON justifications FOR INSERT TO stella_app
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM fields
+    JOIN properties ON properties.id = fields.property_id
+    WHERE fields.id = justifications.field_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_update ON justifications FOR UPDATE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM fields
+    JOIN properties ON properties.id = fields.property_id
+    WHERE fields.id = justifications.field_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_delete ON justifications FOR DELETE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM fields
+    JOIN properties ON properties.id = fields.property_id
+    WHERE fields.id = justifications.field_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+
+-- extracted_content → entities.workspace_id
+CREATE POLICY ws_select ON extracted_content FOR SELECT TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = extracted_content.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_insert ON extracted_content FOR INSERT TO stella_app
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = extracted_content.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_update ON extracted_content FOR UPDATE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = extracted_content.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_delete ON extracted_content FOR DELETE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM entities
+    WHERE entities.id = extracted_content.entity_id
+      AND entities.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+
+-- property_dependencies → properties.workspace_id
+CREATE POLICY ws_select ON property_dependencies FOR SELECT TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = property_dependencies.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_insert ON property_dependencies FOR INSERT TO stella_app
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = property_dependencies.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_update ON property_dependencies FOR UPDATE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = property_dependencies.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+CREATE POLICY ws_delete ON property_dependencies FOR DELETE TO stella_app
+  USING (EXISTS (
+    SELECT 1 FROM properties
+    WHERE properties.id = property_dependencies.property_id
+      AND properties.workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ','))
+  ));
+
 CREATE POLICY ws_select ON workspace_members FOR SELECT TO stella_app
   USING (workspace_id = ANY(string_to_array(current_setting('app.workspace_ids', true), ',')));
 CREATE POLICY ws_insert ON workspace_members FOR INSERT TO stella_app
@@ -202,13 +343,9 @@ CREATE POLICY ws_delete ON workspace_members FOR DELETE TO stella_app
 -- 5. Backfill workspace_members
 -- ============================================================
 
--- NOTE: This produces N×M rows (members × active workspaces per
--- org). For mid-size firms this is small; for large tenants
--- (1000+ members, 500+ workspaces) this may need a maintenance
--- window. ON CONFLICT DO NOTHING makes it safe to re-run.
 INSERT INTO workspace_members (id, workspace_id, user_id, created_at)
 SELECT
-  replace(replace(substr(encode(gen_random_bytes(16), 'base64'), 1, 21), '+', '_'), '/', '-'),
+  gen_random_uuid()::text,
   w.id,
   m.user_id,
   NOW()

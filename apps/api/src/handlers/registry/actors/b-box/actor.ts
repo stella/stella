@@ -6,7 +6,6 @@ import { actor } from "rivetkit";
 import { getSyncActorConfig } from "@stella/rivet/actors/sync-actor-config";
 
 import { isMockAI } from "@/api/consts";
-import { db } from "@/api/db";
 import { justifications } from "@/api/db/schema";
 import type { Registry } from "@/api/handlers/registry";
 import { generateBBoxes } from "@/api/handlers/registry/actors/b-box/generate-b-boxes";
@@ -39,7 +38,7 @@ export const bBoxActor = actor({
         generateBBoxesSchema,
         input,
       );
-      const { organizationId, workspaceId, authToken } = c.conn.state;
+      const { organizationId, workspaceId, authToken, scopedDb } = c.conn.state;
 
       if (c.state.pendingJustificationIds.has(justificationId)) {
         return { status: "already-running" };
@@ -57,6 +56,7 @@ export const bBoxActor = actor({
           organizationId,
           workspaceId,
           justificationId,
+          scopedDb,
         );
         if (Result.isError(preparedDataResult)) {
           return preparedDataResult;
@@ -81,15 +81,17 @@ export const bBoxActor = actor({
 
         const boxes = bBoxes.flat();
 
-        await db
-          .update(justifications)
-          .set({
-            boundingBoxes: {
-              version: 1,
-              boxes,
-            },
-          })
-          .where(eq(justifications.id, justificationId));
+        await scopedDb((tx) =>
+          tx
+            .update(justifications)
+            .set({
+              boundingBoxes: {
+                version: 1,
+                boxes,
+              },
+            })
+            .where(eq(justifications.id, justificationId)),
+        );
 
         const client = c.client<Registry>();
 

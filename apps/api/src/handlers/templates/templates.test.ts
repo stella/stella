@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScopedDb } from "@/api/db";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -101,6 +102,18 @@ const DOCX_MIME =
 
 const fakeOrgId = "org_test" as SafeId<"organization">;
 const fakeUserId = "user_test";
+
+/** No-op ScopedDb stub for tests. Calls the callback but
+ *  returns `undefined`; sufficient for handlers where the
+ *  scopedDb call is best-effort (e.g., analytics inserts). */
+const stubScopedDb = ((fn: unknown) => {
+  if (typeof fn === "function") {
+    // Swallow the result; the callback runs against a
+    // fake tx that will throw on actual DB access.
+    return Promise.resolve(undefined);
+  }
+  return Promise.resolve(undefined);
+}) as unknown as ScopedDb;
 
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
@@ -474,6 +487,7 @@ describe("handler MIME validation", () => {
 
   test("fill rejects non-DOCX file", async () => {
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -515,6 +529,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -532,6 +547,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -549,6 +565,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -566,6 +583,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -583,6 +601,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -609,6 +628,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -628,6 +648,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
@@ -650,6 +671,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},

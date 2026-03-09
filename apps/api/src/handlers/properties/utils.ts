@@ -2,7 +2,7 @@ import { sort } from "@tamtamchik/json-deep-sort";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type {
   AIModelTool,
   ManualInputTool,
@@ -49,29 +49,33 @@ export const comparePropertiesForStale = ({
 };
 
 type ValidatePropertyInputsProps = {
+  scopedDb: ScopedDb;
   propertyId: string;
   workspaceId: SafeId<"workspace">;
   proposedInputs: string[];
 };
 
 export const validatePropertyInputs = async ({
+  scopedDb,
   propertyId,
   workspaceId,
   proposedInputs,
 }: ValidatePropertyInputsProps): Promise<Result<void, string[]>> => {
-  const workspaceProperties = await db.query.properties.findMany({
-    where: {
-      workspaceId: { eq: workspaceId },
-    },
-    columns: { id: true },
-    with: {
-      dependencies: {
-        columns: {
-          dependsOnPropertyId: true,
+  const workspaceProperties = await scopedDb((tx) =>
+    tx.query.properties.findMany({
+      where: {
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { id: true },
+      with: {
+        dependencies: {
+          columns: {
+            dependsOnPropertyId: true,
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   const dependencyGraph = new Map<string, string[]>();
   for (const property of workspaceProperties) {
