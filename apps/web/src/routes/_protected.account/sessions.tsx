@@ -170,7 +170,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
 
   return (
     <Button
-      disabled={revokeSession.isPending}
+      loading={revokeSession.isPending}
       onClick={() => revokeSession.mutate(token)}
       size="xs"
       variant="ghost"
@@ -242,7 +242,7 @@ const RevokeAllDialog = () => {
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={revokeOtherSessions.isPending}
+            loading={revokeOtherSessions.isPending}
             onClick={() => {
               revokeOtherSessions.mutate();
             }}

@@ -267,7 +267,7 @@ const SettingsDialog = () => {
             </DialogClose>
             <form.Subscribe selector={(s) => s.isSubmitting}>
               {(isSubmitting) => (
-                <Button disabled={isSubmitting} type="submit">
+                <Button loading={isSubmitting} type="submit">
                   {t("common.saveChanges")}
                 </Button>
               )}
@@ -479,7 +479,7 @@ const MatterNumberingSection = () => {
 
         <Button
           className="self-start"
-          disabled={updateMutation.isPending}
+          loading={updateMutation.isPending}
           onClick={() => updateMutation.mutate()}
           size="sm"
         >
@@ -633,7 +633,7 @@ const InviteDialog = () => {
             </DialogClose>
             <form.Subscribe selector={(s) => s.isSubmitting}>
               {(isSubmitting) => (
-                <Button disabled={isSubmitting} type="submit">
+                <Button loading={isSubmitting} type="submit">
                   {t("organization.invitations.sendInvitation")}
                 </Button>
               )}

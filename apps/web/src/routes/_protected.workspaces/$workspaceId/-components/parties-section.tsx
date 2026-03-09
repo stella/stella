@@ -458,7 +458,8 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!selectedContact || !selectedRole || addParty.isPending}
+            disabled={!selectedContact || !selectedRole}
+            loading={addParty.isPending}
             onClick={handleSubmit}
           >
             {t("workspaces.parties.addParty")}
