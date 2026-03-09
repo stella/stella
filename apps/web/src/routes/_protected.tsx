@@ -83,6 +83,7 @@ export const Route = createFileRoute("/_protected")({
         name: context.user.name || undefined,
         email: context.user.email,
         image: context.user.image,
+        timezoneId: context.user.timezoneId,
       },
     };
   },

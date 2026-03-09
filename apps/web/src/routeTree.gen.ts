@@ -30,6 +30,7 @@ import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protect
 import { Route as ProtectedKnowledgeAnalyticsRouteImport } from './routes/_protected.knowledge/analytics'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
+import { Route as ProtectedAccountSettingsRouteImport } from './routes/_protected.account/settings'
 import { Route as ProtectedAccountSessionsRouteImport } from './routes/_protected.account/sessions'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedKnowledgeCaseLawRouteRouteImport } from './routes/_protected.knowledge/case-law/route'
@@ -156,6 +157,12 @@ const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
   path: '/$threadId',
   getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
+const ProtectedAccountSettingsRoute =
+  ProtectedAccountSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProtectedAccountRouteRoute,
+  } as any)
 const ProtectedAccountSessionsRoute =
   ProtectedAccountSessionsRouteImport.update({
     id: '/sessions',
@@ -241,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/knowledge/case-law': typeof ProtectedKnowledgeCaseLawRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/account/sessions': typeof ProtectedAccountSessionsRoute
+  '/account/settings': typeof ProtectedAccountSettingsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -271,6 +279,7 @@ export interface FileRoutesByTo {
   '/auth/otp': typeof AuthOtpRoute
   '/auth': typeof AuthIndexRoute
   '/account/sessions': typeof ProtectedAccountSessionsRoute
+  '/account/settings': typeof ProtectedAccountSettingsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -307,6 +316,7 @@ export interface FileRoutesById {
   '/_protected/knowledge/case-law': typeof ProtectedKnowledgeCaseLawRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/_protected/account/sessions': typeof ProtectedAccountSessionsRoute
+  '/_protected/account/settings': typeof ProtectedAccountSettingsRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/knowledge/case-law'
     | '/workspaces/$workspaceId'
     | '/account/sessions'
+    | '/account/settings'
     | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
@@ -373,6 +384,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth'
     | '/account/sessions'
+    | '/account/settings'
     | '/chat/$threadId'
     | '/contacts/$contactId'
     | '/knowledge/analytics'
@@ -408,6 +420,7 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/case-law'
     | '/_protected/workspaces/$workspaceId'
     | '/_protected/account/sessions'
+    | '/_protected/account/settings'
     | '/_protected/chat/$threadId'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/analytics'
@@ -589,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
     }
+    '/_protected/account/settings': {
+      id: '/_protected/account/settings'
+      path: '/settings'
+      fullPath: '/account/settings'
+      preLoaderRoute: typeof ProtectedAccountSettingsRouteImport
+      parentRoute: typeof ProtectedAccountRouteRoute
+    }
     '/_protected/account/sessions': {
       id: '/_protected/account/sessions'
       path: '/sessions'
@@ -677,10 +697,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface ProtectedAccountRouteRouteChildren {
+  ProtectedAccountSettingsRoute: typeof ProtectedAccountSettingsRoute
   ProtectedAccountSessionsRoute: typeof ProtectedAccountSessionsRoute
 }
 
 const ProtectedAccountRouteRouteChildren: ProtectedAccountRouteRouteChildren = {
+  ProtectedAccountSettingsRoute: ProtectedAccountSettingsRoute,
   ProtectedAccountSessionsRoute: ProtectedAccountSessionsRoute,
 }
 

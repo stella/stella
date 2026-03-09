@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Gestione las preferencias de su cuenta",
+      "timezone": "Zona horaria",
+      "timezoneDescription": "Se utiliza para las marcas de tiempo en notificaciones y correos electrónicos",
+      "timezoneSaved": "Zona horaria actualizada",
+      "title": "Configuración"
     }
   },
   "analytics": {

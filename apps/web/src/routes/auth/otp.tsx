@@ -25,6 +25,7 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
 import { redirectToSchema } from "@/lib/redirect";
+import { COMMON_TIMEZONES } from "@/lib/timezones";
 
 const searchSchema = v.object({
   email: v.pipe(v.string(), v.email()),
@@ -66,6 +67,24 @@ function OTP() {
         }
         throw toAuthClientError(error);
       }
+
+      // Sync browser timezone on first login (fire-and-forget).
+      // Don't block the sign-in path; runs entirely in background.
+      authClient
+        .getSession()
+        .then(async ({ data: freshSession }) => {
+          if (freshSession?.user.timezoneId !== "UTC") {
+            return;
+          }
+          const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const timezones: readonly string[] = COMMON_TIMEZONES;
+          if (timezones.includes(browserTz)) {
+            await authClient.updateUser({ timezoneId: browserTz });
+          }
+        })
+        .catch((err) => {
+          captureError(posthog, err);
+        });
 
       await invalidateSession.mutateAsync();
       await navigate({

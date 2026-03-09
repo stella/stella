@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Hallake oma konto eelistusi",
+      "timezone": "Ajavöönd",
+      "timezoneDescription": "Kasutatakse ajatemplite jaoks teavitustes ja e-kirjades",
+      "timezoneSaved": "Ajavöönd uuendatud",
+      "title": "Seaded"
     }
   },
   "analytics": {

@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Fiókbeállítások kezelése",
+      "timezone": "Időzóna",
+      "timezoneDescription": "Időbélyegekhez használjuk az értesítésekben és e-mailekben",
+      "timezoneSaved": "Időzóna frissítve",
+      "title": "Beállítások"
     }
   },
   "analytics": {

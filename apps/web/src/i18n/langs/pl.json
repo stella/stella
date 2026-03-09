@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Zarządzaj preferencjami konta",
+      "timezone": "Strefa czasowa",
+      "timezoneDescription": "Używana do znaczników czasu w powiadomieniach i e-mailach",
+      "timezoneSaved": "Strefa czasowa zaktualizowana",
+      "title": "Ustawienia"
     }
   },
   "analytics": {

@@ -32,6 +32,7 @@ import {
   PlayIcon,
   PlusIcon,
   SearchIcon,
+  Settings2Icon,
   SquareIcon,
   SunIcon,
   UsersIcon,
@@ -1177,6 +1178,16 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     </MenuRadioGroup>
                   </MenuSubPopup>
                 </MenuSub>
+                <MenuItem
+                  onClick={async () => {
+                    await navigate({
+                      to: "/account/settings",
+                    });
+                  }}
+                >
+                  <Settings2Icon />
+                  {t("common.settings")}
+                </MenuItem>
                 <MenuItem
                   onClick={async () => {
                     await navigate({

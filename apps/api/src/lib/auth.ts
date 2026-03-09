@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
@@ -23,8 +24,35 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
+/**
+ * Validates a timezone identifier via the Intl API.
+ * Throws an APIError if the value is present and not a
+ * recognised IANA timezone.
+ */
+const validateTimezoneId = (timezoneId: unknown): void => {
+  if (typeof timezoneId === "string" && timezoneId !== "UTC") {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
+    } catch {
+      // biome-ignore lint/nursery/useErrorCause: APIError uses non-standard constructor
+      throw new APIError("BAD_REQUEST", {
+        message: "Invalid timezone identifier",
+      });
+    }
+  }
+};
+
 export const auth = betterAuth({
   trustedOrigins: [env.FRONTEND_URL],
+  user: {
+    additionalFields: {
+      timezoneId: {
+        type: "string",
+        required: false,
+        defaultValue: "UTC",
+      },
+    },
+  },
   session: {
     expiresIn: SESSION_LIFETIME_SECONDS,
     updateAge: SESSION_UPDATE_AGE_SECONDS,
@@ -60,6 +88,24 @@ export const auth = betterAuth({
       "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
       "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
       "/reset-password": AUTH_RATE_LIMITS.resetPassword,
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        // biome-ignore lint/suspicious/useAwait: async required by better-auth hook type
+        before: async (user) => {
+          validateTimezoneId(user.timezoneId);
+          return { data: user };
+        },
+      },
+      update: {
+        // biome-ignore lint/suspicious/useAwait: async required by better-auth hook type
+        before: async (user) => {
+          validateTimezoneId(user.timezoneId);
+          return { data: user };
+        },
+      },
     },
   },
   database: drizzleAdapter(db, {

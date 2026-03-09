@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Spravujte své předvolby účtu",
+      "timezone": "Časové pásmo",
+      "timezoneDescription": "Používá se pro časová razítka v oznámeních a e-mailech",
+      "timezoneSaved": "Časové pásmo aktualizováno",
+      "title": "Nastavení"
     }
   },
   "analytics": {
