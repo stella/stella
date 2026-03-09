@@ -380,6 +380,8 @@ checksums:
     common/comingSoon: ee2b0671e00972773210c5be5a9ccb89
     common/confirm: 90930b51154032f119fa75c1bd422d8b
     common/confirmAction: 6d5cd13628a7887711fd0c29f1123652
+    common/connectionLost: 8400cfbde94d372f53ade3ad3479e20e
+    common/connectionLostDescription: 4f6190978e95efd4d91957c8a9eb3da4
     common/convertTo: d172275c31f502b214eb97230dab850d
     common/createdAt: 21d81e727ea38bb7d9c4af320ef5b248
     common/currency: d2ba9a9cea418ea653e3ca6785617a3f
@@ -412,6 +414,7 @@ checksums:
     common/pin: e67f6931f858d0a348f4145e2649b3cf
     common/print: 96b471223326706b965b5f5c36675935
     common/properties: d9d4b7cdfa9324272f895ed8687f607b
+    common/reconnecting: 97aee381cee94210070a2578cf50dd2c
     common/reference: fbba6b416a620e774c0fa80e167e5d46
     common/rename: 6f9413e4606e8d83a010685008fb2931
     common/required: 04d7fb6f37ffe0a6ca97d49e2a8b6eb5
