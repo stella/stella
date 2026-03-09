@@ -104,6 +104,10 @@ updates:
         patterns:
           - "rivetkit"
           - "@rivetkit/*"
+      streamdown:
+        patterns:
+          - "streamdown*"
+          - "@streamdown/*"
       biome:
         patterns:
           - "@biomejs/*"
