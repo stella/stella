@@ -58,6 +58,15 @@ const getSystemTheme = (): "light" | "dark" =>
 const resolveTheme = (theme: Theme): "light" | "dark" =>
   theme === "system" ? getSystemTheme() : theme;
 
+const suppressTransitions = () => {
+  const style = document.createElement("style");
+  style.textContent = "*, *::before, *::after { transition: none !important; }";
+  document.head.appendChild(style);
+  // Force reflow so suppression takes effect before class changes
+  getComputedStyle(document.documentElement).opacity;
+  return () => requestAnimationFrame(() => style.remove());
+};
+
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const [theme, setThemeState] = useState<Theme>(getStoredTheme);
   const [palette, setPaletteState] = useState<Palette>(getStoredPalette);
@@ -80,8 +89,10 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
 
     const updateTheme = () => {
       const resolved = resolveTheme(theme);
+      const restore = suppressTransitions();
       root.classList.toggle("dark", resolved === "dark");
       setResolvedTheme(resolved);
+      restore();
     };
 
     updateTheme();
@@ -98,6 +109,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     const root = document.documentElement;
+    const restore = suppressTransitions();
 
     for (const className of Array.from(root.classList)) {
       if (className.startsWith(PALETTE_PREFIX)) {
@@ -108,7 +120,30 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     if (palette !== "neutral") {
       root.classList.add(`${PALETTE_PREFIX}${palette}`);
     }
+
+    restore();
   }, [palette]);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === THEME_STORAGE_KEY) {
+        if (e.newValue === "light" || e.newValue === "dark") {
+          setThemeState(e.newValue);
+        } else {
+          setThemeState("system");
+        }
+      }
+      if (e.key === PALETTE_STORAGE_KEY) {
+        if (e.newValue === "nord" || e.newValue === "flexoki") {
+          setPaletteState(e.newValue);
+        } else {
+          setPaletteState("neutral");
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const value = useMemo(
     () => ({
