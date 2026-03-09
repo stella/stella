@@ -31,6 +31,7 @@ const FILE_INPUT_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.csv,.md";
 type PendingFile = {
   id: string;
   filename: string;
+  mimeType: string;
   status: "uploading" | "ready" | "error";
   attachment?: ProcessedAttachment;
   errorMessage?: string;
@@ -73,6 +74,7 @@ export const useChatAttachments = () => {
         newPending.push({
           id,
           filename: file.name,
+          mimeType: file.type,
           status: "uploading",
         });
         filesToUpload.push(file);

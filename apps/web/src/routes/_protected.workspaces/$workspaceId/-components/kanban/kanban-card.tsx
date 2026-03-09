@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { FolderIcon } from "lucide-react";
-import { useDrag } from "react-aria";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -11,6 +13,7 @@ import {
 } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   AuthorCell,
@@ -24,8 +27,6 @@ import {
   getFirstFile,
   getInternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-
-const ENTITY_DRAG_TYPE = "stella/entity-id";
 
 type KanbanCardProps = {
   entity: WorkspaceEntity;
@@ -63,9 +64,50 @@ export const KanbanCard = ({
     textField?.content.type === "text" ? textField.content.value.trim() : "";
 
   const dragRef = useRef<HTMLDivElement>(null);
-  const { dragProps } = useDrag({
-    getItems: () => [{ [ENTITY_DRAG_TYPE]: entity.entityId }],
-  });
+
+  useEffect(() => {
+    const el = dragRef.current;
+    if (!el) {
+      return;
+    }
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: ENTITY_DRAG_TYPE,
+        entityId: entity.entityId,
+        entityIds: [entity.entityId],
+        entities: [
+          {
+            entityId: entity.entityId,
+            name,
+            kind: entity.kind,
+            mimeType: file?.mimeType ?? null,
+            parentId: entity.parentId ?? null,
+          },
+        ],
+        name,
+        kind: entity.kind,
+        mimeType: file?.mimeType ?? null,
+      }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) => {
+        setCustomNativeDragPreview({
+          nativeSetDragImage,
+          getOffset: centerUnderPointer,
+          render: ({ container }) => {
+            // Clone the styled inner card (button or div)
+            const inner = el.firstElementChild;
+            if (!inner) {
+              return;
+            }
+            const clone = inner.cloneNode(true) as HTMLElement;
+            const rect = inner.getBoundingClientRect();
+            clone.style.width = `${rect.width}px`;
+            container.appendChild(clone);
+          },
+        });
+      },
+    });
+  }, [entity.entityId, name, entity.kind, file?.mimeType, entity.parentId]);
 
   const startEditing = () => {
     setEditValue(textName || name);
@@ -90,11 +132,11 @@ export const KanbanCard = ({
   const nameElement = isEditing ? (
     <InlineEdit
       inputClassName="w-full font-medium"
-      onChange={setEditValue}
       onCancel={() => {
         setIsEditing(false);
         setEditValue(name);
       }}
+      onChange={setEditValue}
       onCommit={commitRename}
       value={editValue}
     />
@@ -160,7 +202,7 @@ export const KanbanCard = ({
 
   if (navigable && file) {
     return (
-      <div className="group/card" ref={dragRef} {...dragProps}>
+      <div className="group/card" ref={dragRef}>
         <button
           className={cn(
             "relative block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md",
@@ -183,7 +225,7 @@ export const KanbanCard = ({
   }
 
   return (
-    <div className="group/card" ref={dragRef} {...dragProps}>
+    <div className="group/card" ref={dragRef}>
       <div
         className={cn(
           "relative rounded-lg border bg-card p-3 shadow-xs",

@@ -1,5 +1,10 @@
 import type * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import {
   formatForDisplay,
   useHotkey,
@@ -37,7 +42,6 @@ import {
   SunIcon,
   UsersIcon,
 } from "lucide-react";
-import { useDrag, useDrop } from "react-aria";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -326,26 +330,43 @@ const MatterItem = ({
   const updateWorkspace = useUpdateWorkspace();
   const escapedRef = useRef(false);
   const dropRef = useRef<HTMLLIElement>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
-  const { dragProps } = useDrag({
-    getItems: () => [{ [MATTER_DRAG_TYPE]: ws.id }],
-    isDisabled: !isPinned || !onReorder,
-  });
+  const canDrag = isPinned && !!onReorder;
 
-  const { dropProps, isDropTarget } = useDrop({
-    ref: dropRef,
-    async onDrop(e) {
-      for (const item of e.items) {
-        if (item.kind === "text" && item.types.has(MATTER_DRAG_TYPE)) {
-          const draggedId = await item.getText(MATTER_DRAG_TYPE);
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
+
+  useEffect(() => {
+    const el = dropRef.current;
+    if (!el || !canDrag) {
+      return;
+    }
+    return combine(
+      draggable({
+        element: el,
+        getInitialData: () => ({
+          type: MATTER_DRAG_TYPE,
+          matterId: ws.id,
+        }),
+      }),
+      dropTargetForElements({
+        element: el,
+        canDrop: ({ source }) => source.data.type === MATTER_DRAG_TYPE,
+        onDragEnter: () => setIsDropTarget(true),
+        onDragLeave: () => setIsDropTarget(false),
+        onDrop: ({ source }) => {
+          setIsDropTarget(false);
+          // SAFETY: matterId is always a string; set by our own draggable getInitialData.
+          const draggedId = source.data.matterId as string;
           if (draggedId !== ws.id) {
-            onReorder?.(draggedId, ws.id);
+            onReorderRef.current?.(draggedId, ws.id);
           }
-        }
-      }
-    },
-    isDisabled: !isPinned || !onReorder,
-  });
+        },
+      }),
+    );
+  }, [ws.id, canDrag]);
+
   const relTime = formatRelativeTime(ws.lastActivityAt, lang);
 
   const cancelRename = () => {
@@ -423,8 +444,6 @@ const MatterItem = ({
         setMenuOpen(true);
       }}
       ref={dropRef}
-      {...dragProps}
-      {...dropProps}
     >
       <SidebarMenuButton
         asChild

@@ -449,6 +449,7 @@
     "decline": "Noraidīt",
     "delete": "Dzēst",
     "deleteConfirmDescription": "Vai tiešām vēlaties dzēst \"{name}\"? Šo darbību nevar atsaukt.",
+    "deletedCount": "{count, plural, one {# vienums dzēsts} other {# vienumi dzēsti}}",
     "description": "Description",
     "done": "Gatavs",
     "download": "Lejupielādēt",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
     "deleteItem": "Dzēst vienību",
+    "deleteItems": "Dzēst {count, plural, one {# vienību} other {# vienības}}",
+    "deleteItemsDescription": "Vai tiešām vēlaties dzēst {count, plural, one {# vienību} other {# vienības}}? Šo darbību nevar atsaukt.",
     "deleteSelectedRows": "Dzēst atlasītās rindas",
     "deleteSelectedRowsDescription": "{count, plural, zero {Vai tiešām vēlaties dzēst # atlasīto rindu? Šo darbību nevar atsaukt.} one {Vai tiešām vēlaties dzēst # atlasīto rindu? Šo darbību nevar atsaukt.} other {Vai tiešām vēlaties dzēst # atlasītās rindas? Šo darbību nevar atsaukt.}}",
     "deleteSelection": "Dzēst atlasi",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Pēdējoreiz atjaunināts",
+      "moveToRoot": "Nometiet šeit, lai pārvietotu uz saknes līmeni",
       "noFilesYet": "Failu pagaidām nav",
       "version": "Versija"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
       "groupBy": "Grupēt pēc:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Saraksts",
         "grid": "Režģis",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Saraksts",
+        "overview": "Pārskats",
+        "table": "Tabula"
       },
-      "newView": "New {layout}",
+      "newView": "Jauns {layout}",
       "selectProperty": "Izvēlieties rekvizītu"
     },
     "workflow": {

@@ -449,6 +449,7 @@
     "decline": "Odmítnout",
     "delete": "Smazat",
     "deleteConfirmDescription": "Opravdu chcete smazat „{name}“? Tuto akci nelze vrátit zpět.",
+    "deletedCount": "{count, plural, one {# položka smazána} few {# položky smazány} other {# položek smazáno}}",
     "description": "Description",
     "done": "Hotovo",
     "download": "Stáhnout",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",
     "deleteItem": "Smazat položku",
+    "deleteItems": "Smazat {count, plural, one {# položku} few {# položky} other {# položek}}",
+    "deleteItemsDescription": "Opravdu chcete smazat {count, plural, one {# položku} few {# položky} other {# položek}}? Tuto akci nelze vrátit zpět.",
     "deleteSelectedRows": "Smazat vybrané řádky",
     "deleteSelectedRowsDescription": "{count, plural, one {Opravdu chcete smazat # vybraný řádek? Tuto akci nelze vrátit.} few {Opravdu chcete smazat # vybrané řádky? Tuto akci nelze vrátit.} other {Opravdu chcete smazat # vybraných řádků? Tuto akci nelze vrátit.}}",
     "deleteSelection": "Smazat výběr",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Sbalit všechny složky",
       "expandAll": "Rozbalit všechny složky",
       "lastUpdated": "Naposledy aktualizováno",
+      "moveToRoot": "Přetáhněte sem pro přesun do kořenové úrovně",
       "noFilesYet": "Zatím žádné soubory",
       "version": "Verze"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
       "groupBy": "Seskupit podle:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Seznam",
         "grid": "Mřížka",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Seznam",
+        "overview": "Přehled",
+        "table": "Tabulka"
       },
-      "newView": "New {layout}",
+      "newView": "Nový {layout}",
       "selectProperty": "Vybrat vlastnost"
     },
     "workflow": {

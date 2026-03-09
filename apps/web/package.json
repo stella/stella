@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@ai-sdk/react": "3.0.108",
+    "@atlaskit/pragmatic-drag-and-drop": "^1.7.9",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
     "@base-ui/react": "catalog:",
     "@elysiajs/eden": "^1.4.8",
     "@posthog/react": "^1.8.1",
@@ -65,7 +68,6 @@
     "pdfjs-dist": "^5.4.624",
     "posthog-js": "^1.356.1",
     "react": "catalog:react19",
-    "react-aria": "^3.46.0",
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.6.5",
     "recharts": "^3.7.0",

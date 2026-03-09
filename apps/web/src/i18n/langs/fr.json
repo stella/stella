@@ -449,6 +449,7 @@
     "decline": "Refuser",
     "delete": "Supprimer",
     "deleteConfirmDescription": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
+    "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
     "description": "Description",
     "done": "Terminé",
     "download": "Télécharger",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
     "deleteItem": "Supprimer l'élément",
+    "deleteItems": "Supprimer {count, plural, one {# élément} other {# éléments}}",
+    "deleteItemsDescription": "Êtes-vous sûr de vouloir supprimer {count, plural, one {# élément} other {# éléments}} ? Cette action est irréversible.",
     "deleteSelectedRows": "Supprimer les lignes sélectionnées",
     "deleteSelectedRowsDescription": "{count, plural, one {Voulez-vous vraiment supprimer # ligne sélectionnée ? Cette action est irréversible.} many {Voulez-vous vraiment supprimer # lignes sélectionnées ? Cette action est irréversible.} other {Voulez-vous vraiment supprimer # lignes sélectionnées ? Cette action est irréversible.}}",
     "deleteSelection": "Supprimer la sélection",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Dernière mise à jour",
+      "moveToRoot": "Déposez ici pour déplacer à la racine",
       "noFilesYet": "Aucun fichier pour le moment",
       "version": "Version"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# sélectionné} many {# sélectionnés} other {# sélectionnés}}",
       "groupBy": "Regrouper par :",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Liste",
         "grid": "Grille",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Liste",
+        "overview": "Aperçu",
+        "table": "Tableau"
       },
-      "newView": "New {layout}",
+      "newView": "Nouvelle {layout}",
       "selectProperty": "Sélectionner une propriété"
     },
     "workflow": {

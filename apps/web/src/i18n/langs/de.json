@@ -449,6 +449,7 @@
     "decline": "Ablehnen",
     "delete": "Löschen",
     "deleteConfirmDescription": "Möchten Sie \"{name}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deletedCount": "{count, plural, one {# Element} other {# Elemente}} gelöscht",
     "description": "Description",
     "done": "Fertig",
     "download": "Herunterladen",
@@ -962,6 +963,8 @@
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
     "deleteItem": "Element löschen",
+    "deleteItems": "{count, plural, one {# Element} other {# Elemente}} löschen",
+    "deleteItemsDescription": "Sind Sie sicher, dass Sie {count, plural, one {# Element} other {# Elemente}} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deleteSelectedRows": "Ausgewählte Zeilen löschen",
     "deleteSelectedRowsDescription": "{count, plural, one {Möchten Sie # ausgewählte Zeile wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.} other {Möchten Sie # ausgewählte Zeilen wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.}}",
     "deleteSelection": "Auswahl löschen",
@@ -1004,6 +1007,7 @@
       "collapseAll": "Collapse all folders",
       "expandAll": "Expand all folders",
       "lastUpdated": "Zuletzt aktualisiert",
+      "moveToRoot": "Hier ablegen, um auf die oberste Ebene zu verschieben",
       "noFilesYet": "Noch keine Dateien",
       "version": "Version"
     },
@@ -1166,14 +1170,14 @@
       "fieldsSelected": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
       "groupBy": "Gruppieren nach:",
       "layouts": {
-        "filesystem": "List",
+        "filesystem": "Liste",
         "grid": "Raster",
         "kanban": "Kanban",
-        "list": "List",
-        "overview": "Overview",
-        "table": "Table"
+        "list": "Liste",
+        "overview": "Übersicht",
+        "table": "Tabelle"
       },
-      "newView": "New {layout}",
+      "newView": "Neue {layout}",
       "selectProperty": "Eigenschaft auswählen"
     },
     "workflow": {

@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { Chat } from "@ai-sdk/react";
+import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getToolName, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
 import {
@@ -9,6 +10,7 @@ import {
   PaperclipIcon,
   PlusIcon,
   TrashIcon,
+  UploadIcon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
@@ -58,7 +60,69 @@ import {
   chatThreadsOptions,
   chatWorkspaceThreadsOptions,
 } from "@/routes/_protected.chat/-queries";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+
+/** Set up the chat panel container as a pragmatic DnD drop
+ *  target for entity mentions + native file drag overlay.
+ *  Returns { containerRef, isDragOver }. */
+const useEntityDropTarget = (workspaceId: string | undefined) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !workspaceId) {
+      return;
+    }
+    return dropTargetForElements({
+      element: el,
+      canDrop: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+      onDragEnter: () => setIsDragOver(true),
+      onDragLeave: () => setIsDragOver(false),
+      onDrop: ({ source }) => {
+        setIsDragOver(false);
+        // SAFETY: entities is always set by our own draggable getInitialData.
+        const entities = source.data.entities as {
+          entityId: string;
+          name: string;
+          kind: string;
+          mimeType: string | null;
+        }[];
+        const mentions = entities.map((e) => ({
+          id: e.entityId,
+          label: e.name,
+          category: "entity" as const,
+          kind: e.kind,
+          mimeType: e.mimeType,
+          workspaceId,
+        }));
+        useChatPanelStore.getState().requestChatAbout(mentions);
+      },
+    });
+  }, [workspaceId]);
+
+  return { containerRef, isDragOver };
+};
+
+const DropOverlay = () => {
+  const t = useTranslations();
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 z-50",
+        "flex items-center justify-center rounded-lg",
+        "border-2 border-dashed border-foreground/20",
+        "bg-foreground/5",
+      )}
+    >
+      <div className="flex flex-col items-center gap-2 text-foreground/50">
+        <UploadIcon className="size-6" />
+        <span className="text-xs font-medium">{t("chat.chatAbout")}</span>
+      </div>
+    </div>
+  );
+};
 
 type RightPanelChatProps = {
   workspaceId?: string;
@@ -257,7 +321,7 @@ const ChatInputBar = ({
 
   // Consume pending "chat about this" mentions from the store.
   const chatRequestSeq = useChatPanelStore((s) => s.requestSeq);
-  const consumeMention = useChatPanelStore((s) => s.consumeMention);
+  const consumeMentions = useChatPanelStore((s) => s.consumeMentions);
   const lastConsumedSeq = useRef(0);
 
   useEffect(() => {
@@ -265,28 +329,29 @@ const ChatInputBar = ({
       return;
     }
     lastConsumedSeq.current = chatRequestSeq;
-    const mention = consumeMention();
+    const mentions = consumeMentions();
     const editor = editorRef.current;
-    if (!mention || !editor) {
+    if (mentions.length === 0 || !editor) {
       return;
     }
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: "mention",
-        attrs: {
-          id: mention.id,
-          label: mention.label,
-          category: mention.category,
-          kind: mention.kind,
-          mimeType: mention.mimeType,
-          sourceWorkspaceId: mention.workspaceId,
-        },
-      })
-      .insertContent(" ")
-      .run();
-  }, [chatRequestSeq, consumeMention]);
+    const chain = editor.chain().focus();
+    for (const mention of mentions) {
+      chain
+        .insertContent({
+          type: "mention",
+          attrs: {
+            id: mention.id,
+            label: mention.label,
+            category: mention.category,
+            kind: mention.kind,
+            mimeType: mention.mimeType,
+            sourceWorkspaceId: mention.workspaceId,
+          },
+        })
+        .insertContent(" ");
+    }
+    chain.run();
+  }, [chatRequestSeq, consumeMentions]);
 
   const handleSubmit = (text: string) => {
     if (attachments.isSendBlocked) {
@@ -372,13 +437,25 @@ const NewChat = ({
   const userContext = useChatUserContext();
 
   const attachments = useChatAttachments();
+  const entityDrop = useEntityDropTarget(workspaceId);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop zone container
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone container
     <div
-      className="flex flex-1 flex-col overflow-hidden"
-      {...attachments.dropZoneProps}
+      className="relative flex flex-1 flex-col overflow-hidden"
+      onDragOver={attachments.dropZoneProps.onDragOver}
+      onDrop={attachments.dropZoneProps.onDrop}
+      onPaste={attachments.dropZoneProps.onPaste}
+      ref={entityDrop.containerRef}
     >
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-3">
+      {entityDrop.isDragOver && <DropOverlay />}
+      <div
+        className={cn(
+          "flex flex-1 flex-col items-center justify-center gap-4 px-3",
+          entityDrop.isDragOver && "invisible",
+        )}
+      >
         <MessageSquareIcon className="size-8 text-muted-foreground/30" />
         <p className="text-sm font-medium text-foreground">
           {t("chat.greeting")}
@@ -505,6 +582,7 @@ const ActiveThreadInner = ({
   } = useChatSession({ chat, threadId });
 
   const attachments = useChatAttachments();
+  const entityDrop = useEntityDropTarget(workspaceId);
 
   // Invalidate workspace entities when a mutating tool
   // completes so the table and entity links update.
@@ -539,10 +617,16 @@ const ActiveThreadInner = ({
   }, [messages, workspaceId, queryClient]);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop zone container
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone container
     <div
-      className="flex flex-1 flex-col overflow-hidden"
-      {...attachments.dropZoneProps}
+      className="relative flex flex-1 flex-col overflow-hidden"
+      onDragOver={attachments.dropZoneProps.onDragOver}
+      onDrop={attachments.dropZoneProps.onDrop}
+      onPaste={attachments.dropZoneProps.onPaste}
+      ref={entityDrop.containerRef}
     >
+      {entityDrop.isDragOver && <DropOverlay />}
       <div
         className={cn(
           "flex items-center gap-1 border-b px-2",

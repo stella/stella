@@ -13,6 +13,7 @@ export const HOTKEYS = {
   TOGGLE_CHAT: "Mod+J",
   NEW_MATTER: "Mod+Shift+E",
   TOGGLE_TIME_TRACKING: "Mod+Shift+H",
+  SELECT_ALL: "Mod+A",
 } as const satisfies Record<string, Hotkey>;
 
 export const MOD_KEY: HeldKey = detectPlatform() === "mac" ? "Meta" : "Control";

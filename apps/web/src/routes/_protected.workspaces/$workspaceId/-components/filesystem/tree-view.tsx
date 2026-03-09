@@ -6,6 +6,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+  monitorForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
@@ -16,7 +24,6 @@ import {
   FolderOpenIcon,
   FolderPlusIcon,
 } from "lucide-react";
-import { mergeProps, useDrag, useDrop } from "react-aria";
 import { useTranslations } from "use-intl";
 
 import {
@@ -35,6 +42,12 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import {
+  renderDragPreview,
+  renderMultiDragPreview,
+  type DragPreviewData,
+} from "@/components/drag-preview";
+import { HOTKEYS } from "@/lib/hotkeys";
+import {
   isFileDisplayable,
   type WorkspaceEntity,
   type WorkspaceProperty,
@@ -42,6 +55,7 @@ import {
 } from "@/lib/types";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
@@ -70,7 +84,7 @@ import {
   type InternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-const ENTITY_DRAG_TYPE = "stella/entity-id";
+const INDENT_PER_LEVEL = 20;
 
 // -- Column descriptors --
 
@@ -159,9 +173,29 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const createEntities = useCreateEntities();
   const moveEntity = useMoveEntity();
   const renameEntity = useRenameEntity();
-  const rootDropRef = useRef<HTMLDivElement>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleSelect = useCallback((entityId: string, meta: boolean) => {
+    setSelectedIds((prev) => {
+      if (meta) {
+        const next = new Set(prev);
+        if (next.has(entityId)) {
+          next.delete(entityId);
+        } else {
+          next.add(entityId);
+        }
+        return next;
+      }
+      // Single click: toggle if already the sole selection,
+      // otherwise select only this item.
+      if (prev.size === 1 && prev.has(entityId)) {
+        return new Set();
+      }
+      return new Set([entityId]);
+    });
+  }, []);
 
   // Background right-click context menu
   const [bgContextOpen, setBgContextOpen] = useState(false);
@@ -175,6 +209,48 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
   );
   const data = entityData.entities;
+
+  // Build a lookup for drag preview data from selected entities.
+  const entityMap = useMemo(() => {
+    const map = new Map<string, WorkspaceEntity>();
+    for (const e of data) {
+      map.set(e.entityId, e);
+    }
+    return map;
+  }, [data]);
+
+  const getSelectedDragItems = useCallback(
+    (entityIds: Set<string>): DragPreviewData[] => {
+      const items: DragPreviewData[] = [];
+      for (const id of entityIds) {
+        const entity = entityMap.get(id);
+        if (entity) {
+          const f = getFirstFile(entity);
+          items.push({
+            name: getEntityName(entity),
+            kind: entity.kind,
+            mimeType: f?.mimeType ?? null,
+          });
+        }
+      }
+      return items;
+    },
+    [entityMap],
+  );
+
+  const getSelectedEntities = useCallback(
+    (ids: Set<string>): WorkspaceEntity[] => {
+      const entities: WorkspaceEntity[] = [];
+      for (const id of ids) {
+        const entity = entityMap.get(id);
+        if (entity) {
+          entities.push(entity);
+        }
+      }
+      return entities;
+    },
+    [entityMap],
+  );
 
   const tree = useMemo(() => buildTree(data), [data]);
 
@@ -192,6 +268,35 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     const target = findNode(tree, currentFolderId);
     return target ? target.children : tree;
   }, [tree, currentFolderId]);
+
+  // Cmd+A: select all visible entities.
+  const allVisibleIds = useMemo(() => {
+    const ids = new Set<string>();
+    const collect = (nodes: TableTreeNode[]) => {
+      for (const n of nodes) {
+        ids.add(n.entityId);
+        if (n.children.length > 0) {
+          collect(n.children);
+        }
+      }
+    };
+    collect(visibleNodes);
+    return ids;
+  }, [visibleNodes]);
+
+  useHotkey(
+    HOTKEYS.SELECT_ALL,
+    () => {
+      setSelectedIds(allVisibleIds);
+    },
+    { ignoreInputs: true },
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  useHotkey("Escape", clearSelection, { ignoreInputs: true });
 
   const breadcrumbs = useMemo(() => {
     if (!currentFolderId) {
@@ -251,12 +356,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const setFolderState = useWorkspaceStore((s) => s.setFolderState);
   const toggleVersion = useWorkspaceStore((s) => s.folderState.toggleVersion);
 
+  // Toggle all folders when the header button is clicked.
+  // Only react to `toggleVersion` changes; `toggleAll` is
+  // intentionally excluded to avoid an infinite loop
+  // (toggleAll → allExpanded → setFolderState → re-render).
+  const toggleAllRef = useRef(toggleAll);
+  toggleAllRef.current = toggleAll;
   useEffect(() => {
     if (toggleVersion === 0) {
       return;
     }
-    toggleAll();
-  }, [toggleVersion, toggleAll]);
+    toggleAllRef.current();
+  }, [toggleVersion]);
 
   useEffect(() => {
     setFolderState({
@@ -332,56 +443,53 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [createEntities, workspaceId, currentFolderId, t],
   );
 
-  const handleDropOnFile = useCallback(
-    (
-      draggedEntityId: string,
-      targetEntityId: string,
-      targetParentId: string | null,
-    ) => {
-      createEntities.mutate(
-        {
-          workspaceId,
-          type: "manual-input",
-          kind: "folder",
-          parentId: targetParentId ?? undefined,
-          name: t("workspaces.newFolder"),
+  const [isRootDropTarget, setIsRootDropTarget] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const rootBarRef = useRef<HTMLDivElement>(null);
+  const moveEntityRefRoot = useRef(moveEntity);
+  moveEntityRefRoot.current = moveEntity;
+
+  // Track whether an entity drag is active and whether any
+  // dragged entity is nested (has a parentId). Only show the
+  // root drop bar when at least one entity can be moved to root.
+  useEffect(
+    () =>
+      monitorForElements({
+        canMonitor: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+        onDragStart: ({ source }) => {
+          // Check if any entity in the drag has a parentId.
+          const entities = source.data.entities as
+            | { parentId: string | null }[]
+            | undefined;
+          const hasNested = entities
+            ? entities.some((e) => e.parentId)
+            : !!source.data.parentId;
+          if (hasNested) {
+            setIsDragActive(true);
+          }
         },
-        {
-          onSuccess: (result) => {
-            if (result?.entityId) {
-              moveEntity.mutate({
-                workspaceId,
-                entityId: targetEntityId,
-                parentId: result.entityId,
-              });
-              moveEntity.mutate({
-                workspaceId,
-                entityId: draggedEntityId,
-                parentId: result.entityId,
-              });
-              setEditingEntityId(result.entityId);
-              setExpandedIds((prev) => new Set([...prev, result.entityId]));
-            }
-          },
-          onError: () => {
-            toastManager.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
-        },
-      );
-    },
-    [createEntities, moveEntity, workspaceId, t],
+        onDrop: () => setIsDragActive(false),
+      }),
+    [],
   );
 
-  const { dropProps: rootDropProps, isDropTarget: isRootDropTarget } = useDrop({
-    ref: rootDropRef,
-    async onDrop(e) {
-      for (const item of e.items) {
-        if (item.kind === "text" && item.types.has(ENTITY_DRAG_TYPE)) {
-          const entityId = await item.getText(ENTITY_DRAG_TYPE);
-          moveEntity.mutate(
+  // Dedicated root-level drop bar (visible during drags).
+  useEffect(() => {
+    const el = rootBarRef.current;
+    if (!el) {
+      return;
+    }
+    return dropTargetForElements({
+      element: el,
+      canDrop: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+      onDragEnter: () => setIsRootDropTarget(true),
+      onDragLeave: () => setIsRootDropTarget(false),
+      onDrop: ({ source }) => {
+        setIsRootDropTarget(false);
+        // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
+        const entityIds = source.data.entityIds as string[];
+        for (const entityId of entityIds) {
+          moveEntityRefRoot.current.mutate(
             { workspaceId, entityId, parentId: null },
             {
               onError: () => {
@@ -393,9 +501,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             },
           );
         }
-      }
-    },
-  });
+      },
+    });
+  }, [workspaceId, t]);
 
   if (data.length === 0) {
     return (
@@ -408,16 +516,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on background
-    // biome-ignore lint/a11y/noStaticElementInteractions: context menu on background
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu + click-to-deselect on background
+    // biome-ignore lint/a11y/noStaticElementInteractions: context menu + click-to-deselect on background
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape handled via useHotkey
     <div
-      className={cn(
-        "flex-1 overflow-auto p-2",
-        isRootDropTarget && "bg-accent/50",
-      )}
+      className="h-full flex-1 overflow-auto p-2"
+      onClick={(e) => {
+        // Clear selection when clicking empty background
+        // (not inside a row).
+        const target = e.target as HTMLElement;
+        if (!target.closest("[data-entity-row]")) {
+          clearSelection();
+        }
+      }}
       onContextMenu={handleBgContextMenu}
-      ref={rootDropRef}
-      {...rootDropProps}
     >
       {currentFolderId && (
         <div className="mb-2 px-2">
@@ -499,6 +611,19 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         ))}
         <span />
       </div>
+      <div
+        className={cn(
+          "mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs text-muted-foreground transition-colors",
+          isDragActive ? "visible" : "hidden",
+          isRootDropTarget
+            ? "border-primary bg-primary/10 text-foreground"
+            : "border-muted-foreground/30",
+        )}
+        ref={rootBarRef}
+      >
+        <FolderIcon className="size-3.5" />
+        {t("workspaces.filesystem.moveToRoot")}
+      </div>
       <div className="mt-1">
         {visibleNodes.map((node) => (
           <FilesystemRow
@@ -508,10 +633,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             editingEntityId={editingEntityId}
             expandedIds={expandedIds}
             extraColumns={extraColumns}
+            getSelectedDragItems={getSelectedDragItems}
+            getSelectedEntities={getSelectedEntities}
             gridTemplate={gridTemplate}
             key={node.entityId}
             node={node}
-            onDropOnFile={handleDropOnFile}
             onNavigateToFolder={navigateToFolder}
             onRename={(entityId, newName) => {
               renameEntity.mutate({
@@ -520,8 +646,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                 name: newName,
               });
             }}
+            onSelect={handleSelect}
             onStartEditing={setEditingEntityId}
             onToggleFolder={toggleFolder}
+            selectedIds={selectedIds}
             workspaceId={workspaceId}
           />
         ))}
@@ -569,17 +697,16 @@ type FilesystemRowProps = {
   gridTemplate: string;
   ancestorIds: Set<string>;
   expandedIds: Set<string>;
+  selectedIds: Set<string>;
   editingEntityId: string | null;
   currentFolderId: string | undefined;
   onToggleFolder: (folderId: string) => void;
   onNavigateToFolder: (folderId: string) => void;
   onStartEditing: (entityId: string | null) => void;
   onRename: (entityId: string, newName: string) => void;
-  onDropOnFile: (
-    draggedEntityId: string,
-    targetEntityId: string,
-    targetParentId: string | null,
-  ) => void;
+  onSelect: (entityId: string, meta: boolean) => void;
+  getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
+  getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
 };
 
 const FilesystemRow = ({
@@ -590,19 +717,23 @@ const FilesystemRow = ({
   gridTemplate,
   ancestorIds,
   expandedIds,
+  selectedIds,
   editingEntityId,
   currentFolderId,
   onToggleFolder,
   onNavigateToFolder,
   onStartEditing,
   onRename,
-  onDropOnFile,
+  onSelect,
+  getSelectedDragItems,
+  getSelectedEntities,
 }: FilesystemRowProps) => {
   const t = useTranslations();
   const [contextOpen, setContextOpen] = useState(false);
   const [editValue, setEditValue] = useState("");
   const isFolder = node.kind === "folder";
   const isEditing = editingEntityId === node.entityId;
+  const isSelected = selectedIds.has(node.entityId);
   const expanded = isFolder && expandedIds.has(node.entityId);
   const name = getEntityName(node);
 
@@ -639,6 +770,10 @@ const FilesystemRow = ({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // If right-clicking an unselected item, select only it.
+    if (!isSelected) {
+      onSelect(node.entityId, false);
+    }
     const x = e.clientX;
     const y = e.clientY;
     setContextAnchor({
@@ -647,52 +782,172 @@ const FilesystemRow = ({
     setContextOpen(true);
   };
 
-  // Drag support: every row is draggable.
-  const dragRef = useRef<HTMLDivElement>(null);
-  const { dragProps } = useDrag({
-    getItems: () => [{ [ENTITY_DRAG_TYPE]: node.entityId }],
-  });
-
-  // Drop support: only folders accept drops.
+  // Drag + drop support via pragmatic-drag-and-drop.
+  const rowRef = useRef<HTMLDivElement>(null);
   const moveEntity = useMoveEntity();
-  const dropRef = useRef<HTMLDivElement>(null);
-  const { dropProps, isDropTarget } = useDrop({
-    ref: dropRef,
-    async onDrop(e) {
-      for (const item of e.items) {
-        if (item.kind === "text" && item.types.has(ENTITY_DRAG_TYPE)) {
-          const entityId = await item.getText(ENTITY_DRAG_TYPE);
-          if (entityId === node.entityId) {
-            continue;
-          }
-          // Prevent cycles: dropping an ancestor into
-          // its own descendant would break the tree.
-          if (ancestorIds.has(entityId)) {
-            continue;
-          }
-          if (isFolder) {
-            moveEntity.mutate(
-              {
-                workspaceId,
-                entityId,
-                parentId: node.entityId,
-              },
-              {
-                onError: () => {
-                  toastManager.add({
-                    title: t("errors.actionFailed"),
-                    type: "error",
-                  });
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const autoExpandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Store volatile values in refs so the effect doesn't
+  // re-register drag/drop handlers on every render.
+  // Re-registering mid-drag tears down the active drop target
+  // and causes drops to silently fail.
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
+  const ancestorIdsRef = useRef(ancestorIds);
+  ancestorIdsRef.current = ancestorIds;
+  const moveEntityRef = useRef(moveEntity);
+  moveEntityRef.current = moveEntity;
+  const onToggleFolderRef = useRef(onToggleFolder);
+  onToggleFolderRef.current = onToggleFolder;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const getSelectedDragItemsRef = useRef(getSelectedDragItems);
+  getSelectedDragItemsRef.current = getSelectedDragItems;
+  const getSelectedEntitiesRef = useRef(getSelectedEntities);
+  getSelectedEntitiesRef.current = getSelectedEntities;
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) {
+      return;
+    }
+    const cleanup = combine(
+      draggable({
+        element: el,
+        getInitialData: () => {
+          const sel = selectedIdsRef.current;
+          const isMulti = sel.size > 1 && sel.has(node.entityId);
+          // When the dragged item is part of a multi-selection,
+          // include all selected entity IDs in the drag data.
+          const entityIds = isMulti ? [...sel] : [node.entityId];
+          // Include metadata for each entity so drop targets
+          // (e.g. the chat panel) can create mentions for all.
+          const entities = isMulti
+            ? getSelectedEntitiesRef.current(sel).map((e) => ({
+                entityId: e.entityId,
+                name: getEntityName(e),
+                kind: e.kind,
+                mimeType: getFirstFile(e)?.mimeType ?? null,
+                parentId: e.parentId ?? null,
+              }))
+            : [
+                {
+                  entityId: node.entityId,
+                  name,
+                  kind: node.kind,
+                  mimeType: file?.mimeType ?? null,
+                  parentId: node.parentId ?? null,
                 },
+              ];
+          return {
+            type: ENTITY_DRAG_TYPE,
+            entityId: node.entityId,
+            entityIds,
+            entities,
+            parentId: node.parentId ?? null,
+            name,
+            kind: node.kind,
+            mimeType: file?.mimeType ?? null,
+          };
+        },
+        onGenerateDragPreview: ({ nativeSetDragImage }) => {
+          setCustomNativeDragPreview({
+            nativeSetDragImage,
+            render: ({ container }) => {
+              const sel = selectedIdsRef.current;
+              if (sel.size > 1 && sel.has(node.entityId)) {
+                const items = getSelectedDragItemsRef.current(sel);
+                return renderMultiDragPreview(container, items);
+              }
+              return renderDragPreview(container, {
+                name,
+                kind: node.kind,
+                mimeType: file?.mimeType ?? null,
+              });
+            },
+          });
+        },
+      }),
+      // Only folders are drop targets.
+      ...(isFolder
+        ? [
+            dropTargetForElements({
+              element: el,
+              canDrop: ({ source }) =>
+                source.data.type === ENTITY_DRAG_TYPE &&
+                source.data.entityId !== node.entityId &&
+                // SAFETY: entityId is always a string; set by our own draggable getInitialData.
+                !ancestorIdsRef.current.has(source.data.entityId as string),
+              getData: () => ({ entityId: node.entityId }),
+              onDragEnter: () => {
+                setIsDropTarget(true);
+                if (!expandedRef.current) {
+                  autoExpandTimer.current = setTimeout(() => {
+                    onToggleFolderRef.current(node.entityId);
+                  }, 600);
+                }
               },
-            );
-          } else {
-            onDropOnFile(entityId, node.entityId, node.parentId ?? null);
-          }
-        }
+              onDragLeave: () => {
+                setIsDropTarget(false);
+                if (autoExpandTimer.current) {
+                  clearTimeout(autoExpandTimer.current);
+                  autoExpandTimer.current = null;
+                }
+              },
+              onDrop: ({ source }) => {
+                setIsDropTarget(false);
+                if (autoExpandTimer.current) {
+                  clearTimeout(autoExpandTimer.current);
+                  autoExpandTimer.current = null;
+                }
+                // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
+                const entityIds = source.data.entityIds as string[];
+                for (const entityId of entityIds) {
+                  if (ancestorIdsRef.current.has(entityId)) {
+                    continue;
+                  }
+                  if (entityId === node.entityId) {
+                    continue;
+                  }
+                  moveEntityRef.current.mutate(
+                    {
+                      workspaceId,
+                      entityId,
+                      parentId: node.entityId,
+                    },
+                    {
+                      onError: () => {
+                        toastManager.add({
+                          title: t("errors.actionFailed"),
+                          type: "error",
+                        });
+                      },
+                    },
+                  );
+                }
+              },
+            }),
+          ]
+        : []),
+    );
+    return () => {
+      cleanup();
+      if (autoExpandTimer.current) {
+        clearTimeout(autoExpandTimer.current);
+        autoExpandTimer.current = null;
       }
-    },
-  });
+    };
+  }, [
+    node.entityId,
+    node.parentId,
+    node.kind,
+    name,
+    file?.mimeType,
+    isFolder,
+    workspaceId,
+    t,
+  ]);
 
   // Shared cells: Name + Type
   const nameCell = (
@@ -741,7 +996,10 @@ const FilesystemRow = ({
   );
 
   const extraCells = extraColumns.map((col) => (
-    <span className="text-right text-xs text-muted-foreground" key={col.id}>
+    <span
+      className="min-w-0 overflow-hidden text-right text-xs text-ellipsis whitespace-nowrap text-muted-foreground"
+      key={col.id}
+    >
       <ExtraColumnCell column={col} entity={node} />
     </span>
   ));
@@ -749,6 +1007,7 @@ const FilesystemRow = ({
   const gridCls = cn(
     "grid w-full items-center gap-x-4 rounded px-2 py-1 text-left text-sm hover:bg-muted",
     isDropTarget && "bg-accent ring-2 ring-primary",
+    isSelected && "bg-accent",
   );
 
   // Content area: Name + Type + extras (interactive, clickable)
@@ -767,25 +1026,79 @@ const FilesystemRow = ({
     </>
   );
 
-  // Merge drag and drop props onto the wrapper div.
-  // mergeProps chains overlapping event handlers (e.g. onKeyDown)
-  // instead of one silently overwriting the other.
-  const combinedProps = mergeProps(dragProps, dropProps);
+  const isBulkSelected = selectedIds.size > 1 && isSelected;
 
-  const combinedRef = useCallback((el: HTMLDivElement | null) => {
-    dragRef.current = el;
-    dropRef.current = el;
-  }, []);
+  const openInPeek = (() => {
+    if (isBulkSelected) {
+      // Open all selected navigable files in peek.
+      const entities = getSelectedEntities(selectedIds);
+      const navigables = entities
+        .map((e) => {
+          const f = getFirstFile(e);
+          if (!f || !isFileDisplayable(f)) {
+            return null;
+          }
+          return {
+            fieldId: f.fieldId,
+            entityId: e.entityId,
+            label: getEntityName(e),
+          };
+        })
+        .filter((x) => x !== null);
+      if (navigables.length === 0) {
+        return;
+      }
+      return () => {
+        const peek = usePeekStore.getState();
+        for (const tab of navigables) {
+          peek.openTab(tab);
+        }
+      };
+    }
+    if (navigable && file) {
+      return () =>
+        usePeekStore.getState().openTab({
+          fieldId: file.fieldId,
+          entityId: file.entityId,
+          label: name,
+        });
+    }
+    return;
+  })();
+
+  const bulkEntities = isBulkSelected
+    ? getSelectedEntities(selectedIds)
+    : undefined;
+
+  const rowActionsNode = (
+    <span className="flex justify-end">
+      <RowActions
+        anchor={contextAnchor}
+        entity={node}
+        onOpen={openInPeek}
+        onOpenChange={(o) => {
+          setContextOpen(o);
+          if (!o) {
+            setContextAnchor(null);
+          }
+        }}
+        onRename={startEditing}
+        open={contextOpen}
+        selectedEntities={bulkEntities}
+        workspaceId={workspaceId}
+      />
+    </span>
+  );
 
   return (
     <>
       {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on row */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: context menu on row */}
       <div
-        className="group/row"
+        className="group/row relative"
+        data-entity-row
         onContextMenu={handleContextMenu}
-        ref={combinedRef}
-        {...combinedProps}
+        ref={rowRef}
       >
         {isFolder ? (
           <div
@@ -807,82 +1120,34 @@ const FilesystemRow = ({
             >
               {contentCells}
             </button>
-            <span className="flex justify-end">
-              <RowActions
-                anchor={contextAnchor}
-                entity={node}
-                onOpenChange={(o) => {
-                  setContextOpen(o);
-                  if (!o) {
-                    setContextAnchor(null);
-                  }
-                }}
-                onRename={startEditing}
-                open={contextOpen}
-                workspaceId={workspaceId}
-              />
-            </span>
-          </div>
-        ) : navigable && file ? (
-          <div
-            className={gridCls}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <button
-              onClick={() =>
-                usePeekStore.getState().openTab({
-                  fieldId: file.fieldId,
-                  entityId: file.entityId,
-                  label: name,
-                })
-              }
-              style={contentSpanStyle}
-              type="button"
-            >
-              {contentCells}
-            </button>
-            <span className="flex justify-end">
-              <RowActions
-                anchor={contextAnchor}
-                entity={node}
-                onOpenChange={(o) => {
-                  setContextOpen(o);
-                  if (!o) {
-                    setContextAnchor(null);
-                  }
-                }}
-                onRename={startEditing}
-                open={contextOpen}
-                workspaceId={workspaceId}
-              />
-            </span>
+            {rowActionsNode}
           </div>
         ) : (
           <div
             className={gridCls}
             style={{ gridTemplateColumns: gridTemplate }}
           >
-            {contentCells}
-            <span className="flex justify-end">
-              <RowActions
-                anchor={contextAnchor}
-                entity={node}
-                onOpenChange={(o) => {
-                  setContextOpen(o);
-                  if (!o) {
-                    setContextAnchor(null);
-                  }
-                }}
-                onRename={startEditing}
-                open={contextOpen}
-                workspaceId={workspaceId}
-              />
-            </span>
+            <button
+              onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
+              onDoubleClick={() => openInPeek?.()}
+              style={contentSpanStyle}
+              type="button"
+            >
+              {contentCells}
+            </button>
+            {rowActionsNode}
           </div>
         )}
       </div>
-      {isFolder && expanded && (
-        <div>
+      {isFolder && expanded && node.children.length > 0 && (
+        <div className="relative">
+          {/* Tree guide line — aligned under parent chevron */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-muted-foreground/20"
+            style={{
+              left: `${8 + depth * INDENT_PER_LEVEL + 7}px`,
+            }}
+          />
           {node.children.map((child) => (
             <FilesystemRow
               ancestorIds={new Set([...ancestorIds, node.entityId])}
@@ -891,14 +1156,17 @@ const FilesystemRow = ({
               editingEntityId={editingEntityId}
               expandedIds={expandedIds}
               extraColumns={extraColumns}
+              getSelectedDragItems={getSelectedDragItems}
+              getSelectedEntities={getSelectedEntities}
               gridTemplate={gridTemplate}
               key={child.entityId}
               node={child}
-              onDropOnFile={onDropOnFile}
               onNavigateToFolder={onNavigateToFolder}
               onRename={onRename}
+              onSelect={onSelect}
               onStartEditing={onStartEditing}
               onToggleFolder={onToggleFolder}
+              selectedIds={selectedIds}
               workspaceId={workspaceId}
             />
           ))}

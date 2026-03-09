@@ -1,4 +1,19 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+  type Edge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
+import {
+  containsFiles,
+  getFiles,
+} from "@atlaskit/pragmatic-drag-and-drop/external/file";
 import {
   EllipsisVerticalIcon,
   EyeOffIcon,
@@ -8,7 +23,6 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useDrag, useDrop } from "react-aria";
 import { useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stella/api/types";
@@ -38,13 +52,14 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import {
+  COLUMN_DRAG_TYPE,
+  ENTITY_DRAG_TYPE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { optionColors } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-
-const ENTITY_DRAG_TYPE = "stella/entity-id";
-const COLUMN_DRAG_TYPE = "stella/column-value";
 
 type KanbanColumnProps = {
   title: string;
@@ -63,7 +78,11 @@ type KanbanColumnProps = {
   onRenameEntity?: (entityId: string, newName: string) => void;
   onHideColumn?: () => void;
   onDeleteAll?: () => void;
-  onReorderColumn?: (sourceValue: string, targetValue: string) => void;
+  onReorderColumn?: (
+    sourceValue: string,
+    targetValue: string,
+    edge: Edge | null,
+  ) => void;
 };
 
 export const KanbanColumn = ({
@@ -86,71 +105,130 @@ export const KanbanColumn = ({
   onReorderColumn,
 }: KanbanColumnProps) => {
   const t = useTranslations();
-  const dropRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<HTMLDivElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(title);
   const [isFileDragOver, setIsFileDragOver] = useState(false);
-  const dragCounterRef = useRef(0);
+  const [isEntityDragOver, setIsEntityDragOver] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [closestColumnEdge, setClosestColumnEdge] = useState<Edge | null>(null);
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
-  const { dragProps } = useDrag({
-    getItems: () =>
-      columnValue !== null ? [{ [COLUMN_DRAG_TYPE]: columnValue }] : [],
-    isDisabled: !isDraggable,
-  });
+  // Store callbacks in refs to keep effect deps stable.
+  const onDropRef = useRef(onDrop);
+  onDropRef.current = onDrop;
+  const onFileUploadRef = useRef(onFileUpload);
+  onFileUploadRef.current = onFileUpload;
 
-  // Native drag events detect OS file drags (dataTransfer has "Files")
-  const handleNativeDragEnter = (e: React.DragEvent) => {
-    dragCounterRef.current += 1;
-    if (onFileUpload && e.dataTransfer.types.includes("Files")) {
-      setIsFileDragOver(true);
+  useEffect(() => {
+    const el = columnRef.current;
+    const handle = dragHandleRef.current;
+    if (!el) {
+      return;
     }
-  };
-  const handleNativeDragLeave = () => {
-    dragCounterRef.current -= 1;
-    if (dragCounterRef.current <= 0) {
-      dragCounterRef.current = 0;
-      setIsFileDragOver(false);
-    }
-  };
 
-  const { dropProps, isDropTarget } = useDrop({
-    ref: dropRef,
-    async onDrop(e) {
-      dragCounterRef.current = 0;
-      setIsFileDragOver(false);
-      const files: File[] = [];
-      for (const item of e.items) {
-        if (item.kind === "text" && item.types.has(COLUMN_DRAG_TYPE)) {
-          const sourceValue = await item.getText(COLUMN_DRAG_TYPE);
-          if (columnValue !== null && sourceValue !== columnValue) {
-            onReorderColumn?.(sourceValue, columnValue);
+    const cleanups = [
+      // Drop target for entity cards and column reorder
+      dropTargetForElements({
+        element: el,
+        canDrop: ({ source }) =>
+          source.data.type === ENTITY_DRAG_TYPE ||
+          source.data.type === COLUMN_DRAG_TYPE,
+        getData: ({ input, element, source }) => {
+          const data: Record<string | symbol, unknown> = {
+            columnValue,
+          };
+          if (source.data.type === COLUMN_DRAG_TYPE) {
+            return attachClosestEdge(data, {
+              input,
+              element,
+              allowedEdges: ["left", "right"],
+            });
           }
-        } else if (item.kind === "text" && item.types.has(ENTITY_DRAG_TYPE)) {
-          const entityId = await item.getText(ENTITY_DRAG_TYPE);
-          onDrop(entityId);
-        } else if (item.kind === "file") {
-          const file = await item.getFile();
-          files.push(file);
-        }
-      }
-      if (files.length > 0) {
-        onFileUpload?.(files);
-      }
-    },
-  });
+          return data;
+        },
+        onDragEnter: ({ source, self }) => {
+          if (source.data.type === ENTITY_DRAG_TYPE) {
+            setIsEntityDragOver(true);
+          } else if (source.data.type === COLUMN_DRAG_TYPE) {
+            const sourceVal = source.data.columnValue;
+            if (sourceVal !== columnValue) {
+              setClosestColumnEdge(extractClosestEdge(self.data));
+            }
+          }
+        },
+        onDrag: ({ source, self }) => {
+          if (source.data.type === COLUMN_DRAG_TYPE) {
+            const sourceVal = source.data.columnValue;
+            if (sourceVal === columnValue) {
+              return;
+            }
+            const edge = extractClosestEdge(self.data);
+            setClosestColumnEdge((prev) => (prev === edge ? prev : edge));
+          }
+        },
+        onDragLeave: ({ source }) => {
+          if (source.data.type === ENTITY_DRAG_TYPE) {
+            setIsEntityDragOver(false);
+          } else if (source.data.type === COLUMN_DRAG_TYPE) {
+            setClosestColumnEdge(null);
+          }
+        },
+        onDrop: ({ source }) => {
+          setIsEntityDragOver(false);
+          setClosestColumnEdge(null);
+          // Column reorder is handled by the board-level
+          // monitor (forgiving: works even if dropped in gap).
+          if (source.data.type === ENTITY_DRAG_TYPE) {
+            // SAFETY: entityId is always a string; set by our own draggable getInitialData.
+            const entityId = source.data.entityId as string;
+            onDropRef.current(entityId);
+          }
+        },
+      }),
+    ];
 
-  // Merge react-aria drop handlers with native file drag detection.
-  // Spreading dropProps would override our explicit onDragEnter/Leave,
-  // so we extract them and call both in merged handlers.
-  const {
-    onDragEnter: ariaOnDragEnter,
-    onDragLeave: ariaOnDragLeave,
-    ...restDropProps
-  } = dropProps;
+    // External file drop target
+    if (onFileUploadRef.current) {
+      cleanups.push(
+        dropTargetForExternal({
+          element: el,
+          canDrop: containsFiles,
+          onDragEnter: () => setIsFileDragOver(true),
+          onDragLeave: () => setIsFileDragOver(false),
+          onDrop: ({ source }) => {
+            setIsFileDragOver(false);
+            const files = getFiles({ source });
+            if (files.length > 0) {
+              onFileUploadRef.current?.(files);
+            }
+          },
+        }),
+      );
+    }
+
+    // Column draggable: entire column is the element,
+    // grip icon is the drag handle (Trello-style).
+    if (isDraggable && handle && columnValue !== null) {
+      cleanups.push(
+        draggable({
+          element: el,
+          dragHandle: handle,
+          getInitialData: () => ({
+            type: COLUMN_DRAG_TYPE,
+            columnValue,
+          }),
+          onDragStart: () => setIsDragging(true),
+          onDrop: () => setIsDragging(false),
+        }),
+      );
+    }
+
+    return combine(...cleanups);
+  }, [columnValue, isDraggable]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -206,25 +284,15 @@ export const KanbanColumn = ({
   const hasColumnActions = onChangeColor || onHideColumn || onDeleteAll;
 
   return (
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drag-and-drop events from react-aria spread props
-    // biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop container, not a clickable element
     <div
       className={cn(
-        "group/column flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg border-l-2 border-l-transparent transition-all",
+        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-all",
         !colorBg && "bg-muted/50",
-        isFileDragOver
-          ? "bg-primary/5 ring-2 ring-primary/50"
-          : isDropTarget && "border-l-primary bg-primary/5",
+        (isFileDragOver || isEntityDragOver) &&
+          "bg-primary/5 ring-2 ring-primary/50",
+        isDragging && "opacity-40",
       )}
-      onDragEnter={(e) => {
-        ariaOnDragEnter?.(e);
-        handleNativeDragEnter(e);
-      }}
-      onDragLeave={(e) => {
-        ariaOnDragLeave?.(e);
-        handleNativeDragLeave();
-      }}
-      ref={dropRef}
+      ref={columnRef}
       style={
         colorBg
           ? {
@@ -232,8 +300,17 @@ export const KanbanColumn = ({
             }
           : undefined
       }
-      {...restDropProps}
     >
+      {closestColumnEdge && !isDragging && (
+        <div
+          className={cn(
+            "pointer-events-none absolute top-0 z-10 flex h-full w-0.5 flex-col items-center bg-primary",
+            closestColumnEdge === "left" ? "-left-[9px]" : "-right-[9px]",
+          )}
+        >
+          <div className="-mt-0.5 size-2 rounded-full bg-primary" />
+        </div>
+      )}
       <div className="flex items-center gap-2 px-3 py-2">
         {color && onChangeColor ? (
           <Popover modal>
@@ -286,8 +363,7 @@ export const KanbanColumn = ({
         {isDraggable && (
           <div
             className="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/column:opacity-100 hover:text-foreground"
-            ref={dragRef}
-            {...dragProps}
+            ref={dragHandleRef}
           >
             <GripVerticalIcon className="size-3.5" />
           </div>

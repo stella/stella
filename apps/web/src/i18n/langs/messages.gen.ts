@@ -452,6 +452,7 @@ type Messages = {
     "decline": "Decline";
     "delete": "Delete";
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
+    "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "done": "Done";
     "download": "Download";
@@ -965,6 +966,8 @@ type Messages = {
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
     "deleteItem": "Delete item";
+    "deleteItems": "Delete {count, plural, one {# item} other {# items}}";
+    "deleteItemsDescription": "Are you sure you want to delete {count, plural, one {# item} other {# items}}? This action cannot be undone.";
     "deleteSelectedRows": "Delete selected rows";
     "deleteSelectedRowsDescription": "{count, plural, one {Are you sure you want to delete # selected row? This action cannot be undone.} other {Are you sure you want to delete # selected rows? This action cannot be undone.}}";
     "deleteSelection": "Delete selection";
@@ -1007,6 +1010,7 @@ type Messages = {
       "collapseAll": "Collapse all folders";
       "expandAll": "Expand all folders";
       "lastUpdated": "Last updated";
+      "moveToRoot": "Drop here to move to root level";
       "noFilesYet": "No files yet";
       "version": "Version";
     };
@@ -1025,6 +1029,7 @@ type Messages = {
     "lastActive": "Last active {time}";
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
+    "mattersCount": "{count, plural, one {# matter} other {# matters}}";
     "members": {
       "addMember": "Add member";
       "addMemberDescription": "Add an organization member to this matter";
@@ -1035,7 +1040,6 @@ type Messages = {
       "removeMemberConfirm": "Remove this member from the matter?";
       "selectMember": "Select a member";
     };
-    "mattersCount": "{count, plural, one {# matter} other {# matters}}";
     "newDocument": "New document";
     "newFolder": "New folder";
     "newMatter": "New matter";

@@ -735,13 +735,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface ProtectedAccountRouteRouteChildren {
-  ProtectedAccountSettingsRoute: typeof ProtectedAccountSettingsRoute
   ProtectedAccountSessionsRoute: typeof ProtectedAccountSessionsRoute
+  ProtectedAccountSettingsRoute: typeof ProtectedAccountSettingsRoute
 }
 
 const ProtectedAccountRouteRouteChildren: ProtectedAccountRouteRouteChildren = {
-  ProtectedAccountSettingsRoute: ProtectedAccountSettingsRoute,
   ProtectedAccountSessionsRoute: ProtectedAccountSessionsRoute,
+  ProtectedAccountSettingsRoute: ProtectedAccountSettingsRoute,
 }
 
 const ProtectedAccountRouteRouteWithChildren =
