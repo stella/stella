@@ -26,7 +26,7 @@ import {
   updateInvoiceBodySchema,
   updateInvoiceHandler,
 } from "@/api/handlers/invoices/update";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
@@ -35,6 +35,7 @@ export const invoicesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -72,6 +73,7 @@ export const invoicesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { invoice: ["create"] },
       invalidateQuery: true,
       body: createInvoiceBodySchema,
     },
@@ -85,6 +87,7 @@ export const invoicesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { invoice: ["update"] },
       invalidateQuery: true,
       params: t.Object({
         workspaceId: tNanoid,
@@ -102,6 +105,7 @@ export const invoicesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { invoice: ["update"] },
       invalidateQuery: true,
       params: t.Object({
         workspaceId: tNanoid,
@@ -118,6 +122,7 @@ export const invoicesRoute = new Elysia({
         invoiceId: ctx.params.invoiceId,
       }),
     {
+      permissions: { invoice: ["delete"] },
       invalidateQuery: true,
       params: t.Object({
         workspaceId: tNanoid,
@@ -134,6 +139,7 @@ export const invoicesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { invoice: ["update"] },
       invalidateQuery: true,
       params: t.Object({
         workspaceId: tNanoid,
@@ -151,6 +157,7 @@ export const invoicesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { invoice: ["update"] },
       invalidateQuery: true,
       params: t.Object({
         workspaceId: tNanoid,

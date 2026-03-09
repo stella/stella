@@ -42,6 +42,7 @@ import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   useCreateView,
@@ -105,6 +106,7 @@ export const ViewSwitcher = ({
   onViewChange,
 }: ViewSwitcherProps) => {
   const t = useTranslations();
+  const canCreateView = usePermissions({ view: ["create"] });
   const { data: views } = useSuspenseQuery(viewsOptions(workspaceId));
   const createView = useCreateView();
   const reorderViews = useReorderViews();
@@ -186,58 +188,60 @@ export const ViewSwitcher = ({
           })}
         </TabsList>
       </Tabs>
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              className="size-7"
-              disabled={createView.isPending}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <PlusIcon className="size-3.5" />
-        </MenuTrigger>
-        <MenuPopup>
-          {LAYOUT_OPTIONS.map((layout) => {
-            const Icon = layoutIcons[layout];
-            return (
-              <MenuItem
-                key={layout}
-                onClick={() => {
-                  const viewId = nanoid();
-                  createView.mutate(
-                    {
-                      workspaceId,
-                      id: viewId,
-                      name: t("workspaces.views.newView", {
-                        layout: t(LAYOUT_LABEL_KEYS[layout]),
-                      }),
-                      layout,
-                      config: defaultConfigs[layout],
-                    },
-                    {
-                      onSuccess: () => {
-                        onViewChange(viewId);
+      {canCreateView && (
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                className="size-7"
+                disabled={createView.isPending}
+                size="icon-xs"
+                variant="ghost"
+              />
+            }
+          >
+            <PlusIcon className="size-3.5" />
+          </MenuTrigger>
+          <MenuPopup>
+            {LAYOUT_OPTIONS.map((layout) => {
+              const Icon = layoutIcons[layout];
+              return (
+                <MenuItem
+                  key={layout}
+                  onClick={() => {
+                    const viewId = nanoid();
+                    createView.mutate(
+                      {
+                        workspaceId,
+                        id: viewId,
+                        name: t("workspaces.views.newView", {
+                          layout: t(LAYOUT_LABEL_KEYS[layout]),
+                        }),
+                        layout,
+                        config: defaultConfigs[layout],
                       },
-                      onError: () => {
-                        toastManager.add({
-                          title: t("errors.failedToCreateView"),
-                          type: "error",
-                        });
+                      {
+                        onSuccess: () => {
+                          onViewChange(viewId);
+                        },
+                        onError: () => {
+                          toastManager.add({
+                            title: t("errors.failedToCreateView"),
+                            type: "error",
+                          });
+                        },
                       },
-                    },
-                  );
-                }}
-              >
-                <Icon className="size-4" />
-                {t(LAYOUT_LABEL_KEYS[layout])}
-              </MenuItem>
-            );
-          })}
-        </MenuPopup>
-      </Menu>
+                    );
+                  }}
+                >
+                  <Icon className="size-4" />
+                  {t(LAYOUT_LABEL_KEYS[layout])}
+                </MenuItem>
+              );
+            })}
+          </MenuPopup>
+        </Menu>
+      )}
     </div>
   );
 };
@@ -270,6 +274,9 @@ const ViewTab = ({
   onReorder,
 }: ViewTabProps) => {
   const t = useTranslations();
+  const canCreateView = usePermissions({ view: ["create"] });
+  const canUpdateView = usePermissions({ view: ["update"] });
+  const canDeleteView = usePermissions({ view: ["delete"] });
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(name);
   const updateView = useUpdateView();
@@ -338,11 +345,11 @@ const ViewTab = ({
         {icon}
         <InlineEdit
           inputClassName="w-24"
-          onChange={setRenameValue}
           onCancel={() => {
             setIsRenaming(false);
             setRenameValue(name);
           }}
+          onChange={setRenameValue}
           onCommit={handleRename}
           value={renameValue}
         />
@@ -360,6 +367,9 @@ const ViewTab = ({
       <TabsTab
         onClick={onSelect}
         onDoubleClick={(e) => {
+          if (!canUpdateView) {
+            return;
+          }
           e.preventDefault();
           setIsRenaming(true);
           setRenameValue(name);
@@ -387,108 +397,117 @@ const ViewTab = ({
               <EllipsisVerticalIcon className="size-3" />
             </MenuTrigger>
             <MenuPopup>
-              <MenuItem
-                onClick={() => {
-                  setIsRenaming(true);
-                  setRenameValue(name);
-                }}
-              >
-                <PencilIcon className="size-4" />
-                {t("common.rename")}
-              </MenuItem>
-              <MenuItem onClick={onDuplicate}>
-                <CopyIcon className="size-4" />
-                {t("common.duplicate")}
-              </MenuItem>
-              <MenuSub>
-                <MenuSubTrigger>
-                  {icon}
-                  {t("common.convertTo")}
-                </MenuSubTrigger>
-                <MenuSubPopup>
-                  {LAYOUT_OPTIONS.filter((l) => l !== layout).map((l) => {
-                    const Icon = layoutIcons[l];
-                    return (
-                      <MenuItem
-                        key={l}
-                        onClick={() => {
-                          updateView.mutate(
-                            {
-                              workspaceId,
-                              viewId,
-                              layout: l,
-                              config,
-                            },
-                            {
-                              onError: () => {
-                                toastManager.add({
-                                  title: t("errors.failedToChangeViewType"),
-                                  type: "error",
-                                });
-                              },
-                            },
-                          );
-                        }}
-                      >
-                        <Icon className="size-4" />
-                        {t(LAYOUT_LABEL_KEYS[l])}
-                      </MenuItem>
-                    );
-                  })}
-                </MenuSubPopup>
-              </MenuSub>
-              <MenuSeparator />
-              {deleteDisabled ? (
+              {canUpdateView && (
                 <MenuItem
                   onClick={() => {
-                    toastManager.add({
-                      title: t("workspaces.views.cannotDeleteRequired"),
-                      type: "info",
-                    });
+                    setIsRenaming(true);
+                    setRenameValue(name);
                   }}
                 >
-                  <Trash2Icon className="size-4 opacity-50" />
-                  <span className="opacity-50">{t("common.delete")}</span>
+                  <PencilIcon className="size-4" />
+                  {t("common.rename")}
                 </MenuItem>
-              ) : (
-                <AlertDialog>
-                  <AlertDialogTrigger
-                    render={
-                      <MenuItem closeOnClick={false} variant="destructive" />
-                    }
-                  >
-                    <Trash2Icon className="size-4" />
-                    {t("common.delete")}
-                  </AlertDialogTrigger>
-                  <AlertDialogPopup>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {t("workspaces.views.deleteView")}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t("common.deleteConfirmDescription", {
-                          name,
-                        })}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogClose render={<Button variant="ghost" />}>
-                        {t("common.cancel")}
-                      </AlertDialogClose>
-                      <AlertDialogClose
-                        render={
-                          <Button
-                            onClick={handleDelete}
-                            variant="destructive"
-                          />
-                        }
-                      >
-                        {t("common.delete")}
-                      </AlertDialogClose>
-                    </AlertDialogFooter>
-                  </AlertDialogPopup>
-                </AlertDialog>
               )}
+              {canCreateView && (
+                <MenuItem onClick={onDuplicate}>
+                  <CopyIcon className="size-4" />
+                  {t("common.duplicate")}
+                </MenuItem>
+              )}
+              {canUpdateView && (
+                <MenuSub>
+                  <MenuSubTrigger>
+                    {icon}
+                    {t("common.convertTo")}
+                  </MenuSubTrigger>
+                  <MenuSubPopup>
+                    {LAYOUT_OPTIONS.filter((l) => l !== layout).map((l) => {
+                      const Icon = layoutIcons[l];
+                      return (
+                        <MenuItem
+                          key={l}
+                          onClick={() => {
+                            updateView.mutate(
+                              {
+                                workspaceId,
+                                viewId,
+                                layout: l,
+                                config,
+                              },
+                              {
+                                onError: () => {
+                                  toastManager.add({
+                                    title: t("errors.failedToChangeViewType"),
+                                    type: "error",
+                                  });
+                                },
+                              },
+                            );
+                          }}
+                        >
+                          <Icon className="size-4" />
+                          {t(LAYOUT_LABEL_KEYS[l])}
+                        </MenuItem>
+                      );
+                    })}
+                  </MenuSubPopup>
+                </MenuSub>
+              )}
+              {canDeleteView && (canUpdateView || canCreateView) && (
+                <MenuSeparator />
+              )}
+              {canDeleteView &&
+                (deleteDisabled ? (
+                  <MenuItem
+                    onClick={() => {
+                      toastManager.add({
+                        title: t("workspaces.views.cannotDeleteRequired"),
+                        type: "info",
+                      });
+                    }}
+                  >
+                    <Trash2Icon className="size-4 opacity-50" />
+                    <span className="opacity-50">{t("common.delete")}</span>
+                  </MenuItem>
+                ) : (
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={
+                        <MenuItem closeOnClick={false} variant="destructive" />
+                      }
+                    >
+                      <Trash2Icon className="size-4" />
+                      {t("common.delete")}
+                    </AlertDialogTrigger>
+                    <AlertDialogPopup>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {t("workspaces.views.deleteView")}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t("common.deleteConfirmDescription", {
+                            name,
+                          })}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogClose render={<Button variant="ghost" />}>
+                          {t("common.cancel")}
+                        </AlertDialogClose>
+                        <AlertDialogClose
+                          render={
+                            <Button
+                              onClick={handleDelete}
+                              variant="destructive"
+                            />
+                          }
+                        >
+                          {t("common.delete")}
+                        </AlertDialogClose>
+                      </AlertDialogFooter>
+                    </AlertDialogPopup>
+                  </AlertDialog>
+                ))}
             </MenuPopup>
           </Menu>
         )}

@@ -12,13 +12,14 @@ import {
   updateContactBodySchema,
   updateContactByIdHandler,
 } from "@/api/handlers/contacts/update-by-id";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 const contactIdParams = t.Object({ contactId: tNanoid });
 
 export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({
     validateAuth: true,
   })
@@ -69,6 +70,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         body: ctx.body,
       }),
     {
+      permissions: { contact: ["create"] },
       body: createContactBodySchema,
     },
   )
@@ -94,13 +96,19 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
               body: ctx.body,
             }),
           {
+            permissions: { contact: ["update"] },
             body: updateContactBodySchema,
           },
         )
-        .delete("/", (ctx) =>
-          deleteContactByIdHandler({
-            organizationId: ctx.session.activeOrganizationId,
-            contactId: ctx.params.contactId,
-          }),
+        .delete(
+          "/",
+          (ctx) =>
+            deleteContactByIdHandler({
+              organizationId: ctx.session.activeOrganizationId,
+              contactId: ctx.params.contactId,
+            }),
+          {
+            permissions: { contact: ["delete"] },
+          },
         ),
   );

@@ -30,7 +30,7 @@ import {
   uploadEntityBodySchema,
   uploadEntityHandler,
 } from "@/api/handlers/entities/upload";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const entitiesRoute = new Elysia({
@@ -38,6 +38,7 @@ export const entitiesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -50,6 +51,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["create"] },
       invalidateQuery: true,
       body: createEntityBodySchema,
     },
@@ -64,6 +66,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["create"] },
       invalidateQuery: true,
       body: uploadEntityBodySchema,
     },
@@ -82,6 +85,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["delete"] },
       invalidateQuery: true,
       body: deleteEntitiesBodySchema,
     },
@@ -94,6 +98,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["update"] },
       invalidateQuery: true,
       body: moveEntityBodySchema,
     },
@@ -106,6 +111,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["update"] },
       invalidateQuery: true,
       body: renameEntityBodySchema,
     },
@@ -119,6 +125,7 @@ export const entitiesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { entity: ["create"] },
       invalidateQuery: true,
       body: duplicateEntityBodySchema,
     },

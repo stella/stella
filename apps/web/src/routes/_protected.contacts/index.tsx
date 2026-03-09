@@ -51,6 +51,7 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
+import { usePermissions } from "@/hooks/use-permissions";
 import { toFormErrors } from "@/lib/schema";
 import {
   useCreateContact,
@@ -69,6 +70,7 @@ export const Route = createFileRoute("/_protected/contacts/")({
 
 function ContactsPage() {
   const t = useTranslations();
+  const canCreateContact = usePermissions({ contact: ["create"] });
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -122,7 +124,7 @@ function ContactsPage() {
             onClick={() => setFilter("organization")}
           />
         </div>
-        <CreateContactDialog />
+        {canCreateContact && <CreateContactDialog />}
       </div>
 
       <Table>
@@ -188,6 +190,7 @@ type ContactItem = {
 
 const ContactRow = ({ contact }: { contact: ContactItem }) => {
   const t = useTranslations();
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
   const deleteContact = useDeleteContact();
   const queryClient = useQueryClient();
 
@@ -261,13 +264,15 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
             <EllipsisVerticalIcon />
           </Tooltip>
           <MenuPopup>
-            <MenuItem
-              disabled={deleteContact.isPending}
-              onClick={handleDelete}
-              variant="destructive"
-            >
-              {t("contacts.deleteContact")}
-            </MenuItem>
+            {canDeleteContact && (
+              <MenuItem
+                disabled={deleteContact.isPending}
+                onClick={handleDelete}
+                variant="destructive"
+              >
+                {t("contacts.deleteContact")}
+              </MenuItem>
+            )}
           </MenuPopup>
         </Menu>
       </TableCell>

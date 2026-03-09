@@ -37,6 +37,7 @@ import { Label } from "@stella/ui/components/label";
 import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { toFormErrors } from "@/lib/schema";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
@@ -452,85 +453,106 @@ const InvoiceActions = ({
   onDelete: () => void;
 }) => {
   const t = useTranslations("billing.invoices");
+  const canUpdateInvoice = usePermissions({ invoice: ["update"] });
+  const canDeleteInvoice = usePermissions({ invoice: ["delete"] });
 
   switch (invoiceStatus) {
     case "draft":
       return (
         <>
-          <Button onClick={onEdit} size="sm" variant="outline">
-            <EditIcon className="size-3.5" />
-            {t("editInvoice")}
-          </Button>
-          <Button
-            onClick={() => onTransition("finalize")}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon className="size-3.5" />
-            {t("finalize")}
-          </Button>
-          <ConfirmAction description={t("confirmDelete")} onConfirm={onDelete}>
-            <Button size="sm" variant="destructive">
-              <Trash2Icon className="size-3.5" />
-              {t("delete")}
+          {canUpdateInvoice && (
+            <Button onClick={onEdit} size="sm" variant="outline">
+              <EditIcon className="size-3.5" />
+              {t("editInvoice")}
             </Button>
-          </ConfirmAction>
+          )}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("finalize")}
+              size="sm"
+              variant="outline"
+            >
+              <CheckIcon className="size-3.5" />
+              {t("finalize")}
+            </Button>
+          )}
+          {canDeleteInvoice && (
+            <ConfirmAction
+              description={t("confirmDelete")}
+              onConfirm={onDelete}
+            >
+              <Button size="sm" variant="destructive">
+                <Trash2Icon className="size-3.5" />
+                {t("delete")}
+              </Button>
+            </ConfirmAction>
+          )}
         </>
       );
     case "finalized":
       return (
         <>
-          <Button
-            onClick={() => onTransition("send")}
-            size="sm"
-            variant="outline"
-          >
-            <SendIcon className="size-3.5" />
-            {t("send")}
-          </Button>
-          <Button
-            onClick={() => onTransition("revert_to_draft")}
-            size="sm"
-            variant="ghost"
-          >
-            <UndoIcon className="size-3.5" />
-            {t("revertToDraft")}
-          </Button>
-          <ConfirmAction
-            description={t("confirmVoid")}
-            onConfirm={() => onTransition("void")}
-          >
-            <Button size="sm" variant="destructive">
-              <XCircleIcon className="size-3.5" />
-              {t("void")}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("send")}
+              size="sm"
+              variant="outline"
+            >
+              <SendIcon className="size-3.5" />
+              {t("send")}
             </Button>
-          </ConfirmAction>
+          )}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("revert_to_draft")}
+              size="sm"
+              variant="ghost"
+            >
+              <UndoIcon className="size-3.5" />
+              {t("revertToDraft")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
+            <ConfirmAction
+              description={t("confirmVoid")}
+              onConfirm={() => onTransition("void")}
+            >
+              <Button size="sm" variant="destructive">
+                <XCircleIcon className="size-3.5" />
+                {t("void")}
+              </Button>
+            </ConfirmAction>
+          )}
         </>
       );
     case "sent":
       return (
         <>
-          <Button
-            onClick={() => onTransition("mark_paid")}
-            size="sm"
-            variant="outline"
-          >
-            <CheckIcon className="size-3.5" />
-            {t("markPaid")}
-          </Button>
-          <ConfirmAction
-            description={t("confirmVoid")}
-            onConfirm={() => onTransition("void")}
-          >
-            <Button size="sm" variant="destructive">
-              <XCircleIcon className="size-3.5" />
-              {t("void")}
+          {canUpdateInvoice && (
+            <Button
+              onClick={() => onTransition("mark_paid")}
+              size="sm"
+              variant="outline"
+            >
+              <CheckIcon className="size-3.5" />
+              {t("markPaid")}
             </Button>
-          </ConfirmAction>
+          )}
+          {canUpdateInvoice && (
+            <ConfirmAction
+              description={t("confirmVoid")}
+              onConfirm={() => onTransition("void")}
+            >
+              <Button size="sm" variant="destructive">
+                <XCircleIcon className="size-3.5" />
+                {t("void")}
+              </Button>
+            </ConfirmAction>
+          )}
         </>
       );
     case "paid":
-      return (
+      return canUpdateInvoice ? (
         <ConfirmAction
           description={t("confirmVoid")}
           onConfirm={() => onTransition("void")}
@@ -540,7 +562,7 @@ const InvoiceActions = ({
             {t("void")}
           </Button>
         </ConfirmAction>
-      );
+      ) : null;
     case "void":
       return null;
     default:

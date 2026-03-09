@@ -15,7 +15,11 @@ import {
 } from "@/api/handlers/case-law/matter-links/create";
 import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
-import { authMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import {
+  authMacro,
+  permissionMacro,
+  workspaceAccessMacro,
+} from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 /**
@@ -47,6 +51,7 @@ const caseLawMatterLinksRoute = new Elysia({
   prefix: "/case-law/matter-links/:workspaceId",
 })
   .use(workspaceAccessMacro)
+  .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
   .get("/", (ctx) =>
     listMatterLinksHandler({
@@ -61,7 +66,10 @@ const caseLawMatterLinksRoute = new Elysia({
         userId: ctx.user.id,
         body: ctx.body,
       }),
-    { body: createMatterLinkBodySchema },
+    {
+      permissions: { entity: ["create"] },
+      body: createMatterLinkBodySchema,
+    },
   )
   .delete(
     "/:linkId",
@@ -70,7 +78,10 @@ const caseLawMatterLinksRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         linkId: ctx.params.linkId,
       }),
-    { params: t.Object({ workspaceId: tNanoid, linkId: tNanoid }) },
+    {
+      permissions: { entity: ["delete"] },
+      params: t.Object({ workspaceId: tNanoid, linkId: tNanoid }),
+    },
   );
 
 export const caseLawRoute = new Elysia()

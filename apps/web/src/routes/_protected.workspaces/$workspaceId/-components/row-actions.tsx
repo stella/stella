@@ -33,6 +33,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -72,6 +73,8 @@ export const RowActions = ({
   anchor,
 }: RowActionsProps) => {
   const t = useTranslations();
+  const canDeleteEntity = usePermissions({ entity: ["delete"] });
+  const canCreateEntity = usePermissions({ entity: ["create"] });
   const deleteEntities = useDeleteEntities();
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -258,38 +261,44 @@ export const RowActions = ({
             {t("workspaces.files.downloadAsZip")}
           </MenuItem>
         )}
-        {!isFolder && (
+        {!isFolder && canCreateEntity && (
           <MenuItem onClick={handleDuplicate}>
             <CopyIcon />
             {t("common.duplicate")}
           </MenuItem>
         )}
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={<MenuItem closeOnClick={false} variant="destructive" />}
-          >
-            <Trash2Icon />
-            {t("common.delete")}
-          </AlertDialogTrigger>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("workspaces.deleteItem")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("common.deleteConfirmDescription", { name })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="ghost" />}>
-                {t("common.cancel")}
-              </AlertDialogClose>
-              <AlertDialogClose
-                render={<Button onClick={handleDelete} variant="destructive" />}
-              >
-                {t("common.delete")}
-              </AlertDialogClose>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        {canDeleteEntity && (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<MenuItem closeOnClick={false} variant="destructive" />}
+            >
+              <Trash2Icon />
+              {t("common.delete")}
+            </AlertDialogTrigger>
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("workspaces.deleteItem")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("common.deleteConfirmDescription", { name })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="ghost" />}>
+                  {t("common.cancel")}
+                </AlertDialogClose>
+                <AlertDialogClose
+                  render={
+                    <Button onClick={handleDelete} variant="destructive" />
+                  }
+                >
+                  {t("common.delete")}
+                </AlertDialogClose>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        )}
       </MenuPopup>
     </Menu>
   );

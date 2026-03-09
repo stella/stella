@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Administraator",
+      "external": "Väline",
+      "intern": "Praktikant",
       "member": "Liige",
       "owner": "Omanik"
     },

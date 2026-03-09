@@ -2,7 +2,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
-import Elysia, { t, type Context } from "elysia";
+import Elysia, { t } from "elysia";
+
+import { ac, roles, type PermissionInput } from "@stella/permissions";
 
 import { db } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
@@ -80,6 +82,8 @@ export const auth = betterAuth({
       },
     }),
     organization({
+      ac,
+      roles,
       organizationHooks: {
         async afterRemoveMember({ member, organization }) {
           await db
@@ -113,53 +117,58 @@ export const auth = betterAuth({
   ],
 });
 
-export const betterAuthHandler = async (context: Context) => {
-  // Elysia eagerly consumes the request body during parsing,
-  // making it unavailable for better-auth's internal reader.
-  // Reconstruct a fresh Request with Elysia's parsed body.
-  const { method, url, headers } = context.request;
-  const hasBody = method !== "GET" && method !== "HEAD";
-  const request = new Request(url, {
-    method,
-    headers,
-    body: hasBody && context.body ? JSON.stringify(context.body) : undefined,
-  });
-  return await auth.handler(request);
-};
+export const authMacro = new Elysia({ name: "authMacro" }).macro({
+  validateAuth: {
+    async resolve({ status, request }) {
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
 
-export const authMacro = new Elysia({ name: "authMacro" })
-  .mount(auth.handler)
-  .macro({
-    validateAuth: {
-      async resolve({ status, request }) {
-        const session = await auth.api.getSession({
-          headers: request.headers,
-        });
+      const activeOrganizationId = session?.session.activeOrganizationId;
 
-        const activeOrganizationId = session?.session.activeOrganizationId;
+      if (!session || !activeOrganizationId) {
+        return status(401);
+      }
 
-        if (!session || !activeOrganizationId) {
-          return status(401);
-        }
+      posthogIdentify({
+        distinctId: session.user.id,
+        properties: {
+          active_organization_id: activeOrganizationId,
+        },
+      });
 
-        posthogIdentify({
-          distinctId: session.user.id,
-          properties: {
-            active_organization_id: activeOrganizationId,
-          },
-        });
-
-        return {
-          user: session.user,
-          session: {
-            ...session.session,
-            activeOrganizationId:
-              toSafeId<"organization">(activeOrganizationId),
-          },
-        };
-      },
+      return {
+        user: session.user,
+        session: {
+          ...session.session,
+          activeOrganizationId: toSafeId<"organization">(activeOrganizationId),
+        },
+      };
     },
-  });
+  },
+});
+
+export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
+  permissions: (permissions: PermissionInput) => ({
+    // Without this, when this macro is used with another macro that extends the body,
+    // the final merged body would not include the first macro's body extension.
+    body: t.Object({}),
+    async beforeHandle(ctx) {
+      const hasPermissions = await auth.api.hasPermission({
+        headers: ctx.request.headers,
+        body: {
+          permissions,
+        },
+      });
+
+      if (!hasPermissions.success) {
+        return ctx.status(403);
+      }
+
+      return;
+    },
+  }),
+});
 
 const validateWorkspaceAccessParams = t.Object({ workspaceId: tNanoid });
 

@@ -25,6 +25,7 @@ import {
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -73,6 +74,7 @@ export const TemplateList = ({
   onDeleted,
 }: TemplateListProps) => {
   const t = useTranslations();
+  const canCreateTemplate = usePermissions({ template: ["create"] });
   const inputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
 
@@ -146,23 +148,27 @@ export const TemplateList = ({
           <span className="text-sm text-muted-foreground">
             {String(templates.length)}
           </span>
-          <Button
-            disabled={discovering}
-            onClick={() => inputRef.current?.click()}
-            size="sm"
-          >
-            <PlusIcon />
-            {discovering
-              ? t("templates.discovering")
-              : t("templates.newTemplate")}
-          </Button>
-          <input
-            accept=".docx"
-            className="hidden"
-            onChange={handleFileChange}
-            ref={inputRef}
-            type="file"
-          />
+          {canCreateTemplate && (
+            <>
+              <Button
+                disabled={discovering}
+                onClick={() => inputRef.current?.click()}
+                size="sm"
+              >
+                <PlusIcon />
+                {discovering
+                  ? t("templates.discovering")
+                  : t("templates.newTemplate")}
+              </Button>
+              <input
+                accept=".docx"
+                className="hidden"
+                onChange={handleFileChange}
+                ref={inputRef}
+                type="file"
+              />
+            </>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -200,6 +206,7 @@ const TemplateRow = ({
   onDeleted: () => void;
 }) => {
   const t = useTranslations();
+  const canDeleteTemplate = usePermissions({ template: ["delete"] });
   const format = useFormatter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -258,45 +265,47 @@ const TemplateRow = ({
         </div>
       </button>
 
-      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button size="icon-xs" variant="ghost" />}
-          >
-            <MoreHorizontalIcon />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem
-              className="text-destructive-foreground"
-              onClick={() => setDeleteOpen(true)}
+      {canDeleteTemplate && (
+        <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button size="icon-xs" variant="ghost" />}
             >
-              <Trash2Icon />
-              {t("common.delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <MoreHorizontalIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                className="text-destructive-foreground"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2Icon />
+                {t("common.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("templates.confirmDelete")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <Button
-              disabled={deleting}
-              onClick={handleDelete}
-              variant="destructive"
-            >
-              {t("common.delete")}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("templates.confirmDelete")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <Button
+                disabled={deleting}
+                onClick={handleDelete}
+                variant="destructive"
+              >
+                {t("common.delete")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      )}
     </li>
   );
 };

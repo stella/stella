@@ -22,6 +22,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@rivetkit/react": "catalog:rivet",
     "@stella/api": "workspace:*",
+    "@stella/permissions": "workspace:*",
     "@stella/rivet": "workspace:*",
     "@stella/ui": "workspace:*",
     "@streamdown/cjk": "^1.0.2",

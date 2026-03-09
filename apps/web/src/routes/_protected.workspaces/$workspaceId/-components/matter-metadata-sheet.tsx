@@ -38,6 +38,7 @@ import {
 } from "@stella/ui/components/sheet";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
 import type { WorkspaceProperty } from "@/lib/types";
 import {
@@ -117,6 +118,7 @@ export const MatterMetadataSheet = ({
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const deleteWorkspace = useDeleteWorkspace();
+  const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
 
   const rowSelection = useSearch({
@@ -315,18 +317,20 @@ export const MatterMetadataSheet = ({
             </div>
 
             {/* Danger zone */}
-            <div className="mt-auto border-t px-2 pt-4">
-              <Button
-                className="justify-start text-destructive"
-                disabled={deleteWorkspace.isPending}
-                onClick={() => setIsAlertDialogOpen(true)}
-                size="sm"
-                variant="ghost"
-              >
-                <TrashIcon className="size-4" />
-                {t("workspaces.deleteWorkspace")}
-              </Button>
-            </div>
+            {canDeleteWorkspace && (
+              <div className="mt-auto border-t px-2 pt-4">
+                <Button
+                  className="justify-start text-destructive"
+                  disabled={deleteWorkspace.isPending}
+                  onClick={() => setIsAlertDialogOpen(true)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <TrashIcon className="size-4" />
+                  {t("workspaces.deleteWorkspace")}
+                </Button>
+              </div>
+            )}
           </SheetPanel>
         </SheetPopup>
       </Sheet>

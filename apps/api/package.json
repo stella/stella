@@ -28,6 +28,7 @@
     "@libpdf/core": "^0.2.10",
     "@litko/yara-x": "^0.5.0",
     "@openrouter/ai-sdk-provider": "^2.2.3",
+    "@stella/permissions": "workspace:*",
     "@stella/rivet": "workspace:*",
     "@stella/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",

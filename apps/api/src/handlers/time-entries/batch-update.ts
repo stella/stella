@@ -13,7 +13,6 @@ export const batchUpdateBodySchema = t.Object({
     "revert_to_draft",
     "mark_billable",
     "mark_non_billable",
-    "delete",
   ]),
 });
 
@@ -78,35 +77,6 @@ export const batchUpdateHandler = async ({
           ),
         );
       return { updated: result.rowCount ?? 0 };
-    }
-
-    case "delete": {
-      // Draft entries: hard delete. Non-draft: write off.
-      // Wrapped in a transaction for atomicity.
-      const updated = await db.transaction(async (tx) => {
-        const deleted = await tx
-          .delete(timeEntries)
-          .where(and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)));
-
-        const writtenOff = await tx
-          .update(timeEntries)
-          .set({
-            status: BILLING_STATUS.WRITTEN_OFF,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
-              ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-              ne(timeEntries.status, BILLING_STATUS.BILLED),
-            ),
-          );
-
-        return (deleted.rowCount ?? 0) + (writtenOff.rowCount ?? 0);
-      });
-
-      return { updated };
     }
 
     default:

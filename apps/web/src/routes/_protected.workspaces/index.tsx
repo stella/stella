@@ -61,6 +61,7 @@ import {
 } from "@stella/ui/components/tooltip";
 import { cn } from "@stella/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -608,6 +609,7 @@ const MattersToolbar = ({
   isCreating,
 }: MattersToolbarProps) => {
   const t = useTranslations();
+  const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const [searchFocused, setSearchFocused] = useState(false);
 
   const sortLabels: Record<MattersSortKey, string> = {
@@ -755,7 +757,7 @@ const MattersToolbar = ({
             </>
           )}
         </Button>
-        {!isLimitReached && (
+        {!isLimitReached && canCreateWorkspace && (
           <Popover
             onOpenChange={(open) => {
               onCreateOpenChange(open);

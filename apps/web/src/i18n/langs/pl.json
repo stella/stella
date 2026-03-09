@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Administrator",
+      "external": "Zewnętrzny",
+      "intern": "Praktykant",
       "member": "Członek",
       "owner": "Właściciel"
     },

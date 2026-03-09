@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 import { invoicesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
@@ -24,6 +25,7 @@ export const Route = createFileRoute(
 
 function InvoicesPage() {
   const t = useTranslations();
+  const canCreateInvoice = usePermissions({ invoice: ["create"] });
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
@@ -41,16 +43,18 @@ function InvoicesPage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h1 className="text-sm font-medium">{t("billing.invoices.title")}</h1>
-        <Link
-          params={{ workspaceId }}
-          search={{}}
-          to="/workspaces/$workspaceId/invoices"
-        >
-          <Button size="sm" variant="outline">
-            <PlusIcon className="size-4" />
-            {t("billing.invoices.createInvoice")}
-          </Button>
-        </Link>
+        {canCreateInvoice && (
+          <Link
+            params={{ workspaceId }}
+            search={{}}
+            to="/workspaces/$workspaceId/invoices"
+          >
+            <Button size="sm" variant="outline">
+              <PlusIcon className="size-4" />
+              {t("billing.invoices.createInvoice")}
+            </Button>
+          </Link>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto p-4">

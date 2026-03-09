@@ -9,10 +9,14 @@ export const getRoles = (
   { label: t("organization.roles.owner"), value: "owner" },
   { label: t("organization.roles.admin"), value: "admin" },
   { label: t("organization.roles.member"), value: "member" },
+  { label: t("organization.roles.intern"), value: "intern" },
+  { label: t("organization.roles.external"), value: "external" },
 ];
 
 export const rolePriority: Record<Role, number> = {
   owner: 0,
   admin: 1,
   member: 2,
+  intern: 3,
+  external: 4,
 };

@@ -36,7 +36,7 @@ import {
   updateRateTableBodySchema,
   updateRateTableHandler,
 } from "@/api/handlers/rates/update";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
 export const ratesRoute = new Elysia({
@@ -44,6 +44,7 @@ export const ratesRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
@@ -68,6 +69,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["create"] },
       invalidateQuery: true,
       body: createRateTableBodySchema,
     },
@@ -80,6 +82,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["update"] },
       invalidateQuery: true,
       body: updateRateTableBodySchema,
     },
@@ -92,6 +95,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["delete"] },
       invalidateQuery: true,
       body: deleteRateTableBodySchema,
     },
@@ -130,6 +134,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["create"] },
       invalidateQuery: true,
       body: createRateEntryBodySchema,
     },
@@ -143,6 +148,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["update"] },
       invalidateQuery: true,
       body: updateRateEntryBodySchema,
     },
@@ -156,6 +162,7 @@ export const ratesRoute = new Elysia({
         body: ctx.body,
       }),
     {
+      permissions: { rate: ["delete"] },
       invalidateQuery: true,
       body: deleteRateEntryBodySchema,
     },

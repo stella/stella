@@ -10,7 +10,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { useBatchUpdateTimeEntries } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
+import { usePermissions } from "@/hooks/use-permissions";
+import {
+  useBatchDeleteTimeEntries,
+  useBatchUpdateTimeEntries,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
 
 type BatchActionBarProps = {
   workspaceId: string;
@@ -24,18 +28,35 @@ export const BatchActionBar = ({
   onClear,
 }: BatchActionBarProps) => {
   const t = useTranslations();
+  const canUpdateEntry = usePermissions({ timeEntry: ["update"] });
+  const canDeleteEntry = usePermissions({ timeEntry: ["delete"] });
   const batchUpdate = useBatchUpdateTimeEntries();
+  const batchDelete = useBatchDeleteTimeEntries();
 
   const handleAction = (
     action:
       | "approve"
       | "revert_to_draft"
       | "mark_billable"
-      | "mark_non_billable"
-      | "delete",
+      | "mark_non_billable",
   ) => {
     batchUpdate.mutate(
       { workspaceId, ids: selectedIds, action },
+      {
+        onSuccess: () => onClear(),
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleDelete = () => {
+    batchDelete.mutate(
+      { workspaceId, ids: selectedIds },
       {
         onSuccess: () => onClear(),
         onError: () => {
@@ -58,46 +79,48 @@ export const BatchActionBar = ({
         {t("billing.selectedCount", { count: selectedIds.length })}
       </span>
       <div className="ml-auto flex items-center gap-1">
-        <Button
-          onClick={() => handleAction("approve")}
-          size="sm"
-          variant="outline"
-        >
-          <CheckCheckIcon className="size-3.5" />
-          {t("billing.approve")}
-        </Button>
-        <Button
-          onClick={() => handleAction("revert_to_draft")}
-          size="sm"
-          variant="outline"
-        >
-          <UndoIcon className="size-3.5" />
-          {t("billing.revertToDraft")}
-        </Button>
-        <Button
-          onClick={() => handleAction("mark_billable")}
-          size="sm"
-          variant="outline"
-        >
-          <DollarSignIcon className="size-3.5" />
-          {t("billing.markBillableSelected")}
-        </Button>
-        <Button
-          onClick={() => handleAction("mark_non_billable")}
-          size="sm"
-          variant="outline"
-        >
-          <CircleOffIcon className="size-3.5" />
-          {t("billing.markNonBillableSelected")}
-        </Button>
-        <Button
-          onClick={() => handleAction("delete")}
-          size="sm"
-          variant="destructive"
-        >
-          <TrashIcon className="size-3.5" />
-          {t("billing.deleteSelected")}
-        </Button>
+        {canUpdateEntry && (
+          <>
+            <Button
+              onClick={() => handleAction("approve")}
+              size="sm"
+              variant="outline"
+            >
+              <CheckCheckIcon className="size-3.5" />
+              {t("billing.approve")}
+            </Button>
+            <Button
+              onClick={() => handleAction("revert_to_draft")}
+              size="sm"
+              variant="outline"
+            >
+              <UndoIcon className="size-3.5" />
+              {t("billing.revertToDraft")}
+            </Button>
+            <Button
+              onClick={() => handleAction("mark_billable")}
+              size="sm"
+              variant="outline"
+            >
+              <DollarSignIcon className="size-3.5" />
+              {t("billing.markBillableSelected")}
+            </Button>
+            <Button
+              onClick={() => handleAction("mark_non_billable")}
+              size="sm"
+              variant="outline"
+            >
+              <CircleOffIcon className="size-3.5" />
+              {t("billing.markNonBillableSelected")}
+            </Button>
+          </>
+        )}
+        {canDeleteEntry && (
+          <Button onClick={handleDelete} size="sm" variant="destructive">
+            <TrashIcon className="size-3.5" />
+            {t("billing.deleteSelected")}
+          </Button>
+        )}
       </div>
     </div>
   );

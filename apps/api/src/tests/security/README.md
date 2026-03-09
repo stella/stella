@@ -7,6 +7,21 @@ catch regressions that could violate SOC 2 Type II controls
 
 ## What is tested
 
+### `permission-guards.test.ts`
+
+Static analysis test that scans all handler route files for
+mutation endpoints (PUT, POST, PATCH, DELETE) and verifies each
+one has a `permission(...)` guard in its options object.
+
+- Discovers route files automatically from `handlers/*/routes.ts`.
+- Parses mutation calls with a regex, then scans forward for a
+  `permission` call in the options window.
+- An allowlist covers intentionally unguarded endpoints (dev-only
+  routes, read-like POSTs). Adding to the allowlist requires code
+  review.
+- A staleness check ensures allowlist entries still correspond to
+  real endpoints, preventing forgotten exemptions.
+
 ### `branded-types.test.ts`
 
 Validates that the `SafeId<T>` branded type system enforces:

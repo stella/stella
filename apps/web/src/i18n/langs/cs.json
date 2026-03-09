@@ -760,6 +760,8 @@
     },
     "roles": {
       "admin": "Administrátor",
+      "external": "Externí",
+      "intern": "Stážista",
       "member": "Člen",
       "owner": "Vlastník"
     },
