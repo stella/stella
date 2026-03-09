@@ -258,7 +258,7 @@ checksums:
     chat/documentView/trackedChanges: 846a31c4dd64ee4ee67961bd540a8fbb
     chat/extractingContent: 5364ab2d939188d3c155a2570ddefd48
     chat/fileTooLarge: 7537f913143b428791baf411a3f558d7
-    chat/greeting: 4baa45b6e6d953ea40b802910f235026
+    chat/greeting: 6551005f8c75006f4e22fd83ecd493e8
     chat/maxAttachmentsReached: a2fdce9d2eeb5b3de24355af5717a43e
     chat/mention/category/clauses: 462579754cf0f9dab85e687c243a6ed5
     chat/mention/category/contacts: d5b6c3f890b3904eaf5754081945c03d
