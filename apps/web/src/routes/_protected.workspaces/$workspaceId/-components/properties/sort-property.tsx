@@ -4,12 +4,12 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
-import type { WorkspaceEntity } from "@/lib/types";
+import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 export type SortHint = "text" | "date" | "number";
 
 type SortPropertyProps = {
-  column: Column<WorkspaceEntity, unknown>;
+  column: Column<TableTreeNode>;
   sortHint?: SortHint;
 };
 

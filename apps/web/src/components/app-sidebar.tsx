@@ -119,14 +119,11 @@ import {
   useStartTimer,
   useStopTimer,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   activeTimerOptions,
   timeEntriesKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 const isDev = import.meta.env.DEV;
 const WHITESPACE = /\s+/;
@@ -154,34 +151,6 @@ const MatterIcon = ({ id, color }: { id: string; color?: string | null }) => (
   />
 );
 
-/**
- * Extract a display name from an entity's fields.
- * Mirrors the logic in `matter-name-map.ts`.
- */
-const getEntityName = (
-  entity: {
-    entityId: string;
-    fields: Array<{
-      content:
-        | { type: "text"; value: string }
-        | { type: "file"; filename: string }
-        | { type: string };
-    }>;
-  },
-  fallback: string,
-): string => {
-  const nameField = entity.fields.find(
-    (f) => f.content.type === "text" || f.content.type === "file",
-  );
-  if (nameField && "value" in nameField.content) {
-    return String(nameField.content.value);
-  }
-  if (nameField && "filename" in nameField.content) {
-    return String(nameField.content.filename);
-  }
-  return fallback;
-};
-
 type SidebarTimerPopoverProps = {
   workspaceId: string;
 };
@@ -193,20 +162,10 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
   const [selectedMatterId, setSelectedMatterId] = useState("");
   const startTimer = useStartTimer();
 
-  const { data: entities, isPending: entitiesLoading } = useQuery({
-    ...entitiesOptions(workspaceId),
+  const { data: matters, isPending: entitiesLoading } = useQuery({
+    ...entitySummariesOptions(workspaceId),
     enabled: open,
   });
-
-  const matters = useMemo(() => {
-    if (!entities) {
-      return [];
-    }
-    return entities.map((entity) => ({
-      id: entity.entityId,
-      name: getEntityName(entity, t("workspaces.defaultName")),
-    }));
-  }, [entities, t]);
 
   const handleStart = () => {
     if (!selectedMatterId) {
@@ -292,9 +251,9 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
             <ComboboxInput placeholder={t("billing.selectMatter")} size="sm" />
             <ComboboxPopup>
               <ComboboxList>
-                {matters.map((matter) => (
+                {matters?.map((matter) => (
                   <ComboboxItem key={matter.id} value={matter.id}>
-                    {matter.name}
+                    {matter.name ?? t("workspaces.defaultName")}
                   </ComboboxItem>
                 ))}
               </ComboboxList>
@@ -361,7 +320,6 @@ const MatterItem = ({
 }: MatterItemProps) => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
-  const qc = useQueryClient();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -477,13 +435,6 @@ const MatterItem = ({
       >
         <Link
           activeProps={{ "data-active": true }}
-          onMouseEnter={() => {
-            const id = ws.id;
-            qc.prefetchQuery(viewsOptions(id));
-            qc.prefetchQuery(entitiesOptions(id));
-            qc.prefetchQuery(propertiesOptions(id));
-            qc.prefetchQuery(justificationsOptions(id));
-          }}
           params={{ workspaceId: ws.id }}
           to="/workspaces/$workspaceId"
         >

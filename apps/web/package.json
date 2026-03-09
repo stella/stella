@@ -70,6 +70,7 @@
     "react-resizable-panels": "^4.6.5",
     "recharts": "^3.7.0",
     "streamdown": "^2.4.0",
+    "superjson": "^2.2.6",
     "use-debounce": "^10.1.0",
     "use-intl": "catalog:",
     "use-stick-to-bottom": "^1.1.3",

@@ -1,4 +1,3 @@
-import type { ColumnDef, Table } from "@tanstack/react-table";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -6,23 +5,22 @@ import { Button } from "@stella/ui/components/button";
 
 import { TableCell, TableRow } from "@/components/table";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
+import type { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
 
-type BottomRowProps<T> = {
+type BottomRowProps = {
   workspaceId: string;
-  table: Table<T>;
-  columns: ColumnDef<T>[];
+  table: WorkspaceTable;
   onFolderCreated?: (entityId: string) => void;
 };
 
-export const BottomRow = <T,>({
+export const BottomRow = ({
   workspaceId,
   table,
-  columns,
   onFolderCreated,
-}: BottomRowProps<T>) => {
+}: BottomRowProps) => {
   const t = useTranslations();
 
   return (
@@ -56,7 +54,7 @@ export const BottomRow = <T,>({
       >
         {t("common.newRow")}
       </TableCell>
-      <TableCell colSpan={columns.length - 2} />
+      <TableCell colSpan={table.getAllColumns().length - 2} />
     </TableRow>
   );
 };

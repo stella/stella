@@ -1,24 +1,40 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
+
+import { rivet } from "@/lib/api";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { sessionOptions } from "@/routes/-queries";
 
 export const viewsKeys = {
   all: (workspaceId: string) => ["views", workspaceId],
 };
 
-export const viewsOptions = (workspaceId: string) =>
+export const viewsOptions = (workspaceId: string, queryClient: QueryClient) =>
   queryOptions({
     queryKey: viewsKeys.all(workspaceId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .views({ workspaceId })
-        .get({ fetch: { signal } });
+    queryFn: async () => {
+      const [sessionData, propertiesData] = await Promise.all([
+        queryClient.ensureQueryData(sessionOptions),
+        queryClient.ensureQueryData(propertiesOptions(workspaceId)),
+      ]);
 
-      if (response.error) {
-        throw toAPIError(response.error);
+      if (!sessionData?.session.activeOrganizationId) {
+        throw new Error("No active organization");
       }
 
-      return response.data;
+      const actorConfig = getViewsActorConfig({
+        type: "vanilla",
+        organizationId: sessionData.session.activeOrganizationId,
+        workspaceId,
+        authToken: sessionData.session.token,
+      });
+
+      const handle = rivet.views.getOrCreate(...actorConfig);
+      const connection = handle.connect();
+
+      return connection.getViews({
+        propertyIds: propertiesData.map((p) => p.id),
+      });
     },
   });

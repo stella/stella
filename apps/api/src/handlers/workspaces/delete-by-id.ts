@@ -4,6 +4,7 @@ import { status } from "elysia";
 import { ActorError } from "rivetkit/errors";
 
 import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
+import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
 import { db } from "@/api/db";
@@ -102,15 +103,28 @@ export const deleteWorkspaceHandler = async ({
       workspaceId,
     });
 
+    const viewsActorConfig = getViewsActorConfig({
+      type: "vanilla",
+      authToken,
+      organizationId,
+      workspaceId,
+    });
+
     const workflowActor = rivet.workflow.get(...workflowActorConfig);
     const bBoxActor = rivet.bBox.get(...bBoxActorConfig);
+    const viewsActorHandle = rivet.views.get(...viewsActorConfig);
 
-    const [workflowDestroy, bBoxDestroy] = await Promise.all([
+    const [workflowDestroy, bBoxDestroy, viewsDestroy] = await Promise.all([
       safeDestroy(() => workflowActor.destroy()),
       safeDestroy(() => bBoxActor.destroy()),
+      safeDestroy(() => viewsActorHandle.destroy()),
     ]);
 
-    if (!workflowDestroy.success || !bBoxDestroy.success) {
+    if (
+      !workflowDestroy.success ||
+      !bBoxDestroy.success ||
+      !viewsDestroy.success
+    ) {
       // TODO: log this error
       return status(500);
     }

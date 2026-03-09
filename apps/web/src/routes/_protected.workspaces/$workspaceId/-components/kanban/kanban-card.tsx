@@ -22,6 +22,7 @@ import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import {
   getEntityName,
   getFirstFile,
+  getInternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const ENTITY_DRAG_TYPE = "stella/entity-id";
@@ -111,21 +112,21 @@ export const KanbanCard = ({
         cardFields.length > 0 &&
         properties &&
         cardFields.map((fieldId) => {
-          if (fieldId === "__created_by__") {
+          if (fieldId === getInternalPropertyId("created-by")) {
             return (
               <div className="text-xs text-muted-foreground" key={fieldId}>
                 <AuthorCell entity={entity} />
               </div>
             );
           }
-          if (fieldId === "__updated_at__") {
+          if (fieldId === getInternalPropertyId("updated-at")) {
             return (
               <div className="text-xs text-muted-foreground" key={fieldId}>
                 <LastUpdatedCell entity={entity} />
               </div>
             );
           }
-          if (fieldId === "__version__") {
+          if (fieldId === getInternalPropertyId("version")) {
             return (
               <div className="text-xs text-muted-foreground" key={fieldId}>
                 <VersionCell entity={entity} />

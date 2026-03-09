@@ -1,4 +1,5 @@
 import { Activity, useEffect, useRef } from "react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   retainSearchParams,
@@ -13,54 +14,55 @@ import { Accordion } from "@stella/ui/components/accordion";
 import { ScrollArea } from "@stella/ui/components/scroll-area";
 
 import { usePdfStore } from "@/lib/pdf/pdf-store";
-import type { WorkspaceEntity } from "@/lib/types";
+import type { EntityField } from "@/lib/types";
 import {
   EntityFileInfo,
   FieldInfo,
   skipFieldFilter,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
 import PdfViewer from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const PDF_CONTAINER_ID = "pdf-viewer-container";
 
-export const Route = createFileRoute("/_protected/workspaces/$workspaceId/pdf")(
-  {
-    component: RouteComponent,
-    validateSearch: v.object({
-      file: v.object({
-        fieldId: v.string(),
-        pageNumber: v.optional(v.number(), 1),
-        scaleOffset: v.optional(v.number(), 0),
-      }),
-      entity: v.object({
-        id: v.string(),
-        visible: v.boolean(),
-        activePropertyId: v.string(),
-      }),
-      justification: v.optional(
-        v.object({
-          id: v.string(),
-          pageNumber: v.number(),
-        }),
-      ),
+export const Route = createFileRoute(
+  "/_protected/workspaces/$workspaceId/$viewId/pdf",
+)({
+  component: RouteComponent,
+  validateSearch: v.object({
+    file: v.object({
+      fieldId: v.string(),
+      pageNumber: v.optional(v.number(), 1),
+      scaleOffset: v.optional(v.number(), 0),
     }),
-    search: {
-      middlewares: [retainSearchParams(true)],
-    },
-    onLeave: () => {
-      const container = document.getElementById(PDF_CONTAINER_ID);
-
-      // for whatever reason chrome keeps detached nodes in the DOM
-      // after navigation — manually remove to prevent canvas leaks
-      if (container) {
-        container.innerHTML = "";
-      }
-
-      return usePdfStore.getState().cleanupPdfs();
-    },
+    entity: v.object({
+      id: v.string(),
+      visible: v.boolean(),
+      activePropertyId: v.string(),
+    }),
+    justification: v.optional(
+      v.object({
+        id: v.string(),
+        pageNumber: v.number(),
+      }),
+    ),
+  }),
+  search: {
+    middlewares: [retainSearchParams(true)],
   },
-);
+  onLeave: () => {
+    const container = document.getElementById(PDF_CONTAINER_ID);
+
+    // for whatever reason chrome keeps detached nodes in the DOM
+    // after navigation — manually remove to prevent canvas leaks
+    if (container) {
+      container.innerHTML = "";
+    }
+
+    return usePdfStore.getState().cleanupPdfs();
+  },
+});
 
 function RouteComponent() {
   const workspaceId = Route.useParams({
@@ -70,8 +72,8 @@ function RouteComponent() {
   const entitySearch = Route.useSearch({
     select: (s) => s.entity,
   });
-  const entity = useWorkspaceStore((s) =>
-    s.data.find((e) => e.entityId === entitySearch.id),
+  const { data: entity } = useSuspenseQuery(
+    entityOptions(workspaceId, entitySearch.id),
   );
 
   // Sync justification search param → workspace store
@@ -123,7 +125,10 @@ function RouteComponent() {
 
 type FieldInfoListProps = {
   workspaceId: string;
-  entity: WorkspaceEntity;
+  entity: {
+    entityId: string;
+    fields: EntityField[];
+  };
 };
 
 const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
@@ -132,11 +137,11 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
     select: (s) => s.entity.activePropertyId,
   });
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
 
-  const visibleFields = Object.entries(entity.fields).filter(
-    ([_, field]) => !skipFieldFilter(field.content),
+  const visibleFields = entity.fields.filter(
+    (field) => !skipFieldFilter(field.content),
   );
 
   if (visibleFields.length === 0) {
@@ -164,11 +169,12 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
       }}
       value={[activePropertyId]}
     >
-      {visibleFields.map(([propertyId, field]) => (
+      {visibleFields.map((field) => (
         <FieldInfo
+          entityId={entity.entityId}
           field={field}
-          key={propertyId}
-          propertyId={propertyId}
+          key={field.id + field.propertyId}
+          propertyId={field.propertyId}
           workspaceId={workspaceId}
         />
       ))}

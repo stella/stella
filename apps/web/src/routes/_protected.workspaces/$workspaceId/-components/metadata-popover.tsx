@@ -1,4 +1,3 @@
-import type { Column } from "@tanstack/react-table";
 import { EyeOffIcon, type LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -15,17 +14,13 @@ import {
   SortProperty,
   type SortHint,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 type MetadataPopoverProps = {
-  // Column operations (sort, pin) only need the column reference;
-  // the row type is irrelevant here and varies between table
-  // configurations.
-  // biome-ignore lint/suspicious/noExplicitAny: row type varies across table configs
-  column: Column<any, unknown>;
+  column: TableColumn;
   icon: LucideIcon;
   label: string;
   sortHint?: SortHint;
-  onHide?: () => void;
 };
 
 export const MetadataPopover = ({
@@ -33,7 +28,6 @@ export const MetadataPopover = ({
   icon: Icon,
   label,
   sortHint,
-  onHide,
 }: MetadataPopoverProps) => {
   const t = useTranslations();
 
@@ -52,16 +46,14 @@ export const MetadataPopover = ({
         <Separator />
         <div className="flex flex-col p-1">
           <PinProperty column={column} />
-          {onHide && (
-            <Button
-              className="justify-start font-semibold"
-              onClick={onHide}
-              variant="ghost"
-            >
-              <EyeOffIcon />
-              {t("workspaces.kanban.hideColumn")}
-            </Button>
-          )}
+          <Button
+            className="justify-start font-semibold"
+            onClick={() => column.toggleVisibility(false)}
+            variant="ghost"
+          >
+            <EyeOffIcon />
+            {t("workspaces.kanban.hideColumn")}
+          </Button>
         </div>
       </PopoverPopup>
     </Popover>

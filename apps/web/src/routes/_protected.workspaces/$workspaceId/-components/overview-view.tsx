@@ -18,7 +18,6 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type OverviewViewProps = {
   workspaceId: string;
@@ -127,10 +126,9 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
 
   // Look up the full entity from the workspace store so
   // RowActions has the complete data (fields, etc.).
-  const fullEntity = useWorkspaceStore((s) =>
-    s.data.find((e) => e.entityId === entity.entityId),
-  );
+  const fullEntity = undefined;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO: fix me
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       if (!fullEntity) {

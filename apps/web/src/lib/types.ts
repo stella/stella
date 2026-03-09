@@ -3,8 +3,8 @@ import type {
   EntityKind,
   OptionColor,
   PropertyCondition,
-  ViewConfig,
   ViewLayout,
+  ViewLayoutType,
 } from "@stella/api/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
@@ -12,9 +12,9 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type {
   EntityKind,
-  ViewConfig,
   ViewFilterCondition,
   ViewLayout,
+  ViewLayoutType,
 } from "@stella/api/types";
 
 export type RouterToPath = FileRouteTypes["to"];
@@ -96,59 +96,67 @@ export type WorkspacePropertyOption = {
   value: string;
 };
 
+export type WorkspaceFieldContent =
+  | {
+      type: "error";
+      version: 1;
+    }
+  | {
+      type: "pending";
+      version: 1;
+    }
+  | {
+      type: "unsupported";
+      version: 1;
+    }
+  | {
+      type: "text";
+      version: 1;
+      value: string;
+    }
+  | {
+      type: "single-select";
+      version: 1;
+      value: string | null;
+    }
+  | {
+      type: "multi-select";
+      version: 1;
+      value: string[];
+    }
+  | {
+      type: "file";
+      version: 1;
+      id: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      encrypted: boolean;
+      sha256Hex: string;
+      pdfFileId: string | null;
+    }
+  | {
+      type: "date";
+      version: 1;
+      value: string | null;
+    }
+  | {
+      type: "int";
+      version: 1;
+      value: number;
+      currency: string | null;
+    };
+
 export type WorkspaceField = {
   entityId: string;
   id: string;
-  content:
-    | {
-        type: "error";
-        version: 1;
-      }
-    | {
-        type: "pending";
-        version: 1;
-      }
-    | {
-        type: "unsupported";
-        version: 1;
-      }
-    | {
-        type: "text";
-        version: 1;
-        value: string;
-      }
-    | {
-        type: "single-select";
-        version: 1;
-        value: string | null;
-      }
-    | {
-        type: "multi-select";
-        version: 1;
-        value: string[];
-      }
-    | {
-        type: "file";
-        version: 1;
-        id: string;
-        fileName: string;
-        mimeType: string;
-        sizeBytes: number;
-        encrypted: boolean;
-        sha256Hex: string;
-        pdfFileId: string | null;
-      }
-    | {
-        type: "date";
-        version: 1;
-        value: string | null;
-      }
-    | {
-        type: "int";
-        version: 1;
-        value: number;
-        currency: string | null;
-      };
+  content: WorkspaceFieldContent;
+};
+
+export type EntityField = {
+  id: string;
+  propertyId: string;
+  content: WorkspaceFieldContent;
 };
 
 export type WorkspaceEntity = {
@@ -164,13 +172,13 @@ export type WorkspaceEntity = {
   fields: Record<string, WorkspaceField>;
 };
 
-export type WorkspaceView = {
+export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {
+  version: number;
   id: string;
   name: string;
-  workspaceId: string;
-  layout: ViewLayout;
-  config: ViewConfig;
-  createdAt: Date;
+  layout: Extract<ViewLayout, { type: T }>;
+  position: number;
+  createdAt: string;
 };
 
 export type WorkspaceJustification = {

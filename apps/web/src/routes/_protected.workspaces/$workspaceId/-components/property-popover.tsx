@@ -3,8 +3,7 @@ import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
 import { usePostHog } from "@posthog/react";
 import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
-import { useQueryClient } from "@tanstack/react-query";
-import type { Header } from "@tanstack/react-table";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -20,7 +19,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import type { WorkspaceProperty } from "@/lib/types";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
 import { PropertyTextInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
@@ -38,11 +37,13 @@ import {
   SortProperty,
   toSortHint,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const getVString = (t: Translator) =>
   v.pipe(v.string(), v.nonEmpty(t("common.required")));
@@ -192,15 +193,10 @@ const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
-  header: Header<WorkspaceEntity, unknown>;
-  onHide?: () => void;
+  header: TableHeader;
 };
 
-export const PropertyPopover = ({
-  property,
-  header,
-  onHide,
-}: PropertyPopoverProps) => {
+export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
   const posthog = usePostHog();
   const { workspaceId, id, name, content } = property;
@@ -209,6 +205,8 @@ export const PropertyPopover = ({
   const isWorkflowRunning = useIsWorkflowRunning();
   const updateProperty = useUpdateProperty();
   const workflowActor = useWorkflowActor(workspaceId);
+  const activeView = useActiveView();
+  const { data: entityData } = useSuspenseQuery(entitiesOptions(activeView));
   const form = useForm({
     defaultValues: getDefaultValues(property),
     validationLogic: revalidateLogic(),
@@ -239,17 +237,13 @@ export const PropertyPopover = ({
 
             // Auto-run workflow for non-folder entities when
             // an AI property is configured or updated.
-            const entities = useWorkspaceStore.getState().data;
-            const entityIds = entities
-              .filter((e) => e.kind !== "folder")
-              .map((e) => e.entityId);
-
-            if (entityIds.length === 0) {
-              return;
-            }
-
+            // Empty entityIds tells the worker to process all
+            // entities in the workspace.
             workflowActor.connection
-              ?.startWorkflow({ workspaceId, entityIds })
+              ?.startWorkflow({
+                workspaceId,
+                entityIdsOrder: entityData.entities.map((e) => e.entityId),
+              })
               .catch((error) => captureError(posthog, error));
           },
           onError: () => {
@@ -365,7 +359,6 @@ export const PropertyPopover = ({
                             />
                           }
                           field={field}
-                          propertyName={name}
                           onMentionsChange={(mentions) => {
                             form.setFieldValue("tool.dependencies", (prev) =>
                               mentions.map((mention) => {
@@ -382,6 +375,7 @@ export const PropertyPopover = ({
                             );
                           }}
                           propertyId={id}
+                          propertyName={name}
                           workspaceId={workspaceId}
                         />
                       )}
@@ -463,20 +457,18 @@ export const PropertyPopover = ({
                 )}
               </form.Subscribe>
               <PinProperty column={header.column} />
-              {onHide && (
-                <Button
-                  className="justify-start gap-1.5"
-                  onClick={() => {
-                    onHide();
-                    setIsOpen(false);
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <EyeOffIcon className="size-4" />
-                  {t("workspaces.kanban.hideColumn")}
-                </Button>
-              )}
+              <Button
+                className="justify-start gap-1.5"
+                onClick={() => {
+                  header.column.toggleVisibility(false);
+                  setIsOpen(false);
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <EyeOffIcon />
+                {t("workspaces.kanban.hideColumn")}
+              </Button>
               <DeleteProperty property={property} workspaceId={workspaceId} />
             </div>
           </div>

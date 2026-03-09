@@ -2,11 +2,9 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -29,7 +27,6 @@ import type {
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const CATEGORY_ORDER: MentionCategory[] = [
   "entity",
@@ -139,35 +136,43 @@ export const ChatMentionList = forwardRef<
   const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Fetch entities when drilling into a matter
-  const { data: wsEntities, isPending: entitiesLoading } = useQuery({
-    ...entitiesOptions(drillDown?.workspaceId ?? ""),
-    enabled: !!drillDown,
-  });
+  // // Fetch entities when drilling into a matter
+  // const { data: drillDownItems, isPending: entitiesLoading } = useQuery({
+  //   ...entitiesOptions(activeView),
+  //   select: (data) => {
+  //     if (!drillDown) {
+  //       return [];
+  //     }
 
-  const drillDownItems = useMemo<ChatMentionOption[]>(() => {
-    if (!wsEntities || !drillDown) {
-      return [];
-    }
-    return wsEntities.map((entity) => {
-      const fileField = entity.fields.find((f) => f.content.type === "file");
-      const mimeType =
-        fileField?.content.type === "file" ? fileField.content.mimeType : null;
-      const fileName =
-        fileField?.content.type === "file" ? fileField.content.fileName : null;
+  //     return data.entities.map((entity) => {
+  //       const fileField = Object.values(entity.fields).find(
+  //         (f) => f.content.type === "file",
+  //       );
+  //       const mimeType =
+  //         fileField?.content.type === "file"
+  //           ? fileField.content.mimeType
+  //           : null;
+  //       const fileName =
+  //         fileField?.content.type === "file"
+  //           ? fileField.content.fileName
+  //           : null;
 
-      return {
-        id: entity.entityId,
-        label: entity.name ?? fileName ?? entity.entityId,
-        category: "entity" as const,
-        kind: entity.kind,
-        mimeType,
-        sourceWorkspaceId: drillDown.workspaceId,
-      };
-    });
-  }, [wsEntities, drillDown]);
-
-  const activeItems = drillDown ? drillDownItems : items;
+  //       return {
+  //         id: entity.entityId,
+  //         label: entity.name ?? fileName ?? entity.entityId,
+  //         category: "entity" as const,
+  //         kind: entity.kind,
+  //         mimeType,
+  //         sourceWorkspaceId: drillDown.workspaceId,
+  //       };
+  //     });
+  //   },
+  //   enabled: !!drillDown,
+  // });
+  // biome-ignore lint/suspicious/noExplicitAny: TODO: fix me
+  const drillDownItems: any[] = [];
+  const entitiesLoading = false;
+  const activeItems = drillDown ? (drillDownItems ?? []) : items;
   const safeIndex = Math.min(
     selectedIndex,
     Math.max(0, activeItems.length - 1),
@@ -293,11 +298,14 @@ export const ChatMentionList = forwardRef<
             </div>
           )}
 
-          {drillDown && !entitiesLoading && drillDownItems.length === 0 && (
-            <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
-              {t("chat.mention.noResults")}
-            </div>
-          )}
+          {drillDown &&
+            !entitiesLoading &&
+            drillDownItems &&
+            drillDownItems.length === 0 && (
+              <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
+                {t("chat.mention.noResults")}
+              </div>
+            )}
 
           {!drillDown &&
             groups.map((group) => {
@@ -357,7 +365,7 @@ export const ChatMentionList = forwardRef<
 
           {drillDown &&
             !entitiesLoading &&
-            drillDownItems.map((item, i) => (
+            drillDownItems?.map((item, i) => (
               <Button
                 className={cn(
                   "justify-start gap-2 font-normal",

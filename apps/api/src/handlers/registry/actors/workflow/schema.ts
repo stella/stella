@@ -26,7 +26,8 @@ export const defaultWorkflowState = (): WorkflowState => ({
 
 export const startWorkflowSchema = v.object({
   workspaceId: v.string(),
-  entityIds: v.pipe(v.array(v.string()), v.nonEmpty()),
+  entityIdsOrder: v.optional(v.pipe(v.array(v.string()), v.nonEmpty())),
+  entityIds: v.optional(v.pipe(v.array(v.string()), v.nonEmpty())),
 });
 
 export type StartWorkflowSchema = v.InferOutput<typeof startWorkflowSchema>;

@@ -38,7 +38,7 @@ export const useUpdateCurrentPage = ({
     router.state.location.search.file?.pageNumber ?? 1,
   );
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
   const visiblePageRatiosRef = useRef<Map<number, number>>(new Map());
   const updateVisiblePages = usePdfStore((s) => s.updateVisiblePages);

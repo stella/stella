@@ -4,7 +4,6 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import type { OptionColor } from "@stella/api/types";
 import { toastManager } from "@stella/ui/components/toast";
@@ -26,12 +25,11 @@ import {
   useUpsertField,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
-  applyFilters,
-  applySorts,
   getFieldValue,
+  getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -43,50 +41,53 @@ type KanbanViewProps = {
 export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const t = useTranslations();
   const posthog = usePostHog();
-  const data = useWorkspaceStore(useShallow((s) => s.data));
-  const setFieldData = useWorkspaceStore((s) => s.setFieldData);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
   const renameEntity = useRenameEntity();
-  const setEntityName = useWorkspaceStore((s) => s.setEntityName);
   const updateProperty = useUpdateProperty();
   const deleteEntities = useDeleteEntities();
   const workflowActor = useWorkflowActor(workspaceId);
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
-  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
 
-  const { visibleProperties } = view.config;
-  const configuredGroupBy = view.config.kanban?.groupByPropertyId ?? "";
+  const { hiddenProperties } = view.layout;
+  const configuredGroupBy =
+    view.layout.type === "kanban" ? (view.layout.groupByPropertyId ?? "") : "";
 
   const resolvedGroupBy = useMemo(
     () => resolveKanbanGroupBy(configuredGroupBy, properties),
     [configuredGroupBy, properties],
   );
 
-  // Fields to show on each card: visible properties plus metadata.
-  // Empty visibleProperties means "all visible".
+  // Fields to show on each card: all properties minus hidden ones.
   const allPropertyIds = properties.map((p) => p.id);
-  const resolvedVisible =
-    visibleProperties.length > 0
-      ? visibleProperties
-      : [...allPropertyIds, "__created_by__", "__updated_at__", "__version__"];
-  const cardFields = resolvedVisible.filter(
-    (id) => id !== resolvedGroupBy && id !== "__kind__",
+  const allFieldIds = [
+    ...allPropertyIds,
+    getInternalPropertyId("created-by"),
+    getInternalPropertyId("updated-at"),
+    getInternalPropertyId("version"),
+  ];
+  const cardFields = allFieldIds.filter(
+    (id) =>
+      id !== resolvedGroupBy &&
+      id !== getInternalPropertyId("kind") &&
+      !hiddenProperties.includes(id),
   );
 
   const groupByPropertyId = resolvedGroupBy;
   const isBuiltInGrouping =
-    groupByPropertyId === "__kind__" || groupByPropertyId === "__created_by__";
+    groupByPropertyId === getInternalPropertyId("kind") ||
+    groupByPropertyId === getInternalPropertyId("created-by");
   const groupByProperty = isBuiltInGrouping
     ? null
     : properties.find((p) => p.id === groupByPropertyId);
 
-  const { filters, sorts } = view.config;
+  const { filters, sorts } = view.layout;
 
-  const entities = useMemo(() => {
-    const filtered = applyFilters(data, filters);
-    return applySorts(filtered, sorts);
-  }, [data, filters, sorts]);
+  const { data: entityData } = useSuspenseQuery(
+    entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
+  );
+  const entities = entityData.entities;
 
   // No group-by selected at all
   if (!isBuiltInGrouping && !groupByProperty) {
@@ -120,8 +121,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         value: targetValue,
       };
 
-      setFieldData([{ propertyId: groupByPropertyId, entityId, content }]);
-
       upsertField.mutate(
         {
           workspaceId,
@@ -139,7 +138,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
               return;
             }
             workflowActor.connection
-              ?.startWorkflow({ workspaceId, entityIds: [entityId] })
+              ?.startWorkflow({
+                workspaceId,
+                entityIds: [entityId],
+                entityIdsOrder: [],
+              })
               .catch((error) => {
                 captureError(posthog, error);
                 toastManager.add({
@@ -212,8 +215,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           value: columnValue,
         };
 
-        setFieldData([{ propertyId: groupByPropertyId, entityId, content }]);
-
         upsertField.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
@@ -271,13 +272,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           type: "single-select" as const,
           value: newValue,
         };
-        setFieldData([
-          {
-            propertyId: groupByPropertyId,
-            entityId: entity.entityId,
-            content,
-          },
-        ]);
         upsertField.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
@@ -288,7 +282,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     };
 
     const handleHideColumn = (value: string) => {
-      setHiddenColumns((prev) => {
+      setHiddenGroups((prev) => {
         const next = new Set(prev);
         next.add(value);
         return next;
@@ -300,7 +294,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     };
 
     const handleRenameEntity = (entityId: string, newName: string) => {
-      setEntityName(entityId, newName);
       renameEntity.mutate({
         workspaceId,
         entityId,
@@ -334,7 +327,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     };
 
     const visibleGroups = groups.filter(
-      (g) => g.value === null || !hiddenColumns.has(g.value),
+      (g) => g.value === null || !hiddenGroups.has(g.value),
     );
 
     return (
@@ -382,7 +375,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   // Built-in grouping (kind / author): read-only columns
   const resolveBuiltInLabel = (key: string) => {
-    if (groupByPropertyId === "__kind__") {
+    if (groupByPropertyId === getInternalPropertyId("kind")) {
       return key.charAt(0).toUpperCase() + key.slice(1);
     }
     return key || t("workspaces.kanban.unknown");
@@ -511,7 +504,10 @@ const groupByBuiltIn = (
   const grouped = new Map<string, WorkspaceEntity[]>();
 
   for (const entity of entities) {
-    const key = mode === "__kind__" ? entity.kind : (entity.createdBy ?? "");
+    const key =
+      mode === getInternalPropertyId("kind")
+        ? entity.kind
+        : (entity.createdBy ?? "");
 
     const bucket = grouped.get(key);
     if (bucket) {

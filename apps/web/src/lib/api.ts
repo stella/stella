@@ -18,7 +18,7 @@ export const rivet = createClient<Registry>({
   endpoint: env.VITE_RIVET_ENDPOINT,
 });
 
-type Actors = ExtractActorsFromRegistry<Registry>;
+export type Actors = ExtractActorsFromRegistry<Registry>;
 export type ChatActor = Actors["chat"];
 
 export const { useActor } = createRivetKitWithClient(rivet);

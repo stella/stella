@@ -3,7 +3,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import {
   AccordionItem,
@@ -12,17 +11,19 @@ import {
 } from "@stella/ui/components/accordion";
 import { Button } from "@stella/ui/components/button";
 
-import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
+import type { EntityField, WorkspaceEntity } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
+import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type EntityFileInfoProps = {
   entityId: string;
-  fields: Record<string, WorkspaceField>;
+  fields: EntityField[];
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 };
 
@@ -31,30 +32,31 @@ export const EntityFileInfo = ({
   fields,
   scrollContainerRef,
 }: EntityFileInfoProps) => {
-  const field = Object.values(fields).find((f) => f.content.type === "file");
-  const data = useWorkspaceStore(
-    useShallow((s) => {
-      const currentIndex = s.data.findIndex((e) => e.entityId === entityId);
-
+  const field = fields.find((f) => f.content.type === "file");
+  const activeView = useActiveView();
+  const { data: navData } = useSuspenseQuery({
+    ...entitiesOptions(activeView),
+    select: (data) => {
+      const currentIndex = data.entities.findIndex(
+        (e) => e.entityId === entityId,
+      );
       if (currentIndex === -1) {
         return { prevEntity: undefined, nextEntity: undefined };
       }
-
-      const prevEntity = s.data[currentIndex - 1] as
+      const prevEntity = data.entities[currentIndex - 1] as
         | WorkspaceEntity
         | undefined;
-      const nextEntity = s.data[currentIndex + 1] as
+      const nextEntity = data.entities[currentIndex + 1] as
         | WorkspaceEntity
         | undefined;
-
       return { prevEntity, nextEntity };
-    }),
-  );
-  const prevFile = data.prevEntity ? getFirstFile(data.prevEntity) : null;
-  const nextFile = data.nextEntity ? getFirstFile(data.nextEntity) : null;
+    },
+  });
+  const prevFile = navData.prevEntity ? getFirstFile(navData.prevEntity) : null;
+  const nextFile = navData.nextEntity ? getFirstFile(navData.nextEntity) : null;
 
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
 
   if (field?.content.type !== "file") {
@@ -128,7 +130,7 @@ export const EntityFileInfo = ({
   );
 };
 
-export const skipFieldFilter = (content: WorkspaceField["content"]) =>
+export const skipFieldFilter = (content: EntityField["content"]) =>
   content.type === "error" ||
   content.type === "pending" ||
   content.type === "file";
@@ -136,13 +138,15 @@ export const skipFieldFilter = (content: WorkspaceField["content"]) =>
 type FieldInfoProps = {
   workspaceId: string;
   propertyId: string;
-  field: WorkspaceField;
+  field: EntityField;
+  entityId: string;
 };
 
 export const FieldInfo = ({
   workspaceId,
   propertyId,
   field,
+  entityId,
 }: FieldInfoProps) => {
   const t = useTranslations();
   const { data: property } = useSuspenseQuery({
@@ -178,7 +182,7 @@ export const FieldInfo = ({
             <h1 className="text-sm font-medium text-muted-foreground">
               {t("workspaces.answer")}
             </h1>
-            <CellResult field={field} property={property} />
+            <CellResult field={{ ...field, entityId }} property={property} />
           </div>
           {justification && (
             <div className="flex flex-col gap-0.5 text-sm">

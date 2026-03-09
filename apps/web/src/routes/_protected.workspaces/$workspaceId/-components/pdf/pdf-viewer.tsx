@@ -18,11 +18,11 @@ import { PdfPage } from "@/routes/_protected.workspaces/$workspaceId/-components
 import { PdfPasswordDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-password-dialog";
 import { useUpdateCurrentPage } from "@/routes/_protected.workspaces/$workspaceId/-hooks/pdf/use-pdf-current-page";
 import { useDelayedLoading } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-delayed-loading";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const [, roundY] = approximateFraction(getDevicePixelRatio());
 
-const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/pdf");
+const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/$viewId/pdf");
 
 const PdfViewer = () => {
   const t = useTranslations();
@@ -197,16 +197,15 @@ const PdfViewer = () => {
 
   // Image-origin PDFs should never be inverted: the invert+hue-rotate
   // filter produces garbled colours on rasterized content.
-  const isImageOrigin = useWorkspaceStore((s) => {
-    const entity = s.data.find((e) => e.entityId === entityId);
-    if (!entity) {
-      return false;
-    }
-    const field = entity.fields[fileSearch.fieldId];
-    if (!field || field.content.type !== "file") {
-      return false;
-    }
-    return field.content.mimeType.startsWith("image/");
+  const { data: isImageOrigin } = useSuspenseQuery({
+    ...entityOptions(workspaceId, entityId),
+    select: (entity) => {
+      const field = entity.fields.find((f) => f.id === fileSearch.fieldId);
+      if (!field || field.content.type !== "file") {
+        return false;
+      }
+      return field.content.mimeType.startsWith("image/");
+    },
   });
 
   const { resolvedTheme } = useTheme();

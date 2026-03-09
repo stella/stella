@@ -11,10 +11,9 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { MentionCategory } from "@/components/chat-mention-extension";
-import { isFileDisplayable } from "@/lib/types";
+import { isFileDisplayable, type WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
@@ -42,7 +41,7 @@ const parseStellaMentionHref = (
 
 /** Open the entity's file in the peek panel. */
 export const openEntityInPeek = (entityId: string, label: string) => {
-  const entities = useWorkspaceStore.getState().data;
+  const entities: WorkspaceEntity[] = [];
   const entity = entities.find((e) => e.entityId === entityId);
   if (!entity) {
     return;
@@ -61,12 +60,12 @@ export const openEntityInPeek = (entityId: string, label: string) => {
 };
 
 /** Resolve the icon for an entity by its ID. */
-export const EntityMentionIcon = ({ entityId }: { entityId: string }) => {
-  const entity = useWorkspaceStore((s) =>
-    s.data.find((e) => e.entityId === entityId),
-  );
+// TODO: fix me
+export const EntityMentionIcon = ({ entityId: _ }: { entityId: string }) => {
+  // TODO: fix me
+  const entity: WorkspaceEntity | undefined = undefined;
   const file = entity ? getFirstFile(entity) : null;
-  const kind = entity?.kind ?? "document";
+  const kind: string = "document";
 
   if (kind === "folder") {
     return <FolderIcon className="inline size-3 shrink-0" />;
@@ -101,7 +100,8 @@ export const EntityLink = ({
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
   const navigate = useNavigate();
-  const hasWorkspace = useWorkspaceStore((s) => s.data.length > 0);
+  // TODO: fix me
+  const hasWorkspace = false;
 
   if (!href) {
     return (

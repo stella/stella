@@ -8,7 +8,6 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -20,7 +19,7 @@ import {
   type MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import type { WorkspaceEntity } from "@/lib/types";
 import {
   getEntityName,
   getFirstFile,
@@ -81,20 +80,17 @@ type ChatEditorProps = {
   autoFocus?: boolean;
   /** Ref populated with a submit function so the parent can
    *  trigger submit externally (e.g., from a send button). */
-  submitRef?: React.MutableRefObject<(() => void) | null>;
+  submitRef?: React.RefObject<(() => void) | null>;
   /** Called when the editor transitions between empty and
    *  non-empty. Useful for showing/hiding a send button. */
   onEmptyChange?: (isEmpty: boolean) => void;
   /** Ref populated with the TipTap editor instance so the
    *  parent can programmatically insert content. */
-  editorRef?: React.MutableRefObject<Editor | null>;
-  /** @deprecated Use mentionContext instead. */
-  workspaceId?: string;
+  editorRef?: React.RefObject<Editor | null>;
 };
 
 export const ChatEditor = ({
   mentionContext,
-  workspaceId: legacyWorkspaceId,
   className,
   onSubmit,
   placeholder,
@@ -106,25 +102,19 @@ export const ChatEditor = ({
   const t = useTranslations();
   const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
 
-  // Support both legacy workspaceId and new mentionContext
-  const ctx: MentionContext | undefined =
-    mentionContext ??
-    (legacyWorkspaceId ? { workspaceId: legacyWorkspaceId } : undefined);
-
-  const wsId = ctx?.workspaceId;
-  const categories = ctx?.categories ?? [];
+  const wsId = mentionContext?.workspaceId;
+  const categories = mentionContext?.categories ?? [];
   const hasMentions = !!wsId || categories.length > 0;
 
-  const allEntities = useWorkspaceStore(
-    useShallow((s) => (wsId ? s.data : [])),
-  );
-
+  // TODO: fix me
+  const allEntities: WorkspaceEntity[] = [];
   const mentionProviders = useMentionProviders();
 
   // Build the items list. Updated whenever store or providers
   // change, but consumed via a ref so TipTap's suggestion
   // plugin always reads the latest data without needing the
   // editor to fully recreate.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO: fix me
   const getItems: MentionSourceProvider = useMemo(() => {
     return () => {
       const items: ChatMentionOption[] = [];
@@ -151,7 +141,7 @@ export const ChatEditor = ({
 
       return items;
     };
-  }, [wsId, allEntities, categories, mentionProviders]);
+  }, [wsId, categories, mentionProviders]);
 
   // Stable ref so the suggestion plugin always calls the
   // latest getItems without requiring editor recreation.

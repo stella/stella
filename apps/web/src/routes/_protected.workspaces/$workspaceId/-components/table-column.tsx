@@ -1,12 +1,12 @@
 import type { PropsWithChildren } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import type { ColumnDef } from "@tanstack/react-table";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
 import type {
+  EntityKind,
   WorkspaceEntity,
   WorkspaceJustification,
   WorkspaceProperty,
@@ -18,29 +18,18 @@ import {
   type EditableFieldContent,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
+import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-type PropertyColumnOptions = {
-  onHide?: () => void;
-};
-
 export const getPropertyColumn = (
   property: WorkspaceProperty,
-  options?: PropertyColumnOptions,
-): ColumnDef<WorkspaceEntity> => ({
+): TableColumnDef => ({
   id: property.id,
   accessorKey: property.id,
   accessorFn: (row) => row.fields[property.id],
-  sortingFn: "sortProperty",
-  header: (ctx) => (
-    <PropertyPopover
-      header={ctx.header}
-      onHide={options?.onHide}
-      property={property}
-    />
-  ),
+  header: (ctx) => <PropertyPopover header={ctx.header} property={property} />,
   size: 200,
   cell: (props) => (
     <PropertyCell entity={props.row.original} property={property} />
@@ -85,6 +74,7 @@ const PropertyCell = ({
     return (
       <WithEditFieldButton
         entityId={entity.entityId}
+        entityKind={entity.kind}
         fieldContent={editableContent}
         options={options}
         propertyId={property.id}
@@ -134,7 +124,7 @@ const WithOpenEntityButton = ({
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
   const createBoundingBoxes = useCreateBBoxes({
     justification,
@@ -149,7 +139,7 @@ const WithOpenEntityButton = ({
           createBoundingBoxes();
 
           await navigate({
-            to: "/workspaces/$workspaceId/pdf",
+            to: "/workspaces/$workspaceId/$viewId/pdf",
             search: (prev) =>
               produce(prev, (s) => {
                 s.file = {
@@ -179,6 +169,7 @@ type WithEditFieldButtonProps = {
   propertyId: string;
   workspaceId: string;
   propertyType: EditableFieldContent["type"];
+  entityKind: EntityKind;
   options: WorkspacePropertyOption[];
   fieldContent: EditableFieldContent | undefined;
 };
@@ -188,6 +179,7 @@ const WithEditFieldButton = ({
   propertyId,
   workspaceId,
   propertyType,
+  entityKind,
   options,
   fieldContent,
   children,
@@ -201,6 +193,7 @@ const WithEditFieldButton = ({
       <EditFieldDialog
         className="absolute right-2 bottom-2 hidden group-hover/cell-content:block"
         entityId={entityId}
+        entityKind={entityKind}
         fieldContent={editableFieldContent}
         options={options}
         propertyId={propertyId}

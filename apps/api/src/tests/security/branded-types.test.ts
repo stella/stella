@@ -6,7 +6,6 @@ import type {
   entities,
   invoices,
   properties,
-  views,
   workspaces,
 } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -75,16 +74,6 @@ describe("branded types", () => {
       expect(check).toBeDefined();
       // @ts-expect-error - plain string not assignable
       const bad: OrgIdInsert = "plain-string";
-      expect(bad).toBeDefined();
-    });
-
-    test("insert model requires SafeId<workspace>", () => {
-      type ViewInsert = InferInsertModel<typeof views>;
-      type WsIdInsert = ViewInsert["workspaceId"];
-      const check: WsIdInsert = toSafeId<"workspace">("test");
-      expect(check).toBeDefined();
-      // @ts-expect-error - plain string not assignable
-      const bad: WsIdInsert = "plain-string";
       expect(bad).toBeDefined();
     });
 

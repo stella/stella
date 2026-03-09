@@ -1,22 +1,23 @@
-import { useSearch } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useParams, useSearch } from "@tanstack/react-router";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 export const PdfBreadcrumb = () => {
+  const { workspaceId } = useParams({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+  });
   const search = useSearch({
     select: (s) => ({
       fieldId: s.file.fieldId,
       entityId: s.entity.id,
     }),
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
   });
-  const filename: string =
-    useWorkspaceStore((s) => {
-      const entity = s.data.find((e) => e.entityId === search.entityId);
-      if (!entity) {
-        return null;
-      }
+  const { data: filename } = useSuspenseQuery({
+    ...entityOptions(workspaceId, search.entityId),
+    select: (entity) => {
       const fileField = Object.values(entity.fields).find(
         (field) => field.id === search.fieldId,
       );
@@ -25,11 +26,12 @@ export const PdfBreadcrumb = () => {
         return null;
       }
       return fileField.content.fileName;
-    }) ?? search.fieldId;
+    },
+  });
 
   return (
-    <BreadcrumbLink to="/workspaces/$workspaceId/pdf">
-      {filename}
+    <BreadcrumbLink to="/workspaces/$workspaceId/$viewId/pdf">
+      {filename ?? search.fieldId}
     </BreadcrumbLink>
   );
 };

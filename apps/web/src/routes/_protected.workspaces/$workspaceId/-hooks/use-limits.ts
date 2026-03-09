@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
+import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -17,13 +18,14 @@ export const usePropertiesCountLimit = (workspaceId: string) => {
   return propertiesCount >= maxPropertiesCount;
 };
 
-export const useEntitiesCountLimit = (workspaceId: string) => {
+export const useEntitiesCountLimit = () => {
+  const activeView = useActiveView();
   const entitiesCount = useSuspenseQuery({
-    ...entitiesOptions(workspaceId),
-    select: (data) => data.length,
+    ...entitiesOptions(activeView),
+    select: (data) => data.totalCount,
   }).data;
   const maxEntitiesCount = useSuspenseQuery({
-    ...workspaceOptions(workspaceId),
+    ...workspaceOptions(activeView.workspaceId),
     select: (data) => data.limits.entitiesCount,
   }).data;
 

@@ -1,5 +1,6 @@
-import Elysia, { t } from "elysia";
+import Elysia, { status, t } from "elysia";
 
+import { entityKindSchema } from "@/api/db/schema-validators";
 import {
   checkStampBodySchema,
   checkStampHandler,
@@ -22,6 +23,8 @@ import {
   moveEntityHandler,
 } from "@/api/handlers/entities/move";
 import { readEntitiesHandler } from "@/api/handlers/entities/read";
+import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
+import { readEntitySummariesHandler } from "@/api/handlers/entities/read-summaries";
 import {
   renameEntityBodySchema,
   renameEntityHandler,
@@ -32,6 +35,44 @@ import {
 } from "@/api/handlers/entities/upload";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import { LIMITS } from "@/api/lib/limits";
+
+const readEntitiesQuerySchema = t.Object({
+  filters: t.Optional(
+    t.Array(
+      t.Union([
+        t.Object({
+          id: t.String(),
+          field: t.Literal("kind"),
+          op: t.Literal("in"),
+          value: t.Array(entityKindSchema),
+        }),
+        t.Object({
+          id: t.String(),
+          field: t.Literal("property"),
+          propertyId: t.String({ minLength: 1 }),
+          op: t.UnionEnum(["eq", "neq", "contains", "is_empty"]),
+          value: t.Optional(t.Union([t.String(), t.Array(t.String())])),
+        }),
+      ]),
+    ),
+  ),
+  sorts: t.Optional(
+    t.Array(
+      t.Object({
+        propertyId: t.String({ minLength: 1 }),
+        desc: t.Boolean(),
+      }),
+    ),
+  ),
+  page: t.Optional(t.Integer({ minimum: 1 })),
+  pageSize: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.entitiesPageSizeMax,
+    }),
+  ),
+});
 
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",
@@ -71,10 +112,19 @@ export const entitiesRoute = new Elysia({
       body: uploadEntityBodySchema,
     },
   )
-  .get("/", (ctx) =>
-    readEntitiesHandler({
-      workspaceId: ctx.workspaceId,
-    }),
+  .get(
+    "/",
+    (ctx) =>
+      readEntitiesHandler({
+        workspaceId: ctx.workspaceId,
+        filters: ctx.query.filters ?? [],
+        sorts: ctx.query.sorts ?? [],
+        page: ctx.query.page ?? 1,
+        pageSize: ctx.query.pageSize ?? LIMITS.entitiesPageSizeDefault,
+      }),
+    {
+      query: readEntitiesQuerySchema,
+    },
   )
   .delete(
     "/",
@@ -142,6 +192,19 @@ export const entitiesRoute = new Elysia({
     },
   )
   .get(
+    "/summaries",
+    (ctx) =>
+      readEntitySummariesHandler({
+        workspaceId: ctx.workspaceId,
+        page: ctx.query.page ?? 1,
+      }),
+    {
+      query: t.Object({
+        page: t.Optional(t.Integer({ minimum: 1 })),
+      }),
+    },
+  )
+  .get(
     "/zip/:entityId",
     (ctx) =>
       downloadZipHandler({
@@ -149,6 +212,25 @@ export const entitiesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
       }),
+    {
+      params: t.Object({
+        workspaceId: t.String(),
+        entityId: t.String(),
+      }),
+    },
+  )
+  .get(
+    "/entity/:entityId",
+    async (ctx) => {
+      const result = await readEntityByIdHandler({
+        workspaceId: ctx.workspaceId,
+        entityId: ctx.params.entityId,
+      });
+      if (!result) {
+        return status(404, { message: "Entity not found" });
+      }
+      return result;
+    },
     {
       params: t.Object({
         workspaceId: t.String(),

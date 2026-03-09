@@ -162,6 +162,8 @@ export const useUpsertField = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+
+      return response.data;
     },
 
     onError: (error) => {

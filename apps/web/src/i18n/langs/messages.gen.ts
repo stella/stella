@@ -592,6 +592,12 @@ type Messages = {
       "person": "Person";
     };
   };
+  "filters": {
+    "contains": "contains";
+    "eq": "equals";
+    "is_empty": "is empty";
+    "neq": "not equals";
+  };
   "errors": {
     "actionFailed": "Action failed";
     "failedToAcceptInvitation": "Failed to accept invitation";
@@ -1136,7 +1142,6 @@ type Messages = {
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";
-      "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "failedToChangeViewType": "Failed to change view type";

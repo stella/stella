@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type { ActionContextOf } from "rivetkit";
 
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
@@ -168,7 +169,7 @@ const processWorkflowBatch = (
       ...processedFields.skippedPropertyIds,
     ];
 
-    await db.transaction(async (tx) => {
+    const updatedFields = await db.transaction(async (tx) => {
       // 1. Delete existing fields (cascade deletes
       //    their justifications).
       if (allPropertyIds.length > 0) {
@@ -194,6 +195,7 @@ const processWorkflowBatch = (
           }),
         ),
         ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
+          id: nanoid(),
           propertyId,
           entityVersionId,
           content: {
@@ -220,25 +222,25 @@ const processWorkflowBatch = (
           })),
         );
       }
+
+      return fieldValues;
     });
 
     broadcastEvent(c, {
       name: "field-content",
       data: [
         ...processedFields.skippedPropertyIds.map((propertyId) => ({
+          // fieldId does not exist for skipped properties, because they are deleted from the database
+          id: "",
           propertyId,
           entityId,
           content: null,
         })),
-        ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
-          propertyId,
+        ...updatedFields.map((f) => ({
+          id: f.id,
+          propertyId: f.propertyId,
           entityId,
-          content: { type: "unsupported" as const, version: 1 as const },
-        })),
-        ...processedFields.aiResults.map(({ propertyId, content }) => ({
-          propertyId,
-          entityId,
-          content,
+          content: f.content,
         })),
       ],
     } satisfies WorkflowActorEvent);

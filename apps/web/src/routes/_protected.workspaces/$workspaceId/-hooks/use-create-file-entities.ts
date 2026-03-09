@@ -2,11 +2,10 @@ import { usePostHog } from "@posthog/react";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import { toastManager } from "@stella/ui/components/toast";
 
-import { MAX_PARALLEL_FILE_UPLOADS, MAX_PROJECT_ENTITIES } from "@/consts";
+import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
@@ -15,7 +14,6 @@ import {
   propertiesKeys,
   propertiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const MAX_DISPLAYED_FAILURES = 5;
 
@@ -75,7 +73,6 @@ export const uploadFileEntity = (
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const data = useWorkspaceStore(useShallow((s) => s.data));
   const posthog = usePostHog();
 
   const mutation = useMutation({
@@ -94,17 +91,6 @@ export const useCreateFileEntities = (workspaceId: string) => {
         propertyId = response.data.id;
       }
 
-      const remainingSlots = MAX_PROJECT_ENTITIES - data.length;
-      if (remainingSlots <= 0) {
-        toastManager.add({
-          title: t("workspaces.files.maxEntitiesReached"),
-          type: "warning",
-        });
-        return;
-      }
-
-      const filesToUpload = files.slice(0, remainingSlots);
-
       const toastId = toastManager.add({
         type: "loading",
         title: t("workspaces.files.uploading"),
@@ -114,12 +100,8 @@ export const useCreateFileEntities = (workspaceId: string) => {
       let renamedCount = 0;
       const failedFiles: string[] = [];
 
-      for (
-        let i = 0;
-        i < filesToUpload.length;
-        i += MAX_PARALLEL_FILE_UPLOADS
-      ) {
-        const batch = filesToUpload.slice(i, i + MAX_PARALLEL_FILE_UPLOADS);
+      for (let i = 0; i < files.length; i += MAX_PARALLEL_FILE_UPLOADS) {
+        const batch = files.slice(i, i + MAX_PARALLEL_FILE_UPLOADS);
 
         if (batch.length === 0) {
           break;
@@ -143,7 +125,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       }
 
       const failedCount = failedFiles.length;
-      const successCount = filesToUpload.length - failedCount;
+      const successCount = files.length - failedCount;
 
       if (failedCount === 0) {
         toastManager.update(toastId, {
@@ -156,7 +138,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
           type: "warning",
           title: t("workspaces.files.uploadedPartially", {
             failed: failedCount,
-            total: filesToUpload.length,
+            total: files.length,
           }),
           description: formatFailedFiles(failedFiles),
         });

@@ -1,35 +1,23 @@
 import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
-import type { ViewConfig, ViewLayout } from "@/lib/types";
-import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import type { ViewLayout, ViewLayoutType } from "@/lib/types";
+import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
 
 type CreateViewVars = {
-  workspaceId: string;
   id: string;
   name: string;
   layout: ViewLayout;
-  config: ViewConfig;
 };
 
-export const useCreateView = () => {
+export const useCreateView = (workspaceId: string) => {
   const posthog = usePostHog();
+  const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateViewVars) => {
-      const response = await api.views({ workspaceId }).put({
-        queryKey: viewsKeys.all(workspaceId),
-        ...body,
-      });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+    mutationFn: async (body: CreateViewVars) => {
+      return await actor.handle?.createView(body);
     },
     onError: (error) => {
       captureError(posthog, error);
@@ -38,31 +26,37 @@ export const useCreateView = () => {
 };
 
 type UpdateViewVars = {
-  workspaceId: string;
   viewId: string;
   name?: string;
   layout?: ViewLayout;
-  config?: ViewConfig;
 };
 
-export const useUpdateView = () => {
+export const useUpdateView = (workspaceId: string) => {
   const posthog = usePostHog();
+  const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ workspaceId, viewId, ...body }: UpdateViewVars) => {
-      const response = await api
-        .views({ workspaceId })
-        .view({ viewId })
-        .post({
-          queryKey: viewsKeys.all(workspaceId),
-          ...body,
-        });
+    mutationFn: async (body: UpdateViewVars) => {
+      return await actor.handle?.updateView(body);
+    },
+    onError: (error) => {
+      captureError(posthog, error);
+    },
+  });
+};
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+type ConvertViewVars = {
+  viewId: string;
+  targetType: ViewLayoutType;
+};
 
-      return response.data;
+export const useConvertView = (workspaceId: string) => {
+  const posthog = usePostHog();
+  const actor = useViewsActor(workspaceId);
+
+  return useMutation({
+    mutationFn: async ({ viewId, targetType }: ConvertViewVars) => {
+      return await actor.handle?.convertView({ viewId, targetType });
     },
     onError: (error) => {
       captureError(posthog, error);
@@ -71,25 +65,16 @@ export const useUpdateView = () => {
 };
 
 type ReorderViewsVars = {
-  workspaceId: string;
   viewIds: string[];
 };
 
-export const useReorderViews = () => {
+export const useReorderViews = (workspaceId: string) => {
   const posthog = usePostHog();
+  const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ workspaceId, viewIds }: ReorderViewsVars) => {
-      const response = await api.views({ workspaceId }).reorder.patch({
-        queryKey: viewsKeys.all(workspaceId),
-        viewIds,
-      });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+    mutationFn: async ({ viewIds }: ReorderViewsVars) => {
+      return await actor.handle?.reorderViews({ viewIds });
     },
     onError: (error) => {
       captureError(posthog, error);
@@ -98,27 +83,16 @@ export const useReorderViews = () => {
 };
 
 type DeleteViewVars = {
-  workspaceId: string;
   viewId: string;
 };
 
-export const useDeleteView = () => {
+export const useDeleteView = (workspaceId: string) => {
   const posthog = usePostHog();
+  const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ workspaceId, viewId }: DeleteViewVars) => {
-      const response = await api
-        .views({ workspaceId })
-        .view({ viewId })
-        .delete({
-          queryKey: viewsKeys.all(workspaceId),
-        });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+    mutationFn: async ({ viewId }: DeleteViewVars) => {
+      return await actor.handle?.deleteView({ viewId });
     },
     onError: (error) => {
       captureError(posthog, error);

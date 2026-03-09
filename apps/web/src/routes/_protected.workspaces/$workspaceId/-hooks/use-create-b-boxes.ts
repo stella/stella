@@ -80,7 +80,7 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
 
 export const useIsCreatingBBoxes = () => {
   const justificationId = useSearch({
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.justification?.id,
   });
   const isPending = useWorkspaceStore((s) =>
