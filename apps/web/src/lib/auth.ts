@@ -1,4 +1,8 @@
-import { emailOTPClient, organizationClient } from "better-auth/client/plugins";
+import {
+  emailOTPClient,
+  inferAdditionalFields,
+  organizationClient,
+} from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 import { ac, roles } from "@stella/permissions";
@@ -11,7 +15,15 @@ export const HTTP_TOO_MANY_REQUESTS = 429;
 
 export const authClient = createAuthClient({
   baseURL: env.VITE_API_URL,
-  plugins: [emailOTPClient(), organizationClient({ ac, roles })],
+  plugins: [
+    emailOTPClient(),
+    organizationClient({ ac, roles }),
+    inferAdditionalFields({
+      user: {
+        timezoneId: { type: "string" },
+      },
+    }),
+  ],
   fetchOptions: {
     headers: {
       get "Accept-Language"() {

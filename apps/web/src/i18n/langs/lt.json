@@ -13,6 +13,13 @@
       "revokeSession": "Sign out",
       "title": "Sessions",
       "unknownDevice": "Unknown device"
+    },
+    "settings": {
+      "description": "Tvarkykite savo paskyros nuostatas",
+      "timezone": "Laiko juosta",
+      "timezoneDescription": "Naudojama laiko žymoms pranešimuose ir el. laiškuose",
+      "timezoneSaved": "Laiko juosta atnaujinta",
+      "title": "Nustatymai"
     }
   },
   "analytics": {

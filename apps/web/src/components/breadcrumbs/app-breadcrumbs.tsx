@@ -112,6 +112,13 @@ export const AppBreadcrumbs = () => {
           </BreadcrumbLink>
         );
       },
+      [serializeKey(["/account/settings"])]: () => {
+        return (
+          <BreadcrumbLink to="/account/settings">
+            {t("common.settings")}
+          </BreadcrumbLink>
+        );
+      },
       [serializeKey(["/chat"])]: () => {
         return (
           <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>

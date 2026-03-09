@@ -3,6 +3,13 @@
 
 type Messages = {
   "account": {
+    "settings": {
+      "description": "Manage your account preferences";
+      "timezone": "Timezone";
+      "timezoneDescription": "Used for timestamps in notifications and emails";
+      "timezoneSaved": "Timezone updated";
+      "title": "Settings";
+    };
     "sessions": {
       "currentSession": "Current";
       "description": "Manage your active sessions";
