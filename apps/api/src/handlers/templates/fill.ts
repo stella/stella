@@ -6,12 +6,10 @@ import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
-import {
-  DOCX_EXT_RE,
-  sanitizeFilename,
-} from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
+import { contentDisposition } from "@/api/lib/content-disposition";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -140,7 +138,7 @@ export const fillHandler = async ({
       status: 200,
       headers: {
         "Content-Type": PDF_MIME_TYPE,
-        "Content-Disposition": `attachment; filename="${pdfName}"`,
+        "Content-Disposition": contentDisposition(pdfName),
       },
     });
   }

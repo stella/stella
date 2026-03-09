@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -162,7 +163,7 @@ export const createTemplateHandler = async ({
         organizationId,
         categoryId: categoryId ?? null,
         name,
-        fileName: file.name,
+        fileName: sanitizeFilename(file.name),
         s3Key,
         sizeBytes: docxWithManifest.byteLength,
         manifest,

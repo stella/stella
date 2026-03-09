@@ -20,6 +20,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -74,8 +75,9 @@ export const uploadEntityHandler = async ({
   organizationId,
   workspaceId,
   userId,
-  body: { file, name, propertyId },
+  body: { file, name: rawName, propertyId },
 }: UploadEntityHandlerProps) => {
+  const name = sanitizeFilename(rawName);
   const [entityCount, property] = await Promise.all([
     db.$count(entities, eq(entities.workspaceId, workspaceId)),
     db.query.properties.findFirst({
