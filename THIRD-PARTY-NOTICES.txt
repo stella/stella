@@ -14190,12 +14190,12 @@ The following npm packages may be included in this product:
  - @ai-sdk/react@3.0.108
  - @ai-sdk/valibot@2.0.17
  - @streamdown/cjk@1.0.2
- - @streamdown/code@1.0.3
+ - @streamdown/code@1.1.0
  - @streamdown/math@1.0.2
  - @streamdown/mermaid@1.0.2
  - ai@6.0.106
- - remend@1.2.1
- - streamdown@2.3.0
+ - remend@1.2.2
+ - streamdown@2.4.0
 
 These packages each contain the following license:
 
