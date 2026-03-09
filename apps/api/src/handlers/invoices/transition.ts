@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -58,12 +58,14 @@ export const transitionInvoiceBodySchema = t.Object({
 type TransitionInvoiceBodySchema = Static<typeof transitionInvoiceBodySchema>;
 
 type TransitionInvoiceHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   invoiceId: string;
   body: TransitionInvoiceBodySchema;
 };
 
 export const transitionInvoiceHandler = async ({
+  scopedDb,
   workspaceId,
   invoiceId,
   body,
@@ -84,7 +86,7 @@ export const transitionInvoiceHandler = async ({
 
   // Void requires a transaction: revert linked entries.
   if (body.action === "void") {
-    const result = await db.transaction(async (tx) => {
+    const result = await scopedDb(async (tx) => {
       const updated = await tx
         .update(invoices)
         .set(set)
@@ -144,17 +146,19 @@ export const transitionInvoiceHandler = async ({
   }
 
   // Non-void transitions: simple status update.
-  const result = await db
-    .update(invoices)
-    .set(set)
-    .where(
-      and(
-        eq(invoices.id, invoiceId),
-        eq(invoices.workspaceId, workspaceId),
-        inArray(invoices.status, transition.from),
-      ),
-    )
-    .returning({ id: invoices.id });
+  const result = await scopedDb((tx) =>
+    tx
+      .update(invoices)
+      .set(set)
+      .where(
+        and(
+          eq(invoices.id, invoiceId),
+          eq(invoices.workspaceId, workspaceId),
+          inArray(invoices.status, transition.from),
+        ),
+      )
+      .returning({ id: invoices.id }),
+  );
 
   if (result.length === 0) {
     return status(409, {

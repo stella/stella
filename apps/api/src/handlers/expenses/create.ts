@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -24,6 +24,7 @@ export const createExpenseBodySchema = t.Object({
 type CreateExpenseBodySchema = Static<typeof createExpenseBodySchema>;
 
 type CreateExpenseHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: string;
@@ -31,6 +32,7 @@ type CreateExpenseHandlerProps = {
 };
 
 export const createExpenseHandler = async ({
+  scopedDb,
   organizationId,
   workspaceId,
   userId,
@@ -58,10 +60,12 @@ export const createExpenseHandler = async ({
     });
   }
 
-  const matter = await db.query.entities.findFirst({
-    where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-    columns: { id: true },
-  });
+  const matter = await scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+      columns: { id: true },
+    }),
+  );
 
   if (!matter) {
     return status(400, {
@@ -69,9 +73,8 @@ export const createExpenseHandler = async ({
     });
   }
 
-  const totalExpenses = await db.$count(
-    expenses,
-    eq(expenses.workspaceId, workspaceId),
+  const totalExpenses = await scopedDb((tx) =>
+    tx.$count(expenses, eq(expenses.workspaceId, workspaceId)),
   );
 
   if (totalExpenses >= LIMITS.expensesPerWorkspace) {
@@ -80,23 +83,25 @@ export const createExpenseHandler = async ({
     });
   }
 
-  const [entry] = await db
-    .insert(expenses)
-    .values({
-      organizationId,
-      workspaceId,
-      userId,
-      matterId: body.matterId,
-      dateIncurred: body.dateIncurred,
-      amount: body.amount,
-      currency: body.currency,
-      category: body.category,
-      description: body.description,
-      invoiceDescription: body.invoiceDescription ?? null,
-      billable: body.billable ?? true,
-      markup: body.markup ?? 0,
-    })
-    .returning({ id: expenses.id });
+  const [entry] = await scopedDb((tx) =>
+    tx
+      .insert(expenses)
+      .values({
+        organizationId,
+        workspaceId,
+        userId,
+        matterId: body.matterId,
+        dateIncurred: body.dateIncurred,
+        amount: body.amount,
+        currency: body.currency,
+        category: body.category,
+        description: body.description,
+        invoiceDescription: body.invoiceDescription ?? null,
+        billable: body.billable ?? true,
+        markup: body.markup ?? 0,
+      })
+      .returning({ id: expenses.id }),
+  );
 
   return { id: entry.id };
 };

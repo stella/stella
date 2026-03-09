@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -20,6 +20,7 @@ import { captureError } from "@/api/lib/posthog";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
+  scopedDb: ScopedDb;
 };
 
 type PipelineResult = {
@@ -44,14 +45,17 @@ type ProcessResult = {
 const processDecision = async (
   result: IngestionResult,
   sourceId: string,
+  scopedDb: ScopedDb,
 ): Promise<ProcessResult> => {
-  const existing = await db.query.caseLawDecisions.findFirst({
-    where: {
-      sourceId,
-      caseNumber: result.caseNumber,
-    },
-    columns: { id: true, sourceHash: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: {
+        sourceId,
+        caseNumber: result.caseNumber,
+      },
+      columns: { id: true, sourceHash: true },
+    }),
+  );
 
   if (existing?.sourceHash === result.rawHash) {
     return { inserted: false, searchVectorFailed: false };
@@ -65,7 +69,7 @@ const processDecision = async (
 
   let decisionId: string | undefined;
 
-  await db.transaction(async (tx) => {
+  await scopedDb(async (tx) => {
     if (existing) {
       await tx
         .update(caseLawDecisions)
@@ -141,7 +145,7 @@ const processDecision = async (
   let searchVectorFailed = false;
   if (decisionId) {
     try {
-      await indexDecision(decisionId);
+      await indexDecision(decisionId, scopedDb);
     } catch (err) {
       captureError(err, { decisionId, sourceId });
       searchVectorFailed = true;
@@ -160,6 +164,7 @@ const processDecision = async (
  */
 export const runIngestionPipeline = async ({
   source,
+  scopedDb,
 }: PipelineInput): Promise<PipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
@@ -191,7 +196,7 @@ export const runIngestionPipeline = async ({
     const page = pageResult.value;
 
     for (const result of page.decisions) {
-      const outcome = await processDecision(result, source.id);
+      const outcome = await processDecision(result, source.id, scopedDb);
 
       if (outcome.inserted) {
         inserted++;
@@ -216,10 +221,12 @@ export const runIngestionPipeline = async ({
   }
 
   // Persist sync cursor and timestamp
-  await db
-    .update(caseLawSources)
-    .set({ syncCursor: cursor, lastSyncAt: new Date() })
-    .where(eq(caseLawSources.id, source.id));
+  await scopedDb((tx) =>
+    tx
+      .update(caseLawSources)
+      .set({ syncCursor: cursor, lastSyncAt: new Date() })
+      .where(eq(caseLawSources.id, source.id)),
+  );
 
   return {
     inserted,

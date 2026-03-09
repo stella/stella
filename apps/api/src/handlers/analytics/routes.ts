@@ -22,6 +22,7 @@ export const analyticsRoute = new Elysia({
       summaryHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -31,6 +32,7 @@ export const analyticsRoute = new Elysia({
       hoursByMatterHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -40,6 +42,7 @@ export const analyticsRoute = new Elysia({
       hoursByUserHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -49,6 +52,7 @@ export const analyticsRoute = new Elysia({
       hoursByPeriodHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: periodQuerySchema },
   )
@@ -58,6 +62,7 @@ export const analyticsRoute = new Elysia({
       statusBreakdownHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: dateRangeQuerySchema },
   )
@@ -67,6 +72,7 @@ export const analyticsRoute = new Elysia({
       revenueByPeriodHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: periodQuerySchema },
   );

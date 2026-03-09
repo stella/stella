@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -21,12 +21,14 @@ export const addEntriesBodySchema = t.Object({
 type AddEntriesBodySchema = Static<typeof addEntriesBodySchema>;
 
 type AddEntriesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   invoiceId: string;
   body: AddEntriesBodySchema;
 };
 
 export const addEntriesHandler = async ({
+  scopedDb,
   workspaceId,
   invoiceId,
   body,
@@ -40,13 +42,15 @@ export const addEntriesHandler = async ({
   const now = new Date();
 
   // Pre-validate: invoice must be draft.
-  const invoice = await db.query.invoices.findFirst({
-    where: {
-      id: invoiceId,
-      workspaceId: { eq: workspaceId },
-    },
-    columns: { id: true, status: true },
-  });
+  const invoice = await scopedDb((tx) =>
+    tx.query.invoices.findFirst({
+      where: {
+        id: invoiceId,
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { id: true, status: true },
+    }),
+  );
 
   if (!invoice) {
     return status(404, { message: "Invoice not found" });
@@ -59,23 +63,26 @@ export const addEntriesHandler = async ({
   }
 
   // Pre-validate time entries.
-  if (body.timeEntryIds?.length) {
-    const entries = await db
-      .select({
-        id: timeEntries.id,
-        status: timeEntries.status,
-        billable: timeEntries.billable,
-        invoiceId: timeEntries.invoiceId,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.workspaceId, workspaceId),
-          inArray(timeEntries.id, body.timeEntryIds),
+  const timeEntryIds = body.timeEntryIds;
+  if (timeEntryIds?.length) {
+    const entries = await scopedDb((tx) =>
+      tx
+        .select({
+          id: timeEntries.id,
+          status: timeEntries.status,
+          billable: timeEntries.billable,
+          invoiceId: timeEntries.invoiceId,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspaceId),
+            inArray(timeEntries.id, timeEntryIds),
+          ),
         ),
-      );
+    );
 
-    if (entries.length !== body.timeEntryIds.length) {
+    if (entries.length !== timeEntryIds.length) {
       return status(400, {
         message: "Some time entries were not found",
       });
@@ -97,23 +104,26 @@ export const addEntriesHandler = async ({
   }
 
   // Pre-validate expenses.
-  if (body.expenseIds?.length) {
-    const expenseRows = await db
-      .select({
-        id: expenses.id,
-        status: expenses.status,
-        billable: expenses.billable,
-        invoiceId: expenses.invoiceId,
-      })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.workspaceId, workspaceId),
-          inArray(expenses.id, body.expenseIds),
+  const expenseIds = body.expenseIds;
+  if (expenseIds?.length) {
+    const expenseRows = await scopedDb((tx) =>
+      tx
+        .select({
+          id: expenses.id,
+          status: expenses.status,
+          billable: expenses.billable,
+          invoiceId: expenses.invoiceId,
+        })
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.workspaceId, workspaceId),
+            inArray(expenses.id, expenseIds),
+          ),
         ),
-      );
+    );
 
-    if (expenseRows.length !== body.expenseIds.length) {
+    if (expenseRows.length !== expenseIds.length) {
       return status(400, {
         message: "Some expenses were not found",
       });
@@ -134,131 +144,124 @@ export const addEntriesHandler = async ({
     }
   }
 
-  const result = await db
-    .transaction(async (tx) => {
-      // Re-verify draft status inside tx to prevent TOCTOU race.
-      const invoiceCheck = await tx.query.invoices.findFirst({
-        where: {
-          id: invoiceId,
-          workspaceId: { eq: workspaceId },
-          status: INVOICE_STATUS.DRAFT,
-        },
-        columns: { id: true },
+  const result = await scopedDb(async (tx) => {
+    // Re-verify draft status inside tx to prevent TOCTOU race.
+    const invoiceCheck = await tx.query.invoices.findFirst({
+      where: {
+        id: invoiceId,
+        workspaceId: { eq: workspaceId },
+        status: INVOICE_STATUS.DRAFT,
+      },
+      columns: { id: true },
+    });
+    if (!invoiceCheck) {
+      throw new ConcurrentModificationError({
+        message: "Invoice status changed concurrently",
       });
-      if (!invoiceCheck) {
+    }
+
+    if (timeEntryIds?.length) {
+      const updated = await tx
+        .update(timeEntries)
+        .set({
+          invoiceId,
+          status: BILLING_STATUS.BILLED,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspaceId),
+            inArray(timeEntries.id, timeEntryIds),
+            eq(timeEntries.status, BILLING_STATUS.APPROVED),
+            eq(timeEntries.billable, true),
+            isNull(timeEntries.invoiceId),
+          ),
+        );
+
+      const linkedCount = updated.rowCount ?? 0;
+      if (linkedCount !== timeEntryIds.length) {
         throw new ConcurrentModificationError({
-          message: "Invoice status changed concurrently",
+          message: "Entries modified concurrently",
         });
       }
+    }
 
-      if (body.timeEntryIds?.length) {
-        const updated = await tx
-          .update(timeEntries)
-          .set({
-            invoiceId,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, body.timeEntryIds),
-              eq(timeEntries.status, BILLING_STATUS.APPROVED),
-              eq(timeEntries.billable, true),
-              isNull(timeEntries.invoiceId),
-            ),
-          );
-
-        const linkedCount = updated.rowCount ?? 0;
-        if (linkedCount !== body.timeEntryIds.length) {
-          throw new ConcurrentModificationError({
-            message: "Entries modified concurrently",
-          });
-        }
-      }
-
-      if (body.expenseIds?.length) {
-        const updated = await tx
-          .update(expenses)
-          .set({
-            invoiceId,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(expenses.workspaceId, workspaceId),
-              inArray(expenses.id, body.expenseIds),
-              eq(expenses.status, BILLING_STATUS.APPROVED),
-              eq(expenses.billable, true),
-              isNull(expenses.invoiceId),
-            ),
-          );
-
-        const linkedCount = updated.rowCount ?? 0;
-        if (linkedCount !== body.expenseIds.length) {
-          throw new ConcurrentModificationError({
-            message: "Entries modified concurrently",
-          });
-        }
-      }
-
-      // Recalculate total from all linked entries.
-      const allTimeEntries = await tx
-        .select({
-          billedMinutes: timeEntries.billedMinutes,
-          rateAtEntry: timeEntries.rateAtEntry,
+    if (expenseIds?.length) {
+      const updated = await tx
+        .update(expenses)
+        .set({
+          invoiceId,
+          status: BILLING_STATUS.BILLED,
+          updatedAt: now,
         })
-        .from(timeEntries)
         .where(
           and(
-            eq(timeEntries.invoiceId, invoiceId),
-            eq(timeEntries.workspaceId, workspaceId),
-          ),
-        );
-
-      const allExpenses = await tx
-        .select({
-          amount: expenses.amount,
-          markup: expenses.markup,
-        })
-        .from(expenses)
-        .where(
-          and(
-            eq(expenses.invoiceId, invoiceId),
             eq(expenses.workspaceId, workspaceId),
+            inArray(expenses.id, expenseIds),
+            eq(expenses.status, BILLING_STATUS.APPROVED),
+            eq(expenses.billable, true),
+            isNull(expenses.invoiceId),
           ),
         );
 
-      let totalAmount = 0;
-      for (const entry of allTimeEntries) {
-        totalAmount += Math.round(
-          (entry.billedMinutes / 60) * entry.rateAtEntry,
-        );
+      const linkedCount = updated.rowCount ?? 0;
+      if (linkedCount !== expenseIds.length) {
+        throw new ConcurrentModificationError({
+          message: "Entries modified concurrently",
+        });
       }
-      for (const expense of allExpenses) {
-        const markupMultiplier = 1 + expense.markup / 100;
-        totalAmount += Math.round(expense.amount * markupMultiplier);
-      }
+    }
 
-      await tx
-        .update(invoices)
-        .set({ totalAmount, updatedAt: now })
-        .where(
-          and(
-            eq(invoices.id, invoiceId),
-            eq(invoices.workspaceId, workspaceId),
-          ),
-        );
+    // Recalculate total from all linked entries.
+    const allTimeEntries = await tx
+      .select({
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.invoiceId, invoiceId),
+          eq(timeEntries.workspaceId, workspaceId),
+        ),
+      );
 
-      return { totalAmount };
-    })
-    .catch((err: unknown) => {
-      if (err instanceof ConcurrentModificationError) {
-        return null;
-      }
-      throw err;
-    });
+    const allExpenses = await tx
+      .select({
+        amount: expenses.amount,
+        markup: expenses.markup,
+      })
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.invoiceId, invoiceId),
+          eq(expenses.workspaceId, workspaceId),
+        ),
+      );
+
+    let totalAmount = 0;
+    for (const entry of allTimeEntries) {
+      totalAmount += Math.round((entry.billedMinutes / 60) * entry.rateAtEntry);
+    }
+    for (const expense of allExpenses) {
+      const markupMultiplier = 1 + expense.markup / 100;
+      totalAmount += Math.round(expense.amount * markupMultiplier);
+    }
+
+    await tx
+      .update(invoices)
+      .set({ totalAmount, updatedAt: now })
+      .where(
+        and(eq(invoices.id, invoiceId), eq(invoices.workspaceId, workspaceId)),
+      );
+
+    return { totalAmount };
+  }).catch((err: unknown) => {
+    if (err instanceof ConcurrentModificationError) {
+      return null;
+    }
+    throw err;
+  });
 
   if (!result) {
     return status(409, {

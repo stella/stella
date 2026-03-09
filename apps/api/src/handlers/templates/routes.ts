@@ -137,6 +137,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/fill-preview",
     (ctx) =>
       fillPreviewHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         body: ctx.body,
@@ -150,6 +151,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/fill",
     (ctx) =>
       fillByIdHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         templateId: ctx.params.templateId,
@@ -229,6 +231,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/clauses",
     (ctx) =>
       listTemplateClausesHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
       }),
@@ -238,6 +241,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/clauses",
     (ctx) =>
       linkClauseHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         body: ctx.body,
@@ -252,6 +256,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/clauses/:linkId",
     (ctx) =>
       unlinkClauseHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         linkId: ctx.params.linkId,
@@ -268,6 +273,7 @@ export const templatesRoute = new Elysia({
     "/:templateId/clauses/:linkId/sync",
     (ctx) =>
       syncClauseHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         linkId: ctx.params.linkId,

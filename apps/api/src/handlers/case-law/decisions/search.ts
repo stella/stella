@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
@@ -32,7 +32,10 @@ export const searchDecisionsBodySchema = t.Object({
 
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
 
-export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
+export const searchDecisionsHandler = async (
+  body: SearchDecisionsBody,
+  scopedDb: ScopedDb,
+) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
 
@@ -189,10 +192,10 @@ export const searchDecisionsHandler = async (body: SearchDecisionsBody) => {
   // Skip expensive COUNT(*) and facet queries on paginated
   // requests; these values don't change between pages.
   const queries: Promise<{ rows: Record<string, unknown>[] }>[] = [
-    db.execute(hitsQuery),
-    parsedCursor ? emptyRows : db.execute(countQuery),
-    parsedCursor ? emptyRows : db.execute(courtFacetQuery),
-    parsedCursor ? emptyRows : db.execute(countryFacetQuery),
+    scopedDb((tx) => tx.execute(hitsQuery)),
+    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countQuery)),
+    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
+    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countryFacetQuery)),
   ];
 
   const [hitsResult, countResult, courtResult, countryResult] =

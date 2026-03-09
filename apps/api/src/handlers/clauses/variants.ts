@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauseVariants } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
@@ -29,16 +29,19 @@ type UpdateVariantBody = Static<typeof updateVariantBodySchema>;
 // ── Helpers ─────────────────────────────────────────
 
 const verifyClauseOwnership = async (
+  scopedDb: ScopedDb,
   clauseId: string,
   organizationId: SafeId<"organization">,
 ) => {
-  const clause = await db.query.clauses.findFirst({
-    where: {
-      id: clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true },
-  });
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: clauseId,
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   return clause;
 };
@@ -46,33 +49,41 @@ const verifyClauseOwnership = async (
 // ── List ────────────────────────────────────────────
 
 type ListVariantsProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
 };
 
 export const listVariantsHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
 }: ListVariantsProps) => {
-  const clause = await verifyClauseOwnership(clauseId, organizationId);
+  const clause = await verifyClauseOwnership(
+    scopedDb,
+    clauseId,
+    organizationId,
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const result = await db.query.clauseVariants.findMany({
-    where: { clauseId },
-    columns: {
-      id: true,
-      label: true,
-      body: true,
-      sortOrder: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: { sortOrder: "asc" },
-    limit: LIMITS.clauseVariantsPerClause,
-  });
+  const result = await scopedDb((tx) =>
+    tx.query.clauseVariants.findMany({
+      where: { clauseId },
+      columns: {
+        id: true,
+        label: true,
+        body: true,
+        sortOrder: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { sortOrder: "asc" },
+      limit: LIMITS.clauseVariantsPerClause,
+    }),
+  );
 
   return { variants: result };
 };
@@ -80,25 +91,30 @@ export const listVariantsHandler = async ({
 // ── Create ──────────────────────────────────────────
 
 type CreateVariantProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   body: CreateVariantBody;
 };
 
 export const createVariantHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
   body,
 }: CreateVariantProps) => {
-  const clause = await verifyClauseOwnership(clauseId, organizationId);
+  const clause = await verifyClauseOwnership(
+    scopedDb,
+    clauseId,
+    organizationId,
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const existingCount = await db.$count(
-    clauseVariants,
-    eq(clauseVariants.clauseId, clauseId),
+  const existingCount = await scopedDb((tx) =>
+    tx.$count(clauseVariants, eq(clauseVariants.clauseId, clauseId)),
   );
 
   if (existingCount >= LIMITS.clauseVariantsPerClause) {
@@ -107,20 +123,22 @@ export const createVariantHandler = async ({
     });
   }
 
-  const [inserted] = await db
-    .insert(clauseVariants)
-    .values({
-      id: nanoid(),
-      clauseId,
-      label: body.label,
-      body: body.body,
-    })
-    .returning({
-      id: clauseVariants.id,
-      label: clauseVariants.label,
-      sortOrder: clauseVariants.sortOrder,
-      createdAt: clauseVariants.createdAt,
-    });
+  const [inserted] = await scopedDb((tx) =>
+    tx
+      .insert(clauseVariants)
+      .values({
+        id: nanoid(),
+        clauseId,
+        label: body.label,
+        body: body.body,
+      })
+      .returning({
+        id: clauseVariants.id,
+        label: clauseVariants.label,
+        sortOrder: clauseVariants.sortOrder,
+        createdAt: clauseVariants.createdAt,
+      }),
+  );
 
   return inserted;
 };
@@ -128,6 +146,7 @@ export const createVariantHandler = async ({
 // ── Update ──────────────────────────────────────────
 
 type UpdateVariantProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   variantId: string;
@@ -135,21 +154,28 @@ type UpdateVariantProps = {
 };
 
 export const updateVariantHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
   variantId,
   body,
 }: UpdateVariantProps) => {
-  const clause = await verifyClauseOwnership(clauseId, organizationId);
+  const clause = await verifyClauseOwnership(
+    scopedDb,
+    clauseId,
+    organizationId,
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const existing = await db.query.clauseVariants.findFirst({
-    where: { id: variantId, clauseId },
-    columns: { id: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.clauseVariants.findFirst({
+      where: { id: variantId, clauseId },
+      columns: { id: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Variant not found" });
@@ -160,21 +186,23 @@ export const updateVariantHandler = async ({
     updatedAt: new Date(),
   };
 
-  const [updated] = await db
-    .update(clauseVariants)
-    .set(updates)
-    .where(
-      and(
-        eq(clauseVariants.id, variantId),
-        eq(clauseVariants.clauseId, clauseId),
-      ),
-    )
-    .returning({
-      id: clauseVariants.id,
-      label: clauseVariants.label,
-      sortOrder: clauseVariants.sortOrder,
-      updatedAt: clauseVariants.updatedAt,
-    });
+  const [updated] = await scopedDb((tx) =>
+    tx
+      .update(clauseVariants)
+      .set(updates)
+      .where(
+        and(
+          eq(clauseVariants.id, variantId),
+          eq(clauseVariants.clauseId, clauseId),
+        ),
+      )
+      .returning({
+        id: clauseVariants.id,
+        label: clauseVariants.label,
+        sortOrder: clauseVariants.sortOrder,
+        updatedAt: clauseVariants.updatedAt,
+      }),
+  );
 
   return updated;
 };
@@ -182,39 +210,49 @@ export const updateVariantHandler = async ({
 // ── Delete ──────────────────────────────────────────
 
 type DeleteVariantProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   variantId: string;
 };
 
 export const deleteVariantHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
   variantId,
 }: DeleteVariantProps) => {
-  const clause = await verifyClauseOwnership(clauseId, organizationId);
+  const clause = await verifyClauseOwnership(
+    scopedDb,
+    clauseId,
+    organizationId,
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const existing = await db.query.clauseVariants.findFirst({
-    where: { id: variantId, clauseId },
-    columns: { id: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.clauseVariants.findFirst({
+      where: { id: variantId, clauseId },
+      columns: { id: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Variant not found" });
   }
 
-  await db
-    .delete(clauseVariants)
-    .where(
-      and(
-        eq(clauseVariants.id, variantId),
-        eq(clauseVariants.clauseId, clauseId),
+  await scopedDb((tx) =>
+    tx
+      .delete(clauseVariants)
+      .where(
+        and(
+          eq(clauseVariants.id, variantId),
+          eq(clauseVariants.clauseId, clauseId),
+        ),
       ),
-    );
+  );
 
   return;
 };

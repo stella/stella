@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
@@ -19,6 +19,7 @@ export const deleteEntitiesBodySchema = t.Object({
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
 type DeleteEntitiesHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   body: DeleteEntitiesBodySchema;
@@ -44,25 +45,28 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 };
 
 export const deleteEntitiesHandler = async ({
+  scopedDb,
   organizationId,
   workspaceId,
   body,
 }: DeleteEntitiesHandlerProps) => {
-  const entityVersionIds = db
-    .select({ id: entityVersions.id })
-    .from(entityVersions)
-    .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-    .where(
-      and(
-        eq(entities.workspaceId, workspaceId),
-        inArray(entities.id, body.entityIds),
-      ),
-    );
+  const fieldRows = await scopedDb((tx) => {
+    const entityVersionIds = tx
+      .select({ id: entityVersions.id })
+      .from(entityVersions)
+      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+      .where(
+        and(
+          eq(entities.workspaceId, workspaceId),
+          inArray(entities.id, body.entityIds),
+        ),
+      );
 
-  const fieldRows = await db
-    .select({ content: fields.content })
-    .from(fields)
-    .where(inArray(fields.entityVersionId, entityVersionIds));
+    return tx
+      .select({ content: fields.content })
+      .from(fields)
+      .where(inArray(fields.entityVersionId, entityVersionIds));
+  });
 
   const fileRefs = fieldRows.flatMap((row) => extractFileRefs(row.content));
 
@@ -79,19 +83,23 @@ export const deleteEntitiesHandler = async ({
 
   // Cascade: entities → entityVersions → fields →
   // justifications (all cascade).
-  await db
-    .delete(entities)
-    .where(
-      and(
-        eq(entities.workspaceId, workspaceId),
-        inArray(entities.id, body.entityIds),
+  await scopedDb((tx) =>
+    tx
+      .delete(entities)
+      .where(
+        and(
+          eq(entities.workspaceId, workspaceId),
+          inArray(entities.id, body.entityIds),
+        ),
       ),
-    );
+  );
 
-  await db
-    .update(workspaces)
-    .set({ lastActivityAt: new Date() })
-    .where(eq(workspaces.id, workspaceId));
+  await scopedDb((tx) =>
+    tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId)),
+  );
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();

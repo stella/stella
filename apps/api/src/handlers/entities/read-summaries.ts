@@ -1,16 +1,18 @@
 import { count, desc, eq } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadEntitySummariesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   page: number;
 };
 
 export const readEntitySummariesHandler = async ({
+  scopedDb,
   workspaceId,
   page,
 }: ReadEntitySummariesHandlerProps) => {
@@ -19,17 +21,21 @@ export const readEntitySummariesHandler = async ({
   const whereClause = eq(entities.workspaceId, workspaceId);
 
   const [rows, countResult] = await Promise.all([
-    db
-      .select({
-        id: entities.id,
-        name: entities.name,
-      })
-      .from(entities)
-      .where(whereClause)
-      .orderBy(desc(entities.createdAt))
-      .offset(offset)
-      .limit(pageSize),
-    db.select({ total: count() }).from(entities).where(whereClause),
+    scopedDb((tx) =>
+      tx
+        .select({
+          id: entities.id,
+          name: entities.name,
+        })
+        .from(entities)
+        .where(whereClause)
+        .orderBy(desc(entities.createdAt))
+        .offset(offset)
+        .limit(pageSize),
+    ),
+    scopedDb((tx) =>
+      tx.select({ total: count() }).from(entities).where(whereClause),
+    ),
   ]);
 
   return {

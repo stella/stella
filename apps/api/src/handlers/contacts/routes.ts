@@ -32,6 +32,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         cursor: ctx.query.cursor,
         type: ctx.query.type,
         q: ctx.query.q,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: t.Object({
@@ -51,6 +52,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         organizationId: ctx.session.activeOrganizationId,
         q: ctx.query.q,
         type: ctx.query.type,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: t.Object({
@@ -68,6 +70,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { contact: ["create"] },
@@ -85,6 +88,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
           readContactByIdHandler({
             organizationId: ctx.session.activeOrganizationId,
             contactId: ctx.params.contactId,
+            scopedDb: ctx.scopedDb,
           }),
         )
         .post(
@@ -94,6 +98,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
               organizationId: ctx.session.activeOrganizationId,
               contactId: ctx.params.contactId,
               body: ctx.body,
+              scopedDb: ctx.scopedDb,
             }),
           {
             permissions: { contact: ["update"] },
@@ -106,6 +111,7 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
             deleteContactByIdHandler({
               organizationId: ctx.session.activeOrganizationId,
               contactId: ctx.params.contactId,
+              scopedDb: ctx.scopedDb,
             }),
           {
             permissions: { contact: ["delete"] },

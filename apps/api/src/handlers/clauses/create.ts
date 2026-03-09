@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -22,6 +22,7 @@ export const createClauseBodySchema = t.Object({
 });
 
 type CreateClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: {
@@ -36,13 +37,13 @@ type CreateClauseProps = {
 };
 
 export const createClauseHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   body,
 }: CreateClauseProps) => {
-  const existingCount = await db.$count(
-    clauses,
-    eq(clauses.organizationId, organizationId),
+  const existingCount = await scopedDb((tx) =>
+    tx.$count(clauses, eq(clauses.organizationId, organizationId)),
   );
 
   if (existingCount >= LIMITS.clausesPerOrganization) {
@@ -52,13 +53,15 @@ export const createClauseHandler = async ({
   }
 
   if (body.categoryId) {
-    const category = await db.query.clauseCategories.findFirst({
-      where: {
-        id: body.categoryId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    });
+    const category = await scopedDb((tx) =>
+      tx.query.clauseCategories.findFirst({
+        where: {
+          id: body.categoryId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    );
 
     if (!category) {
       return status(404, {
@@ -70,7 +73,7 @@ export const createClauseHandler = async ({
   const clauseId = nanoid();
   const versionId = nanoid();
 
-  const inserted = await db.transaction(async (tx) => {
+  const inserted = await scopedDb(async (tx) => {
     const [row] = await tx
       .insert(clauses)
       .values({
@@ -108,7 +111,13 @@ export const createClauseHandler = async ({
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
   try {
-    await updateSearchVector(clauseId, body.title, body.description, body.body);
+    await updateSearchVector(
+      scopedDb,
+      clauseId,
+      body.title,
+      body.description,
+      body.body,
+    );
   } catch {
     // Intentionally swallowed; see comment above.
   }

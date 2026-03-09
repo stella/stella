@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { invoices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -13,11 +13,13 @@ export const readInvoicesQuerySchema = t.Object({
 type ReadInvoicesQuerySchema = Static<typeof readInvoicesQuerySchema>;
 
 type ReadInvoicesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ReadInvoicesQuerySchema;
 };
 
 export const readInvoicesHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ReadInvoicesHandlerProps) => {
@@ -25,24 +27,28 @@ export const readInvoicesHandler = async ({
   const offset = query.offset ?? 0;
 
   const [rows, total] = await Promise.all([
-    db.query.invoices.findMany({
-      where: { workspaceId: { eq: workspaceId } },
-      columns: {
-        id: true,
-        invoiceNumber: true,
-        reference: true,
-        status: true,
-        invoiceDate: true,
-        dueDate: true,
-        currency: true,
-        totalAmount: true,
-        createdAt: true,
-      },
-      orderBy: (inv, { asc }) => asc(inv.createdAt),
-      limit,
-      offset,
-    }),
-    db.$count(invoices, eq(invoices.workspaceId, workspaceId)),
+    scopedDb((tx) =>
+      tx.query.invoices.findMany({
+        where: { workspaceId: { eq: workspaceId } },
+        columns: {
+          id: true,
+          invoiceNumber: true,
+          reference: true,
+          status: true,
+          invoiceDate: true,
+          dueDate: true,
+          currency: true,
+          totalAmount: true,
+          createdAt: true,
+        },
+        orderBy: (inv, { asc }) => asc(inv.createdAt),
+        limit,
+        offset,
+      }),
+    ),
+    scopedDb((tx) =>
+      tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
+    ),
   ]);
 
   return {

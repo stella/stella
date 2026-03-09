@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { ClauseBody } from "./types";
 
@@ -19,6 +19,7 @@ const bodyToPlainText = (body: ClauseBody): string =>
  * single clause. Called after create and update.
  */
 export const updateSearchVector = async (
+  scopedDb: ScopedDb,
   clauseId: string,
   title: string,
   description: string | null | undefined,
@@ -26,15 +27,17 @@ export const updateSearchVector = async (
 ) => {
   const bodyText = bodyToPlainText(body);
 
-  await db
-    .update(clauses)
-    .set({
-      searchVector: sql`to_tsvector(
+  await scopedDb((tx) =>
+    tx
+      .update(clauses)
+      .set({
+        searchVector: sql`to_tsvector(
         'english',
         ${title} || ' ' ||
         coalesce(${description ?? null}, '') || ' ' ||
         ${bodyText}
       )`,
-    })
-    .where(sql`${clauses.id} = ${clauseId}`);
+      })
+      .where(sql`${clauses.id} = ${clauseId}`),
+  );
 };

@@ -20,6 +20,7 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
       upsertFieldHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { entity: ["update"] },

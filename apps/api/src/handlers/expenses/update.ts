@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,23 +27,27 @@ export const updateExpenseBodySchema = t.Object({
 type UpdateExpenseBodySchema = Static<typeof updateExpenseBodySchema>;
 
 type UpdateExpenseHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: UpdateExpenseBodySchema;
 };
 
 export const updateExpenseHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: UpdateExpenseHandlerProps) => {
-  const existing = await db.query.expenses.findFirst({
-    where: {
-      id: body.id,
-      workspaceId: { eq: workspaceId },
-    },
-    columns: {
-      status: true,
-    },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.expenses.findFirst({
+      where: {
+        id: body.id,
+        workspaceId: { eq: workspaceId },
+      },
+      columns: {
+        status: true,
+      },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Expense not found" });
@@ -59,10 +63,12 @@ export const updateExpenseHandler = async ({
   }
 
   if (body.matterId !== undefined) {
-    const matter = await db.query.entities.findFirst({
-      where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-      columns: { id: true },
-    });
+    const matter = await scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+        columns: { id: true },
+      }),
+    );
 
     if (!matter) {
       return status(400, {
@@ -87,12 +93,14 @@ export const updateExpenseHandler = async ({
     updatedAt: new Date(),
   };
 
-  await db
-    .update(expenses)
-    .set(updates)
-    .where(
-      and(eq(expenses.id, body.id), eq(expenses.workspaceId, workspaceId)),
-    );
+  await scopedDb((tx) =>
+    tx
+      .update(expenses)
+      .set(updates)
+      .where(
+        and(eq(expenses.id, body.id), eq(expenses.workspaceId, workspaceId)),
+      ),
+  );
 
   return { id: body.id };
 };

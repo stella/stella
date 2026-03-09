@@ -5,7 +5,7 @@
  * clauseVersion.
  */
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
 import type { ClauseSlot } from "./discover-clause-slots";
 import type { RichPatchValue } from "./types";
@@ -29,6 +29,7 @@ const VERSION_NUM_RE = /^v(\d+)$/;
 export const resolveClauseSlots = async (
   templateId: string,
   slots: ClauseSlot[],
+  scopedDb: ScopedDb,
 ): Promise<Record<string, RichPatchValue>> => {
   if (slots.length === 0) {
     return {};
@@ -37,16 +38,18 @@ export const resolveClauseSlots = async (
   const patches: Record<string, RichPatchValue> = {};
 
   for (const slot of slots) {
-    const link = await db.query.templateClauses.findFirst({
-      where: {
-        templateId,
-        slotName: slot.name,
-      },
-      columns: {
-        clauseId: true,
-        clauseVersionId: true,
-      },
-    });
+    const link = await scopedDb((tx) =>
+      tx.query.templateClauses.findFirst({
+        where: {
+          templateId,
+          slotName: slot.name,
+        },
+        columns: {
+          clauseId: true,
+          clauseVersionId: true,
+        },
+      }),
+    );
 
     if (!link || !link.clauseId) {
       continue;
@@ -56,6 +59,7 @@ export const resolveClauseSlots = async (
       link.clauseId,
       link.clauseVersionId,
       slot.versionModifier,
+      scopedDb,
     );
 
     if (!versionRow) {
@@ -78,60 +82,73 @@ const resolveVersion = async (
   clauseId: string,
   pinnedVersionId: string | null,
   modifier: string | undefined,
+  scopedDb: ScopedDb,
 ): Promise<VersionRow | undefined> => {
   // :latest — always use the clause's current version
   if (modifier === "latest") {
-    const clause = await db.query.clauses.findFirst({
-      where: { id: clauseId },
-      columns: { currentVersion: true },
-    });
+    const clause = await scopedDb((tx) =>
+      tx.query.clauses.findFirst({
+        where: { id: clauseId },
+        columns: { currentVersion: true },
+      }),
+    );
 
     if (!clause) {
       return;
     }
 
-    return db.query.clauseVersions.findFirst({
-      where: {
-        clauseId,
-        version: clause.currentVersion,
-      },
-      columns: { body: true },
-    });
+    return scopedDb((tx) =>
+      tx.query.clauseVersions.findFirst({
+        where: {
+          clauseId,
+          version: clause.currentVersion,
+        },
+        columns: { body: true },
+      }),
+    );
   }
 
   // :vN — use a specific version number
   const vMatch = modifier?.match(VERSION_NUM_RE);
   if (vMatch) {
     const version = Number.parseInt(vMatch[1], 10);
-    return db.query.clauseVersions.findFirst({
-      where: { clauseId, version },
-      columns: { body: true },
-    });
+    return scopedDb((tx) =>
+      tx.query.clauseVersions.findFirst({
+        where: { clauseId, version },
+        columns: { body: true },
+      }),
+    );
   }
 
   // No modifier — use the pinned version from the link
   if (pinnedVersionId) {
-    return db.query.clauseVersions.findFirst({
-      where: { id: pinnedVersionId },
-      columns: { body: true },
-    });
+    return scopedDb((tx) =>
+      tx.query.clauseVersions.findFirst({
+        where: { id: pinnedVersionId },
+        columns: { body: true },
+      }),
+    );
   }
 
   // Fallback: use the clause's current version
-  const clause = await db.query.clauses.findFirst({
-    where: { id: clauseId },
-    columns: { currentVersion: true },
-  });
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: { id: clauseId },
+      columns: { currentVersion: true },
+    }),
+  );
 
   if (!clause) {
     return;
   }
 
-  return db.query.clauseVersions.findFirst({
-    where: {
-      clauseId,
-      version: clause.currentVersion,
-    },
-    columns: { body: true },
-  });
+  return scopedDb((tx) =>
+    tx.query.clauseVersions.findFirst({
+      where: {
+        clauseId,
+        version: clause.currentVersion,
+      },
+      columns: { body: true },
+    }),
+  );
 };

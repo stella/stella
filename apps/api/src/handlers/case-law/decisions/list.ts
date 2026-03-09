@@ -1,7 +1,7 @@
 import { and, desc, eq, lt, sql, type SQL } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -23,7 +23,10 @@ export const listDecisionsQuerySchema = t.Object({
 
 type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
-export const listDecisionsHandler = async (query: ListDecisionsQuery) => {
+export const listDecisionsHandler = async (
+  query: ListDecisionsQuery,
+  scopedDb: ScopedDb,
+) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [];
 
@@ -72,23 +75,25 @@ export const listDecisionsHandler = async (query: ListDecisionsQuery) => {
     conditions.push(eq(caseLawDecisions.sourceId, query.sourceId));
   }
 
-  const decisions = await db
-    .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      ecli: caseLawDecisions.ecli,
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      decisionType: caseLawDecisions.decisionType,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      createdAt: caseLawDecisions.createdAt,
-    })
-    .from(caseLawDecisions)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
-    .limit(limit + 1);
+  const decisions = await scopedDb((tx) =>
+    tx
+      .select({
+        id: caseLawDecisions.id,
+        caseNumber: caseLawDecisions.caseNumber,
+        ecli: caseLawDecisions.ecli,
+        court: caseLawDecisions.court,
+        country: caseLawDecisions.country,
+        language: caseLawDecisions.language,
+        decisionDate: caseLawDecisions.decisionDate,
+        decisionType: caseLawDecisions.decisionType,
+        sourceUrl: caseLawDecisions.sourceUrl,
+        createdAt: caseLawDecisions.createdAt,
+      })
+      .from(caseLawDecisions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+      .limit(limit + 1),
+  );
 
   const hasMore = decisions.length > limit;
   const items = hasMore ? decisions.slice(0, limit) : decisions;

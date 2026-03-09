@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/api/db";
+import { db, type ScopedDb } from "@/api/db";
 import { entities, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
@@ -90,6 +90,7 @@ type MatterToolsContext = {
   allowedWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   userId: string;
+  scopedDb: ScopedDb;
 };
 
 const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
@@ -110,6 +111,7 @@ export const createMatterTools = ({
   allowedWorkspaceIds,
   organizationId,
   userId,
+  scopedDb,
 }: MatterToolsContext) => {
   const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
 
@@ -609,6 +611,7 @@ export const createMatterTools = ({
         const fileName = `${name}.docx`;
 
         const result = await createEntityFromBuffer({
+          scopedDb,
           organizationId,
           workspaceId,
           userId,

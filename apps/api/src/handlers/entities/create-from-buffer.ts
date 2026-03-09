@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import {
   convertToPdf,
@@ -18,6 +18,7 @@ import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type CreateEntityFromBufferInput = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: string;
@@ -39,6 +40,7 @@ type CreateEntityFromBufferResult =
  * Shared between the upload handler and AI chat tools.
  */
 export const createEntityFromBuffer = async ({
+  scopedDb,
   organizationId,
   workspaceId,
   userId,
@@ -59,10 +61,12 @@ export const createEntityFromBuffer = async ({
 
   // Check for file property before uploading to avoid
   // orphaned S3 files if the property doesn't exist.
-  const wsProperties = await db.query.properties.findMany({
-    columns: { id: true, content: true },
-    where: { workspaceId: { eq: workspaceId } },
-  });
+  const wsProperties = await scopedDb((tx) =>
+    tx.query.properties.findMany({
+      columns: { id: true, content: true },
+      where: { workspaceId: { eq: workspaceId } },
+    }),
+  );
   const fileProperty = wsProperties.find((p) => p.content.type === "file");
 
   if (!fileProperty) {
@@ -99,7 +103,7 @@ export const createEntityFromBuffer = async ({
       await s3.write(pdfKey, new Uint8Array(pdfResult.value.buffer));
     }
 
-    await db.transaction(async (tx) => {
+    await scopedDb(async (tx) => {
       const count = await tx.$count(
         entities,
         eq(entities.workspaceId, workspaceId),

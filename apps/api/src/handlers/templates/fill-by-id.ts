@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db } from "@/api/db";
+import { db, type ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -27,6 +27,7 @@ export const fillByIdQuerySchema = t.Object({
 const PDF_MIME_TYPE = "application/pdf";
 
 type FillByIdProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   templateId: string;
@@ -35,6 +36,7 @@ type FillByIdProps = {
 };
 
 export const fillByIdHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   templateId,
@@ -80,7 +82,7 @@ export const fillByIdHandler = async ({
   // Discover and resolve clause slots ({{@clause:...}})
   const slots = await discoverClauseSlots(buffer);
   if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(templateId, slots);
+    const clausePatches = await resolveClauseSlots(templateId, slots, scopedDb);
     for (const [key, value] of Object.entries(clausePatches)) {
       parsed[key] = value;
     }

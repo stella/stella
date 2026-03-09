@@ -12,7 +12,7 @@
 
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import {
   isValidPolarity,
@@ -60,6 +60,7 @@ const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
  */
 export const loadRules = async (
   language: string,
+  scopedDb: ScopedDb,
   cache?: RuleCache,
 ): Promise<CompiledRule[]> => {
   if (cache) {
@@ -69,17 +70,19 @@ export const loadRules = async (
     }
   }
 
-  const rows = await db
-    .select()
-    .from(caseLawPolarityRules)
-    .where(
-      and(
-        eq(caseLawPolarityRules.language, language),
-        inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
-      ),
-    )
-    .orderBy(desc(caseLawPolarityRules.matchCount))
-    .limit(LIMITS.caseLawPolarityRulesPerLanguage);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select()
+      .from(caseLawPolarityRules)
+      .where(
+        and(
+          eq(caseLawPolarityRules.language, language),
+          inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
+        ),
+      )
+      .orderBy(desc(caseLawPolarityRules.matchCount))
+      .limit(LIMITS.caseLawPolarityRulesPerLanguage),
+  );
 
   const compiled: CompiledRule[] = [];
 
@@ -114,9 +117,10 @@ export const loadRules = async (
 export const matchRule = async (
   context: string,
   language: string,
+  scopedDb: ScopedDb,
   cache?: RuleCache,
 ): Promise<RuleMatch | null> => {
-  const rules = await loadRules(language, cache);
+  const rules = await loadRules(language, scopedDb, cache);
 
   for (const rule of rules) {
     if (rule.regex.test(context)) {
@@ -128,12 +132,17 @@ export const matchRule = async (
 };
 
 /** Increment the match count for a rule. */
-export const incrementMatchCount = async (ruleId: string) => {
-  await db
-    .update(caseLawPolarityRules)
-    .set({
-      matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(caseLawPolarityRules.id, ruleId));
+export const incrementMatchCount = async (
+  ruleId: string,
+  scopedDb: ScopedDb,
+) => {
+  await scopedDb((tx) =>
+    tx
+      .update(caseLawPolarityRules)
+      .set({
+        matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(caseLawPolarityRules.id, ruleId)),
+  );
 };

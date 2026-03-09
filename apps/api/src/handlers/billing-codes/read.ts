@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { billingCodes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -15,11 +15,13 @@ export const readBillingCodesQuerySchema = t.Object({
 type ReadBillingCodesQuerySchema = Static<typeof readBillingCodesQuerySchema>;
 
 type ReadBillingCodesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ReadBillingCodesQuerySchema;
 };
 
 export const readBillingCodesHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ReadBillingCodesHandlerProps) => {
@@ -35,18 +37,20 @@ export const readBillingCodesHandler = async ({
     conditions.push(eq(billingCodes.active, query.active));
   }
 
-  return await db
-    .select({
-      id: billingCodes.id,
-      type: billingCodes.type,
-      code: billingCodes.code,
-      label: billingCodes.label,
-      active: billingCodes.active,
-      sortOrder: billingCodes.sortOrder,
-    })
-    .from(billingCodes)
-    .where(and(...conditions))
-    .orderBy(asc(billingCodes.sortOrder), asc(billingCodes.code))
-    .limit(limit)
-    .offset(offset);
+  return await scopedDb((tx) =>
+    tx
+      .select({
+        id: billingCodes.id,
+        type: billingCodes.type,
+        code: billingCodes.code,
+        label: billingCodes.label,
+        active: billingCodes.active,
+        sortOrder: billingCodes.sortOrder,
+      })
+      .from(billingCodes)
+      .where(and(...conditions))
+      .orderBy(asc(billingCodes.sortOrder), asc(billingCodes.code))
+      .limit(limit)
+      .offset(offset),
+  );
 };

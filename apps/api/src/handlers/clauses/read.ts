@@ -1,7 +1,7 @@
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -37,6 +37,7 @@ export const listClausesQuerySchema = t.Object({
 });
 
 type ListClausesProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   query: {
     categoryId?: string;
@@ -47,6 +48,7 @@ type ListClausesProps = {
 };
 
 export const listClausesHandler = async ({
+  scopedDb,
   organizationId,
   query,
 }: ListClausesProps) => {
@@ -101,18 +103,20 @@ export const listClausesHandler = async ({
     updatedAt: clauses.updatedAt,
   };
 
-  const rows = await db
-    .select(rankExpr ? { ...selectColumns, rank: rankExpr } : selectColumns)
-    .from(clauses)
-    .where(and(...conditions))
-    .orderBy(
-      ...(isSearching
-        ? [
-            sql`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q})) DESC`,
-          ]
-        : [desc(clauses.createdAt), desc(clauses.id)]),
-    )
-    .limit(limit + 1);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select(rankExpr ? { ...selectColumns, rank: rankExpr } : selectColumns)
+      .from(clauses)
+      .where(and(...conditions))
+      .orderBy(
+        ...(isSearching
+          ? [
+              sql`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q})) DESC`,
+            ]
+          : [desc(clauses.createdAt), desc(clauses.id)]),
+      )
+      .limit(limit + 1),
+  );
 
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
@@ -133,56 +137,60 @@ export const listClausesHandler = async ({
 // ── Get ─────────────────────────────────────────────
 
 type GetClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
 };
 
 export const getClauseHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
 }: GetClauseProps) => {
-  const clause = await db.query.clauses.findFirst({
-    where: {
-      id: clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: {
-      id: true,
-      title: true,
-      categoryId: true,
-      description: true,
-      usageNotes: true,
-      language: true,
-      body: true,
-      metadata: true,
-      currentVersion: true,
-      createdBy: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    with: {
-      variants: {
-        columns: {
-          id: true,
-          label: true,
-          body: true,
-          sortOrder: true,
-          createdAt: true,
-        },
-        orderBy: { sortOrder: "asc" },
-        limit: LIMITS.clauseVariantsPerClause,
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: clauseId,
+        organizationId: { eq: organizationId },
       },
-      versions: {
-        columns: {
-          id: true,
-          version: true,
-          createdAt: true,
-        },
-        orderBy: { version: "desc" },
-        limit: LIMITS.clauseVersionsPerClause,
+      columns: {
+        id: true,
+        title: true,
+        categoryId: true,
+        description: true,
+        usageNotes: true,
+        language: true,
+        body: true,
+        metadata: true,
+        currentVersion: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
       },
-    },
-  });
+      with: {
+        variants: {
+          columns: {
+            id: true,
+            label: true,
+            body: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+          orderBy: { sortOrder: "asc" },
+          limit: LIMITS.clauseVariantsPerClause,
+        },
+        versions: {
+          columns: {
+            id: true,
+            version: true,
+            createdAt: true,
+          },
+          orderBy: { version: "desc" },
+          limit: LIMITS.clauseVersionsPerClause,
+        },
+      },
+    }),
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
@@ -194,38 +202,44 @@ export const getClauseHandler = async ({
 // ── Get version body ─────────────────────────────────
 
 type GetClauseVersionProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   versionId: string;
 };
 
 export const getClauseVersionHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
   versionId,
 }: GetClauseVersionProps) => {
   // Verify clause belongs to this org (tenant isolation)
-  const clause = await db.query.clauses.findFirst({
-    where: {
-      id: clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true },
-  });
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: clauseId,
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const version = await db.query.clauseVersions.findFirst({
-    where: { id: versionId, clauseId },
-    columns: {
-      id: true,
-      version: true,
-      body: true,
-      createdAt: true,
-    },
-  });
+  const version = await scopedDb((tx) =>
+    tx.query.clauseVersions.findFirst({
+      where: { id: versionId, clauseId },
+      columns: {
+        id: true,
+        version: true,
+        body: true,
+        createdAt: true,
+      },
+    }),
+  );
 
   if (!version) {
     return status(404, { message: "Version not found" });

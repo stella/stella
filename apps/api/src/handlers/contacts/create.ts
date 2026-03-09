@@ -1,7 +1,7 @@
 import { count, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -44,56 +44,62 @@ export const createContactBodySchema = t.Object({
 type CreateContactBody = Static<typeof createContactBodySchema>;
 
 type CreateContactHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: CreateContactBody;
 };
 
 export const createContactHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   body,
 }: CreateContactHandlerProps) => {
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(contacts)
-    .where(eq(contacts.organizationId, organizationId));
+  const [{ total }] = await scopedDb((tx) =>
+    tx
+      .select({ total: count() })
+      .from(contacts)
+      .where(eq(contacts.organizationId, organizationId)),
+  );
 
   if (total >= LIMITS.contactsCount) {
     return status(400, { message: "Contacts limit reached" });
   }
 
-  const [contact] = await db
-    .insert(contacts)
-    .values({
-      id: body.id,
-      organizationId,
-      type: body.type,
-      prefix: body.prefix,
-      firstName: body.firstName,
-      middleName: body.middleName,
-      lastName: body.lastName,
-      suffix: body.suffix,
-      organizationName: body.organizationName,
-      displayName: body.displayName,
-      notes: body.notes,
-      emails: body.emails,
-      phones: body.phones,
-      addresses: body.addresses,
-      tags: body.tags,
-      color: body.color,
-      registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
-      bankAccounts: body.bankAccounts,
-      billingAddress: body.billingAddress,
-      defaultHourlyRate: body.defaultHourlyRate,
-      currency: body.currency,
-      paymentTermDays: body.paymentTermDays,
-      originatingAttorneyId: body.originatingAttorneyId,
-      responsibleAttorneyId: body.responsibleAttorneyId,
-      createdBy: userId,
-    })
-    .returning();
+  const [contact] = await scopedDb((tx) =>
+    tx
+      .insert(contacts)
+      .values({
+        id: body.id,
+        organizationId,
+        type: body.type,
+        prefix: body.prefix,
+        firstName: body.firstName,
+        middleName: body.middleName,
+        lastName: body.lastName,
+        suffix: body.suffix,
+        organizationName: body.organizationName,
+        displayName: body.displayName,
+        notes: body.notes,
+        emails: body.emails,
+        phones: body.phones,
+        addresses: body.addresses,
+        tags: body.tags,
+        color: body.color,
+        registrationNumber: body.registrationNumber,
+        taxId: body.taxId,
+        bankAccounts: body.bankAccounts,
+        billingAddress: body.billingAddress,
+        defaultHourlyRate: body.defaultHourlyRate,
+        currency: body.currency,
+        paymentTermDays: body.paymentTermDays,
+        originatingAttorneyId: body.originatingAttorneyId,
+        responsibleAttorneyId: body.responsibleAttorneyId,
+        createdBy: userId,
+      })
+      .returning(),
+  );
 
   return contact;
 };

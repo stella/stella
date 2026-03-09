@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { billingCodes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,19 +18,20 @@ export const createBillingCodeBodySchema = t.Object({
 type CreateBillingCodeBodySchema = Static<typeof createBillingCodeBodySchema>;
 
 type CreateBillingCodeHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   body: CreateBillingCodeBodySchema;
 };
 
 export const createBillingCodeHandler = async ({
+  scopedDb,
   organizationId,
   workspaceId,
   body,
 }: CreateBillingCodeHandlerProps) => {
-  const totalCodes = await db.$count(
-    billingCodes,
-    eq(billingCodes.workspaceId, workspaceId),
+  const totalCodes = await scopedDb((tx) =>
+    tx.$count(billingCodes, eq(billingCodes.workspaceId, workspaceId)),
   );
 
   if (totalCodes >= LIMITS.billingCodesPerWorkspace) {
@@ -40,18 +41,20 @@ export const createBillingCodeHandler = async ({
   }
 
   try {
-    const [code] = await db
-      .insert(billingCodes)
-      .values({
-        organizationId,
-        workspaceId,
-        type: body.type,
-        code: body.code,
-        label: body.label,
-        active: body.active ?? true,
-        sortOrder: body.sortOrder ?? 0,
-      })
-      .returning({ id: billingCodes.id });
+    const [code] = await scopedDb((tx) =>
+      tx
+        .insert(billingCodes)
+        .values({
+          organizationId,
+          workspaceId,
+          type: body.type,
+          code: body.code,
+          label: body.label,
+          active: body.active ?? true,
+          sortOrder: body.sortOrder ?? 0,
+        })
+        .returning({ id: billingCodes.id }),
+    );
 
     return { id: code.id };
   } catch (error) {

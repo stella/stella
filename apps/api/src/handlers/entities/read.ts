@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, count, eq, inArray } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
@@ -18,6 +18,7 @@ type ViewSort = {
 };
 
 type ReadEntitiesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
@@ -26,6 +27,7 @@ type ReadEntitiesHandlerProps = {
 };
 
 export const readEntitiesHandler = async ({
+  scopedDb,
   workspaceId,
   filters,
   sorts,
@@ -41,14 +43,18 @@ export const readEntitiesHandler = async ({
 
   // Phase 1: Get paginated IDs and total count in parallel
   const [idRows, countResult] = await Promise.all([
-    db
-      .select({ id: entities.id })
-      .from(entities)
-      .where(whereClause)
-      .orderBy(...sortExpressions)
-      .offset(offset)
-      .limit(pageSize),
-    db.select({ total: count() }).from(entities).where(whereClause),
+    scopedDb((tx) =>
+      tx
+        .select({ id: entities.id })
+        .from(entities)
+        .where(whereClause)
+        .orderBy(...sortExpressions)
+        .offset(offset)
+        .limit(pageSize),
+    ),
+    scopedDb((tx) =>
+      tx.select({ total: count() }).from(entities).where(whereClause),
+    ),
   ]);
 
   const totalCount = countResult.at(0)?.total ?? 0;
@@ -67,41 +73,47 @@ export const readEntitiesHandler = async ({
   const idFilter = inArray(entities.id, pageIds);
 
   const [entityRows, versionCounts, fieldRows] = await Promise.all([
-    db
-      .select({
-        id: entities.id,
-        kind: entities.kind,
-        name: entities.name,
-        parentId: entities.parentId,
-        currentVersionId: entities.currentVersionId,
-        createdAt: entities.createdAt,
-        updatedAt: entities.updatedAt,
-        createdByName: user.name,
-        createdByImage: user.image,
-      })
-      .from(entities)
-      .leftJoin(user, eq(entities.createdBy, user.id))
-      .where(idFilter),
-    db
-      .select({
-        entityId: entityVersions.entityId,
-        versionCount: count(),
-      })
-      .from(entityVersions)
-      .where(inArray(entityVersions.entityId, pageIds))
-      .groupBy(entityVersions.entityId),
-    db
-      .select({
-        entityVersionId: fields.entityVersionId,
-        id: fields.id,
-        propertyId: fields.propertyId,
-        content: fields.content,
-      })
-      .from(fields)
-      .innerJoin(
-        entities,
-        and(eq(fields.entityVersionId, entities.currentVersionId), idFilter),
-      ),
+    scopedDb((tx) =>
+      tx
+        .select({
+          id: entities.id,
+          kind: entities.kind,
+          name: entities.name,
+          parentId: entities.parentId,
+          currentVersionId: entities.currentVersionId,
+          createdAt: entities.createdAt,
+          updatedAt: entities.updatedAt,
+          createdByName: user.name,
+          createdByImage: user.image,
+        })
+        .from(entities)
+        .leftJoin(user, eq(entities.createdBy, user.id))
+        .where(idFilter),
+    ),
+    scopedDb((tx) =>
+      tx
+        .select({
+          entityId: entityVersions.entityId,
+          versionCount: count(),
+        })
+        .from(entityVersions)
+        .where(inArray(entityVersions.entityId, pageIds))
+        .groupBy(entityVersions.entityId),
+    ),
+    scopedDb((tx) =>
+      tx
+        .select({
+          entityVersionId: fields.entityVersionId,
+          id: fields.id,
+          propertyId: fields.propertyId,
+          content: fields.content,
+        })
+        .from(fields)
+        .innerJoin(
+          entities,
+          and(eq(fields.entityVersionId, entities.currentVersionId), idFilter),
+        ),
+    ),
   ]);
 
   // Index lookup maps

@@ -87,6 +87,7 @@ export const entitiesRoute = new Elysia({
     "/",
     (ctx) =>
       createEntitiesHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -101,6 +102,7 @@ export const entitiesRoute = new Elysia({
     "/upload",
     (ctx) =>
       uploadEntityHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -116,6 +118,7 @@ export const entitiesRoute = new Elysia({
     "/",
     (ctx) =>
       readEntitiesHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         filters: ctx.query.filters ?? [],
         sorts: ctx.query.sorts ?? [],
@@ -130,6 +133,7 @@ export const entitiesRoute = new Elysia({
     "/",
     (ctx) =>
       deleteEntitiesHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -144,6 +148,7 @@ export const entitiesRoute = new Elysia({
     "/move",
     (ctx) =>
       moveEntityHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
       }),
@@ -157,6 +162,7 @@ export const entitiesRoute = new Elysia({
     "/rename",
     (ctx) =>
       renameEntityHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
       }),
@@ -170,6 +176,7 @@ export const entitiesRoute = new Elysia({
     "/duplicate",
     (ctx) =>
       duplicateEntityHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -184,6 +191,7 @@ export const entitiesRoute = new Elysia({
     "/check-stamp",
     (ctx) =>
       checkStampHandler({
+        scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
       }),
@@ -195,6 +203,7 @@ export const entitiesRoute = new Elysia({
     "/summaries",
     (ctx) =>
       readEntitySummariesHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         page: ctx.query.page ?? 1,
       }),
@@ -208,6 +217,7 @@ export const entitiesRoute = new Elysia({
     "/zip/:entityId",
     (ctx) =>
       downloadZipHandler({
+        scopedDb: ctx.scopedDb,
         entityId: ctx.params.entityId,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
@@ -223,6 +233,7 @@ export const entitiesRoute = new Elysia({
     "/entity/:entityId",
     async (ctx) => {
       const result = await readEntityByIdHandler({
+        scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         entityId: ctx.params.entityId,
       });

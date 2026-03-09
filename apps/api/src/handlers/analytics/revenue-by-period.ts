@@ -1,11 +1,12 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { GRANULARITY_VALUES, PeriodQuery } from "./date-range-schema";
 
 type RevenueByPeriodHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: PeriodQuery;
 };
@@ -17,6 +18,7 @@ const TRUNC_MAP: Record<(typeof GRANULARITY_VALUES)[number], string> = {
 };
 
 export const revenueByPeriodHandler = ({
+  scopedDb,
   workspaceId,
   query,
 }: RevenueByPeriodHandlerProps) => {
@@ -31,13 +33,15 @@ export const revenueByPeriodHandler = ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return db
-    .select({
-      period: sql<string>`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)::date::text`,
-      revenue: sql<number>`coalesce(round(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes}::numeric * ${timeEntries.rateAtEntry} / 60 else 0 end)), 0)::int`,
-    })
-    .from(timeEntries)
-    .where(and(...conditions))
-    .groupBy(sql`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)`)
-    .orderBy(sql`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)`);
+  return scopedDb((tx) =>
+    tx
+      .select({
+        period: sql<string>`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)::date::text`,
+        revenue: sql<number>`coalesce(round(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes}::numeric * ${timeEntries.rateAtEntry} / 60 else 0 end)), 0)::int`,
+      })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .groupBy(sql`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)`)
+      .orderBy(sql`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)`),
+  );
 };

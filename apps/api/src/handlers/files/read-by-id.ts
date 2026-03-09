@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -14,6 +14,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 type FilePurpose = "download" | "display";
 
 type ReadFileHandlerProps = {
+  scopedDb: ScopedDb;
   fieldId: string;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -22,32 +23,39 @@ type ReadFileHandlerProps = {
 
 const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 
-const fileFieldQuery = (fieldId: string, workspaceId: SafeId<"workspace">) =>
-  db
-    .select({
-      content: fields.content,
-      versionStamp: entityVersions.stamp,
-      verificationCode: entityVersions.verificationCode,
-    })
-    .from(fields)
-    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-    .innerJoin(
-      entities,
-      and(
-        eq(entityVersions.entityId, entities.id),
-        eq(entities.workspaceId, workspaceId),
-      ),
-    )
-    .where(eq(fields.id, fieldId))
-    .limit(1);
+const fileFieldQuery = (
+  scopedDb: ScopedDb,
+  fieldId: string,
+  workspaceId: SafeId<"workspace">,
+) =>
+  scopedDb((tx) =>
+    tx
+      .select({
+        content: fields.content,
+        versionStamp: entityVersions.stamp,
+        verificationCode: entityVersions.verificationCode,
+      })
+      .from(fields)
+      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+      .innerJoin(
+        entities,
+        and(
+          eq(entityVersions.entityId, entities.id),
+          eq(entities.workspaceId, workspaceId),
+        ),
+      )
+      .where(eq(fields.id, fieldId))
+      .limit(1),
+  );
 
 export const readFileHandler = async ({
+  scopedDb,
   fieldId,
   organizationId,
   workspaceId,
   purpose,
 }: ReadFileHandlerProps) => {
-  const [row] = await fileFieldQuery(fieldId, workspaceId);
+  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
 
   if (!row) {
     return status(404);
@@ -108,6 +116,7 @@ export const readFileHandler = async ({
 // ── Stamped download (separate endpoint) ────────────────
 
 type StampedDownloadHandlerProps = {
+  scopedDb: ScopedDb;
   fieldId: string;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -120,11 +129,12 @@ type StampedDownloadHandlerProps = {
  * action (right-click → "Download with stamp").
  */
 export const stampedDownloadHandler = async ({
+  scopedDb,
   fieldId,
   organizationId,
   workspaceId,
 }: StampedDownloadHandlerProps) => {
-  const [row] = await fileFieldQuery(fieldId, workspaceId);
+  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
 
   if (!row) {
     return status(404);

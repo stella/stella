@@ -1,7 +1,7 @@
 import { count, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { caseLawMatterLinks } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -15,29 +15,35 @@ export const createMatterLinkBodySchema = t.Object({
 type CreateMatterLinkBody = Static<typeof createMatterLinkBodySchema>;
 
 type CreateMatterLinkProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   userId: string;
   body: CreateMatterLinkBody;
 };
 
 export const createMatterLinkHandler = async ({
+  scopedDb,
   workspaceId,
   userId,
   body,
 }: CreateMatterLinkProps) => {
-  const decision = await db.query.caseLawDecisions.findFirst({
-    where: { id: body.decisionId },
-    columns: { id: true },
-  });
+  const decision = await scopedDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: body.decisionId },
+      columns: { id: true },
+    }),
+  );
 
   if (!decision) {
     return status(404, { message: "Decision not found" });
   }
 
-  const [{ value: linkCount }] = await db
-    .select({ value: count() })
-    .from(caseLawMatterLinks)
-    .where(eq(caseLawMatterLinks.workspaceId, workspaceId));
+  const [{ value: linkCount }] = await scopedDb((tx) =>
+    tx
+      .select({ value: count() })
+      .from(caseLawMatterLinks)
+      .where(eq(caseLawMatterLinks.workspaceId, workspaceId)),
+  );
 
   if (linkCount >= LIMITS.caseLawMatterLinksPerWorkspace) {
     return status(400, {
@@ -45,18 +51,20 @@ export const createMatterLinkHandler = async ({
     });
   }
 
-  const [link] = await db
-    .insert(caseLawMatterLinks)
-    .values({
-      decisionId: body.decisionId,
-      workspaceId,
-      note: body.note ?? null,
-      linkedBy: userId,
-    })
-    .onConflictDoNothing({
-      target: [caseLawMatterLinks.decisionId, caseLawMatterLinks.workspaceId],
-    })
-    .returning();
+  const [link] = await scopedDb((tx) =>
+    tx
+      .insert(caseLawMatterLinks)
+      .values({
+        decisionId: body.decisionId,
+        workspaceId,
+        note: body.note ?? null,
+        linkedBy: userId,
+      })
+      .onConflictDoNothing({
+        target: [caseLawMatterLinks.decisionId, caseLawMatterLinks.workspaceId],
+      })
+      .returning(),
+  );
 
   if (!link) {
     return status(409, {
