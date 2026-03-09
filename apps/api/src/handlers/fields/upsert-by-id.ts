@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -45,18 +45,22 @@ export const upsertFieldBodySchema = t.Object({
 type UpsertFieldBodySchema = Static<typeof upsertFieldBodySchema>;
 
 type UpsertFieldHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: UpsertFieldBodySchema;
 };
 
 export const upsertFieldHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: UpsertFieldHandlerProps) => {
-  const property = await db.query.properties.findFirst({
-    columns: { id: true, content: true },
-    where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
-  });
+  const property = await scopedDb((tx) =>
+    tx.query.properties.findFirst({
+      columns: { id: true, content: true },
+      where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
+    }),
+  );
 
   if (!property) {
     return status(404, {
@@ -70,10 +74,12 @@ export const upsertFieldHandler = async ({
     });
   }
 
-  const entity = await db.query.entities.findFirst({
-    columns: { id: true, currentVersionId: true },
-    where: { id: body.entityId, workspaceId: { eq: workspaceId } },
-  });
+  const entity = await scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      columns: { id: true, currentVersionId: true },
+      where: { id: body.entityId, workspaceId: { eq: workspaceId } },
+    }),
+  );
 
   if (!entity) {
     return status(404, {
@@ -98,7 +104,7 @@ export const upsertFieldHandler = async ({
   };
 
   if (isEmpty) {
-    await db.transaction(async (tx) => {
+    await scopedDb(async (tx) => {
       await tx
         .delete(fields)
         .where(
@@ -116,7 +122,7 @@ export const upsertFieldHandler = async ({
     return;
   }
 
-  await db.transaction(async (tx) => {
+  await scopedDb(async (tx) => {
     await tx
       .delete(fields)
       .where(

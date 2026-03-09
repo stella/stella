@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { billingCodes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -19,21 +19,25 @@ export const updateBillingCodeBodySchema = t.Object({
 type UpdateBillingCodeBodySchema = Static<typeof updateBillingCodeBodySchema>;
 
 type UpdateBillingCodeHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: UpdateBillingCodeBodySchema;
 };
 
 export const updateBillingCodeHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: UpdateBillingCodeHandlerProps) => {
-  const existing = await db.query.billingCodes.findFirst({
-    where: {
-      id: body.id,
-      workspaceId: { eq: workspaceId },
-    },
-    columns: { id: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.billingCodes.findFirst({
+      where: {
+        id: body.id,
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Billing code not found" });
@@ -46,15 +50,17 @@ export const updateBillingCodeHandler = async ({
   }
 
   try {
-    await db
-      .update(billingCodes)
-      .set(updates)
-      .where(
-        and(
-          eq(billingCodes.id, body.id),
-          eq(billingCodes.workspaceId, workspaceId),
+    await scopedDb((tx) =>
+      tx
+        .update(billingCodes)
+        .set(updates)
+        .where(
+          and(
+            eq(billingCodes.id, body.id),
+            eq(billingCodes.workspaceId, workspaceId),
+          ),
         ),
-      );
+    );
 
     return { id: body.id };
   } catch (error) {

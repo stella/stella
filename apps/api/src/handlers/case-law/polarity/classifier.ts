@@ -11,7 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import {
   phraseToPattern,
@@ -48,6 +48,7 @@ export const classifyCitation = async (
   context: string,
   citationText: string,
   language: string,
+  scopedDb: ScopedDb,
   options?: {
     abortSignal?: AbortSignal;
     ruleCache?: RuleCache;
@@ -55,12 +56,17 @@ export const classifyCitation = async (
   },
 ): Promise<ClassifyResult> => {
   // Tier 1: regex rules
-  const ruleMatch = await matchRule(context, language, options?.ruleCache);
+  const ruleMatch = await matchRule(
+    context,
+    language,
+    scopedDb,
+    options?.ruleCache,
+  );
 
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount(ruleMatch.ruleId).catch((err) => {
+      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch((err) => {
         captureError(err, { ruleId: ruleMatch.ruleId });
       });
     }
@@ -93,7 +99,7 @@ export const classifyCitation = async (
 
   // Track surface form for potential rule promotion
   if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
-    trackSurfaceForm(keyPhrase, polarity, language).catch((err) => {
+    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch((err) => {
       captureError(err, { language, polarity });
     });
   }
@@ -114,24 +120,26 @@ const trackSurfaceForm = async (
   keyPhrase: string,
   polarity: Polarity,
   language: string,
+  scopedDb: ScopedDb,
 ) => {
   const pattern = phraseToPattern(keyPhrase);
   const formJson = JSON.stringify([keyPhrase]);
 
-  await db
-    .insert(caseLawPolarityRules)
-    .values({
-      pattern,
-      polarity,
-      language,
-      source: RULE_SOURCE.LLM_PROPOSED,
-      confidence: 0,
-      surfaceForms: [keyPhrase],
-    })
-    .onConflictDoUpdate({
-      target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
-      set: {
-        surfaceForms: sql`
+  await scopedDb((tx) =>
+    tx
+      .insert(caseLawPolarityRules)
+      .values({
+        pattern,
+        polarity,
+        language,
+        source: RULE_SOURCE.LLM_PROPOSED,
+        confidence: 0,
+        surfaceForms: [keyPhrase],
+      })
+      .onConflictDoUpdate({
+        target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
+        set: {
+          surfaceForms: sql`
           CASE
             WHEN ${caseLawPolarityRules.surfaceForms}
               @> ${formJson}::jsonb
@@ -142,7 +150,7 @@ const trackSurfaceForm = async (
               || ${formJson}::jsonb
           END
         `,
-        source: sql`
+          source: sql`
           CASE
             WHEN ${caseLawPolarityRules.source} = ${RULE_SOURCE.LLM_PROPOSED}
               AND ${caseLawPolarityRules.polarity} = ${polarity}
@@ -159,7 +167,7 @@ const trackSurfaceForm = async (
             ELSE ${caseLawPolarityRules.source}
           END
         `,
-        confidence: sql`
+          confidence: sql`
           CASE
             WHEN ${caseLawPolarityRules.source} = ${RULE_SOURCE.LLM_PROPOSED}
               AND ${caseLawPolarityRules.polarity} = ${polarity}
@@ -176,9 +184,10 @@ const trackSurfaceForm = async (
             ELSE ${caseLawPolarityRules.confidence}
           END
         `,
-        updatedAt: new Date(),
-      },
-    });
+          updatedAt: new Date(),
+        },
+      }),
+  );
 };
 
 /**
@@ -187,12 +196,15 @@ const trackSurfaceForm = async (
 export const persistPolarity = async (
   citationId: string,
   result: ClassifyResult,
+  scopedDb: ScopedDb,
 ) => {
-  await db
-    .update(caseLawCitations)
-    .set({
-      polarity: result.polarity,
-      polarityRuleId: result.ruleId,
-    })
-    .where(eq(caseLawCitations.id, citationId));
+  await scopedDb((tx) =>
+    tx
+      .update(caseLawCitations)
+      .set({
+        polarity: result.polarity,
+        polarityRuleId: result.ruleId,
+      })
+      .where(eq(caseLawCitations.id, citationId)),
+  );
 };

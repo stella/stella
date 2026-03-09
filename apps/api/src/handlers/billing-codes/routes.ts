@@ -34,6 +34,7 @@ export const billingCodesRoute = new Elysia({
       readBillingCodesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readBillingCodesQuerySchema,
@@ -46,6 +47,7 @@ export const billingCodesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { billingCode: ["create"] },
@@ -59,6 +61,7 @@ export const billingCodesRoute = new Elysia({
       updateBillingCodeHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { billingCode: ["update"] },
@@ -72,6 +75,7 @@ export const billingCodesRoute = new Elysia({
       deleteBillingCodeHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { billingCode: ["delete"] },

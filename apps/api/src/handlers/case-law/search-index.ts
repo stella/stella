@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { caseLawSearchDocuments } from "@/api/db/schema";
 import type { DecisionSection } from "./types";
 
@@ -15,18 +15,23 @@ const sectionsToPlainText = (sections: DecisionSection[] | null): string =>
  * Mirrors the pattern from `lib/search/index-entity.ts` but
  * operates on the global (no tenant column) search table.
  */
-export const indexDecision = async (decisionId: string): Promise<void> => {
-  const decision = await db.query.caseLawDecisions.findFirst({
-    where: { id: decisionId },
-    columns: {
-      id: true,
-      caseNumber: true,
-      ecli: true,
-      court: true,
-      fulltext: true,
-      sections: true,
-    },
-  });
+export const indexDecision = async (
+  decisionId: string,
+  scopedDb: ScopedDb,
+): Promise<void> => {
+  const decision = await scopedDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: decisionId },
+      columns: {
+        id: true,
+        caseNumber: true,
+        ecli: true,
+        court: true,
+        fulltext: true,
+        sections: true,
+      },
+    }),
+  );
 
   if (!decision) {
     return;
@@ -49,7 +54,8 @@ export const indexDecision = async (decisionId: string): Promise<void> => {
     .filter(Boolean)
     .join(" ");
 
-  await db.execute(sql`
+  await scopedDb((tx) =>
+    tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
       language, updated_at, tsv
@@ -71,7 +77,8 @@ export const indexDecision = async (decisionId: string): Promise<void> => {
       language = EXCLUDED.language,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
-  `);
+  `),
+  );
 };
 
 /**
@@ -81,8 +88,11 @@ export const indexDecision = async (decisionId: string): Promise<void> => {
  */
 export const removeDecisionFromIndex = async (
   decisionId: string,
+  scopedDb: ScopedDb,
 ): Promise<void> => {
-  await db
-    .delete(caseLawSearchDocuments)
-    .where(eq(caseLawSearchDocuments.decisionId, decisionId));
+  await scopedDb((tx) =>
+    tx
+      .delete(caseLawSearchDocuments)
+      .where(eq(caseLawSearchDocuments.decisionId, decisionId)),
+  );
 };

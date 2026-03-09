@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db, type Transaction } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -14,12 +14,14 @@ export const importBodySchema = t.Object({
 });
 
 type ImportProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: { file: File };
 };
 
 export const importHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   body: { file },
@@ -52,9 +54,8 @@ export const importHandler = async ({
   }
 
   // Check org limit
-  const existingCount = await db.$count(
-    clauses,
-    eq(clauses.organizationId, organizationId),
+  const existingCount = await scopedDb((tx) =>
+    tx.$count(clauses, eq(clauses.organizationId, organizationId)),
   );
 
   const available = LIMITS.clausesPerOrganization - existingCount;
@@ -65,10 +66,12 @@ export const importHandler = async ({
   }
 
   // Load existing categories for matching
-  const allCategories = await db.query.clauseCategories.findMany({
-    where: { organizationId: { eq: organizationId } },
-    columns: { id: true, name: true, parentId: true },
-  });
+  const allCategories = await scopedDb((tx) =>
+    tx.query.clauseCategories.findMany({
+      where: { organizationId: { eq: organizationId } },
+      columns: { id: true, name: true, parentId: true },
+    }),
+  );
 
   const categoryByName = new Map(
     allCategories.map((c) => [c.name.toLowerCase(), c]),
@@ -110,7 +113,7 @@ export const importHandler = async ({
   // All-or-nothing: a single failing insert rolls back everything.
   // PostgreSQL aborts the transaction on any error, so try/catch
   // inside the callback would silently corrupt subsequent statements.
-  const result = await db.transaction(async (tx) => {
+  const result = await scopedDb(async (tx) => {
     const insertedIds: string[] = [];
 
     for (const item of toProcess) {
@@ -151,18 +154,21 @@ export const importHandler = async ({
 
   // Best-effort search vector updates outside tx
   if (result.insertedIds.length > 0) {
-    const newClauses = await db
-      .select({
-        id: clauses.id,
-        title: clauses.title,
-        description: clauses.description,
-        body: clauses.body,
-      })
-      .from(clauses)
-      .where(inArray(clauses.id, result.insertedIds));
+    const newClauses = await scopedDb((tx) =>
+      tx
+        .select({
+          id: clauses.id,
+          title: clauses.title,
+          description: clauses.description,
+          body: clauses.body,
+        })
+        .from(clauses)
+        .where(inArray(clauses.id, result.insertedIds)),
+    );
 
     for (const c of newClauses) {
       updateSearchVector(
+        scopedDb,
         c.id,
         c.title,
         c.description,

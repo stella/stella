@@ -21,7 +21,7 @@ import "dotenv/config";
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -94,6 +94,7 @@ const seedRules = async () => {
 
 const main = async () => {
   const args = parseArgs();
+  const scopedDb = createScopedDb([]);
 
   if (args.seed) {
     await seedRules();
@@ -157,6 +158,7 @@ const main = async () => {
         context,
         citation.citationText,
         citation.language,
+        scopedDb,
         { ruleCache, dryRun: args.dryRun },
       );
 
@@ -169,7 +171,7 @@ const main = async () => {
       }
 
       if (!args.dryRun && result.source !== "fallback") {
-        await persistPolarity(citation.id, result);
+        await persistPolarity(citation.id, result, scopedDb);
       }
 
       // Rate limit LLM calls

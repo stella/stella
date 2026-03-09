@@ -3,7 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db, type Transaction } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import {
@@ -33,6 +33,7 @@ export const uploadEntityBodySchema = t.Object({
 });
 
 type UploadEntityHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: string;
@@ -72,6 +73,7 @@ const resolveFileName = async ({
 };
 
 export const uploadEntityHandler = async ({
+  scopedDb,
   organizationId,
   workspaceId,
   userId,
@@ -79,11 +81,15 @@ export const uploadEntityHandler = async ({
 }: UploadEntityHandlerProps) => {
   const name = sanitizeFilename(rawName);
   const [entityCount, property] = await Promise.all([
-    db.$count(entities, eq(entities.workspaceId, workspaceId)),
-    db.query.properties.findFirst({
-      columns: { id: true, content: true },
-      where: { id: propertyId, workspaceId: { eq: workspaceId } },
-    }),
+    scopedDb((tx) =>
+      tx.$count(entities, eq(entities.workspaceId, workspaceId)),
+    ),
+    scopedDb((tx) =>
+      tx.query.properties.findFirst({
+        columns: { id: true, content: true },
+        where: { id: propertyId, workspaceId: { eq: workspaceId } },
+      }),
+    ),
   ]);
 
   if (entityCount >= LIMITS.entitiesCount) {
@@ -206,7 +212,7 @@ export const uploadEntityHandler = async ({
     const entityId = nanoid();
     const entityVersionId = nanoid();
 
-    const fileName = await db.transaction(async (tx) => {
+    const fileName = await scopedDb(async (tx) => {
       const resolvedName = await resolveFileName({ tx, propertyId, name });
 
       const entityStamp = await allocateEntityStamp(tx, workspaceId);

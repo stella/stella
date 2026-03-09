@@ -34,6 +34,7 @@ export const expensesRoute = new Elysia({
       readExpensesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readExpensesQuerySchema,
@@ -47,6 +48,7 @@ export const expensesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { expense: ["create"] },
@@ -60,6 +62,7 @@ export const expensesRoute = new Elysia({
       updateExpenseHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { expense: ["update"] },
@@ -73,6 +76,7 @@ export const expensesRoute = new Elysia({
       deleteExpenseHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { expense: ["delete"] },

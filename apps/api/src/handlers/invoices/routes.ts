@@ -45,6 +45,7 @@ export const invoicesRoute = new Elysia({
       readInvoicesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: readInvoicesQuerySchema,
@@ -56,6 +57,7 @@ export const invoicesRoute = new Elysia({
       readInvoiceByIdHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       params: t.Object({
@@ -71,6 +73,7 @@ export const invoicesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["create"] },
@@ -85,6 +88,7 @@ export const invoicesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["update"] },
@@ -103,6 +107,7 @@ export const invoicesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["update"] },
@@ -120,6 +125,7 @@ export const invoicesRoute = new Elysia({
       deleteInvoiceHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["delete"] },
@@ -137,6 +143,7 @@ export const invoicesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["update"] },
@@ -155,6 +162,7 @@ export const invoicesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { invoice: ["update"] },

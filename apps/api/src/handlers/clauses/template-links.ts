@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateClauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -21,16 +21,19 @@ type LinkClauseBody = Static<typeof linkClauseBodySchema>;
 // ── Helpers ─────────────────────────────────────────
 
 const verifyTemplateOwnership = async (
+  scopedDb: ScopedDb,
   templateId: string,
   organizationId: SafeId<"organization">,
 ) => {
-  const template = await db.query.templates.findFirst({
-    where: {
-      id: templateId,
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: {
+        id: templateId,
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   return template;
 };
@@ -38,55 +41,63 @@ const verifyTemplateOwnership = async (
 // ── List linked clauses ─────────────────────────────
 
 type ListTemplateClausesProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
 
 export const listTemplateClausesHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
 }: ListTemplateClausesProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await verifyTemplateOwnership(
+    scopedDb,
+    templateId,
+    organizationId,
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });
   }
 
-  const links = await db.query.templateClauses.findMany({
-    where: { templateId },
-    columns: {
-      id: true,
-      clauseId: true,
-      clauseVariantId: true,
-      clauseVersionId: true,
-      slotName: true,
-      sortOrder: true,
-      insertedAt: true,
-    },
-    with: {
-      clause: {
-        columns: {
-          id: true,
-          title: true,
-          currentVersion: true,
+  const links = await scopedDb((tx) =>
+    tx.query.templateClauses.findMany({
+      where: { templateId },
+      columns: {
+        id: true,
+        clauseId: true,
+        clauseVariantId: true,
+        clauseVersionId: true,
+        slotName: true,
+        sortOrder: true,
+        insertedAt: true,
+      },
+      with: {
+        clause: {
+          columns: {
+            id: true,
+            title: true,
+            currentVersion: true,
+          },
+        },
+        clauseVersion: {
+          columns: {
+            id: true,
+            version: true,
+          },
+        },
+        clauseVariant: {
+          columns: {
+            id: true,
+            label: true,
+          },
         },
       },
-      clauseVersion: {
-        columns: {
-          id: true,
-          version: true,
-        },
-      },
-      clauseVariant: {
-        columns: {
-          id: true,
-          label: true,
-        },
-      },
-    },
-    orderBy: { sortOrder: "asc" },
-    limit: LIMITS.templateClausesPerTemplate,
-  });
+      orderBy: { sortOrder: "asc" },
+      limit: LIMITS.templateClausesPerTemplate,
+    }),
+  );
 
   return {
     links: links.map((link) => ({
@@ -102,25 +113,30 @@ export const listTemplateClausesHandler = async ({
 // ── Link clause to template ─────────────────────────
 
 type LinkClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   body: LinkClauseBody;
 };
 
 export const linkClauseHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
   body,
 }: LinkClauseProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await verifyTemplateOwnership(
+    scopedDb,
+    templateId,
+    organizationId,
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });
   }
 
-  const linkCount = await db.$count(
-    templateClauses,
-    eq(templateClauses.templateId, templateId),
+  const linkCount = await scopedDb((tx) =>
+    tx.$count(templateClauses, eq(templateClauses.templateId, templateId)),
   );
 
   if (linkCount >= LIMITS.templateClausesPerTemplate) {
@@ -130,13 +146,15 @@ export const linkClauseHandler = async ({
   }
 
   // Verify clause belongs to same organization
-  const clause = await db.query.clauses.findFirst({
-    where: {
-      id: body.clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true, currentVersion: true },
-  });
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: body.clauseId,
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true, currentVersion: true },
+    }),
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
@@ -144,13 +162,15 @@ export const linkClauseHandler = async ({
 
   // Verify variant if specified
   if (body.variantId) {
-    const variant = await db.query.clauseVariants.findFirst({
-      where: {
-        id: body.variantId,
-        clauseId: body.clauseId,
-      },
-      columns: { id: true },
-    });
+    const variant = await scopedDb((tx) =>
+      tx.query.clauseVariants.findFirst({
+        where: {
+          id: body.variantId,
+          clauseId: body.clauseId,
+        },
+        columns: { id: true },
+      }),
+    );
 
     if (!variant) {
       return status(404, {
@@ -160,34 +180,38 @@ export const linkClauseHandler = async ({
   }
 
   // Find the current version snapshot
-  const currentVersion = await db.query.clauseVersions.findFirst({
-    where: {
-      clauseId: body.clauseId,
-      version: clause.currentVersion,
-    },
-    columns: { id: true },
-  });
+  const currentVersion = await scopedDb((tx) =>
+    tx.query.clauseVersions.findFirst({
+      where: {
+        clauseId: body.clauseId,
+        version: clause.currentVersion,
+      },
+      columns: { id: true },
+    }),
+  );
 
-  const [inserted] = await db
-    .insert(templateClauses)
-    .values({
-      id: nanoid(),
-      templateId,
-      clauseId: body.clauseId,
-      clauseVariantId: body.variantId ?? null,
-      clauseVersionId: currentVersion?.id ?? null,
-      slotName: body.slotName ?? null,
-      sortOrder: linkCount,
-    })
-    .returning({
-      id: templateClauses.id,
-      clauseId: templateClauses.clauseId,
-      clauseVariantId: templateClauses.clauseVariantId,
-      clauseVersionId: templateClauses.clauseVersionId,
-      slotName: templateClauses.slotName,
-      sortOrder: templateClauses.sortOrder,
-      insertedAt: templateClauses.insertedAt,
-    });
+  const [inserted] = await scopedDb((tx) =>
+    tx
+      .insert(templateClauses)
+      .values({
+        id: nanoid(),
+        templateId,
+        clauseId: body.clauseId,
+        clauseVariantId: body.variantId ?? null,
+        clauseVersionId: currentVersion?.id ?? null,
+        slotName: body.slotName ?? null,
+        sortOrder: linkCount,
+      })
+      .returning({
+        id: templateClauses.id,
+        clauseId: templateClauses.clauseId,
+        clauseVariantId: templateClauses.clauseVariantId,
+        clauseVersionId: templateClauses.clauseVersionId,
+        slotName: templateClauses.slotName,
+        sortOrder: templateClauses.sortOrder,
+        insertedAt: templateClauses.insertedAt,
+      }),
+  );
 
   return inserted;
 };
@@ -195,39 +219,49 @@ export const linkClauseHandler = async ({
 // ── Unlink ──────────────────────────────────────────
 
 type UnlinkClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   linkId: string;
 };
 
 export const unlinkClauseHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
   linkId,
 }: UnlinkClauseProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await verifyTemplateOwnership(
+    scopedDb,
+    templateId,
+    organizationId,
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });
   }
 
-  const existing = await db.query.templateClauses.findFirst({
-    where: { id: linkId, templateId },
-    columns: { id: true },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.templateClauses.findFirst({
+      where: { id: linkId, templateId },
+      columns: { id: true },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Link not found" });
   }
 
-  await db
-    .delete(templateClauses)
-    .where(
-      and(
-        eq(templateClauses.id, linkId),
-        eq(templateClauses.templateId, templateId),
+  await scopedDb((tx) =>
+    tx
+      .delete(templateClauses)
+      .where(
+        and(
+          eq(templateClauses.id, linkId),
+          eq(templateClauses.templateId, templateId),
+        ),
       ),
-    );
+  );
 
   return;
 };
@@ -235,60 +269,73 @@ export const unlinkClauseHandler = async ({
 // ── Sync to latest version ──────────────────────────
 
 type SyncClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   linkId: string;
 };
 
 export const syncClauseHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
   linkId,
 }: SyncClauseProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await verifyTemplateOwnership(
+    scopedDb,
+    templateId,
+    organizationId,
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });
   }
 
-  const link = await db.query.templateClauses.findFirst({
-    where: { id: linkId, templateId },
-    columns: {
-      id: true,
-      clauseId: true,
-    },
-  });
+  const link = await scopedDb((tx) =>
+    tx.query.templateClauses.findFirst({
+      where: { id: linkId, templateId },
+      columns: {
+        id: true,
+        clauseId: true,
+      },
+    }),
+  );
 
   if (!link) {
     return status(404, { message: "Link not found" });
   }
 
-  if (!link.clauseId) {
+  const clauseId = link.clauseId;
+  if (!clauseId) {
     return status(400, {
       message: "Clause has been deleted",
     });
   }
 
   // Verify clause still belongs to organization
-  const clause = await db.query.clauses.findFirst({
-    where: {
-      id: link.clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true, currentVersion: true },
-  });
+  const clause = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: clauseId,
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true, currentVersion: true },
+    }),
+  );
 
   if (!clause) {
     return status(404, { message: "Clause not found" });
   }
 
-  const latestVersion = await db.query.clauseVersions.findFirst({
-    where: {
-      clauseId: link.clauseId,
-      version: clause.currentVersion,
-    },
-    columns: { id: true, version: true },
-  });
+  const latestVersion = await scopedDb((tx) =>
+    tx.query.clauseVersions.findFirst({
+      where: {
+        clauseId,
+        version: clause.currentVersion,
+      },
+      columns: { id: true, version: true },
+    }),
+  );
 
   if (!latestVersion) {
     return status(404, {
@@ -296,19 +343,21 @@ export const syncClauseHandler = async ({
     });
   }
 
-  const [updated] = await db
-    .update(templateClauses)
-    .set({ clauseVersionId: latestVersion.id })
-    .where(
-      and(
-        eq(templateClauses.id, linkId),
-        eq(templateClauses.templateId, templateId),
-      ),
-    )
-    .returning({
-      id: templateClauses.id,
-      clauseVersionId: templateClauses.clauseVersionId,
-    });
+  const [updated] = await scopedDb((tx) =>
+    tx
+      .update(templateClauses)
+      .set({ clauseVersionId: latestVersion.id })
+      .where(
+        and(
+          eq(templateClauses.id, linkId),
+          eq(templateClauses.templateId, templateId),
+        ),
+      )
+      .returning({
+        id: templateClauses.id,
+        clauseVersionId: templateClauses.clauseVersionId,
+      }),
+  );
 
   return updated;
 };

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,12 +22,11 @@ export const createEntityBodySchema = t.Object({
 type CreateEntityBodySchema = Static<typeof createEntityBodySchema>;
 
 type CreateEntitiesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   userId: string;
   body: CreateEntityBodySchema;
 };
-
-type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const checkEntityLimit = async (
   tx: Transaction,
@@ -82,6 +81,7 @@ const validateParentId = async (
 };
 
 export const createEntitiesHandler = async ({
+  scopedDb,
   workspaceId,
   userId,
   body,
@@ -90,7 +90,7 @@ export const createEntitiesHandler = async ({
   const kind = body.kind;
   const name = body.name ?? null;
 
-  const txResult = await db.transaction(async (tx) => {
+  const txResult = await scopedDb(async (tx) => {
     const limitResult = await checkEntityLimit(tx, workspaceId);
     if (Result.isError(limitResult)) {
       return status(400, {

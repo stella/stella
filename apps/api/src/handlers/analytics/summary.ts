@@ -1,16 +1,18 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateRangeQuery } from "./date-range-schema";
 
 type SummaryHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: DateRangeQuery;
 };
 
 export const summaryHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: SummaryHandlerProps) => {
@@ -22,17 +24,19 @@ export const summaryHandler = async ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  const rows = await db
-    .select({
-      totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
-      billedMinutes: sql<number>`coalesce(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes} else 0 end), 0)::int`,
-      billedAmount: sql<number>`coalesce(round(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes}::numeric * ${timeEntries.rateAtEntry} / 60 else 0 end)), 0)::int`,
-      entryCount: sql<number>`count(*)::int`,
-      billableMinutes: sql<number>`coalesce(sum(case when ${timeEntries.billable} then ${timeEntries.durationMinutes} else 0 end), 0)::int`,
-      currency: sql<string>`coalesce(mode() within group (order by ${timeEntries.currency}), 'USD')`,
-    })
-    .from(timeEntries)
-    .where(and(...conditions));
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
+        billedMinutes: sql<number>`coalesce(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes} else 0 end), 0)::int`,
+        billedAmount: sql<number>`coalesce(round(sum(case when ${timeEntries.billable} then ${timeEntries.billedMinutes}::numeric * ${timeEntries.rateAtEntry} / 60 else 0 end)), 0)::int`,
+        entryCount: sql<number>`count(*)::int`,
+        billableMinutes: sql<number>`coalesce(sum(case when ${timeEntries.billable} then ${timeEntries.durationMinutes} else 0 end), 0)::int`,
+        currency: sql<string>`coalesce(mode() within group (order by ${timeEntries.currency}), 'USD')`,
+      })
+      .from(timeEntries)
+      .where(and(...conditions)),
+  );
 
   // Aggregate without GROUP BY always returns exactly one row
   const result = rows[0];

@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
@@ -12,6 +12,7 @@ export const checkStampBodySchema = t.Object({
 });
 
 type CheckStampHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   body: Static<typeof checkStampBodySchema>;
 };
@@ -24,6 +25,7 @@ type CheckStampHandlerProps = {
  * existing" vs "upload as new" options.
  */
 export const checkStampHandler = async ({
+  scopedDb,
   organizationId,
   body: { file },
 }: CheckStampHandlerProps) => {
@@ -42,6 +44,7 @@ export const checkStampHandler = async ({
   // then scoped to org for security)
   if (extracted.verificationCode) {
     const match = await lookupByVerificationCode(
+      scopedDb,
       extracted.verificationCode,
       organizationId,
     );
@@ -52,7 +55,11 @@ export const checkStampHandler = async ({
 
   // Fallback: look up by stamp string (org-scoped)
   if (extracted.stamp) {
-    const match = await lookupByStamp(extracted.stamp, organizationId);
+    const match = await lookupByStamp(
+      scopedDb,
+      extracted.stamp,
+      organizationId,
+    );
     if (match) {
       return { match };
     }
@@ -71,29 +78,32 @@ type StampMatch = {
 };
 
 const lookupByVerificationCode = async (
+  scopedDb: ScopedDb,
   verificationCode: string,
   organizationId: SafeId<"organization">,
 ): Promise<StampMatch | null> => {
-  const [row] = await db
-    .select({
-      entityId: entities.id,
-      entityName: entities.name,
-      workspaceId: workspaces.id,
-      workspaceName: workspaces.name,
-      stamp: entityVersions.stamp,
-      versionNumber: entityVersions.versionNumber,
-    })
-    .from(entityVersions)
-    .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-    .innerJoin(
-      workspaces,
-      and(
-        eq(entities.workspaceId, workspaces.id),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .where(eq(entityVersions.verificationCode, verificationCode))
-    .limit(1);
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({
+        entityId: entities.id,
+        entityName: entities.name,
+        workspaceId: workspaces.id,
+        workspaceName: workspaces.name,
+        stamp: entityVersions.stamp,
+        versionNumber: entityVersions.versionNumber,
+      })
+      .from(entityVersions)
+      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+      .innerJoin(
+        workspaces,
+        and(
+          eq(entities.workspaceId, workspaces.id),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .where(eq(entityVersions.verificationCode, verificationCode))
+      .limit(1),
+  );
 
   if (!row || !row.stamp) {
     return null;
@@ -110,30 +120,33 @@ const lookupByVerificationCode = async (
 };
 
 const lookupByStamp = async (
+  scopedDb: ScopedDb,
   stamp: string,
   organizationId: SafeId<"organization">,
 ): Promise<StampMatch | null> => {
-  const [row] = await db
-    .select({
-      entityId: entities.id,
-      entityName: entities.name,
-      workspaceId: workspaces.id,
-      workspaceName: workspaces.name,
-      stamp: entityVersions.stamp,
-      versionNumber: entityVersions.versionNumber,
-    })
-    .from(entityVersions)
-    .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-    .innerJoin(
-      workspaces,
-      and(
-        eq(entities.workspaceId, workspaces.id),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .where(eq(entityVersions.stamp, stamp))
-    .orderBy(desc(entityVersions.createdAt))
-    .limit(1);
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({
+        entityId: entities.id,
+        entityName: entities.name,
+        workspaceId: workspaces.id,
+        workspaceName: workspaces.name,
+        stamp: entityVersions.stamp,
+        versionNumber: entityVersions.versionNumber,
+      })
+      .from(entityVersions)
+      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+      .innerJoin(
+        workspaces,
+        and(
+          eq(entities.workspaceId, workspaces.id),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .where(eq(entityVersions.stamp, stamp))
+      .orderBy(desc(entityVersions.createdAt))
+      .limit(1),
+  );
 
   if (!row || !row.stamp) {
     return null;

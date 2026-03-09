@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -25,42 +25,49 @@ export const updateClauseBodySchema = t.Object({
 type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
 
 type UpdateClauseProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   body: UpdateClauseBody;
 };
 
 export const updateClauseHandler = async ({
+  scopedDb,
   organizationId,
   clauseId,
   body,
 }: UpdateClauseProps) => {
-  const existing = await db.query.clauses.findFirst({
-    where: {
-      id: clauseId,
-      organizationId: { eq: organizationId },
-    },
-    columns: {
-      id: true,
-      title: true,
-      description: true,
-      body: true,
-      currentVersion: true,
-    },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.clauses.findFirst({
+      where: {
+        id: clauseId,
+        organizationId: { eq: organizationId },
+      },
+      columns: {
+        id: true,
+        title: true,
+        description: true,
+        body: true,
+        currentVersion: true,
+      },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Clause not found" });
   }
 
-  if (body.categoryId) {
-    const category = await db.query.clauseCategories.findFirst({
-      where: {
-        id: body.categoryId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    });
+  const categoryId = body.categoryId;
+  if (categoryId) {
+    const category = await scopedDb((tx) =>
+      tx.query.clauseCategories.findFirst({
+        where: {
+          id: categoryId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    );
 
     if (!category) {
       return status(404, {
@@ -94,9 +101,8 @@ export const updateClauseHandler = async ({
   // If body changes, bump version and create snapshot
   let newVersion: number | null = null;
   if (body.body !== undefined) {
-    const versionCount = await db.$count(
-      clauseVersions,
-      eq(clauseVersions.clauseId, clauseId),
+    const versionCount = await scopedDb((tx) =>
+      tx.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
     );
 
     if (versionCount >= LIMITS.clauseVersionsPerClause) {
@@ -110,7 +116,7 @@ export const updateClauseHandler = async ({
     updates.currentVersion = newVersion;
   }
 
-  const updated = await db.transaction(async (tx) => {
+  const updated = await scopedDb(async (tx) => {
     const [row] = await tx
       .update(clauses)
       .set(updates)
@@ -152,6 +158,7 @@ export const updateClauseHandler = async ({
   if (searchFieldsChanged) {
     try {
       await updateSearchVector(
+        scopedDb,
         clauseId,
         body.title ?? existing.title,
         body.description !== undefined

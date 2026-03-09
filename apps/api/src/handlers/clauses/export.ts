@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -15,11 +15,16 @@ export const exportQuerySchema = t.Object({
 });
 
 type ExportProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   query: { ids?: string };
 };
 
-export const exportHandler = async ({ organizationId, query }: ExportProps) => {
+export const exportHandler = async ({
+  scopedDb,
+  organizationId,
+  query,
+}: ExportProps) => {
   const conditions = [eq(clauses.organizationId, organizationId)];
 
   if (query.ids) {
@@ -32,26 +37,30 @@ export const exportHandler = async ({ organizationId, query }: ExportProps) => {
     }
   }
 
-  const rows = await db
-    .select({
-      id: clauses.id,
-      title: clauses.title,
-      description: clauses.description,
-      usageNotes: clauses.usageNotes,
-      language: clauses.language,
-      body: clauses.body,
-      metadata: clauses.metadata,
-      categoryId: clauses.categoryId,
-    })
-    .from(clauses)
-    .where(and(...conditions))
-    .limit(LIMITS.clauseExportLimit);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        id: clauses.id,
+        title: clauses.title,
+        description: clauses.description,
+        usageNotes: clauses.usageNotes,
+        language: clauses.language,
+        body: clauses.body,
+        metadata: clauses.metadata,
+        categoryId: clauses.categoryId,
+      })
+      .from(clauses)
+      .where(and(...conditions))
+      .limit(LIMITS.clauseExportLimit),
+  );
 
   // Load categories for path building
-  const allCategories = await db.query.clauseCategories.findMany({
-    where: { organizationId: { eq: organizationId } },
-    columns: { id: true, name: true, parentId: true },
-  });
+  const allCategories = await scopedDb((tx) =>
+    tx.query.clauseCategories.findMany({
+      where: { organizationId: { eq: organizationId } },
+      columns: { id: true, name: true, parentId: true },
+    }),
+  );
 
   const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
 

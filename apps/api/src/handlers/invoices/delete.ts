@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -12,17 +12,19 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 
 type DeleteInvoiceHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   invoiceId: string;
 };
 
 export const deleteInvoiceHandler = async ({
+  scopedDb,
   workspaceId,
   invoiceId,
 }: DeleteInvoiceHandlerProps) => {
   const now = new Date();
 
-  const result = await db.transaction(async (tx) => {
+  const result = await scopedDb(async (tx) => {
     // Verify draft status before touching linked entries.
     const invoice = await tx.query.invoices.findFirst({
       where: {

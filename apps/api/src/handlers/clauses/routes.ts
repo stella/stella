@@ -50,6 +50,7 @@ export const clauseCategoriesRoute = new Elysia({
   .get("/", (ctx) =>
     listCategoriesHandler({
       organizationId: ctx.session.activeOrganizationId,
+      scopedDb: ctx.scopedDb,
     }),
   )
   .put(
@@ -58,6 +59,7 @@ export const clauseCategoriesRoute = new Elysia({
       createCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["create"] },
@@ -71,6 +73,7 @@ export const clauseCategoriesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["update"] },
@@ -84,6 +87,7 @@ export const clauseCategoriesRoute = new Elysia({
       deleteCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["delete"] },
@@ -105,6 +109,7 @@ export const clausesRoute = new Elysia({
       listClausesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: listClausesQuerySchema },
   )
@@ -115,6 +120,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["create"] },
@@ -127,6 +133,7 @@ export const clausesRoute = new Elysia({
       exportHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
+        scopedDb: ctx.scopedDb,
       }),
     { query: exportQuerySchema },
   )
@@ -137,6 +144,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["create"] },
@@ -149,6 +157,7 @@ export const clausesRoute = new Elysia({
       getClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
+        scopedDb: ctx.scopedDb,
       }),
     { params: t.Object({ clauseId: tNanoid }) },
   )
@@ -159,6 +168,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["update"] },
@@ -172,6 +182,7 @@ export const clausesRoute = new Elysia({
       deleteClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["delete"] },
@@ -186,6 +197,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         versionId: ctx.params.versionId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       params: t.Object({
@@ -201,6 +213,7 @@ export const clausesRoute = new Elysia({
       listVariantsHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
+        scopedDb: ctx.scopedDb,
       }),
     { params: t.Object({ clauseId: tNanoid }) },
   )
@@ -211,6 +224,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["create"] },
@@ -226,6 +240,7 @@ export const clausesRoute = new Elysia({
         clauseId: ctx.params.clauseId,
         variantId: ctx.params.variantId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["update"] },
@@ -243,6 +258,7 @@ export const clausesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         variantId: ctx.params.variantId,
+        scopedDb: ctx.scopedDb,
       }),
     {
       permissions: { clause: ["delete"] },

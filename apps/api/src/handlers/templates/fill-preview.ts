@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db } from "@/api/db";
+import { db, type ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -16,12 +16,14 @@ export const fillPreviewBodySchema = t.Object({
 });
 
 type FillPreviewProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   body: { values: string };
 };
 
 export const fillPreviewHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
   body: { values: valuesJson },
@@ -65,7 +67,7 @@ export const fillPreviewHandler = async ({
   // Resolve clause slots before filling
   const slots = await discoverClauseSlots(buffer);
   if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(templateId, slots);
+    const clausePatches = await resolveClauseSlots(templateId, slots, scopedDb);
     for (const [key, value] of Object.entries(clausePatches)) {
       record[key] = value;
     }

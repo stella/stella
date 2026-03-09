@@ -10,7 +10,7 @@
 
 import "dotenv/config";
 
-import { db } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -107,8 +107,10 @@ const main = async () => {
       `\nIngesting: ${name} (cursor: ${source.syncCursor ?? "start"})`,
     );
 
+    const scopedDb = createScopedDb([]);
     const result = await runIngestionPipeline({
       source,
+      scopedDb,
     });
 
     console.log(

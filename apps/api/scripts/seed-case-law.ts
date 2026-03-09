@@ -16,7 +16,7 @@
 
 import "dotenv/config";
 
-import { db } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -872,7 +872,8 @@ async function seed() {
       updatedAt: now,
     });
 
-    await indexDecision(d.id);
+    const scopedDb = createScopedDb([]);
+    await indexDecision(d.id, scopedDb);
 
     insertedCount++;
   }

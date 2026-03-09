@@ -24,7 +24,7 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { db } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type {
@@ -521,6 +521,7 @@ export const chatActor = actor({
                   allowedWorkspaceIds: allWorkspaceIds,
                   organizationId: orgId,
                   userId: connState.userId,
+                  scopedDb: createScopedDb(allWorkspaceIds),
                 })
               : {};
           // Extract text attachments for system prompt injection.

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -18,12 +18,14 @@ export const updateInvoiceBodySchema = t.Object({
 type UpdateInvoiceBodySchema = Static<typeof updateInvoiceBodySchema>;
 
 type UpdateInvoiceHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   invoiceId: string;
   body: UpdateInvoiceBodySchema;
 };
 
 export const updateInvoiceHandler = async ({
+  scopedDb,
   workspaceId,
   invoiceId,
   body,
@@ -40,17 +42,19 @@ export const updateInvoiceHandler = async ({
     updatedAt: new Date(),
   };
 
-  const result = await db
-    .update(invoices)
-    .set(set)
-    .where(
-      and(
-        eq(invoices.id, invoiceId),
-        eq(invoices.workspaceId, workspaceId),
-        eq(invoices.status, INVOICE_STATUS.DRAFT),
-      ),
-    )
-    .returning({ id: invoices.id });
+  const result = await scopedDb((tx) =>
+    tx
+      .update(invoices)
+      .set(set)
+      .where(
+        and(
+          eq(invoices.id, invoiceId),
+          eq(invoices.workspaceId, workspaceId),
+          eq(invoices.status, INVOICE_STATUS.DRAFT),
+        ),
+      )
+      .returning({ id: invoices.id }),
+  );
 
   if (result.length === 0) {
     return status(409, {

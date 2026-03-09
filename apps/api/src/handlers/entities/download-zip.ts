@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { status } from "elysia";
 import JSZip from "jszip";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -10,6 +10,7 @@ import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 
 type DownloadZipHandlerProps = {
+  scopedDb: ScopedDb;
   entityId: string;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -26,10 +27,12 @@ type FileRow = {
  * recursive CTE (single query, no N+1).
  */
 const collectDescendantIds = async (
+  scopedDb: ScopedDb,
   parentId: string,
   workspaceId: SafeId<"workspace">,
 ): Promise<string[]> => {
-  const result = await db.execute<{ id: string }>(sql`
+  const result = await scopedDb((tx) =>
+    tx.execute<{ id: string }>(sql`
     WITH RECURSIVE descendants AS (
       SELECT ${entities.id}
       FROM ${entities}
@@ -42,23 +45,27 @@ const collectDescendantIds = async (
       WHERE e.workspace_id = ${workspaceId}
     )
     SELECT id FROM descendants
-  `);
+  `),
+  );
 
   return result.rows.map((r) => r.id);
 };
 
 export const downloadZipHandler = async ({
+  scopedDb,
   entityId,
   organizationId,
   workspaceId,
 }: DownloadZipHandlerProps) => {
-  const [folder] = await db
-    .select({ id: entities.id, kind: entities.kind })
-    .from(entities)
-    .where(
-      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-    )
-    .limit(1);
+  const [folder] = await scopedDb((tx) =>
+    tx
+      .select({ id: entities.id, kind: entities.kind })
+      .from(entities)
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      )
+      .limit(1),
+  );
 
   if (!folder) {
     return status(404);
@@ -68,26 +75,32 @@ export const downloadZipHandler = async ({
     return status(400);
   }
 
-  const descendantIds = await collectDescendantIds(entityId, workspaceId);
+  const descendantIds = await collectDescendantIds(
+    scopedDb,
+    entityId,
+    workspaceId,
+  );
 
   if (descendantIds.length === 0) {
     return status(404);
   }
 
   // Batch-query all file fields in one query
-  const rows = await db
-    .select({ content: fields.content })
-    .from(fields)
-    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-    .innerJoin(
-      entities,
-      and(
-        eq(entityVersions.entityId, entities.id),
-        eq(entityVersions.id, entities.currentVersionId),
-        eq(entities.workspaceId, workspaceId),
-      ),
-    )
-    .where(inArray(entityVersions.entityId, descendantIds));
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({ content: fields.content })
+      .from(fields)
+      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+      .innerJoin(
+        entities,
+        and(
+          eq(entityVersions.entityId, entities.id),
+          eq(entityVersions.id, entities.currentVersionId),
+          eq(entities.workspaceId, workspaceId),
+        ),
+      )
+      .where(inArray(entityVersions.entityId, descendantIds)),
+  );
 
   const fileRows: FileRow[] = [];
   for (const row of rows) {

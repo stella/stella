@@ -21,6 +21,7 @@ export const filesRoute = new Elysia({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         purpose: ctx.query.purpose,
+        scopedDb: ctx.scopedDb,
       }),
     {
       query: t.Object({
@@ -33,5 +34,6 @@ export const filesRoute = new Elysia({
       fieldId: ctx.params.fieldId,
       organizationId: ctx.session.activeOrganizationId,
       workspaceId: ctx.workspaceId,
+      scopedDb: ctx.scopedDb,
     }),
   );

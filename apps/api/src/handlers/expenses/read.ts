@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import {
   expenseCategorySchema,
@@ -26,11 +26,13 @@ export const readExpensesQuerySchema = t.Object({
 type ReadExpensesQuerySchema = Static<typeof readExpensesQuerySchema>;
 
 type ReadExpensesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ReadExpensesQuerySchema;
 };
 
 export const readExpensesHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ReadExpensesHandlerProps) => {
@@ -61,27 +63,29 @@ export const readExpensesHandler = async ({
     conditions.push(eq(expenses.billable, query.billable));
   }
 
-  const rows = await db
-    .select({
-      id: expenses.id,
-      userId: expenses.userId,
-      matterId: expenses.matterId,
-      dateIncurred: expenses.dateIncurred,
-      amount: expenses.amount,
-      currency: expenses.currency,
-      category: expenses.category,
-      description: expenses.description,
-      invoiceDescription: expenses.invoiceDescription,
-      billable: expenses.billable,
-      markup: expenses.markup,
-      status: expenses.status,
-      createdAt: expenses.createdAt,
-    })
-    .from(expenses)
-    .where(and(...conditions))
-    .orderBy(expenses.dateIncurred)
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        id: expenses.id,
+        userId: expenses.userId,
+        matterId: expenses.matterId,
+        dateIncurred: expenses.dateIncurred,
+        amount: expenses.amount,
+        currency: expenses.currency,
+        category: expenses.category,
+        description: expenses.description,
+        invoiceDescription: expenses.invoiceDescription,
+        billable: expenses.billable,
+        markup: expenses.markup,
+        status: expenses.status,
+        createdAt: expenses.createdAt,
+      })
+      .from(expenses)
+      .where(and(...conditions))
+      .orderBy(expenses.dateIncurred)
+      .limit(limit)
+      .offset(offset),
+  );
 
   // Batch-fetch user names
   const userIds = new Set<string>();
@@ -93,10 +97,12 @@ export const readExpensesHandler = async ({
 
   const usersResult =
     userIds.size > 0
-      ? await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, Array.from(userIds)))
+      ? await scopedDb((tx) =>
+          tx
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, Array.from(userIds))),
+        )
       : [];
 
   const userMap = new Map(usersResult.map((u) => [u.id, u.name]));

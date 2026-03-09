@@ -2,7 +2,7 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db, type Transaction } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -18,6 +18,7 @@ export const duplicateEntityBodySchema = t.Object({
 });
 
 type DuplicateEntityHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   userId: string;
   body: Static<typeof duplicateEntityBodySchema>;
@@ -114,32 +115,35 @@ const extractFileName = (
 };
 
 export const duplicateEntityHandler = async ({
+  scopedDb,
   workspaceId,
   userId,
   body: { entityId: sourceEntityId },
 }: DuplicateEntityHandlerProps) => {
-  const source = await db.query.entities.findFirst({
-    where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
-    columns: {
-      id: true,
-      kind: true,
-      name: true,
-      parentId: true,
-    },
-    with: {
-      currentVersion: {
-        columns: { id: true },
-        with: {
-          fields: {
-            columns: {
-              propertyId: true,
-              content: true,
+  const source = await scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
+      columns: {
+        id: true,
+        kind: true,
+        name: true,
+        parentId: true,
+      },
+      with: {
+        currentVersion: {
+          columns: { id: true },
+          with: {
+            fields: {
+              columns: {
+                propertyId: true,
+                content: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!source) {
     return status(404, { message: "Entity not found" });
@@ -163,7 +167,7 @@ export const duplicateEntityHandler = async ({
   // display name from the file field's fileName
   const effectiveName = source.name ?? extractFileName(sourceFields);
 
-  const result = await db.transaction(async (tx) => {
+  const result = await scopedDb(async (tx) => {
     const entityCount = await tx.$count(
       entities,
       eq(entities.workspaceId, workspaceId),

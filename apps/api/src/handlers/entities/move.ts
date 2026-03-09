@@ -1,12 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
-
-type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const moveEntityBodySchema = t.Object({
   entityId: tNanoid,
@@ -16,15 +14,17 @@ export const moveEntityBodySchema = t.Object({
 type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
 
 type MoveEntityHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: MoveEntityBodySchema;
 };
 
 export const moveEntityHandler = ({
+  scopedDb,
   workspaceId,
   body,
 }: MoveEntityHandlerProps) => {
-  return db.transaction(async (tx) => {
+  return scopedDb(async (tx) => {
     // Lock the entity row to prevent concurrent moves.
     const [entity] = await tx
       .select({ id: entities.id, kind: entities.kind })

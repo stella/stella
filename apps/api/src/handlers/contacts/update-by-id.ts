@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -47,26 +47,30 @@ export const updateContactBodySchema = t.Object({
 type UpdateContactBody = Static<typeof updateContactBodySchema>;
 
 type UpdateContactByIdHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   contactId: string;
   body: UpdateContactBody;
 };
 
 export const updateContactByIdHandler = async ({
+  scopedDb,
   organizationId,
   contactId,
   body,
 }: UpdateContactByIdHandlerProps) => {
-  const [updated] = await db
-    .update(contacts)
-    .set(body)
-    .where(
-      and(
-        eq(contacts.id, contactId),
-        eq(contacts.organizationId, organizationId),
-      ),
-    )
-    .returning({ id: contacts.id });
+  const [updated] = await scopedDb((tx) =>
+    tx
+      .update(contacts)
+      .set(body)
+      .where(
+        and(
+          eq(contacts.id, contactId),
+          eq(contacts.organizationId, organizationId),
+        ),
+      )
+      .returning({ id: contacts.id }),
+  );
 
   if (!updated) {
     return status(404, { message: "Contact not found" });
