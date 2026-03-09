@@ -2,8 +2,14 @@ import { sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
-import { matterCounters, properties, workspaces } from "@/api/db/schema";
+import { adminDb } from "@/api/db";
+import {
+  matterCounters,
+  properties,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
+import { WORKSPACE_ACTIVE_STATUS } from "@/api/lib/auth";
 // biome-ignore lint/style/noRestrictedImports: brands freshly-inserted workspace PK for FK usage
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -25,21 +31,25 @@ type CreateWorkspacesBodySchema = Static<typeof createWorkspacesBodySchema>;
 
 type CreateWorkspacesHandlerProps = {
   organizationId: SafeId<"organization">;
+  userId: string;
   body: CreateWorkspacesBodySchema;
 };
 
+// Uses adminDb because the new workspace ID isn't in
+// `app.workspace_ids` yet; RLS would block the INSERT.
 export const createWorkspacesHandler = ({
   organizationId,
+  userId,
   body,
 }: CreateWorkspacesHandlerProps) => {
-  return db.transaction(async (tx) => {
+  return adminDb.transaction(async (tx) => {
     const workspacesResult = await tx.query.workspaces.findMany({
       columns: {
         name: true,
       },
       where: {
         organizationId: { eq: organizationId },
-        status: "active",
+        status: WORKSPACE_ACTIVE_STATUS,
       },
     });
 
@@ -101,6 +111,11 @@ export const createWorkspacesHandler = ({
     });
 
     const wsId = toSafeId<"workspace">(body.id);
+
+    await tx.insert(workspaceMembers).values({
+      workspaceId: wsId,
+      userId,
+    });
 
     await tx.insert(properties).values([
       {

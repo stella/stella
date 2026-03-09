@@ -22,6 +22,12 @@ import {
 } from "@/api/handlers/workspaces/workspace-contacts-create";
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import {
+  addWorkspaceMemberBodySchema,
+  addWorkspaceMemberHandler,
+} from "@/api/handlers/workspaces/workspace-members-add";
+import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-remove";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -36,6 +42,8 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .get("/", (ctx) =>
     readWorkspacesHandler({
       organizationId: ctx.session.activeOrganizationId,
+      accessibleWorkspaceIds: ctx.accessibleWorkspaceIds,
+      scopedDb: ctx.scopedDb,
     }),
   )
   .put(
@@ -43,6 +51,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     (ctx) =>
       createWorkspacesHandler({
         organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
         body: ctx.body,
       }),
 
@@ -69,6 +78,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           readWorkspaceHandler({
             workspaceId: ctx.workspaceId,
             organizationId: ctx.session.activeOrganizationId,
+            scopedDb: ctx.scopedDb,
           }),
         )
         .get("/workflow", (ctx) =>
@@ -81,11 +91,13 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .get("/justifications", (ctx) =>
           readJustificationsHandler({
             workspaceId: ctx.workspaceId,
+            scopedDb: ctx.scopedDb,
           }),
         )
         .get("/overview", (ctx) =>
           readOverviewHandler({
             workspaceId: ctx.workspaceId,
+            scopedDb: ctx.scopedDb,
           }),
         )
         .post(
@@ -95,6 +107,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
               body: ctx.body,
+              scopedDb: ctx.scopedDb,
             }),
           {
             permissions: { workspace: ["update"] },
@@ -125,6 +138,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .get("/contacts", (ctx) =>
           readWorkspaceContactsHandler({
             workspaceId: ctx.workspaceId,
+            scopedDb: ctx.scopedDb,
           }),
         )
         .put(
@@ -134,6 +148,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
               body: ctx.body,
+              scopedDb: ctx.scopedDb,
             }),
           {
             permissions: { workspace: ["update"] },
@@ -147,10 +162,48 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             deleteWorkspaceContactHandler({
               workspaceId: ctx.workspaceId,
               workspaceContactId: ctx.params.workspaceContactId,
+              scopedDb: ctx.scopedDb,
             }),
           {
             permissions: { workspace: ["update"] },
             params: t.Object({ workspaceContactId: tNanoid }),
+            invalidateQuery: true,
+          },
+        )
+        .get("/members", (ctx) =>
+          readWorkspaceMembersHandler({
+            workspaceId: ctx.workspaceId,
+            scopedDb: ctx.scopedDb,
+          }),
+        )
+        .put(
+          "/members",
+          (ctx) =>
+            addWorkspaceMemberHandler({
+              workspaceId: ctx.workspaceId,
+              organizationId: ctx.session.activeOrganizationId,
+              body: ctx.body,
+              scopedDb: ctx.scopedDb,
+            }),
+          {
+            permissions: { workspace: ["update"] },
+            body: addWorkspaceMemberBodySchema,
+            invalidateQuery: true,
+          },
+        )
+        .delete(
+          "/members/:userId",
+          (ctx) =>
+            removeWorkspaceMemberHandler({
+              workspaceId: ctx.workspaceId,
+              userId: ctx.params.userId,
+              scopedDb: ctx.scopedDb,
+            }),
+          {
+            permissions: { workspace: ["update"] },
+            params: t.Object({
+              userId: t.String({ maxLength: 128 }),
+            }),
             invalidateQuery: true,
           },
         ),

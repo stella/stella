@@ -832,6 +832,7 @@
     "invitationResent": "Zaproszenie wysłane ponownie",
     "invitationSent": "Zaproszenie wysłane",
     "matterNumberingUpdated": "Numeracja spraw zaktualizowana",
+    "memberAdded": "Członek dodany",
     "memberRemoved": "Członek usunięty",
     "organizationUpdated": "Organizacja zaktualizowana",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Zablokuj",
     "matterInfo": "Informacje o sprawie",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Dodaj członka",
+      "addMemberDescription": "Dodaj członka organizacji do tej sprawy",
+      "alreadyMember": "Użytkownik jest już członkiem",
+      "cannotRemoveLast": "Nie można usunąć ostatniego członka",
+      "noMembersFound": "Nie znaleziono członków",
+      "removeMember": "Usuń członka",
+      "removeMemberConfirm": "Usunąć tego członka ze sprawy?",
+      "selectMember": "Wybierz członka"
+    },
     "newDocument": "Nowy dokument",
     "newFolder": "Nowy folder",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Zapisz jako PDF",
     "sections": {
       "documents": "Dokumenty",
+      "members": "Członkowie",
       "parties": "Strony"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

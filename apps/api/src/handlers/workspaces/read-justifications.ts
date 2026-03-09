@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type { BoundingBoxes } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadJustificationsHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -24,25 +25,28 @@ type JustificationResponse = {
 // no limit. A workspace with 10k entities loads everything
 // into memory.
 export const readJustificationsHandler = async ({
+  scopedDb,
   workspaceId,
 }: ReadJustificationsHandlerProps) => {
-  const result = await db.query.entities.findMany({
-    where: { workspaceId: { eq: workspaceId } },
-    columns: {},
-    with: {
-      currentVersion: {
-        columns: {},
-        with: {
-          fields: {
-            columns: {},
-            with: {
-              justification: true,
+  const result = await scopedDb((tx) =>
+    tx.query.entities.findMany({
+      where: { workspaceId: { eq: workspaceId } },
+      columns: {},
+      with: {
+        currentVersion: {
+          columns: {},
+          with: {
+            fields: {
+              columns: {},
+              with: {
+                justification: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  );
 
   const justificationList: JustificationResponse[] = [];
 

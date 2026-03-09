@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import { adminDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -10,12 +10,14 @@ type UpdateLastActiveWorkspaceParams = {
   workspaceId: SafeId<"workspace">;
 };
 
+// Uses adminDb because `member` is an org-level auth table
+// with no RLS policy (not workspace-scoped).
 export const updateLastActiveWorkspaceHandler = async ({
   userId,
   organizationId,
   workspaceId,
 }: UpdateLastActiveWorkspaceParams) => {
-  await db
+  await adminDb
     .update(member)
     .set({ lastActiveWorkspaceId: workspaceId })
     .where(

@@ -832,6 +832,7 @@
     "invitationResent": "Pozvánka znovu odoslaná",
     "invitationSent": "Pozvánka odoslaná",
     "matterNumberingUpdated": "Číslovanie spisov aktualizované",
+    "memberAdded": "Člen pridaný",
     "memberRemoved": "Člen odstránený",
     "organizationUpdated": "Organizácia aktualizovaná",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Zamknúť",
     "matterInfo": "Informácie o spise",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Pridať člena",
+      "addMemberDescription": "Pridať člena organizácie k tomuto spisu",
+      "alreadyMember": "Používateľ je už členom",
+      "cannotRemoveLast": "Posledného člena nie je možné odstrániť",
+      "noMembersFound": "Nenašli sa žiadni členovia",
+      "removeMember": "Odstrániť člena",
+      "removeMemberConfirm": "Odstrániť tohto člena zo spisu?",
+      "selectMember": "Vybrať člena"
+    },
     "newDocument": "Nový dokument",
     "newFolder": "Nový priečinok",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Uložiť ako PDF",
     "sections": {
       "documents": "Dokumenty",
+      "members": "Členovia",
       "parties": "Strany"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

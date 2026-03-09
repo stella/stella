@@ -7,7 +7,7 @@ import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
 import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
-import { db } from "@/api/db";
+import { adminDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import {
   entities,
@@ -51,11 +51,16 @@ type DeleteWorkspaceHandlerProps = {
   authToken: string;
 };
 
+// Workspace deletion uses adminDb (superuser) because it
+// changes workspace status to "deleting", which would remove
+// the workspace from app.workspace_ids and break subsequent
+// RLS-scoped queries within the same flow. The route already
+// guards this with permissions: { workspace: ['delete'] }.
 export const changeWorkspaceStatus = (
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
 ) =>
-  db
+  adminDb
     .update(workspaces)
     .set({ status: newStatus })
     .where(eq(workspaces.id, workspaceId));
@@ -135,13 +140,13 @@ export const deleteWorkspaceHandler = async ({
     // Query file metadata from fields.content JSONB.
     // Workspace is sealed by status: "deleting", so no
     // concurrent uploads can insert new files.
-    const workspaceEntityVersionIds = db
+    const workspaceEntityVersionIds = adminDb
       .select({ id: entityVersions.id })
       .from(entityVersions)
       .innerJoin(entities, eq(entityVersions.entityId, entities.id))
       .where(eq(entities.workspaceId, workspaceId));
 
-    const fieldRows = await db
+    const fieldRows = await adminDb
       .select({ content: fields.content })
       .from(fields)
       .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
@@ -162,7 +167,7 @@ export const deleteWorkspaceHandler = async ({
 
     // All S3 objects are gone. Delete DB records in a
     // single transaction.
-    await db.transaction(async (tx) => {
+    await adminDb.transaction(async (tx) => {
       // Delete property dependencies (restrict FK prevents
       // cascade, so explicit cleanup is needed).
       const workspacePropertyIds = tx

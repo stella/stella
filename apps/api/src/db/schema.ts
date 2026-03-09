@@ -287,6 +287,27 @@ export const workspaces = p.pgTable(
   ],
 );
 
+export const workspaceMembers = p.pgTable(
+  "workspace_members",
+  {
+    id: pNanoid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .varchar("user_id", { length: 128 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("workspace_members_workspace_user_uidx")
+      .on(table.workspaceId, table.userId),
+    p.index("workspace_members_user_id_idx").on(table.userId),
+  ],
+);
+
 export const workspaceContacts = p.pgTable(
   "workspace_contacts",
   {
@@ -1298,6 +1319,7 @@ export const relations = defineRelations(
     contacts,
     contactRelationships,
     workspaces,
+    workspaceMembers,
     workspaceContacts,
     properties,
     propertyDependencies,
@@ -1407,6 +1429,20 @@ export const relations = defineRelations(
       workspaceContacts: r.many.workspaceContacts({
         from: r.workspaces.id,
         to: r.workspaceContacts.workspaceId,
+      }),
+      members: r.many.workspaceMembers({
+        from: r.workspaces.id,
+        to: r.workspaceMembers.workspaceId,
+      }),
+    },
+    workspaceMembers: {
+      workspace: r.one.workspaces({
+        from: r.workspaceMembers.workspaceId,
+        to: r.workspaces.id,
+      }),
+      user: r.one.user({
+        from: r.workspaceMembers.userId,
+        to: r.user.id,
       }),
     },
     workspaceContacts: {

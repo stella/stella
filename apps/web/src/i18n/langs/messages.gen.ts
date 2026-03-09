@@ -835,6 +835,7 @@ type Messages = {
     "invitationResent": "Invitation resent";
     "invitationSent": "Invitation sent";
     "matterNumberingUpdated": "Matter numbering updated";
+    "memberAdded": "Member added";
     "memberRemoved": "Member removed";
     "organizationUpdated": "Organization updated";
     "otherSessionsRevoked": "Other sessions revoked";
@@ -1024,6 +1025,16 @@ type Messages = {
     "lastActive": "Last active {time}";
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
+    "members": {
+      "addMember": "Add member";
+      "addMemberDescription": "Add an organization member to this matter";
+      "alreadyMember": "User is already a member";
+      "cannotRemoveLast": "Cannot remove the last member";
+      "noMembersFound": "No members found";
+      "removeMember": "Remove member";
+      "removeMemberConfirm": "Remove this member from the matter?";
+      "selectMember": "Select a member";
+    };
     "mattersCount": "{count, plural, one {# matter} other {# matters}}";
     "newDocument": "New document";
     "newFolder": "New folder";
@@ -1134,6 +1145,7 @@ type Messages = {
     "saveAsPdf": "Save as PDF";
     "sections": {
       "documents": "Documents";
+      "members": "Members";
       "parties": "Parties";
     };
     "tasksCount": "{count, plural, one {# task} other {# tasks}}";

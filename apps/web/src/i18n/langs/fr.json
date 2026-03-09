@@ -76,7 +76,7 @@
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
-    "signInToStella": "Connectez-vous à Stella",
+    "signInToStella": "Se connecter à Stella",
     "signOut": "Se déconnecter",
     "slugLabel": "Slug",
     "slugPlaceholder": "mon-organisation",
@@ -657,9 +657,9 @@
   },
   "filters": {
     "contains": "contient",
-    "eq": "égal à",
+    "eq": "égal",
     "is_empty": "est vide",
-    "neq": "différent de"
+    "neq": "différent"
   },
   "knowledge": {
     "sections": {
@@ -832,6 +832,7 @@
     "invitationResent": "Invitation renvoyée",
     "invitationSent": "Invitation envoyée",
     "matterNumberingUpdated": "Numérotation des dossiers mise à jour",
+    "memberAdded": "Membre ajouté",
     "memberRemoved": "Membre retiré",
     "organizationUpdated": "Organisation mise à jour",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Verrouiller",
     "matterInfo": "Informations sur le dossier",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Ajouter un membre",
+      "addMemberDescription": "Ajouter un membre de l'organisation à ce dossier",
+      "alreadyMember": "L'utilisateur est déjà membre",
+      "cannotRemoveLast": "Impossible de retirer le dernier membre",
+      "noMembersFound": "Aucun membre trouvé",
+      "removeMember": "Retirer le membre",
+      "removeMemberConfirm": "Retirer ce membre du dossier ?",
+      "selectMember": "Sélectionner un membre"
+    },
     "newDocument": "Nouveau document",
     "newFolder": "Nouveau dossier",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Enregistrer en PDF",
     "sections": {
       "documents": "Documents",
+      "members": "Membres",
       "parties": "Parties"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

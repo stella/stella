@@ -832,6 +832,7 @@
     "invitationResent": "Meghívó újraküldve",
     "invitationSent": "Meghívó elküldve",
     "matterNumberingUpdated": "Ügyszámozás frissítve",
+    "memberAdded": "Tag hozzáadva",
     "memberRemoved": "Tag eltávolítva",
     "organizationUpdated": "Szervezet frissítve",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Zárolás",
     "matterInfo": "Ügy adatai",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Tag hozzáadása",
+      "addMemberDescription": "Szervezeti tag hozzáadása ehhez az ügyhöz",
+      "alreadyMember": "A felhasználó már tag",
+      "cannotRemoveLast": "Az utolsó tag nem távolítható el",
+      "noMembersFound": "Nem található tag",
+      "removeMember": "Tag eltávolítása",
+      "removeMemberConfirm": "Eltávolítja ezt a tagot az ügyből?",
+      "selectMember": "Tag kiválasztása"
+    },
     "newDocument": "Új dokumentum",
     "newFolder": "Új mappa",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Mentés PDF-ként",
     "sections": {
       "documents": "Dokumentumok",
+      "members": "Tagok",
       "parties": "Felek"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",
