@@ -13,6 +13,11 @@ checksums:
     account/sessions/revokeSession: 6d842546a84e919c519bf8cbffdf25a0
     account/sessions/title: c775652cb31428e3d673d928f2f644d7
     account/sessions/unknownDevice: 89f4b6fe795be5d15823de7675cdfd85
+    account/settings/description: 5b9c65fbf6ffec4cdec7fb85d4b1dccc
+    account/settings/timezone: 370780b854bdbef55320f977a4fb9ddb
+    account/settings/timezoneDescription: ae55697ae97e141d255af58a98fbe21e
+    account/settings/timezoneSaved: f47e97482e51a0ee1cb0cbd358c8ea66
+    account/settings/title: 8df6777277469c1fd88cc18dde2f1cc3
     analytics/billedAmount: 312ca0e9934041e7b24eda0fab671668
     analytics/billedHours: b506a545cfd14c71d0a6dc952993a25d
     analytics/entries: cfe9fa2bbeedda59de54266997e94efe
