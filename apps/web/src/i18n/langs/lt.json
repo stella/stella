@@ -76,7 +76,7 @@
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
-    "signInToStella": "Prisijungti prie Stella",
+    "signInToStella": "Prisijungti prie stella",
     "signOut": "Atsijungti",
     "slugLabel": "Slug",
     "slugPlaceholder": "mano-organizacija",
@@ -652,6 +652,12 @@
     "title": "Atsiliepimai",
     "trigger": "Atsiliepimai"
   },
+  "filters": {
+    "contains": "apima",
+    "eq": "lygu",
+    "is_empty": "tuščia",
+    "neq": "nelygu"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Pridėti laukus",
       "aiGenerated": "Sugeneruota AI",
-      "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ištrinti rodinį",
       "failedToChangeViewType": "Failed to change view type",

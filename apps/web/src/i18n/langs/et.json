@@ -76,7 +76,7 @@
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
-    "signInToStella": "Logi Stella sisse",
+    "signInToStella": "Logi stella sisse",
     "signOut": "Logi välja",
     "slugLabel": "Slug",
     "slugPlaceholder": "minu-organisatsioon",
@@ -652,6 +652,12 @@
     "title": "Tagasiside",
     "trigger": "Tagasiside"
   },
+  "filters": {
+    "contains": "sisaldab",
+    "eq": "võrdub",
+    "is_empty": "on tühi",
+    "neq": "ei võrdu"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Lisa väljad",
       "aiGenerated": "Tehisintellektiga loodud",
-      "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
       "copySuffix": "{name} (copy)",
       "deleteView": "Kustuta vaade",
       "failedToChangeViewType": "Failed to change view type",

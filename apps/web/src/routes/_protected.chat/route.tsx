@@ -1,6 +1,11 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
+import { pageTitle } from "@/lib/page-title";
+
 export const Route = createFileRoute("/_protected/chat")({
+  head: () => ({
+    meta: [{ title: pageTitle("navigation.chat") }],
+  }),
   component: ChatLayout,
 });
 

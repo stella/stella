@@ -52,6 +52,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { pageTitle } from "@/lib/page-title";
 import { toFormErrors } from "@/lib/schema";
 import {
   useCreateContact,
@@ -65,6 +66,9 @@ import {
 type ContactFilter = "all" | "person" | "organization";
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  head: () => ({
+    meta: [{ title: pageTitle("navigation.contacts") }],
+  }),
   component: ContactsPage,
 });
 

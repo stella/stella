@@ -76,7 +76,7 @@
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
-    "signInToStella": "Bejelentkezés a Stellába",
+    "signInToStella": "Bejelentkezés a stellába",
     "signOut": "Kijelentkezés",
     "slugLabel": "Slug",
     "slugPlaceholder": "szervezetem",
@@ -652,6 +652,12 @@
     "title": "Visszajelzés",
     "trigger": "Visszajelzés"
   },
+  "filters": {
+    "contains": "tartalmazza",
+    "eq": "egyenlő",
+    "is_empty": "üres",
+    "neq": "nem egyenlő"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Mezők hozzáadása",
       "aiGenerated": "MI által generált",
-      "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
       "copySuffix": "{name} (copy)",
       "deleteView": "Nézet törlése",
       "failedToChangeViewType": "Failed to change view type",

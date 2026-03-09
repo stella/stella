@@ -76,7 +76,7 @@
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
-    "signInToStella": "Pieslēgties Stella",
+    "signInToStella": "Pieslēgties stella",
     "signOut": "Atslēgties",
     "slugLabel": "Slug",
     "slugPlaceholder": "mana-organizacija",
@@ -652,6 +652,12 @@
     "title": "Atsauksmes",
     "trigger": "Atsauksmes"
   },
+  "filters": {
+    "contains": "satur",
+    "eq": "vienāds ar",
+    "is_empty": "ir tukšs",
+    "neq": "nav vienāds ar"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Pievienot laukus",
       "aiGenerated": "AI ģenerēts",
-      "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
       "copySuffix": "{name} (copy)",
       "deleteView": "Dzēst skatu",
       "failedToChangeViewType": "Failed to change view type",

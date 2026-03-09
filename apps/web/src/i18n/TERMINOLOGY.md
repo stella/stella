@@ -130,8 +130,9 @@ locale, then pass the result as an interpolation variable.
 ## Style Rules
 
 - **Sentence case** for all UI text (not Title Case): "Create new
-  workspace", not "Create New Workspace". Exception: proper nouns
-  (Stella) and German nouns (capitalized per grammar).
+  workspace", not "Create New Workspace". Exception: German nouns
+  (capitalized per grammar). The product name is spelled **stella**
+  (lowercase) in all user-facing text.
 - **No trailing punctuation** on button labels: "Save changes",
   not "Save changes."
 - **Ellipsis for loading states**: "Uploading files...", not

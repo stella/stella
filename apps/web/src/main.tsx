@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
-import { RouterProvider } from "@tanstack/react-router";
+import { HeadContent, RouterProvider } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 import ReactDOM from "react-dom/client";
 
 import "@stella/ui/globals.css";
@@ -12,6 +13,7 @@ if (rootElement && !rootElement.innerHTML) {
 
   root.render(
     <StrictMode>
+      {createPortal(<HeadContent />, document.head)}
       <RouterProvider router={getRouter()} />
     </StrictMode>,
   );

@@ -76,7 +76,7 @@
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
-    "signInToStella": "Se connecter à Stella",
+    "signInToStella": "Se connecter à stella",
     "signOut": "Se déconnecter",
     "slugLabel": "Slug",
     "slugPlaceholder": "mon-organisation",
@@ -652,6 +652,12 @@
     "title": "Commentaires",
     "trigger": "Commentaires"
   },
+  "filters": {
+    "contains": "contient",
+    "eq": "égal à",
+    "is_empty": "est vide",
+    "neq": "différent de"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1133,7 +1139,6 @@
     "views": {
       "addFields": "Ajouter des champs",
       "aiGenerated": "Généré par IA",
-      "cannotDeleteRequired": "Au moins une vue de ce type est requise",
       "copySuffix": "{name} (copy)",
       "deleteView": "Supprimer la vue",
       "failedToChangeViewType": "Failed to change view type",

@@ -3,13 +3,6 @@
 
 type Messages = {
   "account": {
-    "settings": {
-      "description": "Manage your account preferences";
-      "timezone": "Timezone";
-      "timezoneDescription": "Used for timestamps in notifications and emails";
-      "timezoneSaved": "Timezone updated";
-      "title": "Settings";
-    };
     "sessions": {
       "currentSession": "Current";
       "description": "Manage your active sessions";
@@ -23,6 +16,13 @@ type Messages = {
       "revokeSession": "Sign out";
       "title": "Sessions";
       "unknownDevice": "Unknown device";
+    };
+    "settings": {
+      "description": "Manage your account preferences";
+      "timezone": "Timezone";
+      "timezoneDescription": "Used for timestamps in notifications and emails";
+      "timezoneSaved": "Timezone updated";
+      "title": "Settings";
     };
   };
   "analytics": {
@@ -79,7 +79,7 @@ type Messages = {
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
-    "signInToStella": "Sign in to Stella";
+    "signInToStella": "Sign in to stella";
     "signOut": "Sign Out";
     "slugLabel": "Slug";
     "slugPlaceholder": "my-organization";
@@ -316,7 +316,6 @@ type Messages = {
     "extractingContent": "Extracting content...";
     "fileTooLarge": "File exceeds {maxSize} limit";
     "greeting": "What would you like to work on?";
-    "thinking": "Thinking...";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
@@ -332,6 +331,7 @@ type Messages = {
     "noThreads": "No conversations yet";
     "placeholder": "What would you like to know?";
     "send": "Send message";
+    "thinking": "Thinking...";
     "threads": "Conversations";
     "tool": {
       "askUser": "Asking for clarification";
@@ -592,12 +592,6 @@ type Messages = {
       "person": "Person";
     };
   };
-  "filters": {
-    "contains": "contains";
-    "eq": "equals";
-    "is_empty": "is empty";
-    "neq": "not equals";
-  };
   "errors": {
     "actionFailed": "Action failed";
     "failedToAcceptInvitation": "Failed to accept invitation";
@@ -660,6 +654,12 @@ type Messages = {
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";
     "title": "Feedback";
     "trigger": "Feedback";
+  };
+  "filters": {
+    "contains": "contains";
+    "eq": "equals";
+    "is_empty": "is empty";
+    "neq": "not equals";
   };
   "knowledge": {
     "sections": {
