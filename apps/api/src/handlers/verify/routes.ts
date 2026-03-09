@@ -34,6 +34,7 @@ export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
       resolveVerificationCodeAuth(
         ctx.params.code,
         ctx.session.activeOrganizationId,
+        ctx.scopedDb,
       ),
     {
       params: t.Object({

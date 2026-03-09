@@ -12,6 +12,7 @@ export const searchRoute = new Elysia({ prefix: "/search" })
       searchHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
+        scopedDb: ctx.scopedDb,
       }),
     { body: searchBodySchema },
   );

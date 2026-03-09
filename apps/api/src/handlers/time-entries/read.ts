@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import {
   timeEntrySourceSchema,
@@ -27,11 +27,13 @@ export const readTimeEntriesQuerySchema = t.Object({
 type ReadTimeEntriesQuerySchema = Static<typeof readTimeEntriesQuerySchema>;
 
 type ReadTimeEntriesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ReadTimeEntriesQuerySchema;
 };
 
 export const readTimeEntriesHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ReadTimeEntriesHandlerProps) => {
@@ -65,34 +67,36 @@ export const readTimeEntriesHandler = async ({
     conditions.push(isNotNull(timeEntries.timerStartedAt));
   }
 
-  const rows = await db
-    .select({
-      id: timeEntries.id,
-      userId: timeEntries.userId,
-      matterId: timeEntries.matterId,
-      dateWorked: timeEntries.dateWorked,
-      timezoneId: timeEntries.timezoneId,
-      durationMinutes: timeEntries.durationMinutes,
-      billedMinutes: timeEntries.billedMinutes,
-      rateAtEntry: timeEntries.rateAtEntry,
-      currency: timeEntries.currency,
-      narrative: timeEntries.narrative,
-      invoiceNarrative: timeEntries.invoiceNarrative,
-      billable: timeEntries.billable,
-      noCharge: timeEntries.noCharge,
-      status: timeEntries.status,
-      source: timeEntries.source,
-      taskCode: timeEntries.taskCode,
-      activityCode: timeEntries.activityCode,
-      timerStartedAt: timeEntries.timerStartedAt,
-      timerStoppedAt: timeEntries.timerStoppedAt,
-      createdAt: timeEntries.createdAt,
-    })
-    .from(timeEntries)
-    .where(and(...conditions))
-    .orderBy(timeEntries.dateWorked)
-    .limit(limit)
-    .offset(offset);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        id: timeEntries.id,
+        userId: timeEntries.userId,
+        matterId: timeEntries.matterId,
+        dateWorked: timeEntries.dateWorked,
+        timezoneId: timeEntries.timezoneId,
+        durationMinutes: timeEntries.durationMinutes,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        currency: timeEntries.currency,
+        narrative: timeEntries.narrative,
+        invoiceNarrative: timeEntries.invoiceNarrative,
+        billable: timeEntries.billable,
+        noCharge: timeEntries.noCharge,
+        status: timeEntries.status,
+        source: timeEntries.source,
+        taskCode: timeEntries.taskCode,
+        activityCode: timeEntries.activityCode,
+        timerStartedAt: timeEntries.timerStartedAt,
+        timerStoppedAt: timeEntries.timerStoppedAt,
+        createdAt: timeEntries.createdAt,
+      })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(timeEntries.dateWorked)
+      .limit(limit)
+      .offset(offset),
+  );
 
   // Batch-fetch user names
   const userIds = new Set<string>();
@@ -104,10 +108,12 @@ export const readTimeEntriesHandler = async ({
 
   const usersResult =
     userIds.size > 0
-      ? await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, Array.from(userIds)))
+      ? await scopedDb((tx) =>
+          tx
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, Array.from(userIds))),
+        )
       : [];
 
   const userMap = new Map(usersResult.map((u) => [u.id, u.name]));

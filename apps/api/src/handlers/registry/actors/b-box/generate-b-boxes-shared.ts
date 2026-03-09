@@ -2,7 +2,7 @@ import { PDF } from "@libpdf/core";
 import { Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -150,28 +150,31 @@ export const prepareJustificationData = async (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
   justificationId: string,
+  scopedDb: ScopedDb,
 ) =>
   Result.gen(async function* () {
-    const data = await db.query.justifications.findFirst({
-      where: { id: justificationId },
-      columns: { htmlContent: true },
-      with: {
-        field: {
-          columns: { content: true },
-          with: {
-            property: { columns: { tool: true } },
-            entityVersion: {
-              columns: {},
-              with: {
-                fields: {
-                  columns: { content: true },
+    const data = await scopedDb((tx) =>
+      tx.query.justifications.findFirst({
+        where: { id: justificationId },
+        columns: { htmlContent: true },
+        with: {
+          field: {
+            columns: { content: true },
+            with: {
+              property: { columns: { tool: true } },
+              entityVersion: {
+                columns: {},
+                with: {
+                  fields: {
+                    columns: { content: true },
+                  },
                 },
               },
             },
           },
         },
-      },
-    });
+      }),
+    );
 
     const fieldContent = getFieldContentAsString(data?.field?.content);
     const tool = data?.field?.property?.tool;

@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Savienojums zaudēts",
-    "connectionLostDescription": "Nevar sasniegt serveri. Pārbaudiet tīkla savienojumu.",
     "convertTo": "Pārvērst par",
     "createdAt": "Izveidots {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Piespraust",
     "print": "Print",
     "properties": "Rekvizīti",
-    "reconnecting": "Atkārtota savienošana...",
     "reference": "Reference",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "piem., Atspējot sūtīšanas pogu, kad forma ir tukša",
     "title": "Atsauksmes",
     "trigger": "Atsauksmes"
-  },
-  "filters": {
-    "contains": "satur",
-    "eq": "vienāds",
-    "is_empty": "ir tukšs",
-    "neq": "nav vienāds"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Pievienot laukus",
       "aiGenerated": "AI ģenerēts",
+      "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
       "copySuffix": "{name} (copy)",
       "deleteView": "Dzēst skatu",
       "failedToChangeViewType": "Failed to change view type",

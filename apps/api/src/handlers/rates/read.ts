@@ -1,7 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -13,45 +13,51 @@ export const readRateTablesQuerySchema = t.Object({
 type ReadRateTablesQuerySchema = Static<typeof readRateTablesQuerySchema>;
 
 type ReadRateTablesHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ReadRateTablesQuerySchema;
 };
 
 export const readRateTablesHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ReadRateTablesHandlerProps) => {
   const limit = query.limit ?? 50;
   const offset = query.offset ?? 0;
 
-  const tables = await db
-    .select({
-      id: rateTables.id,
-      name: rateTables.name,
-      currency: rateTables.currency,
-      isDefault: rateTables.isDefault,
-      createdAt: rateTables.createdAt,
-      updatedAt: rateTables.updatedAt,
-    })
-    .from(rateTables)
-    .where(eq(rateTables.workspaceId, workspaceId))
-    .orderBy(rateTables.createdAt)
-    .limit(limit)
-    .offset(offset);
+  const tables = await scopedDb((tx) =>
+    tx
+      .select({
+        id: rateTables.id,
+        name: rateTables.name,
+        currency: rateTables.currency,
+        isDefault: rateTables.isDefault,
+        createdAt: rateTables.createdAt,
+        updatedAt: rateTables.updatedAt,
+      })
+      .from(rateTables)
+      .where(eq(rateTables.workspaceId, workspaceId))
+      .orderBy(rateTables.createdAt)
+      .limit(limit)
+      .offset(offset),
+  );
 
   // Batch count entries per table
   const tableIds = tables.map((t) => t.id);
   const entryCounts = new Map<string, number>();
 
   if (tableIds.length > 0) {
-    const counts = await db
-      .select({
-        rateTableId: rateEntries.rateTableId,
-        count: sql<number>`count(*)::int`.as("count"),
-      })
-      .from(rateEntries)
-      .where(inArray(rateEntries.rateTableId, tableIds))
-      .groupBy(rateEntries.rateTableId);
+    const counts = await scopedDb((tx) =>
+      tx
+        .select({
+          rateTableId: rateEntries.rateTableId,
+          count: sql<number>`count(*)::int`.as("count"),
+        })
+        .from(rateEntries)
+        .where(inArray(rateEntries.rateTableId, tableIds))
+        .groupBy(rateEntries.rateTableId),
+    );
 
     for (const row of counts) {
       entryCounts.set(row.rateTableId, Number(row.count));

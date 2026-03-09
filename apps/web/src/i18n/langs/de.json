@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Verbindung unterbrochen",
-    "connectionLostDescription": "Der Server ist nicht erreichbar. Überprüfen Sie Ihre Netzwerkverbindung.",
     "convertTo": "Konvertieren zu",
     "createdAt": "Erstellt am {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Anheften",
     "print": "Print",
     "properties": "Eigenschaften",
-    "reconnecting": "Verbindung wird wiederhergestellt...",
     "reference": "Reference",
     "rename": "Umbenennen",
     "required": "Erforderlich",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "z. B. Senden-Schaltfläche deaktivieren, wenn das Formular leer ist",
     "title": "Feedback",
     "trigger": "Feedback"
-  },
-  "filters": {
-    "contains": "enthält",
-    "eq": "gleich",
-    "is_empty": "ist leer",
-    "neq": "ungleich"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Felder hinzufügen",
       "aiGenerated": "KI-generiert",
+      "cannotDeleteRequired": "Mindestens eine Ansicht dieses Typs ist erforderlich",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ansicht löschen",
       "failedToChangeViewType": "Failed to change view type",

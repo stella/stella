@@ -76,7 +76,7 @@
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
-    "signInToStella": "Jelentkezzen be a Stella rendszerbe",
+    "signInToStella": "Bejelentkezés a Stellába",
     "signOut": "Kijelentkezés",
     "slugLabel": "Slug",
     "slugPlaceholder": "szervezetem",
@@ -439,8 +439,6 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "A kapcsolat megszakadt",
-    "connectionLostDescription": "A szerver nem érhető el. Ellenőrizze a hálózati kapcsolatot.",
     "convertTo": "Konvertálás",
     "createdAt": "Létrehozva: {date}",
     "currency": "Currency",
@@ -474,7 +472,6 @@
     "pin": "Rögzítés",
     "print": "Print",
     "properties": "Tulajdonságok",
-    "reconnecting": "Újracsatlakozás...",
     "reference": "Reference",
     "rename": "Átnevezés",
     "required": "Kötelező",
@@ -655,12 +652,6 @@
     "suggestedFixPlaceholder": "pl. A küldés gomb legyen inaktív, ha az űrlap üres",
     "title": "Visszajelzés",
     "trigger": "Visszajelzés"
-  },
-  "filters": {
-    "contains": "tartalmazza",
-    "eq": "egyenlő",
-    "is_empty": "üres",
-    "neq": "nem egyenlő"
   },
   "knowledge": {
     "sections": {
@@ -1158,6 +1149,7 @@
     "views": {
       "addFields": "Mezők hozzáadása",
       "aiGenerated": "MI által generált",
+      "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
       "copySuffix": "{name} (copy)",
       "deleteView": "Nézet törlése",
       "failedToChangeViewType": "Failed to change view type",

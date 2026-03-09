@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -15,23 +15,26 @@ import type { SafeId } from "@/api/lib/branded-types";
 export const resolveVerificationCodeAuth = async (
   code: string,
   organizationId: SafeId<"organization">,
+  scopedDb: ScopedDb,
 ) => {
-  const [row] = await db
-    .select({
-      workspaceId: entities.workspaceId,
-      entityId: entities.id,
-    })
-    .from(entityVersions)
-    .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-    .innerJoin(
-      workspaces,
-      and(
-        eq(entities.workspaceId, workspaces.id),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .where(eq(entityVersions.verificationCode, code))
-    .limit(1);
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({
+        workspaceId: entities.workspaceId,
+        entityId: entities.id,
+      })
+      .from(entityVersions)
+      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+      .innerJoin(
+        workspaces,
+        and(
+          eq(entities.workspaceId, workspaces.id),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .where(eq(entityVersions.verificationCode, code))
+      .limit(1),
+  );
 
   if (!row) {
     return status(404);

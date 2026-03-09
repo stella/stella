@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { db, type ScopedDb } from "@/api/db";
+import { adminDb, type ScopedDb } from "@/api/db";
 import { entities, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
@@ -182,38 +182,42 @@ export const createMatterTools = ({
       }),
       execute: async ({ workspaceId, kind, parentId, limit }) => {
         const [ents, properties] = await Promise.all([
-          db.query.entities.findMany({
-            where: {
-              workspaceId: { eq: workspaceId },
-              ...(kind ? { kind } : {}),
-              ...(parentId ? { parentId } : {}),
-            },
-            orderBy: { createdAt: "asc" },
-            limit,
-            columns: {
-              id: true,
-              kind: true,
-              name: true,
-              parentId: true,
-            },
-            with: {
-              currentVersion: {
-                columns: { id: true },
-                with: {
-                  fields: {
-                    columns: {
-                      propertyId: true,
-                      content: true,
+          scopedDb((tx) =>
+            tx.query.entities.findMany({
+              where: {
+                workspaceId: { eq: workspaceId },
+                ...(kind ? { kind } : {}),
+                ...(parentId ? { parentId } : {}),
+              },
+              orderBy: { createdAt: "asc" },
+              limit,
+              columns: {
+                id: true,
+                kind: true,
+                name: true,
+                parentId: true,
+              },
+              with: {
+                currentVersion: {
+                  columns: { id: true },
+                  with: {
+                    fields: {
+                      columns: {
+                        propertyId: true,
+                        content: true,
+                      },
                     },
                   },
                 },
               },
-            },
-          }),
-          db.query.properties.findMany({
-            where: { workspaceId: { eq: workspaceId } },
-            columns: { id: true, name: true },
-          }),
+            }),
+          ),
+          scopedDb((tx) =>
+            tx.query.properties.findMany({
+              where: { workspaceId: { eq: workspaceId } },
+              columns: { id: true, name: true },
+            }),
+          ),
         ]);
         const propNameById = new Map(properties.map((p) => [p.id, p.name]));
 
@@ -249,44 +253,48 @@ export const createMatterTools = ({
         entityId: z.string().describe("The entity ID to read"),
       }),
       execute: async ({ workspaceId, entityId }) => {
-        const entity = await db.query.entities.findFirst({
-          where: {
-            id: entityId,
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            id: true,
-            kind: true,
-            name: true,
-            parentId: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-          with: {
-            createdByUser: { columns: { name: true } },
-            versions: { columns: { id: true } },
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: {
-                    propertyId: true,
-                    content: true,
+        const entity = await scopedDb((tx) =>
+          tx.query.entities.findFirst({
+            where: {
+              id: entityId,
+              workspaceId: { eq: workspaceId },
+            },
+            columns: {
+              id: true,
+              kind: true,
+              name: true,
+              parentId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            with: {
+              createdByUser: { columns: { name: true } },
+              versions: { columns: { id: true } },
+              currentVersion: {
+                columns: { id: true },
+                with: {
+                  fields: {
+                    columns: {
+                      propertyId: true,
+                      content: true,
+                    },
                   },
                 },
               },
             },
-          },
-        });
+          }),
+        );
 
         if (!entity) {
           return { error: "Entity not found in this matter" };
         }
 
-        const properties = await db.query.properties.findMany({
-          where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true, name: true },
-        });
+        const properties = await scopedDb((tx) =>
+          tx.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: { id: true, name: true },
+          }),
+        );
         const propNameById = new Map(properties.map((p) => [p.id, p.name]));
 
         return {
@@ -320,15 +328,17 @@ export const createMatterTools = ({
         entityId: z.string().describe("The entity ID whose content to read"),
       }),
       execute: safeExecute(async ({ workspaceId, entityId }) => {
-        const row = await db.query.extractedContent.findFirst({
-          where: {
-            entityId,
-            organizationId: { eq: organizationId },
-          },
-          with: {
-            entity: { columns: { workspaceId: true } },
-          },
-        });
+        const row = await scopedDb((tx) =>
+          tx.query.extractedContent.findFirst({
+            where: {
+              entityId,
+              organizationId: { eq: organizationId },
+            },
+            with: {
+              entity: { columns: { workspaceId: true } },
+            },
+          }),
+        );
 
         if (!row) {
           return {
@@ -400,13 +410,15 @@ export const createMatterTools = ({
       }),
       execute: safeExecute(
         async ({ workspaceId, entityId, propertyId, value }) => {
-          const property = await db.query.properties.findFirst({
-            columns: { id: true, content: true },
-            where: {
-              id: propertyId,
-              workspaceId: { eq: workspaceId },
-            },
-          });
+          const property = await scopedDb((tx) =>
+            tx.query.properties.findFirst({
+              columns: { id: true, content: true },
+              where: {
+                id: propertyId,
+                workspaceId: { eq: workspaceId },
+              },
+            }),
+          );
 
           if (!property) {
             return {
@@ -523,13 +535,15 @@ export const createMatterTools = ({
               };
           }
 
-          const entity = await db.query.entities.findFirst({
-            columns: { id: true, currentVersionId: true },
-            where: {
-              id: entityId,
-              workspaceId: { eq: workspaceId },
-            },
-          });
+          const entity = await scopedDb((tx) =>
+            tx.query.entities.findFirst({
+              columns: { id: true, currentVersionId: true },
+              where: {
+                id: entityId,
+                workspaceId: { eq: workspaceId },
+              },
+            }),
+          );
 
           if (!entity) {
             return {
@@ -554,7 +568,7 @@ export const createMatterTools = ({
             value === "" ||
             (Array.isArray(value) && value.length === 0);
 
-          await db.transaction(async (tx) => {
+          await scopedDb(async (tx) => {
             await tx
               .delete(fields)
               .where(
@@ -687,9 +701,13 @@ export const createMatterTools = ({
 
 type OrgToolsContext = {
   organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
 };
 
-export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
+export const createOrgTools = ({
+  organizationId,
+  scopedDb,
+}: OrgToolsContext) => ({
   searchAcrossMatters: tool({
     description:
       "Search for documents across ALL matters in the " +
@@ -739,20 +757,24 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
       entityId: z.string().describe("The entity ID whose content to read"),
     }),
     execute: safeExecute(async ({ entityId }) => {
-      const row = await db.query.extractedContent.findFirst({
-        where: {
-          entityId,
-          organizationId: { eq: organizationId },
-        },
-        with: {
-          entity: {
-            columns: {
-              workspaceId: true,
-              name: true,
+      // extracted_content has RLS; use scopedDb which has
+      // all the user's workspace IDs.
+      const row = await scopedDb((tx) =>
+        tx.query.extractedContent.findFirst({
+          where: {
+            entityId,
+            organizationId: { eq: organizationId },
+          },
+          with: {
+            entity: {
+              columns: {
+                workspaceId: true,
+                name: true,
+              },
             },
           },
-        },
-      });
+        }),
+      );
 
       if (!row) {
         return {
@@ -787,8 +809,9 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
     inputSchema: z.object({
       contactId: z.string().describe("The contact ID to read"),
     }),
+    // contacts is org-level (no RLS); use adminDb
     execute: async ({ contactId }) => {
-      const contact = await db.query.contacts.findFirst({
+      const contact = await adminDb.query.contacts.findFirst({
         where: {
           id: contactId,
           organizationId: { eq: organizationId },
@@ -828,8 +851,9 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
       query: z.string().optional().describe("Filter by name (substring match)"),
       limit: z.number().int().min(1).max(50).optional().default(20),
     }),
+    // templates is org-level (no RLS); use adminDb
     execute: async ({ query, limit }) => {
-      const templates = await db.query.templates.findMany({
+      const templates = await adminDb.query.templates.findMany({
         where: {
           organizationId: { eq: organizationId },
           ...(query ? { name: { ilike: `%${escapeLike(query)}%` } } : {}),
@@ -858,8 +882,9 @@ export const createOrgTools = ({ organizationId }: OrgToolsContext) => ({
     inputSchema: z.object({
       clauseId: z.string().describe("The clause ID to read"),
     }),
+    // clauses is org-level (no RLS); use adminDb
     execute: async ({ clauseId }) => {
-      const clause = await db.query.clauses.findFirst({
+      const clause = await adminDb.query.clauses.findFirst({
         where: {
           id: clauseId,
           organizationId: { eq: organizationId },
@@ -947,7 +972,11 @@ export const validateWorkspaceIds = async (
     return [];
   }
 
-  const rows = await db
+  // adminDb: this runs before scopedDb is created (resolves
+  // which workspaces the user can access). The workspaces
+  // table has RLS, so the app role would fail without
+  // workspace_ids set.
+  const rows = await adminDb
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(

@@ -1,7 +1,7 @@
 import type { UIMessageChunk } from "ai";
 import { and, eq } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
 // biome-ignore lint/style/noRestrictedImports: brands verified workspace IDs
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -82,24 +82,27 @@ type EntityMeta = {
 const nameFromDb = async (
   entityId: string,
   workspaceId: SafeId<"workspace">,
+  scopedDb: ScopedDb,
 ): Promise<EntityMeta | null> => {
-  const entity = await db.query.entities.findFirst({
-    where: {
-      id: entityId,
-      workspaceId: { eq: workspaceId },
-    },
-    columns: { name: true, kind: true },
-    with: {
-      currentVersion: {
-        columns: {},
-        with: {
-          fields: {
-            columns: { content: true },
+  const entity = await scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: {
+        id: entityId,
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { name: true, kind: true },
+      with: {
+        currentVersion: {
+          columns: {},
+          with: {
+            fields: {
+              columns: { content: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+  );
 
   if (!entity) {
     return null;
@@ -145,28 +148,31 @@ const nameFromDb = async (
 const nameFromDbOrgScoped = async (
   entityId: string,
   organizationId: SafeId<"organization">,
+  scopedDb: ScopedDb,
 ): Promise<EntityMeta | null> => {
   // Find which workspace this entity belongs to within
   // the organization. Uses a JOIN so the DB never returns
   // data from another org (no fetch-then-check).
-  const [row] = await db
-    .select({ workspaceId: entities.workspaceId })
-    .from(entities)
-    .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
-    .where(
-      and(
-        eq(entities.id, entityId),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({ workspaceId: entities.workspaceId })
+      .from(entities)
+      .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+      .where(
+        and(
+          eq(entities.id, entityId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!row) {
     return null;
   }
 
   // Delegate to workspace-scoped lookup for full metadata.
-  return nameFromDb(entityId, toSafeId<"workspace">(row.workspaceId));
+  return nameFromDb(entityId, toSafeId<"workspace">(row.workspaceId), scopedDb);
 };
 
 /**
@@ -179,6 +185,7 @@ const nameFromDbOrgScoped = async (
 export const createSourceInjectionTransform = (
   workspaceId: SafeId<"workspace"> | null,
   organizationId: SafeId<"organization">,
+  scopedDb: ScopedDb,
 ) => {
   const toolNames = new Map<string, string>();
   const emittedEntities = new Set<string>();
@@ -255,9 +262,9 @@ export const createSourceInjectionTransform = (
       if (!meta) {
         try {
           const dbMeta = workspaceId
-            ? ((await nameFromDb(entityId, workspaceId)) ??
-              (await nameFromDbOrgScoped(entityId, organizationId)))
-            : await nameFromDbOrgScoped(entityId, organizationId);
+            ? ((await nameFromDb(entityId, workspaceId, scopedDb)) ??
+              (await nameFromDbOrgScoped(entityId, organizationId, scopedDb)))
+            : await nameFromDbOrgScoped(entityId, organizationId, scopedDb);
           if (dbMeta) {
             meta = dbMeta;
             entityMeta.set(entityId, meta);

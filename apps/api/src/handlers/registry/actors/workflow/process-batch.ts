@@ -6,7 +6,7 @@ import type { ActionContextOf } from "rivetkit";
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
 import { isMockAI } from "@/api/consts";
-import { db } from "@/api/db";
+import { createScopedDb, type ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { fields, justifications } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
@@ -36,6 +36,9 @@ export const processBatchAction = (
   { batchId, level, entityId }: WorkflowActionSchemas[typeof processBatch],
 ) =>
   Result.tryPromise(async () => {
+    const { workspaceId } = parseBrandedWorkflowActorKey(c.key);
+    const scopedDb = createScopedDb([workspaceId]);
+
     const rawBatch = c.state.executionPlan
       .at(level)
       ?.find((b) => b.id === batchId);
@@ -46,10 +49,12 @@ export const processBatchAction = (
 
     const propertyIds = rawBatch.properties.map((p) => p.id);
 
-    const entityRow = await db.query.entities.findFirst({
-      columns: { currentVersionId: true },
-      where: { id: entityId },
-    });
+    const entityRow = await scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        columns: { currentVersionId: true },
+        where: { id: entityId },
+      }),
+    );
 
     if (!entityRow?.currentVersionId) {
       panic("Entity has no current version");
@@ -58,18 +63,20 @@ export const processBatchAction = (
     const entityVersionId = entityRow.currentVersionId;
 
     // Get existing field content types for skip logic
-    const batchFields = await db
-      .select({
-        propertyId: fields.propertyId,
-        contentType: jsonField(fields.content, "v1")("type"),
-      })
-      .from(fields)
-      .where(
-        and(
-          eq(fields.entityVersionId, entityVersionId),
-          inArray(fields.propertyId, propertyIds),
+    const batchFields = await scopedDb((tx) =>
+      tx
+        .select({
+          propertyId: fields.propertyId,
+          contentType: jsonField(fields.content, "v1")("type"),
+        })
+        .from(fields)
+        .where(
+          and(
+            eq(fields.entityVersionId, entityVersionId),
+            inArray(fields.propertyId, propertyIds),
+          ),
         ),
-      );
+    );
 
     const fieldContentMap = new Map<string, FieldContent["type"]>(
       batchFields.map((f) => [f.propertyId, f.contentType]),
@@ -90,6 +97,7 @@ export const processBatchAction = (
       entityVersionId,
       level,
       batch,
+      scopedDb,
     });
 
     if (Result.isError(result)) {
@@ -100,12 +108,16 @@ export const processBatchAction = (
         metadata: { entityId, batchId, level: String(level) },
       });
 
-      await setFieldsContent(c, {
-        entityId,
-        entityVersionId,
-        batch,
-        contentType: "error",
-      });
+      await setFieldsContent(
+        c,
+        {
+          entityId,
+          entityVersionId,
+          batch,
+          contentType: "error",
+        },
+        scopedDb,
+      );
     }
 
     await runWorkflowAction(c, advanceQueue, {
@@ -119,21 +131,32 @@ type ProcessWorkflowBatchProps = {
   entityVersionId: string;
   level: number;
   batch: PropertyBatch;
+  scopedDb: ScopedDb;
 };
 
 const processWorkflowBatch = (
   c: ActionContextOf<typeof workflowActor>,
-  { entityId, entityVersionId, level, batch }: ProcessWorkflowBatchProps,
+  {
+    entityId,
+    entityVersionId,
+    level,
+    batch,
+    scopedDb,
+  }: ProcessWorkflowBatchProps,
 ) =>
   Result.tryPromise(async () => {
     const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
 
-    await setFieldsContent(c, {
-      entityId,
-      entityVersionId,
-      batch,
-      contentType: "pending",
-    });
+    await setFieldsContent(
+      c,
+      {
+        entityId,
+        entityVersionId,
+        batch,
+        contentType: "pending",
+      },
+      scopedDb,
+    );
 
     const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
@@ -143,6 +166,7 @@ const processWorkflowBatch = (
       entityVersionId,
       organizationId,
       workspaceId,
+      scopedDb,
     });
 
     const isBatchPending = c.state.executionPlan
@@ -150,12 +174,16 @@ const processWorkflowBatch = (
       ?.find((b) => b.id === batch.id);
 
     if (!isBatchPending || Result.isError(result)) {
-      await setFieldsContent(c, {
-        entityId,
-        entityVersionId,
-        batch,
-        contentType: "error",
-      });
+      await setFieldsContent(
+        c,
+        {
+          entityId,
+          entityVersionId,
+          batch,
+          contentType: "error",
+        },
+        scopedDb,
+      );
       return;
     }
 
@@ -169,7 +197,7 @@ const processWorkflowBatch = (
       ...processedFields.skippedPropertyIds,
     ];
 
-    const updatedFields = await db.transaction(async (tx) => {
+    const updatedFields = await scopedDb(async (tx) => {
       // 1. Delete existing fields (cascade deletes
       //    their justifications).
       if (allPropertyIds.length > 0) {

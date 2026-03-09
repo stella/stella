@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -10,6 +10,7 @@ import type {
 } from "../analytics/date-range-schema";
 
 type FillsByPeriodHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   query: PeriodQuery;
 };
@@ -21,6 +22,7 @@ const TRUNC_MAP: Record<(typeof GRANULARITY_VALUES)[number], string> = {
 };
 
 export const fillsByPeriodHandler = ({
+  scopedDb,
   organizationId,
   query,
 }: FillsByPeriodHandlerProps) => {
@@ -37,18 +39,20 @@ export const fillsByPeriodHandler = ({
     );
   }
 
-  return db
-    .select({
-      period: sql<string>`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})::date::text`,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(templateFills)
-    .where(and(...conditions))
-    .groupBy(
-      sql`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})`,
-    )
-    .orderBy(
-      sql`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})`,
-    )
-    .limit(LIMITS.analyticsFillsByPeriodLimit);
+  return scopedDb((tx) =>
+    tx
+      .select({
+        period: sql<string>`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})::date::text`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(templateFills)
+      .where(and(...conditions))
+      .groupBy(
+        sql`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})`,
+      )
+      .orderBy(
+        sql`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})`,
+      )
+      .limit(LIMITS.analyticsFillsByPeriodLimit),
+  );
 };

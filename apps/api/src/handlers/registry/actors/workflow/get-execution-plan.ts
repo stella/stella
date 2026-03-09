@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type { PropertyStatus } from "@/api/db/schema";
 import type {
   AIModelTool,
@@ -62,26 +62,29 @@ type ExecutionPlanData = {
 
 export const getExecutionPlanData = async (
   workspaceId: SafeId<"workspace">,
+  scopedDb: ScopedDb,
 ): Promise<ExecutionPlanData> => {
-  const propertiesResult = await db.query.properties.findMany({
-    columns: {
-      id: true,
-      status: true,
-      content: true,
-      tool: true,
-    },
-    with: {
-      dependencies: {
-        columns: {
-          dependsOnPropertyId: true,
-          condition: true,
+  const propertiesResult = await scopedDb((tx) =>
+    tx.query.properties.findMany({
+      columns: {
+        id: true,
+        status: true,
+        content: true,
+        tool: true,
+      },
+      with: {
+        dependencies: {
+          columns: {
+            dependsOnPropertyId: true,
+            condition: true,
+          },
         },
       },
-    },
-    where: {
-      workspaceId: { eq: workspaceId },
-    },
-  });
+      where: {
+        workspaceId: { eq: workspaceId },
+      },
+    }),
+  );
 
   const allProperties: ExecutionPlanProperty[] = propertiesResult.map(
     (property) => ({

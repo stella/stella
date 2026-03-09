@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
@@ -135,16 +135,6 @@ export const linkClauseHandler = async ({
     return status(404, { message: "Template not found" });
   }
 
-  const linkCount = await scopedDb((tx) =>
-    tx.$count(templateClauses, eq(templateClauses.templateId, templateId)),
-  );
-
-  if (linkCount >= LIMITS.templateClausesPerTemplate) {
-    return status(400, {
-      message: "Template clause limit reached",
-    });
-  }
-
   // Verify clause belongs to same organization
   const clause = await scopedDb((tx) =>
     tx.query.clauses.findFirst({
@@ -190,8 +180,23 @@ export const linkClauseHandler = async ({
     }),
   );
 
-  const [inserted] = await scopedDb((tx) =>
-    tx
+  // Advisory lock + count + insert in one transaction to
+  // prevent TOCTOU race on the limit and duplicate sortOrder.
+  const result = await scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
+    );
+
+    const linkCount = await tx.$count(
+      templateClauses,
+      eq(templateClauses.templateId, templateId),
+    );
+
+    if (linkCount >= LIMITS.templateClausesPerTemplate) {
+      return null;
+    }
+
+    const [row] = await tx
       .insert(templateClauses)
       .values({
         id: nanoid(),
@@ -210,10 +215,18 @@ export const linkClauseHandler = async ({
         slotName: templateClauses.slotName,
         sortOrder: templateClauses.sortOrder,
         insertedAt: templateClauses.insertedAt,
-      }),
-  );
+      });
 
-  return inserted;
+    return row;
+  });
+
+  if (!result) {
+    return status(400, {
+      message: "Template clause limit reached",
+    });
+  }
+
+  return result;
 };
 
 // ── Unlink ──────────────────────────────────────────

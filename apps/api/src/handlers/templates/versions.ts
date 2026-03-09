@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -10,13 +10,16 @@ import { presignDownloadUrl } from "@/api/lib/s3";
 // ── Helpers ──────────────────────────────────────────
 
 const verifyTemplateOwnership = async (
+  scopedDb: ScopedDb,
   templateId: string,
   organizationId: SafeId<"organization">,
 ) => {
-  const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: { id: true },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: { id: true },
+    }),
+  );
 
   return template;
 };
@@ -24,15 +27,21 @@ const verifyTemplateOwnership = async (
 // ── List versions ────────────────────────────────────
 
 type ListVersionsProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
 
 export const listTemplateVersionsHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
 }: ListVersionsProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await verifyTemplateOwnership(
+    scopedDb,
+    templateId,
+    organizationId,
+  );
 
   if (!template) {
     return status(404, {
@@ -40,17 +49,19 @@ export const listTemplateVersionsHandler = async ({
     });
   }
 
-  const versions = await db
-    .select({
-      id: templateVersions.id,
-      version: templateVersions.version,
-      fieldCount: templateVersions.fieldCount,
-      createdAt: templateVersions.createdAt,
-    })
-    .from(templateVersions)
-    .where(eq(templateVersions.templateId, templateId))
-    .orderBy(desc(templateVersions.version))
-    .limit(LIMITS.templateVersionsPerTemplate);
+  const versions = await scopedDb((tx) =>
+    tx
+      .select({
+        id: templateVersions.id,
+        version: templateVersions.version,
+        fieldCount: templateVersions.fieldCount,
+        createdAt: templateVersions.createdAt,
+      })
+      .from(templateVersions)
+      .where(eq(templateVersions.templateId, templateId))
+      .orderBy(desc(templateVersions.version))
+      .limit(LIMITS.templateVersionsPerTemplate),
+  );
 
   return { versions };
 };
@@ -58,20 +69,24 @@ export const listTemplateVersionsHandler = async ({
 // ── Get version ──────────────────────────────────────
 
 type GetVersionProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   versionId: string;
 };
 
 export const getTemplateVersionHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
   versionId,
 }: GetVersionProps) => {
-  const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: { id: true, fileName: true },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: { id: true, fileName: true },
+    }),
+  );
 
   if (!template) {
     return status(404, {
@@ -79,16 +94,18 @@ export const getTemplateVersionHandler = async ({
     });
   }
 
-  const version = await db.query.templateVersions.findFirst({
-    where: { id: versionId, templateId },
-    columns: {
-      id: true,
-      version: true,
-      s3Key: true,
-      fieldCount: true,
-      createdAt: true,
-    },
-  });
+  const version = await scopedDb((tx) =>
+    tx.query.templateVersions.findFirst({
+      where: { id: versionId, templateId },
+      columns: {
+        id: true,
+        version: true,
+        s3Key: true,
+        fieldCount: true,
+        createdAt: true,
+      },
+    }),
+  );
 
   if (!version) {
     return status(404, {

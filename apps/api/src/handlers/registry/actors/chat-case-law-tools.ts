@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -12,7 +12,7 @@ const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";
  *  plain text without markup. */
 const stripTags = (html: string): string => html.replace(/<[^>]+>/g, "");
 
-export const createCaseLawTools = () => ({
+export const createCaseLawTools = (scopedDb: ScopedDb) => ({
   searchCaseLaw: tool({
     description:
       "Search the case law library for court decisions " +
@@ -51,7 +51,8 @@ export const createCaseLawTools = () => ({
       const countryFilter = country ? sql`AND d.country = ${country}` : sql``;
 
       // Raw SQL: Drizzle lacks tsvector/ts_headline support
-      const result = await db.execute(sql`
+      const result = await scopedDb((tx) =>
+        tx.execute(sql`
         SELECT
           d.id,
           d.case_number,
@@ -77,7 +78,8 @@ export const createCaseLawTools = () => ({
           ts_rank(sd.tsv, ${tsQuery}) DESC,
           sd.decision_id DESC
         LIMIT ${limit}
-      `);
+      `),
+      );
 
       return {
         resultCount: result.rows.length,

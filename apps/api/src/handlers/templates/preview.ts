@@ -1,6 +1,6 @@
 import { status } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -8,18 +8,22 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 
 type PreviewTemplateProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
 
 export const previewTemplateHandler = async ({
+  scopedDb,
   organizationId,
   templateId,
 }: PreviewTemplateProps) => {
-  const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: { s3Key: true },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: { s3Key: true },
+    }),
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });

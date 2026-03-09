@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
@@ -18,6 +18,7 @@ export const exportCsvQuerySchema = t.Object({
 type ExportCsvQuerySchema = Static<typeof exportCsvQuerySchema>;
 
 type ExportCsvHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ExportCsvQuerySchema;
 };
@@ -35,6 +36,7 @@ const escapeCSV = (value: string): string => {
 };
 
 export const exportCsvHandler = async ({
+  scopedDb,
   workspaceId,
   query,
 }: ExportCsvHandlerProps) => {
@@ -53,27 +55,29 @@ export const exportCsvHandler = async ({
     conditions.push(eq(timeEntries.matterId, query.matterId));
   }
 
-  const rows = await db
-    .select({
-      id: timeEntries.id,
-      userId: timeEntries.userId,
-      matterId: timeEntries.matterId,
-      dateWorked: timeEntries.dateWorked,
-      durationMinutes: timeEntries.durationMinutes,
-      billedMinutes: timeEntries.billedMinutes,
-      rateAtEntry: timeEntries.rateAtEntry,
-      currency: timeEntries.currency,
-      narrative: timeEntries.narrative,
-      invoiceNarrative: timeEntries.invoiceNarrative,
-      billable: timeEntries.billable,
-      status: timeEntries.status,
-      taskCode: timeEntries.taskCode,
-      activityCode: timeEntries.activityCode,
-    })
-    .from(timeEntries)
-    .where(and(...conditions))
-    .orderBy(timeEntries.dateWorked)
-    .limit(LIMITS.exportRowLimit);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        id: timeEntries.id,
+        userId: timeEntries.userId,
+        matterId: timeEntries.matterId,
+        dateWorked: timeEntries.dateWorked,
+        durationMinutes: timeEntries.durationMinutes,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        currency: timeEntries.currency,
+        narrative: timeEntries.narrative,
+        invoiceNarrative: timeEntries.invoiceNarrative,
+        billable: timeEntries.billable,
+        status: timeEntries.status,
+        taskCode: timeEntries.taskCode,
+        activityCode: timeEntries.activityCode,
+      })
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(timeEntries.dateWorked)
+      .limit(LIMITS.exportRowLimit),
+  );
 
   // Batch-fetch user names
   const userIds = new Set<string>();
@@ -85,10 +89,12 @@ export const exportCsvHandler = async ({
 
   const usersResult =
     userIds.size > 0
-      ? await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, Array.from(userIds)))
+      ? await scopedDb((tx) =>
+          tx
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, Array.from(userIds))),
+        )
       : [];
 
   const userMap = new Map(usersResult.map((u) => [u.id, u.name]));

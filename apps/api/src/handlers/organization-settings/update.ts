@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { organizationSettings } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validatePattern } from "@/api/lib/matter-reference";
@@ -17,11 +17,13 @@ type UpdateOrganizationSettingsBodySchema = Static<
 >;
 
 type UpdateOrganizationSettingsHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   body: UpdateOrganizationSettingsBodySchema;
 };
 
 export const updateOrganizationSettingsHandler = async ({
+  scopedDb,
   organizationId,
   body,
 }: UpdateOrganizationSettingsHandlerProps) => {
@@ -34,22 +36,24 @@ export const updateOrganizationSettingsHandler = async ({
     return status(400, { message: validation.error.message });
   }
 
-  await db
-    .insert(organizationSettings)
-    .values({
-      id: nanoid(),
-      organizationId,
-      matterNumberPattern: body.matterNumberPattern,
-      matterNumberPadding: body.matterNumberPadding,
-    })
-    .onConflictDoUpdate({
-      target: organizationSettings.organizationId,
-      set: {
+  await scopedDb((tx) =>
+    tx
+      .insert(organizationSettings)
+      .values({
+        id: nanoid(),
+        organizationId,
         matterNumberPattern: body.matterNumberPattern,
         matterNumberPadding: body.matterNumberPadding,
-        updatedAt: new Date(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: {
+          matterNumberPattern: body.matterNumberPattern,
+          matterNumberPadding: body.matterNumberPadding,
+          updatedAt: new Date(),
+        },
+      }),
+  );
 
   return {
     matterNumberPattern: body.matterNumberPattern,

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -32,23 +32,27 @@ export const updateTimeEntryBodySchema = t.Object({
 type UpdateTimeEntryBodySchema = Static<typeof updateTimeEntryBodySchema>;
 
 type UpdateTimeEntryByIdHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: UpdateTimeEntryBodySchema;
 };
 
 export const updateTimeEntryByIdHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: UpdateTimeEntryByIdHandlerProps) => {
-  const existing = await db.query.timeEntries.findFirst({
-    where: {
-      id: body.id,
-      workspaceId: { eq: workspaceId },
-    },
-    columns: {
-      status: true,
-    },
-  });
+  const existing = await scopedDb((tx) =>
+    tx.query.timeEntries.findFirst({
+      where: {
+        id: body.id,
+        workspaceId: { eq: workspaceId },
+      },
+      columns: {
+        status: true,
+      },
+    }),
+  );
 
   if (!existing) {
     return status(404, { message: "Time entry not found" });
@@ -64,10 +68,12 @@ export const updateTimeEntryByIdHandler = async ({
   }
 
   if (body.matterId !== undefined) {
-    const matter = await db.query.entities.findFirst({
-      where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-      columns: { id: true },
-    });
+    const matter = await scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+        columns: { id: true },
+      }),
+    );
 
     if (!matter) {
       return status(400, {
@@ -97,15 +103,17 @@ export const updateTimeEntryByIdHandler = async ({
     updatedAt: new Date(),
   };
 
-  await db
-    .update(timeEntries)
-    .set(updates)
-    .where(
-      and(
-        eq(timeEntries.id, body.id),
-        eq(timeEntries.workspaceId, workspaceId),
+  await scopedDb((tx) =>
+    tx
+      .update(timeEntries)
+      .set(updates)
+      .where(
+        and(
+          eq(timeEntries.id, body.id),
+          eq(timeEntries.workspaceId, workspaceId),
+        ),
       ),
-    );
+  );
 
   return { id: body.id };
 };

@@ -24,7 +24,7 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { createScopedDb, db } from "@/api/db";
+import { adminDb, createScopedDb, type ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type {
@@ -52,7 +52,6 @@ import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { captureError } from "@/api/lib/posthog";
 
 const DEFAULT_MODEL = CHAT_MODEL;
-const caseLawTools = createCaseLawTools();
 const MAX_TOOL_STEPS = 5;
 /** User turns to keep in the sliding window. Tools are always
  *  available, so we use a larger window to accommodate
@@ -209,27 +208,35 @@ const buildPrompt = (
 
 /** Build a system prompt for a workspace-bound thread. */
 const buildSystemPrompt = async (
+  scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   organizationId: SafeId<"organization">,
   userContext: UserContext | null,
 ): Promise<string> => {
-  const [workspace, properties, [entityCountRow]] = await Promise.all([
-    db.query.workspaces.findFirst({
-      where: {
-        id: { eq: workspaceId },
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true, name: true },
-    }),
-    db.query.properties.findMany({
-      where: { workspaceId: { eq: workspaceId } },
-      columns: { id: true, name: true, status: true, content: true },
-    }),
-    db
-      .select({ value: count() })
-      .from(entities)
-      .where(eq(entities.workspaceId, workspaceId)),
-  ]);
+  const [workspace, properties, [entityCountRow]] = await scopedDb((tx) =>
+    Promise.all([
+      tx.query.workspaces.findFirst({
+        where: {
+          id: { eq: workspaceId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true, name: true },
+      }),
+      tx.query.properties.findMany({
+        where: { workspaceId: { eq: workspaceId } },
+        columns: {
+          id: true,
+          name: true,
+          status: true,
+          content: true,
+        },
+      }),
+      tx
+        .select({ value: count() })
+        .from(entities)
+        .where(eq(entities.workspaceId, workspaceId)),
+    ]),
+  );
 
   const entityCount = entityCountRow?.value ?? 0;
 
@@ -277,6 +284,7 @@ const buildSystemPrompt = async (
 
 /** Build a system prompt for multi-workspace or global threads. */
 const buildMultiContextPrompt = async (
+  scopedDb: ScopedDb,
   mentionedWsIds: SafeId<"workspace">[],
   organizationId: SafeId<"organization">,
   userContext: UserContext | null,
@@ -284,13 +292,15 @@ const buildMultiContextPrompt = async (
 ): Promise<string> => {
   const workspaces =
     mentionedWsIds.length > 0
-      ? await db.query.workspaces.findMany({
-          where: {
-            id: { in: mentionedWsIds },
-            organizationId: { eq: organizationId },
-          },
-          columns: { id: true, name: true },
-        })
+      ? await scopedDb((tx) =>
+          tx.query.workspaces.findMany({
+            where: {
+              id: { in: mentionedWsIds },
+              organizationId: { eq: organizationId },
+            },
+            columns: { id: true, name: true },
+          }),
+        )
       : [];
 
   const wsMap = new Map(workspaces.map((w) => [w.id, w.name]));
@@ -483,7 +493,7 @@ export const chatActor = actor({
           // non-workspace thread.
           let validatedWsId: SafeId<"workspace"> | null = null;
           if (wsId) {
-            const ws = await db.query.workspaces.findFirst({
+            const ws = await adminDb.query.workspaces.findFirst({
               where: {
                 id: wsId,
                 organizationId: { eq: orgId },
@@ -514,14 +524,19 @@ export const chatActor = actor({
 
           // Org tools and case law are always available. Matter
           // tools are added when there are accessible workspaces.
-          const orgTools = createOrgTools({ organizationId: orgId });
+          const scopedDb = createScopedDb(allWorkspaceIds);
+          const orgTools = createOrgTools({
+            organizationId: orgId,
+            scopedDb,
+          });
+          const caseLawTools = createCaseLawTools(scopedDb);
           const matterTools =
             allWorkspaceIds.length > 0
               ? createMatterTools({
                   allowedWorkspaceIds: allWorkspaceIds,
                   organizationId: orgId,
                   userId: connState.userId,
-                  scopedDb: createScopedDb(allWorkspaceIds),
+                  scopedDb,
                 })
               : {};
           // Extract text attachments for system prompt injection.
@@ -556,9 +571,15 @@ export const chatActor = actor({
           // multi-workspace or global gets the multi-context prompt.
           let system: string | undefined;
           if (validatedWsId && allWorkspaceIds.length === 1) {
-            system = await buildSystemPrompt(validatedWsId, orgId, ctx);
+            system = await buildSystemPrompt(
+              scopedDb,
+              validatedWsId,
+              orgId,
+              ctx,
+            );
           } else if (allWorkspaceIds.length > 0) {
             system = await buildMultiContextPrompt(
+              scopedDb,
               allWorkspaceIds,
               orgId,
               ctx,
@@ -642,7 +663,7 @@ export const chatActor = actor({
           // use the reader API.
           const outputStream: ReadableStream<UIMessageChunk> =
             uiStream.pipeThrough(
-              createSourceInjectionTransform(validatedWsId, orgId),
+              createSourceInjectionTransform(validatedWsId, orgId, scopedDb),
             );
 
           const reader = outputStream.getReader();
@@ -732,9 +753,12 @@ export const chatActor = actor({
         organizationId: SafeId<"organization">;
       };
       if (rawWsId) {
+        const wsId = toSafeId<"workspace">(rawWsId);
+        const promptDb = createScopedDb([wsId]);
         return {
           prompt: await buildSystemPrompt(
-            toSafeId<"workspace">(rawWsId),
+            promptDb,
+            wsId,
             connState.organizationId,
             ctx,
           ),

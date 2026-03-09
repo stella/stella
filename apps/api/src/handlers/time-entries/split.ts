@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,11 +23,13 @@ export const splitEntryBodySchema = t.Object({
 type SplitEntryBodySchema = Static<typeof splitEntryBodySchema>;
 
 type SplitEntryHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: SplitEntryBodySchema;
 };
 
 export const splitEntryHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: SplitEntryHandlerProps) => {
@@ -39,12 +41,14 @@ export const splitEntryHandler = async ({
     });
   }
 
-  const original = await db.query.timeEntries.findFirst({
-    where: {
-      id: body.id,
-      workspaceId: { eq: workspaceId },
-    },
-  });
+  const original = await scopedDb((tx) =>
+    tx.query.timeEntries.findFirst({
+      where: {
+        id: body.id,
+        workspaceId: { eq: workspaceId },
+      },
+    }),
+  );
 
   if (!original) {
     return status(404, { message: "Time entry not found" });
@@ -69,28 +73,16 @@ export const splitEntryHandler = async ({
 
   // Validate all target matters exist
   for (const split of body.splits) {
-    const matter = await db.query.entities.findFirst({
-      where: { id: split.matterId, workspaceId: { eq: workspaceId } },
-      columns: { id: true },
-    });
+    const matter = await scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: split.matterId, workspaceId: { eq: workspaceId } },
+        columns: { id: true },
+      }),
+    );
 
     if (!matter) {
       return status(400, {
         message: `Matter ${split.matterId} not found`,
-      });
-    }
-  }
-
-  // Net increase is (splits - 1); check workspace limit.
-  const netNew = body.splits.length - 1;
-  if (netNew > 0) {
-    const currentCount = await db.$count(
-      timeEntries,
-      eq(timeEntries.workspaceId, workspaceId),
-    );
-    if (currentCount + netNew > LIMITS.timeEntriesPerWorkspace) {
-      return status(400, {
-        message: "Workspace time entry limit reached",
       });
     }
   }
@@ -118,7 +110,23 @@ export const splitEntryHandler = async ({
     }
   }
 
-  await db.transaction(async (tx) => {
+  // Limit check + delete + inserts in one transaction with
+  // advisory lock to prevent TOCTOU on the workspace limit.
+  const limitExceeded = await scopedDb(async (tx) => {
+    const netNew = body.splits.length - 1;
+    if (netNew > 0) {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      const currentCount = await tx.$count(
+        timeEntries,
+        eq(timeEntries.workspaceId, workspaceId),
+      );
+      if (currentCount + netNew > LIMITS.timeEntriesPerWorkspace) {
+        return true;
+      }
+    }
+
     // Delete original entry
     await tx
       .delete(timeEntries)
@@ -164,7 +172,15 @@ export const splitEntryHandler = async ({
 
       newEntryIds.push(entry.id);
     }
+
+    return false;
   });
+
+  if (limitExceeded) {
+    return status(400, {
+      message: "Workspace time entry limit reached",
+    });
+  }
 
   return { splitGroupId, entryIds: newEntryIds };
 };

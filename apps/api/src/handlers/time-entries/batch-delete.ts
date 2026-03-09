@@ -1,7 +1,7 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -13,11 +13,13 @@ export const batchDeleteBodySchema = t.Object({
 type BatchDeleteBodySchema = Static<typeof batchDeleteBodySchema>;
 
 type BatchDeleteHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   body: BatchDeleteBodySchema;
 };
 
 export const batchDeleteHandler = async ({
+  scopedDb,
   workspaceId,
   body,
 }: BatchDeleteHandlerProps) => {
@@ -25,7 +27,7 @@ export const batchDeleteHandler = async ({
 
   // Draft entries: hard delete. Non-draft: write off.
   // Wrapped in a transaction for atomicity.
-  const updated = await db.transaction(async (tx) => {
+  const updated = await scopedDb(async (tx) => {
     const deleted = await tx
       .delete(timeEntries)
       .where(

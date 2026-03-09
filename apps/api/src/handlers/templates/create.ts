@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
@@ -31,6 +31,7 @@ export const createTemplateBodySchema = t.Object({
 });
 
 type CreateTemplateProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: {
@@ -70,6 +71,7 @@ const parseClientManifest = (value: unknown): TemplateManifest | null => {
 };
 
 export const createTemplateHandler = async ({
+  scopedDb,
   organizationId,
   userId,
   body: { file, name, categoryId, manifest: manifestJson },
@@ -80,22 +82,13 @@ export const createTemplateHandler = async ({
     });
   }
 
-  const existingCount = await db.$count(
-    templates,
-    eq(templates.organizationId, organizationId),
-  );
-
-  if (existingCount >= LIMITS.templatesCount) {
-    return status(400, {
-      message: "Templates limit reached",
-    });
-  }
-
   if (categoryId) {
-    const category = await db.query.templateCategories.findFirst({
-      where: { id: categoryId, organizationId: { eq: organizationId } },
-      columns: { id: true },
-    });
+    const category = await scopedDb((tx) =>
+      tx.query.templateCategories.findFirst({
+        where: { id: categoryId, organizationId: { eq: organizationId } },
+        columns: { id: true },
+      }),
+    );
     if (!category) {
       return status(400, { message: "Category not found" });
     }
@@ -155,7 +148,22 @@ export const createTemplateHandler = async ({
 
   const versionId = nanoid();
 
-  const inserted = await db.transaction(async (tx) => {
+  // Advisory lock + count + insert in one transaction to
+  // prevent TOCTOU on the template limit.
+  const inserted = await scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
+    );
+
+    const existingCount = await tx.$count(
+      templates,
+      eq(templates.organizationId, organizationId),
+    );
+
+    if (existingCount >= LIMITS.templatesCount) {
+      return null;
+    }
+
     const [row] = await tx
       .insert(templates)
       .values({
@@ -192,6 +200,12 @@ export const createTemplateHandler = async ({
 
     return row;
   });
+
+  if (!inserted) {
+    return status(400, {
+      message: "Templates limit reached",
+    });
+  }
 
   return inserted;
 };

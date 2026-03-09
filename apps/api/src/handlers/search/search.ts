@@ -1,6 +1,6 @@
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -27,20 +27,24 @@ export const searchBodySchema = t.Object({
 type SearchBodySchema = Static<typeof searchBodySchema>;
 
 type SearchHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   body: SearchBodySchema;
 };
 
 export const searchHandler = async ({
+  scopedDb,
   organizationId,
   body,
 }: SearchHandlerProps) => {
   // Validate workspace belongs to the caller's organization
   if (body.workspaceId) {
-    const ws = await db.query.workspaces.findFirst({
-      where: { id: body.workspaceId, organizationId: { eq: organizationId } },
-      columns: { id: true },
-    });
+    const ws = await scopedDb((tx) =>
+      tx.query.workspaces.findFirst({
+        where: { id: body.workspaceId, organizationId: { eq: organizationId } },
+        columns: { id: true },
+      }),
+    );
     if (!ws) {
       return status(400, {
         message: "Workspace not found in organization",
