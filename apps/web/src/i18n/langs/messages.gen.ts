@@ -442,6 +442,8 @@ type Messages = {
     "comingSoon": "Coming soon";
     "confirm": "Confirm";
     "confirmAction": "Are you sure?";
+    "connectionLost": "Connection lost";
+    "connectionLostDescription": "Unable to reach the server. Check your network connection.";
     "convertTo": "Convert to";
     "createdAt": "Created at {date}";
     "currency": "Currency";
@@ -474,6 +476,7 @@ type Messages = {
     "pin": "Pin";
     "print": "Print";
     "properties": "Properties";
+    "reconnecting": "Reconnecting...";
     "reference": "Reference";
     "rename": "Rename";
     "required": "Required";
