@@ -1,4 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type { ActionContextOf, ActorContextOf } from "rivetkit";
 
 import { db } from "@/api/db";
@@ -60,7 +61,7 @@ export const setFieldsContent = async (
 ) => {
   const propertyIds = batch.properties.map((p) => p.id);
 
-  await db.transaction(async (tx) => {
+  const updatedFields = await db.transaction(async (tx) => {
     await tx
       .delete(fields)
       .where(
@@ -71,6 +72,7 @@ export const setFieldsContent = async (
       );
 
     const fieldValues = propertyIds.map((propertyId) => ({
+      id: nanoid(),
       propertyId,
       entityVersionId,
       content: {
@@ -82,17 +84,17 @@ export const setFieldsContent = async (
     if (fieldValues.length > 0) {
       await tx.insert(fields).values(fieldValues);
     }
+
+    return fieldValues;
   });
 
   broadcastEvent(c, {
     name: "field-content",
-    data: batch.properties.map((property) => ({
-      propertyId: property.id,
+    data: updatedFields.map((f) => ({
+      id: f.id,
+      propertyId: f.propertyId,
       entityId,
-      content: {
-        type: contentType,
-        version: 1,
-      },
+      content: f.content,
     })),
   });
 };

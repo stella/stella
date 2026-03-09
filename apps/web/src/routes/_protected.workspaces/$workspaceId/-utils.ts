@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Column, Row, SortingFn } from "@tanstack/react-table";
+import type { Column } from "@tanstack/react-table";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import type {
@@ -8,6 +8,7 @@ import type {
   WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
+import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 type InternalColId = "select" | "add-property";
 
@@ -21,6 +22,26 @@ export const getInternalColId = (col: InternalColId): InternalColId => col;
 export const isInternalColId = (id: string): id is InternalColId => {
   return Object.keys(internalColMap).includes(id);
 };
+
+// -- Internal property IDs (metadata columns stored in view config) --
+
+const INTERNAL_PROPERTIES = [
+  "created-by",
+  "updated-at",
+  "version",
+  "kind",
+] as const;
+
+type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];
+export type InternalPropertyId = `_${InternalProperty}`;
+
+export const getInternalPropertyId = (
+  p: InternalProperty,
+): InternalPropertyId => `_${p}`;
+
+export const isInternalPropertyId = (id: string): id is InternalPropertyId =>
+  id.startsWith("_") &&
+  INTERNAL_PROPERTIES.includes(id.slice(1) as InternalProperty);
 
 export const getPinningStyles = <T = WorkspaceEntity>(
   column: Column<T>,
@@ -105,81 +126,11 @@ export const validateFieldForComputation = (
 
 declare module "@tanstack/table-core" {
   // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Table
-  interface SortingFns {
-    sortProperty: SortingFn<WorkspaceEntity>;
-  }
-  // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Table
   interface ColumnMeta<TData, TValue> {
     /** Render cell text in muted-foreground. */
     muted?: boolean;
   }
 }
-
-type SortRow = Pick<Row<WorkspaceEntity>, "original">;
-
-export const sortProperty = (
-  rowA: SortRow,
-  rowB: SortRow,
-  columnId: string,
-): number => {
-  const fieldA = rowA.original.fields[columnId];
-  const fieldB = rowB.original.fields[columnId];
-
-  // Entities without the sorted field sort to the end
-  if (!fieldA && !fieldB) {
-    return 0;
-  }
-  if (!fieldA) {
-    return 1;
-  }
-  if (!fieldB) {
-    return -1;
-  }
-
-  let valueA: string | null = null;
-  let valueB: string | null = null;
-
-  if (fieldA.content.type === "file" && fieldB.content.type === "file") {
-    valueA = fieldA.content.fileName;
-    valueB = fieldB.content.fileName;
-  }
-
-  if (fieldA.content.type === "text" && fieldB.content.type === "text") {
-    valueA = fieldA.content.value;
-    valueB = fieldB.content.value;
-  }
-
-  if (
-    fieldA.content.type === "single-select" &&
-    fieldB.content.type === "single-select"
-  ) {
-    valueA = fieldA.content.value;
-    valueB = fieldB.content.value;
-  }
-
-  if (
-    fieldA.content.type === "multi-select" &&
-    fieldB.content.type === "multi-select"
-  ) {
-    valueA = fieldA.content.value.toSorted().join(", ");
-    valueB = fieldB.content.value.toSorted().join(", ");
-  }
-
-  if (fieldA.content.type === "date" && fieldB.content.type === "date") {
-    valueA = fieldA.content.value;
-    valueB = fieldB.content.value;
-  }
-
-  if (fieldA.content.type === "int" && fieldB.content.type === "int") {
-    return fieldA.content.value - fieldB.content.value;
-  }
-
-  if (valueA === null && valueB === null) {
-    return 0;
-  }
-
-  return valueA?.localeCompare(valueB ?? "") ?? 0;
-};
 
 export const getFieldValue = (field: WorkspaceField | undefined) => {
   if (!field) {
@@ -423,15 +374,55 @@ export const applySorts = (
   });
 };
 
-// -- Tree utilities (shared between filesystem and table views) --
+// -- Entity parsing --
 
-export type TreeNode = WorkspaceEntity & {
-  children: TreeNode[];
+type RawEntity = {
+  entityId: string;
+  kind: WorkspaceEntity["kind"];
+  name: string | null;
+  parentId: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  createdByImage: string | null;
+  updatedAt: string | null;
+  version: number;
+  fields: {
+    id: string;
+    propertyId: string;
+    entityId: string;
+    content: WorkspaceField["content"];
+  }[];
 };
 
-export const buildTree = (entities: WorkspaceEntity[]): TreeNode[] => {
-  const nodeMap = new Map<string, TreeNode>();
-  const roots: TreeNode[] = [];
+export const parseEntities = (entities: RawEntity[]): WorkspaceEntity[] =>
+  entities.map((e) => ({
+    entityId: e.entityId,
+    kind: e.kind,
+    name: e.name,
+    parentId: e.parentId,
+    createdAt: e.createdAt,
+    createdBy: e.createdBy,
+    createdByImage: e.createdByImage,
+    updatedAt: e.updatedAt,
+    version: e.version,
+    fields: e.fields.reduce(
+      (acc, field) => {
+        acc[field.propertyId] = {
+          id: field.id,
+          entityId: e.entityId,
+          content: field.content,
+        };
+        return acc;
+      },
+      {} as Record<string, WorkspaceField>,
+    ),
+  }));
+
+// -- Tree utilities (shared between filesystem and table views) --
+
+export const buildTree = (entities: WorkspaceEntity[]): TableTreeNode[] => {
+  const nodeMap = new Map<string, TableTreeNode>();
+  const roots: TableTreeNode[] = [];
 
   for (const entity of entities) {
     nodeMap.set(entity.entityId, { ...entity, children: [] });
@@ -458,11 +449,20 @@ export const buildTree = (entities: WorkspaceEntity[]): TreeNode[] => {
   return roots;
 };
 
+export const toTableEntities = (
+  entities: WorkspaceEntity[],
+): TableTreeNode[] => {
+  const hasFolders = entities.some((e) => e.kind === "folder");
+  return hasFolders
+    ? buildTree(entities)
+    : entities.map((e) => ({ ...e, children: [] }));
+};
+
 /** Find a node by ID in a tree (depth-first). */
 export const findNode = (
-  roots: TreeNode[],
+  roots: TableTreeNode[],
   targetId: string,
-): TreeNode | null => {
+): TableTreeNode | null => {
   const stack = [...roots];
   let node = stack.pop();
   while (node) {
@@ -478,7 +478,7 @@ export const findNode = (
 };
 
 /** Collect all row IDs from a tree node and its descendants. */
-export const collectDescendantIds = (node: TreeNode): string[] => {
+export const collectDescendantIds = (node: TableTreeNode): string[] => {
   const ids: string[] = [];
   const stack = [...node.children];
   let child = stack.pop();
@@ -493,7 +493,7 @@ export const collectDescendantIds = (node: TreeNode): string[] => {
 };
 
 /** Count all descendants (non-recursive, stack-based). */
-export const countDescendants = (node: TreeNode): number => {
+export const countDescendants = (node: TableTreeNode): number => {
   let count = 0;
   const stack = [...node.children];
   let child = stack.pop();

@@ -1,36 +1,37 @@
-import type { ViewConfig } from "@/api/db/schema-validators";
+import type {
+  ViewLayout,
+  ViewLayoutType,
+} from "@/api/handlers/registry/actors/views/schema";
 
 /**
  * Layouts that every workspace must have exactly one of.
  * These views are created automatically on workspace creation
  * and cannot be deleted.
  */
-export const REQUIRED_VIEW_LAYOUTS = [
+export const REQUIRED_VIEW_LAYOUTS: ViewLayoutType[] = [
   "overview",
   "table",
   "filesystem",
-] as const;
-
-export type RequiredViewLayout = (typeof REQUIRED_VIEW_LAYOUTS)[number];
-
-/** Set variant for O(1) lookups that accept any string. */
-export const REQUIRED_VIEW_LAYOUT_SET: ReadonlySet<string> = new Set(
-  REQUIRED_VIEW_LAYOUTS,
-);
+];
 
 type DefaultView = {
   name: string;
-  layout: RequiredViewLayout;
-  config: ViewConfig;
+  layout: ViewLayout;
   position: number;
 };
 
-const EMPTY_VIEW_CONFIG: ViewConfig = {
-  filters: [],
-  sorts: [],
-  visibleProperties: [],
-  columnSizing: {},
-  columnOrder: [],
+const emptyLayout = (type: ViewLayoutType): ViewLayout => {
+  const base = {
+    filters: [] as ViewLayout["filters"],
+    sorts: [] as ViewLayout["sorts"],
+    hiddenProperties: [] as string[],
+  };
+
+  if (type === "table") {
+    return { type, ...base, columnOrder: [], columnPinning: [] };
+  }
+
+  return { type, ...base };
 };
 
 /**
@@ -40,20 +41,17 @@ const EMPTY_VIEW_CONFIG: ViewConfig = {
 export const DEFAULT_VIEWS: readonly DefaultView[] = [
   {
     name: "Overview",
-    layout: "overview",
-    config: EMPTY_VIEW_CONFIG,
+    layout: emptyLayout("overview"),
     position: 0,
   },
   {
     name: "Table",
-    layout: "table",
-    config: EMPTY_VIEW_CONFIG,
+    layout: emptyLayout("table"),
     position: 1,
   },
   {
     name: "Files",
-    layout: "filesystem",
-    config: EMPTY_VIEW_CONFIG,
+    layout: emptyLayout("filesystem"),
     position: 2,
   },
-] as const;
+];

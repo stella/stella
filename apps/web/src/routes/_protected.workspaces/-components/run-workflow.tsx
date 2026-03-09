@@ -1,6 +1,5 @@
 import { usePostHog } from "@posthog/react";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { CircleFadingArrowUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -9,12 +8,17 @@ import { Button } from "@stella/ui/components/button";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { captureError } from "@/lib/posthog/utils";
-import type { WorkspaceField, WorkspaceProperty } from "@/lib/types";
+import type {
+  WorkspaceEntity,
+  WorkspaceField,
+  WorkspaceProperty,
+} from "@/lib/types";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { sortProperty } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const isSelectFieldOutdated = (
   property: WorkspaceProperty,
@@ -53,7 +57,7 @@ const isSelectFieldOutdated = (
 
 type CanStartWorkflowProps = {
   properties: WorkspaceProperty[];
-  rowSelection: Record<string, boolean>;
+  entities: WorkspaceEntity[];
 };
 
 type CanStartWorkflowResult = Result<
@@ -66,7 +70,7 @@ type CanStartWorkflowResult = Result<
 
 const canStartWorkflow = ({
   properties,
-  rowSelection,
+  entities,
 }: CanStartWorkflowProps): CanStartWorkflowResult => {
   const manualInputProperties = properties.filter(
     (p) => p.tool.type === "manual-input",
@@ -75,8 +79,6 @@ const canStartWorkflow = ({
   if (manualInputProperties.length === properties.length) {
     return Result.err("all-manual-inputs");
   }
-
-  const entities = useWorkspaceStore.getState().getEntities(rowSelection);
 
   for (const entity of entities) {
     for (const property of manualInputProperties) {
@@ -111,38 +113,26 @@ const canStartWorkflow = ({
 
 type RunButtonProps = {
   workspaceId: string;
+  viewId: string;
 };
 
-export const RunWorkflowButton = ({ workspaceId }: RunButtonProps) => {
+export const RunWorkflowButton = ({ workspaceId, viewId }: RunButtonProps) => {
   const t = useTranslations();
   const posthog = usePostHog();
   const workflowActor = useWorkflowActor(workspaceId);
   const isWorkflowRunning = useIsWorkflowRunning();
-  const [rowSelection, sorting] = useSearch({
-    from: "/_protected/workspaces/$workspaceId/",
-    select: (s) => [s.rowSelection, s.sorting] as const,
-  });
+  const rowSelection = useTableStore((s) => s.rowSelection.get(viewId)) ?? {};
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const activeView = useActiveView();
+  const { data: entityData } = useSuspenseQuery(entitiesOptions(activeView));
   const runWorkflow = useMutation({
     mutationFn: async () => {
-      const state = useWorkspaceStore.getState();
-      let entities = state.getEntities(rowSelection);
-
-      const sortItem = sorting.at(0);
-      if (sortItem) {
-        entities = entities.toSorted((a, b) => {
-          const rowA = { original: a };
-          const rowB = { original: b };
-          const result = sortProperty(rowA, rowB, sortItem.id);
-          return sortItem.desc ? -result : result;
-        });
-      }
-
-      const entityIds = entities.map((entity) => entity.entityId);
+      const entityIds = Object.keys(rowSelection);
 
       const result = await workflowActor.connection?.startWorkflow({
         workspaceId,
         entityIds,
+        entityIdsOrder: entityData.entities.map((e) => e.entityId),
       });
 
       if (result?.status !== "started") {
@@ -163,7 +153,10 @@ export const RunWorkflowButton = ({ workspaceId }: RunButtonProps) => {
           title: t("workspaces.workflow.starting"),
         });
 
-        const result = canStartWorkflow({ properties, rowSelection });
+        const result = canStartWorkflow({
+          properties,
+          entities: entityData.entities,
+        });
 
         if (Result.isOk(result)) {
           runWorkflow.mutate(undefined, {

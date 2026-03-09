@@ -64,7 +64,7 @@ const Citation = ({
   children,
 }: PropsWithChildren<CitationProps>) => {
   const currentJustification = useSearch({
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.justification,
   });
 
@@ -72,7 +72,7 @@ const Citation = ({
     justification?.id === currentJustification?.id &&
     pageNumber === currentJustification?.pageNumber;
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
   const createBoundingBoxes = useCreateBBoxes({
     justification,

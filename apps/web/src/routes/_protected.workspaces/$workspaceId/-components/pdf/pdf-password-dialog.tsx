@@ -24,7 +24,7 @@ export const PdfPasswordDialog = () => {
   const submitPassword = usePdfStore((s) => s.submitPassword);
   const cancelPassword = usePdfStore((s) => s.cancelPassword);
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
   const [password, setPassword] = useState("");
 

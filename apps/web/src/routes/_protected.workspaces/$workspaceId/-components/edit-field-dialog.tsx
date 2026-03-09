@@ -26,12 +26,15 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
-import type { WorkspaceField, WorkspacePropertyOption } from "@/lib/types";
+import type {
+  EntityKind,
+  WorkspaceField,
+  WorkspacePropertyOption,
+} from "@/lib/types";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import { useUpsertField } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 export type EditableFieldContent = Extract<
   WorkspaceField["content"],
@@ -117,6 +120,7 @@ type EditFieldDialogProps = {
   workspaceId: string;
   propertyId: string;
   entityId: string;
+  entityKind: EntityKind;
   options: WorkspacePropertyOption[];
   fieldContent: EditableFieldContent;
   className: string;
@@ -126,6 +130,7 @@ export const EditFieldDialog = ({
   workspaceId,
   propertyId,
   entityId,
+  entityKind,
   options,
   fieldContent,
   className,
@@ -155,14 +160,16 @@ export const EditFieldDialog = ({
             // Auto-run workflow for this entity so dependent
             // AI columns get processed after manual input.
             // Folders can't have AI-derived metadata.
-            const entity = useWorkspaceStore
-              .getState()
-              .data.find((e) => e.entityId === entityId);
-            if (entity?.kind === "folder") {
+            if (entityKind === "folder") {
               return;
             }
+
             workflowActor.connection
-              ?.startWorkflow({ workspaceId, entityIds: [entityId] })
+              ?.startWorkflow({
+                workspaceId,
+                entityIds: [entityId],
+                entityIdsOrder: [],
+              })
               .catch((error) => captureError(posthog, error));
           },
           onSettled: () => {

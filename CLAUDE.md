@@ -371,6 +371,10 @@ premium. Linear is a good reference.
 - Use `.at(0)` when the element may not exist. Use `[0]` only
   when existence is already established (length check, or a
   `// SAFETY:` comment explaining why).
+- Prefer discriminated union narrowing (`obj.type === "x"`)
+  over `"key" in obj` checks. Use `in` only when the type is
+  not a discriminated union and there is no discriminator to
+  check.
 
 ### React
 

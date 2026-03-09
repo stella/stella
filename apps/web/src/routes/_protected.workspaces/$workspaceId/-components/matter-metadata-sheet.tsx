@@ -1,18 +1,14 @@
 import { useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import type { RowSelectionState } from "@tanstack/react-table";
-import { Result } from "better-result";
+import { useNavigate } from "@tanstack/react-router";
 import {
   ArchiveIcon,
   CopyIcon,
   CopyPlusIcon,
   EllipsisIcon,
-  FileDownIcon,
   LockIcon,
   TrashIcon,
 } from "lucide-react";
-import Papa from "papaparse";
 import { useTranslations } from "use-intl";
 
 import {
@@ -40,7 +36,6 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
-import type { WorkspaceProperty } from "@/lib/types";
 import {
   useDeleteWorkspace,
   useUpdateWorkspace,
@@ -50,48 +45,6 @@ import {
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { getFieldValue } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-
-type ExportToCSVProps = {
-  workspaceName: string;
-  properties: WorkspaceProperty[];
-  rowSelection: RowSelectionState;
-};
-
-const exportToCSV = ({
-  workspaceName,
-  properties,
-  rowSelection,
-}: ExportToCSVProps) => {
-  const { getEntities } = useWorkspaceStore.getState();
-  const entities = getEntities(rowSelection);
-
-  if (properties.length === 0 || entities.length === 0) {
-    return Result.err("no-data-to-export");
-  }
-
-  const headers = properties.map((property) => property.name);
-
-  const rows = entities.map((entity) => {
-    return properties.map((property) => {
-      const field = entity.fields[property.id];
-      return getFieldValue(field);
-    });
-  });
-
-  const csvData = [headers, ...rows];
-  const csv = Papa.unparse(csvData);
-  const blob = new Blob([csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-
-  downloadFile(blob, `stella-${workspaceName}.csv`);
-
-  return Result.ok();
-};
 
 const comingSoon = (label: string) => {
   toastManager.add({
@@ -116,17 +69,9 @@ export const MatterMetadataSheet = ({
   const [referenceError, setReferenceError] = useState("");
 
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const deleteWorkspace = useDeleteWorkspace();
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
-
-  const rowSelection = useSearch({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (s) => s.rowSelection,
-  });
-  const canExportToCSV =
-    useWorkspaceStore((s) => s.data.length > 0) && properties.length > 0;
 
   const handleSaveReference = () => {
     const trimmed = referenceValue.trim();
@@ -266,29 +211,6 @@ export const MatterMetadataSheet = ({
               >
                 <CopyPlusIcon className="size-4" />
                 {t("workspaces.duplicateWithContent")}
-              </Button>
-              <Button
-                className="justify-start"
-                disabled={!canExportToCSV}
-                onClick={() =>
-                  exportToCSV({
-                    workspaceName: workspace.name,
-                    properties,
-                    rowSelection,
-                  }).mapError((e) => {
-                    if (e === "no-data-to-export") {
-                      toastManager.add({
-                        title: t("errors.failedToExportNoData"),
-                        type: "error",
-                      });
-                    }
-                  })
-                }
-                size="sm"
-                variant="ghost"
-              >
-                <FileDownIcon className="size-4" />
-                {t("workspaces.exportToCsv")}
               </Button>
             </div>
 

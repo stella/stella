@@ -17,7 +17,6 @@ import type {
   PropertyCondition,
   PropertyContent,
   PropertyTool,
-  ViewConfig,
 } from "@/api/db/schema-validators";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
@@ -62,17 +61,6 @@ export const entityKindEnum = p.pgEnum("entity_kind", [
   "folder",
   "task",
   "message",
-]);
-
-export const viewLayoutEnum = p.pgEnum("view_layout", [
-  "overview",
-  "table",
-  "filesystem",
-  // "gallery" kept in DB enum (PostgreSQL cannot drop
-  // enum values); the layout is removed from validators
-  // and UI
-  "gallery",
-  "kanban",
 ]);
 
 export const timeEntryStatusEnum = p.pgEnum("time_entry_status", [
@@ -626,25 +614,6 @@ export const extractedContent = p.pgTable(
     extractedAt: p.timestamp("extracted_at").notNull().defaultNow(),
   },
   (table) => [p.index("extracted_content_org_id_idx").on(table.organizationId)],
-);
-
-// -- Views --
-
-export const views = p.pgTable(
-  "views",
-  {
-    id: pNanoid.primaryKey(),
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
-
-    name: p.varchar({ length: 256 }).notNull(),
-    layout: viewLayoutEnum().notNull(),
-    config: p.jsonb().$type<ViewConfig>().notNull(),
-    position: p.integer().notNull().default(0),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-  },
-  (table) => [p.index("views_workspace_id_idx").on(table.workspaceId)],
 );
 
 export const timeEntries = p.pgTable(
@@ -1336,7 +1305,6 @@ export const relations = defineRelations(
     entityVersions,
     fields,
     justifications,
-    views,
     templates,
     templateVersions,
     timeEntries,
@@ -1419,10 +1387,6 @@ export const relations = defineRelations(
       entities: r.many.entities({
         from: r.workspaces.id,
         to: r.entities.workspaceId,
-      }),
-      views: r.many.views({
-        from: r.workspaces.id,
-        to: r.views.workspaceId,
       }),
       timeEntries: r.many.timeEntries({
         from: r.workspaces.id,
@@ -1537,12 +1501,6 @@ export const relations = defineRelations(
       justification: r.one.justifications({
         from: r.fields.id,
         to: r.justifications.fieldId,
-      }),
-    },
-    views: {
-      workspace: r.one.workspaces({
-        from: r.views.workspaceId,
-        to: r.workspaces.id,
       }),
     },
     justifications: {

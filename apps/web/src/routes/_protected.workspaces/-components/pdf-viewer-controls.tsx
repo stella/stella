@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
   ArrowBigLeftDashIcon,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "zustand/shallow";
 
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
@@ -22,7 +23,7 @@ import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
 import { captureScrollPosition } from "@/lib/pdf/utils";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const SCALE_OFFSET_STEP = 0.2;
 
@@ -38,28 +39,30 @@ export const PdfViewerControls = () => {
     scaleOffset,
     pageNumber: currentPage,
   } = useSearch({
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.file,
   });
 
   const entityId = useSearch({
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.entity.id,
+  });
+  const { workspaceId } = useParams({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
   });
 
   // Detect if the current file was converted from an image.
   // Inverting colors on image-origin PDFs always produces wrong
   // results, so we hide the dark-mode toggle for them.
-  const isImageOrigin = useWorkspaceStore((s) => {
-    const entity = s.data.find((e) => e.entityId === entityId);
-    if (!entity) {
-      return false;
-    }
-    const field = entity.fields[fieldId];
-    if (!field || field.content.type !== "file") {
-      return false;
-    }
-    return field.content.mimeType.startsWith("image/");
+  const { data: isImageOrigin } = useSuspenseQuery({
+    ...entityOptions(workspaceId, entityId),
+    select: (entity) => {
+      const field = entity.fields.find((f) => f.id === fieldId);
+      if (!field || field.content.type !== "file") {
+        return false;
+      }
+      return field.content.mimeType.startsWith("image/");
+    },
   });
 
   const { resolvedTheme } = useTheme();
@@ -71,7 +74,7 @@ export const PdfViewerControls = () => {
   const setScrollTo = usePdfStore((s) => s.setScrollTo);
   const updateScale = usePdfStore((s) => s.updateScale);
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/pdf",
   });
 
   const totalPages = pageIds?.length ?? 0;

@@ -142,8 +142,8 @@ function ProtectedComponent() {
           toggleRight={toggleRight}
         />
         <RightPanel
-          open={rightOpen}
           onToggle={toggleRight}
+          open={rightOpen}
           workspaceId={activeWorkspaceId}
         />
         <ShortcutHintsOverlay />
@@ -168,15 +168,20 @@ function ProtectedContent({
   const togglePin = usePinnedStore((s) => s.togglePin);
   const pinnedIds = usePinnedStore((s) => s.pinnedIds);
   const projectMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/",
+    from: "/_protected/workspaces/$workspaceId",
+    shouldThrow: false,
+  });
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
     shouldThrow: false,
   });
   const pdfMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     shouldThrow: false,
   });
 
   const workspaceId = projectMatch?.params.workspaceId;
+  const viewId = viewMatch?.params.viewId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
 
   const folderState = useWorkspaceStore((s) => s.folderState);
@@ -192,10 +197,8 @@ function ProtectedContent({
           </>
         )}
         <AppBreadcrumbs />
-        {projectMatch && (
-          <Suspense>
-            <TableControls workspaceId={projectMatch.params.workspaceId} />
-          </Suspense>
+        {workspaceId && viewId && (
+          <TableControls viewId={viewId} workspaceId={workspaceId} />
         )}
         {pdfMatch && <PdfViewerControls />}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">

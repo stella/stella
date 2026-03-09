@@ -23,6 +23,7 @@ export type WorkflowActorEvent =
   | {
       name: "field-content";
       data: {
+        id: string;
         propertyId: string;
         entityId: string;
         content:

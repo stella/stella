@@ -1062,8 +1062,10 @@ const MatterCard = ({
     hoverTimer.current = setTimeout(() => setPreviewEnabled(true), HOVER_DELAY);
     // Prefetch workspace data so clicking feels instant
     const id = workspace.id;
-    qc.prefetchQuery(viewsOptions(id));
-    qc.prefetchQuery(entitiesOptions(id));
+    qc.prefetchQuery(viewsOptions(id, qc));
+    qc.prefetchQuery(
+      entitiesOptions({ workspaceId: id, filters: [], sorts: [], page: 1 }),
+    );
     qc.prefetchQuery(propertiesOptions(id));
     qc.prefetchQuery(justificationsOptions(id));
   }, [qc, workspace.id]);

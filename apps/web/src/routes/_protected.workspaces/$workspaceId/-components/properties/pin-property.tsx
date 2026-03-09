@@ -1,13 +1,12 @@
-import type { Column } from "@tanstack/react-table";
 import { PinIcon, PinOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
-import type { WorkspaceEntity } from "@/lib/types";
+import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 type PinPropertyProps = {
-  column: Column<WorkspaceEntity, unknown>;
+  column: TableColumn;
 };
 
 export const PinProperty = ({ column }: PinPropertyProps) => {

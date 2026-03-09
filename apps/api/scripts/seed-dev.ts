@@ -35,7 +35,6 @@ import {
   rateEntries,
   rateTables,
   timeEntries,
-  views,
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
@@ -44,12 +43,10 @@ import type {
   FieldContent,
   PropertyContent,
   PropertyTool,
-  ViewConfig,
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import { DEFAULT_VIEWS, type RequiredViewLayout } from "@/api/lib/views";
 import { seedTemplates } from "./seed-templates";
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2004,24 +2001,6 @@ const buildProperties = (wsId: string, wsLabel: string): PropertySeed[] => [
   },
 ];
 
-// ─── Views (per-workspace) ──────────────────────────────
-
-type ViewSeed = {
-  id: string;
-  workspaceId: string;
-  name: string;
-  layout: RequiredViewLayout;
-  config: ViewConfig;
-  position: number;
-};
-
-const buildViews = (wsId: string, wsLabel: string): ViewSeed[] =>
-  DEFAULT_VIEWS.map((v) => ({
-    id: seedId(`${wsLabel}-view-${v.layout}`),
-    workspaceId: wsId,
-    ...v,
-  }));
-
 // ─── Entities (per-workspace) ───────────────────────────
 
 type EntitySeed = {
@@ -3015,18 +2994,6 @@ export async function seed(organizationId?: string, userId?: string) {
       })
       .onConflictDoNothing();
 
-    // Default views for extra workspaces
-    for (const v of DEFAULT_VIEWS) {
-      await db
-        .insert(views)
-        .values({
-          id: seedId(`extra-ws-${mw.reference}-view-${v.layout}`),
-          workspaceId: toWs(wsId),
-          ...v,
-        })
-        .onConflictDoNothing();
-    }
-
     moreWsCount++;
   }
   console.log(
@@ -3073,29 +3040,7 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
   );
 
-  // 4. Views
-  const allViews: ViewSeed[] = [];
-  for (let i = 0; i < seedWorkspaces.length; i++) {
-    allViews.push(...buildViews(at(seedWorkspaces, i).id, at(wsLabels, i)));
-  }
-  for (const v of allViews) {
-    await db
-      .insert(views)
-      .values({
-        id: v.id,
-        workspaceId: toWs(v.workspaceId),
-        name: v.name,
-        layout: v.layout,
-        config: v.config,
-        position: v.position,
-      })
-      .onConflictDoNothing();
-  }
-  console.log(
-    `  Views: ${allViews.length} (${allViews.length / seedWorkspaces.length}/workspace)`,
-  );
-
-  // 5. Entities + entity versions
+  // 4. Entities + entity versions
   const allEntities: EntitySeed[] = [];
   for (let i = 0; i < seedWorkspaces.length; i++) {
     allEntities.push(

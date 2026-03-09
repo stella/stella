@@ -111,7 +111,7 @@ export const validateUserActorSession = async (
     await validateActorAuth(key, params);
 
   if (!parsedKey.userId) {
-    throw createUserError("invalid-arguments");
+    throw createUserError("invalid-params");
   }
 
   if (parsedKey.userId !== sessionUserId) {
@@ -133,7 +133,7 @@ export const validateActorSession = async (
     await validateActorAuth(key, params);
 
   if (!parsedKey.workspaceId) {
-    throw createUserError("invalid-arguments");
+    throw createUserError("invalid-params");
   }
 
   const { workspaceId } = parsedKey;
@@ -149,7 +149,7 @@ export const validateActorSession = async (
   });
 
   if (!workspace || workspace.status !== "active") {
-    throw createUserError("invalid-arguments");
+    throw createUserError("invalid-params");
   }
 
   if (workspace.organizationId !== activeOrganizationId) {

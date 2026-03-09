@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actor, UserError } from "rivetkit";
 
@@ -88,10 +88,28 @@ export const workflowActor = actor({
       });
 
       const nestedResult = await Result.tryPromise(async () => {
-        const entityRows = await db
-          .select({ id: entities.id, kind: entities.kind })
-          .from(entities)
-          .where(and(eq(entities.workspaceId, workspaceId)));
+        const BATCH_SIZE = 200;
+        const entityRows: {
+          id: string;
+          kind: string;
+        }[] = [];
+        let offset = 0;
+        for (;;) {
+          const batch = await db
+            .select({
+              id: entities.id,
+              kind: entities.kind,
+            })
+            .from(entities)
+            .where(eq(entities.workspaceId, workspaceId))
+            .limit(BATCH_SIZE)
+            .offset(offset);
+          entityRows.push(...batch);
+          if (batch.length < BATCH_SIZE) {
+            break;
+          }
+          offset += BATCH_SIZE;
+        }
 
         const executionPlanData = await getExecutionPlanData(workspaceId);
         const executionPlan = getPropertyExecutionPlan(executionPlanData);
@@ -99,13 +117,27 @@ export const workflowActor = actor({
         c.state.executionPlan = executionPlan;
 
         // Filter out folders (they can't have AI-derived metadata)
-        // and order based on input entityIds
         const nonFolderIds = new Set(
           entityRows.filter((e) => e.kind !== "folder").map((e) => e.id),
         );
-        const orderedEntityIds = input.entityIds.filter((id) =>
-          nonFolderIds.has(id),
-        );
+
+        const inputEntityIds = input.entityIds ?? [];
+        const inputOrder = input.entityIdsOrder ?? [];
+
+        // Determine target entities: restrict to entityIds if
+        // provided, otherwise process all non-folder entities
+        const targetIds =
+          inputEntityIds.length > 0
+            ? inputEntityIds.filter((id) => nonFolderIds.has(id))
+            : Array.from(nonFolderIds);
+
+        // Prioritize entities from entityIdsOrder first,
+        // then remaining in default order
+        const targetSet = new Set(targetIds);
+        const prioritized = inputOrder.filter((id) => targetSet.has(id));
+        const prioritizedSet = new Set(prioritized);
+        const remaining = targetIds.filter((id) => !prioritizedSet.has(id));
+        const orderedEntityIds = [...prioritized, ...remaining];
 
         for (const entityId of orderedEntityIds) {
           c.state.queuedEntities.add(entityId);

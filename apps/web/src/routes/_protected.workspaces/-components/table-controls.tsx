@@ -1,4 +1,3 @@
-import { useSearch } from "@tanstack/react-router";
 import { TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -16,28 +15,31 @@ import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useDeleteEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type TableControlsProps = {
   workspaceId: string;
+  viewId: string;
 };
 
-export const TableControls = ({ workspaceId }: TableControlsProps) => {
-  return <DeleteEntitiesButton workspaceId={workspaceId} />;
+export const TableControls = ({ workspaceId, viewId }: TableControlsProps) => {
+  return <DeleteEntitiesButton viewId={viewId} workspaceId={workspaceId} />;
 };
 
 type DeleteEntitiesButtonProps = {
   workspaceId: string;
+  viewId: string;
 };
 
-const DeleteEntitiesButton = ({ workspaceId }: DeleteEntitiesButtonProps) => {
+const DeleteEntitiesButton = ({
+  workspaceId,
+  viewId,
+}: DeleteEntitiesButtonProps) => {
   const t = useTranslations();
-  const rowSelection = useSearch({
-    from: "/_protected/workspaces/$workspaceId/",
-    select: (s) => s.rowSelection,
-  });
+  const rowSelection = useTableStore((s) => s.rowSelection.get(viewId)) ?? {};
+  const setRowSelection = useTableStore((s) => s.setRowSelection);
   const isWorkflowRunning = useIsWorkflowRunning();
   const deleteEntities = useDeleteEntities();
 
@@ -46,16 +48,17 @@ const DeleteEntitiesButton = ({ workspaceId }: DeleteEntitiesButtonProps) => {
       return;
     }
 
-    const store = useWorkspaceStore.getState();
-
-    const entities = store.getEntities(rowSelection);
+    const entityIds = Object.keys(rowSelection);
 
     deleteEntities.mutate(
       {
         workspaceId,
-        entityIds: entities.map((entity) => entity.entityId),
+        entityIds,
       },
       {
+        onSuccess: () => {
+          setRowSelection(viewId, {});
+        },
         onError: () => {
           toastManager.add({
             title: t("errors.actionFailed"),

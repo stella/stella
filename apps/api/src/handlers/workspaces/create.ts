@@ -3,7 +3,7 @@ import { status, t, type Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import { db } from "@/api/db";
-import { matterCounters, properties, views, workspaces } from "@/api/db/schema";
+import { matterCounters, properties, workspaces } from "@/api/db/schema";
 // biome-ignore lint/style/noRestrictedImports: brands freshly-inserted workspace PK for FK usage
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -14,7 +14,6 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
-import { DEFAULT_VIEWS } from "@/api/lib/views";
 
 export const createWorkspacesBodySchema = t.Object({
   id: tNanoid,
@@ -113,13 +112,6 @@ export const createWorkspacesHandler = ({
         kinds: ["document"],
       },
     ]);
-
-    await tx.insert(views).values(
-      DEFAULT_VIEWS.map((v) => ({
-        workspaceId: wsId,
-        ...v,
-      })),
-    );
 
     return;
   });

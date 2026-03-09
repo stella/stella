@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { mergeProps, useDrag, useDrop } from "react-aria";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import {
   Breadcrumb,
@@ -52,22 +51,23 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   useCreateEntities,
   useMoveEntity,
   useRenameEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
-  applyFilters,
-  applySorts,
   buildTree,
   findNode,
   getEntityName,
   getFieldValue,
   getFirstFile,
-  type TreeNode,
+  getInternalPropertyId,
+  type InternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const ENTITY_DRAG_TYPE = "stella/entity-id";
@@ -78,29 +78,27 @@ type ExtraColumn =
   | { type: "property"; id: string; label: string; property: WorkspaceProperty }
   | {
       type: "metadata";
-      id: "__created_by__" | "__updated_at__" | "__version__";
+      id: InternalPropertyId;
       label: string;
     };
 
 const ACTIONS_COL_RE = / 2rem$/;
 
-const METADATA_IDS = new Set([
-  "__created_by__",
-  "__updated_at__",
-  "__version__",
+const METADATA_IDS = new Set<string>([
+  getInternalPropertyId("created-by"),
+  getInternalPropertyId("updated-at"),
+  getInternalPropertyId("version"),
 ]);
 
 const resolveExtraColumns = (
-  visibleProperties: string[],
+  hiddenProperties: string[],
   properties: WorkspaceProperty[],
   metadataLabels: Record<string, string>,
 ): ExtraColumn[] => {
-  // Empty visibleProperties = "show all" (same convention
-  // as the Table view). Expand to all metadata + properties.
-  const ids =
-    visibleProperties.length === 0
-      ? [...Array.from(METADATA_IDS), ...properties.map((p) => p.id)]
-      : visibleProperties;
+  const ids = [
+    ...Array.from(METADATA_IDS),
+    ...properties.map((p) => p.id),
+  ].filter((id) => !hiddenProperties.includes(id));
 
   const cols: ExtraColumn[] = [];
 
@@ -108,7 +106,7 @@ const resolveExtraColumns = (
     if (METADATA_IDS.has(id)) {
       cols.push({
         type: "metadata",
-        id: id as "__created_by__" | "__updated_at__" | "__version__",
+        id: id as InternalPropertyId,
         label: metadataLabels[id] ?? id,
       });
     } else {
@@ -157,12 +155,10 @@ const collectFolderIds = (entities: WorkspaceEntity[]): Set<string> => {
 
 export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const t = useTranslations();
-  const rawData = useWorkspaceStore(useShallow((s) => s.data));
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const createEntities = useCreateEntities();
   const moveEntity = useMoveEntity();
   const renameEntity = useRenameEntity();
-  const setEntityName = useWorkspaceStore((s) => s.setEntityName);
   const rootDropRef = useRef<HTMLDivElement>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
@@ -173,18 +169,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
 
-  const { filters, sorts, visibleProperties } = view.config;
+  const { filters, sorts, hiddenProperties } = view.layout;
 
-  const data = useMemo(() => {
-    const filtered = applyFilters(rawData, filters);
-    return applySorts(filtered, sorts);
-  }, [rawData, filters, sorts]);
+  const { data: entityData } = useSuspenseQuery(
+    entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
+  );
+  const data = entityData.entities;
 
   const tree = useMemo(() => buildTree(data), [data]);
 
-  // Drill-down navigation
+  // Drill-down navigation (persisted in URL search params)
   const currentFolderId = useSearch({
-    from: "/_protected/workspaces/$workspaceId",
+    from: "/_protected/workspaces/$workspaceId/$viewId",
     select: (s) => s.folder,
   });
   const navigate = useNavigate();
@@ -217,8 +213,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const navigateToFolder = useCallback(
     async (folderId: string | undefined) => {
       await navigate({
-        to: ".",
+        from: "/workspaces/$workspaceId/$viewId",
         search: (prev) => ({ ...prev, folder: folderId }),
+        replace: true,
       });
     },
     [navigate],
@@ -270,16 +267,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const metadataLabels = useMemo(
     () => ({
-      __created_by__: t("workspaces.filesystem.author"),
-      __updated_at__: t("workspaces.filesystem.lastUpdated"),
-      __version__: t("workspaces.filesystem.version"),
+      [getInternalPropertyId("created-by")]: t("workspaces.filesystem.author"),
+      [getInternalPropertyId("updated-at")]: t(
+        "workspaces.filesystem.lastUpdated",
+      ),
+      [getInternalPropertyId("version")]: t("workspaces.filesystem.version"),
     }),
     [t],
   );
 
   const extraColumns = useMemo(
-    () => resolveExtraColumns(visibleProperties, properties, metadataLabels),
-    [visibleProperties, properties, metadataLabels],
+    () => resolveExtraColumns(hiddenProperties, properties, metadataLabels),
+    [hiddenProperties, properties, metadataLabels],
   );
 
   const gridTemplate = useMemo(
@@ -443,13 +442,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                       {isEditingCrumb ? (
                         <InlineEdit
                           inputClassName="h-5 w-40 text-xs"
-                          onChange={setBreadcrumbEditValue}
                           onCancel={() => setEditingEntityId(null)}
+                          onChange={setBreadcrumbEditValue}
                           onCommit={() => {
                             const trimmed = breadcrumbEditValue.trim();
                             setEditingEntityId(null);
                             if (trimmed && trimmed !== crumb.name) {
-                              setEntityName(crumb.id, trimmed);
                               renameEntity.mutate({
                                 workspaceId,
                                 entityId: crumb.id,
@@ -516,7 +514,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             onDropOnFile={handleDropOnFile}
             onNavigateToFolder={navigateToFolder}
             onRename={(entityId, newName) => {
-              setEntityName(entityId, newName);
               renameEntity.mutate({
                 workspaceId,
                 entityId,
@@ -565,7 +562,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 // -- Row --
 
 type FilesystemRowProps = {
-  node: TreeNode;
+  node: TableTreeNode;
   depth: number | undefined;
   workspaceId: string;
   extraColumns: ExtraColumn[];
@@ -727,8 +724,8 @@ const FilesystemRow = ({
       {isEditing ? (
         <InlineEdit
           inputClassName="w-48"
-          onChange={setEditValue}
           onCancel={cancelEditing}
+          onChange={setEditValue}
           onCommit={commitRename}
           suffix={
             ext ? (
@@ -933,11 +930,11 @@ const formatDateValue = (value: string | Date | null | undefined): string => {
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (column.type === "metadata") {
     switch (column.id) {
-      case "__created_by__":
+      case getInternalPropertyId("created-by"):
         return <AuthorCell entity={entity} />;
-      case "__updated_at__":
+      case getInternalPropertyId("updated-at"):
         return <LastUpdatedCell entity={entity} />;
-      case "__version__":
+      case getInternalPropertyId("version"):
         return <VersionCell entity={entity} />;
       default:
         return null;

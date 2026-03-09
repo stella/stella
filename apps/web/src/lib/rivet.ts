@@ -31,3 +31,11 @@ export const eventHandlerV2 =
     handler: (data: ExtractActorEvents<TActor>[TName]) => void | Promise<void>,
   ) =>
     [eventName, handler] as const;
+
+export const createEventHandler =
+  <TActor>() =>
+  <TName extends keyof ExtractActorEvents<TActor> & string>(
+    eventName: TName,
+    handler: (data: ExtractActorEvents<TActor>[TName]) => void | Promise<void>,
+  ) =>
+    [eventName, handler] as const;

@@ -44,7 +44,7 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
   const closeTab = usePeekStore((s) => s.closeTab);
   const closeAll = usePeekStore((s) => s.closeAll);
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId",
+    from: "/workspaces/$workspaceId/$viewId",
   });
 
   // Track per-file zoom offsets (survives tab switches).
@@ -281,7 +281,6 @@ const VerticalTab = ({
   return (
     <Tooltip
       content={tab.label}
-      side="left"
       render={
         <button
           className={cn(
@@ -289,7 +288,6 @@ const VerticalTab = ({
             active &&
               "bg-background text-foreground before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary",
           )}
-          onClick={onActivate}
           onAuxClick={(e) => {
             // Middle-click to close
             if (e.button === 1) {
@@ -297,9 +295,11 @@ const VerticalTab = ({
               onClose();
             }
           }}
+          onClick={onActivate}
           type="button"
         />
       }
+      side="left"
     >
       <span className="text-[10px] leading-tight font-medium">
         {tab.label.slice(0, 3).toUpperCase()}

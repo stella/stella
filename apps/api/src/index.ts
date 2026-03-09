@@ -30,7 +30,6 @@ import {
 } from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
-import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { auth } from "@/api/lib/auth";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -121,7 +120,6 @@ const api = new Elysia()
       .use(filesRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)
-      .use(viewsRoute)
       .use(templatesRoute)
       .use(templateCategoriesRoute)
       .use(timeEntriesRoute)
