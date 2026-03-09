@@ -8,12 +8,10 @@ import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
-import {
-  DOCX_EXT_RE,
-  sanitizeFilename,
-} from "@/api/handlers/templates/sanitize-filename";
 import type { SafeId } from "@/api/lib/branded-types";
+import { contentDisposition } from "@/api/lib/content-disposition";
 import { s3 } from "@/api/lib/s3";
+import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { containsNull } from "./fill";
@@ -112,7 +110,7 @@ export const fillByIdHandler = async ({
     // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
     .catch(() => {});
 
-  const baseName = sanitizeFilename(template.fileName);
+  const baseName = template.fileName;
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -137,14 +135,14 @@ export const fillByIdHandler = async ({
       status: 200,
       headers: {
         "Content-Type": PDF_MIME_TYPE,
-        "Content-Disposition": `attachment; filename="${pdfName}"`,
+        "Content-Disposition": contentDisposition(pdfName),
       },
     });
   }
 
   const headers = new Headers({
     "Content-Type": DOCX_MIME_TYPE,
-    "Content-Disposition": `attachment; filename="${baseName}"`,
+    "Content-Disposition": contentDisposition(baseName),
   });
 
   if (result.unmatchedPlaceholders.length > 0) {

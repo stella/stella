@@ -6,8 +6,9 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
+import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
-import { s3 } from "@/api/lib/s3";
+import { presignDownloadUrl, s3 } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type FilePurpose = "download" | "display";
@@ -20,8 +21,6 @@ type ReadFileHandlerProps = {
 };
 
 const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-
-const ASCII_FILENAME_RE = /^[\x20-\x7E]+$/;
 
 const fileFieldQuery = (fieldId: string, workspaceId: SafeId<"workspace">) =>
   db
@@ -71,7 +70,10 @@ export const readFileHandler = async ({
       mimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: s3.presign(fileKey, { expiresIn: 900 }),
+      presignedUrl: await presignDownloadUrl(fileKey, {
+        expiresIn: 900,
+        fileName: content.fileName,
+      }),
       stampable:
         !!row.versionStamp &&
         !!row.verificationCode &&
@@ -174,26 +176,4 @@ export const stampedDownloadHandler = async ({
       "Content-Length": String(stamped.byteLength),
     },
   });
-};
-
-/**
- * Build a Content-Disposition header value per RFC 6266.
- *
- * ASCII-safe filenames (no `"` or `\`) use the simple
- * `filename="..."` form. All others get a sanitised ASCII
- * fallback plus `filename*=UTF-8''...` for correct decoding.
- */
-const contentDisposition = (name: string): string => {
-  const isSafeAscii =
-    ASCII_FILENAME_RE.test(name) && !name.includes('"') && !name.includes("\\");
-
-  if (isSafeAscii) {
-    return `attachment; filename="${name}"`;
-  }
-
-  // Sanitise fallback: strip non-ASCII and unsafe chars
-  const fallback = name.replaceAll(/[^\x20-\x7E]/g, "_").replaceAll('"', "_");
-  const encoded = encodeURIComponent(name).replaceAll("'", "%27");
-
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 };

@@ -5,7 +5,7 @@ import { db } from "@/api/db";
 import { templateVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { presignDownloadUrl } from "@/api/lib/s3";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -68,7 +68,10 @@ export const getTemplateVersionHandler = async ({
   templateId,
   versionId,
 }: GetVersionProps) => {
-  const template = await verifyTemplateOwnership(templateId, organizationId);
+  const template = await db.query.templates.findFirst({
+    where: { id: templateId, organizationId: { eq: organizationId } },
+    columns: { id: true, fileName: true },
+  });
 
   if (!template) {
     return status(404, {
@@ -93,8 +96,9 @@ export const getTemplateVersionHandler = async ({
     });
   }
 
-  const presignedUrl = s3.file(version.s3Key).presign({
+  const downloadUrl = await presignDownloadUrl(version.s3Key, {
     expiresIn: 3600,
+    fileName: template.fileName,
   });
 
   return {
@@ -102,6 +106,6 @@ export const getTemplateVersionHandler = async ({
     version: version.version,
     fieldCount: version.fieldCount,
     createdAt: version.createdAt,
-    downloadUrl: presignedUrl,
+    downloadUrl,
   };
 };
