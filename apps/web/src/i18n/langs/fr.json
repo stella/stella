@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Fichiers importés avec succès",
       "uploading": "Import des fichiers",
       "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
+      "uploadingProgress": "{completed, number} sur {total, number} importés",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

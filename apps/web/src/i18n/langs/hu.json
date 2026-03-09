@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",
       "uploading": "Fájlok feltöltése",
       "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik",
+      "uploadingProgress": "{completed, number}/{total, number} feltöltve",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {

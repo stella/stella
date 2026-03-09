@@ -991,6 +991,7 @@
       "uploadedSuccessfully": "Archivos subidos correctamente",
       "uploading": "Subiendo archivos",
       "uploadingDescription": "No cierre esta página hasta que se completen las subidas",
+      "uploadingProgress": "{completed, number} de {total, number} subidos",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
