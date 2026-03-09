@@ -29,6 +29,7 @@ export const LIMITS = {
   contactsCount: 10_000,
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
+  workspaceMembersCount: 500,
   entityNameMaxLength: 255,
   workspaceContributors: 5,
   searchQueryMaxLength: 500,

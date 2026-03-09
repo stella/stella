@@ -44,6 +44,7 @@ import {
   workspaceOptions,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
+import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 
 const comingSoon = (label: string) => {
@@ -184,6 +185,11 @@ export const MatterMetadataSheet = ({
                 </p>
               )}
             </section>
+
+            <Separator />
+
+            {/* Members */}
+            <MembersSection workspaceId={workspaceId} />
 
             <Separator />
 

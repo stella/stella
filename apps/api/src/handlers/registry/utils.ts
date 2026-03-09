@@ -9,9 +9,13 @@ import { parseWorkflowActorKey } from "@stella/rivet/actors/workflow-actor-confi
 import { userErrors, type UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
-import { db } from "@/api/db";
+import { adminDb, createScopedDb, type ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
-import { auth } from "@/api/lib/auth";
+import {
+  auth,
+  resolveAccessibleWorkspaceIds,
+  WORKSPACE_ACTIVE_STATUS,
+} from "@/api/lib/auth";
 // biome-ignore lint/style/noRestrictedImports: actor session validator (equivalent to authMacro)
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { posthogIdentify } from "@/api/lib/posthog";
@@ -39,6 +43,7 @@ export const broadcastEvent = (c: BroadcastCapableContext, event: ActorEvent) =>
 export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
 };
 
 export type UserActorConnState = GlobalActorConnState & {
@@ -62,29 +67,41 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     throw createUserError("unauthorized");
   }
 
-  const activeOrganizationId = session.session.activeOrganizationId;
+  const rawOrgId = session.session.activeOrganizationId;
   const parsedKey = parseActorKey<{
     organizationId: string;
     workspaceId: string | undefined;
     userId: string | undefined;
   }>(key);
 
-  if (parsedKey.organizationId !== activeOrganizationId) {
+  if (parsedKey.organizationId !== rawOrgId) {
     throw createUserError("forbidden");
   }
+
+  const organizationId = toSafeId<"organization">(rawOrgId);
 
   posthogIdentify({
     distinctId: session.user.id,
     properties: {
-      active_organization_id: activeOrganizationId,
+      active_organization_id: organizationId,
     },
   });
 
+  // Centralised workspace resolution: same logic as authMacro,
+  // so actors and HTTP handlers share one code path.
+  const accessibleWorkspaceIds = await resolveAccessibleWorkspaceIds(
+    session.user.id,
+    organizationId,
+  );
+  const scopedDb = createScopedDb(accessibleWorkspaceIds);
+
   return {
     authToken,
-    activeOrganizationId,
+    organizationId,
     sessionUserId: session.user.id,
     parsedKey,
+    accessibleWorkspaceIds,
+    scopedDb,
   };
 };
 
@@ -92,22 +109,19 @@ export const validateGlobalActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<GlobalActorConnState> => {
-  const { authToken, activeOrganizationId } = await validateActorAuth(
+  const { authToken, organizationId, scopedDb } = await validateActorAuth(
     key,
     params,
   );
 
-  return {
-    authToken,
-    organizationId: toSafeId<"organization">(activeOrganizationId),
-  };
+  return { authToken, organizationId, scopedDb };
 };
 
 export const validateUserActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<UserActorConnState> => {
-  const { authToken, activeOrganizationId, sessionUserId, parsedKey } =
+  const { authToken, organizationId, sessionUserId, parsedKey, scopedDb } =
     await validateActorAuth(key, params);
 
   if (!parsedKey.userId) {
@@ -120,8 +134,9 @@ export const validateUserActorSession = async (
 
   return {
     authToken,
-    organizationId: toSafeId<"organization">(activeOrganizationId),
+    organizationId,
     userId: parsedKey.userId,
+    scopedDb,
   };
 };
 
@@ -129,8 +144,13 @@ export const validateActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<ActorConnState> => {
-  const { authToken, activeOrganizationId, parsedKey } =
-    await validateActorAuth(key, params);
+  const {
+    authToken,
+    organizationId,
+    parsedKey,
+    accessibleWorkspaceIds,
+    scopedDb,
+  } = await validateActorAuth(key, params);
 
   if (!parsedKey.workspaceId) {
     throw createUserError("invalid-params");
@@ -138,7 +158,16 @@ export const validateActorSession = async (
 
   const { workspaceId } = parsedKey;
 
-  const workspace = await db.query.workspaces.findFirst({
+  // Membership gate: RLS protects DB reads, but actor
+  // side-effects (broadcasts, state mutations) are not
+  // gated by RLS. Reject non-members early.
+  if (!accessibleWorkspaceIds.includes(workspaceId)) {
+    throw createUserError("forbidden");
+  }
+
+  // Defense in depth: validates workspace existence,
+  // active status, and org ownership independently.
+  const workspace = await adminDb.query.workspaces.findFirst({
     columns: {
       status: true,
       organizationId: true,
@@ -148,18 +177,19 @@ export const validateActorSession = async (
     },
   });
 
-  if (!workspace || workspace.status !== "active") {
-    throw createUserError("invalid-params");
+  if (!workspace || workspace.status !== WORKSPACE_ACTIVE_STATUS) {
+    throw createUserError("invalid-arguments");
   }
 
-  if (workspace.organizationId !== activeOrganizationId) {
+  if (workspace.organizationId !== organizationId) {
     throw createUserError("forbidden");
   }
 
   return {
     authToken,
-    organizationId: toSafeId<"organization">(activeOrganizationId),
+    organizationId,
     workspaceId: toSafeId<"workspace">(workspaceId),
+    scopedDb,
   };
 };
 

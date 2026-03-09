@@ -76,7 +76,7 @@
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
-    "signInToStella": "Inicia sesión en Stella",
+    "signInToStella": "Iniciar sesión en Stella",
     "signOut": "Cerrar sesión",
     "slugLabel": "Slug",
     "slugPlaceholder": "mi-organizacion",
@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Conexión perdida",
-    "connectionLostDescription": "No se puede conectar con el servidor. Compruebe su conexión de red.",
+    "connectionLostDescription": "No se puede conectar al servidor. Compruebe su conexión de red.",
     "convertTo": "Convertir a",
     "createdAt": "Creado el {date}",
     "currency": "Currency",
@@ -657,9 +657,9 @@
   },
   "filters": {
     "contains": "contiene",
-    "eq": "igual a",
+    "eq": "igual",
     "is_empty": "está vacío",
-    "neq": "distinto de"
+    "neq": "no igual"
   },
   "knowledge": {
     "sections": {
@@ -832,6 +832,7 @@
     "invitationResent": "Invitación reenviada",
     "invitationSent": "Invitación enviada",
     "matterNumberingUpdated": "Numeración de asuntos actualizada",
+    "memberAdded": "Miembro añadido",
     "memberRemoved": "Miembro eliminado",
     "organizationUpdated": "Organización actualizada",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Bloquear",
     "matterInfo": "Información del asunto",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Añadir miembro",
+      "addMemberDescription": "Añadir un miembro de la organización a este asunto",
+      "alreadyMember": "El usuario ya es miembro",
+      "cannotRemoveLast": "No se puede eliminar al último miembro",
+      "noMembersFound": "No se encontraron miembros",
+      "removeMember": "Eliminar miembro",
+      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?",
+      "selectMember": "Seleccionar miembro"
+    },
     "newDocument": "Nuevo documento",
     "newFolder": "Nueva carpeta",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Guardar como PDF",
     "sections": {
       "documents": "Documentos",
+      "members": "Miembros",
       "parties": "Partes"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

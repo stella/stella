@@ -832,6 +832,7 @@
     "invitationResent": "Kutse uuesti saadetud",
     "invitationSent": "Kutse saadetud",
     "matterNumberingUpdated": "Toimikute nummerdamine uuendatud",
+    "memberAdded": "Liige lisatud",
     "memberRemoved": "Liige eemaldatud",
     "organizationUpdated": "Organisatsioon uuendatud",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Lukusta",
     "matterInfo": "Toimiku andmed",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Lisa liige",
+      "addMemberDescription": "Lisa organisatsiooni liige sellesse toimikusse",
+      "alreadyMember": "Kasutaja on juba liige",
+      "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
+      "noMembersFound": "Liikmeid ei leitud",
+      "removeMember": "Eemalda liige",
+      "removeMemberConfirm": "Kas eemaldada see liige toimikust?",
+      "selectMember": "Vali liige"
+    },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Salvesta PDF-ina",
     "sections": {
       "documents": "Dokumendid",
+      "members": "Liikmed",
       "parties": "Osapooled"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

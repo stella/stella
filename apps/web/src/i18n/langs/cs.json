@@ -76,7 +76,7 @@
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
-    "signInToStella": "Přihlaste se do Stella",
+    "signInToStella": "Přihlásit se do Stella",
     "signOut": "Odhlásit se",
     "slugLabel": "Slug",
     "slugPlaceholder": "moje-organizace",
@@ -439,8 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Ztráta spojení",
-    "connectionLostDescription": "Nelze se připojit k serveru. Zkontrolujte síťové připojení.",
+    "connectionLost": "Spojení ztraceno",
+    "connectionLostDescription": "Nelze se spojit se serverem. Zkontrolujte připojení k síti.",
     "convertTo": "Převést na",
     "createdAt": "Vytvořeno {date}",
     "currency": "Currency",
@@ -473,7 +473,7 @@
     "pin": "Připnout",
     "print": "Print",
     "properties": "Vlastnosti",
-    "reconnecting": "Obnovování spojení...",
+    "reconnecting": "Opětovné připojování...",
     "reference": "Reference",
     "rename": "Přejmenovat",
     "required": "Povinné",
@@ -658,7 +658,7 @@
   "filters": {
     "contains": "obsahuje",
     "eq": "rovná se",
-    "is_empty": "je prázdné",
+    "is_empty": "je prázdný",
     "neq": "nerovná se"
   },
   "knowledge": {
@@ -832,6 +832,7 @@
     "invitationResent": "Pozvánka znovu odeslána",
     "invitationSent": "Pozvánka odeslána",
     "matterNumberingUpdated": "Číslování spisů aktualizováno",
+    "memberAdded": "Člen přidán",
     "memberRemoved": "Člen odebrán",
     "organizationUpdated": "Organizace aktualizována",
     "otherSessionsRevoked": "Other sessions revoked",
@@ -1022,6 +1023,16 @@
     "lockMatter": "Zamknout",
     "matterInfo": "Informace o spisu",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
+    "members": {
+      "addMember": "Přidat člena",
+      "addMemberDescription": "Přidat člena organizace k tomuto spisu",
+      "alreadyMember": "Uživatel je již členem",
+      "cannotRemoveLast": "Nelze odebrat posledního člena",
+      "noMembersFound": "Nebyli nalezeni žádní členové",
+      "removeMember": "Odebrat člena",
+      "removeMemberConfirm": "Odebrat tohoto člena ze spisu?",
+      "selectMember": "Vybrat člena"
+    },
     "newDocument": "Nový dokument",
     "newFolder": "Nová složka",
     "newMatter": "New matter",
@@ -1131,6 +1142,7 @@
     "saveAsPdf": "Uložit jako PDF",
     "sections": {
       "documents": "Dokumenty",
+      "members": "Členové",
       "parties": "Strany"
     },
     "tasksCount": "{count, plural, one {# task} other {# tasks}}",

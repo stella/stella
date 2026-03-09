@@ -1,55 +1,70 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadOverviewHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
 };
 
 export const readOverviewHandler = async ({
+  scopedDb,
   workspaceId,
 }: ReadOverviewHandlerProps) => {
-  const [entityCount, recentEntities, kindCounts] = await Promise.all([
-    db.$count(entities, eq(entities.workspaceId, workspaceId)),
-    db.query.entities.findMany({
-      where: { workspaceId: { eq: workspaceId } },
-      columns: {
-        id: true,
-        name: true,
-        kind: true,
-        createdBy: true,
-        updatedAt: true,
-      },
-      with: {
-        currentVersion: {
-          columns: { id: true },
+  const { entityCount, recentEntities, kindCounts } = await scopedDb(
+    async (tx) => {
+      const [count, recent, kinds] = await Promise.all([
+        tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(entities)
+          .where(eq(entities.workspaceId, workspaceId))
+          .then((rows) => rows.at(0)?.count ?? 0),
+        tx.query.entities.findMany({
+          where: { workspaceId: { eq: workspaceId } },
+          columns: {
+            id: true,
+            name: true,
+            kind: true,
+            createdBy: true,
+            updatedAt: true,
+          },
           with: {
-            fields: {
-              columns: { id: true, content: true },
-              limit: 1,
+            currentVersion: {
+              columns: { id: true },
+              with: {
+                fields: {
+                  columns: { id: true, content: true },
+                  limit: 1,
+                },
+              },
+            },
+            createdByUser: {
+              columns: { name: true, image: true },
             },
           },
-        },
-        createdByUser: {
-          columns: { name: true, image: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-      limit: LIMITS.overviewRecentEntities,
-    }),
-    db
-      .select({
-        kind: entities.kind,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(entities)
-      .where(eq(entities.workspaceId, workspaceId))
-      .groupBy(entities.kind),
-  ]);
+          orderBy: { updatedAt: "desc" },
+          limit: LIMITS.overviewRecentEntities,
+        }),
+        tx
+          .select({
+            kind: entities.kind,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(entities)
+          .where(eq(entities.workspaceId, workspaceId))
+          .groupBy(entities.kind),
+      ]);
+      return {
+        entityCount: count,
+        recentEntities: recent,
+        kindCounts: kinds,
+      };
+    },
+  );
 
   let documentCount = 0;
   let taskCount = 0;

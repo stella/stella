@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { status, t, type Static } from "elysia";
 
-import { db } from "@/api/db";
+import { adminDb, type ScopedDb } from "@/api/db";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
@@ -17,6 +17,7 @@ export const updateWorkspaceBodySchema = t.Object({
 type UpdateWorkspaceBodySchema = Static<typeof updateWorkspaceBodySchema>;
 
 type UpdateWorkspaceHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   body: UpdateWorkspaceBodySchema;
@@ -25,6 +26,7 @@ type UpdateWorkspaceHandlerProps = {
 // Workspace name is fetched via JOIN at search time;
 // no reindex needed on rename.
 export const updateWorkspaceHandler = async ({
+  scopedDb,
   workspaceId,
   organizationId,
   body,
@@ -35,8 +37,12 @@ export const updateWorkspaceHandler = async ({
     body.reference = null;
   }
 
+  // Reference uniqueness check needs full org visibility.
+  // Under RLS, scopedDb only sees the caller's workspaces;
+  // a conflict in another workspace would be missed, causing
+  // a 500 UNIQUE_VIOLATION instead of a 409.
   if (body.reference) {
-    const [existing] = await db
+    const [existing] = await adminDb
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(
@@ -56,36 +62,38 @@ export const updateWorkspaceHandler = async ({
     }
   }
 
-  if (body.clientId) {
-    const contact = await db.query.contacts.findFirst({
-      where: {
-        id: body.clientId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    });
+  return scopedDb(async (tx) => {
+    if (body.clientId) {
+      const contact = await tx.query.contacts.findFirst({
+        where: {
+          id: body.clientId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      });
 
-    if (!contact) {
-      return status(400, { message: "Contact not found" });
+      if (!contact) {
+        return status(400, { message: "Contact not found" });
+      }
     }
-  }
 
-  return db
-    .update(workspaces)
-    .set({
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.clientId !== undefined && {
-        clientId: body.clientId,
-      }),
-      ...(body.reference !== undefined && {
-        reference: body.reference,
-      }),
-      ...(body.billingReference !== undefined && {
-        billingReference: body.billingReference,
-      }),
-      ...(body.color !== undefined && {
-        color: body.color,
-      }),
-    })
-    .where(eq(workspaces.id, workspaceId));
+    return tx
+      .update(workspaces)
+      .set({
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.clientId !== undefined && {
+          clientId: body.clientId,
+        }),
+        ...(body.reference !== undefined && {
+          reference: body.reference,
+        }),
+        ...(body.billingReference !== undefined && {
+          billingReference: body.billingReference,
+        }),
+        ...(body.color !== undefined && {
+          color: body.color,
+        }),
+      })
+      .where(eq(workspaces.id, workspaceId));
+  });
 };
