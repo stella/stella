@@ -94,7 +94,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
           <HelpCircleIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="font-medium">{t("chat.tool.askUser")}</span>
           {isLoading && (
-            <LoaderIcon className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            <LoaderIcon className="ms-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
           )}
         </div>
       </div>
@@ -115,7 +115,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
         <HelpCircleIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="font-medium">{t("chat.tool.askUser")}</span>
         {(isDone || submitted) && (
-          <CheckIcon className="ml-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
+          <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}
       </div>
 

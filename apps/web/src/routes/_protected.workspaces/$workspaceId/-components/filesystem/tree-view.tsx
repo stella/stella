@@ -605,7 +605,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       >
         <span>{t("common.name")}</span>
         {extraColumns.map((col) => (
-          <span className="text-right" key={col.id}>
+          <span className="text-end" key={col.id}>
             {col.label}
           </span>
         ))}
@@ -997,7 +997,7 @@ const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="min-w-0 overflow-hidden text-right text-xs text-ellipsis whitespace-nowrap text-muted-foreground"
+      className="min-w-0 overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap text-muted-foreground"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1005,7 +1005,7 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "grid w-full items-center gap-x-4 rounded px-2 py-1 text-left text-sm hover:bg-muted",
+    "grid w-full items-center gap-x-4 rounded px-2 py-1 text-start text-sm hover:bg-muted",
     isDropTarget && "bg-accent ring-2 ring-primary",
     isSelected && "bg-accent",
   );
@@ -1106,7 +1106,7 @@ const FilesystemRow = ({
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <button
-              className="text-left"
+              className="text-start"
               onClick={() => {
                 if (currentFolderId) {
                   onNavigateToFolder(node.entityId);

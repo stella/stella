@@ -117,7 +117,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
           {t("billing.timerActive")}
         </span>
         <Button
-          className="ml-auto"
+          className="ms-auto"
           onClick={handleStop}
           size="sm"
           variant="destructive"

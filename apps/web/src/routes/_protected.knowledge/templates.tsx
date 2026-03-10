@@ -735,7 +735,7 @@ const TemplateDetail = ({
                 />
               ) : (
                 <button
-                  className="group flex items-center gap-1.5 text-left"
+                  className="group flex items-center gap-1.5 text-start"
                   onClick={startRename}
                   type="button"
                 >
@@ -792,7 +792,7 @@ const TemplateDetail = ({
                         return (
                           <li key={field.path}>
                             <button
-                              className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50"
+                              className="flex w-full items-center gap-3 px-4 py-3 text-start text-sm hover:bg-muted/50"
                               onClick={() =>
                                 fieldEditDispatch({
                                   type: "setExpanded",

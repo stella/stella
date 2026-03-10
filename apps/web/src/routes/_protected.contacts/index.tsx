@@ -97,7 +97,7 @@ function ContactsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
       <div className="flex items-center gap-2">
-        <InputGroup className="mr-auto max-w-sm flex-1">
+        <InputGroup className="me-auto max-w-sm flex-1">
           <InputGroupInput
             onChange={(e) => {
               const val = e.target.value;
@@ -138,7 +138,7 @@ function ContactsPage() {
             <TableHead>{t("contacts.columns.name")}</TableHead>
             <TableHead>{t("contacts.columns.email")}</TableHead>
             <TableHead>{t("contacts.columns.phone")}</TableHead>
-            <TableHead className="text-right">
+            <TableHead className="text-end">
               {t("contacts.columns.matters")}
             </TableHead>
             <TableHead />
@@ -254,7 +254,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       <TableCell className="text-right tabular-nums">
         {contact.matterCount}
       </TableCell>
-      <TableCell className="w-10 text-right">
+      <TableCell className="w-10 text-end">
         <Menu>
           <Tooltip
             content={t("common.actions")}

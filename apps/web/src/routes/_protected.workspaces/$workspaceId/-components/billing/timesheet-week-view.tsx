@@ -136,7 +136,7 @@ export const TimesheetWeekView = ({
       <table className="w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <th className="sticky left-0 z-10 bg-background px-3 py-2 text-left font-medium">
+            <th className="sticky start-0 z-10 bg-background px-3 py-2 text-start font-medium">
               {t("billing.matter")}
             </th>
             {days.map((day) => {
@@ -184,7 +184,7 @@ export const TimesheetWeekView = ({
 
             return (
               <tr className="border-b hover:bg-muted/30" key={matterId}>
-                <td className="sticky left-0 z-10 bg-background px-3 py-2 font-medium">
+                <td className="sticky start-0 z-10 bg-background px-3 py-2 font-medium">
                   <span className="truncate">
                     {matterNameMap.get(matterId) ?? t("workspaces.defaultName")}
                   </span>
@@ -230,7 +230,7 @@ export const TimesheetWeekView = ({
         {matterIds.length > 0 && (
           <tfoot>
             <tr className="border-t font-medium">
-              <td className="sticky left-0 z-10 bg-background px-3 py-2">
+              <td className="sticky start-0 z-10 bg-background px-3 py-2">
                 {t("billing.total")}
               </td>
               {days.map((day) => {

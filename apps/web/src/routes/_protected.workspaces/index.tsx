@@ -639,7 +639,7 @@ const MattersToolbar = ({
             {activeClient.displayName}
           </span>
           <Button
-            className="ml-0.5 size-5"
+            className="ms-0.5 size-5"
             onClick={() => onChange({ clientFilter: null })}
             size="icon"
             variant="ghost"
@@ -726,12 +726,12 @@ const MattersToolbar = ({
       )}
 
       {/* Right side: search, view toggle, new matter */}
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ms-auto flex items-center gap-1">
         <div className="relative">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2 z-10 size-3 -translate-y-1/2 text-muted-foreground" />
+          <SearchIcon className="pointer-events-none absolute start-2 top-1/2 z-10 size-3 -translate-y-1/2 text-muted-foreground" />
           <Input
             className={cn(
-              "h-7 pl-7 text-xs transition-[width]",
+              "h-7 ps-7 text-xs transition-[width]",
               searchFocused || search ? "w-44" : "w-28",
             )}
             onBlur={() => setSearchFocused(false)}
@@ -876,7 +876,7 @@ const ClientFilterDropdown = ({
           ) : (
             filtered.map((client) => (
               <button
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm hover:bg-accent"
                 key={client.id}
                 onClick={() => onSelect(client.id)}
                 type="button"
@@ -1097,7 +1097,7 @@ const MatterCard = ({
         render={
           <Link
             className={cn(
-              "group relative flex h-auto min-h-22 flex-col justify-between overflow-hidden rounded-xl border bg-card py-2.5 pr-3 pl-3 transition-colors hover:bg-accent/50",
+              "group relative flex h-auto min-h-22 flex-col justify-between overflow-hidden rounded-xl border bg-card py-2.5 ps-3 pe-3 transition-colors hover:bg-accent/50",
               focused && "ring-2 ring-primary",
             )}
             onMouseEnter={onMouseEnter}
@@ -1172,7 +1172,7 @@ const MatterCard = ({
             {visibleContributors.map((c, i) => (
               <TooltipRoot key={c.userId}>
                 <TooltipTrigger
-                  className={cn("rounded-full", i > 0 && "-ml-1")}
+                  className={cn("rounded-full", i > 0 && "-ms-1")}
                   render={<span />}
                 >
                   <Avatar className="size-5 ring-1 ring-background">
@@ -1186,7 +1186,7 @@ const MatterCard = ({
               </TooltipRoot>
             ))}
             {overflow > 0 && (
-              <span className="ml-1 text-[0.625rem] text-muted-foreground">
+              <span className="ms-1 text-[0.625rem] text-muted-foreground">
                 {`+${overflow}`}
               </span>
             )}
@@ -1337,7 +1337,7 @@ const MatterTable = ({
     {
       key: "entityCount",
       label: t("workspaces.overview.totalItems"),
-      className: "hidden md:table-cell text-right",
+      className: "hidden md:table-cell text-end",
       render: (ws) => (
         <span className="text-muted-foreground tabular-nums">
           {ws.entityCount}
@@ -1417,7 +1417,7 @@ const MatterTable = ({
     <div className="overflow-x-auto px-4 pb-4">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-left text-xs text-muted-foreground">
+          <tr className="border-b text-start text-xs text-muted-foreground">
             {columns.map((col) => (
               <th
                 className={cn(

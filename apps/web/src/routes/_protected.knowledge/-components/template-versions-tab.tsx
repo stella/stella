@@ -131,7 +131,7 @@ export const TemplateVersionsTab = ({
                   version: String(ver.version),
                 })}
               </span>
-              <span className="ml-2 text-muted-foreground">
+              <span className="ms-2 text-muted-foreground">
                 {t("templates.fieldCount", {
                   count: ver.fieldCount,
                 })}

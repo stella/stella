@@ -64,7 +64,7 @@ export const EntityFileInfo = ({
   }
 
   return (
-    <div className="mb-1.5 grid min-h-10 grid-cols-[1fr_auto] items-center gap-0.5 border-b bg-popover pr-1 pl-3">
+    <div className="mb-1.5 grid min-h-10 grid-cols-[1fr_auto] items-center gap-0.5 border-b bg-popover ps-3 pe-1">
       <span className="truncate font-medium">{field.content.fileName}</span>
       <div>
         <Button

@@ -50,7 +50,7 @@ export const SectionToc = ({ sections }: SectionTocProps) => {
         {sections.map((section) => (
           <li key={section.index}>
             <button
-              className="w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
+              className="w-full rounded px-2 py-1 text-start text-sm hover:bg-muted"
               onClick={() => scrollToSection(section.index)}
               type="button"
             >

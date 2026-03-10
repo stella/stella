@@ -111,7 +111,7 @@ function MembersLayout() {
   return (
     <div className="flex flex-1 flex-col gap-4 border-t p-4">
       <div className="flex items-center gap-2">
-        <InputGroup className="mr-auto max-w-sm flex-1">
+        <InputGroup className="me-auto max-w-sm flex-1">
           <InputGroupInput
             onChange={(e) => {
               const v = e.target.value;

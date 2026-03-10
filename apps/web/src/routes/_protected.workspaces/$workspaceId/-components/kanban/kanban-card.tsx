@@ -145,7 +145,7 @@ export const KanbanCard = ({
   );
 
   const content = (
-    <div className="flex flex-col gap-1 pr-5">
+    <div className="flex flex-col gap-1 pe-5">
       <span className="flex items-center gap-1.5 text-sm leading-snug font-medium">
         {icon}
         {nameElement}
@@ -190,7 +190,7 @@ export const KanbanCard = ({
   );
 
   const actionsButton = onRename ? (
-    <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+    <div className="absolute end-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:opacity-100">
       <RowActions
         entity={entity}
         onRename={startEditing}
@@ -205,7 +205,7 @@ export const KanbanCard = ({
       <div className="group/card" ref={dragRef}>
         <button
           className={cn(
-            "relative block w-full rounded-lg border bg-card p-3 text-left shadow-xs transition-shadow hover:shadow-md",
+            "relative block w-full rounded-lg border bg-card p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActivePeek && "ring-2 ring-primary/30",
           )}
           onClick={() =>

@@ -154,12 +154,12 @@ export const ClauseList = ({
       />
 
       {/* Clause list */}
-      <div className="flex min-h-0 flex-1 flex-col border-l">
+      <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <div className="relative mr-3 flex-1">
-            <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative me-3 flex-1">
+            <SearchIcon className="absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-8 pl-8"
+              className="h-8 ps-8"
               onChange={handleSearchChange}
               placeholder={t("clauses.searchPlaceholder")}
               value={searchInput}
@@ -254,7 +254,7 @@ const ClauseRow = ({
   return (
     <li>
       <button
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+        className="flex w-full items-center gap-3 px-4 py-3 text-start hover:bg-muted/50"
         onClick={onSelect}
         type="button"
       >
@@ -302,7 +302,7 @@ const CategorySidebar = ({
     <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
       <nav className="flex-1 p-2">
         <button
-          className={`w-full rounded-md px-3 py-1.5 text-left text-sm ${
+          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
             selectedId === null ? "bg-muted font-medium" : "hover:bg-muted/50"
           }`}
           onClick={() => onSelect(null)}
@@ -311,7 +311,7 @@ const CategorySidebar = ({
           {t("clauses.allClauses")}
         </button>
         <button
-          className={`w-full rounded-md px-3 py-1.5 text-left text-sm ${
+          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
             selectedId === "uncategorized"
               ? "bg-muted font-medium"
               : "hover:bg-muted/50"
@@ -405,7 +405,7 @@ const CategoryRow = ({
   return (
     <div className="group flex items-center">
       <button
-        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-left text-sm ${
+        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-start text-sm ${
           isSelected ? "bg-muted font-medium" : "hover:bg-muted/50"
         }`}
         onClick={onSelect}

@@ -287,7 +287,7 @@ const InvoiceDetail = ({
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
+                <tr className="border-b text-start text-muted-foreground">
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>
@@ -358,7 +358,7 @@ const InvoiceDetail = ({
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
+                <tr className="border-b text-start text-muted-foreground">
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>

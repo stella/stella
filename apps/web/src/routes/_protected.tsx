@@ -192,8 +192,8 @@ function ProtectedContent({
       <header className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
         {(!open || isMobile) && (
           <>
-            <SidebarTrigger className="-ml-1" />
-            <Separator className="mr-2 h-4" orientation="vertical" />
+            <SidebarTrigger className="-ms-1" />
+            <Separator className="me-2 h-4" orientation="vertical" />
           </>
         )}
         <AppBreadcrumbs />
@@ -201,7 +201,7 @@ function ProtectedContent({
           <TableControls viewId={viewId} workspaceId={workspaceId} />
         )}
         {pdfMatch && <PdfViewerControls />}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <div className="ms-auto flex shrink-0 items-center gap-0.5">
           {workspaceId && (
             <>
               {folderState?.hasFolders && (
@@ -282,7 +282,7 @@ const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
     : `var(${getMatterSwatch(workspaceId)})`;
   return (
     <span
-      className="ml-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground"
+      className="ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground"
       style={{
         backgroundColor: `color-mix(in srgb, ${swatch} 10%, transparent)`,
       }}

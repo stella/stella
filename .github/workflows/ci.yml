@@ -94,6 +94,9 @@ jobs:
       - name: Lint untyped updates
         run: bash scripts/lint-untyped-updates.sh
 
+      - name: Lint logical CSS properties
+        run: bash scripts/lint-logical-properties.sh
+
       - name: Format
         run: bun run format
 

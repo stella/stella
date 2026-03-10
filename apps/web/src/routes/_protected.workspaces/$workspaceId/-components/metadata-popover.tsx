@@ -33,7 +33,7 @@ export const MetadataPopover = ({
 
   return (
     <Popover modal>
-      <PopoverTrigger className="flex h-full w-full items-center gap-1.5 pr-3 pl-2 text-start hover:bg-accent">
+      <PopoverTrigger className="flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start hover:bg-accent">
         <Icon className="size-3.5 shrink-0" />
         <span className="w-0 flex-1 truncate">{label}</span>
       </PopoverTrigger>

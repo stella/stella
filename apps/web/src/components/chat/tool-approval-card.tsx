@@ -270,13 +270,13 @@ export const ToolApprovalCard = ({
         <PencilIcon className="size-4 shrink-0 text-muted-foreground" />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon className="ml-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+          <LoaderIcon className="ms-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
         )}
         {isApproved && (
-          <CheckIcon className="ml-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
+          <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}
         {isDenied && (
-          <XIcon className="ml-auto size-3.5 shrink-0 text-destructive" />
+          <XIcon className="ms-auto size-3.5 shrink-0 text-destructive" />
         )}
       </div>
 
@@ -311,7 +311,7 @@ export const ToolApprovalCard = ({
             {t("chat.approval.deny")}
           </button>
           <button
-            className="ml-auto text-muted-foreground underline-offset-2 hover:underline"
+            className="ms-auto text-muted-foreground underline-offset-2 hover:underline"
             onClick={() => {
               setResponded(true);
               onAlwaysAllow(name);

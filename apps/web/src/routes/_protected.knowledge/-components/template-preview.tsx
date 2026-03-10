@@ -177,7 +177,7 @@ const ConnectorLines = ({ activeSpans }: { activeSpans: BlockSpan[] }) => (
             : "bg-emerald-300 dark:bg-emerald-700"
         }`}
         key={`${span.startIdx}-${span.depth}`}
-        style={{ left: span.depth * LINE_OFFSET + 7 }}
+        style={{ insetInlineStart: span.depth * LINE_OFFSET + 7 }}
       />
     ))}
   </>
@@ -207,12 +207,12 @@ const PreviewParagraph = ({
       <div className="relative">
         <ConnectorLines activeSpans={activeSpans} />
         <div
-          className={`rounded-sm border-l-[3px] py-1.5 pr-2 pl-3 ${
+          className={`rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 ${
             isConditional
               ? "border-blue-400 bg-blue-50/50 dark:border-blue-600 dark:bg-blue-950/20"
               : "border-emerald-400 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/20"
           }`}
-          style={{ marginLeft: depth * LINE_OFFSET }}
+          style={{ marginInlineStart: depth * LINE_OFFSET }}
         >
           <DirectiveLabel
             expression={paragraph.directiveExpression ?? ""}
@@ -228,7 +228,7 @@ const PreviewParagraph = ({
     return (
       <div
         className="relative py-1"
-        style={{ paddingLeft: depth * LINE_OFFSET }}
+        style={{ paddingInlineStart: depth * LINE_OFFSET }}
       >
         <ConnectorLines activeSpans={activeSpans} />
       </div>

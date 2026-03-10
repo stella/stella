@@ -400,7 +400,7 @@ const ChatInputBar = ({
         <input {...attachments.fileInputProps} />
         <Button
           className={cn(
-            "ml-auto shrink-0 transition-colors",
+            "ms-auto shrink-0 transition-colors",
             hasContent &&
               "bg-foreground text-background hover:bg-foreground/90",
           )}
@@ -857,7 +857,7 @@ const ThreadList = ({
   if (!expanded) {
     return (
       <Button
-        className="ml-auto"
+        className="ms-auto"
         onClick={() => setExpanded(true)}
         size="icon-sm"
         title={t("chat.threads")}
@@ -869,14 +869,14 @@ const ThreadList = ({
   }
 
   return (
-    <div className="relative ml-auto flex items-center gap-1">
+    <div className="relative ms-auto flex items-center gap-1">
       <Button onClick={() => setExpanded(false)} size="sm" variant="ghost">
         <MessageSquareIcon className="size-3.5" />
         {t("chat.threads")}
       </Button>
       {expanded && sortedThreads.length > 0 && (
         <div
-          className="absolute top-[calc(100%+4px)] right-2 z-20 max-h-64 w-56 overflow-y-auto rounded-lg border bg-popover shadow-md"
+          className="absolute end-2 top-[calc(100%+4px)] z-20 max-h-64 w-56 overflow-y-auto rounded-lg border bg-popover shadow-md"
           role="listbox"
         >
           {sortedThreads.map((thread) => (
@@ -885,7 +885,7 @@ const ThreadList = ({
               className={cn(
                 "group flex w-full cursor-pointer",
                 "items-center gap-2 px-3 py-2",
-                "text-left text-sm transition-colors",
+                "text-start text-sm transition-colors",
                 "hover:bg-muted",
                 thread.id === activeThreadId && "bg-muted font-medium",
               )}

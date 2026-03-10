@@ -98,7 +98,7 @@ function Sessions() {
                   <TableCell>
                     {formatRelativeTime(session.updatedAt, lang)}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     {isCurrent ? (
                       <span
                         className={

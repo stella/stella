@@ -124,7 +124,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
             <tr className="border-b bg-muted/50" key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <th
-                  className="px-4 py-2 text-left font-medium text-muted-foreground"
+                  className="px-4 py-2 text-start font-medium text-muted-foreground"
                   key={header.id}
                 >
                   {flexRender(

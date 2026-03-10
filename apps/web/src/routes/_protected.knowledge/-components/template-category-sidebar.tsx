@@ -71,7 +71,7 @@ export const TemplateCategorySidebar = ({
     <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
       <nav className="flex-1 p-2">
         <button
-          className={`w-full rounded-md px-3 py-1.5 text-left text-sm ${
+          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
             selectedId === null ? "bg-muted font-medium" : "hover:bg-muted/50"
           }`}
           onClick={() => onSelect(null)}
@@ -80,7 +80,7 @@ export const TemplateCategorySidebar = ({
           {t("templates.allTemplates")}
         </button>
         <button
-          className={`w-full rounded-md px-3 py-1.5 text-left text-sm ${
+          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
             selectedId === "uncategorized"
               ? "bg-muted font-medium"
               : "hover:bg-muted/50"
@@ -174,7 +174,7 @@ const CategoryRow = ({
   return (
     <div className="group flex items-center">
       <button
-        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-left text-sm ${
+        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-start text-sm ${
           isSelected ? "bg-muted font-medium" : "hover:bg-muted/50"
         }`}
         onClick={onSelect}

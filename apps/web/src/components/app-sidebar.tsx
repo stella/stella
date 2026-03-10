@@ -447,7 +447,7 @@ const MatterItem = ({
     >
       <SidebarMenuButton
         asChild
-        className="pr-12"
+        className="pe-12"
         tooltip={[ws.name, ws.client?.displayName, ws.reference]
           .filter(Boolean)
           .join(" — ")}
@@ -477,7 +477,7 @@ const MatterItem = ({
         <NavBadge digit={navBadge} />
       ) : (
         <div
-          className="absolute top-1.5 right-1 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[pinned]:opacity-100"
+          className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[pinned]:opacity-100"
           data-pinned={isPinned || undefined}
         >
           <button
@@ -731,7 +731,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     <Sidebar {...props}>
       {/* Stella logo header */}
       <SidebarHeader>
-        <div className="flex items-center justify-between pl-2">
+        <div className="flex items-center justify-between ps-2">
           <StellaWordmark className="h-5 w-auto" />
           <Button
             className="size-7 text-muted-foreground"
@@ -1009,7 +1009,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           <FeedbackDialog />
           <SidebarMenuItem>
             <Menu>
-              <MenuTrigger className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">
+              <MenuTrigger className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-start text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">
                 <Avatar className="size-7 rounded-full">
                   {user.image && <AvatarImage src={user.image} />}
                   <AvatarFallback className="text-[0.625rem]">
@@ -1034,7 +1034,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     </span>
                   )}
                 </div>
-                <ChevronsUpDownIcon className="ml-auto size-4 opacity-50" />
+                <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
               </MenuTrigger>
               <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
                 {orgName && (

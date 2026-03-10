@@ -34,7 +34,7 @@ export const HoursByUserTable = ({
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-muted-foreground">
+              <tr className="border-b text-start text-muted-foreground">
                 <th className="pb-2 font-medium">{t("user")}</th>
                 <th className="pb-2 text-right font-medium">
                   {t("totalHours")}

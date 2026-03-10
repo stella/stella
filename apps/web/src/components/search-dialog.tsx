@@ -242,7 +242,7 @@ export const SearchDialog = ({
         <div className="flex max-h-[min(60vh,480px)] min-h-[200px]">
           {/* Facets sidebar */}
           {hasQuery && facets && (
-            <div className="w-48 shrink-0 overflow-y-auto border-r px-3 py-3">
+            <div className="w-48 shrink-0 overflow-y-auto border-e px-3 py-3">
               {facets.kind.length > 0 && (
                 <FacetGroup
                   buckets={facets.kind.map((bucket) => ({
@@ -288,7 +288,7 @@ export const SearchDialog = ({
                         <span className="truncate">
                           {bucket.label ?? bucket.value}
                         </span>
-                        <span className="ml-2 text-muted-foreground">
+                        <span className="ms-2 text-muted-foreground">
                           {bucket.count}
                         </span>
                       </Button>
@@ -387,7 +387,7 @@ const FilterChip = ({ type, label, onRemove }: FilterChipProps) => {
       <span className="font-medium">{label}</span>
       <Button
         aria-label={`Remove ${type}: ${label}`}
-        className="ml-0.5 size-4 rounded-full"
+        className="ms-0.5 size-4 rounded-full"
         onClick={onRemove}
         size="icon-xs"
         variant="ghost"
@@ -427,7 +427,7 @@ const FacetGroup = ({
           variant="ghost"
         >
           <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-          <span className="flex-1 truncate text-left">
+          <span className="flex-1 truncate text-start">
             {bucket.label ?? bucket.value}
           </span>
           <span className="text-muted-foreground">{bucket.count}</span>
@@ -467,7 +467,7 @@ const SearchResultItem = ({
   return (
     <Button
       className={cn(
-        "h-auto w-full items-start justify-start gap-3 px-2 py-2 text-left whitespace-normal sm:h-auto",
+        "h-auto w-full items-start justify-start gap-3 px-2 py-2 text-start whitespace-normal sm:h-auto",
         isSelected && "bg-accent",
       )}
       data-selected={isSelected || undefined}

@@ -174,7 +174,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             </Link>
             <Button
               aria-label={t("workspaces.parties.removeClient")}
-              className="ml-auto"
+              className="ms-auto"
               onClick={handleRemoveClient}
               size="icon-xs"
               variant="ghost"
@@ -306,7 +306,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       </span>
       <Button
         aria-label={t("workspaces.parties.removeParty")}
-        className="ml-auto"
+        className="ms-auto"
         disabled={removeParty.isPending}
         onClick={handleRemove}
         size="icon-xs"
@@ -405,7 +405,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                 <span>{selectedContact.displayName}</span>
                 <Button
-                  className="ml-auto"
+                  className="ms-auto"
                   onClick={() => setSelectedContact(null)}
                   size="icon-xs"
                   variant="ghost"

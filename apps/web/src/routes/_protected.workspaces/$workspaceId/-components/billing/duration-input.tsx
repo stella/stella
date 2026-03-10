@@ -119,7 +119,7 @@ export const DurationInput = ({
         value={displayValue}
       />
       {!isFocused && value > 0 && (
-        <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
+        <span className="pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
           {t("billing.decimalHours", {
             hours: formatDecimalHours(value),
           })}

@@ -143,7 +143,7 @@ export const TemplateList = ({
         selectedId={selectedCategoryId}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col border-l">
+      <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
           <span className="text-sm text-muted-foreground">
             {String(templates.length)}
@@ -244,7 +244,7 @@ const TemplateRow = ({
   return (
     <li className="flex items-center gap-4 px-4 py-3">
       <button
-        className="flex min-w-0 flex-1 items-center gap-3 text-left hover:opacity-80"
+        className="flex min-w-0 flex-1 items-center gap-3 text-start hover:opacity-80"
         onClick={onSelect}
         type="button"
       >

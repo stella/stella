@@ -38,7 +38,7 @@ export const SystemPromptMessage = ({ threadId }: SystemPromptMessageProps) => {
     <Message from="system">
       <MessageContent>
         <button
-          className="flex w-full items-center gap-1.5 text-left"
+          className="flex w-full items-center gap-1.5 text-start"
           onClick={() => setExpanded((e) => !e)}
           type="button"
         >

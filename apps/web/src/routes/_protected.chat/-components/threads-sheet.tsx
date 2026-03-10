@@ -98,7 +98,7 @@ export const ThreadsSheet = () => {
                 key={thread.id}
               >
                 <Link
-                  className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-left"
+                  className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
                   onClick={() => setIsOpen(false)}
                   params={{ threadId: thread.id }}
                   to="/chat/$threadId"
@@ -112,7 +112,7 @@ export const ThreadsSheet = () => {
                 </Link>
                 <Button
                   aria-label={t("chat.deleteThread")}
-                  className="mr-1 opacity-0 group-hover:opacity-100"
+                  className="me-1 opacity-0 group-hover:opacity-100"
                   onClick={() => handleDelete(thread.id)}
                   size="icon-sm"
                   variant="ghost"

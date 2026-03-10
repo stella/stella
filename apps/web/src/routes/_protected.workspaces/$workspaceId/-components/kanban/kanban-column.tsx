@@ -349,7 +349,7 @@ export const KanbanColumn = ({
         ) : (
           <span className="flex flex-1 items-center gap-1.5 truncate">
             <button
-              className="truncate text-left text-sm font-medium"
+              className="truncate text-start text-sm font-medium"
               onClick={startEditing}
               type="button"
             >
