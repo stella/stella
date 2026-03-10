@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Ühendus katkes",
+    "connectionLostDescription": "Ühendus serveriga katkes. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
     "createdAt": "Loodud {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Kinnita",
     "print": "Print",
     "properties": "Omadused",
+    "reconnecting": "Ühendumine…",
     "reference": "Reference",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Lisa ekraanipilt",
     "screenshotFailed": "Ekraanipildi tegemine ebaõnnestus",
     "screenshotHint": "Jäädvustab praeguse lehe (ilma selle dialoogita) ja saadab selle koos tagasisidega.",
+    "sent": "Tagasiside saadetud, aitäh!",
     "submit": "Saada tagasiside",
     "suggestedFix": "Soovituslik parandus (valikuline)",
     "suggestedFixPlaceholder": "nt Keela saatmisnupp, kui vorm on tühi",
     "title": "Tagasiside",
     "trigger": "Tagasiside"
+  },
+  "filters": {
+    "contains": "Sisaldab",
+    "eq": "On",
+    "is_empty": "On tühi",
+    "neq": "Ei ole"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Ühekordse valiku omadus",
         "text": "Teksti omadus"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Leia {propertyName}: ",
+      "defaultPromptPropertyName": "teave",
       "deleteProperty": "Kustuta omadus",
       "deletePropertyConfirmDescription": "Kas olete kindel, et soovite kustutada omaduse \"{propertyName}\"? Seda toimingut ei saa tagasi võtta.",
       "editConditions": "Muuda tingimusi",

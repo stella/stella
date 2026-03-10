@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Savienojums zaudēts",
+    "connectionLostDescription": "Savienojums ar serveri ir zaudēts. Automātiski mēģinām atjaunot.",
     "convertTo": "Pārvērst par",
     "createdAt": "Izveidots {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Piespraust",
     "print": "Print",
     "properties": "Rekvizīti",
+    "reconnecting": "Atjaunojam savienojumu…",
     "reference": "Reference",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Pievienot ekrānuzņēmumu",
     "screenshotFailed": "Ekrānuzņēmuma uzņemšana neizdevās",
     "screenshotHint": "Uzņem pašreizējo lapu (bez šī dialoga) un nosūta to kopā ar jūsu atsauksmi.",
+    "sent": "Atsauksme nosūtīta, paldies!",
     "submit": "Nosūtīt atsauksmi",
     "suggestedFix": "Ieteiktais labojums (neobligāti)",
     "suggestedFixPlaceholder": "piem., Atspējot sūtīšanas pogu, kad forma ir tukša",
     "title": "Atsauksmes",
     "trigger": "Atsauksmes"
+  },
+  "filters": {
+    "contains": "Satur",
+    "eq": "Ir",
+    "is_empty": "Ir tukšs",
+    "neq": "Nav"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Vienas izvēles rekvizīts",
         "text": "Teksta rekvizīts"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Atrodi {propertyName}: ",
+      "defaultPromptPropertyName": "informāciju",
       "deleteProperty": "Dzēst rekvizītu",
       "deletePropertyConfirmDescription": "Vai tiešām vēlaties dzēst rekvizītu \"{propertyName}\"? Šo darbību nevar atsaukt.",
       "editConditions": "Rediģēt nosacījumus",

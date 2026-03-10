@@ -143,7 +143,7 @@ function SelectItem({
           <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
         </svg>
       </SelectPrimitive.ItemIndicator>
-      <SelectPrimitive.ItemText className="col-start-2 min-w-0">
+      <SelectPrimitive.ItemText className="col-start-2 flex min-w-0 items-center gap-2">
         {children}
       </SelectPrimitive.ItemText>
     </SelectPrimitive.Item>

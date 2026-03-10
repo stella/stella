@@ -180,7 +180,7 @@ export const createMatterTools = ({
           .default(50)
           .describe("Max entities to return"),
       }),
-      execute: async ({ workspaceId, kind, parentId, limit }) => {
+      execute: safeExecute(async ({ workspaceId, kind, parentId, limit }) => {
         const [ents, properties] = await Promise.all([
           scopedDb((tx) =>
             tx.query.entities.findMany({
@@ -241,7 +241,7 @@ export const createMatterTools = ({
             fields: fieldMap,
           };
         });
-      },
+      }, "listEntities"),
     }),
 
     readEntity: tool({
@@ -252,7 +252,7 @@ export const createMatterTools = ({
         workspaceId: wsSchema,
         entityId: z.string().describe("The entity ID to read"),
       }),
-      execute: async ({ workspaceId, entityId }) => {
+      execute: safeExecute(async ({ workspaceId, entityId }) => {
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
             where: {
@@ -315,7 +315,7 @@ export const createMatterTools = ({
               }))
               .filter((f) => f.value !== "") ?? [],
         };
-      },
+      }, "readEntity"),
     }),
 
     readContent: tool({
@@ -810,7 +810,7 @@ export const createOrgTools = ({
       contactId: z.string().describe("The contact ID to read"),
     }),
     // contacts is org-level (no RLS); use adminDb
-    execute: async ({ contactId }) => {
+    execute: safeExecute(async ({ contactId }) => {
       const contact = await adminDb.query.contacts.findFirst({
         where: {
           id: contactId,
@@ -842,7 +842,7 @@ export const createOrgTools = ({
         emails: contact.emails ?? [],
         phones: contact.phones ?? [],
       };
-    },
+    }, "readContact"),
   }),
 
   listTemplates: tool({
@@ -852,7 +852,7 @@ export const createOrgTools = ({
       limit: z.number().int().min(1).max(50).optional().default(20),
     }),
     // templates is org-level (no RLS); use adminDb
-    execute: async ({ query, limit }) => {
+    execute: safeExecute(async ({ query, limit }) => {
       const templates = await adminDb.query.templates.findMany({
         where: {
           organizationId: { eq: organizationId },
@@ -874,7 +874,7 @@ export const createOrgTools = ({
         fileName: t.fileName,
         createdAt: t.createdAt.toISOString(),
       }));
-    },
+    }, "listTemplates"),
   }),
 
   readClause: tool({
@@ -883,7 +883,7 @@ export const createOrgTools = ({
       clauseId: z.string().describe("The clause ID to read"),
     }),
     // clauses is org-level (no RLS); use adminDb
-    execute: async ({ clauseId }) => {
+    execute: safeExecute(async ({ clauseId }) => {
       const clause = await adminDb.query.clauses.findFirst({
         where: {
           id: clauseId,
@@ -911,7 +911,7 @@ export const createOrgTools = ({
         version: clause.currentVersion,
         body: clause.body,
       };
-    },
+    }, "readClause"),
   }),
 
   askUser: tool({

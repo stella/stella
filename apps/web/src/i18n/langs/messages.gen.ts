@@ -79,7 +79,7 @@ type Messages = {
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
-    "signInToStella": "Sign in to stella";
+    "signInToStella": "Sign in to Stella";
     "signOut": "Sign Out";
     "slugLabel": "Slug";
     "slugPlaceholder": "my-organization";
@@ -443,7 +443,7 @@ type Messages = {
     "confirm": "Confirm";
     "confirmAction": "Are you sure?";
     "connectionLost": "Connection lost";
-    "connectionLostDescription": "Unable to reach the server. Check your network connection.";
+    "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
     "createdAt": "Created at {date}";
     "currency": "Currency";
@@ -477,7 +477,7 @@ type Messages = {
     "pin": "Pin";
     "print": "Print";
     "properties": "Properties";
-    "reconnecting": "Reconnecting...";
+    "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "rename": "Rename";
     "required": "Required";
@@ -653,6 +653,7 @@ type Messages = {
     "includeScreenshot": "Attach screenshot";
     "screenshotFailed": "Screenshot capture failed";
     "screenshotHint": "Captures the current page (without this dialog) and sends it with your feedback.";
+    "sent": "Feedback sent, thank you!";
     "submit": "Send feedback";
     "suggestedFix": "Suggested fix (optional)";
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";
@@ -660,10 +661,10 @@ type Messages = {
     "trigger": "Feedback";
   };
   "filters": {
-    "contains": "contains";
-    "eq": "equals";
-    "is_empty": "is empty";
-    "neq": "not equals";
+    "eq": "Is";
+    "neq": "Is not";
+    "contains": "Contains";
+    "is_empty": "Is empty";
   };
   "knowledge": {
     "sections": {
@@ -1162,6 +1163,7 @@ type Messages = {
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";
+      "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "failedToChangeViewType": "Failed to change view type";

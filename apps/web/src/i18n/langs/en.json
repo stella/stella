@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Connection lost",
+    "connectionLostDescription": "We lost the connection to the server. Retrying automatically.",
     "convertTo": "Convert to",
     "createdAt": "Created at {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Pin",
     "print": "Print",
     "properties": "Properties",
+    "reconnecting": "Reconnecting…",
     "reference": "Reference",
     "rename": "Rename",
     "required": "Required",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Attach screenshot",
     "screenshotFailed": "Screenshot capture failed",
     "screenshotHint": "Captures the current page (without this dialog) and sends it with your feedback.",
+    "sent": "Feedback sent, thank you!",
     "submit": "Send feedback",
     "suggestedFix": "Suggested fix (optional)",
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty",
     "title": "Feedback",
     "trigger": "Feedback"
+  },
+  "filters": {
+    "contains": "Contains",
+    "eq": "Is",
+    "is_empty": "Is empty",
+    "neq": "Is not"
   },
   "knowledge": {
     "sections": {

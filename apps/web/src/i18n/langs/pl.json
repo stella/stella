@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Utracono połączenie",
+    "connectionLostDescription": "Utracono połączenie z serwerem. Automatyczne ponowne łączenie.",
     "convertTo": "Konwertuj na",
     "createdAt": "Utworzono {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Przypnij",
     "print": "Print",
     "properties": "Właściwości",
+    "reconnecting": "Ponowne łączenie…",
     "reference": "Reference",
     "rename": "Zmień nazwę",
     "required": "Wymagane",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Dołącz zrzut ekranu",
     "screenshotFailed": "Nie udało się przechwycić zrzutu ekranu",
     "screenshotHint": "Przechwytuje bieżącą stronę (bez tego okna dialogowego) i wysyła ją wraz z Twoją opinią.",
+    "sent": "Opinia wysłana, dziękujemy!",
     "submit": "Wyślij opinię",
     "suggestedFix": "Sugerowana poprawka (opcjonalnie)",
     "suggestedFixPlaceholder": "np. Wyłącz przycisk wysyłania, gdy formularz jest pusty",
     "title": "Opinia",
     "trigger": "Opinia"
+  },
+  "filters": {
+    "contains": "Zawiera",
+    "eq": "Jest",
+    "is_empty": "Jest puste",
+    "neq": "Nie jest"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Właściwość jednokrotnego wyboru",
         "text": "Właściwość tekstowa"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Znajdź {propertyName} w ",
+      "defaultPromptPropertyName": "informacje",
       "deleteProperty": "Usuń właściwość",
       "deletePropertyConfirmDescription": "Czy na pewno chcesz usunąć właściwość \"{propertyName}\"? Tej operacji nie można cofnąć.",
       "editConditions": "Edytuj warunki",
