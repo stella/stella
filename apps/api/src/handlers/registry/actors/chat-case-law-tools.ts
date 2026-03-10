@@ -1,10 +1,10 @@
-import { tool } from "ai";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { ScopedDb } from "@/api/db";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { defineTool } from "./chat-tools";
 
 const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";
 
@@ -13,7 +13,8 @@ const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";
 const stripTags = (html: string): string => html.replace(/<[^>]+>/g, "");
 
 export const createCaseLawTools = (scopedDb: ScopedDb) => ({
-  searchCaseLaw: tool({
+  searchCaseLaw: defineTool({
+    name: "searchCaseLaw",
     description:
       "Search the case law library for court decisions " +
       "across all jurisdictions. Returns matching " +

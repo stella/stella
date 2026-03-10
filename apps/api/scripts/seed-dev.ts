@@ -3181,7 +3181,6 @@ export async function seed(organizationId?: string, userId?: string) {
         });
         const ecOrgId = ws?.organizationId ?? ORG_ID;
 
-
         await db
           .insert(extractedContent)
           .values({

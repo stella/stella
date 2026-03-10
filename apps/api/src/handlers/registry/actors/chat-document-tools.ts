@@ -4,10 +4,11 @@
  * the message includes extracted-text attachments.
  */
 
-import { tool, type ToolSet } from "ai";
+import type { ToolSet } from "ai";
 import { z } from "zod";
 
 import type { ExtractedTextAttachment } from "./chat-attachment-types";
+import { defineTool } from "./chat-tools";
 
 type ViewsMap = ExtractedTextAttachment["views"];
 
@@ -20,7 +21,8 @@ const VIEW_KEYS: Record<string, keyof ViewsMap> = {
 export const createDocumentViewTools = (
   attachments: ExtractedTextAttachment[],
 ): ToolSet => ({
-  displayDocument: tool({
+  displayDocument: defineTool({
+    name: "displayDocument",
     description:
       "Display an uploaded document to the user in a " +
       "specific view. Use 'simple' for clean accepted " +

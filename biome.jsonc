@@ -105,6 +105,11 @@
       }
     },
     {
+      // Biome resolves includes relative to the working directory
+      // where `biome lint` is invoked (apps/api/), not the config
+      // file location. So "src/handlers/**" correctly matches
+      // apps/api/src/handlers/**. Confirmed by biome-ignore comments
+      // in handler files being correctly consumed (no lint warnings).
       "includes": ["src/handlers/**"],
       "linter": {
         "rules": {
@@ -116,6 +121,10 @@
                   "@/api/lib/branded-types": {
                     "importNames": ["toSafeId"],
                     "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
+                  },
+                  "ai": {
+                    "importNames": ["tool"],
+                    "message": "Use defineTool from chat-tools.ts instead of tool() directly. defineTool automatically wraps execute with safeExecute."
                   }
                 }
               }
