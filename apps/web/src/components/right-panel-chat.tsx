@@ -41,7 +41,10 @@ import {
   ChatEditor,
   type MentionContext,
 } from "@/components/mentionable-prompt-input";
-import type { ProcessedAttachment } from "@/lib/ai-sdk/rivet-transport";
+import type {
+  ActiveFileContext,
+  ProcessedAttachment,
+} from "@/lib/ai-sdk/rivet-transport";
 import type { ChatActor } from "@/lib/api";
 import {
   GLOBAL_MENTION_CONTEXT,
@@ -61,6 +64,7 @@ import {
   chatWorkspaceThreadsOptions,
 } from "@/routes/_protected.chat/-queries";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 /** Set up the chat panel container as a pragmatic DnD drop
@@ -425,6 +429,28 @@ type NewChatProps = {
   mentionContext: MentionContext;
 };
 
+const makeGetActiveFile =
+  (workspaceId: string | undefined) => (): ActiveFileContext | undefined => {
+    // Only provide inspector context inside a workspace;
+    // the global chat panel should not leak stale state
+    // from a previously visited workspace.
+    if (!workspaceId) {
+      return;
+    }
+    const { tabs, activeId } = useInspectorStore.getState();
+    const tab = tabs.find((t) => t.id === activeId);
+    if (tab?.type !== "pdf") {
+      return;
+    }
+    // Guard against cross-workspace contamination: only
+    // return the active file if it belongs to the current
+    // workspace.
+    if (tab.workspaceId !== workspaceId) {
+      return;
+    }
+    return { entityId: tab.entityId, fileName: tab.label };
+  };
+
 const getModelId = () => useDevStore.getState().chatModelId;
 
 const NewChat = ({
@@ -435,6 +461,10 @@ const NewChat = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
+  const getActiveFile = useMemo(
+    () => makeGetActiveFile(workspaceId),
+    [workspaceId],
+  );
 
   const attachments = useChatAttachments();
   const entityDrop = useEntityDropTarget(workspaceId);
@@ -474,6 +504,7 @@ const NewChat = ({
                 workspaceId,
                 getModelId,
                 userContext,
+                getActiveFile,
               }),
             );
             const { files, textAttachments } = splitAttachments(drained);
@@ -515,6 +546,10 @@ const ActiveThread = ({
 }: ActiveThreadProps) => {
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
+  const getActiveFile = useMemo(
+    () => makeGetActiveFile(workspaceId),
+    [workspaceId],
+  );
   const { data: chat, isLoading } = useQuery(
     chatThreadOptions({
       threadId,
@@ -522,6 +557,7 @@ const ActiveThread = ({
       workspaceId,
       getModelId,
       userContext,
+      getActiveFile,
     }),
   );
 

@@ -6,6 +6,7 @@ import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
 import {
   RivetChatTransport,
+  type ActiveFileContext,
   type ProcessedAttachment,
   type UserContext,
 } from "@/lib/ai-sdk/rivet-transport";
@@ -30,6 +31,7 @@ export const chatThreadOptions = (opts: {
   workspaceId?: string;
   getModelId?: () => string | null;
   userContext?: UserContext;
+  getActiveFile?: () => ActiveFileContext | undefined;
 }) =>
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
@@ -63,6 +65,7 @@ export const chatThreadOptions = (opts: {
         workspaceId: opts.workspaceId,
         getModelId: opts.getModelId,
         userContext: opts.userContext,
+        getActiveFile: opts.getActiveFile,
       });
 
       const chat = new Chat({

@@ -385,6 +385,7 @@ export const chatActor = actor({
         modelId?: string;
         userContext?: UserContext;
         attachments?: ProcessedAttachment[];
+        activeFile?: { entityId: string; fileName: string };
       },
     ) => {
       const {
@@ -395,6 +396,7 @@ export const chatActor = actor({
         modelId,
         userContext,
         attachments,
+        activeFile,
       } = input;
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
@@ -608,6 +610,44 @@ export const chatActor = actor({
               "NOT workspace entities; do not use " +
               "#stella-entity links for them:\n\n" +
               attachmentBlock;
+          }
+
+          // Inject active file context so the AI knows
+          // which document the user is currently viewing.
+          // Only inject when workspace tools are available,
+          // otherwise the prompt references readEntity/
+          // readContent that are not registered.
+          // Validate that the entity actually exists in one
+          // of the allowed workspaces before trusting the
+          // client-supplied entityId.
+          if (activeFile && allWorkspaceIds.length > 0) {
+            const entityRow = await scopedDb((tx) =>
+              tx.query.entities.findFirst({
+                where: { id: activeFile.entityId },
+                columns: { id: true },
+              }),
+            );
+            if (entityRow) {
+              // Sanitize file name and entity ID to prevent
+              // prompt injection: strip newlines and truncate
+              // to a safe length.
+              const safeName = activeFile.fileName
+                .replace(/[\r\n]/g, " ")
+                .slice(0, 200);
+              const safeEntityId = activeFile.entityId
+                .replace(/[\r\n]/g, " ")
+                .slice(0, 100);
+              system =
+                (system ?? "") +
+                "\n\nThe user is currently viewing " +
+                `"${safeName}" ` +
+                `(entity ID: ${safeEntityId}) ` +
+                "in the inspector sidebar. When they " +
+                'refer to "this document" or "the open ' +
+                'file", they mean this entity. Use ' +
+                "readEntity or readContent with this " +
+                "entity ID to access its data.";
+            }
           }
 
           // Strip workspace prefixes from entity mention links
