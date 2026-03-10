@@ -3170,12 +3170,23 @@ export async function seed(organizationId?: string, userId?: string) {
       fileCount++;
 
       // ── Extracted content (AI reads this) ──
+      // Resolve the org from the workspace row so this
+      // matches the org the user's session will filter by
+      // (workspaces may belong to an org created before
+      // the seed ran, e.g. via manual signup).
       if (docText) {
+        const ws = await db.query.workspaces.findFirst({
+          where: { id: toWs(wsId) },
+          columns: { organizationId: true },
+        });
+        const ecOrgId = ws?.organizationId ?? ORG_ID;
+
+
         await db
           .insert(extractedContent)
           .values({
             entityId: entity.entityId,
-            organizationId: ORG_ID,
+            organizationId: ecOrgId,
             ciphertext: Buffer.from(docText, "utf-8"),
             iv: Buffer.alloc(IV_BYTES),
             charCount: docText.length,
