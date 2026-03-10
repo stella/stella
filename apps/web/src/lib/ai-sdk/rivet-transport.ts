@@ -34,6 +34,11 @@ export type ProcessedAttachment =
       };
     };
 
+export type ActiveFileContext = {
+  entityId: string;
+  fileName: string;
+};
+
 export type ChatStreamConnection = {
   on(
     eventName: "stream-chunk",
@@ -47,6 +52,7 @@ export type ChatStreamConnection = {
     modelId?: string;
     userContext?: UserContext;
     attachments?: ProcessedAttachment[];
+    activeFile?: ActiveFileContext;
   }): Promise<{ status: "started" | "busy" }>;
   stop(input: { threadId: string }): Promise<void>;
   getStreamSnapshot(input: {
@@ -72,6 +78,9 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
   private readonly workspaceId: string | undefined;
   private readonly getModelId: (() => string | null) | undefined;
   private readonly userContext: UserContext | undefined;
+  private readonly getActiveFile:
+    | (() => ActiveFileContext | undefined)
+    | undefined;
 
   /** Attachments queued for the next sendMessages call.
    *  Drained (cleared) on each send. */
@@ -91,12 +100,14 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
     workspaceId?: string;
     getModelId?: () => string | null;
     userContext?: UserContext;
+    getActiveFile?: () => ActiveFileContext | undefined;
   }) {
     this.connection = opts.connection;
     this.threadId = opts.threadId;
     this.workspaceId = opts.workspaceId;
     this.getModelId = opts.getModelId;
     this.userContext = opts.userContext;
+    this.getActiveFile = opts.getActiveFile;
   }
 
   /** Subscribe to stream-chunk events for this thread only. */
@@ -199,6 +210,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
       modelId: this.getModelId?.() ?? undefined,
       userContext: ctx,
       attachments,
+      activeFile: this.getActiveFile?.(),
     });
 
     // Another connection already owns this thread's generation.
