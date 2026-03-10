@@ -1,4 +1,5 @@
-import { tool } from "ai";
+// biome-ignore lint/style/noRestrictedImports: defineTool wraps tool() internally
+import { tool, type Tool, type ToolExecutionOptions } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -18,25 +19,47 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CONTENT_MAX_CHARS = 8000;
 
-/** Wrap a tool execute function so unhandled errors are
- *  returned as structured error objects the model can act
- *  on, instead of throwing and causing an opaque
- *  output-error state. */
-const safeExecute =
-  <TArgs, TResult>(
-    fn: (args: TArgs) => Promise<TResult>,
-    toolName?: string,
-  ): ((args: TArgs) => Promise<TResult | { error: string }>) =>
-  async (args) => {
-    try {
-      return await fn(args);
-    } catch (err) {
-      captureError(err, {
-        ...(toolName && { toolName }),
-      });
-      return { error: "Tool execution failed" };
-    }
-  };
+/** Wrapper around `tool()` from "ai" that automatically
+ *  wraps the execute callback with error handling: unhandled
+ *  errors become structured `{ error: string }` objects the
+ *  model can act on, instead of throwing and causing an
+ *  opaque output-error state.
+ *
+ *  Usage: replace `tool({ ... })` with
+ *  `defineTool({ name: "myTool", ... })`. */
+export const defineTool = <INPUT, OUTPUT>({
+  name,
+  execute,
+  ...rest
+}: Omit<Tool<INPUT, OUTPUT>, "execute"> & {
+  /** Tool name used for error reporting. */
+  name: string;
+  /** Execute function. Receives parsed args and, optionally,
+   *  the full ToolExecutionOptions (abortSignal, toolCallId,
+   *  messages). Tools that do not need cancellation can omit
+   *  the second parameter. */
+  execute: (
+    args: INPUT,
+    options?: ToolExecutionOptions,
+  ) => OUTPUT | Promise<OUTPUT>;
+}): Tool<INPUT, OUTPUT | { error: string }> =>
+  tool({
+    ...rest,
+    execute: async (args: INPUT, options: ToolExecutionOptions) => {
+      try {
+        return await execute(args, options);
+      } catch (err) {
+        captureError(err, { toolName: name });
+        // SAFETY: the outer `as Tool<INPUT, OUTPUT | { error: string }>`
+        // widens the execute return type; this narrower return is sound
+        // within that widened context.
+        return { error: "Tool execution failed" } as unknown as OUTPUT;
+      }
+    },
+    // SAFETY: the execute wrapper widens the return type to
+    // include { error: string }; the cast aligns tool()'s
+    // inferred OUTPUT with the actual wrapped return type.
+  } as Tool<INPUT, OUTPUT | { error: string }>);
 
 /** Summarize a field value into a human-readable string. */
 const formatFieldValue = (content: FieldContent): string => {
@@ -116,7 +139,8 @@ export const createMatterTools = ({
   const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
 
   return {
-    searchMatter: tool({
+    searchMatter: defineTool({
+      name: "searchMatter",
       description:
         "Search for documents and files within a matter " +
         "using full-text search. Returns matching entity " +
@@ -136,7 +160,7 @@ export const createMatterTools = ({
           .default(10)
           .describe("Max results to return"),
       }),
-      execute: safeExecute(async ({ workspaceId, query, limit }) => {
+      execute: async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.search({
           query,
@@ -153,10 +177,11 @@ export const createMatterTools = ({
             headline: hit.headline,
           })),
         };
-      }, "searchMatter"),
+      },
     }),
 
-    listEntities: tool({
+    listEntities: defineTool({
+      name: "listEntities",
       description:
         "List documents, files, tasks, and folders in a " +
         "matter. Returns names, types, dates, and custom " +
@@ -180,7 +205,7 @@ export const createMatterTools = ({
           .default(50)
           .describe("Max entities to return"),
       }),
-      execute: safeExecute(async ({ workspaceId, kind, parentId, limit }) => {
+      execute: async ({ workspaceId, kind, parentId, limit }) => {
         const [ents, properties] = await Promise.all([
           scopedDb((tx) =>
             tx.query.entities.findMany({
@@ -241,10 +266,11 @@ export const createMatterTools = ({
             fields: fieldMap,
           };
         });
-      }, "listEntities"),
+      },
     }),
 
-    readEntity: tool({
+    readEntity: defineTool({
+      name: "readEntity",
       description:
         "Get detailed information about a specific entity " +
         "including all its property values (metadata).",
@@ -252,7 +278,7 @@ export const createMatterTools = ({
         workspaceId: wsSchema,
         entityId: z.string().describe("The entity ID to read"),
       }),
-      execute: safeExecute(async ({ workspaceId, entityId }) => {
+      execute: async ({ workspaceId, entityId }) => {
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
             where: {
@@ -315,10 +341,11 @@ export const createMatterTools = ({
               }))
               .filter((f) => f.value !== "") ?? [],
         };
-      }, "readEntity"),
+      },
     }),
 
-    readContent: tool({
+    readContent: defineTool({
+      name: "readContent",
       description:
         "Read the extracted text content of a document. Use " +
         "this to read actual file contents, not just metadata. " +
@@ -327,7 +354,7 @@ export const createMatterTools = ({
         workspaceId: wsSchema,
         entityId: z.string().describe("The entity ID whose content to read"),
       }),
-      execute: safeExecute(async ({ workspaceId, entityId }) => {
+      execute: async ({ workspaceId, entityId }) => {
         const row = await scopedDb((tx) =>
           tx.query.extractedContent.findFirst({
             where: {
@@ -372,10 +399,11 @@ export const createMatterTools = ({
           truncated,
           text,
         };
-      }, "readContent"),
+      },
     }),
 
-    updateEntityFields: tool({
+    updateEntityFields: defineTool({
+      name: "updateEntityFields",
       description:
         "Update a metadata field on an entity (document, " +
         "task, file). The property type is looked up " +
@@ -408,204 +436,200 @@ export const createMatterTools = ({
             "Current value before the change (for display in approval)",
           ),
       }),
-      execute: safeExecute(
-        async ({ workspaceId, entityId, propertyId, value }) => {
-          const property = await scopedDb((tx) =>
-            tx.query.properties.findFirst({
-              columns: { id: true, content: true },
-              where: {
-                id: propertyId,
-                workspaceId: { eq: workspaceId },
-              },
-            }),
-          );
+      execute: async ({ workspaceId, entityId, propertyId, value }) => {
+        const property = await scopedDb((tx) =>
+          tx.query.properties.findFirst({
+            columns: { id: true, content: true },
+            where: {
+              id: propertyId,
+              workspaceId: { eq: workspaceId },
+            },
+          }),
+        );
 
-          if (!property) {
-            return {
-              error:
-                `Property "${propertyId}" not found. ` +
-                "Check the system prompt for available " +
-                "property IDs.",
-            };
-          }
-
-          const propType = property.content.type;
-
-          // Build typed content from the flat value,
-          // validating against the property type.
-          // SAFETY: content is always assigned in the switch
-          // for non-null values; null values hit the isEmpty
-          // path which skips the insert.
-          let content!: FieldContent;
-          switch (propType) {
-            case "text": {
-              if (typeof value !== "string") {
-                return {
-                  error:
-                    `Property is "text"; pass a string ` +
-                    `value, not ${typeof value}.`,
-                };
-              }
-              content = { version: 1, type: "text", value };
-              break;
-            }
-            case "single-select": {
-              if (value !== null && typeof value !== "string") {
-                return {
-                  error:
-                    `Property is "single-select"; pass ` +
-                    `a string or null, not ${typeof value}.`,
-                };
-              }
-              // Validate option exists.
-              if (
-                value !== null &&
-                "options" in property.content &&
-                Array.isArray(property.content.options)
-              ) {
-                const valid = new Set(
-                  (
-                    property.content.options as {
-                      value: string;
-                    }[]
-                  ).map((o) => o.value),
-                );
-                if (!valid.has(value)) {
-                  return {
-                    error:
-                      `Invalid option "${value}". ` +
-                      `Valid: ${[...valid].join(", ")}`,
-                  };
-                }
-              }
-              content = {
-                version: 1,
-                type: "single-select",
-                value,
-              };
-              break;
-            }
-            case "multi-select": {
-              if (!Array.isArray(value)) {
-                return {
-                  error:
-                    'Property is "multi-select"; pass ' +
-                    "an array of strings.",
-                };
-              }
-              content = {
-                version: 1,
-                type: "multi-select",
-                value,
-              };
-              break;
-            }
-            case "date": {
-              if (value !== null && typeof value !== "string") {
-                return {
-                  error:
-                    'Property is "date"; pass an ISO ' +
-                    "date string (YYYY-MM-DD) or null.",
-                };
-              }
-              content = { version: 1, type: "date", value };
-              break;
-            }
-            case "int": {
-              if (value !== null && typeof value !== "number") {
-                return {
-                  error:
-                    `Property is "int"; pass a number ` +
-                    `or null, not ${typeof value}.`,
-                };
-              }
-              if (value !== null) {
-                content = {
-                  version: 1,
-                  type: "int",
-                  value,
-                  currency: null,
-                };
-              }
-              break;
-            }
-            default:
-              return {
-                error: `Unsupported property type "${propType}".`,
-              };
-          }
-
-          const entity = await scopedDb((tx) =>
-            tx.query.entities.findFirst({
-              columns: { id: true, currentVersionId: true },
-              where: {
-                id: entityId,
-                workspaceId: { eq: workspaceId },
-              },
-            }),
-          );
-
-          if (!entity) {
-            return {
-              error:
-                `Entity "${entityId}" not found. Use ` +
-                "listEntities to get valid entity IDs.",
-            };
-          }
-
-          if (!entity.currentVersionId) {
-            return {
-              error:
-                `Entity "${entityId}" has no current ` +
-                "version and cannot be updated.",
-            };
-          }
-
-          const versionId = entity.currentVersionId;
-
-          const isEmpty =
-            value === null ||
-            value === "" ||
-            (Array.isArray(value) && value.length === 0);
-
-          await scopedDb(async (tx) => {
-            await tx
-              .delete(fields)
-              .where(
-                and(
-                  eq(fields.propertyId, propertyId),
-                  eq(fields.entityVersionId, versionId),
-                ),
-              );
-
-            if (!isEmpty) {
-              await tx.insert(fields).values({
-                propertyId,
-                entityVersionId: versionId,
-                content,
-              });
-            }
-
-            await tx
-              .update(entities)
-              .set({ updatedAt: new Date() })
-              .where(eq(entities.id, entityId));
-          });
-
-          getSearchProvider().indexEntity(entityId).catch(captureError);
-
+        if (!property) {
           return {
-            success: true,
-            entityId,
-            propertyId,
-            newValue: isEmpty ? "" : formatFieldValue(content),
+            error:
+              `Property "${propertyId}" not found. ` +
+              "Check the system prompt for available " +
+              "property IDs.",
           };
-        },
-        "updateEntityFields",
-      ),
+        }
+
+        const propType = property.content.type;
+
+        // Build typed content from the flat value,
+        // validating against the property type.
+        // SAFETY: content is always assigned in the switch
+        // for non-null values; null values hit the isEmpty
+        // path which skips the insert.
+        let content!: FieldContent;
+        switch (propType) {
+          case "text": {
+            if (typeof value !== "string") {
+              return {
+                error:
+                  `Property is "text"; pass a string ` +
+                  `value, not ${typeof value}.`,
+              };
+            }
+            content = { version: 1, type: "text", value };
+            break;
+          }
+          case "single-select": {
+            if (value !== null && typeof value !== "string") {
+              return {
+                error:
+                  `Property is "single-select"; pass ` +
+                  `a string or null, not ${typeof value}.`,
+              };
+            }
+            // Validate option exists.
+            if (
+              value !== null &&
+              "options" in property.content &&
+              Array.isArray(property.content.options)
+            ) {
+              const valid = new Set(
+                (
+                  property.content.options as {
+                    value: string;
+                  }[]
+                ).map((o) => o.value),
+              );
+              if (!valid.has(value)) {
+                return {
+                  error:
+                    `Invalid option "${value}". ` +
+                    `Valid: ${[...valid].join(", ")}`,
+                };
+              }
+            }
+            content = {
+              version: 1,
+              type: "single-select",
+              value,
+            };
+            break;
+          }
+          case "multi-select": {
+            if (!Array.isArray(value)) {
+              return {
+                error: 'Property is "multi-select"; pass an array of strings.',
+              };
+            }
+            content = {
+              version: 1,
+              type: "multi-select",
+              value,
+            };
+            break;
+          }
+          case "date": {
+            if (value !== null && typeof value !== "string") {
+              return {
+                error:
+                  'Property is "date"; pass an ISO ' +
+                  "date string (YYYY-MM-DD) or null.",
+              };
+            }
+            content = { version: 1, type: "date", value };
+            break;
+          }
+          case "int": {
+            if (value !== null && typeof value !== "number") {
+              return {
+                error:
+                  `Property is "int"; pass a number ` +
+                  `or null, not ${typeof value}.`,
+              };
+            }
+            if (value !== null) {
+              content = {
+                version: 1,
+                type: "int",
+                value,
+                currency: null,
+              };
+            }
+            break;
+          }
+          default:
+            return {
+              error: `Unsupported property type "${propType}".`,
+            };
+        }
+
+        const entity = await scopedDb((tx) =>
+          tx.query.entities.findFirst({
+            columns: { id: true, currentVersionId: true },
+            where: {
+              id: entityId,
+              workspaceId: { eq: workspaceId },
+            },
+          }),
+        );
+
+        if (!entity) {
+          return {
+            error:
+              `Entity "${entityId}" not found. Use ` +
+              "listEntities to get valid entity IDs.",
+          };
+        }
+
+        if (!entity.currentVersionId) {
+          return {
+            error:
+              `Entity "${entityId}" has no current ` +
+              "version and cannot be updated.",
+          };
+        }
+
+        const versionId = entity.currentVersionId;
+
+        const isEmpty =
+          value === null ||
+          value === "" ||
+          (Array.isArray(value) && value.length === 0);
+
+        await scopedDb(async (tx) => {
+          await tx
+            .delete(fields)
+            .where(
+              and(
+                eq(fields.propertyId, propertyId),
+                eq(fields.entityVersionId, versionId),
+              ),
+            );
+
+          if (!isEmpty) {
+            await tx.insert(fields).values({
+              propertyId,
+              entityVersionId: versionId,
+              content,
+            });
+          }
+
+          await tx
+            .update(entities)
+            .set({ updatedAt: new Date() })
+            .where(eq(entities.id, entityId));
+        });
+
+        getSearchProvider().indexEntity(entityId).catch(captureError);
+
+        return {
+          success: true,
+          entityId,
+          propertyId,
+          newValue: isEmpty ? "" : formatFieldValue(content),
+        };
+      },
     }),
 
-    createDocument: tool({
+    createDocument: defineTool({
+      name: "createDocument",
       description:
         "Create a new DOCX document in the matter from " +
         "markdown content. Write the document body as " +
@@ -620,7 +644,7 @@ export const createMatterTools = ({
           .describe("Document file name (without .docx extension)"),
         markdown: z.string().describe("Document content as markdown"),
       }),
-      execute: safeExecute(async ({ workspaceId, name, markdown }) => {
+      execute: async ({ workspaceId, name, markdown }) => {
         const buffer = await markdownToDocx(markdown);
         const fileName = `${name}.docx`;
 
@@ -643,10 +667,11 @@ export const createMatterTools = ({
           entityId: result.entityId,
           fileName: result.fileName,
         };
-      }, "createDocument"),
+      },
     }),
 
-    searchContent: tool({
+    searchContent: defineTool({
+      name: "searchContent",
       description:
         "Search across document text content within a " +
         "matter. Returns matching passages from documents " +
@@ -668,7 +693,7 @@ export const createMatterTools = ({
           .default(5)
           .describe("Max results (default: 5)"),
       }),
-      execute: safeExecute(async ({ workspaceId, query, limit }) => {
+      execute: async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.searchContent({
           query,
@@ -690,7 +715,7 @@ export const createMatterTools = ({
             passage: hit.passage,
           })),
         };
-      }, "searchContent"),
+      },
     }),
   };
 };
@@ -708,7 +733,8 @@ export const createOrgTools = ({
   organizationId,
   scopedDb,
 }: OrgToolsContext) => ({
-  searchAcrossMatters: tool({
+  searchAcrossMatters: defineTool({
+    name: "searchAcrossMatters",
     description:
       "Search for documents across ALL matters in the " +
       "organization. Only use this when the user explicitly " +
@@ -727,7 +753,7 @@ export const createOrgTools = ({
         .default(10)
         .describe("Max results to return"),
     }),
-    execute: safeExecute(async ({ query, limit }) => {
+    execute: async ({ query, limit }) => {
       const provider = getSearchProvider();
       const result = await provider.search({
         query,
@@ -745,10 +771,11 @@ export const createOrgTools = ({
           headline: hit.headline,
         })),
       };
-    }, "searchAcrossMatters"),
+    },
   }),
 
-  readContentAcrossMatters: tool({
+  readContentAcrossMatters: defineTool({
+    name: "readContentAcrossMatters",
     description:
       "Read the extracted text content of a document from " +
       "any matter. Use after searchAcrossMatters finds a " +
@@ -756,7 +783,7 @@ export const createOrgTools = ({
     inputSchema: z.object({
       entityId: z.string().describe("The entity ID whose content to read"),
     }),
-    execute: safeExecute(async ({ entityId }) => {
+    execute: async ({ entityId }) => {
       // extracted_content has RLS; use scopedDb which has
       // all the user's workspace IDs.
       const row = await scopedDb((tx) =>
@@ -801,16 +828,17 @@ export const createOrgTools = ({
         truncated,
         text,
       };
-    }, "readContentAcrossMatters"),
+    },
   }),
 
-  readContact: tool({
+  readContact: defineTool({
+    name: "readContact",
     description: "Get details about a contact (person or organization).",
     inputSchema: z.object({
       contactId: z.string().describe("The contact ID to read"),
     }),
     // contacts is org-level (no RLS); use adminDb
-    execute: safeExecute(async ({ contactId }) => {
+    execute: async ({ contactId }) => {
       const contact = await adminDb.query.contacts.findFirst({
         where: {
           id: contactId,
@@ -842,17 +870,18 @@ export const createOrgTools = ({
         emails: contact.emails ?? [],
         phones: contact.phones ?? [],
       };
-    }, "readContact"),
+    },
   }),
 
-  listTemplates: tool({
+  listTemplates: defineTool({
+    name: "listTemplates",
     description: "List available document templates.",
     inputSchema: z.object({
       query: z.string().optional().describe("Filter by name (substring match)"),
       limit: z.number().int().min(1).max(50).optional().default(20),
     }),
     // templates is org-level (no RLS); use adminDb
-    execute: safeExecute(async ({ query, limit }) => {
+    execute: async ({ query, limit }) => {
       const templates = await adminDb.query.templates.findMany({
         where: {
           organizationId: { eq: organizationId },
@@ -874,16 +903,17 @@ export const createOrgTools = ({
         fileName: t.fileName,
         createdAt: t.createdAt.toISOString(),
       }));
-    }, "listTemplates"),
+    },
   }),
 
-  readClause: tool({
+  readClause: defineTool({
+    name: "readClause",
     description: "Read a legal clause including its full text body.",
     inputSchema: z.object({
       clauseId: z.string().describe("The clause ID to read"),
     }),
     // clauses is org-level (no RLS); use adminDb
-    execute: safeExecute(async ({ clauseId }) => {
+    execute: async ({ clauseId }) => {
       const clause = await adminDb.query.clauses.findFirst({
         where: {
           id: clauseId,
@@ -911,10 +941,11 @@ export const createOrgTools = ({
         version: clause.currentVersion,
         body: clause.body,
       };
-    }, "readClause"),
+    },
   }),
 
-  askUser: tool({
+  askUser: defineTool({
+    name: "askUser",
     description:
       "Ask the user clarifying questions before executing " +
       "a complex task. Use this when the request is " +
