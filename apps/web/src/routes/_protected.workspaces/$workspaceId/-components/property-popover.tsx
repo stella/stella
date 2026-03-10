@@ -161,13 +161,11 @@ const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
     };
   }
 
-  const isUninitialized = property.status === "uninitialized";
-
   if (property.content.type === "text") {
     return {
       version: 1,
       type: "text",
-      name: isUninitialized ? "" : property.name,
+      name: property.name,
       tool: property.tool,
     };
   }
@@ -176,7 +174,7 @@ const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
     return {
       version: 1,
       type: property.content.type,
-      name: isUninitialized ? "" : property.name,
+      name: property.name,
       tool: property.tool,
     };
   }
@@ -184,7 +182,7 @@ const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
   return {
     version: 1,
     type: property.content.type,
-    name: isUninitialized ? "" : property.name,
+    name: property.name,
     tool: property.tool,
     options: property.content.options,
     fallback: property.content.fallback,

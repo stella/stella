@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Kapcsolat elveszett",
+    "connectionLostDescription": "Elveszett a kapcsolat a szerverrel. Automatikus újrapróbálkozás folyamatban.",
     "convertTo": "Konvertálás",
     "createdAt": "Létrehozva: {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Rögzítés",
     "print": "Print",
     "properties": "Tulajdonságok",
+    "reconnecting": "Újracsatlakozás…",
     "reference": "Reference",
     "rename": "Átnevezés",
     "required": "Kötelező",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Képernyőkép csatolása",
     "screenshotFailed": "A képernyőkép rögzítése sikertelen",
     "screenshotHint": "Rögzíti az aktuális oldalt (e párbeszédablak nélkül), és elküldi a visszajelzéssel együtt.",
+    "sent": "Visszajelzés elküldve, köszönjük!",
     "submit": "Visszajelzés küldése",
     "suggestedFix": "Javasolt javítás (opcionális)",
     "suggestedFixPlaceholder": "pl. A küldés gomb legyen inaktív, ha az űrlap üres",
     "title": "Visszajelzés",
     "trigger": "Visszajelzés"
+  },
+  "filters": {
+    "contains": "Tartalmazza",
+    "eq": "Egyenlő",
+    "is_empty": "Üres",
+    "neq": "Nem egyenlő"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Egyszeres választás tulajdonság",
         "text": "Szöveges tulajdonság"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Keresd meg: {propertyName} ",
+      "defaultPromptPropertyName": "információ",
       "deleteProperty": "Tulajdonság törlése",
       "deletePropertyConfirmDescription": "Biztosan törölni szeretné a(z) \"{propertyName}\" tulajdonságot? Ez a művelet nem vonható vissza.",
       "editConditions": "Feltételek szerkesztése",

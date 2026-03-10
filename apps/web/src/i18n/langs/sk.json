@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Spojenie stratené",
+    "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky skúšame znova.",
     "convertTo": "Previesť na",
     "createdAt": "Vytvorené {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Pripnúť",
     "print": "Print",
     "properties": "Vlastnosti",
+    "reconnecting": "Obnovuje sa spojenie…",
     "reference": "Reference",
     "rename": "Premenovať",
     "required": "Povinné",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Priložiť snímku obrazovky",
     "screenshotFailed": "Zachytenie snímky obrazovky zlyhalo",
     "screenshotHint": "Zachytí aktuálnu stránku (bez tohto dialógu) a odošle ju s vašou spätnou väzbou.",
+    "sent": "Spätná väzba odoslaná, ďakujeme!",
     "submit": "Odoslať spätnú väzbu",
     "suggestedFix": "Navrhovaná oprava (nepovinné)",
     "suggestedFixPlaceholder": "napr. Tlačidlo odoslať by malo byť neaktívne, keď je formulár prázdny",
     "title": "Spätná väzba",
     "trigger": "Spätná väzba"
+  },
+  "filters": {
+    "contains": "Obsahuje",
+    "eq": "Je",
+    "is_empty": "Je prázdne",
+    "neq": "Nie je"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Vlastnosť jednoduchého výberu",
         "text": "Textová vlastnosť"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Nájdi {propertyName} v ",
+      "defaultPromptPropertyName": "informácie",
       "deleteProperty": "Vymazať vlastnosť",
       "deletePropertyConfirmDescription": "Naozaj chcete vymazať vlastnosť \"{propertyName}\"? Túto akciu nemožno vrátiť.",
       "editConditions": "Upraviť podmienky",

@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Connexion perdue",
+    "connectionLostDescription": "La connexion au serveur a été perdue. Reconnexion automatique en cours.",
     "convertTo": "Convertir en",
     "createdAt": "Créé le {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Épingler",
     "print": "Print",
     "properties": "Propriétés",
+    "reconnecting": "Reconnexion…",
     "reference": "Reference",
     "rename": "Renommer",
     "required": "Obligatoire",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Joindre une capture d'écran",
     "screenshotFailed": "Échec de la capture d'écran",
     "screenshotHint": "Capture la page actuelle (sans cette fenêtre) et l'envoie avec vos commentaires.",
+    "sent": "Retour envoyé, merci !",
     "submit": "Envoyer",
     "suggestedFix": "Correction suggérée (facultatif)",
     "suggestedFixPlaceholder": "p. ex. Désactiver le bouton d'envoi lorsque le formulaire est vide",
     "title": "Commentaires",
     "trigger": "Commentaires"
+  },
+  "filters": {
+    "contains": "Contient",
+    "eq": "Est",
+    "is_empty": "Est vide",
+    "neq": "N'est pas"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Propriété à sélection unique",
         "text": "Propriété de texte"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Trouve {propertyName} dans ",
+      "defaultPromptPropertyName": "informations",
       "deleteProperty": "Supprimer la propriété",
       "deletePropertyConfirmDescription": "Voulez-vous vraiment supprimer la propriété « {propertyName} » ? Cette action est irréversible.",
       "editConditions": "Modifier les conditions",

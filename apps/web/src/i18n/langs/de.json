@@ -439,6 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
+    "connectionLost": "Verbindung verloren",
+    "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederverbindung läuft.",
     "convertTo": "Konvertieren zu",
     "createdAt": "Erstellt am {date}",
     "currency": "Currency",
@@ -472,6 +474,7 @@
     "pin": "Anheften",
     "print": "Print",
     "properties": "Eigenschaften",
+    "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Reference",
     "rename": "Umbenennen",
     "required": "Erforderlich",
@@ -647,11 +650,18 @@
     "includeScreenshot": "Screenshot anhängen",
     "screenshotFailed": "Screenshot-Aufnahme fehlgeschlagen",
     "screenshotHint": "Erfasst die aktuelle Seite (ohne diesen Dialog) und sendet sie mit Ihrem Feedback.",
+    "sent": "Feedback gesendet, vielen Dank!",
     "submit": "Feedback senden",
     "suggestedFix": "Lösungsvorschlag (optional)",
     "suggestedFixPlaceholder": "z. B. Senden-Schaltfläche deaktivieren, wenn das Formular leer ist",
     "title": "Feedback",
     "trigger": "Feedback"
+  },
+  "filters": {
+    "contains": "Enthält",
+    "eq": "Ist",
+    "is_empty": "Ist leer",
+    "neq": "Ist nicht"
   },
   "knowledge": {
     "sections": {
@@ -1104,8 +1114,8 @@
         "singleSelect": "Einfachauswahl-Eigenschaft",
         "text": "Texteigenschaft"
       },
-      "defaultPromptPrefix": "Find {propertyName} in ",
-      "defaultPromptPropertyName": "information",
+      "defaultPromptPrefix": "Finde {propertyName} in ",
+      "defaultPromptPropertyName": "Informationen",
       "deleteProperty": "Eigenschaft löschen",
       "deletePropertyConfirmDescription": "Möchten Sie die Eigenschaft \"{propertyName}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
       "editConditions": "Bedingungen bearbeiten",
