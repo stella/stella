@@ -144,7 +144,7 @@ const MemberRow = ({
             render={
               <Button
                 aria-label={t("workspaces.members.removeMember")}
-                className="ml-auto"
+                className="ms-auto"
                 size="icon-xs"
                 variant="ghost"
               />

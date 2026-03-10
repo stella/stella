@@ -8,9 +8,9 @@ type ClauseDiffViewProps = {
 
 const statusBorder: Record<ParagraphDiff["status"], string> = {
   equal: "",
-  modified: "border-l-2 border-l-amber-400 pl-3",
-  added: "border-l-2 border-l-green-500 pl-3",
-  removed: "border-l-2 border-l-red-500 pl-3",
+  modified: "border-s-2 border-s-amber-400 ps-3",
+  added: "border-s-2 border-s-green-500 ps-3",
+  removed: "border-s-2 border-s-red-500 ps-3",
 };
 
 export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (

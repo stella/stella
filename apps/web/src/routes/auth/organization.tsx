@@ -126,7 +126,7 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
           <button
-            className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors hover:bg-accent/50 disabled:opacity-64"
+            className="flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start transition-colors hover:bg-accent/50 disabled:opacity-64"
             disabled={selectOrganization.isPending}
             key={org.id}
             onClick={() => selectOrganization.mutate(org.id)}

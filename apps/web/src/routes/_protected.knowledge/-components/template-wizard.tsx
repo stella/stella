@@ -229,7 +229,7 @@ export const ConfigureStep = ({
                 return (
                   <li key={field.path}>
                     <button
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-start text-sm hover:bg-muted/50"
                       onClick={() =>
                         setExpandedField(isExpanded ? null : field.path)
                       }
@@ -371,7 +371,7 @@ export const FieldConfigEditor = ({
   const t = useTranslations();
 
   return (
-    <div className="flex flex-col gap-4 border-t bg-muted/30 px-4 py-4 pl-11">
+    <div className="flex flex-col gap-4 border-t bg-muted/30 px-4 py-4 ps-11">
       <p className="rounded bg-muted/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
         <code>{field.path}</code>
       </p>

@@ -307,7 +307,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     <div
       className={cn(
         "group/row flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50",
-        handleOpen && "w-full cursor-pointer text-left",
+        handleOpen && "w-full cursor-pointer text-start",
       )}
       onClick={handleOpen}
       onContextMenu={handleContextMenu}

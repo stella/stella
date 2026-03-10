@@ -143,7 +143,7 @@ export const TemplateAssistantPanel = () => {
         {messages.map((msg) => (
           <div
             className={`mb-2 rounded-lg px-3 py-2 text-xs ${
-              msg.role === "user" ? "ml-4 bg-muted" : "mr-4 bg-primary/5"
+              msg.role === "user" ? "ms-4 bg-muted" : "me-4 bg-primary/5"
             }`}
             key={msg.id}
           >

@@ -74,7 +74,7 @@ export const BillingCodesDialog = ({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-w-lg">
         <div className="flex flex-col gap-4 p-4">
-          <div className="flex items-center justify-between pr-6">
+          <div className="flex items-center justify-between pe-6">
             <h3 className="text-sm font-medium">
               {t("billing.codes.manageCodes")}
             </h3>

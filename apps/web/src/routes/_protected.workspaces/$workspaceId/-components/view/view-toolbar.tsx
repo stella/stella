@@ -239,7 +239,7 @@ const PropertiesToggle = ({
             <MenuSeparator />
             <MenuGroup>
               <MenuGroupLabel>
-                <SparklesIcon className="mr-1 inline size-3" />
+                <SparklesIcon className="me-1 inline size-3" />
                 {t("workspaces.views.aiGenerated")}
               </MenuGroupLabel>
               {aiProperties.map((prop) => {

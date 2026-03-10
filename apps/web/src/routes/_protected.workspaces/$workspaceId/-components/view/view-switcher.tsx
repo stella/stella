@@ -344,7 +344,7 @@ const ViewTab = ({
       ref={containerRef}
     >
       <TabsTab
-        className={cn(isActive && "pr-6.5")}
+        className={cn(isActive && "pe-6.5")}
         onClick={onSelect}
         onDoubleClick={(e) => {
           if (!canUpdateView) {
@@ -362,7 +362,7 @@ const ViewTab = ({
       {isActive && (canUpdateView || canCreateView || canDeleteView) && (
         <ViewTabMenu
           canDelete={canDelete}
-          className="absolute top-1/2 right-0 -translate-y-1/2"
+          className="absolute end-0 top-1/2 -translate-y-1/2"
           onRename={() => {
             setIsRenaming(true);
             setRenameValue(name);

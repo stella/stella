@@ -164,10 +164,10 @@ export const LinkClauseDialog = ({
         <DialogPanel className="grid gap-4">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <SearchIcon className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+              <SearchIcon className="absolute start-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
                 aria-label={t("clauses.searchClauses")}
-                className="pl-8"
+                className="ps-8"
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("clauses.searchClauses")}
                 value={search}
@@ -197,7 +197,7 @@ export const LinkClauseDialog = ({
               {filtered.map((clause) => (
                 <li key={clause.id}>
                   <button
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm ${
                       selectedClauseId === clause.id
                         ? "bg-muted"
                         : "hover:bg-muted/50"

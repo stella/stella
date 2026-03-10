@@ -410,7 +410,7 @@ const ArrayFieldRenderer = ({
           key={`${field.path}-${String(index)}`}
         >
           <Button
-            className="absolute top-2 right-2"
+            className="absolute end-2 top-2"
             onClick={() => removeItem(index)}
             size="icon-xs"
             variant="ghost"

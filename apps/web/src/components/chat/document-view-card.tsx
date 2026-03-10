@@ -41,7 +41,7 @@ export const DocumentViewCard = ({ result }: DocumentViewCardProps) => {
       >
         <FileTextIcon className="size-3.5" />
         <span className="font-medium">{result.filename}</span>
-        <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">
+        <span className="ms-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">
           {viewLabel}
         </span>
       </div>

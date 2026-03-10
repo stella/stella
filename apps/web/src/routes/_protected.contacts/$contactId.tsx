@@ -118,7 +118,7 @@ function ContactDetailPage() {
           </span>
         </div>
         {canDeleteContact && (
-          <div className="ml-auto">
+          <div className="ms-auto">
             <Button
               disabled={deleteContact.isPending}
               onClick={() => setIsDeleteOpen(true)}
@@ -427,7 +427,7 @@ function ContactDetailPage() {
                   >
                     {matter.name}
                   </Link>
-                  <span className="ml-auto text-xs text-muted-foreground">
+                  <span className="ms-auto text-xs text-muted-foreground">
                     {t("common.createdAt", {
                       date: new Date(matter.createdAt).toLocaleDateString(),
                     })}
@@ -601,7 +601,7 @@ const EditableRow = ({
         <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
       )}
       <button
-        className="cursor-text text-left text-sm hover:text-foreground"
+        className="cursor-text text-start text-sm hover:text-foreground"
         onClick={() => {
           setInputValue(value ?? "");
           setIsEditing(true);

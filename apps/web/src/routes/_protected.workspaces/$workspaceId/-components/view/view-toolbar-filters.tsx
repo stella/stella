@@ -138,7 +138,7 @@ const FilterChipWrapper = ({
   children,
 }: FilterChipWrapperProps) => (
   <div className="flex items-center gap-1 rounded-md border bg-muted/50">
-    <span className="pl-2 text-xs font-medium">{label}</span>
+    <span className="ps-2 text-xs font-medium">{label}</span>
     {children}
     <Button onClick={onRemove} size="icon-xs" variant="ghost">
       <XIcon />

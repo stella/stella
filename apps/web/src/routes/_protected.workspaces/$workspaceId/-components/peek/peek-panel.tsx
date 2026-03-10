@@ -170,7 +170,7 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
   return (
     <div className="flex h-full bg-background">
       {/* Vertical tab bar */}
-      <div className="flex w-9 shrink-0 flex-col border-r bg-muted/50">
+      <div className="flex w-9 shrink-0 flex-col border-e bg-muted/50">
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {tabs.map((tab) => (
@@ -286,7 +286,7 @@ const VerticalTab = ({
           className={cn(
             "group/tab relative flex h-9 w-full items-center justify-center border-b text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
             active &&
-              "bg-background text-foreground before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary",
+              "bg-background text-foreground before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:bg-primary",
           )}
           onAuxClick={(e) => {
             // Middle-click to close

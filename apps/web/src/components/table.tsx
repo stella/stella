@@ -62,7 +62,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       className={cn(
-        "relative z-0 h-8 border-r bg-background px-2 text-left align-middle font-semibold whitespace-nowrap text-foreground transition-colors last:border-r-0 hover:bg-accent [&:has([role=checkbox])]:pr-0 *:[[role=checkbox]]:translate-y-[2px]",
+        "relative z-0 h-8 border-e bg-background px-2 text-start align-middle font-semibold whitespace-nowrap text-foreground transition-colors last:border-e-0 hover:bg-accent [&:has([role=checkbox])]:pe-0 *:[[role=checkbox]]:translate-y-[2px]",
         className,
       )}
       data-slot="table-head"
@@ -75,7 +75,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       className={cn(
-        "group/cell-content relative z-0 h-auto min-h-8 overflow-hidden border-r bg-background p-2 align-middle whitespace-nowrap group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))] last:border-r-0",
+        "group/cell-content relative z-0 h-auto min-h-8 overflow-hidden border-e bg-background p-2 align-middle whitespace-nowrap group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))] last:border-e-0",
         className,
       )}
       data-slot="table-cell"

@@ -43,7 +43,7 @@ function DecisionViewer() {
     <div className="flex flex-1 overflow-hidden">
       {/* Left: Section TOC */}
       {sections.length > 0 && (
-        <aside className="hidden w-56 shrink-0 overflow-y-auto border-r p-3 lg:block">
+        <aside className="hidden w-56 shrink-0 overflow-y-auto border-e p-3 lg:block">
           <SectionToc sections={sections} />
         </aside>
       )}
@@ -55,7 +55,7 @@ function DecisionViewer() {
 
       {/* Right: Metadata sidebar */}
       {decision.source && (
-        <aside className="hidden w-72 shrink-0 overflow-y-auto border-l p-4 xl:block">
+        <aside className="hidden w-72 shrink-0 overflow-y-auto border-s p-4 xl:block">
           <MetadataPanel
             decision={{
               ...decision,

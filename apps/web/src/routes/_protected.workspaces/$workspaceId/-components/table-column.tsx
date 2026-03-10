@@ -134,7 +134,7 @@ const WithOpenEntityButton = ({
     <>
       {children}
       <Button
-        className="absolute right-2 bottom-2 hidden group-hover/cell-content:block"
+        className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
         onClick={async () => {
           createBoundingBoxes();
 
@@ -191,7 +191,7 @@ const WithEditFieldButton = ({
     <>
       {children}
       <EditFieldDialog
-        className="absolute right-2 bottom-2 hidden group-hover/cell-content:block"
+        className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
         entityId={entityId}
         entityKind={entityKind}
         fieldContent={editableFieldContent}

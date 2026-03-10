@@ -106,7 +106,7 @@ function Members() {
               <TableCell>{member.user.email}</TableCell>
               <TableCell>{t(`organization.roles.${member.role}`)}</TableCell>
               <TableCell>{formatDate(member.createdAt)}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-end">
                 <Menu>
                   <Tooltip
                     content={t("common.actions")}

@@ -88,7 +88,7 @@ export const PdfViewerControls = () => {
   }, 100);
 
   return (
-    <div className="ml-auto flex items-center justify-between">
+    <div className="ms-auto flex items-center justify-between">
       <Tooltip
         content={t("workspaces.pdf.goBack")}
         render={
@@ -248,11 +248,11 @@ export const PdfViewerControls = () => {
       >
         <ChevronDownIcon />
       </Tooltip>
-      <div className="mr-2 ml-1.5 flex gap-x-1.5 text-sm">
+      <div className="ms-1.5 me-2 flex gap-x-1.5 text-sm">
         <input
           aria-label={t("common.currentPage")}
           autoComplete="off"
-          className="mr-1 w-14 rounded border px-1 text-end"
+          className="me-1 w-14 rounded border px-1 text-end"
           inputMode="numeric"
           onBlur={() => {
             if (

@@ -77,7 +77,7 @@ function Invitations() {
               </TableCell>
               <TableCell>{formatDate(invitation.createdAt)}</TableCell>
               <TableCell>{formatDate(invitation.expiresAt)}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-end">
                 <Menu>
                   <Tooltip
                     content={t("common.actions")}

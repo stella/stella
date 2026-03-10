@@ -51,7 +51,7 @@ export const ToolCallCard = ({
     <div className="my-1 rounded-md border bg-muted/40 text-xs">
       <button
         className={cn(
-          "flex w-full items-center gap-1.5 px-2 py-1.5 text-left",
+          "flex w-full items-center gap-1.5 px-2 py-1.5 text-start",
           !canExpand && "cursor-default",
         )}
         onClick={() => canExpand && setExpanded((e) => !e)}

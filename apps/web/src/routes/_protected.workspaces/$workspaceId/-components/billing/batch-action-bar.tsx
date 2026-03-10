@@ -78,7 +78,7 @@ export const BatchActionBar = ({
       <span className="text-sm font-medium">
         {t("billing.selectedCount", { count: selectedIds.length })}
       </span>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ms-auto flex items-center gap-1">
         {canUpdateEntry && (
           <>
             <Button

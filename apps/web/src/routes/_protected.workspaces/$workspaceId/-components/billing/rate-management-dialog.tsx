@@ -122,7 +122,7 @@ const RateTablesView = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between pr-6">
+      <div className="flex items-center justify-between pe-6">
         <h3 className="text-sm font-medium">{t("billing.rates.rateTables")}</h3>
         <Button
           onClick={() => setShowForm(!showForm)}
@@ -162,7 +162,7 @@ const RateTablesView = ({
               key={table.id}
             >
               <button
-                className="flex min-w-0 flex-1 flex-col gap-0.5 text-left"
+                className="flex min-w-0 flex-1 flex-col gap-0.5 text-start"
                 onClick={() => onSelectTable(table.id)}
                 type="button"
               >

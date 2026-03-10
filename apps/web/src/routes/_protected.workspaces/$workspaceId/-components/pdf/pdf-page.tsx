@@ -204,7 +204,7 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
   return (
     <>
       <canvas
-        className="absolute top-0 left-0 h-full w-full contain-content"
+        className="absolute start-0 top-0 h-full w-full contain-content"
         ref={canvasRef}
       />
       <div
