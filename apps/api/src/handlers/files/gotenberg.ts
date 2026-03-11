@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
+import { applyFitToPage } from "@/api/handlers/files/xlsx-preprocess";
 
 /**
  * MIME types that Gotenberg's LibreOffice route can convert
@@ -45,6 +46,16 @@ const CONVERTIBLE_MIME_TYPES: Record<string, null> = {
 export const isConvertibleMimeType = (mimeType: string): boolean =>
   mimeType in CONVERTIBLE_MIME_TYPES;
 
+/**
+ * Spreadsheet MIME types (.xls, .xlsx) that benefit from the
+ * fit-to-page pre-processor. ODS uses ODF format (different ZIP
+ * structure), so we skip it.
+ */
+const XLSX_MIME_TYPES = new Set([
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
 type ConvertToPdfResult = {
   buffer: ArrayBuffer;
   sizeBytes: number;
@@ -59,12 +70,17 @@ export class GotenbergError extends TaggedError("GotenbergError")<{
 export const convertToPdf = (
   fileBuffer: ArrayBuffer,
   fileName: string,
+  mimeType: string,
 ): Promise<Result<ConvertToPdfResult, GotenbergError>> =>
   Result.tryPromise(
     {
       try: async () => {
+        const buffer = XLSX_MIME_TYPES.has(mimeType)
+          ? await applyFitToPage(fileBuffer)
+          : fileBuffer;
+
         const formData = new FormData();
-        formData.append("files", new Blob([fileBuffer]), fileName);
+        formData.append("files", new Blob([buffer]), fileName);
         formData.append("exportNotes", "true");
         formData.append("exportNotesInMargin", "true");
 
@@ -91,10 +107,10 @@ export const convertToPdf = (
           });
         }
 
-        const buffer = await response.arrayBuffer();
+        const result = await response.arrayBuffer();
         return {
-          buffer,
-          sizeBytes: buffer.byteLength,
+          buffer: result,
+          sizeBytes: result.byteLength,
         };
       },
       catch: (cause) => {

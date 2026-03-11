@@ -174,7 +174,9 @@ export const uploadEntityHandler = async ({
 
   const [, conversionResult] = await Promise.all([
     s3.write(sourceKey, new Uint8Array(fileBuffer)),
-    shouldConvert ? convertToPdf(fileBuffer, name) : Promise.resolve(null),
+    shouldConvert
+      ? convertToPdf(fileBuffer, name, file.type)
+      : Promise.resolve(null),
   ]);
 
   // If conversion was expected but failed, clean up and
