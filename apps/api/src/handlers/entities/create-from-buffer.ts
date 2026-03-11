@@ -88,7 +88,7 @@ export const createEntityFromBuffer = async ({
     const [, pdfResult] = await Promise.all([
       s3.write(s3Key, bytes),
       shouldConvert
-        ? convertToPdf(bytes.buffer as ArrayBuffer, fileName)
+        ? convertToPdf(bytes.buffer as ArrayBuffer, fileName, mimeType)
         : Promise.resolve(null),
     ]);
     if (pdfResult && Result.isOk(pdfResult)) {

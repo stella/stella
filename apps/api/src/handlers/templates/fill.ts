@@ -125,6 +125,7 @@ export const fillHandler = async ({
         docxBytes.byteOffset + docxBytes.byteLength,
       ),
       sanitizeFilename(file.name),
+      DOCX_MIME_TYPE,
     );
     if (Result.isError(pdfResult)) {
       return new Response(JSON.stringify({ error: "PDF conversion failed" }), {

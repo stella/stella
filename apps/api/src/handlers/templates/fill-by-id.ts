@@ -123,6 +123,7 @@ export const fillByIdHandler = async ({
         docxBytes.byteOffset + docxBytes.byteLength,
       ),
       baseName,
+      DOCX_MIME_TYPE,
     );
     if (Result.isError(pdfResult)) {
       return status(502, {
