@@ -164,7 +164,7 @@ function ProtectedContent({
   toggleRight,
 }: ProtectedContentProps) {
   const t = useTranslations();
-  const { open, isMobile } = useSidebar();
+  const { isMobile } = useSidebar();
   const togglePin = usePinnedStore((s) => s.togglePin);
   const pinnedIds = usePinnedStore((s) => s.pinnedIds);
   const projectMatch = useMatch({
@@ -190,7 +190,7 @@ function ProtectedContent({
   return (
     <SidebarInset className="flex flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
-        {(!open || isMobile) && (
+        {isMobile && (
           <>
             <SidebarTrigger className="-ms-1" />
             <Separator className="me-2 h-4" orientation="vertical" />
