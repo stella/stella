@@ -108,14 +108,20 @@ export const FeedbackDialog = () => {
     <SidebarMenuItem>
       <Dialog onOpenChange={handleOpen} open={open}>
         <DialogTrigger
-          render={<SidebarMenuButton disabled={capturing} size="sm" />}
+          render={
+            <SidebarMenuButton
+              disabled={capturing}
+              size="sm"
+              tooltip={t("feedback.trigger")}
+            />
+          }
         >
           {capturing ? (
             <LoaderIcon className="size-4 animate-spin" />
           ) : (
             <MessageSquarePlusIcon className="size-4" />
           )}
-          {t("feedback.trigger")}
+          <span>{t("feedback.trigger")}</span>
         </DialogTrigger>
         <DialogPopup className="max-w-md">
           <form onSubmit={handleSubmit}>

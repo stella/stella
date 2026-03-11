@@ -79,6 +79,7 @@ import {
   PopoverTrigger,
 } from "@stella/ui/components/popover";
 import { toastManager } from "@stella/ui/components/toast";
+import { cn } from "@stella/ui/lib/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { FeedbackDialog } from "@/components/feedback-dialog";
@@ -522,7 +523,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const queryClient = useQueryClient();
   const navigate = routeApi.useNavigate();
   const createWorkspace = useCreateWorkspace();
-  const { toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile } = useSidebar();
+  const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
@@ -728,11 +730,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   };
 
   return (
-    <Sidebar {...props}>
+    <Sidebar {...props} collapsible="icon">
       {/* Stella logo header */}
       <SidebarHeader>
-        <div className="flex items-center justify-between ps-2">
-          <StellaWordmark className="h-5 w-auto" />
+        <div
+          className={
+            isCollapsed
+              ? "flex items-center justify-center"
+              : "flex items-center justify-between ps-2"
+          }
+        >
+          {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button
             className="size-7 text-muted-foreground"
             onClick={toggleSidebar}
@@ -1009,32 +1017,42 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           <FeedbackDialog />
           <SidebarMenuItem>
             <Menu>
-              <MenuTrigger className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-start text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">
+              <MenuTrigger
+                className={cn(
+                  "flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent",
+                  isCollapsed ? "justify-center" : "gap-2",
+                )}
+                title={isCollapsed ? displayName : undefined}
+              >
                 <Avatar className="size-7 rounded-full">
                   {user.image && <AvatarImage src={user.image} />}
                   <AvatarFallback className="text-[0.625rem]">
                     {getInitials(displayName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex min-w-0 flex-col justify-center">
-                  {user.name ? (
-                    <>
-                      <span className="truncate text-sm font-medium">
-                        {user.name}
-                      </span>
-                      {user.email && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {user.email}
+                {!isCollapsed && (
+                  <>
+                    <div className="flex min-w-0 flex-col justify-center">
+                      {user.name ? (
+                        <>
+                          <span className="truncate text-sm font-medium">
+                            {user.name}
+                          </span>
+                          {user.email && (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {user.email}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="truncate text-sm font-medium">
+                          {user.email || t("common.user")}
                         </span>
                       )}
-                    </>
-                  ) : (
-                    <span className="truncate text-sm font-medium">
-                      {user.email || t("common.user")}
-                    </span>
-                  )}
-                </div>
-                <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
+                    </div>
+                    <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
+                  </>
+                )}
               </MenuTrigger>
               <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
                 {orgName && (
