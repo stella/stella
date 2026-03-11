@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { workspaceContacts } from "@/api/db/schema";
@@ -39,7 +40,7 @@ type CreateWorkspaceContactHandlerProps = {
   body: CreateWorkspaceContactBody;
 };
 
-export const createWorkspaceContactHandler = async ({
+export const createWorkspaceContactHandler = ({
   scopedDb,
   workspaceId,
   organizationId,

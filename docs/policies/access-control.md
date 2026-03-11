@@ -85,7 +85,7 @@ operations runbook (private).
   without the macro causes a type error (missing `SafeId`).
 - Branch protection rules are enforced by GitHub and audited
   weekly.
-- Biome's `noSecrets` lint rule (entropy threshold 50) blocks
+- oxlint's `no-secrets` lint rule (entropy threshold 50) blocks
   commits containing tokens or credentials.
 
 ## Review

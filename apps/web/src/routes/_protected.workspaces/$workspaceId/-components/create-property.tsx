@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -79,7 +80,7 @@ export const CreateProperty = ({ workspaceId }: CreatePropertyProps) => {
         <MenuTrigger
           render={
             <Button
-              className="h-full! min-w-10 rounded-none hover:bg-accent"
+              className="hover:bg-accent h-full! min-w-10 rounded-none"
               disabled={createProperty.isPending}
               size="icon"
               type="button"
@@ -130,7 +131,7 @@ export const CreateProperty = ({ workspaceId }: CreatePropertyProps) => {
           <div className="flex items-center gap-2 px-6 pb-4">
             {selectedType && (
               <PropertyIcon
-                className="size-4 shrink-0 text-muted-foreground"
+                className="text-muted-foreground size-4 shrink-0"
                 type={selectedType}
               />
             )}

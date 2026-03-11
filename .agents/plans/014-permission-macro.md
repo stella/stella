@@ -135,6 +135,7 @@ Mechanical replacement at each route:
 ```
 
 Remove `permission` from imports:
+
 ```diff
 -import { permission, workspaceAccessMacro } from "@/api/lib/auth";
 +import { workspaceAccessMacro } from "@/api/lib/auth";

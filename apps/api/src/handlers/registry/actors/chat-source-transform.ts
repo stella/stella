@@ -3,8 +3,9 @@ import { and, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
-// biome-ignore lint/style/noRestrictedImports: brands verified workspace IDs
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- brands verified workspace IDs
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 const SOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "readEntity",

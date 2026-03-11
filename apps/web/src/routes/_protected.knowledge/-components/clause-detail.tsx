@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import {
   ArrowLeftIcon,
   Loader2Icon,
@@ -43,10 +44,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
-import {
-  diffClauseBodies,
-  type ParagraphDiff,
-} from "@/routes/_protected.knowledge/-components/clause-diff";
+import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
+import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
@@ -166,7 +165,7 @@ export const ClauseDetailView = ({
     };
 
     if (!cancelled) {
-      // biome-ignore lint/nursery/noFloatingPromises: effect
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       doLoad();
     }
 
@@ -244,6 +243,7 @@ export const ClauseDetailView = ({
                     </AlertDialogClose>
                     <Button
                       disabled={deleting}
+                      // eslint-disable-next-line typescript/no-misused-promises
                       onClick={handleDelete}
                       variant="destructive"
                     >
@@ -259,7 +259,7 @@ export const ClauseDetailView = ({
 
       {state.kind === "loading" && (
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("clauses.loading")}
           </p>
         </div>
@@ -267,7 +267,7 @@ export const ClauseDetailView = ({
 
       {state.kind === "error" && (
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("clauses.loadFailed")}
           </p>
         </div>
@@ -278,6 +278,7 @@ export const ClauseDetailView = ({
           categories={categories}
           clauseId={clauseId}
           detail={state.detail}
+          // eslint-disable-next-line typescript/no-misused-promises
           onRefresh={load}
         />
       )}
@@ -295,6 +296,7 @@ export const ClauseDetailView = ({
             bodyParagraphs: state.detail.body,
           }}
           onOpenChange={setEditOpen}
+          // eslint-disable-next-line typescript/no-misused-promises
           onSaved={load}
           open={editOpen}
         />
@@ -327,7 +329,7 @@ const DetailContent = ({
     <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">{detail.title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-muted-foreground mt-1 text-sm">
           {categoryName ?? t("clauses.uncategorized")}
           {" \u00b7 "}
           {t("clauses.version", {
@@ -339,7 +341,7 @@ const DetailContent = ({
           })}
         </p>
         {detail.description && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-2 text-sm">
             {detail.description}
           </p>
         )}
@@ -358,10 +360,10 @@ const DetailContent = ({
           </div>
           {detail.usageNotes && (
             <div className="mt-3">
-              <p className="text-xs font-medium text-muted-foreground">
+              <p className="text-muted-foreground text-xs font-medium">
                 {t("clauses.usageNotes")}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-sm">
                 {detail.usageNotes}
               </p>
             </div>
@@ -405,7 +407,7 @@ const VariantsTab = ({
   return (
     <div className="mt-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-muted-foreground text-sm">
           {String(variants.length)}
         </span>
         <Button onClick={() => setAddOpen(true)} size="sm" variant="outline">
@@ -415,7 +417,7 @@ const VariantsTab = ({
       </div>
 
       {variants.length === 0 && (
-        <p className="py-4 text-center text-sm text-muted-foreground">
+        <p className="text-muted-foreground py-4 text-center text-sm">
           {t("clauses.noVariants")}
         </p>
       )}
@@ -529,6 +531,7 @@ const VariantRow = ({
               </AlertDialogClose>
               <Button
                 disabled={deleting}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={handleDelete}
                 variant="destructive"
               >
@@ -539,7 +542,7 @@ const VariantRow = ({
         </AlertDialog>
       </div>
       {body.length > 0 && (
-        <div className="mt-2 rounded border bg-muted/30 p-3">
+        <div className="bg-muted/30 mt-2 rounded border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
@@ -637,6 +640,7 @@ const VariantFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
+          {/* eslint-disable-next-line typescript/no-misused-promises */}
           <Button disabled={saving || !label.trim()} onClick={handleSave}>
             {t("common.save")}
           </Button>
@@ -711,7 +715,7 @@ const HistoryTab = ({
 
   if (versions.length === 0) {
     return (
-      <p className="mt-4 py-4 text-center text-sm text-muted-foreground">
+      <p className="text-muted-foreground mt-4 py-4 text-center text-sm">
         {t("clauses.noVersions")}
       </p>
     );
@@ -719,7 +723,7 @@ const HistoryTab = ({
 
   return (
     <div className="mt-4 space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         {t("clauses.selectVersionToCompare")}
       </p>
       <div className="rounded-lg border">
@@ -733,6 +737,7 @@ const HistoryTab = ({
                   "hover:bg-muted/50",
                   selectedId === ver.id && "bg-muted",
                 )}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() => handleVersionClick(ver.id)}
                 type="button"
               >
@@ -755,7 +760,7 @@ const HistoryTab = ({
 
       {loading && (
         <div className="flex items-center justify-center py-4">
-          <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+          <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
         </div>
       )}
 
@@ -765,7 +770,7 @@ const HistoryTab = ({
             {t("clauses.compareWithCurrent")}
           </h4>
           {diffResult.every((d) => d.status === "equal") ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {t("clauses.noChanges")}
             </p>
           ) : (

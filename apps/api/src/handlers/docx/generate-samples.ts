@@ -1,4 +1,4 @@
-/* biome-ignore-all lint/suspicious/noConsole: CLI script */
+/* eslint-disable no-console */
 /**
  * Generate sample DOCX files for manual verification in Word.
  *
@@ -176,7 +176,7 @@ This Agreement shall remain in effect for a period of two (2) years from the Eff
 
 const generateFilledTemplate = async () => {
   const SPA_FIXTURE = new URL(
-    "./fixtures/spa-template-with-placeholders.docx",
+    "fixtures/spa-template-with-placeholders.docx",
     import.meta.url,
   ).pathname;
 
@@ -221,7 +221,7 @@ const run = async () => {
   console.log("\nDone. Open the files in Word to verify.");
 };
 
-run().catch((err) => {
-  console.error(err);
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

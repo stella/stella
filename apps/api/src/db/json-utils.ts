@@ -39,7 +39,7 @@ export const jsonField =
   ) =>
   <TKey extends ColumnDataKeys<TColumn, TVersion>>(key: TKey) => {
     if (typeof key !== "string") {
-      throw new Error("JSON field key literal must be a string");
+      throw new TypeError("JSON field key literal must be a string");
     }
 
     if (column.dataType !== "object json") {
@@ -58,7 +58,7 @@ export const jsonLiteral = <
   value: KeysOfUnion<TData, TVersion>,
 ) => {
   if (typeof value !== "string") {
-    throw new Error("JSON field value literal must be a string");
+    throw new TypeError("JSON field value literal must be a string");
   }
 
   return sql.raw(`'${value}'`);

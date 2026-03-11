@@ -34,6 +34,7 @@ export const useCreateWorkspace = () => {
       }
     },
     onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
       });

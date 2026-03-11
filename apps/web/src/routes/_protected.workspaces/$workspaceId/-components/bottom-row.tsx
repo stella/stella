@@ -35,7 +35,7 @@ export const BottomRow = ({
           onFolderCreated={onFolderCreated}
           render={
             <Button
-              className="absolute inset-0 z-10 flex size-auto! rounded-none border-e hover:bg-accent"
+              className="hover:bg-accent absolute inset-0 z-10 flex size-auto! rounded-none border-e"
               size="icon"
               type="button"
               variant="ghost"

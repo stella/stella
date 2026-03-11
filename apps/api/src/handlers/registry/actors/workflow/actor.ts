@@ -15,9 +15,11 @@ import {
   defaultWorkflowState,
   startWorkflowSchema,
   workflowActions,
-  type StartWorkflowReturn,
-  type StartWorkflowSchema,
-  type WorkflowActionSchemas,
+} from "@/api/handlers/registry/actors/workflow/schema";
+import type {
+  StartWorkflowReturn,
+  StartWorkflowSchema,
+  WorkflowActionSchemas,
 } from "@/api/handlers/registry/actors/workflow/schema";
 import {
   handleUnrecoverableError,
@@ -56,6 +58,7 @@ export const workflowActor = actor({
 
     for (const [entityId, pendingEntity] of c.state.pendingBatches) {
       for (const batchId of pendingEntity.remainingBatches) {
+        // eslint-disable-next-line typescript/no-floating-promises
         runWorkflowAction(c, processBatch, {
           batchId,
           level: pendingEntity.level,
@@ -65,9 +68,7 @@ export const workflowActor = actor({
     }
   },
   actions: {
-    getWorkflowStatus: (c) => {
-      return { running: c.state.isRunning };
-    },
+    getWorkflowStatus: (c) => ({ running: c.state.isRunning }),
     startWorkflow: async (
       c,
       rawInput: StartWorkflowSchema,
@@ -115,7 +116,7 @@ export const workflowActor = actor({
         const targetIds =
           inputEntityIds.length > 0
             ? inputEntityIds.filter((id) => nonFolderIds.has(id))
-            : Array.from(nonFolderIds);
+            : [...nonFolderIds];
 
         // Prioritize entities from entityIdsOrder first,
         // then remaining in default order
@@ -138,7 +139,7 @@ export const workflowActor = actor({
             { requestId: c.state.requestId },
             "Empty execution plan, finishing",
           );
-          await runWorkflowAction(c, finishWorkflow, undefined);
+          await runWorkflowAction(c, finishWorkflow);
           return Result.ok();
         }
 

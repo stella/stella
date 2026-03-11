@@ -37,7 +37,6 @@ stella/
 ├── packages/
 │   ├── rivet/        # Rivet config and integration
 │   ├── ui/           # Shared UI components
-│   ├── prettier-config/
 │   └── typescript-config/
 ```
 
@@ -48,8 +47,8 @@ bun run dev              # Start all dev servers
 bun run dev:web          # Web only (port 3000)
 bun run dev:api          # API only (port 3001)
 bun run build            # Build all packages
-bun run lint             # Lint (Biome)
-bun run format           # Format (Prettier)
+bun run lint             # Lint (oxlint)
+bun run format           # Format (oxfmt)
 bun run typecheck        # TypeScript check
 bun run test             # Run tests (Bun)
 bun run db:push          # Push DB schema changes
@@ -64,9 +63,9 @@ fetch the relevant docs first using `list_doc_sources` and
 
 **Covered libraries:** Elysia, Drizzle, TanStack (Router, Query,
 Form, Table), React, Valibot, Zod, TipTap, Bun, better-auth,
-PostHog, Zustand.
+PostHog, Zustand, Oxlint.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, Biome.
+**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt.
 For these, use `WebFetch` or `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.
@@ -92,8 +91,8 @@ For these, use `WebFetch` or `WebSearch` directly.
 | Validation (API)    | Zod                                  |
 | Validation (Web)    | Valibot                              |
 | Analytics           | PostHog                              |
-| Linting             | Biome (ultracite preset)             |
-| Formatting          | Prettier                             |
+| Linting             | oxlint (ultracite preset)            |
+| Formatting          | oxfmt                                |
 | PDF                 | pdfjs-dist, @libpdf/core             |
 | UI components       | coss (Base UI)                       |
 | Rich text           | TipTap                               |
@@ -556,13 +555,13 @@ in `apps/web/src/i18n/TERMINOLOGY.md`.
 
 ## Linting and Formatting
 
-Biome handles linting via the **ultracite** preset
-(`ultracite/core` + `ultracite/react`). Prettier handles
-formatting. Together they auto-enforce: `for...of` over
-`.forEach()`, `const` over `let`, template literals, no floating
-promises, React hooks rules, `key` props on iterables,
-`rel="noopener"` on `target="_blank"`, no secrets in source, no
-import cycles. If Biome catches it, trust the linter; don't
+oxlint handles linting via the **ultracite** preset
+(`ultracite/oxlint/core` + `ultracite/oxlint/react`). oxfmt
+handles formatting, import sorting, and Tailwind class sorting.
+Together they auto-enforce: `for...of` over `.forEach()`,
+`const` over `let`, template literals, React hooks rules,
+`key` props on iterables, `rel="noopener"` on `target="_blank"`,
+no import cycles. If oxlint catches it, trust the linter; don't
 duplicate the check in code review.
 
 Run before committing:
@@ -571,10 +570,18 @@ Run before committing:
 bun run lint && bun run format
 ```
 
-Biome config: `/biome.jsonc`
-Prettier config: `/packages/prettier-config/index.mjs`
+Lint config: `/.oxlintrc.json`
+Format config: `/.oxfmtrc.json`
 
-Import order (enforced by Prettier plugin):
+To suppress a lint rule for one line, use:
+
+```typescript
+// eslint-disable-next-line rule-name
+```
+
+For example: `// eslint-disable-next-line @typescript-eslint/consistent-type-definitions`
+
+Import order (enforced by oxfmt):
 
 1. React
 2. Third-party packages

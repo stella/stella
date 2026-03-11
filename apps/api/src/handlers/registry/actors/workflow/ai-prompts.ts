@@ -215,10 +215,10 @@ export const buildTextInputsMessage = (textInputs: TextInput[]) => {
 };
 
 export const buildPromptsMessage = (
-  properties: Array<{
+  properties: {
     id: string;
     tool: { prompt: string };
-  }>,
+  }[],
 ) => {
   const list = properties
     .map(({ id, tool }) => `- ${id}: ${tool.prompt}`)

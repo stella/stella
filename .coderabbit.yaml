@@ -11,7 +11,7 @@ reviews:
       - "draft"
   tools:
     biome:
-      enabled: true
+      enabled: false
     hadolint:
       enabled: true
 chat:

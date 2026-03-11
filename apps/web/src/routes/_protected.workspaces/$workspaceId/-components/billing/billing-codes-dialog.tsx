@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useForm } from "@tanstack/react-form";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "lucide-react";
@@ -137,12 +138,12 @@ export const BillingCodesDialog = ({
                   key={code.id}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    <span className="text-muted-foreground shrink-0 font-mono text-xs">
                       {code.code}
                     </span>
                     <span className="truncate text-sm">{code.label}</span>
                     {!code.active && (
-                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+                      <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
                         {t("billing.codes.inactive")}
                       </span>
                     )}
@@ -162,7 +163,7 @@ export const BillingCodesDialog = ({
                       <Checkbox checked={code.active} />
                     </Button>
                     <Button
-                      className="size-7 text-destructive"
+                      className="text-destructive size-7"
                       onClick={() => handleDelete(code.id)}
                       size="icon"
                       variant="ghost"
@@ -175,7 +176,7 @@ export const BillingCodesDialog = ({
             </div>
           ) : (
             !showForm && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
+              <div className="text-muted-foreground py-6 text-center text-sm">
                 {t("billing.codes.noCodesYet")}
               </div>
             )
@@ -211,6 +212,7 @@ const CreateCodeForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >

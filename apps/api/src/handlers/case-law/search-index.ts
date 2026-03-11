@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawSearchDocuments } from "@/api/db/schema";
+
 import type { DecisionSection } from "./types";
 
 const sectionsToPlainText = (sections: DecisionSection[] | null): string =>
@@ -43,7 +44,7 @@ export const indexDecision = async (
     // SAFETY: sections is typed as unknown in Drizzle's JSONB
     // column but is always DecisionSection[] | null when set
     // by the ingestion pipeline (segmenter.ts).
-    sectionsToPlainText(decision.sections as DecisionSection[] | null);
+    sectionsToPlainText(decision.sections);
 
   const searchableText = [
     decision.caseNumber,

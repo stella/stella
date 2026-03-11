@@ -21,13 +21,13 @@ pointers, not context injection.
 
 ### Mention Types
 
-| Type | Trigger context | Serialized format | Icon |
-|---|---|---|---|
-| Entity | Workspace chat | `[Name](#stella-entity=ID)` | doc/folder |
-| Matter | Global + workspace | `[Name](#stella-workspace=ID)` | scale |
-| Contact | Global + workspace | `[Name](#stella-contact=ID)` | user |
-| Template | Global + knowledge | `[Name](#stella-template=ID)` | file-text |
-| Clause | Global + knowledge | `[Name](#stella-clause=ID)` | scroll |
+| Type     | Trigger context    | Serialized format              | Icon       |
+| -------- | ------------------ | ------------------------------ | ---------- |
+| Entity   | Workspace chat     | `[Name](#stella-entity=ID)`    | doc/folder |
+| Matter   | Global + workspace | `[Name](#stella-workspace=ID)` | scale      |
+| Contact  | Global + workspace | `[Name](#stella-contact=ID)`   | user       |
+| Template | Global + knowledge | `[Name](#stella-template=ID)`  | file-text  |
+| Clause   | Global + knowledge | `[Name](#stella-clause=ID)`    | scroll     |
 
 ### Categorized Suggestion Dropdown
 
@@ -61,10 +61,12 @@ Clauses                  (only on /knowledge or global)
 Each mention type needs a data source. Two strategies:
 
 **Client-cached** (already loaded, instant):
+
 - Entities: `useWorkspaceStore` (current)
 - Matters: `workspacesOptions` query (sidebar already loads)
 
 **Server-searched** (fetched on query, debounced):
+
 - Contacts: `GET /contacts?q={query}&limit=5`
 - Templates: `GET /templates?q={query}&limit=5`
 - Clauses: `GET /clauses?q={query}&limit=5`
@@ -75,26 +77,26 @@ This keeps the dropdown snappy while supporting large datasets.
 
 ### Context Availability by Route
 
-| Route | Available categories |
-|---|---|
-| `/workspaces/$id` | Entities, Matters, Contacts |
-| `/knowledge/templates` | Templates, Clauses, Matters |
-| `/knowledge/clauses` | Clauses, Templates, Matters |
-| `/contacts` | Contacts, Matters |
-| `/chat` (global) | Matters, Contacts, Templates, Clauses |
-| Any other | Matters, Contacts |
+| Route                  | Available categories                  |
+| ---------------------- | ------------------------------------- |
+| `/workspaces/$id`      | Entities, Matters, Contacts           |
+| `/knowledge/templates` | Templates, Clauses, Matters           |
+| `/knowledge/clauses`   | Clauses, Templates, Matters           |
+| `/contacts`            | Contacts, Matters                     |
+| `/chat` (global)       | Matters, Contacts, Templates, Clauses |
+| Any other              | Matters, Contacts                     |
 
 This is driven by a `MentionContext` passed to `ChatEditor`:
 
 ```typescript
 type MentionContext = {
-  workspaceId?: string;        // enables entity mentions
+  workspaceId?: string; // enables entity mentions
   categories: MentionCategory[];
 };
 
 type MentionCategory =
-  | "entity"     // documents, folders in current matter
-  | "workspace"  // matters
+  | "entity" // documents, folders in current matter
+  | "workspace" // matters
   | "contact"
   | "template"
   | "clause";
@@ -113,13 +115,13 @@ pass the set of allowed workspace IDs to a new tool factory:
 
 ```typescript
 // Existing (unchanged for workspace-scoped threads)
-createMatterTools({ workspaceId, organizationId })
+createMatterTools({ workspaceId, organizationId });
 
 // New: for global chat or cross-matter references
 createMultiMatterTools({
-  allowedWorkspaceIds: SafeId<"workspace">[],
+  allowedWorkspaceIds: SafeId < "workspace" > [],
   organizationId,
-})
+});
 ```
 
 The multi-matter tools mirror the existing four but add a
@@ -177,6 +179,7 @@ const parseMentions = (text: string): MentionRef[]
 ```
 
 Used in:
+
 1. `chat-actor.ts` to determine which tools to activate
 2. `chat-source-transform.ts` to inject source chips
 3. `UserMessageText` to render mention chips in messages

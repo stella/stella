@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   getCoreRowModel,
   getExpandedRowModel,
   useReactTable,
-  type ExpandedState,
 } from "@tanstack/react-table";
+import type { ExpandedState } from "@tanstack/react-table";
 import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 

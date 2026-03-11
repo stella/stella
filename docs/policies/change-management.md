@@ -50,16 +50,16 @@ The `ci.yml` workflow runs on every PR and produces a single
 `ci-result` status check that gates merging. The pipeline
 includes:
 
-| Check              | Tool                     | Purpose                                |
-| ------------------ | ------------------------ | -------------------------------------- |
-| Spell check        | codespell                | Catch typos in code and docs           |
-| Dependency install | `bun ci`                 | Verify lockfile integrity              |
-| i18n sync          | `bun run i18n:check`     | Ensure translation keys are consistent |
-| Lint               | Biome (ultracite preset) | Code quality and security rules        |
-| Colour lint        | `scripts/lint-colors.sh` | Enforce semantic colour tokens         |
-| Format             | Prettier                 | Consistent code formatting             |
-| Type check         | TypeScript strict mode   | Type safety                            |
-| Tests              | Bun test runner          | Functional correctness                 |
+| Check              | Tool                      | Purpose                                |
+| ------------------ | ------------------------- | -------------------------------------- |
+| Spell check        | codespell                 | Catch typos in code and docs           |
+| Dependency install | `bun ci`                  | Verify lockfile integrity              |
+| i18n sync          | `bun run i18n:check`      | Ensure translation keys are consistent |
+| Lint               | oxlint (ultracite preset) | Code quality and security rules        |
+| Colour lint        | `scripts/lint-colors.sh`  | Enforce semantic colour tokens         |
+| Format             | Prettier                  | Consistent code formatting             |
+| Type check         | TypeScript strict mode    | Type safety                            |
+| Tests              | Bun test runner           | Functional correctness                 |
 
 All checks must pass. The `ci-result` aggregation job
 (`if: always()`) ensures the gate is never accidentally

@@ -32,7 +32,7 @@ structure.
 - **TypeScript**: strict mode, `type` over `interface`, no `any`,
   no non-null assertions. See [CLAUDE.md](CLAUDE.md) for full
   coding conventions.
-- **Linting**: Biome (ultracite preset). **Formatting**: Prettier.
+- **Linting**: oxlint (ultracite preset). **Formatting**: oxfmt.
 - **Tests**: write tests for new functionality when applicable.
 
 ## Pull Request Checklist

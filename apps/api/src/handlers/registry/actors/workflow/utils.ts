@@ -10,15 +10,11 @@ import type {
 } from "@/api/db/schema-validators";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import type { PropertyBatch } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
-import {
-  defaultWorkflowState,
-  type WorkflowActionSchemas,
-} from "@/api/handlers/registry/actors/workflow/schema";
+import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
+import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
 import { broadcastEvent, resetActorState } from "@/api/handlers/registry/utils";
-import {
-  captureActorError,
-  type CaptureActorErrorProps,
-} from "@/api/lib/errors/actions";
+import { captureActorError } from "@/api/lib/errors/actions";
+import type { CaptureActorErrorProps } from "@/api/lib/errors/actions";
 
 export const prepareBatch = (
   rawBatch: PropertyBatch,
@@ -42,11 +38,16 @@ export const prepareBatch = (
   };
 };
 
-export const runWorkflowAction = <T extends keyof WorkflowActionSchemas>(
+export function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
   c: ActorContextOf<typeof workflowActor>,
   action: T,
-  input: WorkflowActionSchemas[T],
-) => c.schedule.after(0, action, input);
+  // eslint-disable-next-line typescript/no-invalid-void-type -- void is the correct valibot void_ output type here
+  ...args: WorkflowActionSchemas[T] extends void
+    ? []
+    : [input: WorkflowActionSchemas[T]]
+): ReturnType<typeof c.schedule.after> {
+  return c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
+}
 
 type SetFieldsContentProps = {
   entityId: string;

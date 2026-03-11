@@ -5,7 +5,7 @@ import { customAlphabet } from "nanoid";
  * excluding ambiguous characters (0, O, 1, l, I).
  * 31 chars, 10-char length = 31^10 ~ 8.2 * 10^14 combinations.
  */
-// biome-ignore lint/security/noSecrets: character set, not a secret
+
 const VCODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const VCODE_LENGTH = 10;
 

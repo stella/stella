@@ -45,13 +45,13 @@ export const spawnWorker = async ({
     }
 
     return Result.ok(stdout);
-  } catch (err) {
+  } catch (error) {
     subprocess.kill();
     return Result.err(
       new SubprocessError({
-        message: err instanceof Error ? err.message : String(err),
+        message: error instanceof Error ? error.message : String(error),
         exitCode: null,
-        cause: err,
+        cause: error,
       }),
     );
   }

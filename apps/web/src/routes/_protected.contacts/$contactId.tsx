@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -70,6 +71,7 @@ function ContactDetailPage() {
     deleteContact.mutate(
       { contactId },
       {
+        // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: async () => {
           toastManager.add({
             title: t("success.contactDeleted"),
@@ -100,6 +102,7 @@ function ContactDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
+          // eslint-disable-next-line typescript/no-misused-promises
           onClick={() => navigate({ to: "/contacts" })}
           size="icon-xs"
           variant="ghost"
@@ -108,12 +111,12 @@ function ContactDetailPage() {
         </Button>
         <div className="flex items-center gap-2">
           {contact.type === "person" ? (
-            <UserIcon className="size-5 text-muted-foreground" />
+            <UserIcon className="text-muted-foreground size-5" />
           ) : (
-            <BuildingIcon className="size-5 text-muted-foreground" />
+            <BuildingIcon className="text-muted-foreground size-5" />
           )}
           <h1 className="text-xl font-bold">{contact.displayName}</h1>
-          <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
             {t(`contacts.type.${contact.type}`)}
           </span>
         </div>
@@ -134,7 +137,7 @@ function ContactDetailPage() {
       <div className="grid gap-6 md:grid-cols-2">
         {/* Identity */}
         <section className="rounded-lg border p-4">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          <h2 className="text-muted-foreground mb-3 text-sm font-medium">
             {contact.type === "person"
               ? t("contacts.type.person")
               : t("contacts.type.organization")}
@@ -185,19 +188,17 @@ function ContactDetailPage() {
 
         {/* Communication */}
         <section className="rounded-lg border p-4">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          <h2 className="text-muted-foreground mb-3 text-sm font-medium">
             {t("contacts.communication.emails")} {"& "}
             {t("contacts.communication.phones")}
           </h2>
           <div className="space-y-3 text-sm">
             {primaryEmail && (
               <div className="flex items-center gap-2">
-                <MailIcon className="size-4 text-muted-foreground" />
+                <MailIcon className="text-muted-foreground size-4" />
                 <span>{primaryEmail.address}</span>
-                <span className="text-xs text-muted-foreground">
-                  {"("}
-                  {t(`contacts.emailTypes.${primaryEmail.type}`)}
-                  {")"}
+                <span className="text-muted-foreground text-xs">
+                  ({t(`contacts.emailTypes.${primaryEmail.type}`)})
                 </span>
               </div>
             )}
@@ -205,23 +206,19 @@ function ContactDetailPage() {
               ?.filter((e) => e !== primaryEmail)
               .map((email) => (
                 <div className="flex items-center gap-2" key={email.address}>
-                  <MailIcon className="size-4 text-muted-foreground" />
+                  <MailIcon className="text-muted-foreground size-4" />
                   <span>{email.address}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {"("}
-                    {t(`contacts.emailTypes.${email.type}`)}
-                    {")"}
+                  <span className="text-muted-foreground text-xs">
+                    ({t(`contacts.emailTypes.${email.type}`)})
                   </span>
                 </div>
               ))}
             {primaryPhone && (
               <div className="flex items-center gap-2">
-                <PhoneIcon className="size-4 text-muted-foreground" />
+                <PhoneIcon className="text-muted-foreground size-4" />
                 <span>{primaryPhone.number}</span>
-                <span className="text-xs text-muted-foreground">
-                  {"("}
-                  {t(`contacts.phoneTypes.${primaryPhone.type}`)}
-                  {")"}
+                <span className="text-muted-foreground text-xs">
+                  ({t(`contacts.phoneTypes.${primaryPhone.type}`)})
                 </span>
               </div>
             )}
@@ -229,12 +226,10 @@ function ContactDetailPage() {
               ?.filter((p) => p !== primaryPhone)
               .map((phone) => (
                 <div className="flex items-center gap-2" key={phone.number}>
-                  <PhoneIcon className="size-4 text-muted-foreground" />
+                  <PhoneIcon className="text-muted-foreground size-4" />
                   <span>{phone.number}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {"("}
-                    {t(`contacts.phoneTypes.${phone.type}`)}
-                    {")"}
+                  <span className="text-muted-foreground text-xs">
+                    ({t(`contacts.phoneTypes.${phone.type}`)})
                   </span>
                 </div>
               ))}
@@ -249,7 +244,7 @@ function ContactDetailPage() {
         {/* Billing details (organizations) */}
         {contact.type === "organization" && (
           <section className="rounded-lg border p-4">
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+            <h2 className="text-muted-foreground mb-3 text-sm font-medium">
               {t("contacts.billing.title")}
             </h2>
             <div className="space-y-2 text-sm">
@@ -271,7 +266,7 @@ function ContactDetailPage() {
                 label={t("contacts.fields.defaultHourlyRate")}
                 type="number"
                 value={
-                  contact.defaultHourlyRate != null
+                  contact.defaultHourlyRate !== null
                     ? String(contact.defaultHourlyRate)
                     : null
                 }
@@ -288,14 +283,14 @@ function ContactDetailPage() {
                 label={t("contacts.fields.paymentTermDays")}
                 type="number"
                 value={
-                  contact.paymentTermDays != null
+                  contact.paymentTermDays !== null
                     ? String(contact.paymentTermDays)
                     : null
                 }
               />
               {contact.billingAddress && (
                 <div className="min-w-0 rounded-md border p-2">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  <p className="text-muted-foreground mb-1 text-xs font-medium">
                     {t("contacts.fields.billingAddress")}
                   </p>
                   {contact.billingAddress.line1 && (
@@ -374,7 +369,7 @@ function ContactDetailPage() {
         {/* Responsible attorneys */}
         {(contact.originatingAttorney || contact.responsibleAttorney) && (
           <section className="rounded-lg border p-4">
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+            <h2 className="text-muted-foreground mb-3 text-sm font-medium">
               {t("contacts.attorneys.title")}
             </h2>
             <div className="space-y-2 text-sm">
@@ -396,7 +391,7 @@ function ContactDetailPage() {
 
         {/* Notes */}
         <section className="rounded-lg border p-4 md:col-span-2">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          <h2 className="text-muted-foreground mb-3 text-sm font-medium">
             {t("contacts.fields.notes")}
           </h2>
           <EditableRow
@@ -409,14 +404,14 @@ function ContactDetailPage() {
 
         {/* Matters as client */}
         <section className="rounded-lg border p-4 md:col-span-2">
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          <h2 className="text-muted-foreground mb-3 text-sm font-medium">
             {t("contacts.mattersAsClient")}
           </h2>
           {contact.clientMatters.length > 0 ? (
             <ul className="space-y-2">
               {contact.clientMatters.map((matter) => (
                 <li
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                  className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
                   key={matter.id}
                 >
                   <MatterColorIcon matter={matter} />
@@ -427,7 +422,7 @@ function ContactDetailPage() {
                   >
                     {matter.name}
                   </Link>
-                  <span className="ms-auto text-xs text-muted-foreground">
+                  <span className="text-muted-foreground ms-auto text-xs">
                     {t("common.createdAt", {
                       date: new Date(matter.createdAt).toLocaleDateString(),
                     })}
@@ -436,12 +431,12 @@ function ContactDetailPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {t("contacts.noMattersAsClient")}
             </p>
           )}
           {contact.partyCount > 0 && (
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mt-3 text-xs">
               {t("contacts.alsoPartyIn", {
                 count: contact.partyCount,
               })}
@@ -478,7 +473,7 @@ function ContactDetailPage() {
 // Read-only row for non-editable fields
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline gap-2">
-    <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
+    <span className="text-muted-foreground w-32 shrink-0">{label}</span>
     <span className="min-w-0 break-all">{value}</span>
   </div>
 );
@@ -550,9 +545,11 @@ const EditableRow = ({
       { contactId: contact.id, ...payload },
       {
         onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: contactsKeys.byId(contact.id),
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: contactsKeys.list(),
           });
@@ -572,7 +569,7 @@ const EditableRow = ({
     return (
       <div className="flex items-baseline gap-2">
         {label && (
-          <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
+          <span className="text-muted-foreground w-32 shrink-0">{label}</span>
         )}
         <Input
           autoFocus
@@ -598,17 +595,17 @@ const EditableRow = ({
   return (
     <div className="flex items-baseline gap-2">
       {label && (
-        <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground w-32 shrink-0">{label}</span>
       )}
       <button
-        className="cursor-text text-start text-sm hover:text-foreground"
+        className="hover:text-foreground cursor-text text-start text-sm"
         onClick={() => {
           setInputValue(value ?? "");
           setIsEditing(true);
         }}
         type="button"
       >
-        {value || <span className="text-muted-foreground/50">{"—"}</span>}
+        {value || <span className="text-muted-foreground/50">—</span>}
       </button>
     </div>
   );
@@ -627,7 +624,7 @@ const MatterColorIcon = ({
   return (
     <Popover>
       <PopoverTrigger
-        className="cursor-pointer rounded p-0.5 transition-colors hover:bg-muted"
+        className="hover:bg-muted cursor-pointer rounded p-0.5 transition-colors"
         render={<button type="button" />}
       >
         <LayersIcon

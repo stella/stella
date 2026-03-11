@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { hoursByUserOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/analytics";
+
 import { formatHours } from "./utils";
 
 type HoursByUserTableProps = {
@@ -24,17 +25,17 @@ export const HoursByUserTable = ({
   );
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="bg-card rounded-lg border p-4">
       <h3 className="mb-4 text-sm font-medium">{t("hoursByUser")}</h3>
       {data.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
+        <p className="text-muted-foreground py-4 text-center text-sm">
           {t("noData")}
         </p>
       ) : (
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-start text-muted-foreground">
+              <tr className="text-muted-foreground border-b text-start">
                 <th className="pb-2 font-medium">{t("user")}</th>
                 <th className="pb-2 text-right font-medium">
                   {t("totalHours")}

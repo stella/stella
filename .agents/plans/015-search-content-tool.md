@@ -39,13 +39,13 @@ where the unit is a passage, not a line.
 
 ### Key patterns
 
-| Pattern | Consensus |
-|---|---|
-| Input | Single `query` string (required) + optional filters |
-| Result cap | 10-100 matches; total output under ~2,000 tokens |
-| Truncation | Append warning when results are capped |
-| Search method | Code tools: keyword/regex. Doc tools: semantic or hybrid |
-| Auto-context | Gemini enriches low-match results with surrounding lines (10% fewer follow-up reads) |
+| Pattern       | Consensus                                                                            |
+| ------------- | ------------------------------------------------------------------------------------ |
+| Input         | Single `query` string (required) + optional filters                                  |
+| Result cap    | 10-100 matches; total output under ~2,000 tokens                                     |
+| Truncation    | Append warning when results are capped                                               |
+| Search method | Code tools: keyword/regex. Doc tools: semantic or hybrid                             |
+| Auto-context  | Gemini enriches low-match results with surrounding lines (10% fewer follow-up reads) |
 
 ### Implication for Stella
 
@@ -68,14 +68,20 @@ searchContent: tool({
     "specific clauses, terms, or information across " +
     "all documents without reading each one.",
   inputSchema: z.object({
-    query: z.string()
+    query: z
+      .string()
       .max(LIMITS.searchQueryMaxLength)
       .describe("Text or keywords to search for"),
-    limit: z.number().int().min(1).max(20)
-      .optional().default(5)
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .default(5)
       .describe("Max results (default: 5)"),
   }),
-})
+});
 ```
 
 ### How it works
@@ -107,13 +113,13 @@ searchContent: tool({
 
 ### Differences from `searchMatter`
 
-| | searchMatter | searchContent |
-|---|---|---|
-| Purpose | Find entities by name | Find text in documents |
-| Headline | Short (15-35 words) | Long passage (60-80 words) |
-| Returns | Entity list with metadata | Passages with entity refs |
-| Default limit | 10 | 5 (passages are larger) |
-| Use case | "What documents are here?" | "Which doc mentions X?" |
+|               | searchMatter               | searchContent              |
+| ------------- | -------------------------- | -------------------------- |
+| Purpose       | Find entities by name      | Find text in documents     |
+| Headline      | Short (15-35 words)        | Long passage (60-80 words) |
+| Returns       | Entity list with metadata  | Passages with entity refs  |
+| Default limit | 10                         | 5 (passages are larger)    |
+| Use case      | "What documents are here?" | "Which doc mentions X?"    |
 
 ### System prompt update
 
@@ -135,6 +141,7 @@ Refactored the 4-way tool branching into 2 layers:
    `readEntity`, `readContent`
 
 Eliminated:
+
 - `createCrossMatterTools` (merged into `createOrgTools`)
 - Old single-workspace `createMatterTools` (merged into
   the multi-workspace variant, always explicit `workspaceId`)

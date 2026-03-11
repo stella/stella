@@ -281,7 +281,7 @@ export const evaluateCondition = (
   type Atom = { negated: boolean; value: boolean };
 
   const atoms: Atom[] = [];
-  const connectors: Array<"and" | "or"> = [];
+  const connectors: ("and" | "or")[] = [];
 
   let i = 0;
   while (i < tokens.length) {
@@ -717,7 +717,7 @@ export const processBlockDirectives = (
 
       // Process blocks in reverse order to preserve paragraph
       // indices (same pattern as apply-edits.ts)
-      const sortedBlocks = [...blocks].sort((a, b) => {
+      const sortedBlocks = [...blocks].toSorted((a, b) => {
         const aStart = a.directiveParagraphs[0];
         const bStart = b.directiveParagraphs[0];
         return bStart - aStart;
@@ -895,7 +895,7 @@ export const processBlockDirectives = (
         // Create temporary body with the group paragraphs
         const tempBody = doc.createElementNS(W_NS, "w:body");
         for (const p of group) {
-          tempBody.appendChild(p);
+          tempBody.append(p);
         }
         // Recursively process
         process(tempBody, itemContext);

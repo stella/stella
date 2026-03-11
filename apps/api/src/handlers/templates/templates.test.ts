@@ -110,9 +110,9 @@ const stubScopedDb = ((fn: unknown) => {
   if (typeof fn === "function") {
     // Swallow the result; the callback runs against a
     // fake tx that will throw on actual DB access.
-    return Promise.resolve(undefined);
+    return Promise.resolve();
   }
-  return Promise.resolve(undefined);
+  return Promise.resolve();
 }) as unknown as ScopedDb;
 
 const makeDocxFile = async (buf: Buffer) =>
@@ -149,7 +149,7 @@ describe("template discover", () => {
     const fields = mergeManifestWithDiscovery(manifest, discovered);
 
     expect(fields.length).toBe(2);
-    const names = fields.map((f) => f.path).sort();
+    const names = fields.map((f) => f.path).toSorted();
     expect(names).toEqual(["city", "name"]);
     expect(discovered.structureErrors).toEqual([]);
   });
@@ -199,7 +199,7 @@ describe("template discover", () => {
     });
 
     const discovered = await discoverTemplate(buf);
-    const names = discovered.placeholders.map((p) => p.name).sort();
+    const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["bodyField", "clientName"]);
     expect(discovered.fields.length).toBe(2);
   });
@@ -213,7 +213,7 @@ describe("template discover", () => {
     });
 
     const discovered = await discoverTemplate(buf);
-    const names = discovered.placeholders.map((p) => p.name).sort();
+    const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["bodyField", "pageNum"]);
   });
 
@@ -245,7 +245,7 @@ describe("template discover", () => {
     });
 
     const discovered = await discoverTemplate(buf);
-    const names = discovered.placeholders.map((p) => p.name).sort();
+    const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["f1", "h1", "h2"]);
   });
 });
@@ -417,7 +417,7 @@ describe("template manifest", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("'path'");
@@ -439,7 +439,7 @@ describe("template manifest", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("'expression'");
@@ -495,7 +495,7 @@ describe("handler MIME validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("DOCX");
@@ -515,7 +515,7 @@ describe("handler MIME validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("DOCX");
@@ -537,7 +537,7 @@ describe("fill handler validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("Invalid JSON");
@@ -555,7 +555,7 @@ describe("fill handler validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("object");
@@ -573,7 +573,7 @@ describe("fill handler validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("object");
@@ -591,7 +591,7 @@ describe("fill handler validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("null");
@@ -612,7 +612,7 @@ describe("fill handler validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(400);
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("null");
@@ -636,7 +636,7 @@ describe("fill handler diagnostic headers", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(200);
     const header = resp.headers.get("X-Unmatched-Placeholders");
     expect(header).toContain("city");
@@ -659,7 +659,7 @@ describe("fill handler diagnostic headers", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(200);
     const header = resp.headers.get("X-Unused-Values");
     expect(header).toContain("extra");
@@ -682,7 +682,7 @@ describe("fill handler diagnostic headers", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
-    const resp = result as Response;
+    const resp = result;
     expect(resp.status).toBe(200);
     expect(resp.headers.get("X-Unmatched-Placeholders")).toBeNull();
     expect(resp.headers.get("X-Unused-Values")).toBeNull();
@@ -708,7 +708,7 @@ describe("discover → fill round-trip", () => {
     const manifest = await readManifest(buf);
     const fields = mergeManifestWithDiscovery(manifest, discovered);
 
-    const fieldPaths = fields.map((f) => f.path).sort();
+    const fieldPaths = fields.map((f) => f.path).toSorted();
     expect(fieldPaths).toEqual(["amount", "client_name", "effective_date"]);
 
     // Step 2: build values from discovered fields

@@ -58,12 +58,12 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
     <div className="flex flex-wrap items-center gap-1 px-2 py-1">
       <FilterChips
         filters={filters}
-        onUpdate={(filters) => handleUpdate({ filters })}
+        onUpdate={(updatedFilters) => handleUpdate({ filters: updatedFilters })}
         properties={properties}
       />
 
       <SortChips
-        onUpdate={(sorts) => handleUpdate({ sorts })}
+        onUpdate={(updatedSorts) => handleUpdate({ sorts: updatedSorts })}
         properties={properties}
         sorts={sorts}
       />
@@ -76,7 +76,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 
       {view.layout.type === "kanban" && (
         <>
-          <span className="mx-1 h-4 w-px bg-border" />
+          <span className="bg-border mx-1 h-4 w-px" />
           <KanbanGroupByControl
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId) =>

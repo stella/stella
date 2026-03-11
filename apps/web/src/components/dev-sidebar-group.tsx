@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseIcon,
@@ -160,7 +161,7 @@ export const DevSidebarGroup = () => {
     <MenuSub>
       <MenuSubTrigger>
         <WrenchIcon />
-        {"Dev"}
+        Dev
       </MenuSubTrigger>
       <MenuSubPopup>
         <MenuCheckboxItem
@@ -168,28 +169,28 @@ export const DevSidebarGroup = () => {
           onClick={() => dev.setTanstackDevtools(!dev.tanstackDevtools)}
           variant="switch"
         >
-          {"TanStack Devtools"}
+          TanStack Devtools
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.rivetDevtools}
           onClick={() => dev.setRivetDevtools(!dev.rivetDevtools)}
           variant="switch"
         >
-          {"Rivet Devtools"}
+          Rivet Devtools
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.sourceInspector}
           onClick={() => dev.setSourceInspector(!dev.sourceInspector)}
           variant="switch"
         >
-          {"Source Inspector"}
+          Source Inspector
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.showToolCalls}
           onClick={() => dev.setShowToolCalls(!dev.showToolCalls)}
           variant="switch"
         >
-          {"Show Tool Calls"}
+          Show Tool Calls
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.reactGrab}
@@ -200,11 +201,11 @@ export const DevSidebarGroup = () => {
           }}
           variant="switch"
         >
-          {"React Grab"}
+          React Grab
         </MenuCheckboxItem>
         <MenuSeparator />
         <MenuGroup>
-          <MenuGroupLabel>{"Chat Model"}</MenuGroupLabel>
+          <MenuGroupLabel>Chat Model</MenuGroupLabel>
           <MenuRadioGroup value={dev.chatModelId ?? ""}>
             {CHAT_MODELS.map((m) => (
               <MenuRadioItem
@@ -218,15 +219,18 @@ export const DevSidebarGroup = () => {
           </MenuRadioGroup>
         </MenuGroup>
         <MenuSeparator />
+        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <MenuItem disabled={seeding} onClick={handleSeed}>
           <DatabaseIcon />
           {seeding ? "Seeding..." : "Seed data"}
         </MenuItem>
+        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <MenuItem disabled={cleaning} onClick={handleClean}>
           <Trash2Icon />
           {cleaning ? "Cleaning..." : "Clean data"}
         </MenuItem>
         <MenuSeparator />
+        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <MenuItem disabled={clearingCache} onClick={handleClearCache}>
           <RotateCcwIcon />
           {clearingCache ? "Clearing…" : "Clear cache"}

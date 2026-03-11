@@ -1,5 +1,4 @@
 import "dotenv/config";
-
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 
@@ -17,7 +16,7 @@ import { env } from "@/api/env";
 // const client = new SQL(env.DATABASE_URL);
 
 if (!env.DATABASE_APP_URL) {
-  // biome-ignore lint/suspicious/noConsole: startup warning
+  // eslint-disable-next-line no-console
   console.warn(
     "[WARN] DATABASE_APP_URL is not set. " +
       "RLS policies will be bypassed if DATABASE_URL " +
@@ -71,7 +70,7 @@ export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * transaction mode and streaming-friendly.
  *
  * Handlers receive this from `authMacro` and must never
- * import `db` directly (enforced by Biome lint rule).
+ * import `db` directly (enforced by oxlint rule).
  */
 export type ScopedDb = {
   <T>(fn: (tx: Transaction) => Promise<T>): Promise<T>;

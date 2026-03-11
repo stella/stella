@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -7,10 +8,8 @@ import { Button } from "@stella/ui/components/button";
 import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
 import { toastManager } from "@stella/ui/components/toast";
 
-import {
-  ExpenseForm,
-  type ExpenseFormValues,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
+import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
+import type { ExpenseFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
 import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
@@ -188,7 +187,7 @@ export const ExpenseListView = ({
           ))}
         </div>
       ) : (
-        <div className="py-8 text-center text-sm text-muted-foreground">
+        <div className="text-muted-foreground py-8 text-center text-sm">
           {t("billing.expenses.noExpenses")}
         </div>
       )}

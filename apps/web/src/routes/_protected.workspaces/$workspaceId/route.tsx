@@ -1,14 +1,15 @@
 import { useEffect } from "react";
+
 import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
 import { api } from "@/lib/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { PeekPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-panel";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     api
       .workspaces({ workspaceId: wsId })
       ["last-active"].post()
-      .catch(() => undefined);
+      .catch(() => {});
   },
   loader: ({ context, params }) =>
     context.queryClient.ensureQueryData(workspaceOptions(params.workspaceId)),
@@ -45,10 +46,8 @@ function RouteComponent() {
   // Clean up peek tabs when the workspace changes so stale
   // field IDs from the previous workspace don't cause broken
   // PDF previews.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: workspaceId triggers cleanup on navigation
-  useEffect(() => {
-    return () => usePeekStore.getState().closeAll();
-  }, [workspaceId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => usePeekStore.getState().closeAll(), [workspaceId]);
 
   const timesheetsMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/timesheets",
@@ -78,8 +77,8 @@ function RouteComponent() {
         </Panel>
         {hasPeekTabs && (
           <>
-            <Separator className="group flex w-1 shrink-0 cursor-col-resize items-center justify-center data-[separator=active]:bg-border data-[separator=hover]:bg-border">
-              <div className="h-8 w-0.5 rounded-full bg-border group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
+            <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
+              <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
             </Separator>
             <Panel defaultSize="32rem" maxSize="50rem" minSize="20rem">
               <PeekPanel workspaceId={workspaceId} />

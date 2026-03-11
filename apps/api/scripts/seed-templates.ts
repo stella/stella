@@ -18,7 +18,6 @@
  */
 
 import "dotenv/config";
-
 import JSZip from "jszip";
 
 import { db } from "@/api/db";
@@ -41,6 +40,7 @@ import type {
 } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
+
 import { ensureTestUsers } from "./seed-test-user";
 import { DEFAULT_ORG_ID, pickAuthor, seedId } from "./seed-utils";
 
@@ -122,14 +122,7 @@ const createTemplateDocx = async (
     .folder("word")
     ?.file(
       "document.xml",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-        "<w:body>" +
-        `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>` +
-        `<w:r><w:t>${escXml(title)}</w:t></w:r></w:p>` +
-        bodyXml +
-        "</w:body>" +
-        "</w:document>",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
     );
 
   zip
@@ -2350,7 +2343,7 @@ export async function seedTemplates(
         const vi = clause.variants.findIndex(
           (v) => v.label === link.variantLabel,
         );
-        if (vi >= 0) {
+        if (vi !== -1) {
           clauseVariantId = seedId(`${link.clauseLabel}-var-${vi}`);
         }
       }
@@ -2386,8 +2379,8 @@ if (import.meta.main) {
       console.log("\nDone.");
       process.exit(0);
     })
-    .catch((err) => {
-      console.error("Seed failed:", err);
+    .catch((error) => {
+      console.error("Seed failed:", error);
       process.exit(1);
     });
 }

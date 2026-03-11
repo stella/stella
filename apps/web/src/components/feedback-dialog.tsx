@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import { CameraIcon, LoaderIcon, MessageSquarePlusIcon } from "lucide-react";
 import { usePostHog } from "posthog-js/react";
 import { useTranslations } from "use-intl";
@@ -106,6 +107,7 @@ export const FeedbackDialog = () => {
 
   return (
     <SidebarMenuItem>
+      {/* eslint-disable-next-line typescript/no-misused-promises */}
       <Dialog onOpenChange={handleOpen} open={open}>
         <DialogTrigger
           render={
@@ -161,17 +163,17 @@ export const FeedbackDialog = () => {
                     }
                   />
                   <Label className="font-normal" htmlFor="feedback-screenshot">
-                    <CameraIcon className="size-3.5 text-muted-foreground" />
+                    <CameraIcon className="text-muted-foreground size-3.5" />
                     {t("feedback.includeScreenshot")}
                   </Label>
                 </div>
                 {!screenshotFailed && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     {t("feedback.screenshotHint")}
                   </p>
                 )}
                 {screenshotFailed && (
-                  <span className="text-xs text-destructive">
+                  <span className="text-destructive text-xs">
                     {t("feedback.screenshotFailed")}
                   </span>
                 )}
@@ -179,6 +181,7 @@ export const FeedbackDialog = () => {
             </div>
             <DialogFooter>
               <Button
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() => handleOpen(false)}
                 type="button"
                 variant="outline"

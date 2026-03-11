@@ -1,4 +1,4 @@
-/* biome-ignore-all lint/suspicious/noConsole: CLI script */
+/* eslint-disable no-console */
 /**
  * Test script: fills the SPA template with mock values
  * using patchDocument to verify the template filling flow.
@@ -9,7 +9,7 @@
 import { fillTemplate } from "./patch-template";
 
 const TEMPLATE = new URL(
-  "./fixtures/spa-template-with-placeholders.docx",
+  "fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 
@@ -30,7 +30,7 @@ const run = async () => {
   await Bun.write(outputPath, buffer);
 };
 
-run().catch((err) => {
-  console.error(err);
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

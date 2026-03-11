@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { EllipsisVerticalIcon } from "lucide-react";
@@ -139,7 +140,7 @@ function Invitations() {
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                className="text-center text-muted-foreground"
+                className="text-muted-foreground text-center"
                 colSpan={6}
               >
                 {t("organization.invitations.noInvitationsFound")}

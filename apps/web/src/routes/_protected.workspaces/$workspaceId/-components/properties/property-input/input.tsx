@@ -1,16 +1,17 @@
+import { useEffect, useRef } from "react";
+import type React from "react";
+
+import type { AnyFieldApi } from "@tanstack/react-form";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
+
+import "./tiptap.css";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-
-import "./tiptap.css";
-
-import { useEffect, useRef } from "react";
-import type React from "react";
-import type { AnyFieldApi } from "@tanstack/react-form";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { FieldError } from "@stella/ui/components/field";
@@ -33,7 +34,7 @@ const getMentions = (editor: Editor): string[] => {
     }
   });
 
-  return Array.from(mentions);
+  return [...mentions];
 };
 
 type PropertyPromptInputProps = {
@@ -85,7 +86,7 @@ export const PropertyPromptInput = ({
     editorProps: {
       attributes: {
         class: cn(
-          "min-h-32 w-full rounded-md bg-muted p-2 text-sm placeholder:text-muted-foreground/64 focus-visible:outline-none",
+          "bg-muted placeholder:text-muted-foreground/64 min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
         ),
       },
     },

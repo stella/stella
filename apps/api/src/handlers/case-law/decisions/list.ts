@@ -1,5 +1,7 @@
-import { and, desc, eq, lt, sql, type SQL } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";

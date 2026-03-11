@@ -3,10 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import { parseJustificationContent } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-shared";
 import { createMockJustifications } from "@/api/handlers/registry/actors/workflow/generate-batch-mock";
-import {
-  parseJustificationXml,
-  type JustificationFilenames,
-} from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import { parseJustificationXml } from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
 
 describe("justifications", () => {
   const filenames: JustificationFilenames = [

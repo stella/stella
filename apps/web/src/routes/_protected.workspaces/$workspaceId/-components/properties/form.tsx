@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+
 import type { AnyFieldApi } from "@tanstack/react-form";
 
 import { Field, FieldError } from "@stella/ui/components/field";
@@ -10,13 +11,11 @@ export const PropertyFormField = ({
   children,
   className,
   ...props
-}: PropertyFormFieldProps) => {
-  return (
-    <Field className={cn("group gap-1 p-1", className)} {...props}>
-      {children}
-    </Field>
-  );
-};
+}: PropertyFormFieldProps) => (
+  <Field className={cn("group gap-1 p-1", className)} {...props}>
+    {children}
+  </Field>
+);
 type PropertyTextInputProps = {
   field: AnyFieldApi;
   placeholder: string;
@@ -25,20 +24,18 @@ type PropertyTextInputProps = {
 export const PropertyTextInput = ({
   field,
   placeholder,
-}: PropertyTextInputProps) => {
-  return (
-    <PropertyFormField name={field.name}>
-      <input
-        autoComplete="off"
-        className="w-full rounded-md px-1.5 py-1 text-sm font-semibold group-data-invalid:border group-data-invalid:border-destructive/36 placeholder:text-muted-foreground/72 focus-visible:outline-none"
-        data-1p-ignore
-        onBlur={field.handleBlur}
-        onChange={(e) => field.handleChange(e.target.value)}
-        placeholder={placeholder}
-        type="text"
-        value={field.state.value}
-      />
-      <FieldError />
-    </PropertyFormField>
-  );
-};
+}: PropertyTextInputProps) => (
+  <PropertyFormField name={field.name}>
+    <input
+      autoComplete="off"
+      className="group-data-invalid:border-destructive/36 placeholder:text-muted-foreground/72 w-full rounded-md px-1.5 py-1 text-sm font-semibold group-data-invalid:border focus-visible:outline-none"
+      data-1p-ignore
+      onBlur={field.handleBlur}
+      onChange={(e) => field.handleChange(e.target.value)}
+      placeholder={placeholder}
+      type="text"
+      value={field.state.value}
+    />
+    <FieldError />
+  </PropertyFormField>
+);

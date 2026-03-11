@@ -4,18 +4,12 @@ import {
   hasToolCall,
   stepCountIs,
   streamText,
-  type ToolSet,
-  type UIMessage,
-  type UIMessageChunk,
 } from "ai";
+import type { ToolSet, UIMessage, UIMessageChunk } from "ai";
 import { count, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import {
-  actor,
-  event,
-  type ActionContextOf,
-  type AnyActorDefinition,
-} from "rivetkit";
+import { actor, event } from "rivetkit";
+import type { ActionContextOf, AnyActorDefinition } from "rivetkit";
 import { joinSignals } from "rivetkit/utils";
 
 import type {
@@ -24,7 +18,8 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { adminDb, createScopedDb, type ScopedDb } from "@/api/db";
+import { adminDb, createScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type {
@@ -47,8 +42,9 @@ import {
 } from "@/api/handlers/registry/actors/chat-tools";
 import { validateUserActorSession } from "@/api/handlers/registry/utils";
 import { CHAT_MODEL } from "@/api/lib/ai-models";
-// biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { captureError } from "@/api/lib/posthog";
 
 const DEFAULT_MODEL = CHAT_MODEL;
@@ -326,9 +322,7 @@ const buildMultiContextPrompt = async (
       "",
       matterLines ? `Referenced matters:\n${matterLines}` : "",
       entityLines
-        ? "Entity-workspace mapping (use these when " +
-          "calling tools):\n" +
-          entityLines
+        ? `Entity-workspace mapping (use these when calling tools):\n${entityLines}`
         : "",
     ],
     userContext,
@@ -603,13 +597,7 @@ export const chatActor = actor({
                 return `--- ${label} ---\n${view}\n---`;
               })
               .join("\n\n");
-            system =
-              (system ?? "") +
-              "\n\nThe user has attached these files " +
-              "for context. These are uploaded files, " +
-              "NOT workspace entities; do not use " +
-              "#stella-entity links for them:\n\n" +
-              attachmentBlock;
+            system = `${system ?? ""}\n\nThe user has attached these files for context. These are uploaded files, NOT workspace entities; do not use #stella-entity links for them:\n\n${attachmentBlock}`;
           }
 
           // Inject active file context so the AI knows
@@ -637,16 +625,7 @@ export const chatActor = actor({
               const safeEntityId = activeFile.entityId
                 .replace(/[\r\n]/g, " ")
                 .slice(0, 100);
-              system =
-                (system ?? "") +
-                "\n\nThe user is currently viewing " +
-                `"${safeName}" ` +
-                `(entity ID: ${safeEntityId}) ` +
-                "in the inspector sidebar. When they " +
-                'refer to "this document" or "the open ' +
-                'file", they mean this entity. Use ' +
-                "readEntity or readContent with this " +
-                "entity ID to access its data.";
+              system = `${system ?? ""}\n\nThe user is currently viewing "${safeName}" (entity ID: ${safeEntityId}) in the inspector sidebar. When they refer to "this document" or "the open file", they mean this entity. Use readEntity or readContent with this entity ID to access its data.`;
             }
           }
 
@@ -741,9 +720,8 @@ export const chatActor = actor({
         c.vars.stopControllers.delete(input.threadId);
       }
     },
-    getMessages: (c, input: { threadId: string }) => {
-      return c.state.threads.get(input.threadId)?.messages ?? [];
-    },
+    getMessages: (c, input: { threadId: string }) =>
+      c.state.threads.get(input.threadId)?.messages ?? [],
     getStreamSnapshot: (
       c,
       input: { threadId: string; startFromSeq: number },

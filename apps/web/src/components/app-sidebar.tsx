@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -116,11 +117,6 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
-  useCreateWorkspace,
-  useUpdateWorkspace,
-} from "@/routes/_protected.workspaces/-mutations";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
-import {
   useStartTimer,
   useStopTimer,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
@@ -129,6 +125,11 @@ import {
   activeTimerOptions,
   timeEntriesKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+import {
+  useCreateWorkspace,
+  useUpdateWorkspace,
+} from "@/routes/_protected.workspaces/-mutations";
+import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 
 const isDev = import.meta.env.DEV;
 const WHITESPACE = /\s+/;
@@ -194,9 +195,11 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
         onSuccess: () => {
           setOpen(false);
           setSelectedMatterId("");
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: timeEntriesKeys.all(workspaceId),
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: timeEntriesKeys.activeTimer(workspaceId),
           });
@@ -236,11 +239,11 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-64" side="right" sideOffset={8}>
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {t("billing.selectMatterToStart")}
           </p>
           {entitiesLoading && (
-            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
               <Loader2Icon className="size-3 animate-spin" />
               {t("billing.loading")}
             </div>
@@ -279,7 +282,7 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
 
 const NavBadge = ({ digit }: { digit: number }) => (
   <SidebarMenuBadge>
-    <kbd className="animate-in rounded border bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground duration-150 fade-in">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150">
       {digit}
     </kbd>
   </SidebarMenuBadge>
@@ -437,7 +440,7 @@ const MatterItem = ({
     <SidebarMenuItem
       className={
         isDropTarget
-          ? "before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full before:bg-primary"
+          ? "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full"
           : undefined
       }
       onContextMenu={(e) => {
@@ -462,12 +465,12 @@ const MatterItem = ({
           <span className="flex min-w-0 flex-col">
             <span className="truncate">{ws.name}</span>
             {ws.client ? (
-              <span className="truncate text-[0.625rem] leading-tight text-muted-foreground opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+              <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
                 {ws.client.displayName}
                 {relTime ? ` · ${relTime}` : ""}
               </span>
             ) : (
-              <span className="font-mono text-[0.625rem] leading-tight text-muted-foreground opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+              <span className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
                 {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
               </span>
             )}
@@ -482,7 +485,7 @@ const MatterItem = ({
           data-pinned={isPinned || undefined}
         >
           <button
-            className="flex size-5 items-center justify-center rounded-md text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent"
+            className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
             onClick={() => onTogglePin(ws.id)}
             title={isPinned ? t("common.unpin") : t("common.pin")}
             type="button"
@@ -494,7 +497,7 @@ const MatterItem = ({
             )}
           </button>
           <Menu onOpenChange={setMenuOpen} open={menuOpen}>
-            <MenuTrigger className="flex size-5 items-center justify-center rounded-md text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent data-popup-open:opacity-100">
+            <MenuTrigger className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100">
               <EllipsisVerticalIcon className="size-4" />
             </MenuTrigger>
             <MenuPopup align="start" side="right" sideOffset={4}>
@@ -564,6 +567,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     handleCreateWorkspace();
   });
 
+  // eslint-disable-next-line typescript/no-misused-promises
   useHotkey(HOTKEYS.TOGGLE_TIME_TRACKING, async () => {
     if (currentWorkspaceId) {
       await navigate({
@@ -612,7 +616,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     }
     return [...workspaces]
       .filter((ws) => !pinnedIds.has(ws.id))
-      .sort(
+      .toSorted(
         (a, b) =>
           new Date(b.lastActivityAt).getTime() -
           new Date(a.lastActivityAt).getTime(),
@@ -659,10 +663,13 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   ] = [
     { action: () => setSearchOpen(true) },
     { action: comingSoon },
+    // eslint-disable-next-line typescript/no-misused-promises
     { action: () => navigate({ to: "/workspaces" }) },
     { action: comingSoon },
+    // eslint-disable-next-line typescript/no-misused-promises
     { action: () => navigate({ to: "/knowledge" }) },
     {
+      // eslint-disable-next-line typescript/no-misused-promises
       action: async () => {
         if (currentWorkspaceId) {
           await navigate({
@@ -742,7 +749,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button
-            className="size-7 text-muted-foreground"
+            className="text-muted-foreground size-7"
             onClick={toggleSidebar}
             size="icon"
             variant="ghost"
@@ -769,7 +776,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 <NavBadge digit={1} />
               ) : (
                 <SidebarMenuBadge>
-                  <kbd className="text-[0.625rem] text-muted-foreground">
+                  <kbd className="text-muted-foreground text-[0.625rem]">
                     {formatForDisplay(HOTKEYS.SEARCH)}
                   </kbd>
                 </SidebarMenuBadge>
@@ -787,7 +794,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 <NavBadge digit={2} />
               ) : (
                 <SidebarMenuBadge>
-                  <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                  <span className="bg-muted-foreground/40 size-1.5 rounded-full" />
                 </SidebarMenuBadge>
               )}
             </SidebarMenuItem>
@@ -812,6 +819,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() => navigate({ to: "/chat" })}
                 tooltip={t("navigation.chat")}
               >
@@ -863,7 +871,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     {formatTimer(timerSeconds)}
                     <Button
                       aria-label={t("billing.stopTimer")}
-                      className="size-5 text-muted-foreground"
+                      className="text-muted-foreground size-5"
                       disabled={stopTimer.isPending}
                       onClick={() => {
                         if (currentWorkspaceId) {
@@ -873,10 +881,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                             },
                             {
                               onSuccess: () => {
+                                // eslint-disable-next-line typescript/no-floating-promises
                                 queryClient.invalidateQueries({
                                   queryKey:
                                     timeEntriesKeys.all(currentWorkspaceId),
                                 });
+                                // eslint-disable-next-line typescript/no-floating-promises
                                 queryClient.invalidateQueries({
                                   queryKey:
                                     timeEntriesKeys.activeTimer(
@@ -1019,7 +1029,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             <Menu>
               <MenuTrigger
                 className={cn(
-                  "flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent",
+                  "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
                   isCollapsed ? "justify-center" : "gap-2",
                 )}
                 title={isCollapsed ? displayName : undefined}
@@ -1039,7 +1049,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                             {user.name}
                           </span>
                           {user.email && (
-                            <span className="truncate text-xs text-muted-foreground">
+                            <span className="text-muted-foreground truncate text-xs">
                               {user.email}
                             </span>
                           )}
@@ -1068,6 +1078,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 {managementRoles.includes(role) && (
                   <>
                     <MenuItem
+                      // eslint-disable-next-line typescript/no-misused-promises
                       onClick={async () => {
                         await navigate({
                           to: "/organization/members",
@@ -1078,6 +1089,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                       {t("navigation.members")}
                     </MenuItem>
                     <MenuItem
+                      // eslint-disable-next-line typescript/no-misused-promises
                       onClick={async () => {
                         await navigate({
                           to: "/organization/invitations",
@@ -1091,6 +1103,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </>
                 )}
                 <MenuItem
+                  // eslint-disable-next-line typescript/no-misused-promises
                   onClick={async () => {
                     await navigate({
                       to: "/contacts",
@@ -1154,19 +1167,20 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </MenuSubTrigger>
                   <MenuSubPopup>
                     <MenuRadioGroup value={lang}>
-                      {supportedLanguages.map((lang) => (
+                      {supportedLanguages.map((langCode) => (
                         <MenuRadioItem
-                          key={lang}
-                          onClick={() => setLang(lang)}
-                          value={lang}
+                          key={langCode}
+                          onClick={() => setLang(langCode)}
+                          value={langCode}
                         >
-                          {LANG_ENDONYMS[lang]}
+                          {LANG_ENDONYMS[langCode]}
                         </MenuRadioItem>
                       ))}
                     </MenuRadioGroup>
                   </MenuSubPopup>
                 </MenuSub>
                 <MenuItem
+                  // eslint-disable-next-line typescript/no-misused-promises
                   onClick={async () => {
                     await navigate({
                       to: "/account/settings",
@@ -1177,6 +1191,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   {t("common.settings")}
                 </MenuItem>
                 <MenuItem
+                  // eslint-disable-next-line typescript/no-misused-promises
                   onClick={async () => {
                     await navigate({
                       to: "/account/sessions",

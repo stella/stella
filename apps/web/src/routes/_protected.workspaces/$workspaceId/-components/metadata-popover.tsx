@@ -1,4 +1,5 @@
-import { EyeOffIcon, type LucideIcon } from "lucide-react";
+import { EyeOffIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -10,10 +11,8 @@ import {
 import { Separator } from "@stella/ui/components/separator";
 
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
-import {
-  SortProperty,
-  type SortHint,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
 type MetadataPopoverProps = {
@@ -33,7 +32,7 @@ export const MetadataPopover = ({
 
   return (
     <Popover modal>
-      <PopoverTrigger className="flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start hover:bg-accent">
+      <PopoverTrigger className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start">
         <Icon className="size-3.5 shrink-0" />
         <span className="w-0 flex-1 truncate">{label}</span>
       </PopoverTrigger>

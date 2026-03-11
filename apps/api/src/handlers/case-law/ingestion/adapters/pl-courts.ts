@@ -52,7 +52,7 @@ type SaosDivision = {
 type SaosItem = {
   id?: number;
   courtType?: string;
-  courtCases?: Array<{ caseNumber?: string }>;
+  courtCases?: { caseNumber?: string }[];
   judgmentType?: string;
   judgmentDate?: string;
   judges?: SaosJudge[];
@@ -190,7 +190,8 @@ export const plCourtsAdapter: SourceAdapter = {
         const total = data.info?.totalResults;
         const fetched = page * PAGE_SIZE + items.length;
         const nextCursor =
-          items.length >= PAGE_SIZE && (total == null || fetched < total)
+          items.length >= PAGE_SIZE &&
+          (total === null || total === undefined || fetched < total)
             ? String(page + 1)
             : null;
 

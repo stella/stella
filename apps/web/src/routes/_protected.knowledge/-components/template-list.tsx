@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import {
   LayoutTemplateIcon,
   MoreHorizontalIcon,
@@ -29,10 +30,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
-import {
-  TemplateCategorySidebar,
-  type TemplateCategoryItem,
-} from "@/routes/_protected.knowledge/-components/template-category-sidebar";
+import { TemplateCategorySidebar } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
+import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TemplateUpload } from "@/routes/_protected.knowledge/-components/template-upload";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
@@ -123,7 +122,7 @@ export const TemplateList = ({
       const file = e.target.files?.item(0);
       if (file) {
         // Errors are surfaced as toasts inside discover
-        discover(file).catch(() => undefined);
+        discover(file).catch(() => {});
       }
       e.target.value = "";
     },
@@ -145,7 +144,7 @@ export const TemplateList = ({
 
       <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-muted-foreground text-sm">
             {String(templates.length)}
           </span>
           {canCreateTemplate && (
@@ -174,7 +173,7 @@ export const TemplateList = ({
         <div className="flex-1 overflow-y-auto">
           {templates.length === 0 && (
             <div className="flex items-center justify-center p-8">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {t("templates.noTemplates")}
               </p>
             </div>
@@ -248,12 +247,12 @@ const TemplateRow = ({
         onClick={onSelect}
         type="button"
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <LayoutTemplateIcon className="size-4 text-muted-foreground" />
+        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <LayoutTemplateIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{template.name}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {t("templates.fieldCount", {
               count: template.fieldCount,
             })}
@@ -297,6 +296,7 @@ const TemplateRow = ({
               </AlertDialogClose>
               <Button
                 disabled={deleting}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={handleDelete}
                 variant="destructive"
               >

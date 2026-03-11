@@ -1,14 +1,15 @@
 import { Chat } from "@ai-sdk/react";
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
 import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
-import {
-  RivetChatTransport,
-  type ActiveFileContext,
-  type ProcessedAttachment,
-  type UserContext,
+import { RivetChatTransport } from "@/lib/ai-sdk/rivet-transport";
+import type {
+  ActiveFileContext,
+  ProcessedAttachment,
+  UserContext,
 } from "@/lib/ai-sdk/rivet-transport";
 import { rivet } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";

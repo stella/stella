@@ -6,16 +6,16 @@ import { nanoid } from "nanoid";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
-  type AIJustification,
-  type AIResult,
-  type FieldContentForAI,
-  type GenerateBatchProps,
-  type GenerateBatchResult,
 } from "@/api/handlers/registry/actors/workflow/generate-batch-shared";
-import {
-  parseJustificationXml,
-  type JustificationFilenames,
-} from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import type {
+  AIJustification,
+  AIResult,
+  FieldContentForAI,
+  GenerateBatchProps,
+  GenerateBatchResult,
+} from "@/api/handlers/registry/actors/workflow/generate-batch-shared";
+import { parseJustificationXml } from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
 import {
   Unreachable,
   WorkflowIntegrationError,
@@ -48,12 +48,12 @@ const getValueFromInputFields = (input: FieldContentForAI[]): string => {
   return values.join(" + ");
 };
 
-export const generateBatchMock = async ({
+export const generateBatchMock = ({
   batch,
   entityVersionId,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  Result.gen(async function* () {
+  Result.gen(async function* generateBatchMockGen() {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,
@@ -198,14 +198,14 @@ export const generateBatchMock = async ({
       unsupportedPropertyIds: [],
     });
   }).then((result) =>
-    result.mapError((e) =>
-      matchError(e, {
-        ParseXmlError: (e) =>
+    result.mapError((err) =>
+      matchError(err, {
+        ParseXmlError: (parseErr) =>
           new WorkflowIntegrationError({
-            message: e.message,
-            cause: e,
+            message: parseErr.message,
+            cause: parseErr,
           }),
-        WorkflowValidationError: (e) => e,
+        WorkflowValidationError: (validErr) => validErr,
       }),
     ),
   );

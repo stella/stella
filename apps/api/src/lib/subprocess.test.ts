@@ -1,6 +1,6 @@
-import { resolve } from "node:path";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 import { spawnWorker } from "@/api/lib/subprocess";
 

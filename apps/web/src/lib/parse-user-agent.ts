@@ -12,7 +12,7 @@ const BROWSERS = [
   [/Firefox\//, "Firefox"],
   [/Chrome\//, "Chrome"],
   [/Safari\//, "Safari"],
-] as const satisfies ReadonlyArray<readonly [RegExp, string]>;
+] as const satisfies readonly (readonly [RegExp, string])[];
 
 const OPERATING_SYSTEMS = [
   [/Windows/, "Windows"],
@@ -21,7 +21,7 @@ const OPERATING_SYSTEMS = [
   [/iPhone|iPad|iPod/, "iOS"],
   [/CrOS/, "ChromeOS"],
   [/Linux/, "Linux"],
-] as const satisfies ReadonlyArray<readonly [RegExp, string]>;
+] as const satisfies readonly (readonly [RegExp, string])[];
 
 export const parseUserAgent = (
   ua: string | null | undefined,

@@ -208,7 +208,7 @@ describe("editWithTracking", () => {
   });
 
   test("works on the SPA fixture", async () => {
-    const fixture = new URL("./fixtures/spa-template.docx", import.meta.url)
+    const fixture = new URL("fixtures/spa-template.docx", import.meta.url)
       .pathname;
     const file = Bun.file(fixture);
     const docx = Buffer.from(await file.arrayBuffer());

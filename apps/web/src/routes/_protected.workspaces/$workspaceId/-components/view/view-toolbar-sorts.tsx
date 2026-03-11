@@ -22,45 +22,41 @@ type SortChipsProps = {
   onUpdate: (sorts: ViewLayout["sorts"]) => void;
 };
 
-export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
-  return (
-    <>
-      {sorts.map((sort) => {
-        const property = properties.find((p) => p.id === sort.propertyId);
+export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => (
+  <>
+    {sorts.map((sort) => {
+      const property = properties.find((p) => p.id === sort.propertyId);
 
-        if (!property) {
-          return null;
-        }
+      if (!property) {
+        return null;
+      }
 
-        return (
-          <SortChip
-            desc={sort.desc}
-            key={sort.propertyId}
-            onRemove={() => {
-              onUpdate(sorts.filter((s) => s.propertyId !== sort.propertyId));
-            }}
-            onToggle={() => {
-              onUpdate(
-                sorts.map((s) =>
-                  s.propertyId === sort.propertyId
-                    ? { ...s, desc: !s.desc }
-                    : s,
-                ),
-              );
-            }}
-            propertyName={property.name}
-            propertyType={property.content.type}
-          />
-        );
-      })}
-      <AddSortButton
-        onAdd={(sort) => onUpdate([...sorts, sort])}
-        properties={properties}
-        sortedPropertyIds={new Set(sorts.map((s) => s.propertyId))}
-      />
-    </>
-  );
-};
+      return (
+        <SortChip
+          desc={sort.desc}
+          key={sort.propertyId}
+          onRemove={() => {
+            onUpdate(sorts.filter((s) => s.propertyId !== sort.propertyId));
+          }}
+          onToggle={() => {
+            onUpdate(
+              sorts.map((s) =>
+                s.propertyId === sort.propertyId ? { ...s, desc: !s.desc } : s,
+              ),
+            );
+          }}
+          propertyName={property.name}
+          propertyType={property.content.type}
+        />
+      );
+    })}
+    <AddSortButton
+      onAdd={(sort) => onUpdate([...sorts, sort])}
+      properties={properties}
+      sortedPropertyIds={new Set(sorts.map((s) => s.propertyId))}
+    />
+  </>
+);
 
 type SortChipProps = {
   propertyName: string;
@@ -100,7 +96,7 @@ const SortChip = ({
   const hint = getSortChipLabel(propertyType, desc);
 
   return (
-    <div className="flex items-center rounded-md border bg-muted/50">
+    <div className="bg-muted/50 flex items-center rounded-md border">
       <Button onClick={onToggle} size="xs" variant="ghost">
         {!hint && <SortIcon />}
         {propertyName}
@@ -123,29 +119,27 @@ const AddSortButton = ({
   properties,
   sortedPropertyIds,
   onAdd,
-}: AddSortButtonProps) => {
-  return (
-    <Menu>
-      <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
-        <ArrowUpDownIcon />
-      </MenuTrigger>
-      <MenuPopup>
-        {properties.map((property) => (
-          <MenuItem
-            disabled={sortedPropertyIds.has(property.id)}
-            key={property.id}
-            onClick={() =>
-              onAdd({
-                propertyId: property.id,
-                desc: false,
-              })
-            }
-          >
-            <PropertyIcon type={property.content.type} />
-            {property.name}
-          </MenuItem>
-        ))}
-      </MenuPopup>
-    </Menu>
-  );
-};
+}: AddSortButtonProps) => (
+  <Menu>
+    <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+      <ArrowUpDownIcon />
+    </MenuTrigger>
+    <MenuPopup>
+      {properties.map((property) => (
+        <MenuItem
+          disabled={sortedPropertyIds.has(property.id)}
+          key={property.id}
+          onClick={() =>
+            onAdd({
+              propertyId: property.id,
+              desc: false,
+            })
+          }
+        >
+          <PropertyIcon type={property.content.type} />
+          {property.name}
+        </MenuItem>
+      ))}
+    </MenuPopup>
+  </Menu>
+);

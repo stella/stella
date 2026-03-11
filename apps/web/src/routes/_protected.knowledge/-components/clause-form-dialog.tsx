@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -24,6 +25,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+
 import { ClauseEditor } from "./clause-editor";
 import type { ClauseParagraph } from "./clause-editor-types";
 
@@ -295,6 +297,7 @@ export const ClauseFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
+          {/* eslint-disable-next-line typescript/no-misused-promises */}
           <Button disabled={saving || !form.title.trim()} onClick={handleSave}>
             {t("common.save")}
           </Button>

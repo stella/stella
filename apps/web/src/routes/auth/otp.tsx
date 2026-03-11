@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -55,17 +56,26 @@ function OTP() {
   const invalidateSession = useInvalidateSession();
 
   const verifyOtp = useMutation({
-    mutationFn: async ({ email, otp }: { email: string; otp: string }) => {
-      const { error } = await authClient.signIn.emailOtp({ email, otp });
+    mutationFn: async ({
+      email: emailArg,
+      otp: otpArg,
+    }: {
+      email: string;
+      otp: string;
+    }) => {
+      const { error: signInError } = await authClient.signIn.emailOtp({
+        email: emailArg,
+        otp: otpArg,
+      });
 
-      if (error) {
-        if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+      if (signInError) {
+        if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
           toastManager.add({
-            title: error.message ?? t("errors.actionFailed"),
+            title: signInError.message ?? t("errors.actionFailed"),
             type: "error",
           });
         }
-        throw toAuthClientError(error);
+        throw toAuthClientError(signInError);
       }
 
       // Sync browser timezone on first login (fire-and-forget).
@@ -82,8 +92,8 @@ function OTP() {
             await authClient.updateUser({ timezoneId: browserTz });
           }
         })
-        .catch((err) => {
-          captureError(posthog, err);
+        .catch((error) => {
+          captureError(posthog, error);
         });
 
       await invalidateSession.mutateAsync();

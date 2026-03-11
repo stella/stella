@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
-import { adminDb, type ScopedDb } from "@/api/db";
+import { adminDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { workspaceMembers } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

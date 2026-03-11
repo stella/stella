@@ -41,8 +41,8 @@ const scanParagraphs = (
  * `word/footer*.xml` entries. `patchDocument` patches across
  * all parts, so this ensures discovery matches fill coverage.
  *
- * @returns Deduplicated list with occurrence counts, sorted
- *          alphabetically by name.
+ * @returns {Promise<DiscoveredPlaceholder[]>} Deduplicated list
+ *   with occurrence counts, sorted alphabetically by name.
  */
 export const discoverPlaceholders = async (
   docxBuffer: Buffer,
@@ -75,6 +75,6 @@ export const discoverPlaceholders = async (
   }
 
   return [...counts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, count]) => ({ name, count }));
 };

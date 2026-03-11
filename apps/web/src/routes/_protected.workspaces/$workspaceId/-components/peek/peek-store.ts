@@ -54,6 +54,7 @@ export const usePeekStore = create<State & Actions>()(
       });
 
       // Release PDF resources outside the immer producer
+      // eslint-disable-next-line typescript/no-floating-promises
       usePdfStore.getState().cleanupPdf(fieldId);
     },
 
@@ -72,6 +73,7 @@ export const usePeekStore = create<State & Actions>()(
 
       const pdfStore = usePdfStore.getState();
       for (const fieldId of fieldIds) {
+        // eslint-disable-next-line typescript/no-floating-promises
         pdfStore.cleanupPdf(fieldId);
       }
     },

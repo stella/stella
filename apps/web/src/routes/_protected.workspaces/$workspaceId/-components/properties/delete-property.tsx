@@ -41,7 +41,7 @@ export const DeleteProperty = ({
       <AlertDialogTrigger
         render={
           <Button
-            className="justify-start font-semibold text-destructive-foreground"
+            className="text-destructive-foreground justify-start font-semibold"
             disabled={
               isWorkflowRunning || !canDelete || deleteProperty.isPending
             }

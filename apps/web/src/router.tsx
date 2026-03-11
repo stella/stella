@@ -1,11 +1,13 @@
 import type { PropsWithChildren } from "react";
+
 import { PostHogProvider } from "@posthog/react";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
-import { IntlProvider, type AbstractIntlMessages } from "use-intl";
+import { IntlProvider } from "use-intl";
+import type { AbstractIntlMessages } from "use-intl";
 
 import { ToastProvider } from "@stella/ui/components/toast";
 import { TooltipProvider } from "@stella/ui/components/tooltip";
@@ -74,7 +76,7 @@ export function getRouter() {
 }
 
 declare module "@tanstack/react-router" {
-  // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Router
+  // oxlint-disable-next-line consistent-type-definitions
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

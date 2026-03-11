@@ -7,8 +7,8 @@
  * timeout kills the subprocess if it hangs.
  */
 
-import { resolve } from "node:path";
 import { Result } from "better-result";
+import { resolve } from "node:path";
 
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,14 +18,14 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_PATH = resolve(import.meta.dir, "extraction-worker.ts");
 
-const SUPPORTED_MIMES: string[] = [PDF_MIME_TYPE, DOCX_MIME_TYPE];
+const SUPPORTED_MIMES = new Set<string>([PDF_MIME_TYPE, DOCX_MIME_TYPE]);
 
 export const extractFileText = async (
   buffer: ArrayBuffer,
   mimeType: string,
   context?: Record<string, string>,
 ) => {
-  if (!SUPPORTED_MIMES.includes(mimeType)) {
+  if (!SUPPORTED_MIMES.has(mimeType)) {
     return null;
   }
 

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -177,7 +178,8 @@ export const ChatMentionList = forwardRef<
   //   },
   //   enabled: !!drillDown,
   // });
-  // biome-ignore lint/suspicious/noExplicitAny: TODO: fix me
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- TODO: fix me
   const drillDownItems: any[] = [];
   const entitiesLoading = false;
   const activeItems = drillDown ? (drillDownItems ?? []) : items;
@@ -283,7 +285,7 @@ export const ChatMentionList = forwardRef<
         >
           {drillDown && (
             <Button
-              className="justify-start gap-2 font-normal text-muted-foreground"
+              className="text-muted-foreground justify-start gap-2 font-normal"
               onClick={handleBack}
               size="sm"
               variant="ghost"
@@ -296,12 +298,12 @@ export const ChatMentionList = forwardRef<
 
           {drillDown && entitiesLoading && (
             <div className="flex items-center justify-center p-2">
-              <LoaderIcon className="size-4 animate-spin text-muted-foreground" />
+              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
             </div>
           )}
 
           {!drillDown && activeItems.length === 0 && (
-            <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex items-center justify-center p-2 text-center text-sm">
               {t("chat.mention.noResults")}
             </div>
           )}
@@ -310,7 +312,7 @@ export const ChatMentionList = forwardRef<
             !entitiesLoading &&
             drillDownItems &&
             drillDownItems.length === 0 && (
-              <div className="flex items-center justify-center p-2 text-center text-sm text-muted-foreground">
+              <div className="text-muted-foreground flex items-center justify-center p-2 text-center text-sm">
                 {t("chat.mention.noResults")}
               </div>
             )}
@@ -322,7 +324,7 @@ export const ChatMentionList = forwardRef<
               return (
                 <div key={group.category}>
                   {hasMultipleCategories && (
-                    <div className="px-2 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground">
+                    <div className="text-muted-foreground px-2 pt-1.5 pb-0.5 text-xs font-medium">
                       {categoryLabel(group.category)}
                     </div>
                   )}
@@ -357,7 +359,7 @@ export const ChatMentionList = forwardRef<
                         </Button>
                         {isWorkspace && (
                           <Button
-                            className="size-7 shrink-0 text-muted-foreground"
+                            className="text-muted-foreground size-7 shrink-0"
                             onClick={() => handleDrillDown(item)}
                             size="icon-sm"
                             variant="ghost"

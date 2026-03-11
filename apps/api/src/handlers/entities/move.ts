@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
@@ -23,8 +24,8 @@ export const moveEntityHandler = ({
   scopedDb,
   workspaceId,
   body,
-}: MoveEntityHandlerProps) => {
-  return scopedDb(async (tx) => {
+}: MoveEntityHandlerProps) =>
+  scopedDb(async (tx) => {
     // Lock the entity row to prevent concurrent moves.
     const [entity] = await tx
       .select({ id: entities.id, kind: entities.kind })
@@ -114,7 +115,6 @@ export const moveEntityHandler = ({
 
     return status(200);
   });
-};
 
 /**
  * Walk up the parent chain from `startId` using a recursive

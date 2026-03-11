@@ -112,6 +112,7 @@ compiler and the database prevent unauthorized access.
   `caseLawMatterLinks`
 
   Each policy:
+
   ```sql
   USING (
     workspace_id = ANY(
@@ -212,11 +213,11 @@ New handler — `apps/api/src/handlers/workspaces/members.ts`:
 ### Migration
 
 - Backfill migration: for every existing `(organization,
-  member)` pair, insert `workspaceMember` rows for all
+member)` pair, insert `workspaceMember` rows for all
   workspaces in that org. This preserves current behavior
   (everyone sees everything) and lets admins restrict later.
 - Enable RLS on all 14 tables via `ALTER TABLE ... ENABLE
-  ROW LEVEL SECURITY`.
+ROW LEVEL SECURITY`.
 - Create a dedicated PostgreSQL role for the application
   connection (RLS does not apply to table owners / superusers).
 
@@ -275,5 +276,5 @@ New handler — `apps/api/src/handlers/workspaces/members.ts`:
   - `stella_app` — runtime role with SELECT/INSERT/UPDATE/
     DELETE grants but no table ownership. RLS applies.
     Connected via new `DATABASE_APP_URL` env var.
-  The Drizzle config keeps `DATABASE_URL`; the app runtime
-  (`db/index.ts`) switches to `DATABASE_APP_URL`.
+    The Drizzle config keeps `DATABASE_URL`; the app runtime
+    (`db/index.ts`) switches to `DATABASE_APP_URL`.

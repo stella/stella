@@ -1,5 +1,7 @@
 import { useRef } from "react";
-import { UploadIcon, type LucideIcon } from "lucide-react";
+
+import { UploadIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -21,11 +23,11 @@ export const EmptyState = ({
 }: EmptyStateProps) => (
   <div className="flex flex-1 items-center justify-center p-8">
     <div className="flex flex-col items-center gap-3 text-center">
-      <Icon className="size-8 text-muted-foreground" />
+      <Icon className="text-muted-foreground size-8" />
       <div>
-        <p className="text-sm text-muted-foreground">{message}</p>
+        <p className="text-muted-foreground text-sm">{message}</p>
         {hint && (
-          <p className="mt-1 text-xs text-muted-foreground/80">{hint}</p>
+          <p className="text-muted-foreground/80 mt-1 text-xs">{hint}</p>
         )}
       </div>
       {workspaceId && <UploadButton workspaceId={workspaceId} />}
@@ -53,7 +55,7 @@ const UploadButton = ({ workspaceId }: { workspaceId: string }) => {
         className="sr-only"
         multiple
         onChange={(e) => {
-          const files = Array.from(e.currentTarget.files ?? []);
+          const files = [...(e.currentTarget.files ?? [])];
           if (files.length > 0) {
             createFileEntities(files);
           }

@@ -27,7 +27,7 @@ export const DecisionText = ({ decision, sections }: DecisionTextProps) => {
       <article className="mx-auto max-w-3xl space-y-6">
         <header>
           <h1 className="text-xl font-semibold">{decision.caseNumber}</h1>
-          <p className="text-sm text-muted-foreground">{decision.court}</p>
+          <p className="text-muted-foreground text-sm">{decision.court}</p>
         </header>
 
         {sections.map((section) => (
@@ -50,7 +50,7 @@ export const DecisionText = ({ decision, sections }: DecisionTextProps) => {
       <article className="mx-auto max-w-3xl space-y-6">
         <header>
           <h1 className="text-xl font-semibold">{decision.caseNumber}</h1>
-          <p className="text-sm text-muted-foreground">{decision.court}</p>
+          <p className="text-muted-foreground text-sm">{decision.court}</p>
         </header>
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {decision.fulltext}
@@ -61,7 +61,7 @@ export const DecisionText = ({ decision, sections }: DecisionTextProps) => {
 
   return (
     <div className="flex items-center justify-center py-16">
-      <p className="text-sm text-muted-foreground">{t("caseLaw.emptyState")}</p>
+      <p className="text-muted-foreground text-sm">{t("caseLaw.emptyState")}</p>
     </div>
   );
 };

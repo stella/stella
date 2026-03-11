@@ -54,7 +54,7 @@ export const captureError = (
   const tag = errorTag(error);
 
   if (env.isDev) {
-    // biome-ignore lint/suspicious/noConsole: full error in dev only
+    // eslint-disable-next-line no-console
     console.error(error);
   }
 

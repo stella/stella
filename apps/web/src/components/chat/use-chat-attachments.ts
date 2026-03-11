@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { ProcessedAttachment } from "@/lib/ai-sdk/rivet-transport";
@@ -48,7 +49,7 @@ export const useChatAttachments = () => {
 
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
+      const fileArray = [...files];
 
       const newPending: PendingFile[] = [];
       const filesToUpload: File[] = [];
@@ -155,7 +156,7 @@ export const useChatAttachments = () => {
       e.preventDefault();
       const { files } = e.dataTransfer;
       if (files.length > 0) {
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget upload
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         addFiles(files);
       }
     },
@@ -179,7 +180,7 @@ export const useChatAttachments = () => {
       }
       if (files.length > 0) {
         e.preventDefault();
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget upload
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         addFiles(files);
       }
     },
@@ -190,7 +191,7 @@ export const useChatAttachments = () => {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const { files } = e.target;
       if (files && files.length > 0) {
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget upload
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         addFiles(files);
       }
       e.target.value = "";

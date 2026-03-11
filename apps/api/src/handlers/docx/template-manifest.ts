@@ -503,7 +503,7 @@ export const mergeManifestWithDiscovery = (
 
 const mergeField = (
   discovered: DiscoveredField,
-  meta: FieldMeta | undefined,
+  meta?: FieldMeta,
 ): ResolvedField => {
   const resolved: ResolvedField = {
     path: discovered.path,
@@ -531,9 +531,7 @@ const mergeField = (
 
   if (discovered.itemFields) {
     // Item-level metadata not yet supported
-    resolved.itemFields = discovered.itemFields.map((item) =>
-      mergeField(item, undefined),
-    );
+    resolved.itemFields = discovered.itemFields.map((item) => mergeField(item));
   }
 
   return resolved;

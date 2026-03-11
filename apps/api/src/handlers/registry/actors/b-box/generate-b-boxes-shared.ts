@@ -45,9 +45,11 @@ export const parseJustificationContent = (justification: string) => {
   }
 
   const document = documentResult.value;
+  // eslint-disable-next-line unicorn/prefer-query-selector -- slimdom XML document does not support querySelectorAll
   const spans = document.getElementsByTagName("span");
 
   for (const span of spans) {
+    // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
     const pageNumber = span.getAttribute("data-page-number");
 
     if (pageNumber) {
@@ -69,7 +71,7 @@ export const parseJustificationContent = (justification: string) => {
 
   return Result.ok({
     justificationText,
-    pageNumbers: Array.from(pageNumbers),
+    pageNumbers: [...pageNumbers],
   });
 };
 
@@ -146,13 +148,13 @@ export type PreparedJustificationData = {
   pdf: PDF;
 };
 
-export const prepareJustificationData = async (
+export const prepareJustificationData = (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
   justificationId: string,
   scopedDb: ScopedDb,
 ) =>
-  Result.gen(async function* () {
+  Result.gen(async function* prepareJustificationDataGen() {
     const data = await scopedDb((tx) =>
       tx.query.justifications.findFirst({
         where: { id: justificationId },

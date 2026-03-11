@@ -4,6 +4,7 @@ import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+
 import type { DateRangeQuery } from "./date-range-schema";
 
 type HoursByUserHandlerProps = {

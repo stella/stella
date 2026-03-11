@@ -1,4 +1,5 @@
-import { UserError, type ActionContextOf, type ActorContext } from "rivetkit";
+import { UserError } from "rivetkit";
+import type { ActionContextOf, ActorContext } from "rivetkit";
 import * as v from "valibot";
 
 import {
@@ -6,32 +7,35 @@ import {
   parseActorKey,
 } from "@stella/rivet/actors/common";
 import { parseWorkflowActorKey } from "@stella/rivet/actors/workflow-actor-config";
-import { userErrors, type UserErrorCode } from "@stella/rivet/errors";
+import { userErrors } from "@stella/rivet/errors";
+import type { UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
-import { adminDb, createScopedDb, type ScopedDb } from "@/api/db";
+import { adminDb, createScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import {
   auth,
   resolveAccessibleWorkspaceIds,
   WORKSPACE_ACTIVE_STATUS,
 } from "@/api/lib/auth";
-// biome-ignore lint/style/noRestrictedImports: actor session validator (equivalent to authMacro)
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- actor session validator (equivalent to authMacro)
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { posthogIdentify } from "@/api/lib/posthog";
 
 export const createUserError = (
   errorCode: UserErrorCode,
   config?: { cause?: unknown; metadata?: unknown },
-) => {
-  return new UserError(userErrors[errorCode], {
+) =>
+  new UserError(userErrors[errorCode], {
     code: errorCode,
     cause: config?.cause,
     metadata: config?.metadata,
   });
-};
 
-// biome-ignore lint/suspicious/noExplicitAny: it's fine
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript-eslint/no-explicit-any -- any is intentional here
 type AnyActorContext = ActorContext<any, any, any, any, any, any>;
 
 /** Context with a broadcast method. Accepts any actor context (including chat). */

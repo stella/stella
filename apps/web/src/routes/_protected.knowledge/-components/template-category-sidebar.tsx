@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import {
   MoreHorizontalIcon,
   PencilIcon,
@@ -228,6 +229,7 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              // eslint-disable-next-line typescript/no-misused-promises
               onClick={handleDelete}
               variant="destructive"
             >
@@ -353,6 +355,7 @@ const CategoryFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
+          {/* eslint-disable-next-line typescript/no-misused-promises */}
           <Button disabled={saving || !name.trim()} onClick={handleSave}>
             {t("common.save")}
           </Button>

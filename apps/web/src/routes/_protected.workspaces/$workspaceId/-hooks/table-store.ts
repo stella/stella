@@ -5,7 +5,8 @@ import type {
 } from "@tanstack/react-table";
 import superjson from "superjson";
 import { create } from "zustand";
-import { persist, type PersistStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import type { PersistStorage } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 const superjsonStorage: PersistStorage<PersistedState> = {

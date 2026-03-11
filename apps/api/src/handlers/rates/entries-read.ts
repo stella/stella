@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
-import { t, type Static } from "elysia";
+import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
@@ -72,7 +73,7 @@ export const readRateEntriesHandler = async ({
           tx
             .select({ id: user.id, name: user.name })
             .from(user)
-            .where(inArray(user.id, Array.from(userIds))),
+            .where(inArray(user.id, [...userIds])),
         )
       : [];
 

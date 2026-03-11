@@ -64,11 +64,12 @@ export const EntityFileInfo = ({
   }
 
   return (
-    <div className="mb-1.5 grid min-h-10 grid-cols-[1fr_auto] items-center gap-0.5 border-b bg-popover ps-3 pe-1">
+    <div className="bg-popover mb-1.5 grid min-h-10 grid-cols-[1fr_auto] items-center gap-0.5 border-b ps-3 pe-1">
       <span className="truncate font-medium">{field.content.fileName}</span>
       <div>
         <Button
           disabled={!prevFile}
+          // eslint-disable-next-line typescript/no-misused-promises
           onClick={async () => {
             await navigate({
               resetScroll: true,
@@ -98,6 +99,7 @@ export const EntityFileInfo = ({
         </Button>
         <Button
           disabled={!nextFile}
+          // eslint-disable-next-line typescript/no-misused-promises
           onClick={async () => {
             await navigate({
               replace: true,
@@ -179,14 +181,14 @@ export const FieldInfo = ({
       <AccordionPanel className="px-3 pb-2">
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-0.5 text-sm">
-            <h1 className="text-sm font-medium text-muted-foreground">
+            <h1 className="text-muted-foreground text-sm font-medium">
               {t("workspaces.answer")}
             </h1>
             <CellResult field={{ ...field, entityId }} property={property} />
           </div>
           {justification && (
             <div className="flex flex-col gap-0.5 text-sm">
-              <h1 className="text-sm font-medium text-muted-foreground">
+              <h1 className="text-muted-foreground text-sm font-medium">
                 {t("workspaces.justification")}
               </h1>
               <Justification justification={justification} />

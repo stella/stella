@@ -268,7 +268,7 @@ describe("extractText", () => {
   });
 
   test("works on the SPA fixture", async () => {
-    const fixture = new URL("./fixtures/spa-template.docx", import.meta.url)
+    const fixture = new URL("fixtures/spa-template.docx", import.meta.url)
       .pathname;
     const file = Bun.file(fixture);
     const buf = Buffer.from(await file.arrayBuffer());

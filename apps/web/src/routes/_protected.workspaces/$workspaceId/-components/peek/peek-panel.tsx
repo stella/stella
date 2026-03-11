@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef } from "react";
+
 import { useNavigate } from "@tanstack/react-router";
 import {
   ExternalLinkIcon,
@@ -18,10 +19,8 @@ import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
 import { PeekPdfViewer } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
-import {
-  usePeekStore,
-  type PeekTab,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import type { PeekTab } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 
 type PeekPanelProps = {
   workspaceId: string;
@@ -50,7 +49,7 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
   // Track per-file zoom offsets (survives tab switches).
   const scaleOffsets = useRef(new Map<string, number>());
 
-  const activeTab = tabs.find((t) => t.fieldId === activeFieldId);
+  const activeTab = tabs.find((tab) => tab.fieldId === activeFieldId);
 
   const handleZoom = useCallback(
     (direction: "in" | "out") => {
@@ -88,19 +87,19 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
     pdf.document
       .getData()
       .then((data) => {
-        const blob = new Blob([data.slice()], {
+        const blob = new Blob([new Uint8Array(data)], {
           type: PDF_MIME_TYPE,
         });
         const url = URL.createObjectURL(blob);
         const frame = document.createElement("iframe");
         frame.style.display = "none";
         frame.src = url;
-        document.body.appendChild(frame);
+        document.body.append(frame);
         frame.contentWindow?.addEventListener("afterprint", () => {
-          document.body.removeChild(frame);
+          frame.remove();
           URL.revokeObjectURL(url);
         });
-        frame.onload = () => frame.contentWindow?.print();
+        frame.addEventListener("load", () => frame.contentWindow?.print());
       })
       .catch(() => {
         /* print failure is non-critical */
@@ -168,9 +167,9 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
   }, [activeFieldId]);
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="bg-background flex h-full">
       {/* Vertical tab bar */}
-      <div className="flex w-9 shrink-0 flex-col border-e bg-muted/50">
+      <div className="bg-muted/50 flex w-9 shrink-0 flex-col border-e">
         <ScrollArea className="flex-1">
           <div className="flex flex-col">
             {tabs.map((tab) => (
@@ -229,6 +228,7 @@ export const PeekPanel = ({ workspaceId }: PeekPanelProps) => {
               content={t("workspaces.pdf.openFullView")}
               render={
                 <Button
+                  // eslint-disable-next-line typescript/no-misused-promises
                   onClick={handleOpenFullView}
                   size="icon-xs"
                   variant="ghost"
@@ -277,33 +277,31 @@ const VerticalTab = ({
   active,
   onActivate,
   onClose,
-}: VerticalTabProps) => {
-  return (
-    <Tooltip
-      content={tab.label}
-      render={
-        <button
-          className={cn(
-            "group/tab relative flex h-9 w-full items-center justify-center border-b text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-            active &&
-              "bg-background text-foreground before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:bg-primary",
-          )}
-          onAuxClick={(e) => {
-            // Middle-click to close
-            if (e.button === 1) {
-              e.preventDefault();
-              onClose();
-            }
-          }}
-          onClick={onActivate}
-          type="button"
-        />
-      }
-      side="left"
-    >
-      <span className="text-[10px] leading-tight font-medium">
-        {tab.label.slice(0, 3).toUpperCase()}
-      </span>
-    </Tooltip>
-  );
-};
+}: VerticalTabProps) => (
+  <Tooltip
+    content={tab.label}
+    render={
+      <button
+        className={cn(
+          "group/tab text-muted-foreground hover:bg-accent hover:text-foreground relative flex h-9 w-full items-center justify-center border-b transition-colors",
+          active &&
+            "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:start-0 before:w-0.5",
+        )}
+        onAuxClick={(e) => {
+          // Middle-click to close
+          if (e.button === 1) {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+        onClick={onActivate}
+        type="button"
+      />
+    }
+    side="left"
+  >
+    <span className="text-[10px] leading-tight font-medium">
+      {tab.label.slice(0, 3).toUpperCase()}
+    </span>
+  </Tooltip>
+);

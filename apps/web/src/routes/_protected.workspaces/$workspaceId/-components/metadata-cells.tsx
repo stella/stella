@@ -29,7 +29,7 @@ export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
     .toUpperCase();
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
       <Avatar className="size-5 text-[10px]">
         {entity.createdByImage && (
           <AvatarImage alt={name} src={entity.createdByImage} />
@@ -52,7 +52,7 @@ export const LastUpdatedCell = ({ entity }: { entity: WorkspaceEntity }) => {
   return (
     <Tooltip
       content={full}
-      render={<span className="text-xs text-muted-foreground" />}
+      render={<span className="text-muted-foreground text-xs" />}
     >
       {formatRelativeTime(ts)}
     </Tooltip>
@@ -65,7 +65,7 @@ export const VersionCell = ({ entity }: { entity: WorkspaceEntity }) => {
   }
 
   return (
-    <span className="truncate text-xs text-muted-foreground">
+    <span className="text-muted-foreground truncate text-xs">
       {entity.version}
     </span>
   );

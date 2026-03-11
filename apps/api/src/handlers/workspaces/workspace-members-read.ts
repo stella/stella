@@ -10,8 +10,8 @@ type ReadWorkspaceMembersHandlerProps = {
 export const readWorkspaceMembersHandler = async ({
   scopedDb,
   workspaceId,
-}: ReadWorkspaceMembersHandlerProps) => {
-  return await scopedDb((tx) =>
+}: ReadWorkspaceMembersHandlerProps) =>
+  await scopedDb((tx) =>
     tx.query.workspaceMembers.findMany({
       where: { workspaceId: { eq: workspaceId } },
       limit: LIMITS.workspaceMembersCount,
@@ -32,4 +32,3 @@ export const readWorkspaceMembersHandler = async ({
       },
     }),
   );
-};

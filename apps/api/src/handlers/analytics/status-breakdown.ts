@@ -3,6 +3,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+
 import type { DateRangeQuery } from "./date-range-schema";
 
 type StatusBreakdownHandlerProps = {

@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  isSorted,
-  sortKeys,
-  syncMessages,
-  type NestedMessages,
-} from "./i18n-check";
+import { isSorted, sortKeys, syncMessages } from "./i18n-check";
+import type { NestedMessages } from "./i18n-check";
 
 describe("syncMessages", () => {
   test("adds missing top-level keys", () => {

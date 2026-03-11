@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { NodeViewWrapper } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -25,7 +26,7 @@ export const MentionNode = (props: NodeViewProps) => {
     <NodeViewWrapper className="inline w-fit">
       <span
         className={cn(
-          "rounded bg-info/10 px-1 py-0.5 font-medium text-info-foreground",
+          "bg-info/10 text-info-foreground rounded px-1 py-0.5 font-medium",
         )}
       >
         {propertyName ?? attributes.label}

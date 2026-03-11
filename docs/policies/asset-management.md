@@ -48,7 +48,7 @@ and container base images used in the Stella monorepo.
    ecosystems (`.github/dependabot.yml`):
    - **Bun packages:** daily checks, grouped by library family
      (TanStack, Vite, React, Prettier, AI, PostHog, TipTap,
-     AWS, Drizzle, Elysia, RivetKit, Biome, and others).
+     AWS, Drizzle, Elysia, RivetKit, oxlint, and others).
    - **GitHub Actions:** weekly checks, grouped.
    - **Docker base images:** weekly checks.
 

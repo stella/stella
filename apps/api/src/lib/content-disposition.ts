@@ -1,4 +1,4 @@
-const ASCII_FILENAME_RE = /^[\x20-\x7E]+$/;
+const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/;
 
 /**
  * Build a Content-Disposition header value per RFC 6266.
@@ -17,7 +17,7 @@ export const contentDisposition = (name: string): string => {
 
   // Sanitise fallback: strip non-ASCII and unsafe chars
   const fallback = name
-    .replaceAll(/[^\x20-\x7E]/g, "_")
+    .replaceAll(/[^\u0020-\u007E]/g, "_")
     .replaceAll('"', "_")
     .replaceAll("\\", "_");
   const encoded = encodeURIComponent(name).replaceAll("'", "%27");

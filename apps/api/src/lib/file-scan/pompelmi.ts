@@ -2,9 +2,8 @@ import {
   CommonHeuristicsScanner,
   composeScanners,
   createZipBombGuard,
-  type Match,
-  type Scanner,
 } from "pompelmi";
+import type { Match, Scanner } from "pompelmi";
 
 import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
 import { yaraScanner } from "@/api/lib/file-scan/yara";

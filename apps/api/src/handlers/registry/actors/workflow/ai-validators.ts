@@ -129,7 +129,7 @@ const validateMultiSelectResult = ({
   if (isStringArray(answer)) {
     return Result.ok({
       type: "multi-select",
-      value: Array.from(new Set(answer)),
+      value: [...new Set(answer)],
       justificationXml: justification,
     });
   }

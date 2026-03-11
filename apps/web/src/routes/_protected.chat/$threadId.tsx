@@ -96,7 +96,7 @@ function ThreadRoute() {
                         return (
                           <MessageResponse
                             components={streamdownComponents}
-                            // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
+                            // eslint-disable-next-line react/no-array-index-key
                             key={`${message.id}-text-${i}`}
                           >
                             {part.text}
@@ -108,6 +108,7 @@ function ThreadRoute() {
                           return (
                             <AskUserCard
                               key={part.toolCallId}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onSubmit={(text) => sendMessage({ text })}
                               part={part}
                             />
@@ -125,7 +126,9 @@ function ThreadRoute() {
                               autoApprovedTools={autoApprovedTools}
                               key={part.toolCallId}
                               onAlwaysAllow={handleAlwaysAllow}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onApprove={handleApprove}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onDeny={handleDeny}
                               part={part}
                             />
@@ -145,7 +148,7 @@ function ThreadRoute() {
                   message.parts.map((part, i) =>
                     part.type === "text" ? (
                       <UserMessageText
-                        // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
+                        // eslint-disable-next-line react/no-array-index-key
                         key={`${message.id}-text-${i}`}
                         text={part.text}
                       />
@@ -164,11 +167,13 @@ function ThreadRoute() {
           autoFocus
           className="min-h-10 flex-1 rounded-lg border px-3 py-2"
           mentionContext={GLOBAL_MENTION_CONTEXT}
+          // eslint-disable-next-line typescript/no-misused-promises
           onSubmit={(text) => sendMessage({ text })}
         />
         {isGenerating && (
           <Button
             aria-label={t("common.cancel")}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={() => stop()}
             size="icon-sm"
             variant="outline"

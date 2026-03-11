@@ -8,7 +8,8 @@ import type {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 describe("branded types", () => {
   describe("toSafeId", () => {

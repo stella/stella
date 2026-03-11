@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
 import { usePostHog } from "@posthog/react";
@@ -147,9 +148,7 @@ const isSelectProperty = (
 ): values is Extract<
   PropertyFormSchema,
   { type: "single-select" | "multi-select" }
-> => {
-  return values.type === "single-select" || values.type === "multi-select";
-};
+> => values.type === "single-select" || values.type === "multi-select";
 
 const getDefaultValues = (property: WorkspaceProperty): PropertyFormSchema => {
   if (property.content.type === "file") {
@@ -260,6 +259,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   return (
     <Popover
       modal={true}
+      // eslint-disable-next-line typescript/no-misused-promises
       onOpenChange={async (open) => {
         if (open || !form.state.isDirty) {
           setIsOpen(open);
@@ -302,6 +302,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
           return;
         }
 
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
         setIsOpen(open);
       }}
@@ -324,7 +325,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             )}
             name="name"
           />
-          <div className="relative rounded-t-xl border border-b-0 bg-popover [clip-path:inset(0_1px)] before:pointer-events-none before:absolute before:inset-0 before:rounded-t-[calc(var(--radius-xl)-1px)]">
+          <div className="bg-popover relative rounded-t-xl border border-b-0 [clip-path:inset(0_1px)] before:pointer-events-none before:absolute before:inset-0 before:rounded-t-[calc(var(--radius-xl)-1px)]">
             <PropertyPopoverType type={content.type} />
             <div className="flex flex-col gap-1 p-1">
               {content.type !== "file" && (

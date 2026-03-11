@@ -101,7 +101,7 @@ const SourceChip = ({
       className={cn(
         "inline-flex items-center gap-1 rounded-md border",
         "bg-muted/50 px-1.5 py-0.5 text-xs transition-colors",
-        workspaceId ? "cursor-pointer hover:bg-muted" : "cursor-default",
+        workspaceId ? "hover:bg-muted cursor-pointer" : "cursor-default",
       )}
       onClick={handleClick}
       type="button"

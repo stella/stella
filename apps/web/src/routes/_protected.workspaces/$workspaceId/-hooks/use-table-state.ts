@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+
 import type {
   ColumnPinningState,
   ColumnSizingState,
@@ -59,6 +60,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
 
   const onSortingChange: OnChangeFn<SortingState> = (updater) => {
     const data = typeof updater === "function" ? updater(sorting) : updater;
+    // eslint-disable-next-line typescript/no-floating-promises
     viewsActor.handle?.updateView({
       viewId,
       layout: {
@@ -78,6 +80,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
+    // eslint-disable-next-line typescript/no-floating-promises
     viewsActor.handle?.updateView({
       viewId,
       layout: { ...view.layout, columnPinning: data.left ?? [] },
@@ -102,6 +105,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
       .filter(([, visible]) => !visible)
       .map(([id]) => id);
 
+    // eslint-disable-next-line typescript/no-floating-promises
     viewsActor.handle?.updateView({
       viewId,
       layout: { ...view.layout, hiddenProperties },

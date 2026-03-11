@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  deserializeAITool,
-  serializeAITool,
-  type AITool,
-} from "@/api/lib/markdown/ai-tool";
+import { deserializeAITool, serializeAITool } from "@/api/lib/markdown/ai-tool";
+import type { AITool } from "@/api/lib/markdown/ai-tool";
 
 describe("ai tool", () => {
   const aiTool: AITool = {

@@ -142,7 +142,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
 
       return false;
     } catch (error) {
-      // biome-ignore lint/suspicious/noConsole: stream error should be logged
+      // eslint-disable-next-line no-console -- stream errors must be logged
       console.error("Failed to enqueue stream chunk", error);
       unsubscribe();
       return true;
@@ -172,11 +172,12 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
 
         abortSignal?.addEventListener(
           "abort",
+          // eslint-disable-next-line typescript/no-misused-promises
           async () => {
             try {
               controller.close();
             } catch (error) {
-              // biome-ignore lint/suspicious/noConsole: this should be logged
+              // eslint-disable-next-line no-console
               console.error("Failed to close stream controller", error);
             }
             unsubscribe();
@@ -217,6 +218,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
     // Close gracefully so the SDK returns to 'ready' state and
     // the stream-started event handler can resume the stream.
     if (status === "busy") {
+      // eslint-disable-next-line typescript/no-floating-promises
       stream.cancel();
       return stream;
     }
@@ -234,12 +236,13 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
 
       // 2. Get undelivered chunks from the server.
       const resumeFrom = this.lastSeq + 1;
-      const { done, snapshot } = await this.connection.getStreamSnapshot({
-        threadId: this.threadId,
-        startFromSeq: resumeFrom,
-      });
+      const { done: streamDone, snapshot } =
+        await this.connection.getStreamSnapshot({
+          threadId: this.threadId,
+          startFromSeq: resumeFrom,
+        });
 
-      if (done) {
+      if (streamDone) {
         unsubscribeBuffer();
         return null;
       }

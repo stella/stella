@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -94,7 +95,7 @@ export const SearchDialog = ({
   const facets = latestPage?.facets;
   const totalCount = latestPage?.totalCount ?? 0;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when selection changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const el = resultsRef.current?.querySelector("[data-selected]");
     el?.scrollIntoView({ block: "nearest" });
@@ -169,6 +170,7 @@ export const SearchDialog = ({
         }
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- allHits is derived from data and recalculated each render; memoizing it would add complexity for no benefit
     [allHits, selectedIndex, handleResultClick],
   );
 
@@ -197,19 +199,20 @@ export const SearchDialog = ({
       <DialogPopup className="max-w-2xl" showCloseButton={false}>
         {/* Search input */}
         <div className="flex items-center gap-3 border-b px-4 py-3">
-          <SearchIcon className="size-5 shrink-0 text-muted-foreground" />
+          <SearchIcon className="text-muted-foreground size-5 shrink-0" />
           <Input
             autoFocus
-            className="flex-1 border-0 bg-transparent text-sm shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+            className="placeholder:text-muted-foreground flex-1 border-0 bg-transparent text-sm shadow-none outline-none focus-visible:ring-0"
             onChange={handleQueryChange}
+            // eslint-disable-next-line typescript/no-misused-promises
             onKeyDown={handleKeyDown}
             placeholder={t("search.placeholder")}
             value={query}
           />
           {isFetching && !isFetchingNextPage && (
-            <LoaderIcon className="size-4 shrink-0 animate-spin text-muted-foreground" />
+            <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
           )}
-          <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+          <kbd className="bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-[0.625rem]">
             {t("search.escKey")}
           </kbd>
         </div>
@@ -263,7 +266,7 @@ export const SearchDialog = ({
 
               {facets.workspace.length > 0 && (
                 <div className="mt-4">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  <p className="text-muted-foreground mb-2 text-xs font-medium">
                     {t("search.facets.workspace")}
                   </p>
                   <div className="space-y-0.5">
@@ -288,7 +291,7 @@ export const SearchDialog = ({
                         <span className="truncate">
                           {bucket.label ?? bucket.value}
                         </span>
-                        <span className="ms-2 text-muted-foreground">
+                        <span className="text-muted-foreground ms-2">
                           {bucket.count}
                         </span>
                       </Button>
@@ -303,7 +306,7 @@ export const SearchDialog = ({
           <div className="flex-1 overflow-y-auto" ref={resultsRef}>
             {!hasQuery && (
               <div className="flex h-full items-center justify-center px-4 py-8">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {t("search.emptyState")}
                 </p>
               </div>
@@ -312,7 +315,7 @@ export const SearchDialog = ({
             {hasQuery && isLoading && (
               <div className="space-y-3 px-4 py-3">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list never reorders
+                  // eslint-disable-next-line react/no-array-index-key
                   <div className="space-y-2" key={`skeleton-${i}`}>
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-3 w-1/2" />
@@ -323,7 +326,7 @@ export const SearchDialog = ({
 
             {hasQuery && !isLoading && !hasResults && (
               <div className="flex h-full items-center justify-center px-4 py-8">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {t("search.noResults", {
                     query: debouncedQuery,
                   })}
@@ -333,7 +336,7 @@ export const SearchDialog = ({
 
             {hasResults && (
               <div className="px-2 py-2">
-                <p className="px-2 pb-2 text-xs text-muted-foreground">
+                <p className="text-muted-foreground px-2 pb-2 text-xs">
                   {t("search.resultCount", {
                     count: totalCount,
                   })}
@@ -343,6 +346,7 @@ export const SearchDialog = ({
                     hit={hit}
                     isSelected={index === selectedIndex}
                     key={hit.entityId}
+                    // eslint-disable-next-line typescript/no-misused-promises
                     onClick={handleResultClick}
                   />
                 ))}
@@ -351,6 +355,7 @@ export const SearchDialog = ({
                     <Button
                       className="w-full"
                       disabled={isFetchingNextPage}
+                      // eslint-disable-next-line typescript/no-misused-promises
                       onClick={() => fetchNextPage()}
                       size="sm"
                       variant="ghost"
@@ -380,7 +385,7 @@ type FilterChipProps = {
 const FilterChip = ({ type, label, onRemove }: FilterChipProps) => {
   const t = useTranslations();
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs">
+    <span className="bg-muted/50 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
       <span className="text-muted-foreground">
         {t("search.filterLabel", { type })}
       </span>
@@ -400,11 +405,11 @@ const FilterChip = ({ type, label, onRemove }: FilterChipProps) => {
 
 type FacetGroupProps = {
   title: string;
-  buckets: Array<{
+  buckets: {
     value: string;
     label?: string;
     count: number;
-  }>;
+  }[];
   selected: string[];
   onChange: (value: string) => void;
 };
@@ -416,7 +421,7 @@ const FacetGroup = ({
   onChange,
 }: FacetGroupProps) => (
   <div>
-    <p className="mb-2 text-xs font-medium text-muted-foreground">{title}</p>
+    <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
     <div className="space-y-0.5">
       {buckets.map((bucket) => (
         <Button
@@ -475,12 +480,12 @@ const SearchResultItem = ({
       onClick={() => onClick(hit.workspaceId)}
       variant="ghost"
     >
-      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
           {hit.title || hit.entityId}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="text-muted-foreground truncate text-xs">
           {t("search.metaSeparator", {
             workspace: hit.workspaceName,
             time: formatted,
@@ -488,8 +493,8 @@ const SearchResultItem = ({
         </p>
         {hit.headline && (
           <p
-            className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground [&_mark]:bg-highlight [&_mark]:font-medium [&_mark]:text-highlight-foreground"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: headline is escaped server-side (escapeAndHighlight) and only contains <mark> tags
+            className="text-muted-foreground [&_mark]:bg-highlight [&_mark]:text-highlight-foreground mt-0.5 line-clamp-2 text-xs font-normal [&_mark]:font-medium"
+            // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{
               __html: hit.headline,
             }}

@@ -1,6 +1,7 @@
+import { compile } from "@litko/yara-x";
+import type { RuleMatch } from "@litko/yara-x";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { compile, type RuleMatch } from "@litko/yara-x";
 import type { Match, Scanner } from "pompelmi";
 
 import { isRecord } from "@/api/lib/type-guards";
@@ -8,7 +9,7 @@ import { isRecord } from "@/api/lib/type-guards";
 const YARA_DIR = join(import.meta.dir, "yara");
 
 const compiled = compile(
-  Array.from(new Bun.Glob("*.yar").scanSync(YARA_DIR))
+  [...new Bun.Glob("*.yar").scanSync(YARA_DIR)]
     .map((f) => readFileSync(join(YARA_DIR, f), "utf8"))
     .join("\n"),
 );

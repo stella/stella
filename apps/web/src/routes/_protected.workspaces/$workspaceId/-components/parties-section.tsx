@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   useQuery,
   useQueryClient,
@@ -39,11 +40,6 @@ import { toastManager } from "@stella/ui/components/toast";
 import { ContactPicker } from "@/components/contact-picker";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
-import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspaceOptions,
-  workspacesKeys,
-} from "@/routes/_protected.workspaces/-queries";
 import {
   useAddParty,
   useRemoveParty,
@@ -51,9 +47,14 @@ import {
 import {
   PARTY_ROLES,
   toPartyRole,
-  type PartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
+import type { PartyRole } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import { workspaceContactsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-contacts";
+import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
+import {
+  workspaceOptions,
+  workspacesKeys,
+} from "@/routes/_protected.workspaces/-queries";
 
 const ROLE_LABEL_KEYS = {
   opposing_party: "workspaces.parties.partyRoles.opposing_party",
@@ -90,6 +91,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       { id, type, displayName: name },
       {
         onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
@@ -114,6 +116,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             title: t("success.clientUpdated"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
@@ -137,6 +140,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             title: t("success.clientUpdated"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
@@ -155,15 +159,15 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
       {/* Client sub-section */}
       <section>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+        <h3 className="text-muted-foreground mb-3 text-sm font-medium">
           {t("workspaces.parties.client")}
         </h3>
         {workspace.client ? (
           <div className="flex items-center gap-2 rounded-md border px-3 py-2">
             {workspace.client.type === "person" ? (
-              <UserIcon className="size-4 text-muted-foreground" />
+              <UserIcon className="text-muted-foreground size-4" />
             ) : (
-              <BuildingIcon className="size-4 text-muted-foreground" />
+              <BuildingIcon className="text-muted-foreground size-4" />
             )}
             <Link
               className="text-sm font-medium hover:underline"
@@ -184,7 +188,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {t("workspaces.parties.noClient")}
             </p>
             <ContactPicker
@@ -207,7 +211,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       {/* Parties sub-section */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-medium text-muted-foreground">
+          <h3 className="text-muted-foreground text-sm font-medium">
             {t("workspaces.sections.parties")}
           </h3>
           <AddPartyDialog workspaceId={workspaceId} />
@@ -223,7 +227,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("workspaces.parties.noParties")}
           </p>
         )}
@@ -268,6 +272,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             title: t("success.partyRemoved"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspaceContactsOptions(workspaceId).queryKey,
           });
@@ -290,9 +295,9 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
   return (
     <li className="flex items-center gap-2 rounded-md border px-3 py-2">
       {contact.type === "person" ? (
-        <UserIcon className="size-4 text-muted-foreground" />
+        <UserIcon className="text-muted-foreground size-4" />
       ) : (
-        <BuildingIcon className="size-4 text-muted-foreground" />
+        <BuildingIcon className="text-muted-foreground size-4" />
       )}
       <Link
         className="text-sm font-medium hover:underline"
@@ -301,7 +306,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       >
         {contact.displayName}
       </Link>
-      <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+      <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
         {t(roleKey)}
       </span>
       <Button
@@ -355,6 +360,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
             title: t("success.partyAdded"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspaceContactsOptions(workspaceId).queryKey,
           });

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";

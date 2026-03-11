@@ -1,7 +1,7 @@
-import { rmSync } from "node:fs";
-import { resolve } from "node:path";
 import { eq, inArray } from "drizzle-orm";
 import Elysia from "elysia";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { db } from "@/api/db";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
-// biome-ignore lint/style/noRestrictedImports: dev-only route; brands session org ID
+// eslint-disable-next-line no-restricted-imports -- dev-only route; brands session org ID
 import { toSafeId } from "@/api/lib/branded-types";
 import { getSearchProvider } from "@/api/lib/search/provider";
 

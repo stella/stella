@@ -7,14 +7,16 @@ import {
   getViewsInputSchema,
   reorderViewsInputSchema,
   updateViewInputSchema,
-  type ConvertViewInput,
-  type CreateViewInput,
-  type GetViewsInput,
-  type ReorderViewsInput,
-  type UpdateViewInput,
-  type ViewLayout,
-  type ViewLayoutBase,
-  type ViewLayoutType,
+} from "@/api/handlers/registry/actors/views/schema";
+import type {
+  ConvertViewInput,
+  CreateViewInput,
+  GetViewsInput,
+  ReorderViewsInput,
+  UpdateViewInput,
+  ViewLayout,
+  ViewLayoutBase,
+  ViewLayoutType,
 } from "@/api/handlers/registry/actors/views/schema";
 import {
   createUserError,

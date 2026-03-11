@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { PlayIcon, SquareIcon } from "lucide-react";
@@ -113,7 +114,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
         <span className="text-sm font-medium tabular-nums">
           {formatElapsed(elapsed)}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-muted-foreground text-xs">
           {t("billing.timerActive")}
         </span>
         <Button

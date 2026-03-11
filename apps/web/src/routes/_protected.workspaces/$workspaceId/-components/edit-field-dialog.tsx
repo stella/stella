@@ -1,10 +1,8 @@
 import { useState } from "react";
+
 import { usePostHog } from "@posthog/react";
-import {
-  revalidateLogic,
-  useForm,
-  type AnyFieldApi,
-} from "@tanstack/react-form";
+import { revalidateLogic, useForm } from "@tanstack/react-form";
+import type { AnyFieldApi } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -206,6 +204,7 @@ export const EditFieldDialog = ({
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
+                // eslint-disable-next-line typescript/no-floating-promises
                 form.handleSubmit();
               }}
             >

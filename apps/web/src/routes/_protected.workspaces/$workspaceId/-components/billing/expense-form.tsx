@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
@@ -106,6 +107,7 @@ export const ExpenseForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >

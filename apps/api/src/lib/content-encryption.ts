@@ -30,7 +30,7 @@ const getMasterKey = (): Buffer | null => {
  * The org ID is used as the `info` parameter so each
  * organization gets an independent key.
  */
-const deriveOrgKey = async (
+const deriveOrgKey = (
   masterKey: Buffer,
   organizationId: string,
 ): Promise<Buffer> =>
@@ -69,7 +69,7 @@ export const encryptContent = async (
 
   if (!masterKey) {
     return {
-      ciphertext: Buffer.from(plaintext, "utf-8"),
+      ciphertext: Buffer.from(plaintext, "utf8"),
       iv: Buffer.alloc(IV_BYTES),
     };
   }
@@ -113,7 +113,7 @@ export const decryptContent = async (
   // survive key rotation without silent data loss.
   const isPlaintext = iv.every((b) => b === 0);
   if (isPlaintext) {
-    return ciphertext.toString("utf-8");
+    return ciphertext.toString("utf8");
   }
 
   const masterKey = getMasterKey();

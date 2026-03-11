@@ -23,7 +23,7 @@ function DecisionViewer() {
   if (!decision) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t("caseLaw.decisionNotFound")}
         </p>
       </div>
@@ -32,12 +32,12 @@ function DecisionViewer() {
 
   // SAFETY: sections is JSONB written by our segmenter
   // (DecisionSection[]). Drizzle types JSONB as unknown.
-  const sections = (decision.sections ?? []) as Array<{
+  const sections = (decision.sections ?? []) as {
     index: number;
     type: string;
     title: string | null;
     text: string;
-  }>;
+  }[];
 
   return (
     <div className="flex flex-1 overflow-hidden">

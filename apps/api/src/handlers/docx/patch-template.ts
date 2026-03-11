@@ -8,7 +8,8 @@
  * DOM before `patchDocument()` runs.
  */
 
-import { patchDocument, type IPatch } from "docx";
+import { patchDocument } from "docx";
+import type { IPatch } from "docx";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 

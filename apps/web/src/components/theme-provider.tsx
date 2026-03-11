@@ -5,8 +5,8 @@ import {
   useEffect,
   useMemo,
   useState,
-  type PropsWithChildren,
 } from "react";
+import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 
@@ -61,9 +61,9 @@ const resolveTheme = (theme: Theme): "light" | "dark" =>
 const suppressTransitions = () => {
   const style = document.createElement("style");
   style.textContent = "*, *::before, *::after { transition: none !important; }";
-  document.head.appendChild(style);
+  document.head.append(style);
   // Force reflow so suppression takes effect before class changes
-  getComputedStyle(document.documentElement).opacity;
+  void getComputedStyle(document.documentElement).opacity;
   return () => requestAnimationFrame(() => style.remove());
 };
 
@@ -111,7 +111,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     const root = document.documentElement;
     const restore = suppressTransitions();
 
-    for (const className of Array.from(root.classList)) {
+    for (const className of [...root.classList]) {
       if (className.startsWith(PALETTE_PREFIX)) {
         root.classList.remove(className);
       }

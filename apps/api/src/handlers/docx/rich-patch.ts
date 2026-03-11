@@ -8,7 +8,8 @@
  *   Paragraph objects (replaces the host paragraph entirely)
  */
 
-import { Paragraph, PatchType, TextRun, type IPatch } from "docx";
+import { Paragraph, PatchType, TextRun } from "docx";
+import type { IPatch } from "docx";
 
 import type { RichPatchValue } from "./types";
 

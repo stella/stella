@@ -1,14 +1,13 @@
 "use client";
 
-import {
-  useCallback,
-  useRef,
-  useState,
-  type FormEvent,
-  type FormEventHandler,
-  type HTMLAttributes,
-  type KeyboardEventHandler,
+import { useCallback, useRef, useState } from "react";
+import type {
+  FormEvent,
+  FormEventHandler,
+  HTMLAttributes,
+  KeyboardEventHandler,
 } from "react";
+
 import type { ChatStatus } from "ai";
 import { CornerDownLeftIcon, LoaderIcon, SquareIcon } from "lucide-react";
 
@@ -57,6 +56,7 @@ export const PromptInput = ({
         return;
       }
       event.currentTarget.reset();
+      // eslint-disable-next-line typescript/no-floating-promises
       onSubmit({ text }, event);
     },
     [onSubmit],

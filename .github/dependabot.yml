@@ -68,9 +68,10 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
-      prettier:
+      oxc:
         patterns:
-          - "prettier*"
+          - "oxlint"
+          - "oxfmt"
       ai:
         patterns:
           - "ai*"
@@ -108,9 +109,8 @@ updates:
         patterns:
           - "streamdown*"
           - "@streamdown/*"
-      biome:
+      ultracite:
         patterns:
-          - "@biomejs/*"
           - "ultracite"
     ignore:
       - dependency-name: "*"

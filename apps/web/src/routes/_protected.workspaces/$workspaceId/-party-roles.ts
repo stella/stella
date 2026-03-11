@@ -12,7 +12,7 @@ export const PARTY_ROLES = [
 
 export type PartyRole = (typeof PARTY_ROLES)[number];
 
-const PARTY_ROLES_SET: Set<string> = new Set(PARTY_ROLES);
+const PARTY_ROLES_SET = new Set<string>(PARTY_ROLES);
 
 const isPartyRole = (value: string): value is PartyRole =>
   PARTY_ROLES_SET.has(value);

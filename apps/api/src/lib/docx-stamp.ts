@@ -50,7 +50,7 @@ const DOCX_MIME_TYPES = new Set([
 /** OOXML custom property format identifier (fixed by spec). */
 const FMTID = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
 
-// ── Top-level regex (biome: useTopLevelRegex) ───────────
+// ── Top-level regex (oxlint: prefer-regex-literals) ───────────
 
 const PID_RE = /pid="(\d+)"/g;
 const WID_RE = /w:id="(\d+)"/g;

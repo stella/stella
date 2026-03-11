@@ -113,7 +113,7 @@ export const fillHandler = async ({
         result.structureErrors.length > 0 ? result.structureErrors : null,
     }),
   )
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
+    // eslint-disable-next-line no-empty
     .catch(() => {});
 
   // PDF conversion via Gotenberg

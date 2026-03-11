@@ -28,7 +28,7 @@ const parseBody = (xml: string): slimdom.Element => {
 /** Collect all paragraph texts from a body element. */
 const bodyTexts = (body: slimdom.Element): string[] => {
   const ps = body.getElementsByTagNameNS(W_NS, "p");
-  return Array.from(ps).map((p) => paragraphText(p));
+  return [...ps].map((p) => paragraphText(p));
 };
 
 // ── evaluateCondition ────────────────────────────────────

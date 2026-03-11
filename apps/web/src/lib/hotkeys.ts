@@ -1,9 +1,5 @@
-import {
-  detectPlatform,
-  formatForDisplay,
-  type HeldKey,
-  type Hotkey,
-} from "@tanstack/react-hotkeys";
+import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
+import type { HeldKey, Hotkey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -58,14 +54,14 @@ export const SHORTCUT_HINT_GROUPS = [
       },
     ],
   },
-] as const satisfies ReadonlyArray<{
+] as const satisfies readonly {
   categoryKey: string;
-  hints: ReadonlyArray<{
+  hints: readonly {
     hotkey: Hotkey;
     labelKey: TranslationKey;
     contexts: readonly ShortcutContext[];
-  }>;
-}>;
+  }[];
+}[];
 
 export type ShortcutHint =
   (typeof SHORTCUT_HINT_GROUPS)[number]["hints"][number];

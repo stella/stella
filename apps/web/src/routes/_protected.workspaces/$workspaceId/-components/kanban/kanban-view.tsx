@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
-import {
-  extractClosestEdge,
-  type Edge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { usePostHog } from "@posthog/react";
@@ -23,7 +23,6 @@ import type {
   WorkspaceView,
 } from "@/lib/types";
 // -- Auto-scrolling board container with forgiving column drop --
-
 import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
@@ -358,6 +357,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                   : undefined
               }
               onDrop={(entityId) => handleDrop(value, entityId)}
+              // eslint-disable-next-line typescript/no-misused-promises
               onFileUpload={(files) => handleFileUpload(value, files)}
               onHideColumn={
                 value !== null ? () => handleHideColumn(value) : undefined
@@ -605,7 +605,7 @@ const groupByBuiltIn = (
     }
   }
 
-  return Array.from(grouped.entries()).map(([key, ents]) => ({
+  return [...grouped.entries()].map(([key, ents]) => ({
     label: resolveLabel(key),
     entities: ents,
   }));

@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
@@ -13,10 +14,8 @@ import type {
   WorkspacePropertyOption,
 } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
-import {
-  EditFieldDialog,
-  type EditableFieldContent,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import { EditFieldDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
@@ -135,6 +134,7 @@ const WithOpenEntityButton = ({
       {children}
       <Button
         className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
+        // eslint-disable-next-line typescript/no-misused-promises
         onClick={async () => {
           createBoundingBoxes();
 

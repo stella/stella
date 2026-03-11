@@ -146,8 +146,8 @@ const processDecision = async (
   if (decisionId) {
     try {
       await indexDecision(decisionId, scopedDb);
-    } catch (err) {
-      captureError(err, { decisionId, sourceId });
+    } catch (error) {
+      captureError(error, { decisionId, sourceId });
       searchVectorFailed = true;
     }
   }

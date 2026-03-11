@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 
 import type {
@@ -96,8 +97,8 @@ export const ChatMentionProviders = ({
 
   const workspaces = workspacesData?.workspaces;
 
-  const value = useMemo<MentionProviders>(() => {
-    return {
+  const value = useMemo<MentionProviders>(
+    () => ({
       getItems: (categories) => {
         const items: ChatMentionOption[] = [];
 
@@ -127,8 +128,9 @@ export const ChatMentionProviders = ({
 
         return items;
       },
-    };
-  }, [workspaces, contacts, templates, clauses]);
+    }),
+    [workspaces, contacts, templates, clauses],
+  );
 
   return (
     <MentionProvidersContext value={value}>{children}</MentionProvidersContext>

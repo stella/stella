@@ -8,10 +8,10 @@ import type { DecisionSection } from "@/api/handlers/case-law/types";
  * Each pattern maps to a section type with the regex matching
  * the section heading. Order matters: first match wins.
  */
-const SECTION_PATTERNS: Array<{
+const SECTION_PATTERNS: {
   type: DecisionSection["type"];
   pattern: RegExp;
-}> = [
+}[] = [
   // Czech patterns
   {
     type: "ruling",
@@ -84,11 +84,11 @@ export const segmentDecision = (fulltext: string): DecisionSection[] => {
   }
 
   const lines = fulltext.split("\n");
-  const boundaries: Array<{
+  const boundaries: {
     lineIndex: number;
     type: DecisionSection["type"];
     title: string;
-  }> = [];
+  }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
+
 import type { ClauseBody } from "./types";
 
 /**

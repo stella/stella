@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import {
   useQuery,
   useQueryClient,
@@ -67,6 +68,11 @@ import { getMatterColor } from "@/lib/matter-colors";
 import { pageTitle } from "@/lib/page-title";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import {
   useCreateWorkspace,
   useDeleteWorkspace,
@@ -75,11 +81,6 @@ import {
   overviewOptions,
   workspacesOptions,
 } from "@/routes/_protected.workspaces/-queries";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 export const Route = createFileRoute("/_protected/workspaces/")({
   head: () => ({
@@ -301,7 +302,7 @@ function RouteComponent() {
         map.set(ws.client.id, ws.client);
       }
     }
-    return [...map.values()].sort((a, b) =>
+    return [...map.values()].toSorted((a, b) =>
       a.displayName.localeCompare(b.displayName),
     );
   }, [workspaces]);
@@ -401,7 +402,7 @@ function RouteComponent() {
 
   const openMatter = useCallback(
     (id: string) => {
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       navigate({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: id },
@@ -498,7 +499,7 @@ function RouteComponent() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {displayed.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
             {workspaces.length === 0
               ? t("workspaces.noMatters")
               : t("common.empty")}
@@ -572,7 +573,7 @@ function RouteComponent() {
 
 type MattersToolbarProps = {
   config: MattersConfig;
-  clients: Array<{ id: string; displayName: string }>;
+  clients: { id: string; displayName: string }[];
   onChange: (patch: Partial<MattersConfig>) => void;
   search: string;
   onSearchChange: (value: string) => void;
@@ -633,7 +634,7 @@ const MattersToolbar = ({
     <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1">
       {/* Client filter */}
       {activeClient && (
-        <span className="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-xs">
+        <span className="bg-muted/50 flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs">
           <span className="font-medium">{t("workspaces.parties.client")}</span>
           <span className="text-muted-foreground">
             {activeClient.displayName}
@@ -677,7 +678,7 @@ const MattersToolbar = ({
             >
               <span className="flex-1">{sortLabels[key]}</span>
               {config.sortKey === key && (
-                <CheckIcon className="size-3 text-primary" />
+                <CheckIcon className="text-primary size-3" />
               )}
             </MenuItem>
           ))}
@@ -705,13 +706,13 @@ const MattersToolbar = ({
             <MenuItem onClick={() => onChange({ groupBy: "none" })}>
               <span className="flex-1">{t("workspaces.noGrouping")}</span>
               {config.groupBy === "none" && (
-                <CheckIcon className="size-3 text-primary" />
+                <CheckIcon className="text-primary size-3" />
               )}
             </MenuItem>
             <MenuItem onClick={() => onChange({ groupBy: "client" })}>
               <span className="flex-1">{t("workspaces.parties.client")}</span>
               {config.groupBy === "client" && (
-                <CheckIcon className="size-3 text-primary" />
+                <CheckIcon className="text-primary size-3" />
               )}
             </MenuItem>
           </MenuPopup>
@@ -728,7 +729,7 @@ const MattersToolbar = ({
       {/* Right side: search, view toggle, new matter */}
       <div className="ms-auto flex items-center gap-1">
         <div className="relative">
-          <SearchIcon className="pointer-events-none absolute start-2 top-1/2 z-10 size-3 -translate-y-1/2 text-muted-foreground" />
+          <SearchIcon className="text-muted-foreground pointer-events-none absolute start-2 top-1/2 z-10 size-3 -translate-y-1/2" />
           <Input
             className={cn(
               "h-7 ps-7 text-xs transition-[width]",
@@ -824,7 +825,7 @@ const MattersToolbar = ({
 // -- Client filter dropdown --
 
 type ClientFilterDropdownProps = {
-  clients: Array<{ id: string; displayName: string }>;
+  clients: { id: string; displayName: string }[];
   selected: string | null;
   onSelect: (id: string | null) => void;
 };
@@ -870,20 +871,20 @@ const ClientFilterDropdown = ({
         />
         <div className="-mx-2 max-h-48 overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+            <p className="text-muted-foreground px-2 py-3 text-center text-xs">
               {t("contacts.noContactsFound")}
             </p>
           ) : (
             filtered.map((client) => (
               <button
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm hover:bg-accent"
+                className="hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm"
                 key={client.id}
                 onClick={() => onSelect(client.id)}
                 type="button"
               >
                 <span className="flex-1 truncate">{client.displayName}</span>
                 {selected === client.id && (
-                  <CheckIcon className="size-3 shrink-0 text-primary" />
+                  <CheckIcon className="text-primary size-3 shrink-0" />
                 )}
               </button>
             ))
@@ -894,7 +895,7 @@ const ClientFilterDropdown = ({
   );
 };
 
-const ToolbarSeparator = () => <span className="mx-1 h-4 w-px bg-border" />;
+const ToolbarSeparator = () => <span className="bg-border mx-1 h-4 w-px" />;
 
 // -- Sort chip --
 
@@ -908,7 +909,7 @@ const SortChip = ({ label, desc, onToggle }: SortChipProps) => {
   const SortIcon = desc ? ArrowDownIcon : ArrowUpIcon;
 
   return (
-    <span className="flex items-center gap-1 rounded-md border bg-muted/50 px-1.5 py-0.5 text-xs">
+    <span className="bg-muted/50 flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs">
       <Button
         className="flex h-auto items-center gap-1 p-0 font-medium"
         onClick={onToggle}
@@ -968,7 +969,7 @@ const ColumnsToggle = ({ config, onChange }: ColumnsToggleProps) => {
             return (
               <MenuItem key={colId} onClick={() => toggle(colId)}>
                 <span className="flex-1">{columnLabels[colId]}</span>
-                {isVisible && <CheckIcon className="size-3 text-primary" />}
+                {isVisible && <CheckIcon className="text-primary size-3" />}
               </MenuItem>
             );
           })}
@@ -995,7 +996,7 @@ const ClientGroupHeader = ({
     className={cn(
       "sticky top-0 z-10 col-span-full",
       "flex items-center gap-2",
-      "border-b bg-background/95 backdrop-blur-sm",
+      "bg-background/95 border-b backdrop-blur-sm",
       "pt-4 pb-2 first:pt-0",
     )}
   >
@@ -1014,8 +1015,8 @@ const ClientGroupHeader = ({
     </h3>
     <span
       className={cn(
-        "rounded-full bg-muted px-1.5 py-0.5",
-        "text-[0.625rem] text-muted-foreground tabular-nums",
+        "bg-muted rounded-full px-1.5 py-0.5",
+        "text-muted-foreground text-[0.625rem] tabular-nums",
       )}
     >
       {matterCount}
@@ -1051,9 +1052,8 @@ const MatterCard = ({
 
   const [previewEnabled, setPreviewEnabled] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+  // eslint-disable-next-line unicorn/no-useless-undefined -- React 19 useRef requires an explicit initial value
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const { data: preview } = useQuery({
     ...overviewOptions(workspace.id),
@@ -1066,11 +1066,15 @@ const MatterCard = ({
     hoverTimer.current = setTimeout(() => setPreviewEnabled(true), HOVER_DELAY);
     // Prefetch workspace data so clicking feels instant
     const id = workspace.id;
+    // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(viewsOptions(id, qc));
+    // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(
       entitiesOptions({ workspaceId: id, filters: [], sorts: [], page: 1 }),
     );
+    // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(propertiesOptions(id));
+    // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(justificationsOptions(id));
   }, [qc, workspace.id]);
 
@@ -1097,8 +1101,8 @@ const MatterCard = ({
         render={
           <Link
             className={cn(
-              "group relative flex h-auto min-h-22 flex-col justify-between overflow-hidden rounded-xl border bg-card py-2.5 ps-3 pe-3 transition-colors hover:bg-accent/50",
-              focused && "ring-2 ring-primary",
+              "group bg-card hover:bg-accent/50 relative flex h-auto min-h-22 flex-col justify-between overflow-hidden rounded-xl border py-2.5 ps-3 pe-3 transition-colors",
+              focused && "ring-primary ring-2",
             )}
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
@@ -1116,7 +1120,7 @@ const MatterCard = ({
             <h2 className="truncate text-sm font-semibold">{workspace.name}</h2>
             {!hideClientName && workspace.client && (
               <Link
-                className="truncate text-xs text-muted-foreground hover:text-foreground hover:underline"
+                className="text-muted-foreground hover:text-foreground truncate text-xs hover:underline"
                 onClick={(e) => e.stopPropagation()}
                 params={{ contactId: workspace.client.id }}
                 to="/contacts/$contactId"
@@ -1175,7 +1179,7 @@ const MatterCard = ({
                   className={cn("rounded-full", i > 0 && "-ms-1")}
                   render={<span />}
                 >
-                  <Avatar className="size-5 ring-1 ring-background">
+                  <Avatar className="ring-background size-5 ring-1">
                     {c.userImage && <AvatarImage src={c.userImage} />}
                     <AvatarFallback className="text-[0.5rem]">
                       {getInitials(c.userName)}
@@ -1186,18 +1190,18 @@ const MatterCard = ({
               </TooltipRoot>
             ))}
             {overflow > 0 && (
-              <span className="ms-1 text-[0.625rem] text-muted-foreground">
+              <span className="text-muted-foreground ms-1 text-[0.625rem]">
                 {`+${overflow}`}
               </span>
             )}
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
           {workspace.reference && (
             <>
               <span className="font-mono">{workspace.reference}</span>
-              <span>{"·"}</span>
+              <span>·</span>
             </>
           )}
           <span>
@@ -1207,7 +1211,7 @@ const MatterCard = ({
                 })
               : t("workspaces.noItems")}
           </span>
-          <span>{"·"}</span>
+          <span>·</span>
           <span
             title={new Date(workspace.lastActivityAt).toLocaleString(lang, {
               dateStyle: "full",
@@ -1224,13 +1228,13 @@ const MatterCard = ({
           <div className="p-3">
             {(preview.documentCount > 0 || preview.taskCount > 0) && (
               <div className="mb-2 flex gap-1">
-                <div className="flex-1 rounded bg-muted px-2 py-1 text-center text-xs tabular-nums">
+                <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
                   {t("workspaces.documentsCount", {
                     count: preview.documentCount,
                   })}
                 </div>
                 {preview.taskCount > 0 && (
-                  <div className="flex-1 rounded bg-muted px-2 py-1 text-center text-xs tabular-nums">
+                  <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
                     {t("workspaces.tasksCount", {
                       count: preview.taskCount,
                     })}
@@ -1249,11 +1253,11 @@ const MatterCard = ({
                     mimeType={entity.mimeType}
                   />
                 ) : (
-                  <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <FileIcon className="text-muted-foreground size-3.5 shrink-0" />
                 )}
                 <span className="min-w-0 flex-1 truncate">{entity.name}</span>
                 {entity.updatedAt && (
-                  <span className="shrink-0 text-muted-foreground">
+                  <span className="text-muted-foreground shrink-0">
                     {formatRelativeTime(entity.updatedAt, lang)}
                   </span>
                 )}
@@ -1329,7 +1333,7 @@ const MatterTable = ({
       label: t("common.reference"),
       className: "hidden md:table-cell",
       render: (ws) => (
-        <span className="font-mono text-muted-foreground">
+        <span className="text-muted-foreground font-mono">
           {ws.reference ?? "—"}
         </span>
       ),
@@ -1399,7 +1403,7 @@ const MatterTable = ({
   const renderRow = (ws: Workspace, globalIndex: number) => (
     <tr
       className={cn(
-        "cursor-pointer border-b transition-colors hover:bg-accent/50",
+        "hover:bg-accent/50 cursor-pointer border-b transition-colors",
         focusIndex === globalIndex && "bg-accent/50",
       )}
       key={ws.id}
@@ -1417,11 +1421,11 @@ const MatterTable = ({
     <div className="overflow-x-auto px-4 pb-4">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-start text-xs text-muted-foreground">
+          <tr className="text-muted-foreground border-b text-start text-xs">
             {columns.map((col) => (
               <th
                 className={cn(
-                  "cursor-pointer px-3 py-2 font-medium select-none hover:text-foreground",
+                  "hover:text-foreground cursor-pointer px-3 py-2 font-medium select-none",
                   col.className,
                 )}
                 key={col.key}
@@ -1466,9 +1470,9 @@ const MatterTable = ({
                           )}
                           <span
                             className={cn(
-                              "rounded-full bg-muted px-1.5 py-0.5",
+                              "bg-muted rounded-full px-1.5 py-0.5",
                               "text-[0.625rem] tabular-nums",
-                              "font-normal text-muted-foreground",
+                              "text-muted-foreground font-normal",
                             )}
                           >
                             {group.workspaces.length}

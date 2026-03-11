@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -10,8 +11,8 @@ import {
   CONDITIONAL_KINDS,
   DirectiveLabel,
   HighlightedText,
-  type BlockDirectiveKind,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 // ── Types ────────────────────────────────────────────────
@@ -260,7 +261,7 @@ const PreviewParagraph = ({
 };
 
 const ErrorIndicator = ({ error }: { error: StructureError }) => (
-  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+  <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
     <AlertTriangleIcon className="size-3 shrink-0" />
     {error.message}
   </p>
@@ -269,11 +270,11 @@ const ErrorIndicator = ({ error }: { error: StructureError }) => (
 /** Subtle divider between header/body/footer sections. */
 const SectionDivider = ({ label }: { label: string }) => (
   <div className="flex items-center gap-2 pt-2 pb-1">
-    <div className="h-px flex-1 bg-border" />
-    <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
+    <div className="bg-border h-px flex-1" />
+    <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
       {label}
     </span>
-    <div className="h-px flex-1 bg-border" />
+    <div className="bg-border h-px flex-1" />
   </div>
 );
 
@@ -316,7 +317,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
       setState({ kind: "ready", data });
     };
 
-    // biome-ignore lint/nursery/noFloatingPromises: effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     load();
 
     return () => {
@@ -337,7 +338,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (state.kind === "loading") {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("discovering")}</p>
+        <p className="text-muted-foreground text-sm">{t("discovering")}</p>
       </div>
     );
   }
@@ -345,7 +346,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (state.kind === "error") {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("previewFailed")}</p>
+        <p className="text-muted-foreground text-sm">{t("previewFailed")}</p>
       </div>
     );
   }
@@ -355,7 +356,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (paragraphs.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
+        <p className="text-muted-foreground text-sm">{t("previewEmpty")}</p>
       </div>
     );
   }
@@ -371,8 +372,8 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const hasMultipleSections = sources.size > 1;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: text selection handler
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: text selection handler
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className="space-y-0.5 py-2"
       onKeyUp={handleTextSelection}

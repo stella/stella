@@ -21,7 +21,8 @@ export const parseMentions = (text: string): MentionRef[] => {
   const refs: MentionRef[] = [];
 
   for (const match of text.matchAll(MENTION_RE)) {
-    const [, , type, rawId] = match;
+    const type = match[2];
+    const rawId = match[3];
     const key = `${type}:${rawId}`;
     if (seen.has(key)) {
       continue;

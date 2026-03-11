@@ -1,6 +1,6 @@
+import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, test } from "bun:test";
 
 /**
  * Endpoints that are intentionally unguarded.
@@ -57,7 +57,7 @@ type Endpoint = {
 };
 
 const parseRouteFile = (filePath: string): Endpoint[] => {
-  const source = readFileSync(filePath, "utf-8");
+  const source = readFileSync(filePath, "utf8");
   const lines = source.split("\n");
   const endpoints: Endpoint[] = [];
 
@@ -106,7 +106,7 @@ describe("permission guards", () => {
 
     let source: string;
     try {
-      source = readFileSync(routeFile, "utf-8");
+      source = readFileSync(routeFile, "utf8");
     } catch {
       continue; // No routes.ts in this handler dir
     }
@@ -140,10 +140,10 @@ describe("permission guards", () => {
       let endpoints: Endpoint[];
       try {
         endpoints = parseRouteFile(routeFile);
-      } catch (err) {
+      } catch (error) {
         throw new Error(
           `Allowlist entry "${relPath}" refers to a non-existent file`,
-          { cause: err },
+          { cause: error },
         );
       }
       const found = new Set(endpoints.map((ep) => `${ep.method} ${ep.path}`));

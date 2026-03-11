@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -126,7 +127,7 @@ export const TimeEntryForm = ({
     if (rateOverride) {
       return;
     }
-    if (resolved?.hourlyRate != null && resolved.currency) {
+    if (resolved && resolved.hourlyRate !== null && resolved.currency) {
       form.setFieldValue("rateAtEntry", resolved.hourlyRate);
       form.setFieldValue("currency", resolved.currency);
     }
@@ -141,6 +142,7 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >
@@ -190,7 +192,7 @@ export const TimeEntryForm = ({
           <Label>{t("billing.rates.hourlyRate")}</Label>
           {!rateOverride && currentRate > 0 && (
             <button
-              className="text-xs text-muted-foreground underline"
+              className="text-muted-foreground text-xs underline"
               onClick={() => setRateOverride(true)}
               type="button"
             >
@@ -234,7 +236,7 @@ export const TimeEntryForm = ({
             </form.Field>
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-muted-foreground text-sm">
             {currentRate > 0
               ? `${formatCurrencyAmount(currentRate, currentCurrency)}${t("billing.rates.perHour")}`
               : t("billing.rates.noRateFound")}

@@ -13,8 +13,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
   WorkflowValidationError,
-  type WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
+import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 // Types shared between mock and real AI implementations
 export type FieldContentForAI = Exclude<

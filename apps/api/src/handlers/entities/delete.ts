@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t, type Static } from "elysia";
+import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";

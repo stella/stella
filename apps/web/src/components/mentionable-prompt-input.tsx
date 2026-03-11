@@ -1,12 +1,13 @@
 import "./chat-editor.css";
-
 import { useCallback, useEffect, useMemo, useRef } from "react";
+
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -15,8 +16,10 @@ import {
   ChatMention,
   createChatSuggestion,
   MENTION_HASH_PREFIX,
-  type ChatMentionOption,
-  type MentionCategory,
+} from "@/components/chat-mention-extension";
+import type {
+  ChatMentionOption,
+  MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -114,9 +117,9 @@ export const ChatEditor = ({
   // change, but consumed via a ref so TipTap's suggestion
   // plugin always reads the latest data without needing the
   // editor to fully recreate.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO: fix me
-  const getItems: MentionSourceProvider = useMemo(() => {
-    return () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const getItems: MentionSourceProvider = useMemo(
+    () => () => {
       const items: ChatMentionOption[] = [];
 
       // Entity mentions from current workspace
@@ -140,8 +143,10 @@ export const ChatEditor = ({
       }
 
       return items;
-    };
-  }, [wsId, categories, mentionProviders]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- categories is intentionally not memoized; allEntities comes from query data and is stable per render
+    [wsId, categories, mentionProviders],
+  );
 
   // Stable ref so the suggestion plugin always calls the
   // latest getItems without requiring editor recreation.
@@ -188,7 +193,7 @@ export const ChatEditor = ({
       attributes: {
         class: cn(
           "field-sizing-content max-h-48 min-h-10",
-          "overflow-y-auto text-sm text-foreground",
+          "text-foreground overflow-y-auto text-sm",
           "focus-visible:outline-none",
         ),
       },
@@ -257,8 +262,7 @@ export const ChatEditor = ({
   return (
     // Stop keyboard events from reaching parent handlers
     // (e.g. workspace table arrow-key navigation).
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: intentional isolation
-    // biome-ignore lint/a11y/noStaticElementInteractions: intentional isolation
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-static-element-interactions
     <div
       className={cn("chat-editor", className)}
       onKeyDown={(e) => e.stopPropagation()}

@@ -115,7 +115,9 @@ export const createTemplateHandler = async ({
   }));
 
   const clientManifest =
-    manifestJson != null ? parseClientManifest(manifestJson) : null;
+    manifestJson !== null && manifestJson !== undefined
+      ? parseClientManifest(manifestJson)
+      : null;
 
   if (clientManifest) {
     const metaByPath = new Map<string, FieldMeta>();

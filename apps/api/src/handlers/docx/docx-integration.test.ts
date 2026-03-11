@@ -145,7 +145,7 @@ const FOOTER_WRAP = (body: string) =>
   `<w:ftr xmlns:w="${W_NS}">${body}</w:ftr>`;
 
 const SPA_FIXTURE = new URL(
-  "./fixtures/spa-template-with-placeholders.docx",
+  "fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 
@@ -298,8 +298,8 @@ describe("idempotent operations", () => {
     const doc2 = await file2?.async("string");
     expect(doc1).toBe(doc2);
 
-    const entries1 = Object.keys(zip1.files).sort();
-    const entries2 = Object.keys(zip2.files).sort();
+    const entries1 = Object.keys(zip1.files).toSorted();
+    const entries2 = Object.keys(zip2.files).toSorted();
     expect(entries1).toEqual(entries2);
   });
 
@@ -475,7 +475,7 @@ describe("split-run placeholders", () => {
     const buf = await makeDocx(xml);
 
     const discovered = await discoverTemplate(buf);
-    const names = discovered.placeholders.map((p) => p.name).sort();
+    const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["a", "b"]);
   });
 });
@@ -499,7 +499,7 @@ describe("placeholders in tables", () => {
     const buf = await makeDocx(xml);
 
     const discovered = await discoverTemplate(buf);
-    const names = discovered.placeholders.map((p) => p.name).sort();
+    const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["col_a", "col_b"]);
   });
 

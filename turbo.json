@@ -23,16 +23,11 @@
     },
     "lint": {
       "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "{root}/biome.jsonc"]
+      "inputs": ["$TURBO_DEFAULT$", "{root}/.oxlintrc.json"]
     },
     "format": {
       "dependsOn": ["transit"],
-      "outputs": [".cache/.prettiercache"],
-      "outputLogs": "new-only"
-    },
-    "//#format:root": {
-      "outputs": [".cache/.prettiercache"],
-      "outputLogs": "new-only"
+      "inputs": ["$TURBO_DEFAULT$", "{root}/.oxfmtrc.json"]
     },
     "i18n:check": {
       "dependsOn": ["transit"],

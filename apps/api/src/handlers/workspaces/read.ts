@@ -4,8 +4,9 @@ import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
 import { WORKSPACE_ACTIVE_STATUS } from "@/api/lib/auth";
-// biome-ignore lint/style/noRestrictedImports: brands DB-returned workspace PKs for map lookups
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- brands DB-returned workspace PKs for map lookups
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadWorkspacesHandlerProps = {

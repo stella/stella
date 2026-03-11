@@ -11,7 +11,8 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { MentionCategory } from "@/components/chat-mention-extension";
-import { isFileDisplayable, type WorkspaceEntity } from "@/lib/types";
+import { isFileDisplayable } from "@/lib/types";
+import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -120,10 +121,11 @@ export const EntityLink = ({
       <button
         className={cn(
           "inline-flex items-center gap-0.5",
-          "text-foreground underline decoration-muted-foreground/40",
+          "text-foreground decoration-muted-foreground/40 underline",
           "underline-offset-2 transition-colors",
-          "cursor-pointer hover:decoration-foreground",
+          "hover:decoration-foreground cursor-pointer",
         )}
+        // eslint-disable-next-line typescript/no-misused-promises
         onClick={() =>
           navigate({
             to: "/knowledge/case-law/$decisionId",
@@ -167,7 +169,7 @@ export const EntityLink = ({
       return;
     }
     if (category === "workspace") {
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       navigate({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: id },
@@ -191,9 +193,9 @@ export const EntityLink = ({
     <button
       className={cn(
         "inline-flex items-center gap-0.5",
-        "text-foreground underline decoration-muted-foreground/40",
+        "text-foreground decoration-muted-foreground/40 underline",
         "underline-offset-2 transition-colors",
-        "cursor-pointer hover:decoration-foreground",
+        "hover:decoration-foreground cursor-pointer",
       )}
       onClick={handleClick}
       type="button"

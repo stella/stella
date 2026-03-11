@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import {
@@ -54,6 +55,7 @@ import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
 import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
+import { roleOptions } from "@/routes/-queries";
 import {
   getRoles,
   managementRoles,
@@ -71,7 +73,6 @@ import {
   createSlug,
   getOrganizationSchema,
 } from "@/routes/_protected.organization/-utils";
-import { roleOptions } from "@/routes/-queries";
 
 const searchSchema = v.object({
   q: v.optional(v.string()),
@@ -99,7 +100,7 @@ function MembersLayout() {
   const [localQuery, setLocalQuery] = useState(() => q ?? "");
 
   const updateSearch = useDebouncedCallback((value: string) => {
-    // biome-ignore lint/nursery/noFloatingPromises: ignore
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     navigate({
       search: (prev) =>
         produce(prev, (draft) => {
@@ -114,9 +115,9 @@ function MembersLayout() {
         <InputGroup className="me-auto max-w-sm flex-1">
           <InputGroupInput
             onChange={(e) => {
-              const v = e.target.value;
-              setLocalQuery(v);
-              updateSearch(v);
+              const val = e.target.value;
+              setLocalQuery(val);
+              updateSearch(val);
             }}
             placeholder={t("common.search")}
             value={localQuery}
@@ -197,9 +198,9 @@ const SettingsDialog = () => {
 
   return (
     <Dialog
-      onOpenChange={(isOpen) => {
-        setIsOpen(isOpen);
-        if (!isOpen) {
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
           form.reset();
         }
       }}
@@ -215,6 +216,7 @@ const SettingsDialog = () => {
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
+            // eslint-disable-next-line typescript/no-floating-promises
             form.handleSubmit();
           }}
         >
@@ -332,6 +334,7 @@ const MatterNumberingSection = () => {
 
   // Fetch preview when pattern or padding changes
   useEffect(() => {
+    // eslint-disable-next-line typescript/no-floating-promises
     fetchPreview(pattern, padding);
   }, [pattern, padding, fetchPreview]);
 
@@ -368,12 +371,12 @@ const MatterNumberingSection = () => {
     PATTERN_PRESETS.find((p) => p.value === pattern)?.value ?? "custom";
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className="bg-card flex flex-col gap-3 rounded-xl border p-4">
       <div>
         <h3 className="text-sm font-medium">
           {t("organization.matterNumber.title")}
         </h3>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           {t("organization.matterNumber.description")}
         </p>
       </div>
@@ -430,7 +433,7 @@ const MatterNumberingSection = () => {
               placeholder="{YYYY}/{SEQ}"
               value={pattern}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {t("organization.matterNumber.tokenHelp")}
             </p>
           </Field>
@@ -461,17 +464,17 @@ const MatterNumberingSection = () => {
               ))}
             </SelectPopup>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {t("organization.matterNumber.paddingDescription")}
           </p>
         </Field>
 
         {preview && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               {t("organization.matterNumber.nextPreview")}
             </span>
-            <span className="rounded border bg-muted px-2 py-1 font-mono text-sm">
+            <span className="bg-muted rounded border px-2 py-1 font-mono text-sm">
               {preview}
             </span>
           </div>
@@ -537,9 +540,9 @@ const InviteDialog = () => {
 
   return (
     <Dialog
-      onOpenChange={(isOpen) => {
-        setIsOpen(isOpen);
-        if (!isOpen) {
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
           form.reset();
         }
       }}
@@ -558,6 +561,7 @@ const InviteDialog = () => {
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
+            // eslint-disable-next-line typescript/no-floating-promises
             form.handleSubmit();
           }}
         >

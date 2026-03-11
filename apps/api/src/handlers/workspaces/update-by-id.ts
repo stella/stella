@@ -1,7 +1,9 @@
 import { and, eq, ne } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
-import { adminDb, type ScopedDb } from "@/api/db";
+import { adminDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";

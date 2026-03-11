@@ -5,13 +5,15 @@ import { bearer, emailOTP, organization } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
-import { ac, roles, type PermissionInput } from "@stella/permissions";
+import { ac, roles } from "@stella/permissions";
+import type { PermissionInput } from "@stella/permissions";
 
 import { adminDb, createScopedDb, db } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
 import {
@@ -39,7 +41,6 @@ const validateTimezoneId = (timezoneId: unknown): void => {
     try {
       Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
     } catch {
-      // biome-ignore lint/nursery/useErrorCause: APIError uses non-standard constructor
       throw new APIError("BAD_REQUEST", {
         message: "Invalid timezone identifier",
       });
@@ -98,14 +99,14 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        // biome-ignore lint/suspicious/useAwait: async required by better-auth hook type
+        // eslint-disable-next-line require-await -- async required by better-auth hook type
         before: async (user) => {
           validateTimezoneId(user.timezoneId);
           return { data: user };
         },
       },
       update: {
-        // biome-ignore lint/suspicious/useAwait: async required by better-auth hook type
+        // eslint-disable-next-line require-await -- async required by better-auth hook type
         before: async (user) => {
           validateTimezoneId(user.timezoneId);
           return { data: user };
@@ -123,7 +124,7 @@ export const auth = betterAuth({
     emailOTP({
       async sendVerificationOTP({ email, otp, type }, ctx) {
         if (env.isDev) {
-          // biome-ignore lint/suspicious/noConsole: intentional dev-mode logging
+          // eslint-disable-next-line no-console
           console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
           return;
         }
@@ -136,13 +137,13 @@ export const auth = betterAuth({
       ac,
       roles,
       organizationHooks: {
-        async afterRemoveMember({ member, organization }) {
+        async afterRemoveMember({ member, organization: org }) {
           await db
             .delete(sessionTable)
             .where(
               and(
                 eq(sessionTable.userId, member.userId),
-                eq(sessionTable.activeOrganizationId, organization.id),
+                eq(sessionTable.activeOrganizationId, org.id),
               ),
             );
         },
@@ -150,7 +151,7 @@ export const auth = betterAuth({
       async sendInvitationEmail(data, request) {
         const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
         if (env.isDev) {
-          // biome-ignore lint/suspicious/noConsole: intentional dev-mode logging
+          // eslint-disable-next-line no-console
           console.log(`[DEV] Org invitation for ${data.email}: ${inviteLink}`);
           return;
         }

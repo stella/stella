@@ -158,7 +158,7 @@ export const buildLevelBatches = (
 
   for (const propId of levelPropertyIds) {
     const deps = graph.dependsOn.get(propId) ?? new Set();
-    const signature = [...deps].sort().join(",");
+    const signature = [...deps].toSorted().join(",");
 
     if (!signatureToProperties.has(signature)) {
       signatureToProperties.set(signature, []);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -151,9 +152,9 @@ function RouteComponent() {
       return;
     }
     initialFetchDone.current = true;
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchCategories();
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchClauses();
   }, [fetchCategories, fetchClauses]);
 
@@ -173,7 +174,7 @@ function RouteComponent() {
       return;
     }
     prevFetchRef.current = fetchClauses;
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchClauses();
   }, [fetchClauses]);
 
@@ -181,7 +182,7 @@ function RouteComponent() {
 
   const handleLoadMore = useCallback(() => {
     if (nextCursor) {
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       fetchClauses(nextCursor);
     }
   }, [nextCursor, fetchClauses]);
@@ -196,9 +197,9 @@ function RouteComponent() {
   const handleRefresh = useCallback(() => {
     setClauses([]);
     setNextCursor(null);
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchClauses();
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchCategories();
   }, [fetchClauses, fetchCategories]);
 
@@ -214,7 +215,7 @@ function RouteComponent() {
       setClauses([]);
       setNextCursor(null);
       setLoaded(false);
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       fetchCategories();
     } else {
       // Query already empty; fetchClauses closure is fresh,
@@ -237,7 +238,7 @@ function RouteComponent() {
   if (!loaded) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("clauses.loading")}</p>
+        <p className="text-muted-foreground text-sm">{t("clauses.loading")}</p>
       </div>
     );
   }
@@ -250,7 +251,7 @@ function RouteComponent() {
         loading={loading}
         nextCursor={nextCursor}
         onCategoriesChanged={() => {
-          // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           fetchCategories();
         }}
         onCategorySelect={handleCategorySelect}

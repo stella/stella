@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "ignorePatterns": ["**/*.gen.*", "sbom.cdx.json"],
+  "sortImports": {
+    "customGroups": [
+      {
+        "groupName": "react",
+        "elementNamePattern": ["react", "react-dom", "react-dom/**"]
+      },
+      {
+        "groupName": "stella",
+        "elementNamePattern": ["@stella/**"]
+      },
+      {
+        "groupName": "aliases",
+        "elementNamePattern": ["@/**"]
+      }
+    ],
+    "groups": [
+      "react",
+      ["value-builtin", "value-external", "type-builtin", "type-external"],
+      "stella",
+      "aliases",
+      [
+        "value-parent",
+        "value-sibling",
+        "value-index",
+        "type-parent",
+        "type-sibling",
+        "type-index"
+      ]
+    ],
+    "newlinesBetween": true
+  },
+  "sortTailwindcss": {
+    "functions": ["cn", "cva"]
+  },
+  "overrides": [
+    {
+      "files": ["*.jsonc", "*.code-workspace"],
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
+}

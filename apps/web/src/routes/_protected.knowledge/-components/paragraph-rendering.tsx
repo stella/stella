@@ -50,7 +50,7 @@ export const HighlightedText = ({ text }: { text: string }) => {
     parts.push(text.slice(lastIndex));
   }
 
-  return <>{parts}</>;
+  return parts;
 };
 
 export const CONDITIONAL_KINDS = new Set<BlockDirectiveKind>([

@@ -29,7 +29,7 @@ into the model conversation as structured content.
   cross-workspace entity picking; (d) no file upload; (e) the
   model receives these as raw text, not structured context.
 - **AI SDK sendMessage**: Already supports `files: FileList |
-  FileUIPart[]` alongside `text`. User messages can have both
+FileUIPart[]` alongside `text`. User messages can have both
   text parts and file parts. The `FileUIPart` type carries
   `mediaType`, `url` (data URL or hosted URL), and optional
   `filename`.
@@ -43,7 +43,7 @@ into the model conversation as structured content.
   workspaces list is available via `workspacesOptions`.
 - **File upload**: `useCreateFileEntities` handles file upload
   to a workspace. `AddEntityMenu` uses a hidden `<input
-  type="file">` for the file picker. `DropZone` uses
+type="file">` for the file picker. `DropZone` uses
   `react-aria` drag-and-drop. Files are uploaded via
   `api.entities({workspaceId}).upload.post()`.
 - **Search**: `searchHandler` accepts an optional `workspaceId`
@@ -130,6 +130,7 @@ multi-select. The user closes the popover manually or by
 clicking outside.
 
 **"From another matter"** -- Opens a two-step flow:
+
 1. Workspace selector: a search input filtering the workspaces
    list (from `workspacesOptions`). Shows workspace name and
    matter color.
@@ -324,7 +325,7 @@ the actor. Currently, `sendMessages` on the connection sends:
 
 ```typescript
 {
-  threadId, chatId, message, workspaceId, modelId
+  (threadId, chatId, message, workspaceId, modelId);
 }
 ```
 
@@ -394,9 +395,15 @@ managing the list of context chips.
 
 ```typescript
 type ContextItem =
-  | { type: "entity"; entityId: string; name: string;
-      kind: string; mimeType: string | null;
-      workspaceId: string; workspaceName?: string }
+  | {
+      type: "entity";
+      entityId: string;
+      name: string;
+      kind: string;
+      mimeType: string | null;
+      workspaceId: string;
+      workspaceName?: string;
+    }
   | { type: "file"; id: string; file: File; name: string };
 
 // State: items[], add, remove, clear
@@ -415,6 +422,7 @@ send.
 
 Renders the list of `ContextItem` as a horizontal flex-wrap row.
 Each chip:
+
 - Shows icon + truncated name
 - Has a close button (XIcon, `size-3`)
 - For cross-workspace entities, shows workspace name in muted
@@ -430,6 +438,7 @@ top of the `InputGroup` and the textarea.
 (new)
 
 Components:
+
 - `AddContextButton` -- renders in `PromptInputFooter`
 - `AddContextPopover` -- the popover with three menu items
 - `EntitySearchList` -- reusable entity search list (extracted
@@ -452,10 +461,12 @@ For "Upload file": hidden `<input type="file" multiple>` with
 ### Phase 4: Wire Into Prompt Submission
 
 **Files**:
+
 - `apps/web/src/components/right-panel-chat.tsx`
 - `apps/web/src/lib/ai-sdk/rivet-transport.ts`
 
 Update `NewChat` and `ActiveThreadInner` to:
+
 1. Manage context state (`useState<ContextItem[]>`)
 2. Render `ContextChips` above the textarea
 3. Render `AddContextButton` in `PromptInputFooter`
@@ -464,6 +475,7 @@ Update `NewChat` and `ActiveThreadInner` to:
    `sendMessage({ text, files })`, clear context state
 
 Update `RivetChatTransport`:
+
 1. Add `pendingContext` field
 2. In `sendMessages`, read and clear `pendingContext`, forward
    to actor
@@ -473,11 +485,13 @@ Update `ChatStreamConnection` type to include `contextEntities`.
 ### Phase 5: Backend -- Pre-fetch Entity Context
 
 **Files**:
+
 - `apps/api/src/handlers/registry/actors/chat-actor.ts`
 - `apps/api/src/handlers/registry/actors/chat-tools.ts`
   (or new file `chat-context-prefetch.ts`)
 
 In `sendMessages` action:
+
 1. Accept `contextEntities` in the input
 2. Before calling `streamText`, pre-fetch each referenced
    entity's metadata and extracted content
@@ -488,10 +502,11 @@ In `sendMessages` action:
    the model gets (tools remain workspace-scoped)
 
 Add a helper `prefetchEntityContext` that:
+
 - Validates each entity's workspace belongs to the org
 - Fetches entity name, kind, fields via `db.query.entities`
 - Fetches extracted content via `db.query.extractedContent`
-  + `decryptContent`
+  - `decryptContent`
 - Truncates content to a reasonable limit (e.g., 4000 chars
   per entity, 16000 total)
 - Returns a formatted string for system prompt injection
@@ -499,6 +514,7 @@ Add a helper `prefetchEntityContext` that:
 ### Phase 6: Remove @-Mention (follow-up)
 
 After the context button is stable:
+
 1. Remove `MentionablePromptArea` wrapper
 2. Remove `EntityMentionPopover` component
 3. Remove `entity-mention-popover.tsx`
@@ -530,12 +546,12 @@ New keys to add to `en.json` under `chat`:
 
 ## Constraints and Limits
 
-| Limit                        | Value    | Rationale                |
-| ---------------------------- | -------- | -------------------------|
-| Max context items per message | 5       | Token budget             |
-| Max file size (upload)       | 10 MB    | Data URL / model limits  |
-| Max content per entity       | 4000 ch  | Token budget             |
-| Max total injected content   | 16000 ch | ~4k tokens overhead      |
+| Limit                         | Value    | Rationale               |
+| ----------------------------- | -------- | ----------------------- |
+| Max context items per message | 5        | Token budget            |
+| Max file size (upload)        | 10 MB    | Data URL / model limits |
+| Max content per entity        | 4000 ch  | Token budget            |
+| Max total injected content    | 16000 ch | ~4k tokens overhead     |
 
 These should be defined in a shared constants file, not as magic
 numbers in components.

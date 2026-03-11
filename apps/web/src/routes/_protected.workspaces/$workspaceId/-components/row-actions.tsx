@@ -219,23 +219,27 @@ export const RowActions = ({
           {t("chat.chatAbout")}
         </MenuItem>
         {hasAnyFile && (
+          // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={() => handleDownload()}>
             <DownloadIcon />
             {t("common.download")}
           </MenuItem>
         )}
         {!isBulk && hasPdfConversion && (
+          // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={() => handleDownload(true)}>
             <FileOutputIcon />
             {t("common.saveAsPdf")}
           </MenuItem>
         )}
         {hasAnyFolder && (
+          // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={handleZipDownload}>
             <ArchiveIcon />
             {t("workspaces.files.downloadAsZip")}
           </MenuItem>
         )}
+        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <MenuItem onClick={handleDuplicate}>
           <CopyIcon />
           {t("common.duplicate")}

@@ -25,7 +25,7 @@ export const SectionToc = ({ sections }: SectionTocProps) => {
   const t = useTranslations();
 
   const scrollToSection = (index: number) => {
-    const element = document.getElementById(`section-${index}`);
+    const element = document.querySelector(`#section-${index}`);
     element?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -43,14 +43,14 @@ export const SectionToc = ({ sections }: SectionTocProps) => {
 
   return (
     <nav>
-      <h3 className="mb-2 text-xs font-semibold text-muted-foreground uppercase">
+      <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
         {t("caseLaw.viewer.sections")}
       </h3>
       <ul className="space-y-0.5">
         {sections.map((section) => (
           <li key={section.index}>
             <button
-              className="w-full rounded px-2 py-1 text-start text-sm hover:bg-muted"
+              className="hover:bg-muted w-full rounded px-2 py-1 text-start text-sm"
               onClick={() => scrollToSection(section.index)}
               type="button"
             >

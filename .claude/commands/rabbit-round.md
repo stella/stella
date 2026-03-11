@@ -15,11 +15,35 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    gh api user --jq '.login'
    ```
 
-2. **Fetch all bot comments** - both review comments and issue comments:
+2. **Fetch all bot comments** - Prefer GraphQL for review threads to only process unresolved ones:
 
    ```bash
-   # Review comments (inline on code)
-   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --paginate
+   # Fetch all review threads and filter for unresolved ones only
+   gh api graphql --paginate -f query='
+   query($endCursor: String) {
+     repository(owner: "{owner}", name: "{repo}") {
+       pullRequest(number: {pr_number}) {
+         reviewThreads(first: 50, after: $endCursor) {
+           nodes {
+             id
+             isResolved
+             path
+             comments(first: 10) {
+               nodes {
+                 databaseId
+                 body
+                 author { login }
+               }
+             }
+           }
+           pageInfo {
+             hasNextPage
+             endCursor
+           }
+         }
+       }
+     }
+   }' | jq '.data.repository.pullRequest.reviewThreads.nodes | map(select(.isResolved == false))'
 
    # Issue comments (top-level PR comments, used by Greptile and others)
    gh api repos/{owner}/{repo}/issues/{pr_number}/comments --paginate

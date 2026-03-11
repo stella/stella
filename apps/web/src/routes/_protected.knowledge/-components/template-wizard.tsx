@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -201,6 +202,7 @@ export const ConfigureStep = ({
           </div>
         )}
 
+        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <form className="flex flex-col gap-5" onSubmit={handleSave}>
           <Field>
             <FieldLabel>{t("templates.templateName")}</FieldLabel>
@@ -217,7 +219,7 @@ export const ConfigureStep = ({
 
           <div className="rounded-lg border">
             <div className="border-b px-4 py-3">
-              <h3 className="text-sm font-medium text-muted-foreground">
+              <h3 className="text-muted-foreground text-sm font-medium">
                 {t("templates.fieldCount", {
                   count: fields.length,
                 })}
@@ -229,25 +231,25 @@ export const ConfigureStep = ({
                 return (
                   <li key={field.path}>
                     <button
-                      className="flex w-full items-center gap-3 px-4 py-3 text-start text-sm hover:bg-muted/50"
+                      className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
                       onClick={() =>
                         setExpandedField(isExpanded ? null : field.path)
                       }
                       type="button"
                     >
                       {isExpanded ? (
-                        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
                       ) : (
-                        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
                       )}
                       <span className="min-w-0 flex-1 font-medium">
                         {field.label || field.path}
                       </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="text-muted-foreground shrink-0 text-xs">
                         {t(`templates.inputTypes.${field.inputType}`)}
                       </span>
                       {field.required && (
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="text-muted-foreground shrink-0 text-xs">
                           {REQUIRED_MARKER}
                         </span>
                       )}
@@ -321,16 +323,16 @@ const OptionsTagInput = ({
   );
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: focus delegation
-    // biome-ignore lint/a11y/noStaticElementInteractions: focus delegation
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: focus delegation
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
-      className="flex min-h-9 w-full flex-wrap gap-1 rounded-lg border border-input bg-background p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 ring-ring/24 transition-shadow outline-none focus-within:border-ring focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
+      className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 transition-shadow outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
       onClick={() => inputRef.current?.focus()}
     >
       {options.map((option, i) => (
         <span
-          className="flex items-center rounded-md bg-accent ps-2 text-sm font-medium text-accent-foreground sm:text-xs"
+          className="bg-accent text-accent-foreground flex items-center rounded-md ps-2 text-sm font-medium sm:text-xs"
           key={option}
         >
           {option}
@@ -347,7 +349,7 @@ const OptionsTagInput = ({
         </span>
       ))}
       <input
-        className="min-w-24 flex-1 bg-transparent px-1 outline-none placeholder:text-muted-foreground"
+        className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
@@ -371,8 +373,8 @@ export const FieldConfigEditor = ({
   const t = useTranslations();
 
   return (
-    <div className="flex flex-col gap-4 border-t bg-muted/30 px-4 py-4 ps-11">
-      <p className="rounded bg-muted/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+    <div className="bg-muted/30 flex flex-col gap-4 border-t px-4 py-4 ps-11">
+      <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
         <code>{field.path}</code>
       </p>
 

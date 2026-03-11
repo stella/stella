@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 

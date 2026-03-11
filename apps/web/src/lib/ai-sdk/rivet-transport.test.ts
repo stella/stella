@@ -1,11 +1,7 @@
 import type { UIMessage, UIMessageChunk } from "ai";
-import { describe, expect, it, vi } from "vitest";
 
-import {
-  RivetChatTransport,
-  type ChatStreamConnection,
-  type SequencedChunk,
-} from "./rivet-transport";
+import { RivetChatTransport } from "./rivet-transport";
+import type { ChatStreamConnection, SequencedChunk } from "./rivet-transport";
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -95,7 +91,7 @@ const makeSendOptions = (messages: UIMessage[]) => ({
 
 // ── Tests ──────────────────────────────────────────────────
 
-describe("RivetChatTransport", () => {
+describe(RivetChatTransport, () => {
   describe("sendMessages", () => {
     it("enqueues chunks into the ReadableStream", async () => {
       const { connection, emit, listeners } = createMockConnection();
@@ -115,17 +111,17 @@ describe("RivetChatTransport", () => {
       const chunks = await collectStream(stream);
 
       expect(chunks).toHaveLength(3);
-      expect(chunks[0]).toEqual({
+      expect(chunks[0]).toStrictEqual({
         type: "text-delta",
         id: "part-1",
         delta: "Hi",
       });
-      expect(chunks[1]).toEqual({
+      expect(chunks[1]).toStrictEqual({
         type: "text-delta",
         id: "part-1",
         delta: " there",
       });
-      expect(chunks[2]).toEqual({ type: "finish" });
+      expect(chunks[2]).toStrictEqual({ type: "finish" });
       expect(listeners).toHaveLength(0);
     });
 
@@ -147,7 +143,7 @@ describe("RivetChatTransport", () => {
       const chunks = await collectStream(stream);
 
       expect(chunks).toHaveLength(2);
-      expect(chunks[0]).toEqual({
+      expect(chunks[0]).toStrictEqual({
         type: "text-delta",
         id: "part-1",
         delta: "right",
@@ -245,7 +241,7 @@ describe("RivetChatTransport", () => {
       // Stream should be closed after abort
       const reader = stream.getReader();
       const { done } = await reader.read();
-      expect(done).toBe(true);
+      expect(done).toBeTruthy();
       expect(listeners).toHaveLength(0);
     });
 
@@ -266,7 +262,7 @@ describe("RivetChatTransport", () => {
 
       const reader = stream.getReader();
       const { done } = await reader.read();
-      expect(done).toBe(true);
+      expect(done).toBeTruthy();
       expect(listeners).toHaveLength(0);
     });
 
@@ -308,6 +304,7 @@ describe("RivetChatTransport", () => {
       // should unsubscribe.
       emit(textDelta(0, "after cancel"));
 
+      // eslint-disable-next-line jest/prefer-called-with -- verifying call happened, not specific args
       expect(consoleSpy).toHaveBeenCalled();
       expect(listeners).toHaveLength(0);
 
@@ -399,7 +396,7 @@ describe("RivetChatTransport", () => {
         )
         .map((c) => c.delta);
 
-      expect(deltas).toEqual(["snap-1", "snap-2", "live-1"]);
+      expect(deltas).toStrictEqual(["snap-1", "snap-2", "live-1"]);
       expect(chunks.at(-1)?.type).toBe("finish");
       expect(listeners).toHaveLength(0);
     });
@@ -439,7 +436,7 @@ describe("RivetChatTransport", () => {
         )
         .map((c) => c.delta);
 
-      expect(deltas).toEqual(["snap-0", "snap-1", "buffered-realtime"]);
+      expect(deltas).toStrictEqual(["snap-0", "snap-1", "buffered-realtime"]);
       expect(listeners).toHaveLength(0);
     });
 
@@ -479,7 +476,7 @@ describe("RivetChatTransport", () => {
         .map((c) => c.delta);
 
       // "dup" appears only once (from snapshot)
-      expect(deltas).toEqual(["snap-0", "dup"]);
+      expect(deltas).toStrictEqual(["snap-0", "dup"]);
       expect(listeners).toHaveLength(0);
     });
 
@@ -583,7 +580,7 @@ describe("RivetChatTransport", () => {
       const chunks = await collectStream(stream);
       const types = chunks.map((c) => c.type);
 
-      expect(types).toEqual(["text-delta", "text-delta", "finish"]);
+      expect(types).toStrictEqual(["text-delta", "text-delta", "finish"]);
       expect(listeners).toHaveLength(0);
     });
 
@@ -622,7 +619,7 @@ describe("RivetChatTransport", () => {
         )
         .map((c) => c.delta);
 
-      expect(deltas).toEqual(["buf-0", "buf-1"]);
+      expect(deltas).toStrictEqual(["buf-0", "buf-1"]);
       expect(listeners).toHaveLength(0);
     });
 

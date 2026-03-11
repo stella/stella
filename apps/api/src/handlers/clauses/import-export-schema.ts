@@ -1,4 +1,5 @@
-import { isClauseBody, type ClauseBody } from "./types";
+import { isClauseBody } from "./types";
+import type { ClauseBody } from "./types";
 
 export type ClauseExportItem = {
   title: string;

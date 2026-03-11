@@ -1233,7 +1233,7 @@ export const caseLawPolarityRules = p.pgTable(
     polarity: p.varchar("polarity", { length: 16 }).notNull(),
     language: p.varchar("language", { length: 8 }).notNull(),
     source: p.varchar("source", { length: 16 }).notNull().default("manual"),
-    confidence: p.doublePrecision("confidence").notNull().default(1.0),
+    confidence: p.doublePrecision("confidence").notNull().default(1),
     matchCount: p.integer("match_count").notNull().default(0),
     surfaceForms: p.jsonb("surface_forms").$type<string[]>().default([]),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),

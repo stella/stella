@@ -33,7 +33,7 @@ const CATEGORY_ICON: Record<
 /** Strip optional `WS_ID:` prefix from cross-workspace entity IDs. */
 const stripWsPrefix = (id: string) => {
   const idx = id.indexOf(":");
-  return idx >= 0 ? id.slice(idx + 1) : id;
+  return idx !== -1 ? id.slice(idx + 1) : id;
 };
 
 const MentionChip = ({
@@ -54,7 +54,7 @@ const MentionChip = ({
       return;
     }
     if (category === "workspace") {
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       navigate({ to: "/workspaces/$workspaceId", params: { workspaceId: id } });
       return;
     }
@@ -75,9 +75,9 @@ const MentionChip = ({
     <button
       className={cn(
         "inline-flex items-center gap-0.5",
-        "rounded bg-accent px-1 py-0.5",
-        "text-xs font-medium text-accent-foreground",
-        "cursor-pointer hover:bg-accent/80",
+        "bg-accent rounded px-1 py-0.5",
+        "text-accent-foreground text-xs font-medium",
+        "hover:bg-accent/80 cursor-pointer",
       )}
       onClick={handleClick}
       type="button"

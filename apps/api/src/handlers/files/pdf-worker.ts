@@ -18,8 +18,8 @@ try {
   const pdf = await PDF.load(fileBytes);
   process.stdout.write(String(pdf.isEncrypted));
   process.exit(0);
-} catch (err) {
-  const message = err instanceof Error ? err.message : String(err);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`pdf-worker error: ${message}\n`);
   process.exit(1);
 }

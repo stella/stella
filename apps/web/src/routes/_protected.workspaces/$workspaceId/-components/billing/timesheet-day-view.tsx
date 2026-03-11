@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
@@ -19,10 +20,8 @@ import {
   formatCurrencyAmount,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
-import {
-  TimeEntryForm,
-  type TimeEntryFormValues,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
+import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
+import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
 import { TimerControls } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls";
 import {
@@ -223,7 +222,7 @@ export const TimesheetDayView = ({
           <span className="text-sm font-medium tabular-nums">
             {formatMinutes(totalMinutes)}
           </span>
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-muted-foreground text-xs tabular-nums">
             {t("billing.decimalHours", {
               hours: formatDecimalHours(totalMinutes),
             })}
@@ -243,7 +242,7 @@ export const TimesheetDayView = ({
       {/* Batch actions */}
       <BatchActionBar
         onClear={() => setSelectedIds(new Set())}
-        selectedIds={Array.from(selectedIds)}
+        selectedIds={[...selectedIds]}
         workspaceId={workspaceId}
       />
 
@@ -267,7 +266,7 @@ export const TimesheetDayView = ({
           ))}
         </div>
       ) : (
-        <div className="py-8 text-center text-sm text-muted-foreground">
+        <div className="text-muted-foreground py-8 text-center text-sm">
           {t("billing.noEntries")}
         </div>
       )}

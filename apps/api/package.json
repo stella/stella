@@ -1,6 +1,10 @@
 {
   "name": "@stella/api",
   "version": "0.0.0",
+  "module": "src/index.js",
+  "exports": {
+    "./types": "./src/types.ts"
+  },
   "scripts": {
     "test": "bun test",
     "dev": "bun run docker:dev && bun --port 3001 --watch src/index.ts",
@@ -9,8 +13,8 @@
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint",
-    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
+    "lint": "oxlint",
+    "format": "oxfmt .",
     "db:push": "bun --bun drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
     "db:seed-dev": "bun scripts/seed-dev.ts",
@@ -66,9 +70,5 @@
     "bun-types": "latest",
     "drizzle-kit": "1.0.0-beta.15-859cf75",
     "fast-check": "^4.5.3"
-  },
-  "module": "src/index.js",
-  "exports": {
-    "./types": "./src/types.ts"
   }
 }

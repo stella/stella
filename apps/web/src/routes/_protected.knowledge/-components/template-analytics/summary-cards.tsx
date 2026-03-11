@@ -36,8 +36,8 @@ export const SummaryCards = ({ dateFrom, dateTo }: SummaryCardsProps) => {
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {cards.map((card) => (
-        <div className="rounded-lg border bg-card p-4" key={card.label}>
-          <p className="text-sm text-muted-foreground">{card.label}</p>
+        <div className="bg-card rounded-lg border p-4" key={card.label}>
+          <p className="text-muted-foreground text-sm">{card.label}</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
             {card.value}
           </p>

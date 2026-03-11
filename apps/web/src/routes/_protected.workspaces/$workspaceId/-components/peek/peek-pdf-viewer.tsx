@@ -1,4 +1,6 @@
-import { useRef, type CSSProperties } from "react";
+import { useRef } from "react";
+import type { CSSProperties } from "react";
+
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
@@ -154,7 +156,7 @@ export const PeekPdfViewer = ({
         Array.from({ length: 3 }, (_, i) => (
           <Skeleton
             className="mx-auto min-h-screen"
-            // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder skeletons with fixed count
+            // eslint-disable-next-line react/no-array-index-key
             key={i}
             style={{ width: PDF_WIDTH }}
           />
@@ -166,7 +168,7 @@ export const PeekPdfViewer = ({
 
 const PeekBanner = ({ label }: { label: string }) => (
   <div
-    className="mx-auto flex items-center justify-center rounded-md bg-muted px-4 py-2 text-center text-sm text-muted-foreground"
+    className="bg-muted text-muted-foreground mx-auto flex items-center justify-center rounded-md px-4 py-2 text-center text-sm"
     style={{ maxWidth: PDF_WIDTH }}
   >
     {label}

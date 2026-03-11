@@ -36,7 +36,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   return (
     <tfoot
       className={cn(
-        "border-t bg-muted font-medium [&>tr]:last:border-b-0",
+        "bg-muted border-t font-medium [&>tr]:last:border-b-0",
         className,
       )}
       data-slot="table-footer"
@@ -49,7 +49,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       className={cn(
-        "group/row isolate border-b transition-colors data-[state=selected]:bg-muted",
+        "group/row data-[state=selected]:bg-muted isolate border-b transition-colors",
         className,
       )}
       data-slot="table-row"
@@ -62,7 +62,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       className={cn(
-        "relative z-0 h-8 border-e bg-background px-2 text-start align-middle font-semibold whitespace-nowrap text-foreground transition-colors last:border-e-0 hover:bg-accent [&:has([role=checkbox])]:pe-0 *:[[role=checkbox]]:translate-y-[2px]",
+        "bg-background text-foreground hover:bg-accent relative z-0 h-8 border-e px-2 text-start align-middle font-semibold whitespace-nowrap transition-colors last:border-e-0 [&:has([role=checkbox])]:pe-0 *:[[role=checkbox]]:translate-y-[2px]",
         className,
       )}
       data-slot="table-head"
@@ -75,7 +75,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       className={cn(
-        "group/cell-content relative z-0 h-auto min-h-8 overflow-hidden border-e bg-background p-2 align-middle whitespace-nowrap group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))] last:border-e-0",
+        "group/cell-content bg-background relative z-0 h-auto min-h-8 overflow-hidden border-e p-2 align-middle whitespace-nowrap group-hover/row:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] group-data-[state=selected]/row:bg-[color-mix(in_srgb,var(--color-info)_10%,var(--color-background))] group-data-[state=selected]/row:group-hover/row:bg-[color-mix(in_srgb,var(--color-info)_15%,var(--color-background))] last:border-e-0",
         className,
       )}
       data-slot="table-cell"
@@ -90,7 +90,7 @@ function TableCaption({
 }: React.ComponentProps<"caption">) {
   return (
     <caption
-      className={cn("mt-4 text-sm text-muted-foreground", className)}
+      className={cn("text-muted-foreground mt-4 text-sm", className)}
       data-slot="table-caption"
       {...props}
     />

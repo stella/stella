@@ -172,7 +172,7 @@ describe("applyFitToPage", () => {
   it("returns the original buffer when input is not a ZIP", async () => {
     // Plain text: not a ZIP
     const encoder = new TextEncoder();
-    const buf = encoder.encode("not a zip file").buffer as ArrayBuffer;
+    const buf = encoder.encode("not a zip file").buffer;
     const out = await applyFitToPage(buf);
     expect(out).toBe(buf);
   });

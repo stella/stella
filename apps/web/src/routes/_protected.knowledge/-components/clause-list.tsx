@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import {
   DownloadIcon,
   MoreHorizontalIcon,
@@ -157,7 +158,7 @@ export const ClauseList = ({
       <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
           <div className="relative me-3 flex-1">
-            <SearchIcon className="absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="text-muted-foreground absolute start-2.5 top-1/2 size-4 -translate-y-1/2" />
             <Input
               className="h-8 ps-8"
               onChange={handleSearchChange}
@@ -176,6 +177,7 @@ export const ClauseList = ({
                 {t("clauses.import")}
               </Button>
             )}
+            {/* eslint-disable-next-line typescript/no-misused-promises */}
             <Button onClick={handleExport} size="sm" variant="outline">
               <DownloadIcon />
               {t("clauses.export")}
@@ -198,7 +200,7 @@ export const ClauseList = ({
         <div className="flex-1 overflow-y-auto">
           {clauses.length === 0 && !loading && (
             <div className="flex items-center justify-center p-8">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {t("clauses.noResults")}
               </p>
             </div>
@@ -254,16 +256,16 @@ const ClauseRow = ({
   return (
     <li>
       <button
-        className="flex w-full items-center gap-3 px-4 py-3 text-start hover:bg-muted/50"
+        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
         onClick={onSelect}
         type="button"
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <TextQuoteIcon className="size-4 text-muted-foreground" />
+        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <TextQuoteIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{clause.title}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {categoryName ?? t("clauses.uncategorized")}
             {" \u00b7 "}
             {format.dateTime(new Date(clause.createdAt), {
@@ -271,7 +273,7 @@ const ClauseRow = ({
             })}
           </p>
         </div>
-        <span className="shrink-0 text-xs text-muted-foreground">
+        <span className="text-muted-foreground shrink-0 text-xs">
           {t("clauses.version", {
             version: String(clause.currentVersion),
           })}
@@ -459,6 +461,7 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              // eslint-disable-next-line typescript/no-misused-promises
               onClick={handleDelete}
               variant="destructive"
             >
@@ -580,6 +583,7 @@ const CategoryFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
+          {/* eslint-disable-next-line typescript/no-misused-promises */}
           <Button disabled={saving || !name.trim()} onClick={handleSave}>
             {t("common.save")}
           </Button>

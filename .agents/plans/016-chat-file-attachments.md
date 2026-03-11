@@ -10,12 +10,12 @@ answer questions about redlines.
 
 ## File Handling Strategy
 
-| File type | Handling |
-|---|---|
-| Images (PNG, JPEG, WEBP, GIF) | `FileUIPart` — native multimodal |
-| PDFs | `FileUIPart` — native multimodal (all target models support it) |
-| DOCX | Extract text server-side with inline tracked changes → system prompt injection |
-| Plain text (TXT, CSV, MD) | Read content directly → system prompt injection |
+| File type                     | Handling                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| Images (PNG, JPEG, WEBP, GIF) | `FileUIPart` — native multimodal                                               |
+| PDFs                          | `FileUIPart` — native multimodal (all target models support it)                |
+| DOCX                          | Extract text server-side with inline tracked changes → system prompt injection |
+| Plain text (TXT, CSV, MD)     | Read content directly → system prompt injection                                |
 
 No model capability checks or fallback paths. PDFs are always
 sent natively; any model worth using in Stella supports them.
@@ -54,6 +54,7 @@ This requires a new extraction mode that:
    and `[DEL by Author, Date: "text"]`
 
 The OOXML attributes:
+
 - `w:ins` wraps inserted runs; attributes on the element:
   `w:author`, `w:date`
 - `w:del` wraps deleted runs; same attributes. Child runs
@@ -77,14 +78,14 @@ displayDocument: tool({
     view: z.enum(["simple", "original", "tracked-changes"]),
     filename: z.string(),
   }),
-})
+});
 ```
 
-| View | Shows |
-|---|---|
-| `simple` | Clean accepted text (all changes accepted) |
-| `original` | Original text (all changes rejected) |
-| `tracked-changes` | Full inline redline with `[INS]`/`[DEL]` |
+| View              | Shows                                      |
+| ----------------- | ------------------------------------------ |
+| `simple`          | Clean accepted text (all changes accepted) |
+| `original`        | Original text (all changes rejected)       |
+| `tracked-changes` | Full inline redline with `[INS]`/`[DEL]`   |
 
 The frontend renders this as a formatted document card in the
 chat, similar to existing tool call cards. All three views are
@@ -111,8 +112,8 @@ appropriate for the file type.
 type UploadResponse =
   | {
       type: "native-file";
-      dataUrl: string;       // base64 data URL
-      mediaType: string;     // e.g. "image/png", "application/pdf"
+      dataUrl: string; // base64 data URL
+      mediaType: string; // e.g. "image/png", "application/pdf"
       filename: string;
     }
   | {
@@ -129,6 +130,7 @@ type UploadResponse =
 ```
 
 Flow:
+
 1. Validate file size and MIME type against allowlist
 2. Run `scanFile` (YARA rules) — reuse existing pipeline
 3. For images/PDFs: convert to base64 data URL, return as
@@ -213,9 +215,7 @@ parts, but since we're working at the model message level
 after conversion, inject directly:
 
 ```typescript
-const lastUserMsg = modelMessages.findLast(
-  (m) => m.role === "user",
-);
+const lastUserMsg = modelMessages.findLast((m) => m.role === "user");
 if (lastUserMsg) {
   for (const att of nativeAttachments) {
     lastUserMsg.content.unshift({
@@ -263,15 +263,10 @@ const createDocumentViewTools = (
       filename: z.string(),
     }),
     execute: async ({ view, filename }) => {
-      const att = attachments.find(
-        (a) => a.filename === filename,
-      );
+      const att = attachments.find((a) => a.filename === filename);
       if (!att) return { error: "File not found" };
 
-      const viewKey =
-        view === "tracked-changes"
-          ? "trackedChanges"
-          : view;
+      const viewKey = view === "tracked-changes" ? "trackedChanges" : view;
       const text = att.views[viewKey] ?? att.views.simple;
       return { filename, view, text };
     },
@@ -287,6 +282,7 @@ formatted text.
 ### File upload UI
 
 Components:
+
 - **Paperclip button** in `PromptInputFooter` — triggers
   hidden `<input type="file" multiple>`
 - **Attachment chips** above the textarea — show pending files
@@ -309,6 +305,7 @@ Components:
 For native file parts (images, PDFs), the AI SDK stores them
 in `message.parts` as `FileUIPart`. Add rendering for
 `part.type === "file"`:
+
 - Images: small thumbnail
 - PDFs: filename chip with PDF icon
 
@@ -337,6 +334,7 @@ tool call cards.
 
 New extraction mode in `extract-text.ts` (or a sibling
 `extract-text-tracked.ts`):
+
 - `collectTextWithRevisions()` — walks the DOM, emitting
   `[INS]`/`[DEL]` annotations inline
 - `collectTextOriginal()` — walks the DOM, including
@@ -408,15 +406,15 @@ Add to `en.json` under `chat`:
 
 ## Critical files
 
-| File | Role |
-|---|---|
-| `apps/api/src/handlers/docx/extract-text.ts` | Extend with tracked-changes extraction |
-| `apps/api/src/handlers/docx/types.ts` | Extend types for revision data |
-| `apps/api/src/handlers/chat/upload-context-file.ts` | New upload endpoint |
-| `apps/api/src/lib/limits.ts` | Add chat attachment limits |
-| `apps/api/src/handlers/registry/actors/chat-actor.ts` | Accept attachments, inject context |
-| `apps/web/src/lib/ai-sdk/rivet-transport.ts` | `pendingAttachments` side-channel |
-| `apps/web/src/components/right-panel-chat.tsx` | File upload UI, chips, drop zone |
+| File                                                  | Role                                   |
+| ----------------------------------------------------- | -------------------------------------- |
+| `apps/api/src/handlers/docx/extract-text.ts`          | Extend with tracked-changes extraction |
+| `apps/api/src/handlers/docx/types.ts`                 | Extend types for revision data         |
+| `apps/api/src/handlers/chat/upload-context-file.ts`   | New upload endpoint                    |
+| `apps/api/src/lib/limits.ts`                          | Add chat attachment limits             |
+| `apps/api/src/handlers/registry/actors/chat-actor.ts` | Accept attachments, inject context     |
+| `apps/web/src/lib/ai-sdk/rivet-transport.ts`          | `pendingAttachments` side-channel      |
+| `apps/web/src/components/right-panel-chat.tsx`        | File upload UI, chips, drop zone       |
 
 ## Open questions
 

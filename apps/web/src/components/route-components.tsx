@@ -5,9 +5,11 @@ import {
   useState,
   useTransition,
 } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Navigate, type ErrorComponentProps } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -69,8 +71,8 @@ export const DefaultErrorComponent = ({
             query.state.fetchStatus === "idle" &&
             query.state.status === "error",
         })
-        .catch((e) => {
-          captureError(posthog, e);
+        .catch((refetchError) => {
+          captureError(posthog, refetchError);
         });
 
       setIsAutoRetrying(false);
@@ -196,32 +198,30 @@ export const StatusMessage = ({
   description,
   actionButton,
   className,
-}: StatusMessageProps) => {
-  return (
-    <div
+}: StatusMessageProps) => (
+  <div
+    className={cn(
+      "mx-auto flex h-full w-screen max-w-md flex-col items-center justify-center gap-y-6 p-6 text-center",
+      className,
+    )}
+  >
+    <StellaMark
       className={cn(
-        "mx-auto flex h-full w-screen max-w-md flex-col items-center justify-center gap-y-6 p-6 text-center",
-        className,
+        "size-10",
+        status === "error"
+          ? "text-muted-foreground/40"
+          : "text-muted-foreground/60",
       )}
-    >
-      <StellaMark
-        className={cn(
-          "size-10",
-          status === "error"
-            ? "text-muted-foreground/40"
-            : "text-muted-foreground/60",
-        )}
-      />
-      <div className="flex flex-col items-center gap-y-1.5">
-        <h1 className="text-lg font-medium text-foreground">{title}</h1>
-        {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
-        )}
-      </div>
-      {actionButton}
+    />
+    <div className="flex flex-col items-center gap-y-1.5">
+      <h1 className="text-foreground text-lg font-medium">{title}</h1>
+      {description && (
+        <p className="text-muted-foreground text-sm">{description}</p>
+      )}
     </div>
-  );
-};
+    {actionButton}
+  </div>
+);
 
 type DefaultPendingComponentProps = {
   className?: string;
@@ -229,19 +229,15 @@ type DefaultPendingComponentProps = {
 
 export const DefaultPendingComponent = ({
   className,
-}: DefaultPendingComponentProps) => {
-  return (
-    <div
-      className={cn(
-        "flex h-full w-full items-center justify-center bg-background",
-        className,
-      )}
-    >
-      <StellaMark className="size-8 animate-pulse text-muted-foreground" />
-    </div>
-  );
-};
+}: DefaultPendingComponentProps) => (
+  <div
+    className={cn(
+      "bg-background flex h-full w-full items-center justify-center",
+      className,
+    )}
+  >
+    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
+  </div>
+);
 
-export const DefaultNotFoundComponent = () => {
-  return <Navigate to={"/workspaces"} />;
-};
+export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;

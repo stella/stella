@@ -102,6 +102,7 @@ file; AI workflows use the converted PDF.
   relations to remove `file`
 
 ### Schema validators
+
 (`apps/api/src/db/schema-validators.ts`)
 
 - Expand the `type: "file"` variant of `fieldContentSchema`:
@@ -126,6 +127,7 @@ file; AI workflows use the converted PDF.
   ```
 
 ### Gotenberg client
+
 (`apps/api/src/handlers/files/gotenberg.ts`)
 
 - `CONVERTIBLE_MIME_TYPES` constant: full list of MIME types
@@ -149,6 +151,7 @@ file; AI workflows use the converted PDF.
   `/health`
 
 ### Upload handler
+
 (`apps/api/src/handlers/entities/upload.ts`)
 
 - After buffering file: run S3 upload and Gotenberg
@@ -164,6 +167,7 @@ file; AI workflows use the converted PDF.
   `{ type: "file", version: 1 }`
 
 ### Read entities handler
+
 (`apps/api/src/handlers/entities/read.ts`)
 
 - Remove `with: { file: ... }` from query
@@ -171,6 +175,7 @@ file; AI workflows use the converted PDF.
   directly without enrichment
 
 ### Read file handler
+
 (`apps/api/src/handlers/files/read-by-id.ts`)
 
 - Change to accept a file content object (or look up via
@@ -180,6 +185,7 @@ file; AI workflows use the converted PDF.
   S3 key
 
 ### Entity delete handler
+
 (`apps/api/src/handlers/entities/delete.ts`)
 
 - Query file metadata from `fields.content` (JSONB) instead
@@ -190,6 +196,7 @@ file; AI workflows use the converted PDF.
   from entity → version → field handles everything)
 
 ### Workspace delete handler
+
 (`apps/api/src/handlers/workspaces/delete-by-id.ts`)
 
 - Query file IDs from `fields.content` JSONB instead of
@@ -198,6 +205,7 @@ file; AI workflows use the converted PDF.
 - Remove `files` table references
 
 ### AI workflow
+
 (`apps/api/src/handlers/registry/actors/workflow/`)
 
 - `generate-batch-shared.ts`: `resolveFiles` queries
@@ -239,6 +247,7 @@ file; AI workflows use the converted PDF.
   returned; entity contains file data in field content)
 
 ### Create entities handler
+
 (`apps/api/src/handlers/entities/create.ts`)
 
 - The `type: "file"` path currently passes `fileId` in the

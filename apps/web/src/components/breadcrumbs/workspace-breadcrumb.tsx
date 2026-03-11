@@ -1,6 +1,8 @@
 import { useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link, useMatch, type ResolveParams } from "@tanstack/react-router";
+import { Link, useMatch } from "@tanstack/react-router";
+import type { ResolveParams } from "@tanstack/react-router";
 import { LayersIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -84,7 +86,7 @@ export const WorkspaceBreadcrumb = ({
   const colorPicker = match ? (
     <Popover onOpenChange={setColorPickerOpen} open={colorPickerOpen}>
       <PopoverTrigger
-        className="cursor-pointer rounded p-0.5 transition-colors hover:bg-muted"
+        className="hover:bg-muted cursor-pointer rounded p-0.5 transition-colors"
         render={<button type="button" />}
       >
         <LayersIcon
@@ -116,7 +118,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem>
         <Link
-          className="max-w-48 truncate transition-colors hover:text-foreground"
+          className="hover:text-foreground max-w-48 truncate transition-colors"
           onClick={() => {
             try {
               const raw = localStorage.getItem("matters_overview_config");
@@ -164,7 +166,7 @@ export const WorkspaceBreadcrumb = ({
     />
   ) : workspace.reference ? (
     <button
-      className="cursor-text text-sm text-muted-foreground/60 hover:text-muted-foreground"
+      className="text-muted-foreground/60 hover:text-muted-foreground cursor-text text-sm"
       onClick={() => {
         if (!match) {
           return;

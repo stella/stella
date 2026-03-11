@@ -5,9 +5,11 @@ import {
   buildDependencyGraph,
   buildLevelBatches,
   getPropertyExecutionPlan,
-  type BatchPropertyDependency,
-  type ExecutionPlanProperty,
-  type PropertyDependency,
+} from "@/api/handlers/registry/actors/workflow/get-execution-plan";
+import type {
+  BatchPropertyDependency,
+  ExecutionPlanProperty,
+  PropertyDependency,
 } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
 
 const aiModelTool = {
@@ -80,7 +82,10 @@ describe("buildDependencyGraph", () => {
     expect(graph.inDegree.get("C")).toBe(1);
     expect(graph.inDegree.get("D")).toBe(2);
 
-    expect([...(graph.dependents.get("A") ?? [])].sort()).toEqual(["B", "C"]);
+    expect([...(graph.dependents.get("A") ?? [])].toSorted()).toEqual([
+      "B",
+      "C",
+    ]);
     expect(graph.dependents.get("B")).toEqual(["D"]);
     expect(graph.dependents.get("C")).toEqual(["D"]);
   });
@@ -172,7 +177,10 @@ describe("buildLevelBatches", () => {
 
     expect(batches.length).toBe(1);
     expect(batches[0].inputs).toEqual(["A"]);
-    expect(batches[0].properties.map((p) => p.id).sort()).toEqual(["B", "C"]);
+    expect(batches[0].properties.map((p) => p.id).toSorted()).toEqual([
+      "B",
+      "C",
+    ]);
   });
 
   test("excludes file-type properties from batches", () => {
@@ -242,7 +250,7 @@ describe("buildLevelBatches", () => {
     const batches = buildLevelBatches(["B", "C"], propertiesById, graph);
 
     expect(batches.length).toBe(2);
-    const inputsList = batches.map((b) => b.inputs.join(",")).sort();
+    const inputsList = batches.map((b) => b.inputs.join(",")).toSorted();
     expect(inputsList).toEqual(["", "A"]);
   });
 });
@@ -346,10 +354,13 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(2);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0][0].inputs.sort()).toEqual(["A"]);
-    expect(plan[0][0].properties.map((p) => p.id).sort()).toEqual(["B", "C"]);
+    expect(plan[0][0].inputs.toSorted()).toEqual(["A"]);
+    expect(plan[0][0].properties.map((p) => p.id).toSorted()).toEqual([
+      "B",
+      "C",
+    ]);
     expect(plan[1]).toHaveLength(1);
-    expect(plan[1][0].inputs.sort()).toEqual(["B", "C"]);
+    expect(plan[1][0].inputs.toSorted()).toEqual(["B", "C"]);
     expect(plan[1][0].properties.map((p) => p.id)).toEqual(["D"]);
   });
 

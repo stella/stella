@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -151,7 +152,7 @@ function ContactsPage() {
           {!isLoading && items.length === 0 && (
             <TableRow>
               <TableCell
-                className="py-8 text-center text-muted-foreground"
+                className="text-muted-foreground py-8 text-center"
                 colSpan={6}
               >
                 <p>{t("contacts.noContactsFound")}</p>
@@ -209,6 +210,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       { contactId: contact.id },
       {
         onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
@@ -231,9 +233,9 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
     <TableRow className="group">
       <TableCell>
         {contact.type === "person" ? (
-          <UserIcon className="size-4 text-muted-foreground" />
+          <UserIcon className="text-muted-foreground size-4" />
         ) : (
-          <BuildingIcon className="size-4 text-muted-foreground" />
+          <BuildingIcon className="text-muted-foreground size-4" />
         )}
       </TableCell>
       <TableCell>
@@ -357,6 +359,7 @@ const CreateContactDialog = () => {
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
+            // eslint-disable-next-line typescript/no-floating-promises
             form.handleSubmit();
           }}
         >

@@ -9,7 +9,6 @@ import { toastManager } from "@stella/ui/components/toast";
 import type { Actors } from "@/lib/api";
 import { createEventHandler, eventHandler } from "@/lib/rivet";
 import type { WorkspaceView } from "@/lib/types";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-pagination";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -23,6 +22,7 @@ import {
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const searchSchema = v.object({
   folder: v.optional(v.string()),
@@ -51,7 +51,7 @@ function RouteComponent() {
   const viewsQueryOptions = viewsOptions(workspaceId, queryClient);
   const { data: activeView } = useSuspenseQuery({
     ...viewsQueryOptions,
-    select: (data) => data.find((v) => v.id === viewId) ?? data.at(0),
+    select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
   });
   const viewsActor = useViewsActor(workspaceId);
   const pruneStaleViews = useTableStore((s) => s.pruneStaleViews);
@@ -136,7 +136,10 @@ function RouteComponent() {
               }
 
               if (field.content === null) {
-                delete draft.entities[entityIndex].fields[field.propertyId];
+                Reflect.deleteProperty(
+                  draft.entities[entityIndex].fields,
+                  field.propertyId,
+                );
                 continue;
               }
 
@@ -153,7 +156,7 @@ function RouteComponent() {
 
   viewsActor.useEvent(
     ...viewsEvent("views-changed", async ({ views: updated }) => {
-      pruneStaleViews(updated.map((v) => v.id));
+      pruneStaleViews(updated.map((view) => view.id));
       await queryClient.cancelQueries({
         queryKey: viewsQueryOptions.queryKey,
       });
@@ -162,26 +165,28 @@ function RouteComponent() {
           return updated;
         }
 
-        const merged = prev.map((v) => updated.find((u) => u.id === v.id) ?? v);
+        const merged = prev.map(
+          (view) => updated.find((u) => u.id === view.id) ?? view,
+        );
 
-        for (const v of updated) {
-          if (!merged.some((m) => m.id === v.id)) {
-            merged.push(v);
+        for (const view of updated) {
+          if (!merged.some((m) => m.id === view.id)) {
+            merged.push(view);
           }
         }
 
-        return merged.sort((a, b) => a.position - b.position);
+        return merged.toSorted((a, b) => a.position - b.position);
       });
     }),
   );
 
   viewsActor.useEvent(
-    ...viewsEvent("view-deleted", async ({ viewId }) => {
+    ...viewsEvent("view-deleted", async ({ viewId: deletedViewId }) => {
       await queryClient.cancelQueries({
         queryKey: viewsQueryOptions.queryKey,
       });
       queryClient.setQueryData(viewsQueryOptions.queryKey, (prev) =>
-        prev?.filter((v) => v.id !== viewId),
+        prev?.filter((view) => view.id !== deletedViewId),
       );
     }),
   );
@@ -216,6 +221,7 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
   const totalPages = Math.ceil(data.totalCount / data.pageSize);
 
   const setPage = (newPage: number) => {
+    // eslint-disable-next-line typescript/no-floating-promises
     navigate({
       search: (prev) => ({
         ...prev,
@@ -229,6 +235,7 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
       <div className="flex items-center justify-between border-b">
         <ViewSwitcher
           activeViewId={activeView.id}
+          // eslint-disable-next-line typescript/no-misused-promises
           onViewChange={async (viewId) => {
             await navigate({
               to: ".",

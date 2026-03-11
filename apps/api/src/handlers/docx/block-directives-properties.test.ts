@@ -89,7 +89,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .stringMatching(IDENT_UNDERSCORE_RE)
       .filter((s) => s.length > 0 && HAS_LETTER_RE.test(s));
 
-    await fc.assert(
+    fc.assert(
       fc.property(identifiersWithUnderscores, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
@@ -104,7 +104,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .integer({ min: 1, max: 10 })
       .map((n) => "_".repeat(n));
 
-    await fc.assert(
+    fc.assert(
       fc.property(underscoreOnly, (ident) => {
         // Should resolve as a path lookup, not a number
         const data: Record<string, unknown> = {};
@@ -121,7 +121,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
       .integer({ min: 0, max: 999 })
       .map((n) => `_${n}`);
 
-    await fc.assert(
+    fc.assert(
       fc.property(underscoreDigit, (ident) => {
         const data = { [ident]: "found" };
         const result = resolvePath(ident, data);
@@ -217,7 +217,7 @@ describe("property: arrays inside loop items are not recursed into", () => {
         "",
       ),
     );
-    await fc.assert(
+    fc.assert(
       fc.property(
         identifier,
         fc.array(leafValue, { minLength: 1, maxLength: 5 }),
@@ -443,7 +443,7 @@ describe("property: flattenTemplateData roundtrip", () => {
       }),
     });
 
-    await fc.assert(
+    fc.assert(
       fc.property(nestedObject, (obj) => {
         const flattened = flattenTemplateData(obj);
 
@@ -467,7 +467,7 @@ describe("property: flattenTemplateData roundtrip", () => {
 
 describe("property: evaluateCondition consistency", () => {
   test("negation inverts truthiness for any path", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(identifier, leafValue, (path, value) => {
         const data = { [path]: value };
         const pos = evaluateCondition(path, data);
@@ -479,7 +479,7 @@ describe("property: evaluateCondition consistency", () => {
   });
 
   test("comparison is symmetric for ==", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(identifier, identifier, leafValue, (a, b, value) => {
         const data = { [a]: value, [b]: value };
         const forward = evaluateCondition(`${a} == ${b}`, data);

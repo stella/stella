@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { summaryOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/analytics";
+
 import { formatHours } from "./utils";
 
 type SummaryCardsProps = {
@@ -43,8 +44,8 @@ export const SummaryCards = ({
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {cards.map((card) => (
-        <div className="rounded-lg border bg-card p-4" key={card.label}>
-          <p className="text-sm text-muted-foreground">{card.label}</p>
+        <div className="bg-card rounded-lg border p-4" key={card.label}>
+          <p className="text-muted-foreground text-sm">{card.label}</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
             {card.value}
           </p>

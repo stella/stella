@@ -1,5 +1,6 @@
 import { setup } from "rivetkit";
-import { createClient, type ExtractActorsFromRegistry } from "rivetkit/client";
+import { createClient } from "rivetkit/client";
+import type { ExtractActorsFromRegistry } from "rivetkit/client";
 
 import { bBoxActor } from "@/api/handlers/registry/actors/b-box/actor";
 import { chatActor } from "@/api/handlers/registry/actors/chat-actor";

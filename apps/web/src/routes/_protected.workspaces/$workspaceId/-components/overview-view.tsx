@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -15,13 +16,14 @@ import { cn } from "@stella/ui/lib/utils";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { isFileDisplayable, type WorkspaceEntity } from "@/lib/types";
-import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
+import { isFileDisplayable } from "@/lib/types";
+import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
 type OverviewViewProps = {
   workspaceId: string;
@@ -38,7 +40,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
       {/* At a glance */}
       <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+        <h2 className="text-muted-foreground mb-3 text-sm font-medium">
           {t("workspaces.overview.atAGlance")}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -59,7 +61,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
       {/* Recent activity */}
       <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+        <h2 className="text-muted-foreground mb-3 text-sm font-medium">
           {t("workspaces.overview.recentActivity")}
         </h2>
         {hasActivity ? (
@@ -91,9 +93,9 @@ type StatCardProps = {
 };
 
 const StatCard = ({ label, value }: StatCardProps) => (
-  <div className="flex flex-col gap-1 rounded-lg border bg-card px-4 py-3">
+  <div className="bg-card flex flex-col gap-1 rounded-lg border px-4 py-3">
     <span className="text-2xl font-semibold tabular-nums">{value}</span>
-    <span className="text-xs text-muted-foreground capitalize">{label}</span>
+    <span className="text-muted-foreground text-xs capitalize">{label}</span>
   </div>
 );
 
@@ -186,7 +188,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
 
   const icon =
     entity.kind === "folder" ? (
-      <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+      <FolderIcon className="text-muted-foreground size-4 shrink-0" />
     ) : entity.mimeType ? (
       <DocumentIcon className="size-4 shrink-0" mimeType={entity.mimeType} />
     ) : null;
@@ -246,7 +248,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       {icon}
       <span className="min-w-0 flex-1 truncate text-sm">{entity.name}</span>
       {entity.createdBy && (
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs">
           <Avatar className="size-4 text-[8px]">
             {entity.createdByImage && (
               <AvatarImage alt={entity.createdBy} src={entity.createdByImage} />
@@ -264,13 +266,13 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         </span>
       )}
       {entity.updatedAt && (
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
           {formatRelativeTime(entity.updatedAt, lang)}
         </span>
       )}
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: event-capture wrapper */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: event-capture wrapper */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: event-capture wrapper */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
         <RowActions
           anchor={contextAnchor}
@@ -302,11 +304,11 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     // Use a <div> instead of <button> to avoid invalid
     // nested <button> elements (RowActions renders a
     // <button> menu trigger inside).
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: div-as-button pattern
-    // biome-ignore lint/a11y/noStaticElementInteractions: has role="button" when interactive
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className={cn(
-        "group/row flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50",
+        "group/row hover:bg-muted/50 flex items-center gap-3 px-4 py-2.5",
         handleOpen && "w-full cursor-pointer text-start",
       )}
       onClick={handleOpen}

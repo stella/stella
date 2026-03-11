@@ -18,7 +18,6 @@
  */
 
 import "dotenv/config";
-
 import { sql } from "drizzle-orm";
 
 import { db } from "@/api/db";
@@ -47,6 +46,7 @@ import type {
 import { toSafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+
 import { seedTemplates } from "./seed-templates";
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2127,14 +2127,14 @@ const buildFields = (
         type: "date",
         value: seedDueDate(
           // Use wsLabel hash + doc index for variety
-          seedId(`${wsLabel}-${i}`).charCodeAt(0) + i,
+          (seedId(`${wsLabel}-${i}`).codePointAt(0) ?? 0) + i,
         ),
       },
     });
 
     // Notes field
     const noteIndex =
-      (seedId(`${wsLabel}-note-${i}`).charCodeAt(0) + i) % notes.length;
+      ((seedId(`${wsLabel}-note-${i}`).codePointAt(0) ?? 0) + i) % notes.length;
     result.push({
       id: seedId(`${wsLabel}-field-notes-${i}`),
       propertyId: notesPropId,
@@ -2596,7 +2596,13 @@ type InvoiceSeed = {
 };
 
 const buildInvoices = (): InvoiceSeed[] => {
-  const statuses = ["draft", "finalized", "sent", "paid", "sent"] as const;
+  const invoiceStatuses = [
+    "draft",
+    "finalized",
+    "sent",
+    "paid",
+    "sent",
+  ] as const;
   const invoiceSeeds: InvoiceSeed[] = [];
   for (let i = 0; i < 5; i++) {
     const wsIndex = i % seedWorkspaces.length;
@@ -2605,7 +2611,7 @@ const buildInvoices = (): InvoiceSeed[] => {
       id: seedId(`invoice-${i}`),
       workspaceId: ws.id,
       invoiceNumber: `INV-2025-${String(i + 1).padStart(4, "0")}`,
-      status: at(statuses, i),
+      status: at(invoiceStatuses, i),
       invoiceDate: `2025-0${i + 1}-15`,
       dueDate: `2025-0${i + 2}-15`,
       currency: "CZK",
@@ -3186,7 +3192,7 @@ export async function seed(organizationId?: string, userId?: string) {
           .values({
             entityId: entity.entityId,
             organizationId: ecOrgId,
-            ciphertext: Buffer.from(docText, "utf-8"),
+            ciphertext: Buffer.from(docText, "utf8"),
             iv: Buffer.alloc(IV_BYTES),
             charCount: docText.length,
             language: null,
@@ -3221,7 +3227,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const mw = at(MORE_WORKSPACES, i);
     const wsId = seedId(`extra-ws-${mw.reference}`);
     const wsLabel = `extra-ws-${mw.reference}`;
-    const hash = seedId(`${wsLabel}-docs`).charCodeAt(0);
+    const hash = seedId(`${wsLabel}-docs`).codePointAt(0) ?? 0;
     const picked: string[] = [];
     for (let d = 0; d < 4; d++) {
       const idx = (hash + d * 7) % allDocNames.length;
@@ -3435,8 +3441,8 @@ if (import.meta.main) {
 
   seed()
     .then(() => process.exit(0))
-    .catch((err) => {
-      console.error("Seed failed:", err);
+    .catch((error) => {
+      console.error("Seed failed:", error);
       process.exit(1);
     });
 }

@@ -1,4 +1,5 @@
-import { asc, inArray, sql, type SQL } from "drizzle-orm";
+import { asc, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -51,9 +52,10 @@ const getFieldValue = (content: FieldContent | undefined): string => {
 };
 
 const findField = (
-  fields: EntityField[],
+  entityFields: EntityField[],
   propertyId: string,
-): EntityField | undefined => fields.find((f) => f.propertyId === propertyId);
+): EntityField | undefined =>
+  entityFields.find((f) => f.propertyId === propertyId);
 
 const matchesFilter = <T extends FilterableEntity>(
   entity: T,
@@ -85,27 +87,27 @@ const matchesFilter = <T extends FilterableEntity>(
 // -- Public API --
 
 export const applyFilters = <T extends FilterableEntity>(
-  entities: T[],
+  items: T[],
   filters: ViewFilterCondition[],
 ): T[] => {
   if (filters.length === 0) {
-    return entities;
+    return items;
   }
 
-  return entities.filter((entity) =>
+  return items.filter((entity) =>
     filters.every((filter) => matchesFilter(entity, filter)),
   );
 };
 
 export const applySorts = <T extends FilterableEntity>(
-  entities: T[],
+  items: T[],
   sorts: ViewSort[],
 ): T[] => {
   if (sorts.length === 0) {
-    return entities;
+    return items;
   }
 
-  return [...entities].sort((a, b) => {
+  return [...items].toSorted((a, b) => {
     for (const sort of sorts) {
       const fieldA = findField(a.fields, sort.propertyId);
       const fieldB = findField(b.fields, sort.propertyId);

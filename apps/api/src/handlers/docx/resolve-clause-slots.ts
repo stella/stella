@@ -7,6 +7,7 @@
 
 import type { ScopedDb } from "@/api/db";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+
 import type { ClauseSlot } from "./discover-clause-slots";
 import type { RichPatchValue } from "./types";
 

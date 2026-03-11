@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -73,7 +74,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.item(0);
       if (file) {
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         discover(file);
       }
       // Reset so the same file can be re-selected
@@ -88,7 +89,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       setIsDragOver(false);
       const file = e.dataTransfer.files.item(0);
       if (file) {
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         discover(file);
       }
     },
@@ -107,27 +108,27 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone requires drag events */}
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone requires drag events */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className={`flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-all duration-200 ${
           isDragOver
-            ? "border-foreground/30 bg-accent/50 shadow-lg shadow-primary/20"
+            ? "border-foreground/30 bg-accent/50 shadow-primary/20 shadow-lg"
             : "border-border shadow-none"
         }`}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <div className="flex size-12 items-center justify-center rounded-lg bg-muted">
-          <UploadIcon className="size-6 text-muted-foreground" />
+        <div className="bg-muted flex size-12 items-center justify-center rounded-lg">
+          <UploadIcon className="text-muted-foreground size-6" />
         </div>
 
         <div className="text-center">
           <h2 className="text-base font-semibold">
             {t("templates.uploadTitle")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             {t("templates.uploadDescription")}
           </p>
         </div>
@@ -136,7 +137,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
           <Button disabled={loading} onClick={() => inputRef.current?.click()}>
             {loading ? t("templates.discovering") : t("templates.browseFiles")}
           </Button>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {t("templates.dragAndDrop")}
           </p>
         </div>

@@ -1,13 +1,11 @@
 import { eq } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { properties } from "@/api/db/schema";
-import {
-  propertyContentTypeSchema,
-  type PropertyContent,
-  type PropertyTool,
-} from "@/api/db/schema-validators";
+import { propertyContentTypeSchema } from "@/api/db/schema-validators";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";

@@ -16,7 +16,7 @@ export const MATTER_SWATCHES = [
 export const getMatterSwatch = (id: string) => {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
-    hash = Math.imul(hash, 31) + id.charCodeAt(i);
+    hash = Math.imul(hash, 31) + (id.codePointAt(i) ?? 0);
   }
   return MATTER_SWATCHES[Math.abs(hash) % MATTER_SWATCHES.length];
 };

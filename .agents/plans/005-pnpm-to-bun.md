@@ -66,7 +66,7 @@ with `bun` and `bunx`. Keep Turbo for build orchestration.
 - Switching to isolated linker (blocked by Bun bugs)
 - Upgrading Bun version beyond 1.3.6
 - `.claude/mcp/` isolated install (use `bun install --cwd
-  .claude/mcp` as the equivalent)
+.claude/mcp` as the equivalent)
 
 ## Implementation
 

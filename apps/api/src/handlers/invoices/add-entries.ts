@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -256,11 +257,11 @@ export const addEntriesHandler = async ({
       );
 
     return { totalAmount };
-  }).catch((err: unknown) => {
-    if (err instanceof ConcurrentModificationError) {
+  }).catch((error: unknown) => {
+    if (error instanceof ConcurrentModificationError) {
       return null;
     }
-    throw err;
+    throw error;
   });
 
   if (!result) {

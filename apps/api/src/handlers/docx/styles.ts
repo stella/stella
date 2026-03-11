@@ -10,7 +10,8 @@
  * DOCX files and produce this config dynamically.
  */
 
-import { AlignmentType, type IStylesOptions } from "docx";
+import { AlignmentType } from "docx";
+import type { IStylesOptions } from "docx";
 
 const FONT = "Arial";
 const FONT_SIZE_PT = 10;

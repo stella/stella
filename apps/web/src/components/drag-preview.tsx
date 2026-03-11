@@ -8,9 +8,10 @@
  */
 
 import { createElement } from "react";
-import { FolderIcon } from "lucide-react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+
+import { FolderIcon } from "lucide-react";
 
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 

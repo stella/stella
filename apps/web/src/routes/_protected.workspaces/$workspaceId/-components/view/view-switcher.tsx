@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -60,11 +61,11 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 
 const VIEW_DRAG_TYPE = "stella/view-id";
 
-const REQUIRED_VIEW_LAYOUTS: ViewLayoutType[] = [
+const REQUIRED_VIEW_LAYOUTS = new Set<ViewLayoutType>([
   "overview",
   "table",
   "filesystem",
-];
+]);
 
 const layoutIcons: Record<ViewLayoutType, React.ElementType> = {
   overview: LayoutDashboardIcon,
@@ -159,7 +160,7 @@ export const ViewSwitcher = ({
         <TabsList variant="underline">
           {views.map((view) => {
             const isLastOfLayout =
-              REQUIRED_VIEW_LAYOUTS.includes(view.layout.type) &&
+              REQUIRED_VIEW_LAYOUTS.has(view.layout.type) &&
               views.filter((v) => v.layout.type === view.layout.type).length <=
                 1;
 
@@ -340,7 +341,7 @@ const ViewTab = ({
 
   return (
     <div
-      className={cn("relative", isDropTarget && "rounded ring-2 ring-primary")}
+      className={cn("relative", isDropTarget && "ring-primary rounded ring-2")}
       ref={containerRef}
     >
       <TabsTab
@@ -402,10 +403,10 @@ const ViewTabMenu = ({
   const Icon = layoutIcons[layout.type];
 
   const handleDuplicate = () => {
-    const id = nanoid();
+    const newId = nanoid();
     createView.mutate(
       {
-        id,
+        id: newId,
         name: t("workspaces.views.copySuffix", {
           name: view.name,
         }),

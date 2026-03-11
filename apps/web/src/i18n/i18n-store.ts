@@ -96,7 +96,7 @@ export const useI18nStore = create<State & Actions>()(
       name: getStorageKey("i18n"),
       version: 0,
       migrate: () => {
-        return;
+        /* no-op: reset persisted state on version bump */
       },
       onRehydrateStorage: () => (state) => {
         if (!state) {

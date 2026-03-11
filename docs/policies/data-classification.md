@@ -82,7 +82,7 @@ by default.
     credentials, API keys) are stored in environment variables,
     never in source code or configuration files.
 
-11. **Lint enforcement.** Biome's `noSecrets` rule (entropy
+11. **Lint enforcement.** oxlint's `no-secrets` rule (entropy
     threshold 50) runs in CI and blocks commits containing
     high-entropy strings that resemble credentials.
 

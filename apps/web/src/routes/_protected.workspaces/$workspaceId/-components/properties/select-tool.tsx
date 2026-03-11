@@ -29,7 +29,7 @@ export const SelectTool = ({ field }: SelectToolProps) => {
       onValueChange={field.handleChange}
       value={field.state.value}
     >
-      <SelectTrigger className="border-0 px-1.5 shadow-none ring-0 before:shadow-none! hover:bg-muted">
+      <SelectTrigger className="hover:bg-muted border-0 px-1.5 shadow-none ring-0 before:shadow-none!">
         <SelectValue className="font-semibold" />
       </SelectTrigger>
       <SelectPopup alignItemWithTrigger={false}>

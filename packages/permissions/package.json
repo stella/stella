@@ -1,13 +1,16 @@
 {
   "name": "@stella/permissions",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint",
-    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+    "lint": "oxlint",
+    "format": "oxfmt ."
   },
   "dependencies": {
     "better-auth": "catalog:"
@@ -15,8 +18,5 @@
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
     "typescript": "catalog:"
-  },
-  "exports": {
-    ".": "./src/index.ts"
   }
 }

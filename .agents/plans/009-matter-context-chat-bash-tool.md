@@ -72,11 +72,12 @@ File: `apps/api/src/handlers/registry/actors/chat-actor.ts`
 type ThreadMetadata = {
   title: string;
   createdAt: number;
-  workspaceId: string | null;  // NEW
+  workspaceId: string | null; // NEW
 };
 ```
 
 Update `sendMessages` action to accept `workspaceId`:
+
 ```typescript
 sendMessages: (c, input: {
   threadId: string;
@@ -150,9 +151,7 @@ export const createMatterTools = (
       "matter/workspace using full-text search. Returns " +
       "matching entity names with highlighted excerpts.",
     parameters: z.object({
-      query: z.string().describe(
-        "The search query (keywords, phrases)"
-      ),
+      query: z.string().describe("The search query (keywords, phrases)"),
       limit: z.number().optional().default(10),
     }),
     execute: async ({ query, limit }) => {
@@ -168,10 +167,13 @@ export const createMatterTools = (
       "custom property values (metadata columns). Use " +
       "this to understand what's in the matter.",
     parameters: z.object({
-      kind: z.enum(["document", "folder", "task", "file"])
+      kind: z
+        .enum(["document", "folder", "task", "file"])
         .optional()
         .describe("Filter by entity type"),
-      parentId: z.string().optional()
+      parentId: z
+        .string()
+        .optional()
         .describe("List contents of a specific folder"),
     }),
     execute: async ({ kind, parentId }) => {
@@ -217,17 +219,14 @@ When a thread has a `workspaceId`, pass tools to `streamText`:
 
 ```typescript
 const tools = thread.metadata.workspaceId
-  ? createMatterTools(
-      thread.metadata.workspaceId,
-      organizationId,
-    )
+  ? createMatterTools(thread.metadata.workspaceId, organizationId)
   : undefined;
 
 const stream = streamText({
   model,
   messages: await convertToModelMessages(messages),
   tools,
-  maxSteps: 5,  // Allow tool-use loops
+  maxSteps: 5, // Allow tool-use loops
   abortSignal: runSignal,
 });
 ```
@@ -264,6 +263,7 @@ The frontend knows which view is active (`activeView.layout`:
 `workspaceId` on message send.
 
 When `layout === "table"`:
+
 - System prompt emphasizes: "The user is viewing entities in
   a table with columns: {propertyNames}. They may ask about
   filtering, sorting, or analyzing the metadata."
@@ -271,6 +271,7 @@ When `layout === "table"`:
   (matching the columns the user sees)
 
 When `layout !== "table"` (files view):
+
 - System prompt emphasizes: "The user is viewing files and
   folders. They may ask about document contents."
 - `readContent` tool is highlighted in the prompt
@@ -326,6 +327,7 @@ capabilities depending on what the user is doing.
 #### What is a Skill?
 
 A skill is a named bundle of:
+
 1. **Tools** — AI SDK `tool()` definitions (same pattern as
    matter tools)
 2. **System prompt fragment** — appended to the base system
@@ -336,15 +338,15 @@ A skill is a named bundle of:
 
 Skills activate based on where the user is in the app:
 
-| Route context              | Active skills               |
-| -------------------------- | --------------------------- |
-| `/workspaces/$id` (files)  | matter-search, matter-read  |
-| `/workspaces/$id` (table)  | matter-search, matter-meta  |
-| `/knowledge/templates`     | template-management         |
-| `/knowledge/clauses`       | clause-search, clause-draft |
-| `/workspaces/$id/invoices` | invoice-query               |
-| `/workspaces/$id/timesheets` | timesheet-query           |
-| Global (no route context)  | (base chat only)            |
+| Route context                | Active skills               |
+| ---------------------------- | --------------------------- |
+| `/workspaces/$id` (files)    | matter-search, matter-read  |
+| `/workspaces/$id` (table)    | matter-search, matter-meta  |
+| `/knowledge/templates`       | template-management         |
+| `/knowledge/clauses`         | clause-search, clause-draft |
+| `/workspaces/$id/invoices`   | invoice-query               |
+| `/workspaces/$id/timesheets` | timesheet-query             |
+| Global (no route context)    | (base chat only)            |
 
 The frontend passes an **activation context** alongside
 `workspaceId` when creating a thread:
@@ -352,7 +354,7 @@ The frontend passes an **activation context** alongside
 ```typescript
 type ChatContext = {
   workspaceId?: string;
-  skills?: string[];   // e.g., ["matter-search", "matter-read"]
+  skills?: string[]; // e.g., ["matter-search", "matter-read"]
   viewLayout?: "table" | "files" | "kanban";
 };
 ```

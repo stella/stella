@@ -1,19 +1,13 @@
 import { LRUCache } from "lru-cache";
-import {
-  getDocument,
-  type PageViewport,
-  type PDFDocumentProxy,
-  type PDFPageProxy,
-} from "pdfjs-dist";
+import { getDocument } from "pdfjs-dist";
+import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { DEFAULT_PAGE_BUFFER_SIZE } from "@/lib/pdf/consts";
-import { getOrderedPages } from "@/lib/pdf/utils";
-
-import "pdfjs-dist/build/pdf.worker.mjs";
-
 import { getStorageKey } from "@/consts";
+import { DEFAULT_PAGE_BUFFER_SIZE } from "@/lib/pdf/consts";
+import "pdfjs-dist/build/pdf.worker.mjs";
+import { getOrderedPages } from "@/lib/pdf/utils";
 
 export const PDF_WIDTH = 768; // px, screen md
 
@@ -185,6 +179,7 @@ export const usePdfStore = create<State & Actions>()(
             set({
               passwordRequest: {
                 resolve: callback,
+                // eslint-disable-next-line typescript/no-misused-promises
                 reject: () => loadingTask.destroy(),
                 reason,
               },
@@ -416,7 +411,7 @@ export const usePdfStore = create<State & Actions>()(
       cleanupPdfs: async () => {
         const state = get();
         const pdfs = new Map(state.pdfs);
-        const pdfValues = Array.from(pdfs.values());
+        const pdfValues = [...pdfs.values()];
         const pages = new Map(state.pages);
         const renderMap = new Map(state.renderMap);
 
@@ -497,7 +492,7 @@ export const usePdfStore = create<State & Actions>()(
             pages,
             renderMap,
             renderedPages: new Set(
-              Array.from(s.renderedPages).filter((id) => !filePages.has(id)),
+              [...s.renderedPages].filter((id) => !filePages.has(id)),
             ),
           };
         }),
@@ -664,7 +659,7 @@ export const usePdfStore = create<State & Actions>()(
         invertPages: state.invertPages,
       }),
       migrate: () => {
-        return;
+        /* no-op: reset persisted state on version bump */
       },
     },
   ),
