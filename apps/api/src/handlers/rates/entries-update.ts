@@ -1,5 +1,6 @@
 import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";

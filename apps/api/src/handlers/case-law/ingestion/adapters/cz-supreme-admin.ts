@@ -32,10 +32,10 @@ type NssoudApiItem = {
   TypRozhodnuti?: string;
   SoudceZpravodaj?: string;
   OblastPrava?: string;
-  AplikovanaZakonnaUstanoveni?: Array<{
+  AplikovanaZakonnaUstanoveni?: {
     Cislo?: string;
     Paragraf?: string;
-  }>;
+  }[];
   AplikovanaUniiniPravniPredpis?: string[];
   Prejudikatura?: string[];
   PravniVeta?: string;

@@ -24,9 +24,9 @@ type TableControlsProps = {
   viewId: string;
 };
 
-export const TableControls = ({ workspaceId, viewId }: TableControlsProps) => {
-  return <DeleteEntitiesButton viewId={viewId} workspaceId={workspaceId} />;
-};
+export const TableControls = ({ workspaceId, viewId }: TableControlsProps) => (
+  <DeleteEntitiesButton viewId={viewId} workspaceId={workspaceId} />
+);
 
 type DeleteEntitiesButtonProps = {
   workspaceId: string;

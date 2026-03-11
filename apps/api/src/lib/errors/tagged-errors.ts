@@ -31,11 +31,11 @@ export class WorkflowIntegrationError extends TaggedError(
 /** Post-generation OOXML structural violations. */
 export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
   message: string;
-  violations: Array<{
+  violations: {
     rule: string;
     message: string;
     element?: string;
-  }>;
+  }[];
 }>() {}
 
 /** DOCX tracked-changes editing failure. */
@@ -56,11 +56,11 @@ export class TemplateDirectiveError extends TaggedError(
   "TemplateDirectiveError",
 )<{
   message: string;
-  errors: Array<{
+  errors: {
     message: string;
     paragraphIndex: number;
     directive: string;
-  }>;
+  }[];
 }>() {}
 
 /** Case-law adapter page-fetch failure. */

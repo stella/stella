@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -94,7 +95,7 @@ export const TimesheetWeekView = ({
     return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
   }, [entries]);
 
-  const matterIds = Array.from(grid.keys());
+  const matterIds = [...grid.keys()];
 
   const columnTotals = useMemo(() => {
     const totals = new Map<string, DayData>();
@@ -136,7 +137,7 @@ export const TimesheetWeekView = ({
       <table className="w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
-            <th className="sticky start-0 z-10 bg-background px-3 py-2 text-start font-medium">
+            <th className="bg-background sticky start-0 z-10 px-3 py-2 text-start font-medium">
               {t("billing.matter")}
             </th>
             {days.map((day) => {
@@ -154,7 +155,7 @@ export const TimesheetWeekView = ({
                     onClick={() => onDayClick(day)}
                     type="button"
                   >
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-muted-foreground text-xs">
                       {d.toLocaleDateString(undefined, {
                         weekday: "short",
                       })}
@@ -183,8 +184,8 @@ export const TimesheetWeekView = ({
             }
 
             return (
-              <tr className="border-b hover:bg-muted/30" key={matterId}>
-                <td className="sticky start-0 z-10 bg-background px-3 py-2 font-medium">
+              <tr className="hover:bg-muted/30 border-b" key={matterId}>
+                <td className="bg-background sticky start-0 z-10 px-3 py-2 font-medium">
                   <span className="truncate">
                     {matterNameMap.get(matterId) ?? t("workspaces.defaultName")}
                   </span>
@@ -208,7 +209,7 @@ export const TimesheetWeekView = ({
                 <td className="px-2 py-2 text-center tabular-nums">
                   <div className="font-medium">{formatMinutes(rowMinutes)}</div>
                   {rowAmount > 0 && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-muted-foreground text-xs">
                       {formatCurrencyCompact(rowAmount, dominantCurrency)}
                     </div>
                   )}
@@ -219,7 +220,7 @@ export const TimesheetWeekView = ({
           {matterIds.length === 0 && (
             <tr>
               <td
-                className="px-3 py-8 text-center text-muted-foreground"
+                className="text-muted-foreground px-3 py-8 text-center"
                 colSpan={days.length + 2}
               >
                 {t("billing.noEntries")}
@@ -230,7 +231,7 @@ export const TimesheetWeekView = ({
         {matterIds.length > 0 && (
           <tfoot>
             <tr className="border-t font-medium">
-              <td className="sticky start-0 z-10 bg-background px-3 py-2">
+              <td className="bg-background sticky start-0 z-10 px-3 py-2">
                 {t("billing.total")}
               </td>
               {days.map((day) => {
@@ -249,7 +250,7 @@ export const TimesheetWeekView = ({
               })}
               <td className="px-2 py-2 text-center tabular-nums">
                 <div>{formatMinutes(weekTotals.minutes)}</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-muted-foreground text-xs">
                   {t("billing.decimalHours", {
                     hours: formatDecimalHours(weekTotals.minutes),
                   })}

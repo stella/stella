@@ -18,7 +18,6 @@
  */
 
 import "dotenv/config";
-
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { createScopedDb, db } from "@/api/db";
@@ -84,7 +83,7 @@ const seedRules = async () => {
         polarity: rule.polarity,
         language: rule.language,
         source: RULE_SOURCE.MANUAL,
-        confidence: 1.0,
+        confidence: 1,
       })
       .onConflictDoNothing();
   }
@@ -178,8 +177,8 @@ const main = async () => {
       if (result.source === "llm") {
         await new Promise<void>((resolve) => setTimeout(resolve, 200));
       }
-    } catch (err) {
-      console.error(`[polarity] Failed citation ${citation.id}:`, err);
+    } catch (error) {
+      console.error(`[polarity] Failed citation ${citation.id}:`, error);
       fallbacks++;
     }
   }
@@ -198,7 +197,7 @@ const main = async () => {
   process.exit(0);
 };
 
-main().catch((err) => {
-  console.error("Classification failed:", err);
+main().catch((error) => {
+  console.error("Classification failed:", error);
   process.exit(1);
 });

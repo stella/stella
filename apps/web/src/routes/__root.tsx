@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import {
   createRootRouteWithContext,

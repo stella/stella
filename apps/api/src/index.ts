@@ -62,7 +62,6 @@ const api = new Elysia()
     }),
   )
   .onError(({ error, set, code, request }) => {
-    // biome-ignore lint/performance/noDelete: headers value type is string | number
     delete set.headers["X-Powered-By"];
 
     const url = new URL(request.url);
@@ -91,13 +90,12 @@ const api = new Elysia()
     return httpError("Internal server error");
   })
   .onAfterHandle(async ({ set }) => {
-    // biome-ignore lint/performance/noDelete: headers value type is string | number; delete is the correct way to remove a key
     delete set.headers["X-Powered-By"];
 
     const posthog = getPostHog();
 
     await posthog.flush().catch((error) => {
-      // biome-ignore lint/suspicious/noConsole: log error
+      // eslint-disable-next-line no-console
       console.error("Error flushing posthog", error);
     });
   })

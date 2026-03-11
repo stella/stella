@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { DownloadIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -66,7 +67,7 @@ export const TemplateVersionsTab = ({
       }
     };
 
-    // biome-ignore lint/nursery/noFloatingPromises: effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     load();
   }, [templateId, t]);
 
@@ -104,14 +105,14 @@ export const TemplateVersionsTab = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">{t("clauses.loading")}</p>
+        <p className="text-muted-foreground text-sm">{t("clauses.loading")}</p>
       </div>
     );
   }
 
   if (versions.length === 0) {
     return (
-      <p className="mt-4 py-4 text-center text-sm text-muted-foreground">
+      <p className="text-muted-foreground mt-4 py-4 text-center text-sm">
         {t("templates.versionsEmpty")}
       </p>
     );
@@ -131,7 +132,7 @@ export const TemplateVersionsTab = ({
                   version: String(ver.version),
                 })}
               </span>
-              <span className="ms-2 text-muted-foreground">
+              <span className="text-muted-foreground ms-2">
                 {t("templates.fieldCount", {
                   count: ver.fieldCount,
                 })}
@@ -145,6 +146,7 @@ export const TemplateVersionsTab = ({
                 })}
               </span>
               <Button
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() => handleView(ver.id)}
                 size="icon-xs"
                 variant="ghost"

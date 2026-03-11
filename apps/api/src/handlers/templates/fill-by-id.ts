@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db, type ScopedDb } from "@/api/db";
+import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -14,6 +15,7 @@ import { s3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
 import { containsNull } from "./fill";
 
 export const fillByIdBodySchema = t.Object({
@@ -109,7 +111,7 @@ export const fillByIdHandler = async ({
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
     })
-    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
+    // eslint-disable-next-line no-empty
     .catch(() => {});
 
   const baseName = template.fileName;

@@ -26,8 +26,5 @@ export const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
   return typeof obj.text === "string";
 };
 
-export const isClauseBody = (value: unknown): value is ClauseBody => {
-  return (
-    Array.isArray(value) && value.length > 0 && value.every(isClauseParagraph)
-  );
-};
+export const isClauseBody = (value: unknown): value is ClauseBody =>
+  Array.isArray(value) && value.length > 0 && value.every(isClauseParagraph);

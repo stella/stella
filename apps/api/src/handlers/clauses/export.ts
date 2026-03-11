@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+
 import type {
   ClauseExportItem,
   ClauseExportPayload,
@@ -93,7 +94,7 @@ export const exportHandler = async ({
     language: row.language,
     body: row.body,
     // SAFETY: metadata is Record<string, unknown> stored as JSONB
-    metadata: row.metadata as Record<string, unknown> | null,
+    metadata: row.metadata,
     categoryName: row.categoryId
       ? (categoryMap.get(row.categoryId)?.name ?? null)
       : null,

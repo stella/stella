@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, like } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
@@ -264,8 +265,8 @@ export const uploadEntityHandler = async ({
       return resolvedName;
     });
 
-    await processExtraction(entityId).catch((err) =>
-      captureError(err, { entityId, mimeType: file.type }),
+    await processExtraction(entityId).catch((error) =>
+      captureError(error, { entityId, mimeType: file.type }),
     );
 
     return {

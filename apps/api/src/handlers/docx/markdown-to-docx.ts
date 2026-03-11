@@ -26,9 +26,11 @@ import {
   TextRun,
   WidthType,
 } from "docx";
-import { lexer, type Token, type Tokens } from "marked";
+import { lexer } from "marked";
+import type { Token, Tokens } from "marked";
 
-import { DEFAULT_STYLE_MAPPING, type StyleMapping } from "./style-guide";
+import { DEFAULT_STYLE_MAPPING } from "./style-guide";
+import type { StyleMapping } from "./style-guide";
 import { BULLET_HANGING, BULLET_INDENT, stylesConfig } from "./styles";
 
 type DocxChild = Paragraph | Table;
@@ -171,10 +173,9 @@ const createConverters = (mapping: StyleMapping) => {
 
     for (let i = 0; i < token.items.length; i++) {
       const item = token.items[i];
-      const inlineTokens = item.tokens.filter(
+      const firstBlock = item.tokens.find(
         (t) => t.type === "text" || t.type === "paragraph",
       );
-      const firstBlock = inlineTokens[0];
 
       const contentRuns =
         firstBlock && "tokens" in firstBlock && firstBlock.tokens
@@ -339,7 +340,7 @@ export const markdownToDocx = async (
   });
 
   // SAFETY: Packer.toBuffer() returns a Node Buffer in Bun runtime
-  let buffer = (await Packer.toBuffer(doc)) as Buffer;
+  let buffer = await Packer.toBuffer(doc);
 
   if (options.templatePath) {
     const { injectStyles } = await import("./inject-styles");

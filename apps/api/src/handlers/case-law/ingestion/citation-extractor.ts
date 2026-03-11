@@ -52,7 +52,7 @@ const CITATION_PATTERNS: RegExp[] = [
  * their source section index.
  */
 export const extractCitations = (
-  sections: Array<{ index: number; text: string }>,
+  sections: { index: number; text: string }[],
 ): ExtractedCitation[] => {
   const seen = new Set<string>();
   const citations: ExtractedCitation[] = [];

@@ -6,17 +6,16 @@ import type { ActionContextOf } from "rivetkit";
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
 import { isMockAI } from "@/api/consts";
-import { createScopedDb, type ScopedDb } from "@/api/db";
+import { createScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { fields, justifications } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import { generateBatch } from "@/api/handlers/registry/actors/workflow/generate-batch";
 import { generateBatchMock } from "@/api/handlers/registry/actors/workflow/generate-batch-mock";
 import type { PropertyBatch } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
-import {
-  workflowActions,
-  type WorkflowActionSchemas,
-} from "@/api/handlers/registry/actors/workflow/schema";
+import { workflowActions } from "@/api/handlers/registry/actors/workflow/schema";
+import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
 import {
   prepareBatch,
   runWorkflowAction,

@@ -66,12 +66,12 @@ via the existing chat system.
 
 ### Global tables (no tenant column)
 
-| Table | Contents |
-|-------|----------|
-| `case_law_courts` | Court reference data (name, country, type) |
-| `case_law_sources` | System-managed ingestion source registry |
-| `case_law_decisions` | Court decisions (public records) |
-| `case_law_citations` | Citation graph between decisions |
+| Table                       | Contents                                                  |
+| --------------------------- | --------------------------------------------------------- |
+| `case_law_courts`           | Court reference data (name, country, type)                |
+| `case_law_sources`          | System-managed ingestion source registry                  |
+| `case_law_decisions`        | Court decisions (public records)                          |
+| `case_law_citations`        | Citation graph between decisions                          |
 | `case_law_search_documents` | FTS index (parallel to `search_documents`, no tenant col) |
 
 Read access: any authenticated user. Write access: system only
@@ -79,11 +79,11 @@ Read access: any authenticated user. Write access: system only
 
 ### Tenant-scoped tables
 
-| Table | Scope | Contents |
-|-------|-------|----------|
-| `case_law_matter_links` | workspace | Links decisions to matters |
-| `case_law_searches` | organization | Saved search sessions (Phase 6) |
-| `case_law_search_results` | via searchId FK | AI-extracted answers (Phase 6) |
+| Table                     | Scope           | Contents                        |
+| ------------------------- | --------------- | ------------------------------- |
+| `case_law_matter_links`   | workspace       | Links decisions to matters      |
+| `case_law_searches`       | organization    | Saved search sessions (Phase 6) |
+| `case_law_search_results` | via searchId FK | AI-extracted answers (Phase 6)  |
 
 ## Scope
 
@@ -148,6 +148,7 @@ infinite scroll.
 ### Phase 4: Frontend — Case Viewer
 
 Three-panel layout (react-resizable-panels):
+
 - Left: section ToC from `decision.sections`
 - Center: rendered fulltext with citation highlighting
 - Right: metadata sidebar (court, date, ECLI, legal
@@ -166,6 +167,7 @@ Copy-with-citation on text selection.
 
 Saved search sessions (org-scoped). Each session has question
 columns. For each decision in the result set:
+
 1. Retrieve relevant sections via full-text search
 2. Pass sections to AI with the column question
 3. Store extracted answer (yes/no/text + confidence)
@@ -188,54 +190,61 @@ See PR #461 for the full file list.
 
 ### Search Integration (Phase 2) — Key Files
 
-| Action | File |
-|--------|------|
-| Modify or mirror | `apps/api/src/lib/search/provider.ts` |
-| Create | `apps/api/src/handlers/case-law/search-index.ts` |
-| Modify | `apps/api/src/handlers/case-law/ingestion/pipeline.ts` |
-| Modify | `apps/api/src/handlers/case-law/decisions/search.ts` |
+| Action           | File                                                   |
+| ---------------- | ------------------------------------------------------ |
+| Modify or mirror | `apps/api/src/lib/search/provider.ts`                  |
+| Create           | `apps/api/src/handlers/case-law/search-index.ts`       |
+| Modify           | `apps/api/src/handlers/case-law/ingestion/pipeline.ts` |
+| Modify           | `apps/api/src/handlers/case-law/decisions/search.ts`   |
 
 ### Courts Reference (Phase 5) — Key Files
 
-| Action | File |
-|--------|------|
-| Modify | `apps/api/src/db/schema.ts` (add `case_law_courts`) |
-| Create | `apps/api/scripts/seed-courts.ts` |
+| Action | File                                                   |
+| ------ | ------------------------------------------------------ |
+| Modify | `apps/api/src/db/schema.ts` (add `case_law_courts`)    |
+| Create | `apps/api/scripts/seed-courts.ts`                      |
 | Modify | `apps/api/src/handlers/case-law/ingestion/pipeline.ts` |
 
 ## Verification
 
 ### Phase 1 (done)
+
 - `bun run db:push` succeeds
 - `bun run typecheck` passes
 - Global-read endpoints work with auth
 - Tenant-scoped endpoints enforce workspace access
 
 ### Phase 2
+
 - Case law decisions appear in search results
 - Full-text search returns relevant results ranked by BM25
 - Language-aware stemming works for CZ/SK text
 
 ### Phase 3
+
 - Decision table renders with faceted filters
 - Court filter groups by country and court type
 - Infinite scroll loads pages correctly
 
 ### Phase 4
+
 - Three-panel case viewer renders
 - Section navigation scrolls correctly
 - Citations are highlighted and clickable
 - Copy-with-citation works
 
 ### Phase 5
+
 - Background worker runs ingestion on schedule
 - Courts reference table populated with CZ/SK courts
 - Court facet filter uses reference data
 
 ### Phase 6
+
 - Columnar search: add a question column, AI extracts answers
 - Yes/No filtering works on AI-extracted columns
 
 ### Phase 7
+
 - Chat actor can search and cite case law
 - Results include links to case viewer

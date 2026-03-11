@@ -74,7 +74,7 @@ export const BatchActionBar = ({
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
+    <div className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
       <span className="text-sm font-medium">
         {t("billing.selectedCount", { count: selectedIds.length })}
       </span>

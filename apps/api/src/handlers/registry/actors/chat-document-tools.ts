@@ -23,13 +23,8 @@ export const createDocumentViewTools = (
 ): ToolSet => ({
   displayDocument: defineTool({
     name: "displayDocument",
-    description:
-      "Display an uploaded document to the user in a " +
-      "specific view. Use 'simple' for clean accepted " +
-      "text, 'original' for the pre-edit version, " +
-      "'tracked-changes' for the full redline with " +
-      "annotations. Available files: " +
-      attachments.map((a) => a.filename).join(", "),
+    // oxfmt-ignore
+    description: `Display an uploaded document to the user in a specific view. Use 'simple' for clean accepted text, 'original' for the pre-edit version, 'tracked-changes' for the full redline with annotations. Available files: ${attachments.map((a) => a.filename).join(", ")}`,
     inputSchema: z.object({
       view: z.enum(["simple", "original", "tracked-changes"]),
       filename: z.string(),

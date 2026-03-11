@@ -1,4 +1,5 @@
 import { Suspense, useMemo, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
@@ -123,7 +124,7 @@ function TimesheetsPage() {
         throw new Error("Export failed");
       }
       // SAFETY: CSV endpoint returns plain text string
-      downloadBlob(response.data as string, `timesheet-${dateFrom}.csv`);
+      downloadBlob(response.data, `timesheet-${dateFrom}.csv`);
     } else if (format === "ledes") {
       const response = await api["time-entries"]({
         workspaceId,
@@ -132,7 +133,7 @@ function TimesheetsPage() {
         throw new Error("Export failed");
       }
       // SAFETY: LEDES endpoint returns plain text string
-      downloadBlob(response.data as string, `timesheet-${dateFrom}.ledes`);
+      downloadBlob(response.data, `timesheet-${dateFrom}.ledes`);
     } else if (format === "pdf") {
       const response = await api["time-entries"]({
         workspaceId,
@@ -245,7 +246,7 @@ function TimesheetsPage() {
       <div className="flex-1 overflow-auto p-4">
         <Suspense
           fallback={
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-8 text-center text-sm">
               {t("billing.loading")}
             </div>
           }

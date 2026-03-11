@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
@@ -6,11 +7,8 @@ import { FolderIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import {
-  isFileDisplayable,
-  type WorkspaceEntity,
-  type WorkspaceProperty,
-} from "@/lib/types";
+import { isFileDisplayable } from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -102,7 +100,7 @@ export const KanbanCard = ({
             const clone = inner.cloneNode(true) as HTMLElement;
             const rect = inner.getBoundingClientRect();
             clone.style.width = `${rect.width}px`;
-            container.appendChild(clone);
+            container.append(clone);
           },
         });
       },
@@ -124,7 +122,7 @@ export const KanbanCard = ({
 
   const icon =
     entity.kind === "folder" ? (
-      <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+      <FolderIcon className="text-muted-foreground size-4 shrink-0" />
     ) : file?.mimeType ? (
       <DocumentIcon className="size-4 shrink-0" mimeType={file.mimeType} />
     ) : null;
@@ -156,21 +154,21 @@ export const KanbanCard = ({
         cardFields.map((fieldId) => {
           if (fieldId === getInternalPropertyId("created-by")) {
             return (
-              <div className="text-xs text-muted-foreground" key={fieldId}>
+              <div className="text-muted-foreground text-xs" key={fieldId}>
                 <AuthorCell entity={entity} />
               </div>
             );
           }
           if (fieldId === getInternalPropertyId("updated-at")) {
             return (
-              <div className="text-xs text-muted-foreground" key={fieldId}>
+              <div className="text-muted-foreground text-xs" key={fieldId}>
                 <LastUpdatedCell entity={entity} />
               </div>
             );
           }
           if (fieldId === getInternalPropertyId("version")) {
             return (
-              <div className="text-xs text-muted-foreground" key={fieldId}>
+              <div className="text-muted-foreground text-xs" key={fieldId}>
                 <VersionCell entity={entity} />
               </div>
             );
@@ -181,7 +179,7 @@ export const KanbanCard = ({
             return null;
           }
           return (
-            <div className="text-xs text-muted-foreground" key={fieldId}>
+            <div className="text-muted-foreground text-xs" key={fieldId}>
               <CellResult field={field} property={prop} />
             </div>
           );
@@ -205,8 +203,8 @@ export const KanbanCard = ({
       <div className="group/card" ref={dragRef}>
         <button
           className={cn(
-            "relative block w-full rounded-lg border bg-card p-3 text-start shadow-xs transition-shadow hover:shadow-md",
-            isActivePeek && "ring-2 ring-primary/30",
+            "bg-card relative block w-full rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
+            isActivePeek && "ring-primary/30 ring-2",
           )}
           onClick={() =>
             usePeekStore.getState().openTab({
@@ -228,8 +226,8 @@ export const KanbanCard = ({
     <div className="group/card" ref={dragRef}>
       <div
         className={cn(
-          "relative rounded-lg border bg-card p-3 shadow-xs",
-          isActivePeek && "ring-2 ring-primary/30",
+          "bg-card relative rounded-lg border p-3 shadow-xs",
+          isActivePeek && "ring-primary/30 ring-2",
         )}
       >
         {content}

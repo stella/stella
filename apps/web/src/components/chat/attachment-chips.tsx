@@ -37,17 +37,17 @@ export const AttachmentChips = ({ files, onRemove }: AttachmentChipsProps) => {
         <div
           className={cn(
             "flex shrink-0 items-center gap-1.5",
-            "rounded-md border bg-muted/50 px-2 py-1 text-xs",
+            "bg-muted/50 rounded-md border px-2 py-1 text-xs",
             file.status === "error" &&
               "border-destructive/50 bg-destructive/10",
           )}
           key={file.id}
         >
           {file.status === "uploading" ? (
-            <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
+            <Loader2Icon className="text-muted-foreground size-3 animate-spin" />
           ) : (
             <DocumentIcon
-              className="size-3 text-muted-foreground"
+              className="text-muted-foreground size-3"
               mimeType={file.mimeType}
             />
           )}

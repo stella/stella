@@ -1,5 +1,6 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { t, type Static } from "elysia";
+import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
@@ -82,7 +83,7 @@ export const exportPdfHandler = async ({
           tx
             .select({ id: user.id, name: user.name })
             .from(user)
-            .where(inArray(user.id, Array.from(userIds))),
+            .where(inArray(user.id, [...userIds])),
         )
       : [];
 
@@ -158,7 +159,7 @@ const buildMinimalPdf = (lines: string[]): Uint8Array => {
 
   // Replace non-ASCII characters with '?' since Helvetica
   // cannot render them; keeps string length === byte length.
-  const toAscii = (s: string) => s.replace(/[^\x20-\x7E]/g, "?");
+  const toAscii = (s: string) => s.replace(/[^\u0020-\u007E]/g, "?");
 
   // Escape special PDF characters in text
   const escPdf = (s: string) =>

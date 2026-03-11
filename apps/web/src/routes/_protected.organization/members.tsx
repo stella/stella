@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -46,10 +47,12 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
-import { authClient, type Role } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
+import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
+import { roleOptions } from "@/routes/-queries";
 import {
   getRoles,
   rolePriority,
@@ -60,7 +63,6 @@ import {
   organizationOptions,
 } from "@/routes/_protected.organization/-queries";
 import { formatDate } from "@/routes/_protected.organization/-utils";
-import { roleOptions } from "@/routes/-queries";
 
 export const Route = createFileRoute("/_protected/organization/members")({
   component: Members,
@@ -141,7 +143,7 @@ function Members() {
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                className="text-center text-muted-foreground"
+                className="text-muted-foreground text-center"
                 colSpan={4}
               >
                 {t("organization.members.noMembersFound")}
@@ -221,6 +223,7 @@ const UpdateRoleDialog = ({ memberId, email, role }: UpdateRoleDialogProps) => {
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
+            // eslint-disable-next-line typescript/no-floating-promises
             form.handleSubmit();
           }}
         >

@@ -1,9 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  flexRender,
-  type Table as ReactTable,
-  type Row,
-} from "@tanstack/react-table";
+
+import { flexRender } from "@tanstack/react-table";
+import type { Table as ReactTable, Row } from "@tanstack/react-table";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -61,7 +59,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     if (!s.activeFieldId) {
       return null;
     }
-    const tab = s.tabs.find((tab) => tab.fieldId === s.activeFieldId);
+    const tab = s.tabs.find((tabItem) => tabItem.fieldId === s.activeFieldId);
     return tab?.entityId ?? null;
   });
 
@@ -71,7 +69,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     // Compute logical row labels that account for collapsed
     // folder children. Each visible row gets a 1-based number;
     // collapsed folders show a range.
-    const rowLabels: string[] = [];
+    const labels: string[] = [];
     let logicalPos = 1;
     for (const row of rowModel.rows) {
       const isFolder = row.original.kind === "folder";
@@ -80,18 +78,18 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
       if (isCollapsed) {
         const descendantCount = countDescendants(row.original);
         if (descendantCount > 0) {
-          rowLabels.push(`${logicalPos}-${logicalPos + descendantCount}`);
+          labels.push(`${logicalPos}-${logicalPos + descendantCount}`);
           logicalPos += descendantCount + 1;
         } else {
-          rowLabels.push(String(logicalPos));
+          labels.push(String(logicalPos));
           logicalPos += 1;
         }
       } else {
-        rowLabels.push(String(logicalPos));
+        labels.push(String(logicalPos));
         logicalPos += 1;
       }
     }
-    return rowLabels;
+    return labels;
   }, [rowModel]);
 
   const handleRowDrop = (e: React.DragEvent, target: TableTreeNode) => {
@@ -154,18 +152,18 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
   return (
     <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
       <Table
-        className="table-auto border-separate border-spacing-0 [&_td]:border-border [&_tfoot_td]:border-t [&_th]:border-b [&_th]:border-border [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
+        className="[&_td]:border-border [&_th]:border-border table-auto border-separate border-spacing-0 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
         style={{
           width: "100%",
           minWidth: table.getTotalSize(),
         }}
       >
-        <TableHeader className="sticky top-0 z-10 border-b bg-background">
+        <TableHeader className="bg-background sticky top-0 z-10 border-b">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <TableHead
-                  className="group/table-head relative h-10 border-t bg-background px-0 hover:bg-background"
+                  className="group/table-head bg-background hover:bg-background relative h-10 border-t px-0"
                   colSpan={header.colSpan}
                   key={header.id}
                   style={{
@@ -186,12 +184,12 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
                       onTouchStart={header.getResizeHandler()}
                       type="button"
                     >
-                      <span className="mr-auto h-full w-1 rounded bg-primary/25" />
+                      <span className="bg-primary/25 mr-auto h-full w-1 rounded" />
                     </button>
                   )}
                   {header.column.getIsResizing() && (
                     <div
-                      className="absolute top-0 right-0 z-10 w-px bg-info"
+                      className="bg-info absolute top-0 right-0 z-10 w-px"
                       style={{
                         height: `${tableWrapperRef.current?.clientHeight ?? 0}px`,
                       }}
@@ -217,7 +215,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
                   className={cn(
                     row.original.entityId === activeEntityId && "bg-muted/50",
                     dropTargetId === row.original.entityId &&
-                      "ring-2 ring-primary",
+                      "ring-primary ring-2",
                   )}
                   data-state={row.getIsSelected() && "selected"}
                   draggable
@@ -294,7 +292,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
                 className={cn(
                   row.original.entityId === activeEntityId && "bg-muted/50",
                   dropTargetId === row.original.entityId &&
-                    "ring-2 ring-primary",
+                    "ring-primary ring-2",
                 )}
                 data-state={row.getIsSelected() && "selected"}
                 draggable
@@ -457,9 +455,9 @@ const FolderCell = ({
         />
       </button>
       {isExpanded ? (
-        <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+        <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
       ) : (
-        <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+        <FolderIcon className="text-muted-foreground size-4 shrink-0" />
       )}
       {isEditing ? (
         <InlineEdit

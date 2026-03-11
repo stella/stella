@@ -4,7 +4,8 @@ import { useTranslations } from "use-intl";
 
 import { toastManager } from "@stella/ui/components/toast";
 
-import { authClient, type Role } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
+import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
 import { organizationKeys } from "@/routes/_protected.organization/-queries";
@@ -35,6 +36,7 @@ export const useRemoveMember = () => {
         title: t("success.memberRemoved"),
         type: "success",
       });
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
@@ -73,6 +75,7 @@ export const useInviteMember = () => {
       return result.data;
     },
     onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
@@ -103,6 +106,7 @@ export const useCancelInvitation = () => {
       return result.data;
     },
     onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
       toastManager.add({
         title: t("success.invitationCanceled"),

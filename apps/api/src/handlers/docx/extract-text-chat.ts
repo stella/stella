@@ -236,7 +236,7 @@ const extractHeaderFooterViews = async (
 
   const entries = Object.keys(zip.files)
     .filter((path) => HEADER_FOOTER_RE.test(path) && path.startsWith(prefix))
-    .sort();
+    .toSorted();
 
   for (const path of entries) {
     const entry = zip.file(path);

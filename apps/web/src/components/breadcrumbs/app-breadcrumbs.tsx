@@ -1,5 +1,7 @@
 import { Fragment, useId, useMemo } from "react";
-import { useMatches, type ResolveParams } from "@tanstack/react-router";
+
+import { useMatches } from "@tanstack/react-router";
+import type { ResolveParams } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -34,96 +36,72 @@ export const AppBreadcrumbs = () => {
     Record<string, BreadcrumbComponent<RouterFullPath>>
   > = useMemo(
     () => ({
-      [serializeKey(["/workspaces/"])]: () => {
-        return (
-          <BreadcrumbLink to="/workspaces">
-            {t("common.matters")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/workspaces/$workspaceId"])]: (params) => {
-        return <WorkspaceBreadcrumb {...params} />;
-      },
-      [serializeKey(["/workspaces/$workspaceId/$viewId/pdf"])]: () => {
-        return <PdfBreadcrumb />;
-      },
-      [serializeKey(["/knowledge"])]: () => {
-        return (
-          <BreadcrumbLink to="/knowledge">
-            {t("navigation.knowledge")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/knowledge/templates"])]: () => {
-        return (
-          <BreadcrumbLink to="/knowledge/templates">
-            {t("navigation.templates")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/contacts/"])]: () => {
-        return (
-          <BreadcrumbLink to="/contacts">
-            {t("navigation.contacts")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/knowledge/clauses"])]: () => {
-        return (
-          <BreadcrumbLink to="/knowledge/clauses">
-            {t("navigation.clauses")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/contacts/$contactId"])]: (params) => {
-        return <ContactBreadcrumb {...params} />;
-      },
-      [serializeKey(["/knowledge/case-law/"])]: () => {
-        return (
-          <BreadcrumbLink to="/knowledge/case-law">
-            {t("navigation.caseLaw")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/organization"])]: () => {
-        return <BreadcrumbItem>{t("navigation.organization")}</BreadcrumbItem>;
-      },
-      [serializeKey(["/organization/members"])]: () => {
-        return (
-          <BreadcrumbLink to="/organization/members">
-            {t("navigation.members")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/organization/invitations"])]: () => {
-        return (
-          <BreadcrumbLink to="/organization/invitations">
-            {t("navigation.invitations")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/account"])]: () => {
-        return <BreadcrumbItem>{t("navigation.account")}</BreadcrumbItem>;
-      },
-      [serializeKey(["/account/sessions"])]: () => {
-        return (
-          <BreadcrumbLink to="/account/sessions">
-            {t("navigation.sessions")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/account/settings"])]: () => {
-        return (
-          <BreadcrumbLink to="/account/settings">
-            {t("common.settings")}
-          </BreadcrumbLink>
-        );
-      },
-      [serializeKey(["/chat"])]: () => {
-        return (
-          <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>
-        );
-      },
+      [serializeKey(["/workspaces/"])]: () => (
+        <BreadcrumbLink to="/workspaces">{t("common.matters")}</BreadcrumbLink>
+      ),
+      [serializeKey(["/workspaces/$workspaceId"])]: (params) => (
+        <WorkspaceBreadcrumb {...params} />
+      ),
+      [serializeKey(["/workspaces/$workspaceId/$viewId/pdf"])]: () => (
+        <PdfBreadcrumb />
+      ),
+      [serializeKey(["/knowledge"])]: () => (
+        <BreadcrumbLink to="/knowledge">
+          {t("navigation.knowledge")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/knowledge/templates"])]: () => (
+        <BreadcrumbLink to="/knowledge/templates">
+          {t("navigation.templates")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/contacts/"])]: () => (
+        <BreadcrumbLink to="/contacts">
+          {t("navigation.contacts")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/knowledge/clauses"])]: () => (
+        <BreadcrumbLink to="/knowledge/clauses">
+          {t("navigation.clauses")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/contacts/$contactId"])]: (params) => (
+        <ContactBreadcrumb {...params} />
+      ),
+      [serializeKey(["/knowledge/case-law/"])]: () => (
+        <BreadcrumbLink to="/knowledge/case-law">
+          {t("navigation.caseLaw")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/organization"])]: () => (
+        <BreadcrumbItem>{t("navigation.organization")}</BreadcrumbItem>
+      ),
+      [serializeKey(["/organization/members"])]: () => (
+        <BreadcrumbLink to="/organization/members">
+          {t("navigation.members")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/organization/invitations"])]: () => (
+        <BreadcrumbLink to="/organization/invitations">
+          {t("navigation.invitations")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/account"])]: () => (
+        <BreadcrumbItem>{t("navigation.account")}</BreadcrumbItem>
+      ),
+      [serializeKey(["/account/sessions"])]: () => (
+        <BreadcrumbLink to="/account/sessions">
+          {t("navigation.sessions")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/account/settings"])]: () => (
+        <BreadcrumbLink to="/account/settings">
+          {t("common.settings")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/chat"])]: () => (
+        <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>
+      ),
     }),
     [t],
   );
@@ -147,7 +125,7 @@ export const AppBreadcrumbs = () => {
       }
     }
 
-    return Array.from(results.values());
+    return [...results.values()];
   }, [matches, breadcrumbMap]);
 
   return (
@@ -156,7 +134,7 @@ export const AppBreadcrumbs = () => {
         {breadcrumbs.map((breadcrumb, index) => (
           <Fragment
             key={`${id}-${
-              // biome-ignore lint/suspicious/noArrayIndexKey: we use id
+              // eslint-disable-next-line react/no-array-index-key
               index
             }`}
           >

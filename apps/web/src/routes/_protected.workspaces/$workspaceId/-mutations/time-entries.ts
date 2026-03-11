@@ -230,7 +230,7 @@ export const useBatchDeleteTimeEntries = () => {
 type SplitTimeEntryVars = {
   workspaceId: string;
   id: string;
-  splits: Array<{ matterId: string; percentage: number }>;
+  splits: { matterId: string; percentage: number }[];
 };
 
 export const useSplitTimeEntry = () => {

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -9,8 +10,8 @@ import {
   manualInputToolSchema,
   propertyConditionSchema,
   propertyContentSchema,
-  type PropertyTool,
 } from "@/api/db/schema-validators";
+import type { PropertyTool } from "@/api/db/schema-validators";
 import {
   comparePropertiesForStale,
   validatePropertyInputs,

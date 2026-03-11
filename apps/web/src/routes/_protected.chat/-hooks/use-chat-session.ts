@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import { useChat, type Chat } from "@ai-sdk/react";
-import { isToolUIPart, type UIMessage } from "ai";
+
+import { useChat } from "@ai-sdk/react";
+import type { Chat } from "@ai-sdk/react";
+import { isToolUIPart } from "ai";
+import type { UIMessage } from "ai";
 
 import { EntityLink } from "@/components/chat/entity-link";
 import type { ChatActor } from "@/lib/api";

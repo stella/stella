@@ -93,7 +93,7 @@ const deleteNestedKey = (obj: NestedMessages, keyPath: string): void => {
     current = next;
   }
 
-  delete current[leaf];
+  Reflect.deleteProperty(current, leaf);
 
   // Clean up empty parent objects bottom-up
   for (let i = parents.length - 1; i >= 0; i--) {
@@ -103,7 +103,7 @@ const deleteNestedKey = (obj: NestedMessages, keyPath: string): void => {
     }
     const nested = entry.obj[entry.key];
     if (typeof nested === "object" && Object.keys(nested).length === 0) {
-      delete entry.obj[entry.key];
+      Reflect.deleteProperty(entry.obj, entry.key);
     }
   }
 };
@@ -123,7 +123,7 @@ export const isSorted = (obj: NestedMessages): boolean => {
 export const sortKeys = (obj: NestedMessages): NestedMessages => {
   const sorted: NestedMessages = {};
 
-  for (const key of Object.keys(obj).sort()) {
+  for (const key of Object.keys(obj).toSorted()) {
     const value = obj[key];
     sorted[key] = typeof value === "string" ? value : sortKeys(value);
   }
@@ -203,16 +203,16 @@ if (import.meta.main) {
   }
 
   const glob = new Bun.Glob("*.json");
-  const langFiles = Array.from(glob.scanSync(langsDir))
+  const langFiles = [...glob.scanSync(langsDir)]
     .filter((f) => f !== "en.json")
-    .sort();
+    .toSorted();
 
   for (const file of langFiles) {
     const messages = await readLang(file);
     const langKeys = new Set(flattenKeys(messages));
 
-    const missing = Array.from(enKeys).filter((k) => !langKeys.has(k));
-    const extra = Array.from(langKeys).filter((k) => !enKeys.has(k));
+    const missing = [...enKeys].filter((k) => !langKeys.has(k));
+    const extra = [...langKeys].filter((k) => !enKeys.has(k));
     const unsorted = !isSorted(messages);
 
     if (missing.length === 0 && extra.length === 0 && !unsorted) {

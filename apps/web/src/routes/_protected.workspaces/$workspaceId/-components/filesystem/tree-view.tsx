@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -44,14 +45,14 @@ import { cn } from "@stella/ui/lib/utils";
 import {
   renderDragPreview,
   renderMultiDragPreview,
-  type DragPreviewData,
 } from "@/components/drag-preview";
+import type { DragPreviewData } from "@/components/drag-preview";
 import { HOTKEYS } from "@/lib/hotkeys";
-import {
-  isFileDisplayable,
-  type WorkspaceEntity,
-  type WorkspaceProperty,
-  type WorkspaceView,
+import { isFileDisplayable } from "@/lib/types";
+import type {
+  WorkspaceEntity,
+  WorkspaceProperty,
+  WorkspaceView,
 } from "@/lib/types";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -81,8 +82,8 @@ import {
   getFieldValue,
   getFirstFile,
   getInternalPropertyId,
-  type InternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const INDENT_PER_LEVEL = 20;
 
@@ -109,10 +110,9 @@ const resolveExtraColumns = (
   properties: WorkspaceProperty[],
   metadataLabels: Record<string, string>,
 ): ExtraColumn[] => {
-  const ids = [
-    ...Array.from(METADATA_IDS),
-    ...properties.map((p) => p.id),
-  ].filter((id) => !hiddenProperties.includes(id));
+  const ids = [...[...METADATA_IDS], ...properties.map((p) => p.id)].filter(
+    (id) => !hiddenProperties.includes(id),
+  );
 
   const cols: ExtraColumn[] = [];
 
@@ -316,7 +316,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }, [currentFolderId, data]);
 
   const navigateToFolder = useCallback(
-    async (folderId: string | undefined) => {
+    async (folderId?: string) => {
       await navigate({
         from: "/workspaces/$workspaceId/$viewId",
         search: (prev) => ({ ...prev, folder: folderId }),
@@ -418,7 +418,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           name: kind === "folder" ? t("workspaces.newFolder") : undefined,
         },
         {
-          onSuccess: (data) => {
+          onSuccess: (result) => {
             toastManager.add({
               title:
                 kind === "folder"
@@ -426,9 +426,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                   : t("success.documentCreated"),
               type: "success",
             });
-            if (kind === "folder" && data?.entityId) {
-              setEditingEntityId(data.entityId);
-              setExpandedIds((prev) => new Set([...prev, data.entityId]));
+            if (kind === "folder" && result?.entityId) {
+              setEditingEntityId(result.entityId);
+              setExpandedIds((prev) => new Set([...prev, result.entityId]));
             }
           },
           onError: () => {
@@ -516,9 +516,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu + click-to-deselect on background
-    // biome-ignore lint/a11y/noStaticElementInteractions: context menu + click-to-deselect on background
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape handled via useHotkey
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events
     <div
       className="h-full flex-1 overflow-auto p-2"
       onClick={(e) => {
@@ -537,8 +537,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <BreadcrumbList>
               <BreadcrumbItem>
                 <button
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => navigateToFolder(undefined)}
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                  // eslint-disable-next-line typescript/no-misused-promises
+                  onClick={() => navigateToFolder()}
                   type="button"
                 >
                   <FolderIcon className="size-3.5" />
@@ -572,7 +573,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                       ) : isLast ? (
                         <button
                           className="text-xs font-medium"
-                          onClick={() => navigateToFolder(undefined)}
+                          // eslint-disable-next-line typescript/no-misused-promises
+                          onClick={() => navigateToFolder()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setBreadcrumbEditValue(crumb.name);
@@ -584,7 +586,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         </button>
                       ) : (
                         <button
-                          className="text-xs text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground hover:text-foreground text-xs"
+                          // eslint-disable-next-line typescript/no-misused-promises
                           onClick={() => navigateToFolder(crumb.id)}
                           type="button"
                         >
@@ -600,7 +603,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         </div>
       )}
       <div
-        className="grid items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium text-muted-foreground"
+        className="text-muted-foreground grid items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
         style={{ gridTemplateColumns: gridTemplate }}
       >
         <span>{t("common.name")}</span>
@@ -613,7 +616,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs text-muted-foreground transition-colors",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs transition-colors",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -638,6 +641,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             gridTemplate={gridTemplate}
             key={node.entityId}
             node={node}
+            // eslint-disable-next-line typescript/no-misused-promises
             onNavigateToFolder={navigateToFolder}
             onRename={(entityId, newName) => {
               renameEntity.mutate({
@@ -967,14 +971,14 @@ const FilesystemRow = ({
       )}
       {isFolder ? (
         expanded ? (
-          <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+          <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
         ) : (
-          <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+          <FolderIcon className="text-muted-foreground size-4 shrink-0" />
         )
       ) : file?.mimeType ? (
         <DocumentIcon className="size-4 shrink-0" mimeType={file.mimeType} />
       ) : (
-        <FileIcon className="size-4 shrink-0 text-muted-foreground" />
+        <FileIcon className="text-muted-foreground size-4 shrink-0" />
       )}
       {isEditing ? (
         <InlineEdit
@@ -984,7 +988,7 @@ const FilesystemRow = ({
           onCommit={commitRename}
           suffix={
             ext ? (
-              <span className="text-sm text-muted-foreground">{ext}</span>
+              <span className="text-muted-foreground text-sm">{ext}</span>
             ) : undefined
           }
           value={editValue}
@@ -997,7 +1001,7 @@ const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="min-w-0 overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap text-muted-foreground"
+      className="text-muted-foreground min-w-0 overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1005,8 +1009,8 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "grid w-full items-center gap-x-4 rounded px-2 py-1 text-start text-sm hover:bg-muted",
-    isDropTarget && "bg-accent ring-2 ring-primary",
+    "hover:bg-muted grid w-full items-center gap-x-4 rounded px-2 py-1 text-start text-sm",
+    isDropTarget && "bg-accent ring-primary ring-2",
     isSelected && "bg-accent",
   );
 
@@ -1092,8 +1096,8 @@ const FilesystemRow = ({
 
   return (
     <>
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on row */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: context menu on row */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         className="group/row relative"
         data-entity-row
@@ -1143,7 +1147,7 @@ const FilesystemRow = ({
         <div className="relative">
           {/* Tree guide line — aligned under parent chevron */}
           <div
-            className="absolute top-0 bottom-0 w-px bg-muted-foreground/20"
+            className="bg-muted-foreground/20 absolute top-0 bottom-0 w-px"
             style={{
               left: `${8 + depth * INDENT_PER_LEVEL + 7}px`,
             }}
@@ -1217,7 +1221,7 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value);
     return (
-      <span className="truncate text-xs text-muted-foreground">
+      <span className="text-muted-foreground truncate text-xs">
         {formatted || "-"}
       </span>
     );
@@ -1226,7 +1230,7 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   const value = getFieldValue(field);
 
   return (
-    <span className="truncate text-xs text-muted-foreground">
+    <span className="text-muted-foreground truncate text-xs">
       {value || "-"}
     </span>
   );

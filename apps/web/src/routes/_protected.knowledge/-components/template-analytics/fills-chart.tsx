@@ -43,10 +43,10 @@ export const FillsChart = ({
   }));
 
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="bg-card rounded-lg border p-4">
       <h3 className="mb-4 text-sm font-medium">{t("fillsByPeriod")}</h3>
       {chartData.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="text-muted-foreground py-8 text-center text-sm">
           {t("noData")}
         </p>
       ) : (

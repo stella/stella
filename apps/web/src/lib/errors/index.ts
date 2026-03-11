@@ -1,6 +1,7 @@
 import { TaggedError } from "better-result";
 
-import { authClient, type AuthErrorCode } from "@/lib/auth";
+import { authClient } from "@/lib/auth";
+import type { AuthErrorCode } from "@/lib/auth";
 
 export class APIError extends TaggedError("ApiError")<{
   status: number;
@@ -62,15 +63,15 @@ export const userErrorMessage = (
 };
 
 export class AuthClientError extends TaggedError("AuthClientError")<{
-  code?: AuthErrorCode | undefined | undefined;
+  code?: AuthErrorCode | undefined;
   message: string;
   status: number;
   statusText: string;
 }>() {}
 
 type ToAuthClientErrorProps = {
-  code?: string | undefined | undefined;
-  message?: string | undefined | undefined;
+  code?: string | undefined;
+  message?: string | undefined;
   status: number;
   statusText: string;
 };

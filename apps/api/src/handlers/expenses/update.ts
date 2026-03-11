@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { expenseCategorySchema } from "@/api/db/billing-validators";

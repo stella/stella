@@ -30,8 +30,8 @@ export const InlineEdit = ({
       <input
         autoFocus
         className={cn(
-          "h-6 rounded border bg-background px-1.5 text-sm",
-          "outline-none focus:ring-1 focus:ring-primary",
+          "bg-background h-6 rounded border px-1.5 text-sm",
+          "focus:ring-primary outline-none focus:ring-1",
           inputClassName,
         )}
         onBlur={onCommit}

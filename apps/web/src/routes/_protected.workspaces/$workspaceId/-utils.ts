@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
+
 import type { Column } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/table-core";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import type {
@@ -19,9 +21,8 @@ const internalColMap: Record<InternalColId, null> = {
 
 export const getInternalColId = (col: InternalColId): InternalColId => col;
 
-export const isInternalColId = (id: string): id is InternalColId => {
-  return Object.keys(internalColMap).includes(id);
-};
+export const isInternalColId = (id: string): id is InternalColId =>
+  Object.keys(internalColMap).includes(id);
 
 // -- Internal property IDs (metadata columns stored in view config) --
 
@@ -125,8 +126,8 @@ export const validateFieldForComputation = (
 };
 
 declare module "@tanstack/table-core" {
-  // biome-ignore lint/style/useConsistentTypeDefinitions: Tanstack Table
-  interface ColumnMeta<TData, TValue> {
+  // oxlint-disable-next-line consistent-type-definitions
+  interface ColumnMeta<TData extends RowData, TValue> {
     /** Render cell text in muted-foreground. */
     muted?: boolean;
   }
@@ -347,7 +348,7 @@ export const applySorts = (
     return entities;
   }
 
-  return [...entities].sort((a, b) => {
+  return [...entities].toSorted((a, b) => {
     for (const sort of sorts) {
       const fieldA = a.fields[sort.propertyId];
       const fieldB = b.fields[sort.propertyId];
@@ -531,7 +532,7 @@ export const resolveKanbanGroupBy = (
 
   const latest = eligible
     .filter((p) => p.tool.type === "manual-input")
-    .sort(
+    .toSorted(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     )

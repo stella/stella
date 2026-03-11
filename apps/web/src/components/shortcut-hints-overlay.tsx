@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useHotkey, useKeyHold, type Hotkey } from "@tanstack/react-hotkeys";
+
+import { useHotkey, useKeyHold } from "@tanstack/react-hotkeys";
+import type { Hotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -13,9 +15,8 @@ import {
   MOD_KEY,
   SHORTCUT_HINT_GROUPS,
   triggerHotkey,
-  type ShortcutContext,
-  type ShortcutHint,
 } from "@/lib/hotkeys";
+import type { ShortcutContext, ShortcutHint } from "@/lib/hotkeys";
 
 const HOLD_DELAY_MS = 500;
 const HIGHLIGHT_DURATION_MS = 150;
@@ -89,7 +90,7 @@ export function ShortcutHintsOverlay() {
         <div className="flex flex-col gap-3">
           {SHORTCUT_HINT_GROUPS.map((group) => (
             <div key={group.categoryKey}>
-              <h3 className="mb-1 px-2 text-xs font-medium text-muted-foreground">
+              <h3 className="text-muted-foreground mb-1 px-2 text-xs font-medium">
                 {t(group.categoryKey)}
               </h3>
               <div className="flex flex-col gap-0.5">
@@ -183,7 +184,7 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
             ? "border-border bg-background text-foreground"
             : isActive
               ? "border-border bg-muted text-muted-foreground"
-              : "border-transparent bg-muted/40 text-muted-foreground/40",
+              : "bg-muted/40 text-muted-foreground/40 border-transparent",
         )}
       >
         {formatHintKey(hint.hotkey)}

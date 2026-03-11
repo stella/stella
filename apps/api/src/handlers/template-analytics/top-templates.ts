@@ -4,6 +4,7 @@ import type { ScopedDb } from "@/api/db";
 import { templateFills, templates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+
 import type { DateRangeQuery } from "../analytics/date-range-schema";
 
 type TopTemplatesHandlerProps = {

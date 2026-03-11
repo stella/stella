@@ -16,9 +16,8 @@ export const useCreateView = (workspaceId: string) => {
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async (body: CreateViewVars) => {
-      return await actor.handle?.createView(body);
-    },
+    mutationFn: async (body: CreateViewVars) =>
+      await actor.handle?.createView(body),
     onError: (error) => {
       captureError(posthog, error);
     },
@@ -36,9 +35,8 @@ export const useUpdateView = (workspaceId: string) => {
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async (body: UpdateViewVars) => {
-      return await actor.handle?.updateView(body);
-    },
+    mutationFn: async (body: UpdateViewVars) =>
+      await actor.handle?.updateView(body),
     onError: (error) => {
       captureError(posthog, error);
     },
@@ -55,9 +53,8 @@ export const useConvertView = (workspaceId: string) => {
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ viewId, targetType }: ConvertViewVars) => {
-      return await actor.handle?.convertView({ viewId, targetType });
-    },
+    mutationFn: async ({ viewId, targetType }: ConvertViewVars) =>
+      await actor.handle?.convertView({ viewId, targetType }),
     onError: (error) => {
       captureError(posthog, error);
     },
@@ -73,9 +70,8 @@ export const useReorderViews = (workspaceId: string) => {
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ viewIds }: ReorderViewsVars) => {
-      return await actor.handle?.reorderViews({ viewIds });
-    },
+    mutationFn: async ({ viewIds }: ReorderViewsVars) =>
+      await actor.handle?.reorderViews({ viewIds }),
     onError: (error) => {
       captureError(posthog, error);
     },
@@ -91,9 +87,8 @@ export const useDeleteView = (workspaceId: string) => {
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
-    mutationFn: async ({ viewId }: DeleteViewVars) => {
-      return await actor.handle?.deleteView({ viewId });
-    },
+    mutationFn: async ({ viewId }: DeleteViewVars) =>
+      await actor.handle?.deleteView({ viewId }),
     onError: (error) => {
       captureError(posthog, error);
     },

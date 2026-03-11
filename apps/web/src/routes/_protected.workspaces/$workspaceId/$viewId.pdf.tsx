@@ -1,4 +1,5 @@
 import { Activity, useEffect, useRef } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -51,8 +52,9 @@ export const Route = createFileRoute(
   search: {
     middlewares: [retainSearchParams(true)],
   },
+  // eslint-disable-next-line typescript/no-misused-promises
   onLeave: () => {
-    const container = document.getElementById(PDF_CONTAINER_ID);
+    const container = document.querySelector(`#${PDF_CONTAINER_ID}`);
 
     // for whatever reason chrome keeps detached nodes in the DOM
     // after navigation — manually remove to prevent canvas leaks
@@ -91,7 +93,7 @@ function RouteComponent() {
 
   return (
     <div
-      className="relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-x-hidden overflow-y-auto border-t bg-secondary"
+      className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-x-hidden overflow-y-auto border-t"
       ref={scrollContainerRef}
     >
       <Group orientation="horizontal">
@@ -102,12 +104,12 @@ function RouteComponent() {
         </Panel>
 
         <Activity mode={entitySearch.visible && entity ? "visible" : "hidden"}>
-          <Separator className="group flex w-1 shrink-0 cursor-col-resize items-center justify-center data-[separator=active]:bg-border data-[separator=hover]:bg-border">
-            <div className="h-8 w-0.5 rounded-full bg-border group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
+          <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
+            <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
           </Separator>
           <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
             {entity && (
-              <div className="h-full overflow-y-auto bg-background">
+              <div className="bg-background h-full overflow-y-auto">
                 <EntityFileInfo
                   entityId={entity.entityId}
                   fields={entity.fields}
@@ -146,7 +148,7 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
 
   if (visibleFields.length === 0) {
     return (
-      <div className="mt-3 px-3 text-center text-sm font-medium text-muted-foreground">
+      <div className="text-muted-foreground mt-3 px-3 text-center text-sm font-medium">
         {t("workspaces.noFieldsToView")}
       </div>
     );
@@ -155,6 +157,7 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   return (
     <Accordion
       key={entity.entityId}
+      // eslint-disable-next-line typescript/no-misused-promises
       onValueChange={async (nextValue) => {
         const nextId = nextValue.at(0);
 

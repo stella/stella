@@ -271,7 +271,7 @@ const analyzeHeadersAndFooters = async (
   // extractText (which assigns globally sequential indices).
   const entries = Object.keys(zip.files)
     .filter((path) => HEADER_FOOTER_RE.test(path))
-    .sort();
+    .toSorted();
 
   // Track running paragraph counts per source so error indices
   // are relative to the combined section, not individual files.
@@ -359,7 +359,7 @@ export const discoverTemplate = async (
 
   // Build DiscoveredPlaceholder[] (backward-compat)
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, count]) => ({ name, count }));
 
   // Build DiscoveredField[]
@@ -378,7 +378,7 @@ export const discoverTemplate = async (
     };
 
     if (info.kind === "array" && info.itemPaths.size > 0) {
-      field.itemFields = [...info.itemPaths].sort().map((p) => ({
+      field.itemFields = [...info.itemPaths].toSorted().map((p) => ({
         path: p,
         kind: "string" as const,
         count: placeholderCounts.get(`${path}.${p}`) ?? 1,

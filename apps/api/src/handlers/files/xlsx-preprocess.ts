@@ -64,10 +64,7 @@ export const patchSheetXml = (xml: string): string => {
       // or just after the opening <worksheet> tag.
       const anchor = out.search(REGEX_SHEET_LANDMARK);
       if (anchor !== -1) {
-        out =
-          out.slice(0, anchor) +
-          '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
-          out.slice(anchor);
+        out = `${out.slice(0, anchor)}<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>${out.slice(anchor)}`;
       } else {
         // As a last resort, just insert after <worksheet> open tag
         out = out.replace(

@@ -1,4 +1,4 @@
-/* biome-ignore-all lint/suspicious/noConsole: CLI script */
+/* eslint-disable no-console */
 /**
  * Quick script to generate a sample DOCX from Markdown.
  * Run: bun apps/api/src/handlers/docx/generate-sample.ts
@@ -59,7 +59,7 @@ This Agreement constitutes the entire agreement between the parties with respect
 No amendment or modification of this Agreement shall be valid unless made in writing and signed by both parties.
 `;
 
-const TEMPLATE_PATH = new URL("./fixtures/test-template.docx", import.meta.url)
+const TEMPLATE_PATH = new URL("fixtures/test-template.docx", import.meta.url)
   .pathname;
 
 const run = async () => {
@@ -70,7 +70,7 @@ const run = async () => {
   await Bun.write(outputPath, buffer);
 };
 
-run().catch((err) => {
-  console.error(err);
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

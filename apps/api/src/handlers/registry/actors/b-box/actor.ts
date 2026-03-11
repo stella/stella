@@ -11,10 +11,8 @@ import type { Registry } from "@/api/handlers/registry";
 import { generateBBoxes } from "@/api/handlers/registry/actors/b-box/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-shared";
-import {
-  generateBBoxesSchema,
-  type GenerateBBoxesSchema,
-} from "@/api/handlers/registry/actors/b-box/schema";
+import { generateBBoxesSchema } from "@/api/handlers/registry/actors/b-box/schema";
+import type { GenerateBBoxesSchema } from "@/api/handlers/registry/actors/b-box/schema";
 import {
   broadcastEvent,
   validateActorInput,

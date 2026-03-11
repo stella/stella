@@ -10,9 +10,8 @@ const PAGE_HIGHLIGHT_OPACITY = 0.2;
 // % of the PDF width in px
 const HIGHLIGHT_PADDING = PDF_WIDTH * 0.01;
 
-const getBoundingBoxKey = (bBox: BoundingBox) => {
-  return `${bBox.pageNumber}-${bBox.xMin}-${bBox.yMin}-${bBox.xMax}-${bBox.yMax}`;
-};
+const getBoundingBoxKey = (bBox: BoundingBox) =>
+  `${bBox.pageNumber}-${bBox.xMin}-${bBox.yMin}-${bBox.xMax}-${bBox.yMax}`;
 
 type PageCitationProps = {
   fileId: string;
@@ -45,7 +44,9 @@ export const PageCitation = ({
   const overlayWidth = originalWidth * scale;
   const overlayHeight = originalHeight * scale;
 
-  const topBoundingBox = boundingBoxes?.sort((a, b) => a.yMin - b.yMin).at(0);
+  const topBoundingBox = boundingBoxes
+    ?.toSorted((a, b) => a.yMin - b.yMin)
+    .at(0);
   const topBoundingBoxKey = topBoundingBox
     ? getBoundingBoxKey(topBoundingBox)
     : null;
@@ -66,7 +67,7 @@ export const PageCitation = ({
         className="pointer-events-none absolute h-0 w-0"
         focusable="false"
       >
-        <title>{"Page highlight filter"}</title>
+        <title>Page highlight filter</title>
         <filter colorInterpolationFilters="sRGB" id={PAGE_HIGHLIGHT_FILTER_ID}>
           <feComponentTransfer in="SourceGraphic">
             <feFuncA slope={PAGE_HIGHLIGHT_OPACITY} type="linear" />

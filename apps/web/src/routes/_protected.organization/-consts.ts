@@ -3,7 +3,8 @@ import type { Role } from "@/lib/auth";
 export const managementRoles: Role[] = ["owner", "admin"];
 
 export const getRoles = (
-  // biome-ignore lint/suspicious/noExplicitAny: accepts both hook and module translator
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- required for compatibility
   t: (...args: any[]) => string,
 ): { label: string; value: Role }[] => [
   { label: t("organization.roles.owner"), value: "owner" },

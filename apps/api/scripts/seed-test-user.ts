@@ -19,11 +19,10 @@
  */
 
 import "dotenv/config";
-
+import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { eq } from "drizzle-orm";
 
 import { db } from "@/api/db";
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -388,8 +387,8 @@ async function seed() {
 }
 
 if (import.meta.main) {
-  seed().catch((err) => {
-    console.error("Seed failed:", err);
+  seed().catch((error) => {
+    console.error("Seed failed:", error);
     process.exit(1);
   });
 }

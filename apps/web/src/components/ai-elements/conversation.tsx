@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, type ComponentProps } from "react";
+import { useCallback } from "react";
+import type { ComponentProps } from "react";
+
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
@@ -60,7 +62,7 @@ export const ConversationEmptyState = ({
         <div className="space-y-1">
           <h3 className="text-sm font-medium">{title}</h3>
           {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-muted-foreground text-sm">{description}</p>
           )}
         </div>
       </>
@@ -78,9 +80,10 @@ export const ConversationScrollButton = ({
 
   return (
     !isAtBottom && (
-      <div className="absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full bg-background">
+      <div className="bg-background absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full">
         <Button
           className={cn("rounded-full", className)}
+          // eslint-disable-next-line typescript/no-misused-promises
           onClick={() => scrollToBottom()}
           size="icon"
           type="button"
@@ -146,7 +149,7 @@ export const ConversationDownload = ({
   return (
     <Button
       className={cn(
-        "absolute end-4 top-4 rounded-full dark:bg-background dark:hover:bg-muted",
+        "dark:bg-background dark:hover:bg-muted absolute end-4 top-4 rounded-full",
         className,
       )}
       onClick={handleDownload}

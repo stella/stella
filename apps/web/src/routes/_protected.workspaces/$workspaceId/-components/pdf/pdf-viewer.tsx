@@ -1,4 +1,6 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
+
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -264,7 +266,7 @@ export default PdfViewer;
 
 const PdfBanner = ({ label }: { label: string }) => (
   <div
-    className="mx-auto flex items-center justify-center rounded-md bg-muted px-4 py-2 text-center text-sm text-muted-foreground"
+    className="bg-muted text-muted-foreground mx-auto flex items-center justify-center rounded-md px-4 py-2 text-center text-sm"
     style={{ maxWidth: PDF_WIDTH }}
   >
     {label}
@@ -286,12 +288,11 @@ const PdfPageWithBanner = ({
   </>
 );
 
-const PdfViewerSkeleton = ({ className }: { className: string }) => {
-  return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+const PdfViewerSkeleton = ({ className }: { className: string }) =>
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
     <Skeleton
       className={cn("mx-auto min-h-screen", className)}
       key={i}
       style={{ width: PDF_WIDTH }}
     />
   ));
-};

@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { discoverPlaceholders } from "./discover-placeholders";
 
 const SPA_FIXTURE = new URL(
-  "./fixtures/spa-template-with-placeholders.docx",
+  "fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 

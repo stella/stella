@@ -2,12 +2,8 @@ import type * as v from "valibot";
 
 import { getActorRegion } from "../consts";
 import type { CommonOptions, OptionsType } from "../types";
-import {
-  actorKeyFactory,
-  authedActorParamsSchema,
-  type AuthedActorOptions,
-  type AuthedActorReturn,
-} from "./common";
+import { actorKeyFactory, authedActorParamsSchema } from "./common";
+import type { AuthedActorOptions, AuthedActorReturn } from "./common";
 
 export type SyncActorEvent = {
   name: "invalidate-query";

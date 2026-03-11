@@ -76,6 +76,5 @@ export const approximateFraction = (x: number): [number, number] => {
   return result;
 };
 
-export const floorToMultiple = (x: number, divider: number) => {
-  return x - (x % divider);
-};
+export const floorToMultiple = (x: number, divider: number) =>
+  x - (x % divider);

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { getToolName } from "ai";
 import {
@@ -57,7 +58,7 @@ const getApprovalId = (part: ToolPart): string | null =>
   part.approval &&
   typeof part.approval === "object" &&
   "id" in part.approval
-    ? (part.approval.id as string)
+    ? part.approval.id
     : null;
 
 type ToolPart = Parameters<typeof getToolName>[0];
@@ -130,7 +131,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
         : String(newVal);
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border/50 px-3 py-2">
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
       {/* Property change */}
       <div className="flex items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">{propName}:</span>
@@ -139,7 +140,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
             {oldVal != null && (
               <>
                 <SelectBadge property={property} value={oldVal} />
-                <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground" />
+                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
               </>
             )}
             <SelectBadge property={property} value={displayNew} />
@@ -161,7 +162,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
 
       {/* Entity name with icon */}
       {entityName && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
           <DocumentIcon
             className="size-3.5 shrink-0"
             mimeType={
@@ -186,7 +187,7 @@ type CreateSummaryProps = {
 const CreateSummary = ({ input }: CreateSummaryProps) => {
   const name = `${input.name}.docx`;
   return (
-    <div className="flex items-center gap-1.5 border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
+    <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
       <DocumentIcon className="size-3.5 shrink-0" mimeType={DOCX_MIME} />
       <span className="truncate">{name}</span>
     </div>
@@ -262,21 +263,21 @@ export const ToolApprovalCard = ({
         "my-1 rounded-lg border text-sm",
         isApprovalRequested && !isProcessing
           ? "border-border bg-muted/30"
-          : "border-transparent bg-muted/40",
+          : "bg-muted/40 border-transparent",
       )}
     >
       {/* Header: icon + label + status */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <PencilIcon className="size-4 shrink-0 text-muted-foreground" />
+        <PencilIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon className="ms-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
         )}
         {isApproved && (
           <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}
         {isDenied && (
-          <XIcon className="ms-auto size-3.5 shrink-0 text-destructive" />
+          <XIcon className="text-destructive ms-auto size-3.5 shrink-0" />
         )}
       </div>
 
@@ -288,10 +289,10 @@ export const ToolApprovalCard = ({
 
       {/* Actions */}
       {approvalId && !isProcessing && (
-        <div className="flex items-center gap-2 border-t border-border/50 px-3 py-2 text-xs">
+        <div className="border-border/50 flex items-center gap-2 border-t px-3 py-2 text-xs">
           <button
             autoFocus
-            className="rounded-md bg-foreground px-2.5 py-1 font-medium text-background transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="bg-foreground text-background focus-visible:ring-ring rounded-md px-2.5 py-1 font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
             onClick={() => {
               setResponded(true);
               onApprove(approvalId);
@@ -301,7 +302,7 @@ export const ToolApprovalCard = ({
             {t("chat.approval.allow")}
           </button>
           <button
-            className="rounded-md border px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground rounded-md border px-2.5 py-1 transition-colors"
             onClick={() => {
               setResponded(true);
               onDeny(approvalId);
@@ -311,7 +312,7 @@ export const ToolApprovalCard = ({
             {t("chat.approval.deny")}
           </button>
           <button
-            className="ms-auto text-muted-foreground underline-offset-2 hover:underline"
+            className="text-muted-foreground ms-auto underline-offset-2 hover:underline"
             onClick={() => {
               setResponded(true);
               onAlwaysAllow(name);

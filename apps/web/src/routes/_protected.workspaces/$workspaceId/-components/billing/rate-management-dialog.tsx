@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
@@ -158,7 +159,7 @@ const RateTablesView = ({
         <div className="flex flex-col gap-1.5">
           {tables.map((table) => (
             <div
-              className="group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50"
+              className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors"
               key={table.id}
             >
               <button
@@ -170,14 +171,14 @@ const RateTablesView = ({
                   <span className="truncate text-sm font-medium">
                     {table.name}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="text-muted-foreground shrink-0 text-xs">
                     {table.currency}
                   </span>
                   {table.isDefault && (
                     <StarIcon className="size-3 shrink-0 fill-amber-400 text-amber-400" />
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-muted-foreground text-xs">
                   {t("billing.rates.rateCount", {
                     count: table.entryCount,
                   })}
@@ -197,7 +198,7 @@ const RateTablesView = ({
                   </Button>
                 )}
                 <Button
-                  className="size-7 text-destructive"
+                  className="text-destructive size-7"
                   onClick={() => handleDelete(table.id)}
                   size="icon"
                   variant="ghost"
@@ -210,7 +211,7 @@ const RateTablesView = ({
         </div>
       ) : (
         !showForm && (
-          <div className="py-8 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-8 text-center text-sm">
             {t("billing.rates.noRateTables")}
           </div>
         )
@@ -254,6 +255,7 @@ const CreateRateTableForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >
@@ -333,7 +335,7 @@ const RateEntriesView = ({
   );
   const { data: org } = useSuspenseQuery(organizationOptions);
 
-  const table = tables?.find((t) => t.id === rateTableId);
+  const table = tables?.find((tbl) => tbl.id === rateTableId);
 
   const createEntry = useCreateRateEntry();
   const deleteEntry = useDeleteRateEntry();
@@ -372,7 +374,7 @@ const RateEntriesView = ({
           {table?.name ?? t("billing.rates.rateEntries")}
         </h3>
         {table && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {`(${table.currency})`}
           </span>
         )}
@@ -428,7 +430,7 @@ const RateEntriesView = ({
                     {t("billing.rates.perHour")}
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-muted-foreground text-xs">
                   {entry.effectiveFrom}
                   {entry.effectiveTo
                     ? ` — ${entry.effectiveTo}`
@@ -437,7 +439,7 @@ const RateEntriesView = ({
               </div>
 
               <Button
-                className="size-7 text-destructive opacity-0 transition-opacity group-hover:opacity-100"
+                className="text-destructive size-7 opacity-0 transition-opacity group-hover:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"
                 variant="ghost"
@@ -449,7 +451,7 @@ const RateEntriesView = ({
         </div>
       ) : (
         !showForm && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-6 text-center text-sm">
             {t("billing.rates.noRateEntries")}
           </div>
         )
@@ -515,6 +517,7 @@ const CreateRateEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >

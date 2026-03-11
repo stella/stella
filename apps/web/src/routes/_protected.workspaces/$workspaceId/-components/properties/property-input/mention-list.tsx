@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
+
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
@@ -61,7 +62,7 @@ export const MentionList = forwardRef<
       >
         <div className="flex min-w-32 flex-col gap-1">
           {items.length === 0 && (
-            <div className="flex items-center justify-center p-1 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex items-center justify-center p-1 text-center text-sm">
               {t("workspaces.properties.noPropertiesFound")}
             </div>
           )}
@@ -84,3 +85,5 @@ export const MentionList = forwardRef<
     </Popover>
   );
 });
+
+MentionList.displayName = "MentionList";

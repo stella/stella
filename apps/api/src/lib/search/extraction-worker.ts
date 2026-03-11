@@ -59,8 +59,8 @@ try {
     process.stdout.write(text);
   }
   process.exit(0);
-} catch (err) {
-  const message = err instanceof Error ? err.message : String(err);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`extraction-worker error: ${message}\n`);
   process.exit(1);
 }

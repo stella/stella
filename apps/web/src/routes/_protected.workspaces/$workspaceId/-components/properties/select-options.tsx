@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { Field } from "@base-ui/react/field";
 import { PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -36,7 +37,7 @@ export const SelectOptions = (props: SelectOptionsProps) => {
     .filter((option) =>
       option.value.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
     )
-    .sort((a, b) => a.value.localeCompare(b.value));
+    .toSorted((a, b) => a.value.localeCompare(b.value));
 
   const onAddOption = () => {
     const duplicates = matchingOptions.filter((o) => o.value === search);
@@ -85,25 +86,23 @@ const SearchOptions = ({
   setSearch,
   onAddOption,
   placeholder,
-}: SearchOptionsProps) => {
-  return (
-    <div className="flex items-center gap-x-1.5 rounded-md bg-muted px-1.5 py-1">
-      <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      <input
-        className="w-full text-sm placeholder:text-muted-foreground/72 focus-within:outline-none"
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            onAddOption();
-          }
-        }}
-        placeholder={placeholder}
-        type="text"
-        value={search}
-      />
-    </div>
-  );
-};
+}: SearchOptionsProps) => (
+  <div className="bg-muted flex items-center gap-x-1.5 rounded-md px-1.5 py-1">
+    <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
+    <input
+      className="placeholder:text-muted-foreground/72 w-full text-sm focus-within:outline-none"
+      onChange={(e) => setSearch(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          onAddOption();
+        }
+      }}
+      placeholder={placeholder}
+      type="text"
+      value={search}
+    />
+  </div>
+);
 
 type SelectOptionsValuesProps = SelectOptionsProps & {
   search: string;

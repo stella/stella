@@ -1,5 +1,6 @@
 import { and, eq, isNull, like } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";

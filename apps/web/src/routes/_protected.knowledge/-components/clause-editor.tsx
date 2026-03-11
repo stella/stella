@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from "react";
+
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -7,7 +8,8 @@ import Italic from "@tiptap/extension-italic";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
-import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import type { JSONContent } from "@tiptap/react";
 import {
   BoldIcon,
   Heading1Icon,
@@ -19,7 +21,6 @@ import {
 import { Button } from "@stella/ui/components/button";
 
 import "./clause-editor.css";
-
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
 
 // ── Conversion: ClauseBody → TipTap JSON ────────────
@@ -140,7 +141,7 @@ export const ClauseEditor = ({
   // Sync content when the dialog resets
   const contentKey = content.map((p) => p.text).join("\n");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-sync when external content changes (dialog open/close), not on every keystroke
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!editor) {
       return;
@@ -149,6 +150,7 @@ export const ClauseEditor = ({
     if (currentText !== contentKey) {
       editor.commands.setContent(clauseBodyToTipTap(content));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor and content are stable refs; only re-sync when contentKey changes
   }, [contentKey]);
 
   const toggleBold = useCallback(() => {
@@ -173,8 +175,8 @@ export const ClauseEditor = ({
   return (
     // Stop modifier key combos from propagating to global
     // hotkeys (e.g., Cmd+B toggles sidebar otherwise).
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: event isolation wrapper
-    // biome-ignore lint/a11y/noStaticElementInteractions: event isolation wrapper
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="clause-editor rounded-md border"
       onKeyDown={(e) => {
@@ -203,7 +205,7 @@ export const ClauseEditor = ({
         >
           <ItalicIcon className="size-3.5" />
         </Button>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="bg-border mx-1 h-4 w-px" />
         <Button
           className={
             editor.isActive("heading", { level: 1 }) ? "bg-muted" : undefined

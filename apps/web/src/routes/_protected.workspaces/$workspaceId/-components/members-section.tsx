@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   useQuery,
   useQueryClient,
@@ -51,7 +52,7 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">
+        <h3 className="text-muted-foreground text-sm font-medium">
           {t("workspaces.sections.members")}
         </h3>
         {canUpdate && <AddMemberDialog workspaceId={workspaceId} />}
@@ -69,7 +70,7 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t("workspaces.members.noMembersFound")}
         </p>
       )}
@@ -111,6 +112,7 @@ const MemberRow = ({
             title: t("success.memberRemoved"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspaceMembersKeys.all(workspaceId),
           });
@@ -127,13 +129,13 @@ const MemberRow = ({
 
   return (
     <li className="flex items-center gap-2 rounded-md border px-3 py-2">
-      <UserIcon className="size-4 text-muted-foreground" />
+      <UserIcon className="text-muted-foreground size-4" />
       <div className="flex flex-col">
         <span className="text-sm font-medium">
           {member.user?.name ?? member.userId}
         </span>
         {member.user?.email && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {member.user.email}
           </span>
         )}
@@ -216,6 +218,7 @@ const AddMemberDialog = ({ workspaceId }: AddMemberDialogProps) => {
             title: t("success.memberAdded"),
             type: "success",
           });
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspaceMembersKeys.all(workspaceId),
           });

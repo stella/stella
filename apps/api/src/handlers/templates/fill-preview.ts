@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db, type ScopedDb } from "@/api/db";
+import { db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -9,6 +10,7 @@ import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
+
 import { containsNull } from "./fill";
 
 export const fillPreviewBodySchema = t.Object({

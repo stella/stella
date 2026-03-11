@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -43,13 +44,13 @@ import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { roleOptions } from "@/routes/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
+import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
-import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { roleOptions } from "@/routes/-queries";
 
 const LazyTemplateAssistantPanel = lazy(() =>
   import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
@@ -282,7 +283,7 @@ const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
     : `var(${getMatterSwatch(workspaceId)})`;
   return (
     <span
-      className="ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground"
+      className="text-muted-foreground ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
       style={{
         backgroundColor: `color-mix(in srgb, ${swatch} 10%, transparent)`,
       }}
@@ -338,7 +339,7 @@ function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
 
   return (
     <div
-      className="hidden text-sidebar-foreground md:block"
+      className="text-sidebar-foreground hidden md:block"
       data-side="right"
       data-state={open ? "expanded" : "collapsed"}
     >
@@ -365,17 +366,17 @@ function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
       >
         {/* Resize handle */}
         <div
-          className="absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l hover:bg-border active:bg-border"
+          className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         />
-        <div className="flex h-full w-full flex-col bg-sidebar">
+        <div className="bg-sidebar flex h-full w-full flex-col">
           {assistantActive ? (
             <>
-              <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
+              <div className="bg-background flex h-12 shrink-0 items-center gap-2 border-b px-3">
                 <Button
-                  className="size-7 text-muted-foreground"
+                  className="text-muted-foreground size-7"
                   onClick={onToggle}
                   size="icon"
                   variant="ghost"
@@ -392,9 +393,9 @@ function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
             </>
           ) : (
             <>
-              <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3">
+              <div className="bg-background flex h-12 shrink-0 items-center gap-2 border-b px-3">
                 <Button
-                  className="size-7 text-muted-foreground"
+                  className="text-muted-foreground size-7"
                   onClick={onToggle}
                   size="icon"
                   variant="ghost"

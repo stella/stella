@@ -1,6 +1,0 @@
-**/*.gen.*
-**/.cache
-.agents
-apps/api/scripts/seed-dev.ts
-bun.lock
-sbom.cdx.json

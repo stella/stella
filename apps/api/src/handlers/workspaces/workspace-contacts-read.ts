@@ -7,7 +7,7 @@ type ReadWorkspaceContactsHandlerProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-export const readWorkspaceContactsHandler = async ({
+export const readWorkspaceContactsHandler = ({
   scopedDb,
   workspaceId,
 }: ReadWorkspaceContactsHandlerProps) =>

@@ -1,4 +1,5 @@
 import { useRef } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   FileTextIcon,
@@ -139,7 +140,7 @@ export const AddEntityMenu = ({
           className="sr-only"
           multiple
           onChange={(e) => {
-            const files = Array.from(e.currentTarget.files ?? []);
+            const files = [...(e.currentTarget.files ?? [])];
             if (files.length > 0) {
               createFileEntities(files);
             }

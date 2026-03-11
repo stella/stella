@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { ScopedDb } from "@/api/db";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+
 import { defineTool } from "./chat-tools";
 
 const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";

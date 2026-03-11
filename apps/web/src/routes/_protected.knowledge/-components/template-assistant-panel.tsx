@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+
 import {
   BracesIcon,
   GitBranchIcon,
@@ -64,7 +65,7 @@ export const TemplateAssistantPanel = () => {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <SparklesIcon className="size-4 text-muted-foreground" />
+        <SparklesIcon className="text-muted-foreground size-4" />
         <span className="text-sm font-medium">
           {t("rightPanel.templateAssistant")}
         </span>
@@ -73,7 +74,7 @@ export const TemplateAssistantPanel = () => {
       {/* Template name */}
       {templateName && (
         <div className="border-b px-3 py-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate text-xs">
             {templateName}
           </p>
         </div>
@@ -82,10 +83,10 @@ export const TemplateAssistantPanel = () => {
       {/* Selected text */}
       {selectedText && (
         <div className="border-b px-3 py-2.5">
-          <p className="mb-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+          <p className="text-muted-foreground mb-1 text-[10px] font-medium tracking-wider uppercase">
             {t("rightPanel.selectedText")}
           </p>
-          <p className="rounded bg-muted/50 px-2 py-1.5 text-xs">
+          <p className="bg-muted/50 rounded px-2 py-1.5 text-xs">
             {selectedText}
           </p>
         </div>
@@ -94,7 +95,7 @@ export const TemplateAssistantPanel = () => {
       {/* Suggestion buttons */}
       {selectedText && (
         <div className="border-b p-3">
-          <p className="mb-2 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mb-2 text-xs">
             {t("rightPanel.whatToDo")}
           </p>
           <div className="flex flex-col gap-1.5">
@@ -134,7 +135,7 @@ export const TemplateAssistantPanel = () => {
         {messages.length === 0 && !selectedText && (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
             <SparklesIcon className="size-8 opacity-20" />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {t("rightPanel.comingSoon")}
             </p>
           </div>
@@ -143,7 +144,7 @@ export const TemplateAssistantPanel = () => {
         {messages.map((msg) => (
           <div
             className={`mb-2 rounded-lg px-3 py-2 text-xs ${
-              msg.role === "user" ? "ms-4 bg-muted" : "me-4 bg-primary/5"
+              msg.role === "user" ? "bg-muted ms-4" : "bg-primary/5 me-4"
             }`}
             key={msg.id}
           >
@@ -159,7 +160,7 @@ export const TemplateAssistantPanel = () => {
           disabled
           placeholder={t("rightPanel.comingSoon")}
         />
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-muted-foreground text-[10px]">
           {t("rightPanel.mockDisclaimer")}
         </p>
       </div>

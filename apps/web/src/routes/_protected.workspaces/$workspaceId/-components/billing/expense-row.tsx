@@ -58,11 +58,11 @@ export const ExpenseRow = ({
   const canDeleteExpense = usePermissions({ expense: ["delete"] });
 
   return (
-    <div className="group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50">
+    <div className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{matterName}</span>
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+          <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
             {
               {
                 filing_fee: t("billing.expenses.categories.filing_fee"),
@@ -75,7 +75,7 @@ export const ExpenseRow = ({
             }
           </span>
           {!expense.billable && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+            <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
               {t("billing.nonBillable")}
             </span>
           )}
@@ -96,7 +96,7 @@ export const ExpenseRow = ({
           </span>
         </div>
         {expense.description && (
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate text-xs">
             {expense.description}
           </p>
         )}
@@ -119,7 +119,7 @@ export const ExpenseRow = ({
         )}
         {expense.status === "draft" && canDeleteExpense && (
           <Button
-            className="size-7 text-destructive"
+            className="text-destructive size-7"
             onClick={() => onDelete(expense.id)}
             size="icon"
             variant="ghost"

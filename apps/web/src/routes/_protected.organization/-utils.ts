@@ -5,11 +5,10 @@ import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 export const createSlug = (value: string) =>
-  value
+  `${value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .concat("-", String(Math.floor(Date.now() / 1000)));
+    .replace(/^-|-$/g, "")}-${String(Math.floor(Date.now() / 1000))}`;
 
 export const getOrganizationSchema = () => {
   const t = getTranslator();

@@ -11,7 +11,8 @@ import {
   Text,
 } from "@react-email/components";
 
-import { getTranslator, type SupportedLang } from "../i18n/translate";
+import { getTranslator } from "../i18n/translate";
+import type { SupportedLang } from "../i18n/translate";
 
 type Props = {
   inviteLink: string;

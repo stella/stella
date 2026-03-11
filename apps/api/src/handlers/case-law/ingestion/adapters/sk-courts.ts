@@ -231,7 +231,8 @@ export const skCourtsAdapter: SourceAdapter = {
         const total = data.numFound;
         const fetched = page * PAGE_SIZE + items.length;
         const nextCursor =
-          items.length >= PAGE_SIZE && (total == null || fetched < total)
+          items.length >= PAGE_SIZE &&
+          (total === null || total === undefined || fetched < total)
             ? String(page + 1)
             : null;
 

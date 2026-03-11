@@ -2,7 +2,8 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import { adminDb } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -10,16 +11,16 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import {
-  parseEntityKind,
-  type ContentSearchHit,
-  type ContentSearchQuery,
-  type ContentSearchResult,
-  type FacetBucket,
-  type SearchHit,
-  type SearchProvider,
-  type SearchQuery,
-  type SearchResult,
+import { parseEntityKind } from "@/api/lib/search/types";
+import type {
+  ContentSearchHit,
+  ContentSearchQuery,
+  ContentSearchResult,
+  FacetBucket,
+  SearchHit,
+  SearchProvider,
+  SearchQuery,
+  SearchResult,
 } from "@/api/lib/search/types";
 
 const REINDEX_BATCH_SIZE = 100;

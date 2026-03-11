@@ -6,6 +6,7 @@ import type { ScopedDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+
 import { isClauseExportPayload } from "./import-export-schema";
 import { updateSearchVector } from "./search-vector";
 
@@ -173,7 +174,7 @@ export const importHandler = async ({
         c.title,
         c.description,
         c.body,
-        // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort fire-and-forget
+        // eslint-disable-next-line no-empty
       ).catch(() => {});
     }
   }

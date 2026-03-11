@@ -1,6 +1,6 @@
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, test } from "bun:test";
 
 /**
  * Structural test: every table with a `safeWorkspaceId` column
@@ -18,12 +18,12 @@ const MIGRATION_PATH = resolve(
  *  must have its own RLS policy. Relying on FK joins through a
  *  parent table is an application convention, not a database
  *  guarantee; a direct query by ID bypasses the parent filter. */
-const RLS_EXEMPT_TABLES = new Set<string>([]);
+const RLS_EXEMPT_TABLES = new Set<string>();
 
 describe("RLS policies", () => {
   test("every workspace-scoped table has an RLS policy", () => {
-    const schema = readFileSync(SCHEMA_PATH, "utf-8");
-    const migration = readFileSync(MIGRATION_PATH, "utf-8");
+    const schema = readFileSync(SCHEMA_PATH, "utf8");
+    const migration = readFileSync(MIGRATION_PATH, "utf8");
 
     // Find table names containing safeWorkspaceId by looking
     // backwards from each safeWorkspaceId call to the nearest
@@ -68,7 +68,7 @@ describe("RLS policies", () => {
   });
 
   test("RLS is enabled on the workspaces table itself", () => {
-    const migration = readFileSync(MIGRATION_PATH, "utf-8");
+    const migration = readFileSync(MIGRATION_PATH, "utf8");
     expect(migration).toContain(
       "ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY",
     );

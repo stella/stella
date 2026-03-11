@@ -2,10 +2,8 @@ import { panic, Result } from "better-result";
 import type { ActionContextOf } from "rivetkit";
 
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
-import {
-  workflowActions,
-  type WorkflowActionSchemas,
-} from "@/api/handlers/registry/actors/workflow/schema";
+import { workflowActions } from "@/api/handlers/registry/actors/workflow/schema";
+import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
 import { runWorkflowAction } from "@/api/handlers/registry/actors/workflow/utils";
 
 const MAX_PARALLEL = 10;
@@ -46,7 +44,7 @@ export const advanceQueueAction = (
       c.state.queuedEntities.size === 0 &&
       c.state.pendingBatches.size === 0
     ) {
-      await runWorkflowAction(c, finishWorkflow, undefined);
+      await runWorkflowAction(c, finishWorkflow);
       return;
     }
 

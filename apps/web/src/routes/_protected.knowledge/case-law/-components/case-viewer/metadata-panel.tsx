@@ -16,16 +16,16 @@ type MetadataPanelProps = {
       name: string;
       adapterKey: string;
     };
-    citationsFrom: Array<{
+    citationsFrom: {
       id: string;
       citationText: string;
       citedDecisionId: string | null;
-    }>;
-    citationsTo: Array<{
+    }[];
+    citationsTo: {
       id: string;
       citationText: string;
       citingDecisionId: string | null;
-    }>;
+    }[];
   };
 };
 
@@ -44,7 +44,7 @@ const MetadataField = ({
 
   return (
     <div>
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-muted-foreground text-xs font-medium">{label}</dt>
       <dd className="text-sm">{display}</dd>
     </div>
   );
@@ -56,7 +56,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase">
+      <h3 className="text-muted-foreground text-xs font-semibold uppercase">
         {t("caseLaw.viewer.metadata")}
       </h3>
 
@@ -90,10 +90,10 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
       {typeof legalSentence === "string" && legalSentence.length > 0 && (
         <div>
-          <h4 className="mb-1 text-xs font-semibold text-muted-foreground">
+          <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
             {t("caseLaw.viewer.legalSentence")}
           </h4>
-          <p className="rounded-md bg-muted/50 p-3 text-sm leading-relaxed">
+          <p className="bg-muted/50 rounded-md p-3 text-sm leading-relaxed">
             {legalSentence}
           </p>
         </div>
@@ -114,12 +114,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
       {decision.citationsFrom.length > 0 && (
         <div>
-          <h4 className="mb-1 text-xs font-semibold text-muted-foreground">
+          <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
             {`${t("caseLaw.viewer.cites")} (${decision.citationsFrom.length})`}
           </h4>
           <ul className="space-y-1">
             {decision.citationsFrom.slice(0, 10).map((citation) => (
-              <li className="text-xs text-muted-foreground" key={citation.id}>
+              <li className="text-muted-foreground text-xs" key={citation.id}>
                 {citation.citationText}
               </li>
             ))}
@@ -129,12 +129,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
       {decision.citationsTo.length > 0 && (
         <div>
-          <h4 className="mb-1 text-xs font-semibold text-muted-foreground">
+          <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
             {`${t("caseLaw.viewer.citedBy")} (${decision.citationsTo.length})`}
           </h4>
           <ul className="space-y-1">
             {decision.citationsTo.slice(0, 10).map((citation) => (
-              <li className="text-xs text-muted-foreground" key={citation.id}>
+              <li className="text-muted-foreground text-xs" key={citation.id}>
                 {citation.citationText}
               </li>
             ))}

@@ -684,7 +684,7 @@ describe("named conditions in fillTemplate", () => {
 
     const data = { active: true };
     expect(evaluateCondition("active", data)).toBe(true);
-    expect(evaluateCondition("active", data, undefined)).toBe(true);
+    expect(evaluateCondition("active", data)).toBe(true);
   });
 
   test("circular named conditions return false", async () => {

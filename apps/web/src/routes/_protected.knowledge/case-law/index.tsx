@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -6,14 +7,12 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 
 import { DecisionFilters } from "@/routes/_protected.knowledge/case-law/-components/decision-filters";
-import {
-  DecisionTable,
-  type Decision,
-} from "@/routes/_protected.knowledge/case-law/-components/decision-table";
-import {
-  decisionsInfiniteOptions,
-  type DecisionListFilters,
-  type SearchFacets,
+import { DecisionTable } from "@/routes/_protected.knowledge/case-law/-components/decision-table";
+import type { Decision } from "@/routes/_protected.knowledge/case-law/-components/decision-table";
+import { decisionsInfiniteOptions } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+import type {
+  DecisionListFilters,
+  SearchFacets,
 } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
 
 export const Route = createFileRoute("/_protected/knowledge/case-law/")({
@@ -63,6 +62,7 @@ function CaseLawIndex() {
         <div className="flex justify-center py-4">
           <Button
             disabled={isFetchingNextPage}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={() => fetchNextPage()}
             variant="outline"
           >

@@ -11,12 +11,14 @@ processing subprocesses.
 ## Workstream A: Case-law adapter error contracts
 
 ### Problem
+
 All 6 adapters threw raw `Error` on fetch failures, making
 it impossible for the pipeline to distinguish adapter errors
 from other exceptions. Utility functions (`hashResult`,
 `stripHtml`, date parsers) were duplicated across adapters.
 
 ### Changes
+
 1. Added `AdapterFetchError` to `lib/errors/tagged-errors.ts`
    with structured fields: `adapterKey`, `cursor`,
    `httpStatus`, `cause`.
@@ -50,10 +52,12 @@ from other exceptions. Utility functions (`hashResult`,
 ## Workstream B: Shared subprocess runner
 
 ### Problem
+
 `pdf-utils.ts` and `extract-content.ts` had nearly identical
 subprocess spawn/collect/timeout logic.
 
 ### Changes
+
 1. Added `SubprocessError` to `lib/errors/tagged-errors.ts`.
 
 2. Created `lib/subprocess.ts` with `spawnWorker` that

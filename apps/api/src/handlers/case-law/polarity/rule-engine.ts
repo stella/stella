@@ -17,8 +17,8 @@ import { caseLawPolarityRules } from "@/api/db/schema";
 import {
   isValidPolarity,
   RULE_SOURCE,
-  type Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { LIMITS } from "@/api/lib/limits";
 import { captureError } from "@/api/lib/posthog";
 

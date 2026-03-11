@@ -12,6 +12,6 @@ export type TableTreeNode = WorkspaceEntity & {
 };
 
 export type WorkspaceTable = ReactTable<TableTreeNode>;
-export type TableColumnDef = ColumnDef<TableTreeNode, unknown>;
-export type TableColumn = Column<TableTreeNode, unknown>;
+export type TableColumnDef = ColumnDef<TableTreeNode>;
+export type TableColumn = Column<TableTreeNode>;
 export type TableHeader = Header<TableTreeNode, unknown>;

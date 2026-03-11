@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -103,7 +104,7 @@ function ExpensesPage() {
       <div className="flex-1 overflow-auto p-4">
         <Suspense
           fallback={
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-8 text-center text-sm">
               {t("billing.loading")}
             </div>
           }

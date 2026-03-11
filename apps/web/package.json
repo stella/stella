@@ -1,16 +1,16 @@
 {
   "name": "web",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "i18n-typegen src/i18n/langs",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint",
-    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore",
+    "lint": "oxlint",
+    "format": "oxfmt .",
     "i18n:check": "i18n-check src/i18n/langs",
     "test": "vitest run"
   },

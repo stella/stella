@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
@@ -41,7 +42,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
           return (
             <div>
               <Link
-                className="font-medium text-foreground hover:underline"
+                className="text-foreground font-medium hover:underline"
                 params={{ decisionId: id }}
                 to="/knowledge/case-law/$decisionId"
               >
@@ -49,8 +50,8 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
               </Link>
               {headline && (
                 <p
-                  className="mt-0.5 line-clamp-2 text-xs text-muted-foreground [&_mark]:bg-yellow-200/50 [&_mark]:font-medium [&_mark]:text-foreground dark:[&_mark]:bg-yellow-500/20"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: headline is escaped server-side (escapeAndHighlight) and only contains <mark> tags
+                  className="text-muted-foreground [&_mark]:text-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:bg-yellow-200/50 [&_mark]:font-medium dark:[&_mark]:bg-yellow-500/20"
+                  // eslint-disable-next-line react/no-danger
                   dangerouslySetInnerHTML={{ __html: headline }}
                 />
               )}
@@ -64,7 +65,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
       columnHelper.accessor("country", {
         header: t("caseLaw.columns.country"),
         cell: (info) => (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+          <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
             {info.getValue()}
           </span>
         ),
@@ -73,7 +74,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         header: t("caseLaw.columns.decisionDate"),
         cell: (info) => {
           const value = info.getValue();
-          if (value == null) {
+          if (value === null || value === undefined) {
             return "—";
           }
           if (value instanceof Date) {
@@ -102,7 +103,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
 
   if (isLoading) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
+      <p className="text-muted-foreground py-8 text-center text-sm">
         {t("caseLaw.loading")}
       </p>
     );
@@ -110,7 +111,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
 
   if (decisions.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
+      <p className="text-muted-foreground py-8 text-center text-sm">
         {t("caseLaw.emptyState")}
       </p>
     );
@@ -121,10 +122,10 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
       <table className="w-full text-sm">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
-            <tr className="border-b bg-muted/50" key={headerGroup.id}>
+            <tr className="bg-muted/50 border-b" key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <th
-                  className="px-4 py-2 text-start font-medium text-muted-foreground"
+                  className="text-muted-foreground px-4 py-2 text-start font-medium"
                   key={header.id}
                 >
                   {flexRender(
@@ -139,7 +140,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         <tbody>
           {table.getRowModel().rows.map((row) => (
             <tr
-              className="border-b last:border-b-0 hover:bg-muted/30"
+              className="hover:bg-muted/30 border-b last:border-b-0"
               key={row.id}
             >
               {row.getVisibleCells().map((cell) => (

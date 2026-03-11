@@ -3,9 +3,8 @@ import * as slimdom from "slimdom";
 
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 
-const isElementNode = (node: slimdom.Node): node is slimdom.Element => {
-  return node.nodeType === node.ELEMENT_NODE;
-};
+const isElementNode = (node: slimdom.Node): node is slimdom.Element =>
+  node.nodeType === node.ELEMENT_NODE;
 
 export type JustificationFilenames = {
   original: string;
@@ -41,6 +40,7 @@ export const parseJustificationXml = ({
         `<root>${xml.replaceAll(`\\"`, `"`)}</root>`,
       );
 
+      // eslint-disable-next-line unicorn/prefer-query-selector -- slimdom XML document does not support querySelectorAll
       const justificationElements = document.getElementsByTagName("j");
 
       const htmlParts: string[] = [];
@@ -81,7 +81,9 @@ export const parseJustificationXml = ({
           const page = pageNumber.toString();
           const span = document.createElement("span");
           span.textContent = page;
+          // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
           span.setAttribute("data-page-number", page);
+          // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
           span.setAttribute("data-field-id", fileFieldId);
           element.replaceWith(span);
         }
@@ -96,7 +98,7 @@ export const parseJustificationXml = ({
       return {
         htmlVersion: 1,
         htmlContent: htmlParts.join(""),
-        fileFieldIds: Array.from(fileFieldIdSet),
+        fileFieldIds: [...fileFieldIdSet],
       };
     },
     catch: (error) =>

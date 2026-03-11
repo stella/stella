@@ -1,6 +1,8 @@
 "use client";
 
-import { memo, type ComponentProps, type HTMLAttributes } from "react";
+import { memo } from "react";
+import type { ComponentProps, HTMLAttributes } from "react";
+
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
@@ -40,7 +42,7 @@ export const MessageContent = ({
       "overflow-hidden text-sm",
       "group-[.is-user]:ms-auto group-[.is-user]:rounded-lg",
       "group-[.is-user]:bg-secondary group-[.is-user]:px-4",
-      "group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "group-[.is-user]:text-foreground group-[.is-user]:py-3",
       "group-[.is-assistant]:text-foreground",
       "group-[.is-system]:w-full group-[.is-system]:rounded-lg",
       "group-[.is-system]:border group-[.is-system]:border-dashed",

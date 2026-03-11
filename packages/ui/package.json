@@ -1,13 +1,20 @@
 {
   "name": "@stella/ui",
   "version": "0.0.0",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./globals.css": "./src/styles/globals.css",
+    "./postcss.config": "./postcss.config.mjs",
+    "./lib/*": "./src/lib/*.ts",
+    "./components/*": "./src/components/*.tsx",
+    "./hooks/*": "./src/hooks/*.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint",
-    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path ../../.prettierignore"
+    "lint": "oxlint",
+    "format": "oxfmt ."
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
@@ -27,12 +34,5 @@
     "@types/react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"
-  },
-  "exports": {
-    "./globals.css": "./src/styles/globals.css",
-    "./postcss.config": "./postcss.config.mjs",
-    "./lib/*": "./src/lib/*.ts",
-    "./components/*": "./src/components/*.tsx",
-    "./hooks/*": "./src/hooks/*.ts"
   }
 }

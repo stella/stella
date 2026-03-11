@@ -90,7 +90,7 @@ export const DateRangeFilter = ({
         />
       </div>
       {dateFrom > dateTo && (
-        <p className="text-sm text-destructive">{t("invalidDateRange")}</p>
+        <p className="text-destructive text-sm">{t("invalidDateRange")}</p>
       )}
     </div>
   );

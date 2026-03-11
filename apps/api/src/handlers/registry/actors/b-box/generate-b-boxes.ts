@@ -1,10 +1,10 @@
 import { panic, Result } from "better-result";
 
 import { generateBBoxData } from "@/api/handlers/registry/actors/b-box/ai-generate-b-boxes";
-import {
-  parseGeminiBBoxes,
-  type GenerateBBoxesProps,
-  type GenerateBBoxesResult,
+import { parseGeminiBBoxes } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-shared";
+import type {
+  GenerateBBoxesProps,
+  GenerateBBoxesResult,
 } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-shared";
 
 export const generateBBoxes = async ({

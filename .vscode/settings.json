@@ -1,12 +1,12 @@
 {
   "tailwindCSS.classFunctions": ["cva", "cn"],
   "tailwindCSS.experimental.configFile": "packages/ui/src/styles/globals.css",
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "nicolo-ribaudo.oxfmt-vscode",
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.formatOnSave": true,
   "emmet.showExpandedAbbreviation": "never",
   "editor.codeActionsOnSave": {
-    "source.fixAll.biome": "explicit"
+    "source.fixAll.oxc": "explicit"
   },
   "search.exclude": {
     "**/routeTree.gen.ts": true

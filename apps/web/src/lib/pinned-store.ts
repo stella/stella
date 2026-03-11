@@ -8,7 +8,7 @@ const readFromStorage = (userId: string): string[] => {
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
-        return parsed as string[];
+        return parsed;
       }
     }
     return [];

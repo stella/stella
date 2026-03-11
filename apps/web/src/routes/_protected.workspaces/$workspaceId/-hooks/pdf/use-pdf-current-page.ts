@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useThrottledCallback } from "use-debounce";
@@ -60,6 +61,7 @@ export const useUpdateCurrentPage = ({
     }
 
     const observer = new IntersectionObserver(
+      // eslint-disable-next-line typescript/no-misused-promises
       async (entries) => {
         const ratios = visiblePageRatiosRef.current;
 
@@ -85,16 +87,14 @@ export const useUpdateCurrentPage = ({
         // can protect them from eviction and re-queue any
         // that were cleaned up. Throttled so fast scrolling
         // doesn't render pages only briefly in the viewport.
-        const visiblePageIds = Array.from(ratios.keys()).map(
-          (n) => `${fileId}-${n}`,
-        );
+        const visiblePageIds = [...ratios.keys()].map((n) => `${fileId}-${n}`);
         throttledUpdateVisiblePages(fileId, visiblePageIds);
 
         let nextPage: number | undefined;
         let leadingRatio = 0;
 
         for (const [pageNumber, ratio] of ratios) {
-          if (ratio > leadingRatio || ratio === leadingRatio) {
+          if (ratio >= leadingRatio) {
             leadingRatio = ratio;
             nextPage = pageNumber;
           }
@@ -136,16 +136,13 @@ export const useUpdateCurrentPage = ({
       observer.observe(pageElement);
     }
 
+    const ratios = visiblePageRatiosRef.current;
+
     return () => {
       observer.disconnect();
       throttledUpdateVisiblePages.cancel();
-      visiblePageRatiosRef.current.clear();
+      ratios.clear();
     };
-  }, [
-    pageIds,
-    containerRef.current,
-    navigate,
-    fileId,
-    throttledUpdateVisiblePages,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- containerRef is a stable ref; we read .current inside the effect
+  }, [pageIds, containerRef, navigate, fileId, throttledUpdateVisiblePages]);
 };

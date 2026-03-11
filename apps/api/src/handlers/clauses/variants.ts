@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
@@ -8,6 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
+
 import { clauseBodySchema } from "./shared-schemas";
 
 // ── Schemas ─────────────────────────────────────────

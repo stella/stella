@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -8,8 +9,8 @@ import {
   INVOICE_STATUS,
   invoices,
   timeEntries,
-  type InvoiceStatus,
 } from "@/api/db/schema";
+import type { InvoiceStatus } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type TransitionAction =

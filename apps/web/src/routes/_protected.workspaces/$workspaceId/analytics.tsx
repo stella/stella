@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -28,7 +29,7 @@ const getDefaultRange = () => {
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center py-12">
-    <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+    <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
   </div>
 );
 

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";

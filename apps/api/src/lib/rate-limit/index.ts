@@ -5,7 +5,7 @@ import { redis } from "@/api/lib/redis";
 const KEY_PREFIX = "rl:";
 
 const INCREMENT_LUA = await Bun.file(
-  new URL("./increment.lua", import.meta.url),
+  new URL("increment.lua", import.meta.url),
 ).text();
 
 /**

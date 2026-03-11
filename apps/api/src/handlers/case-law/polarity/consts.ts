@@ -34,9 +34,9 @@ export const SPOT_CHECK_RATE = 0.05;
 
 /** Polarity weights for citation scoring. */
 export const POLARITY_WEIGHT: Record<Polarity, number> = {
-  positive: 1.0,
+  positive: 1,
   neutral: 0.5,
-  negative: 0.0,
+  negative: 0,
   unknown: 0.5,
 };
 

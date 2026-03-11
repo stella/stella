@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import {
   AlertTriangleIcon,
   PlusIcon,
@@ -95,14 +96,14 @@ export const TemplateClausesTab = ({
   }, [templateId, t]);
 
   useEffect(() => {
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchLinks();
   }, [fetchLinks]);
 
   if (!loaded) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t("templates.discovering")}
         </p>
       </div>
@@ -112,7 +113,7 @@ export const TemplateClausesTab = ({
   return (
     <div className="mt-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">
+        <h3 className="text-muted-foreground text-sm font-medium">
           {t("clauses.linkedClauses")}
         </h3>
         <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
@@ -122,7 +123,7 @@ export const TemplateClausesTab = ({
       </div>
 
       {links.length === 0 && (
-        <p className="py-4 text-center text-sm text-muted-foreground">
+        <p className="text-muted-foreground py-4 text-center text-sm">
           {t("clauses.noLinkedClauses")}
         </p>
       )}
@@ -134,6 +135,7 @@ export const TemplateClausesTab = ({
               <LinkedClauseRow
                 key={link.id}
                 link={link}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onChanged={fetchLinks}
                 templateId={templateId}
               />
@@ -144,6 +146,7 @@ export const TemplateClausesTab = ({
 
       <LinkClauseDialog
         availableSlots={clauseSlots}
+        // eslint-disable-next-line typescript/no-misused-promises
         onLinked={fetchLinks}
         onOpenChange={setLinkOpen}
         open={linkOpen}
@@ -238,13 +241,13 @@ const LinkedClauseRow = ({
     >
       <div className="min-w-0 flex-1">
         {isDeleted ? (
-          <p className="text-sm text-muted-foreground line-through">
+          <p className="text-muted-foreground text-sm line-through">
             {t("clauses.clauseDeletedTombstone")}
           </p>
         ) : (
           <>
             <p className="text-sm font-medium">{link.clause?.title}</p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2 text-xs">
               {link.slotName && (
                 <span className="rounded-sm bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
                   {link.slotName}
@@ -273,6 +276,7 @@ const LinkedClauseRow = ({
         {link.isOutdated && !isDeleted && (
           <Button
             disabled={syncing}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={handleSync}
             size="sm"
             variant="ghost"
@@ -300,6 +304,7 @@ const LinkedClauseRow = ({
               </AlertDialogClose>
               <Button
                 disabled={unlinking}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={handleUnlink}
                 variant="destructive"
               >

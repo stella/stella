@@ -8,16 +8,16 @@ import { validateAIOutput } from "@/api/handlers/registry/actors/workflow/ai-val
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
-  type AIJustification,
-  type AIResult,
-  type GenerateBatchProps,
-  type GenerateBatchResult,
-  type ResolvedFile,
 } from "@/api/handlers/registry/actors/workflow/generate-batch-shared";
-import {
-  parseJustificationXml,
-  type JustificationFilenames,
-} from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import type {
+  AIJustification,
+  AIResult,
+  GenerateBatchProps,
+  GenerateBatchResult,
+  ResolvedFile,
+} from "@/api/handlers/registry/actors/workflow/generate-batch-shared";
+import { parseJustificationXml } from "@/api/handlers/registry/actors/workflow/parse-justifications";
+import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
@@ -88,7 +88,7 @@ type FileWithContent = {
   simplifiedName: string;
 };
 
-const fetchAndPrepareFiles = async (
+const fetchAndPrepareFiles = (
   resolvedFiles: ResolvedFile[],
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
@@ -120,7 +120,7 @@ const fetchAndPrepareFiles = async (
     }),
   );
 
-export const generateBatch = async ({
+export const generateBatch = ({
   abortSignal,
   batch,
   entityVersionId,
@@ -128,7 +128,7 @@ export const generateBatch = async ({
   workspaceId,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  Result.gen(async function* () {
+  Result.gen(async function* generateBatchGen() {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,
@@ -284,15 +284,15 @@ export const generateBatch = async ({
       unsupportedPropertyIds: [],
     });
   }).then((result) =>
-    result.mapError((e) =>
-      matchError(e, {
-        ParseXmlError: (e) =>
+    result.mapError((err) =>
+      matchError(err, {
+        ParseXmlError: (parseErr) =>
           new WorkflowIntegrationError({
-            message: e.message,
-            cause: e,
+            message: parseErr.message,
+            cause: parseErr,
           }),
-        WorkflowIntegrationError: (e) => e,
-        WorkflowValidationError: (e) => e,
+        WorkflowIntegrationError: (integrationErr) => integrationErr,
+        WorkflowValidationError: (validErr) => validErr,
       }),
     ),
   );

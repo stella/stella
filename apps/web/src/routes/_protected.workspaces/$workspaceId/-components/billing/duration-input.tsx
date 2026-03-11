@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stella/ui/components/input";
@@ -119,7 +120,7 @@ export const DurationInput = ({
         value={displayValue}
       />
       {!isFocused && value > 0 && (
-        <span className="pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+        <span className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 text-xs">
           {t("billing.decimalHours", {
             hours: formatDecimalHours(value),
           })}

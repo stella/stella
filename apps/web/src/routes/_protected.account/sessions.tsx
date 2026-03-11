@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { usePostHog } from "@posthog/react";
 import {
   useMutation,
@@ -36,11 +37,11 @@ import { toAuthClientError } from "@/lib/errors";
 import { parseUserAgent } from "@/lib/parse-user-agent";
 import { captureError } from "@/lib/posthog/utils";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { sessionOptions } from "@/routes/-queries";
 import {
   sessionsKeys,
   sessionsOptions,
 } from "@/routes/_protected.account/-queries";
-import { sessionOptions } from "@/routes/-queries";
 
 export const Route = createFileRoute("/_protected/account/sessions")({
   component: Sessions,
@@ -62,7 +63,7 @@ function Sessions() {
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="text-lg font-semibold">{t("account.sessions.title")}</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t("account.sessions.description")}
         </p>
       </div>
@@ -100,11 +101,7 @@ function Sessions() {
                   </TableCell>
                   <TableCell className="text-end">
                     {isCurrent ? (
-                      <span
-                        className={
-                          "inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium"
-                        }
-                      >
+                      <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
                         {t("account.sessions.currentSession")}
                       </span>
                     ) : (
@@ -117,7 +114,7 @@ function Sessions() {
             {!hasOtherSessions && (
               <TableRow>
                 <TableCell
-                  className="text-center text-muted-foreground"
+                  className="text-muted-foreground text-center"
                   colSpan={4}
                 >
                   {t("account.sessions.noOtherSessions")}
@@ -141,8 +138,8 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
   const queryClient = useQueryClient();
 
   const revokeSession = useMutation({
-    mutationFn: async (token: string) => {
-      const result = await authClient.revokeSession({ token });
+    mutationFn: async (sessionToken: string) => {
+      const result = await authClient.revokeSession({ token: sessionToken });
 
       if (result.error) {
         toastManager.add({
@@ -159,6 +156,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
         title: t("success.sessionRevoked"),
         type: "success",
       });
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: sessionsKeys.all,
       });
@@ -204,6 +202,7 @@ const RevokeAllDialog = () => {
         title: t("success.otherSessionsRevoked"),
         type: "success",
       });
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: sessionsKeys.all,
       });

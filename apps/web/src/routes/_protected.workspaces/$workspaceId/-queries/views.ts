@@ -1,10 +1,11 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
 
 import { rivet } from "@/lib/api";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { sessionOptions } from "@/routes/-queries";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 export const viewsKeys = {
   all: (workspaceId: string) => ["views", workspaceId],

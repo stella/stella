@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
@@ -93,6 +94,7 @@ export const PdfViewerControls = () => {
         content={t("workspaces.pdf.goBack")}
         render={
           <Button
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={() =>
               navigate({
                 to: "/workspaces/$workspaceId",
@@ -111,6 +113,7 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset <= -0.8}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={async () => {
               const viewport = getScrollViewport();
               const restoreScroll = viewport
@@ -147,6 +150,7 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset >= 2}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={async () => {
               const viewport = getScrollViewport();
               const restoreScroll = viewport
@@ -183,6 +187,7 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset === 0}
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={async () => {
               const viewport = getScrollViewport();
               const restoreScroll = viewport
@@ -283,7 +288,7 @@ export const PdfViewerControls = () => {
           }}
           value={pageInputValue}
         />
-        <span>{"/"}</span>
+        <span>/</span>
         <span>{totalPages}</span>
       </div>
       {resolvedTheme === "dark" && !isImageOrigin && (
@@ -312,6 +317,7 @@ export const PdfViewerControls = () => {
         content={t("workspaces.pdf.toggleSidebar")}
         render={
           <Button
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={() =>
               navigate({
                 replace: true,

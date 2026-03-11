@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -133,9 +134,9 @@ export const ContactPicker = ({
             <ComboboxItem key={contact.id} value={contact}>
               <div className="flex items-center gap-2">
                 {contact.type === "person" ? (
-                  <UserIcon className="size-3.5 text-muted-foreground" />
+                  <UserIcon className="text-muted-foreground size-3.5" />
                 ) : (
-                  <BuildingIcon className="size-3.5 text-muted-foreground" />
+                  <BuildingIcon className="text-muted-foreground size-3.5" />
                 )}
                 <span>{contact.displayName}</span>
               </div>
@@ -150,7 +151,7 @@ export const ContactPicker = ({
                     displayName: query.trim(),
                   }}
                 >
-                  <div className="flex items-center gap-2 text-primary">
+                  <div className="text-primary flex items-center gap-2">
                     <PlusIcon className="size-3.5" />
                     <span>
                       {t("contacts.createOrganization", {
@@ -167,7 +168,7 @@ export const ContactPicker = ({
                     displayName: query.trim(),
                   }}
                 >
-                  <div className="flex items-center gap-2 text-primary">
+                  <div className="text-primary flex items-center gap-2">
                     <PlusIcon className="size-3.5" />
                     <span>
                       {t("contacts.createPerson", {

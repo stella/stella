@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+
 import { useForm, useStore } from "@tanstack/react-form";
 import {
   useMutation,
@@ -45,8 +46,8 @@ import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/
 import {
   invoiceByIdOptions,
   invoicesKeys,
-  type InvoiceStatus,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
+import type { InvoiceStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
 import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 export const Route = createFileRoute(
@@ -75,7 +76,7 @@ function InvoiceDetailPage() {
       <div className="flex-1 overflow-auto p-6">
         <Suspense
           fallback={
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-8 text-center text-sm">
               {t("billing.loading")}
             </div>
           }
@@ -108,9 +109,11 @@ const InvoiceDetail = ({
   );
 
   const invalidateAll = () => {
+    // eslint-disable-next-line typescript/no-floating-promises
     queryClient.invalidateQueries({
       queryKey: invoicesKeys.all(workspaceId),
     });
+    // eslint-disable-next-line typescript/no-floating-promises
     queryClient.invalidateQueries({
       queryKey: timeEntriesKeys.all(workspaceId),
     });
@@ -222,7 +225,7 @@ const InvoiceDetail = ({
             <InvoiceStatusBadge status={invoiceStatus} />
           </div>
           {invoice.reference && (
-            <p className="text-sm text-muted-foreground">{invoice.reference}</p>
+            <p className="text-muted-foreground text-sm">{invoice.reference}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -260,7 +263,7 @@ const InvoiceDetail = ({
       {/* Notes */}
       {invoice.notes && (
         <div className="rounded-lg border p-4">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">
+          <p className="text-muted-foreground mb-1 text-xs font-medium">
             {t("common.notes")}
           </p>
           <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
@@ -273,21 +276,21 @@ const InvoiceDetail = ({
           <h3 className="text-sm font-medium">
             {t("billing.invoices.linkedTimeEntries")}
           </h3>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {t("billing.invoices.totalEntries", {
               count: invoice.timeEntries.length,
             })}
           </span>
         </div>
         {invoice.timeEntries.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className="text-muted-foreground py-6 text-center text-sm">
             {t("billing.invoices.noEntries")}
           </div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-start text-muted-foreground">
+                <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>
@@ -335,7 +338,7 @@ const InvoiceDetail = ({
                           size="icon"
                           variant="ghost"
                         >
-                          <XCircleIcon className="size-3.5 text-muted-foreground" />
+                          <XCircleIcon className="text-muted-foreground size-3.5" />
                         </Button>
                       </td>
                     )}
@@ -358,7 +361,7 @@ const InvoiceDetail = ({
           <div className="overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-start text-muted-foreground">
+                <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>
@@ -400,7 +403,7 @@ const InvoiceDetail = ({
                           size="icon"
                           variant="ghost"
                         >
-                          <XCircleIcon className="size-3.5 text-muted-foreground" />
+                          <XCircleIcon className="text-muted-foreground size-3.5" />
                         </Button>
                       </td>
                     )}
@@ -434,7 +437,7 @@ const InvoiceDetail = ({
 
 const InfoCell = ({ label, value }: { label: string; value: string }) => (
   <div>
-    <p className="text-xs text-muted-foreground">{label}</p>
+    <p className="text-muted-foreground text-xs">{label}</p>
     <p className="mt-0.5 text-sm font-medium tabular-nums">{value}</p>
   </div>
 );
@@ -665,6 +668,7 @@ const EditInvoiceForm = ({
         showErrorToast(t("billing.failedToSave"));
         return;
       }
+      // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: invoicesKeys.all(workspaceId),
       });
@@ -680,6 +684,7 @@ const EditInvoiceForm = ({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
+        // eslint-disable-next-line typescript/no-floating-promises
         form.handleSubmit();
       }}
     >

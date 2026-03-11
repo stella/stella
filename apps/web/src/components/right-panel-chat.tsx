@@ -1,8 +1,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+
 import type { Chat } from "@ai-sdk/react";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getToolName, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
+import type { Editor as TipTapEditor } from "@tiptap/react";
+import { getToolName, isToolUIPart } from "ai";
+import type { FileUIPart, UIMessage } from "ai";
 import {
   ArrowUpIcon,
   FileTextIcon,
@@ -39,8 +42,8 @@ import { useChatAttachments } from "@/components/chat/use-chat-attachments";
 import { UserMessageText } from "@/components/chat/user-message-text";
 import {
   ChatEditor,
-  type MentionContext,
 } from "@/components/mentionable-prompt-input";
+import type { MentionContext } from "@/components/mentionable-prompt-input";
 import type {
   ActiveFileContext,
   ProcessedAttachment,
@@ -116,11 +119,11 @@ const DropOverlay = () => {
       className={cn(
         "pointer-events-none absolute inset-0 z-50",
         "flex items-center justify-center rounded-lg",
-        "border-2 border-dashed border-foreground/20",
+        "border-foreground/20 border-2 border-dashed",
         "bg-foreground/5",
       )}
     >
-      <div className="flex flex-col items-center gap-2 text-foreground/50">
+      <div className="text-foreground/50 flex flex-col items-center gap-2">
         <UploadIcon className="size-6" />
         <span className="text-xs font-medium">{t("chat.chatAbout")}</span>
       </div>
@@ -171,11 +174,11 @@ const ThinkingIndicator = () => {
   return (
     <Message from="assistant">
       <MessageContent>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <div className="flex items-center gap-1">
             {[0, 1, 2].map((i) => (
               <div
-                className="size-1.5 animate-pulse rounded-full bg-muted-foreground/40"
+                className="bg-muted-foreground/40 size-1.5 animate-pulse rounded-full"
                 key={i}
                 style={{ animationDelay: `${i * 150}ms` }}
               />
@@ -273,7 +276,7 @@ const UserAttachments = ({ parts }: { parts: FileUIPart[] }) => {
               alt={part.filename ?? "Attached image"}
               className="max-h-32 rounded-md object-cover"
               height={128}
-              // biome-ignore lint/suspicious/noArrayIndexKey: file parts have no unique ID
+              // eslint-disable-next-line react/no-array-index-key
               key={`file-${i}`}
               width={128}
               src={part.url}
@@ -285,10 +288,10 @@ const UserAttachments = ({ parts }: { parts: FileUIPart[] }) => {
           <div
             className={cn(
               "flex items-center gap-1.5",
-              "rounded-md bg-muted/50 px-2 py-1",
-              "text-xs text-muted-foreground",
+              "bg-muted/50 rounded-md px-2 py-1",
+              "text-muted-foreground text-xs",
             )}
-            // biome-ignore lint/suspicious/noArrayIndexKey: file parts have no unique ID
+            // eslint-disable-next-line react/no-array-index-key
             key={`file-${i}`}
           >
             <FileTextIcon className="size-3" />
@@ -320,7 +323,7 @@ const ChatInputBar = ({
 }: ChatInputBarProps) => {
   const t = useTranslations();
   const submitRef = useRef<(() => void) | null>(null);
-  const editorRef = useRef<import("@tiptap/react").Editor | null>(null);
+  const editorRef = useRef<TipTapEditor | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
 
   // Consume pending "chat about this" mentions from the store.
@@ -372,8 +375,8 @@ const ChatInputBar = ({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-muted/30",
-        "transition-colors focus-within:border-ring",
+        "bg-muted/30 rounded-lg border",
+        "focus-within:border-ring transition-colors",
       )}
     >
       {hasPendingFiles && (
@@ -470,8 +473,8 @@ const NewChat = ({
   const entityDrop = useEntityDropTarget(workspaceId);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: drop zone container
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone container
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className="relative flex flex-1 flex-col overflow-hidden"
       onDragOver={attachments.dropZoneProps.onDragOver}
@@ -486,8 +489,8 @@ const NewChat = ({
           entityDrop.isDragOver && "invisible",
         )}
       >
-        <MessageSquareIcon className="size-8 text-muted-foreground/30" />
-        <p className="text-sm font-medium text-foreground">
+        <MessageSquareIcon className="text-muted-foreground/30 size-8" />
+        <p className="text-foreground text-sm font-medium">
           {t("chat.greeting")}
         </p>
       </div>
@@ -495,6 +498,7 @@ const NewChat = ({
         <ChatInputBar
           attachments={attachments}
           mentionContext={mentionContext}
+          // eslint-disable-next-line typescript/no-misused-promises
           onSubmit={async (text, drained) => {
             const threadId = nanoid();
             const chat = await queryClient.ensureQueryData(
@@ -518,6 +522,7 @@ const NewChat = ({
                 }
               ).setAttachments(textAttachments);
             }
+            // eslint-disable-next-line typescript/no-floating-promises
             chat.sendMessage(files.length > 0 ? { text, files } : { text });
             onThreadCreated(threadId);
           }}
@@ -564,7 +569,7 @@ const ActiveThread = ({
   if (isLoading || !chat) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="size-4 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+        <div className="border-foreground/20 border-t-foreground size-4 animate-spin rounded-full border-2" />
       </div>
     );
   }
@@ -644,6 +649,7 @@ const ActiveThreadInner = ({
           continue;
         }
         invalidatedToolsRef.current.add(key);
+        // eslint-disable-next-line typescript/no-floating-promises
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         });
@@ -653,8 +659,8 @@ const ActiveThreadInner = ({
   }, [messages, workspaceId, queryClient]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: drop zone container
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone container
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className="relative flex flex-1 flex-col overflow-hidden"
       onDragOver={attachments.dropZoneProps.onDragOver}
@@ -710,7 +716,7 @@ const ActiveThreadInner = ({
                         return (
                           <MessageResponse
                             components={streamdownComponents}
-                            // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
+                            // eslint-disable-next-line react/no-array-index-key
                             key={`${message.id}-text-${i}`}
                           >
                             {part.text}
@@ -722,6 +728,7 @@ const ActiveThreadInner = ({
                           return (
                             <AskUserCard
                               key={part.toolCallId}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onSubmit={(text) => sendMessage({ text })}
                               part={part}
                             />
@@ -759,7 +766,9 @@ const ActiveThreadInner = ({
                               autoApprovedTools={autoApprovedTools}
                               key={part.toolCallId}
                               onAlwaysAllow={handleAlwaysAllow}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onApprove={handleApprove}
+                              // eslint-disable-next-line typescript/no-misused-promises
                               onDeny={handleDeny}
                               part={part}
                               workspaceId={workspaceId}
@@ -792,7 +801,7 @@ const ActiveThreadInner = ({
                     {message.parts.map((part, i) =>
                       part.type === "text" ? (
                         <UserMessageText
-                          // biome-ignore lint/suspicious/noArrayIndexKey: text parts have no unique ID
+                          // eslint-disable-next-line react/no-array-index-key
                           key={`${message.id}-text-${i}`}
                           text={part.text}
                         />
@@ -825,6 +834,7 @@ const ActiveThreadInner = ({
                 }
               ).setAttachments(textAttachments);
             }
+            // eslint-disable-next-line typescript/no-floating-promises
             sendMessage(files.length > 0 ? { text, files } : { text });
           }}
         />
@@ -887,7 +897,7 @@ const ThreadList = ({
   );
 
   const sortedThreads = threads
-    ? [...threads].sort((a, b) => b.createdAt - a.createdAt)
+    ? [...threads].toSorted((a, b) => b.createdAt - a.createdAt)
     : [];
 
   if (!expanded) {
@@ -912,7 +922,7 @@ const ThreadList = ({
       </Button>
       {expanded && sortedThreads.length > 0 && (
         <div
-          className="absolute end-2 top-[calc(100%+4px)] z-20 max-h-64 w-56 overflow-y-auto rounded-lg border bg-popover shadow-md"
+          className="bg-popover absolute end-2 top-[calc(100%+4px)] z-20 max-h-64 w-56 overflow-y-auto rounded-lg border shadow-md"
           role="listbox"
         >
           {sortedThreads.map((thread) => (
@@ -944,6 +954,7 @@ const ThreadList = ({
                 className="shrink-0 opacity-0 group-hover:opacity-100 [&:hover]:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
+                  // eslint-disable-next-line typescript/no-floating-promises
                   actor.connection?.deleteThread({
                     threadId: thread.id,
                   });

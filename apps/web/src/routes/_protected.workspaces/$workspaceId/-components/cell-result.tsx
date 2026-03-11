@@ -3,11 +3,8 @@ import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
-import {
-  isFileDisplayable,
-  type WorkspaceField,
-  type WorkspaceProperty,
-} from "@/lib/types";
+import { isFileDisplayable } from "@/lib/types";
+import type { WorkspaceField, WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import {
@@ -33,7 +30,7 @@ export const CellResult = ({ field, property }: CellResultProps) => {
     return (
       <div className="grid grid-cols-[1fr_auto] items-center justify-between gap-1.5">
         <span>{t("workspaces.fields.calculating")}</span>
-        <span className="size-2 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
+        <span className="bg-muted-foreground size-2 shrink-0 animate-pulse rounded-full" />
       </div>
     );
   }
@@ -138,7 +135,7 @@ const FileCell = ({
         content={fileName}
         render={
           <button
-            className="grid max-w-max cursor-pointer grid-cols-[1rem_auto] items-center gap-1 rounded bg-muted px-1 py-0.5"
+            className="bg-muted grid max-w-max cursor-pointer grid-cols-[1rem_auto] items-center gap-1 rounded px-1 py-0.5"
             onClick={() => openTab({ fieldId, entityId, label: fileName })}
             type="button"
           />
@@ -154,7 +151,7 @@ const FileCell = ({
     <Tooltip
       content={fileName}
       render={
-        <span className="grid max-w-max grid-cols-[1rem_auto] items-center gap-1 rounded bg-muted px-1 py-0.5 opacity-60" />
+        <span className="bg-muted grid max-w-max grid-cols-[1rem_auto] items-center gap-1 rounded px-1 py-0.5 opacity-60" />
       }
     >
       <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />

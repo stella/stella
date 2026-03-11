@@ -10,7 +10,7 @@
  * citation reference.
  */
 export const extractContext = (
-  sections: Array<{ text: string }>,
+  sections: { text: string }[],
   citationText: string,
   sectionIndex: number | null,
 ): string | null => {

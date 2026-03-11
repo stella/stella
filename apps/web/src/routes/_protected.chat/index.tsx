@@ -28,7 +28,7 @@ function ChatIndex() {
         <ThreadsSheet />
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
-        <h1 className="text-2xl font-semibold text-foreground">
+        <h1 className="text-foreground text-2xl font-semibold">
           {t("chat.greeting")}
         </h1>
         <div className="w-full">
@@ -36,6 +36,7 @@ function ChatIndex() {
             autoFocus
             className="min-h-16 rounded-lg border px-3 py-2"
             mentionContext={GLOBAL_MENTION_CONTEXT}
+            // eslint-disable-next-line typescript/no-misused-promises
             onSubmit={async (text) => {
               const threadId = nanoid();
 
@@ -48,6 +49,7 @@ function ChatIndex() {
                 }),
               );
 
+              // eslint-disable-next-line typescript/no-floating-promises
               chat.sendMessage({ text });
 
               await navigate({

@@ -1,12 +1,12 @@
 import { StrictMode } from "react";
-import { RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
-import "@stella/ui/globals.css";
+import { RouterProvider } from "@tanstack/react-router";
 
+import "@stella/ui/globals.css";
 import { getRouter } from "@/router";
 
-const rootElement = document.getElementById("app");
+const rootElement = document.querySelector("#app");
 if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
 

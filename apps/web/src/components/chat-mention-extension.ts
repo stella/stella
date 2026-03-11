@@ -1,7 +1,5 @@
-import {
-  default as MentionExtension,
-  type MentionNodeAttrs,
-} from "@tiptap/extension-mention";
+import MentionExtension from "@tiptap/extension-mention";
+import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import {
   mergeAttributes,
   ReactNodeViewRenderer,
@@ -47,30 +45,27 @@ export const ChatMention = MentionExtension.extend({
       ...this.parent?.(),
       category: {
         default: "entity",
-        parseHTML: (el: HTMLElement) =>
-          el.getAttribute("data-category") ?? "entity",
+        parseHTML: (el: HTMLElement) => el.dataset.category ?? "entity",
         renderHTML: (attrs: Record<string, unknown>) => ({
           "data-category": attrs.category,
         }),
       },
       kind: {
         default: "document",
-        parseHTML: (el: HTMLElement) =>
-          el.getAttribute("data-kind") ?? "document",
+        parseHTML: (el: HTMLElement) => el.dataset.kind ?? "document",
         renderHTML: (attrs: Record<string, unknown>) => ({
           "data-kind": attrs.kind,
         }),
       },
       mimeType: {
         default: null,
-        parseHTML: (el: HTMLElement) => el.getAttribute("data-mime-type"),
+        parseHTML: (el: HTMLElement) => el.dataset.mimeType,
         renderHTML: (attrs: Record<string, unknown>) =>
           attrs.mimeType ? { "data-mime-type": attrs.mimeType } : {},
       },
       sourceWorkspaceId: {
         default: null,
-        parseHTML: (el: HTMLElement) =>
-          el.getAttribute("data-source-workspace-id"),
+        parseHTML: (el: HTMLElement) => el.dataset.sourceWorkspaceId,
         renderHTML: (attrs: Record<string, unknown>) =>
           attrs.sourceWorkspaceId
             ? { "data-source-workspace-id": attrs.sourceWorkspaceId }

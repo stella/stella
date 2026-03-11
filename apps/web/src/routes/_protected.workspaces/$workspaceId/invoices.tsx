@@ -1,4 +1,5 @@
 import { Suspense, useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -60,7 +61,7 @@ function InvoicesPage() {
       <div className="flex-1 overflow-auto p-4">
         <Suspense
           fallback={
-            <div className="py-8 text-center text-sm text-muted-foreground">
+            <div className="text-muted-foreground py-8 text-center text-sm">
               {t("billing.loading")}
             </div>
           }
@@ -82,7 +83,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
 
   if (data.rows.length === 0) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground py-16 text-center text-sm">
         {t("billing.invoices.noInvoices")}
       </div>
     );
@@ -95,7 +96,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
       <div className="overflow-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/50 text-start text-muted-foreground">
+            <tr className="bg-muted/50 text-muted-foreground border-b text-start">
               <th className="px-4 py-2 font-medium">
                 {t("billing.invoices.invoiceNumber")}
               </th>
@@ -117,8 +118,9 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
           <tbody>
             {data.rows.map((invoice) => (
               <tr
-                className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
+                className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() =>
                   navigate({
                     to: "/workspaces/$workspaceId/invoices/$invoiceId",
@@ -138,13 +140,13 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
                 <td className="px-4 py-2.5 tabular-nums">
                   {invoice.invoiceDate}
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground tabular-nums">
+                <td className="text-muted-foreground px-4 py-2.5 tabular-nums">
                   {invoice.dueDate ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums">
                   {formatCurrencyAmount(invoice.totalAmount, invoice.currency)}
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">
+                <td className="text-muted-foreground px-4 py-2.5">
                   {invoice.reference ?? "—"}
                 </td>
               </tr>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -36,6 +37,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
+import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
+import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 import {
   useDeleteWorkspace,
   useUpdateWorkspace,
@@ -44,8 +47,6 @@ import {
   workspaceOptions,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
-import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
-import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 
 const comingSoon = (label: string) => {
   toastManager.add({
@@ -90,6 +91,7 @@ export const MatterMetadataSheet = ({
       },
       {
         onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
           });
@@ -129,6 +131,7 @@ export const MatterMetadataSheet = ({
             type: "error",
           });
         },
+        // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: async () => {
           toastManager.update(toastId, {
             title: t("success.workspaceDeletedSuccessfully"),
@@ -162,7 +165,7 @@ export const MatterMetadataSheet = ({
           <SheetPanel className="flex flex-1 flex-col gap-4">
             {/* Reference */}
             <section className="px-4">
-              <span className="mb-1.5 block text-sm font-medium text-muted-foreground">
+              <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
                 {t("workspaces.reference")}
               </span>
               <Input
@@ -180,7 +183,7 @@ export const MatterMetadataSheet = ({
                 value={referenceValue}
               />
               {referenceError && (
-                <p className="mt-1 text-xs text-destructive">
+                <p className="text-destructive mt-1 text-xs">
                   {referenceError}
                 </p>
               )}
@@ -248,7 +251,7 @@ export const MatterMetadataSheet = ({
             {canDeleteWorkspace && (
               <div className="mt-auto border-t px-2 pt-4">
                 <Button
-                  className="justify-start text-destructive"
+                  className="text-destructive justify-start"
                   disabled={deleteWorkspace.isPending}
                   onClick={() => setIsAlertDialogOpen(true)}
                   size="sm"

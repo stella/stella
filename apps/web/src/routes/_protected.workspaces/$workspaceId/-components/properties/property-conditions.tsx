@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -153,42 +154,40 @@ export const PropertyConditions = ({
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("workspaces.properties.editConditions")}</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("workspaces.properties.editConditionsDescription")}
           </p>
         </DialogHeader>
         <ScrollArea className="h-96">
           <DialogPanel>
-            {data.map(({ property, conditionData }) => {
-              return (
-                <Fragment key={property.id}>
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 first:hidden">
-                    <Separator />
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {t("workspaces.properties.conditionSeparator")}
-                    </span>
-                    <Separator />
-                  </div>
-                  <ConditionRow
-                    data={conditionData}
-                    onConditionChange={(condition) => {
-                      const index = dependencies.findIndex(
-                        (d) => d.dependsOnPropertyId === property.id,
-                      );
+            {data.map(({ property, conditionData }) => (
+              <Fragment key={property.id}>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 first:hidden">
+                  <Separator />
+                  <span className="text-muted-foreground text-xs font-medium">
+                    {t("workspaces.properties.conditionSeparator")}
+                  </span>
+                  <Separator />
+                </div>
+                <ConditionRow
+                  data={conditionData}
+                  onConditionChange={(condition) => {
+                    const index = dependencies.findIndex(
+                      (d) => d.dependsOnPropertyId === property.id,
+                    );
 
-                      if (index === -1) {
-                        return;
-                      }
-                      replaceValue(index, {
-                        dependsOnPropertyId: property.id,
-                        condition,
-                      });
-                    }}
-                    property={property}
-                  />
-                </Fragment>
-              );
-            })}
+                    if (index === -1) {
+                      return;
+                    }
+                    replaceValue(index, {
+                      dependsOnPropertyId: property.id,
+                      condition,
+                    });
+                  }}
+                  property={property}
+                />
+              </Fragment>
+            ))}
           </DialogPanel>
         </ScrollArea>
       </DialogPopup>

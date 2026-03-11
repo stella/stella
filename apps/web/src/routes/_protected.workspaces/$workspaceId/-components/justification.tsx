@@ -1,6 +1,8 @@
 import type { PropsWithChildren } from "react";
+
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import parse, { domToReact, Element, type DOMNode } from "html-react-parser";
+import parse, { domToReact, Element } from "html-react-parser";
+import type { DOMNode } from "html-react-parser";
 import { produce } from "immer";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -14,42 +16,40 @@ type JustificationProps = {
   justification: WorkspaceJustification;
 };
 
-export const Justification = ({ justification }: JustificationProps) => {
-  return (
-    <p>
-      {parse(justification.htmlContent, {
-        replace: (node) => {
-          if (!(node instanceof Element)) {
-            return node;
-          }
+export const Justification = ({ justification }: JustificationProps) => (
+  <p>
+    {parse(justification.htmlContent, {
+      replace: (node) => {
+        if (!(node instanceof Element)) {
+          return node;
+        }
 
-          const pageNumberAttribute = node.attribs["data-page-number"];
-          const fileFieldId = node.attribs["data-field-id"];
+        const pageNumberAttribute = node.attribs["data-page-number"];
+        const fileFieldId = node.attribs["data-field-id"];
 
-          if (!pageNumberAttribute || !fileFieldId) {
-            return node;
-          }
+        if (!pageNumberAttribute || !fileFieldId) {
+          return node;
+        }
 
-          const pageNumber = +pageNumberAttribute;
+        const pageNumber = +pageNumberAttribute;
 
-          if (Number.isNaN(pageNumber)) {
-            return node;
-          }
+        if (Number.isNaN(pageNumber)) {
+          return node;
+        }
 
-          return (
-            <Citation
-              fileFieldId={fileFieldId}
-              justification={justification}
-              pageNumber={pageNumber}
-            >
-              {domToReact(node.children as DOMNode[])}
-            </Citation>
-          );
-        },
-      })}
-    </p>
-  );
-};
+        return (
+          <Citation
+            fileFieldId={fileFieldId}
+            justification={justification}
+            pageNumber={pageNumber}
+          >
+            {domToReact(node.children as DOMNode[])}
+          </Citation>
+        );
+      },
+    })}
+  </p>
+);
 
 type CitationProps = {
   justification: WorkspaceJustification;
@@ -82,9 +82,10 @@ const Citation = ({
   return (
     <button
       className={cn(
-        "inline-block rounded bg-muted px-1.5 py-0.5 text-xs font-medium transition-colors hover:bg-accent",
+        "bg-muted hover:bg-accent inline-block rounded px-1.5 py-0.5 text-xs font-medium transition-colors",
         isActive && "bg-accent hover:bg-accent",
       )}
+      // eslint-disable-next-line typescript/no-misused-promises
       onClick={async () => {
         createBoundingBoxes();
 

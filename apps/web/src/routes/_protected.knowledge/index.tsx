@@ -7,8 +7,8 @@ import {
   LightbulbIcon,
   PlugIcon,
   TextQuoteIcon,
-  type LucideIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -61,14 +61,14 @@ function KnowledgeLanding() {
               <div
                 className={cn(
                   "flex size-10 items-center justify-center",
-                  "rounded-lg bg-muted",
+                  "bg-muted rounded-lg",
                 )}
               >
                 <Icon className="size-5" />
               </div>
               <div className="mt-3">
                 <h2 className="text-sm font-semibold">{title}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-sm">
                   {description}
                 </p>
               </div>
@@ -79,7 +79,7 @@ function KnowledgeLanding() {
             return (
               <Link
                 className={cn(
-                  "rounded-xl border bg-card p-5",
+                  "bg-card rounded-xl border p-5",
                   "transition-colors",
                   "hover:border-foreground/15 hover:shadow-sm",
                 )}
@@ -94,13 +94,13 @@ function KnowledgeLanding() {
           return (
             <div
               className={cn(
-                "rounded-xl border bg-card p-5",
+                "bg-card rounded-xl border p-5",
                 "cursor-default opacity-50",
               )}
               key={section.key}
             >
               {cardBody}
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="text-muted-foreground mt-3 text-xs">
                 {t("common.comingSoon")}
               </p>
             </div>

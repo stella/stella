@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -181,7 +182,7 @@ const FieldError = ({ message }: { message?: string }) => {
   if (!message) {
     return null;
   }
-  return <p className="text-sm text-destructive-foreground">{message}</p>;
+  return <p className="text-destructive-foreground text-sm">{message}</p>;
 };
 
 const FieldRenderer = ({
@@ -193,7 +194,7 @@ const FieldRenderer = ({
 }: {
   field: ResolvedField;
   value: unknown;
-  onChange: (path: string, value: unknown) => void;
+  onChange: (path: string, value?: unknown) => void;
   onBlur?: (path: string) => void;
   error?: string;
 }) => {
@@ -333,7 +334,7 @@ const ArrayFieldRenderer = ({
 }: {
   field: ResolvedField;
   values: FormValues;
-  onChange: (path: string, value: unknown) => void;
+  onChange: (path: string, value?: unknown) => void;
   onBlur: (path: string) => void;
   onClearPaths: (paths: string[]) => void;
   errors: FieldErrors;
@@ -382,7 +383,7 @@ const ArrayFieldRenderer = ({
     const stalePaths: string[] = [];
     for (const subField of itemFields) {
       const trailingPath = `${field.path}[${items.length - 1}].${subField.path}`;
-      onChange(trailingPath, undefined);
+      onChange(trailingPath);
       stalePaths.push(trailingPath);
     }
     onClearPaths(stalePaths);
@@ -495,11 +496,13 @@ const setNestedValue = (
   value: unknown,
 ) => {
   const parts = path.split(".");
-  // biome-ignore lint/style/noNonNullAssertion: path is non-empty
-  const last = parts.pop()!;
+  const last = parts.at(-1);
+  if (!last) {
+    return;
+  }
   let current = obj;
 
-  for (const part of parts) {
+  for (const part of parts.slice(0, -1)) {
     if (!(part in current) || typeof current[part] !== "object") {
       current[part] = {};
     }
@@ -677,21 +680,24 @@ export const TemplateForm = ({
    *  after an array item is removed). */
   const handleClearPaths = useCallback((paths: string[]) => {
     setErrors((prev) => {
-      const next = { ...prev };
+      let next = { ...prev };
       for (const p of paths) {
-        delete next[p];
+        const { [p]: _, ...rest } = next;
+        next = rest;
       }
       return next;
     });
     setTouched((prev) => {
-      const next = { ...prev };
+      let next = { ...prev };
       for (const p of paths) {
-        delete next[p];
+        const { [p]: _, ...rest } = next;
+        next = rest;
       }
       return next;
     });
     for (const p of paths) {
-      delete touchedRef.current[p];
+      const { [p]: _, ...rest } = touchedRef.current;
+      touchedRef.current = rest;
     }
   }, []);
 
@@ -797,7 +803,7 @@ export const TemplateForm = ({
       anchor.href = url;
       // SAFETY: the discriminated union guarantees `file` is
       // defined when `fileName` (from server-side path) is absent.
-      const baseName = fileName ?? (file as File).name;
+      const baseName = fileName ?? file.name;
       const filename =
         format === "pdf"
           ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
@@ -825,7 +831,7 @@ export const TemplateForm = ({
     (e: React.FormEvent) => {
       e.preventDefault();
       // Errors are surfaced as toasts inside handleDownload
-      handleDownload("docx").catch(() => undefined);
+      handleDownload("docx").catch(() => {});
     },
     [handleDownload],
   );
@@ -911,7 +917,7 @@ export const TemplateForm = ({
         )}
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-          {Array.from(grouped.entries()).map(([prefix, groupFields]) => (
+          {[...grouped.entries()].map(([prefix, groupFields]) => (
             <fieldset
               className={cn(
                 "flex flex-col gap-4",
@@ -920,7 +926,7 @@ export const TemplateForm = ({
               key={prefix || "__root"}
             >
               {prefix !== "" && (
-                <legend className="px-1 text-sm font-medium text-muted-foreground">
+                <legend className="text-muted-foreground px-1 text-sm font-medium">
                   {prefix}
                 </legend>
               )}
@@ -954,6 +960,7 @@ export const TemplateForm = ({
             {templateId && (
               <Button
                 disabled={loading || preview.kind === "loading"}
+                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={handlePreview}
                 type="button"
                 variant="ghost"
@@ -966,7 +973,8 @@ export const TemplateForm = ({
             )}
             <Button
               disabled={loading || hasErrors}
-              onClick={() => handleDownload("pdf").catch(() => undefined)}
+              // eslint-disable-next-line typescript/no-misused-promises
+              onClick={() => handleDownload("pdf").catch(() => {})}
               type="button"
               variant="outline"
             >
@@ -1016,7 +1024,7 @@ export const TemplateForm = ({
                       </p>
                     </div>
                   )}
-                  <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+                  <div className="bg-muted/30 max-h-96 overflow-y-auto rounded-lg border p-4">
                     {preview.paragraphs.map((p, i) => (
                       <p
                         className={cn(

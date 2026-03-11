@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -123,13 +124,13 @@ export const ClauseImportDialog = ({
   }, [file, t, onImported]);
 
   const handleClose = useCallback(
-    (open: boolean) => {
-      if (!open) {
+    (isOpen: boolean) => {
+      if (!isOpen) {
         setFile(null);
         setPreviewCount(null);
         setResult(null);
       }
-      onOpenChange(open);
+      onOpenChange(isOpen);
     },
     [onOpenChange],
   );
@@ -142,7 +143,7 @@ export const ClauseImportDialog = ({
         </DialogHeader>
         <DialogPanel className="grid gap-4">
           <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6">
-            <UploadIcon className="size-8 text-muted-foreground" />
+            <UploadIcon className="text-muted-foreground size-8" />
             <Button
               onClick={() => inputRef.current?.click()}
               size="sm"
@@ -158,7 +159,7 @@ export const ClauseImportDialog = ({
               type="file"
             />
             {file && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {file.name}
                 {previewCount !== null &&
                   ` (${t("clauses.clauseCount", { count: previewCount })})`}
@@ -167,7 +168,7 @@ export const ClauseImportDialog = ({
           </div>
 
           {result && (
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            <div className="bg-muted/30 rounded-lg border p-3 text-sm">
               <p>
                 {t("clauses.importResult", {
                   created: result.created,
@@ -175,7 +176,7 @@ export const ClauseImportDialog = ({
                 })}
               </p>
               {result.errors.length > 0 && (
-                <ul className="mt-2 list-inside list-disc text-destructive-foreground">
+                <ul className="text-destructive-foreground mt-2 list-inside list-disc">
                   {result.errors.map((err) => (
                     <li key={err}>{err}</li>
                   ))}
@@ -189,6 +190,7 @@ export const ClauseImportDialog = ({
             {t("common.cancel")}
           </DialogClose>
           {!result && (
+            // eslint-disable-next-line typescript/no-misused-promises
             <Button disabled={!file || importing} onClick={handleImport}>
               {importing ? t("clauses.importing") : t("clauses.import")}
             </Button>

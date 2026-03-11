@@ -1,5 +1,6 @@
 import { eq, inArray, sql } from "drizzle-orm";
-import { t, type Static } from "elysia";
+import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { rateEntries, rateTables } from "@/api/db/schema";
@@ -44,7 +45,7 @@ export const readRateTablesHandler = async ({
   );
 
   // Batch count entries per table
-  const tableIds = tables.map((t) => t.id);
+  const tableIds = tables.map((table) => table.id);
   const entryCounts = new Map<string, number>();
 
   if (tableIds.length > 0) {

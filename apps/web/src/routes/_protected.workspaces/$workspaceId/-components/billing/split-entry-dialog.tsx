@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -145,7 +146,7 @@ export const SplitEntryDialog = ({
               </div>
               {splits.length > 2 && (
                 <Button
-                  className="size-8 text-destructive"
+                  className="text-destructive size-8"
                   onClick={() => removeSplit(index)}
                   size="icon"
                   variant="ghost"
@@ -170,7 +171,7 @@ export const SplitEntryDialog = ({
               className={
                 totalPercentage === 100
                   ? "text-xs text-emerald-600"
-                  : "text-xs text-destructive"
+                  : "text-destructive text-xs"
               }
             >
               {t("billing.split.percentValue", {

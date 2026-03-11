@@ -1,15 +1,18 @@
-// biome-ignore lint/style/noRestrictedImports: defineTool wraps tool() internally
-import { tool, type Tool, type ToolExecutionOptions } from "ai";
+// eslint-disable-next-line no-restricted-imports -- defineTool wraps tool() internally
+import { tool } from "ai";
+import type { Tool, ToolExecutionOptions } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { adminDb, type ScopedDb } from "@/api/db";
+import { adminDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
-// biome-ignore lint/style/noRestrictedImports: brands actor-validated IDs
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -48,8 +51,8 @@ export const defineTool = <INPUT, OUTPUT>({
     execute: async (args: INPUT, options: ToolExecutionOptions) => {
       try {
         return await execute(args, options);
-      } catch (err) {
-        captureError(err, { toolName: name });
+      } catch (error) {
+        captureError(error, { toolName: name });
         // SAFETY: the outer `as Tool<INPUT, OUTPUT | { error: string }>`
         // widens the execute return type; this narrower return is sound
         // within that widened context.
@@ -85,7 +88,7 @@ const formatFieldValue = (content: FieldContent): string => {
       });
     }
     case "int":
-      if (content.value == null) {
+      if (content.value === null || content.value === undefined) {
         return "";
       }
       return content.currency
@@ -983,7 +986,7 @@ export const createOrgTools = ({
         .max(10)
         .describe("Clarifying questions to ask"),
     }),
-    execute: async ({ analysis, questions }) => ({
+    execute: ({ analysis, questions }) => ({
       status: "awaiting_response",
       analysis,
       questionCount: questions.length,

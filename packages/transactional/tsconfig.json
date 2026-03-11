@@ -1,7 +1,6 @@
 {
   "extends": "@stella/typescript-config/react-library.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@stella/transactional/*": ["./*"]
     }

@@ -17,7 +17,6 @@
  */
 
 import "dotenv/config";
-
 import { sql } from "drizzle-orm";
 
 import { db } from "@/api/db";
@@ -153,7 +152,7 @@ const main = async () => {
   process.exit(0);
 };
 
-main().catch((err) => {
-  console.error("Migration failed:", err);
+main().catch((error) => {
+  console.error("Migration failed:", error);
   process.exit(1);
 });

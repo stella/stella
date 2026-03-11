@@ -3,7 +3,7 @@ import JSZip from "jszip";
 
 import { markdownToDocx } from "./markdown-to-docx";
 
-const TEMPLATE_PATH = new URL("./fixtures/test-template.docx", import.meta.url)
+const TEMPLATE_PATH = new URL("fixtures/test-template.docx", import.meta.url)
   .pathname;
 
 const SAMPLE_MARKDOWN = `# Non-Disclosure Agreement

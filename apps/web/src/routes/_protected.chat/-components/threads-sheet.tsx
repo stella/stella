@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon, TrashIcon } from "lucide-react";
@@ -37,7 +38,7 @@ export const ThreadsSheet = () => {
   const { data: threads } = useQuery(chatThreadsOptions(queryClient));
 
   const sortedThreads = threads
-    ? [...threads].sort((a, b) => b.createdAt - a.createdAt)
+    ? [...threads].toSorted((a, b) => b.createdAt - a.createdAt)
     : [];
 
   const chatEvent = eventHandlerV2<ChatActor>();
@@ -68,6 +69,7 @@ export const ThreadsSheet = () => {
   );
 
   const handleDelete = (threadId: string) => {
+    // eslint-disable-next-line typescript/no-floating-promises
     actor.connection?.deleteThread({ threadId });
   };
 
@@ -88,13 +90,13 @@ export const ThreadsSheet = () => {
         <SheetPanel>
           <div className="flex flex-col gap-1">
             {sortedThreads.length === 0 && (
-              <p className="py-4 text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground py-4 text-center text-sm">
                 {t("chat.noThreads")}
               </p>
             )}
             {sortedThreads.map((thread) => (
               <div
-                className="group flex items-center gap-1 rounded-lg transition-colors hover:bg-muted"
+                className="group hover:bg-muted flex items-center gap-1 rounded-lg transition-colors"
                 key={thread.id}
               >
                 <Link
@@ -106,7 +108,7 @@ export const ThreadsSheet = () => {
                   <span className="truncate text-sm font-medium">
                     {thread.title}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-muted-foreground text-xs">
                     {new Date(thread.createdAt).toLocaleDateString()}
                   </span>
                 </Link>

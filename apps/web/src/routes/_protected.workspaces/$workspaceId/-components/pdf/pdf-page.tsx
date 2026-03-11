@@ -1,12 +1,16 @@
-import { useEffect, useEffectEvent, useRef, type CSSProperties } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
+import type { CSSProperties } from "react";
+
 import { usePostHog } from "@posthog/react";
 import {
   AbortException,
   RenderingCancelledException,
   TextLayer,
 } from "pdfjs-dist";
+import type { PDFPageProxy, PageViewport } from "pdfjs-dist";
 import { useShallow } from "zustand/react/shallow";
 
+import { transformUnknownError } from "@/lib/errors/utils";
 import {
   EOC_CLASS_NAME,
   PAGE_NUMBER_ATTRIBUTE,
@@ -19,11 +23,8 @@ import {
   getCanvasTransform,
 } from "@/lib/pdf/utils";
 import { captureError } from "@/lib/posthog/utils";
-import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
-
 import "pdfjs-dist/build/pdf.worker.mjs";
-
-import { transformUnknownError } from "@/lib/errors/utils";
+import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 type PdfPageProps = {
   fileId: string;
@@ -82,10 +83,10 @@ export const PdfPage = ({ fileId, pageId, isActive }: PdfPageProps) => {
 };
 
 type PageData = {
-  proxy: import("pdfjs-dist").PDFPageProxy;
+  proxy: PDFPageProxy;
   originalWidth: number;
   originalHeight: number;
-  viewport: import("pdfjs-dist").PageViewport;
+  viewport: PageViewport;
 };
 
 type PdfPageCanvasProps = {
@@ -166,13 +167,14 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
       textContentSource: proxy.streamTextContent(),
     });
 
+    // eslint-disable-next-line typescript/no-floating-promises
     renderTask.promise.then(async () => {
       try {
         textLayerContainer.innerHTML = "";
         await textLayer.render();
 
         const eoc = createEndOfContent();
-        textLayerContainer.appendChild(eoc);
+        textLayerContainer.append(eoc);
 
         advancePageRendering(fileId, pageId);
       } catch (unknownError) {
@@ -185,6 +187,7 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
 
     return () => {
       renderTask.cancel();
+      // eslint-disable-next-line typescript/no-floating-promises
       renderTask.promise.finally(() => proxy.cleanup());
       textLayer.cancel();
     };

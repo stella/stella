@@ -1,4 +1,5 @@
 import type { RichPatchValue } from "@/api/handlers/docx/types";
+
 import type { ClauseBody } from "./types";
 
 /**

@@ -10,7 +10,8 @@
 import * as slimdom from "slimdom";
 
 import { isElement, W_NS } from "./ooxml";
-import { buildRunMap, type RunSpan } from "./run-map";
+import { buildRunMap } from "./run-map";
+import type { RunSpan } from "./run-map";
 import type { DocxComment, RevisionAuthor } from "./types";
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
@@ -87,11 +88,11 @@ const injectAnchors = (
     const refRPr = doc.createElementNS(W_NS, "w:rPr");
     const refStyle = doc.createElementNS(W_NS, "w:rStyle");
     refStyle.setAttributeNS(W_NS, "w:val", "CommentReference");
-    refRPr.appendChild(refStyle);
-    refRun.appendChild(refRPr);
+    refRPr.append(refStyle);
+    refRun.append(refRPr);
     const ref = doc.createElementNS(W_NS, "w:commentReference");
     ref.setAttributeNS(W_NS, "w:id", String(commentId));
-    refRun.appendChild(ref);
+    refRun.append(ref);
 
     // Position the anchors
     const startResult = findSpanAt(spans, comment.charOffset);
@@ -106,14 +107,14 @@ const injectAnchors = (
         p.insertBefore(rangeEnd, endAnchor.nextSibling);
         p.insertBefore(refRun, rangeEnd.nextSibling);
       } else {
-        p.appendChild(rangeEnd);
-        p.appendChild(refRun);
+        p.append(rangeEnd);
+        p.append(refRun);
       }
     } else {
       // Fallback: append at end of paragraph
-      p.appendChild(rangeStart);
-      p.appendChild(rangeEnd);
-      p.appendChild(refRun);
+      p.append(rangeStart);
+      p.append(rangeEnd);
+      p.append(refRun);
     }
   }
 
@@ -150,7 +151,7 @@ const buildCommentsXml = (
       "xmlns:r",
       "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     );
-    doc.appendChild(commentsEl);
+    doc.append(commentsEl);
   }
 
   for (let i = 0; i < comments.length; i++) {
@@ -169,11 +170,11 @@ const buildCommentsXml = (
     const t = doc.createElementNS(W_NS, "w:t");
     t.setAttributeNS(XML_NS, "xml:space", "preserve");
     t.textContent = comment.text;
-    r.appendChild(t);
-    p.appendChild(r);
-    commentEl.appendChild(p);
+    r.append(t);
+    p.append(r);
+    commentEl.append(p);
 
-    commentsEl.appendChild(commentEl);
+    commentsEl.append(commentEl);
   }
 
   return slimdom.serializeToWellFormedString(doc);

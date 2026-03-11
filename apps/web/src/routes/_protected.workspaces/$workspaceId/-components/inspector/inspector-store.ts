@@ -118,7 +118,7 @@ export const useInspectorStore = create<State & Actions>()(
       });
 
       if (tab?.type === "pdf") {
-        usePdfStore.getState().cleanupPdf(id);
+        void usePdfStore.getState().cleanupPdf(id);
       }
     },
 
@@ -138,7 +138,7 @@ export const useInspectorStore = create<State & Actions>()(
 
       const pdfStore = usePdfStore.getState();
       for (const id of pdfIds) {
-        pdfStore.cleanupPdf(id);
+        void pdfStore.cleanupPdf(id);
       }
     },
 

@@ -4,7 +4,6 @@ import { resolveVerificationCode } from "@/api/handlers/verify/resolve";
 import { resolveVerificationCodeAuth } from "@/api/handlers/verify/resolve-auth";
 import { authMacro } from "@/api/lib/auth";
 
-// biome-ignore lint/security/noSecrets: character set, not a secret
 const VCODE_PATTERN = "^[abcdefghjkmnpqrstuvwxyz23456789]{10}$";
 
 /**

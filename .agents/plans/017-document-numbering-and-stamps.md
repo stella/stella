@@ -54,6 +54,7 @@ consent toggle.
 ```
 
 Two parts:
+
 - **Human reference** (`2026/001/015.v3`) — for verbal
   citation, emails, briefs. Plain text.
 - **Verification code** (`stl:kx8mq2n4p3`) — globally unique
@@ -81,13 +82,13 @@ trivially parseable.
 
 ### Why both
 
-| | Footer | Custom property |
-|---|---|---|
-| **For** | Humans (printed, visual) | Machines (re-upload) |
-| **Survives printing** | Yes | No |
-| **Survives editing** | Can be deleted | Usually preserved |
-| **Parse reliability** | Fragile (complex XML) | Trivial (key-value) |
-| **Visible to user** | Yes | No (File → Properties) |
+|                       | Footer                   | Custom property        |
+| --------------------- | ------------------------ | ---------------------- |
+| **For**               | Humans (printed, visual) | Machines (re-upload)   |
+| **Survives printing** | Yes                      | No                     |
+| **Survives editing**  | Can be deleted           | Usually preserved      |
+| **Parse reliability** | Fragile (complex XML)    | Trivial (key-value)    |
+| **Visible to user**   | Yes                      | No (File → Properties) |
 
 Re-upload matching checks custom property first (reliable),
 falls back to footer parsing only if the property is missing.
@@ -113,17 +114,17 @@ The human reference (`2026/001/015.v3`) is org-scoped — two
 orgs can have the same reference. The verification code is
 **globally unique** and enables:
 
-| Use case | How the code helps |
-|---|---|
-| **Deep linking** | URL uses the code, not the reference. No ambiguity across orgs. |
-| **Enumeration prevention** | Can't guess `001/016.v1` because you don't know its code. |
-| **Public verification** | `stella.legal/verify/kx8mq2n4p3` → "Valid Stella document, issued [date]." No login required, no content revealed. |
-| **Content integrity** | Upload file → compare SHA-256 against stored hash for that code → "unmodified" or "modified since [date]." |
-| **Cross-org sharing** | External counsel clicks link → code resolves globally → access check happens after. |
-| **Self-hosted instances** | Code is domain-independent. Change domain → old codes still work. |
-| **API integration** | External systems reference docs by `stl:kx8mq2n4p3`. Stable, permanent identifier. |
-| **Leak forensics** (future) | Generate unique code per download instead of per version. Same format, same footer. Trace which download leaked. |
-| **Multi-org users** (future) | Code resolves globally — no need to guess which org. |
+| Use case                     | How the code helps                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Deep linking**             | URL uses the code, not the reference. No ambiguity across orgs.                                                    |
+| **Enumeration prevention**   | Can't guess `001/016.v1` because you don't know its code.                                                          |
+| **Public verification**      | `stella.legal/verify/kx8mq2n4p3` → "Valid Stella document, issued [date]." No login required, no content revealed. |
+| **Content integrity**        | Upload file → compare SHA-256 against stored hash for that code → "unmodified" or "modified since [date]."         |
+| **Cross-org sharing**        | External counsel clicks link → code resolves globally → access check happens after.                                |
+| **Self-hosted instances**    | Code is domain-independent. Change domain → old codes still work.                                                  |
+| **API integration**          | External systems reference docs by `stl:kx8mq2n4p3`. Stable, permanent identifier.                                 |
+| **Leak forensics** (future)  | Generate unique code per download instead of per version. Same format, same footer. Trace which download leaked.   |
+| **Multi-org users** (future) | Code resolves globally — no need to guess which org.                                                               |
 
 ### Format
 
@@ -137,6 +138,7 @@ Space:    31^10 ≈ 8.2 × 10^14 (800+ trillion)
 ```
 
 Prefixed with `stl:` in the footer for:
+
 - Greppability (`grep "stl:" *.docx`)
 - Distinguishing from random text during parsing
 - Format versioning (`stl2:` if ever needed)
@@ -170,6 +172,7 @@ query itself). Access control happens after resolution.
 ```
 
 Examples:
+
 - `2026/001/015.v3` — matter 2026/001, document 15, version 3
 - `CORP-001/003.v1` — matter CORP-001, document 3, version 1
 - `001/042.v2` — matter 001, document 42, version 2
@@ -177,17 +180,20 @@ Examples:
 ## Security Model
 
 **The DOCX stamp contains only:**
+
 - Human-readable reference (sequential numbers, no org info)
 - Verification code (random, globally unique, reveals nothing)
 - Hyperlink to `stella.legal/v/{code}`
 
 **The stamp must NOT contain:**
+
 - Organization name or ID
 - Internal nanoid entity IDs
 - Workspace nanoid IDs
 - Any information that leaks org structure
 
 **Threat model:**
+
 - Document emailed to opposing counsel → they see a reference
   number and a code. No org name, no internal IDs. Clicking
   the link requires authentication.
@@ -207,11 +213,13 @@ Examples:
 **Goal:** Ensure existing matter numbering works correctly.
 
 **Files:**
+
 - `apps/api/src/lib/matter-reference.ts`
 - `apps/api/src/handlers/workspaces/create.ts`
 - `apps/api/src/db/schema.ts` (`matterCounters` table)
 
 **Tasks:**
+
 1. Write tests for `validatePattern`, `toScopeKey`,
    `toReference` covering edge cases:
    - Year rollover (scope key `2025/` → `2026/`)
@@ -248,20 +256,19 @@ export const documentCounters = p.pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     lastValue: p.integer("last_value").notNull().default(0),
   },
-  (table) => [
-    p.uniqueIndex("document_counters_ws_uidx")
-      .on(table.workspaceId),
-  ],
+  (table) => [p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId)],
 );
 ```
 
 Add to `entities` table:
+
 ```ts
 docSequence: p.integer("doc_sequence"),
 // nullable — folders/tasks don't get one
 ```
 
 Partial unique index:
+
 ```sql
 CREATE UNIQUE INDEX entities_ws_doc_seq_uidx
   ON entities (workspace_id, doc_sequence)
@@ -269,6 +276,7 @@ CREATE UNIQUE INDEX entities_ws_doc_seq_uidx
 ```
 
 Add to `entityVersions` table:
+
 ```ts
 versionNumber: p.integer("version_number").notNull().default(1),
 // Frozen human-readable reference:
@@ -278,6 +286,7 @@ verificationCode: p.varchar("verification_code", { length: 16 }),
 ```
 
 Indexes:
+
 ```sql
 -- For stamp-based lookups (re-upload matching within org):
 CREATE INDEX entity_versions_stamp_idx
@@ -297,8 +306,7 @@ import { nanoid } from "nanoid";
 
 // Custom alphabet: no ambiguous chars (0, O, 1, l, I)
 const VCODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
-const generateVerificationCode = () =>
-  nanoid(10, VCODE_ALPHABET);
+const generateVerificationCode = () => nanoid(10, VCODE_ALPHABET);
 
 // When creating an entity version:
 const stamp = toDocumentReference(
@@ -317,6 +325,7 @@ await db.insert(entityVersions).values({
 ```
 
 **Display:**
+
 - Show reference in entity detail/info panel (monospace,
   copyable)
 - Show in entity list as a subtle column
@@ -343,6 +352,7 @@ invisible custom properties.
 **Architecture: inject on download, not on upload.**
 
 Why:
+
 - The stamp/code on the `entityVersion` row is the source
   of truth
 - On-download injection reads the stored values
@@ -361,6 +371,7 @@ stamp param:
 ```
 
 Org-level default in `organizationSettings`:
+
 ```ts
 documentStampEnabled: p.boolean("document_stamp_enabled")
   .notNull()
@@ -378,9 +389,9 @@ const STAMP_BOOKMARK = "stella_dms_ref";
 
 export const injectStamp = async (
   docxBuffer: ArrayBuffer,
-  stamp: string,           // "2026/001/015.v3"
+  stamp: string, // "2026/001/015.v3"
   verificationCode: string, // "kx8mq2n4p3"
-  baseUrl: string,          // "https://stella.legal"
+  baseUrl: string, // "https://stella.legal"
 ): Promise<ArrayBuffer> => {
   const zip = await JSZip.loadAsync(docxBuffer);
 
@@ -409,6 +420,7 @@ const injectCustomProperties = (
 ```
 
 Result in `docProps/custom.xml`:
+
 ```xml
 <Properties xmlns="...custom-properties..."
             xmlns:vt="...vt...">
@@ -441,6 +453,7 @@ const injectFooter = (
 ```
 
 Footer XML:
+
 ```xml
 <w:p>
   <w:pPr>
@@ -468,6 +481,7 @@ Footer XML:
 ```
 
 The hyperlink relationship in `word/_rels/footer1.xml.rels`:
+
 ```xml
 <Relationship Id="rId_stella_vcode"
   Type="http://...hyperlink"
@@ -476,6 +490,7 @@ The hyperlink relationship in `word/_rels/footer1.xml.rels`:
 ```
 
 **Edge cases:**
+
 - Document already has a footer → append stamp paragraph
   after existing content, never replace
 - Document has an existing Stella stamp (detected by
@@ -492,6 +507,7 @@ The hyperlink relationship in `word/_rels/footer1.xml.rels`:
 **Download handler changes (`read-by-id.ts`):**
 
 For DOCX downloads with stamp enabled:
+
 1. Fetch file bytes from S3 (instead of presigned URL)
 2. Look up the entity's current version stamp + code
 3. Call `injectStamp(buffer, stamp, code, baseUrl)`
@@ -503,6 +519,7 @@ For all other cases: presigned URL redirect (no change).
 Stamp each DOCX individually before adding to ZIP.
 
 **Performance:**
+
 - JSZip parse + modify + serialize: ~50-200ms for typical
   legal documents (1-10MB)
 - Additional S3 fetch: ~20-100ms (same region)
@@ -542,9 +559,7 @@ export const extractStamp = async (
   const zip = await JSZip.loadAsync(docxBuffer);
 
   // 1. Try custom properties (fast, reliable)
-  const customXml = await zip
-    .file("docProps/custom.xml")
-    ?.async("string");
+  const customXml = await zip.file("docProps/custom.xml")?.async("string");
   if (customXml) {
     const code = parseProperty(customXml, "stella-code");
     const ref = parseProperty(customXml, "stella-ref");
@@ -610,6 +625,7 @@ User uploads DOCX to a matter
 ```
 
 **Security:**
+
 - Lookup scoped by `organizationId` (even for verification
   code — add org check after global resolution)
 - Write access check before offering "update existing"
@@ -622,13 +638,13 @@ User uploads DOCX to a matter
 
 ## Total Estimated Effort
 
-| Phase | Effort |
-|---|---|
-| 1. Audit & fix matter numbering | 0.5 days |
-| 2. Document numbering + verification codes | 2 days |
-| 3. DOCX stamp injection (footer + properties) | 2.5 days |
-| 4. Round-trip re-upload | 2 days |
-| **Total** | **7 days** |
+| Phase                                         | Effort     |
+| --------------------------------------------- | ---------- |
+| 1. Audit & fix matter numbering               | 0.5 days   |
+| 2. Document numbering + verification codes    | 2 days     |
+| 3. DOCX stamp injection (footer + properties) | 2.5 days   |
+| 4. Round-trip re-upload                       | 2 days     |
+| **Total**                                     | **7 days** |
 
 ## Additional Considerations
 
@@ -705,6 +721,7 @@ code from the leaked file and sees exactly who downloaded it,
 when, and from which IP.
 
 **Why it's a power-up, not core:**
+
 - Core users don't need forensic tracing
 - It creates significantly more DB rows (every download = row)
 - It's a compliance/security feature that enterprises expect
@@ -719,13 +736,15 @@ export const downloadCodes = p.pgTable(
   {
     id: pNanoid.primaryKey(),
     // Links back to the version:
-    entityVersionId: p.varchar("entity_version_id", { length: 21 })
+    entityVersionId: p
+      .varchar("entity_version_id", { length: 21 })
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     // Unique per-download code (same format as verificationCode):
     code: p.varchar("code", { length: 16 }).notNull(),
     // Who downloaded:
-    userId: p.varchar("user_id", { length: 21 })
+    userId: p
+      .varchar("user_id", { length: 21 })
       .notNull()
       .references(() => user.id),
     // Context:
@@ -735,8 +754,7 @@ export const downloadCodes = p.pgTable(
   },
   (table) => [
     p.uniqueIndex("download_codes_code_uidx").on(table.code),
-    p.index("download_codes_version_idx")
-      .on(table.entityVersionId),
+    p.index("download_codes_version_idx").on(table.entityVersionId),
   ],
 );
 ```
@@ -744,6 +762,7 @@ export const downloadCodes = p.pgTable(
 **How it works:**
 
 v1 (core, no forensics):
+
 ```
 Download DOCX → inject version's verificationCode
   → footer: "2026/001/015.v3  stl:kx8mq2n4p3"
@@ -751,6 +770,7 @@ Download DOCX → inject version's verificationCode
 ```
 
 With forensics power-up enabled:
+
 ```
 Download DOCX → generate new downloadCode
   → insert into downloadCodes (linking to version)
@@ -801,10 +821,12 @@ Admin opens document → "Download history" tab
 **Audit log entry on download (always, even without forensics):**
 
 Even without the power-up, log every download:
+
 ```ts
 // Always log (audit trail, no per-download code):
-{ action: "document.downloaded", entityVersionId, userId,
-  ip, timestamp }
+{
+  action: ("document.downloaded", entityVersionId, userId, ip, timestamp);
+}
 ```
 
 The forensics power-up adds the per-download code on top
@@ -812,6 +834,7 @@ of this, enabling code-to-person tracing from the document
 itself (not just from the audit log).
 
 **What makes this a good power-up:**
+
 - Zero friction: same footer format, invisible to users
 - High value: legal privilege breaches are career-ending;
   firms will pay to have tracing
@@ -822,14 +845,14 @@ itself (not just from the audit log).
 
 ## Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Footer injection breaks formatting | High | Test with 20+ real DOCX files. Append-only: never modify existing footer content. Use bookmark for idempotent updates. |
-| Memory pressure from proxying DOCX | Medium | Skip for files > 50MB. Typical legal docs (1-10MB) are fine to buffer. |
-| Custom properties stripped by tool | Low | Footer bookmark is the fallback. Extraction checks both. |
-| Race condition on document counter | Low | Same upsert + increment as matter counters, already proven. |
-| User confusion on re-upload dialog | Medium | Clear wording with document + matter names. "Upload as new" is always the safe default. |
-| Old stamps reference renamed matters | None | Stamps are frozen strings. Lookup by stamp column. |
+| Risk                                 | Impact | Mitigation                                                                                                             |
+| ------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Footer injection breaks formatting   | High   | Test with 20+ real DOCX files. Append-only: never modify existing footer content. Use bookmark for idempotent updates. |
+| Memory pressure from proxying DOCX   | Medium | Skip for files > 50MB. Typical legal docs (1-10MB) are fine to buffer.                                                 |
+| Custom properties stripped by tool   | Low    | Footer bookmark is the fallback. Extraction checks both.                                                               |
+| Race condition on document counter   | Low    | Same upsert + increment as matter counters, already proven.                                                            |
+| User confusion on re-upload dialog   | Medium | Clear wording with document + matter names. "Upload as new" is always the safe default.                                |
+| Old stamps reference renamed matters | None   | Stamps are frozen strings. Lookup by stamp column.                                                                     |
 
 ## Non-goals (v1)
 

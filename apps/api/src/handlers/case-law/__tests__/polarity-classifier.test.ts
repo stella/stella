@@ -70,11 +70,11 @@ describe("isValidPolarity", () => {
 
 describe("POLARITY_WEIGHT", () => {
   test("positive has highest weight", () => {
-    expect(POLARITY_WEIGHT.positive).toBe(1.0);
+    expect(POLARITY_WEIGHT.positive).toBe(1);
   });
 
   test("negative has zero weight", () => {
-    expect(POLARITY_WEIGHT.negative).toBe(0.0);
+    expect(POLARITY_WEIGHT.negative).toBe(0);
   });
 
   test("neutral and unknown have half weight", () => {

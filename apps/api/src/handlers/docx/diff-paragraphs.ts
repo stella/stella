@@ -48,7 +48,7 @@ const wordDiff = (oldText: string, newText: string): Diff[] => {
           tokenList.push(token);
           tokenToIndex.set(token, idx);
         }
-        return String.fromCharCode(idx);
+        return String.fromCodePoint(idx);
       })
       .join("");
 
@@ -61,7 +61,7 @@ const wordDiff = (oldText: string, newText: string): Diff[] => {
   return diffs.map(
     ([op, chars]): Diff => [
       op,
-      [...chars].map((c) => tokenList[c.charCodeAt(0)]).join(""),
+      [...chars].map((c) => tokenList[c.codePointAt(0) ?? 0]).join(""),
     ],
   );
 };

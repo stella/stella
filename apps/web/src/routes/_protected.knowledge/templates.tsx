@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -27,10 +28,12 @@ import {
   buildEditableFields,
   ConfigureStep,
   FieldConfigEditor,
-  type EditableField,
-  type NamedCondition,
-  type ResolvedField,
-  type StructureError,
+} from "@/routes/_protected.knowledge/-components/template-wizard";
+import type {
+  EditableField,
+  NamedCondition,
+  ResolvedField,
+  StructureError,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
@@ -143,7 +146,7 @@ function RouteComponent() {
   const handleCategorySelect = useCallback(
     (id: string | null) => {
       setSelectedCategoryId(id);
-      // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       fetchTemplates(id);
     },
     [fetchTemplates],
@@ -155,9 +158,9 @@ function RouteComponent() {
       return;
     }
     initialFetchDone.current = true;
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchTemplates();
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget in effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     fetchCategories();
   }, [fetchTemplates, fetchCategories]);
 
@@ -169,12 +172,12 @@ function RouteComponent() {
         file={view.file}
         onBack={() => {
           setView({ kind: "list" });
-          // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           fetchTemplates();
         }}
         onSaved={() => {
           setView({ kind: "list" });
-          // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           fetchTemplates();
         }}
         structureErrors={view.structureErrors}
@@ -187,7 +190,7 @@ function RouteComponent() {
       <TemplateDetail
         onBack={() => {
           setView({ kind: "list" });
-          // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           fetchTemplates();
         }}
         onFill={(detail) =>
@@ -277,7 +280,7 @@ function RouteComponent() {
             <h2 className="text-base font-semibold">
               {t("templates.downloadReady")}
             </h2>
-            <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+            <p className="text-muted-foreground mt-1 flex items-center justify-center gap-1.5 text-sm">
               <FileTextIcon className="size-3.5" />
               {view.filename}
             </p>
@@ -295,7 +298,7 @@ function RouteComponent() {
   if (!loaded) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t("templates.discovering")}
         </p>
       </div>
@@ -305,8 +308,10 @@ function RouteComponent() {
   return (
     <TemplateList
       categories={categories}
+      // eslint-disable-next-line typescript/no-misused-promises
       onCategoriesChanged={fetchCategories}
       onCategorySelect={handleCategorySelect}
+      // eslint-disable-next-line typescript/no-misused-promises
       onDeleted={() => fetchTemplates()}
       onDiscovered={(file, schema) =>
         setView({
@@ -505,7 +510,7 @@ const TemplateDetail = ({
       setState({ kind: "ready", detail });
     };
 
-    // biome-ignore lint/nursery/noFloatingPromises: effect
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     load();
 
     return () => {
@@ -574,7 +579,7 @@ const TemplateDetail = ({
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         saveRename();
         return;
       }
@@ -702,7 +707,7 @@ const TemplateDetail = ({
 
       {state.kind === "loading" && (
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("templates.discovering")}
           </p>
         </div>
@@ -710,7 +715,7 @@ const TemplateDetail = ({
 
       {state.kind === "error" && (
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("templates.loadFailed")}
           </p>
         </div>
@@ -725,6 +730,7 @@ const TemplateDetail = ({
                   aria-label={t("templates.templateName")}
                   className="h-8 text-lg font-semibold"
                   disabled={rename.saving}
+                  // eslint-disable-next-line typescript/no-misused-promises
                   onBlur={saveRename}
                   onChange={(e) =>
                     renameDispatch({ type: "setDraft", value: e.target.value })
@@ -742,10 +748,10 @@ const TemplateDetail = ({
                   <h2 className="text-lg font-semibold">
                     {rename.displayName}
                   </h2>
-                  <PencilIcon className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  <PencilIcon className="text-muted-foreground size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
                 </button>
               )}
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="text-muted-foreground mt-1 text-sm">
                 {t("templates.fieldCount", {
                   count: fieldCount,
                 })}
@@ -779,7 +785,7 @@ const TemplateDetail = ({
                 <div className="mt-4">
                   <div className="rounded-lg border">
                     <div className="border-b px-4 py-3">
-                      <h3 className="text-sm font-medium text-muted-foreground">
+                      <h3 className="text-muted-foreground text-sm font-medium">
                         {t("templates.fieldCount", {
                           count: fieldEdit.fields.length,
                         })}
@@ -792,7 +798,7 @@ const TemplateDetail = ({
                         return (
                           <li key={field.path}>
                             <button
-                              className="flex w-full items-center gap-3 px-4 py-3 text-start text-sm hover:bg-muted/50"
+                              className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
                               onClick={() =>
                                 fieldEditDispatch({
                                   type: "setExpanded",
@@ -802,19 +808,19 @@ const TemplateDetail = ({
                               type="button"
                             >
                               {isExpanded ? (
-                                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+                                <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
                               ) : (
-                                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                                <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
                               )}
                               <span className="min-w-0 flex-1 font-medium">
                                 {field.label || field.path}
                               </span>
-                              <span className="shrink-0 text-xs text-muted-foreground">
+                              <span className="text-muted-foreground shrink-0 text-xs">
                                 {t(`templates.inputTypes.${field.inputType}`)}
                               </span>
                               {field.required && (
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                  {"*"}
+                                <span className="text-muted-foreground shrink-0 text-xs">
+                                  *
                                 </span>
                               )}
                             </button>
@@ -842,6 +848,7 @@ const TemplateDetail = ({
                     </Button>
                     <Button
                       disabled={fieldEdit.saving}
+                      // eslint-disable-next-line typescript/no-misused-promises
                       onClick={saveFields}
                       size="sm"
                     >
@@ -853,7 +860,7 @@ const TemplateDetail = ({
                 fields.length > 0 && (
                   <div className="mt-4 rounded-lg border">
                     <div className="flex items-center justify-between border-b px-4 py-3">
-                      <h3 className="text-sm font-medium text-muted-foreground">
+                      <h3 className="text-muted-foreground text-sm font-medium">
                         {t("templates.fieldCount", {
                           count: fields.length,
                         })}
@@ -876,14 +883,14 @@ const TemplateDetail = ({
                           <span className="min-w-0 flex-1 font-medium">
                             {field.label || field.path}
                           </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
+                          <span className="text-muted-foreground shrink-0 text-xs">
                             {field.inputType
                               ? t(`templates.inputTypes.${field.inputType}`)
                               : t("templates.inputTypes.text")}
                           </span>
                           {field.required && (
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              {"*"}
+                            <span className="text-muted-foreground shrink-0 text-xs">
+                              *
                             </span>
                           )}
                         </li>

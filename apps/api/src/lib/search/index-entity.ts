@@ -89,7 +89,7 @@ export const buildSearchDocument = async (
   let title = entity.name ?? "";
 
   // Sort by propertyId for deterministic title extraction
-  const sortedFields = [...version.fields].sort((a, b) =>
+  const sortedFields = [...version.fields].toSorted((a, b) =>
     a.propertyId.localeCompare(b.propertyId),
   );
 
@@ -124,11 +124,11 @@ export const buildSearchDocument = async (
       if (plaintext) {
         fieldTexts.push(plaintext);
       }
-    } catch (err) {
+    } catch (error) {
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
       // added or rotated after this content was stored.
       // Skip extracted content; re-extract to fix.
-      captureError(err, { entityId });
+      captureError(error, { entityId });
     }
   }
 

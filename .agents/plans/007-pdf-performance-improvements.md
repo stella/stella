@@ -89,7 +89,7 @@ The `lru-cache` instance lives inside the store. Per-file
 ### Modified: pdf-store.ts
 
 - Add a `pageStates` map tracking each page as `idle | rendering
-  | rendered | cleaning`. The existing `renderMap` continues to
+| rendered | cleaning`. The existing `renderMap` continues to
   drive the initial rendering queue; `pageStates` is the new
   source of truth for whether a page's canvas is alive.
 - On `advancePageRendering` (page finishes rendering), push the

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { status, t, type Static } from "elysia";
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 import { nanoid } from "nanoid";
 
 import { adminDb } from "@/api/db";
@@ -10,8 +11,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { WORKSPACE_ACTIVE_STATUS } from "@/api/lib/auth";
-// biome-ignore lint/style/noRestrictedImports: brands freshly-inserted workspace PK for FK usage
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+// eslint-disable-next-line no-restricted-imports -- brands freshly-inserted workspace PK for FK usage
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -41,8 +43,8 @@ export const createWorkspacesHandler = ({
   organizationId,
   userId,
   body,
-}: CreateWorkspacesHandlerProps) => {
-  return adminDb.transaction(async (tx) => {
+}: CreateWorkspacesHandlerProps) =>
+  adminDb.transaction(async (tx) => {
     const workspacesResult = await tx.query.workspaces.findMany({
       columns: {
         name: true,
@@ -130,4 +132,3 @@ export const createWorkspacesHandler = ({
 
     return;
   });
-};

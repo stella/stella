@@ -1,6 +1,7 @@
 "use client";
 
 import type * as React from "react";
+
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import {
@@ -9,7 +10,8 @@ import {
   MoreHorizontalIcon,
 } from "lucide-react";
 
-import { buttonVariants, type Button } from "@stella/ui/components/button";
+import { buttonVariants } from "@stella/ui/components/button";
+import type { Button } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {

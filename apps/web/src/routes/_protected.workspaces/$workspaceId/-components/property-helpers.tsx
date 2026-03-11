@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+
 import {
   AlertCircleIcon,
   CalendarIcon,
@@ -8,8 +9,8 @@ import {
   HashIcon,
   ListChecksIcon,
   TextIcon,
-  type LucideIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { PropertyContentType } from "@stella/api/types";
@@ -79,9 +80,9 @@ export const PropertyIcon = ({ type, className }: PropertyHelperProps) => {
   return <Icon className={cn("size-3.5 shrink-0", className)} />;
 };
 
-export const PropertyPopoverLabel = (props: ComponentProps<"span">) => {
-  return <span className="text-sm font-semibold" {...props} />;
-};
+export const PropertyPopoverLabel = (props: ComponentProps<"span">) => (
+  <span className="text-sm font-semibold" {...props} />
+);
 
 export const PropertyName = ({ type }: PropertyHelperProps) => {
   const t = useTranslations();

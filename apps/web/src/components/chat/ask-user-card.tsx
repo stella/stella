@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+
 import type { getToolName } from "ai";
 import {
   CheckIcon,
@@ -89,12 +90,12 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
 
   if (!input) {
     return (
-      <div className="my-1 rounded-lg border border-border bg-muted/30 text-sm">
+      <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
         <div className="flex items-center gap-2 px-3 py-2">
-          <HelpCircleIcon className="size-4 shrink-0 text-muted-foreground" />
+          <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
           <span className="font-medium">{t("chat.tool.askUser")}</span>
           {isLoading && (
-            <LoaderIcon className="ms-auto size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
           )}
         </div>
       </div>
@@ -106,13 +107,13 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
       className={cn(
         "my-1 rounded-lg border text-sm",
         isDone || submitted
-          ? "border-transparent bg-muted/40"
+          ? "bg-muted/40 border-transparent"
           : "border-border bg-muted/30",
       )}
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <HelpCircleIcon className="size-4 shrink-0 text-muted-foreground" />
+        <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="font-medium">{t("chat.tool.askUser")}</span>
         {(isDone || submitted) && (
           <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
@@ -121,7 +122,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
 
       {/* Analysis */}
       {input.analysis && (
-        <div className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+        <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
           <Streamdown components={ANALYSIS_COMPONENTS}>
             {input.analysis}
           </Streamdown>
@@ -129,7 +130,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
       )}
 
       {/* Questions */}
-      <div className="space-y-3 border-t border-border/50 px-3 py-3">
+      <div className="border-border/50 space-y-3 border-t px-3 py-3">
         {input.questions.map((q, i) => (
           <div className="space-y-1.5" key={q.question}>
             <p className="text-xs font-medium">
@@ -155,7 +156,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
                   </button>
                 ))}
                 <button
-                  className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
                   onClick={() => toggleCustom(i)}
                   type="button"
                 >
@@ -168,7 +169,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
             {!submitted && (!q.options || customMode[i]) && (
               <div className="flex gap-1.5">
                 <input
-                  className="flex-1 rounded-md border bg-background px-2 py-1 text-xs focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+                  className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
                   onChange={(e) => setAnswer(i, e.target.value)}
                   placeholder={q.default ?? t("chat.askUser.placeholder")}
                   type="text"
@@ -176,7 +177,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
                 />
                 {q.options && customMode[i] && (
                   <button
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground text-xs"
                     onClick={() => toggleCustom(i)}
                     type="button"
                   >
@@ -187,7 +188,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
             )}
 
             {submitted && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 {answers[i] || "(no answer)"}
               </p>
             )}
@@ -197,9 +198,9 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
 
       {/* Submit */}
       {!submitted && !isLoading && (
-        <div className="border-t border-border/50 px-3 py-2">
+        <div className="border-border/50 border-t px-3 py-2">
           <button
-            className="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
             onClick={handleSubmit}
             type="button"
           >

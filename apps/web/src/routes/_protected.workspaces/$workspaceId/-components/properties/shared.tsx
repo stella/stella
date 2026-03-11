@@ -41,7 +41,7 @@ export const PropertyPopoverTrigger = ({
       }
       render={
         <PopoverTrigger
-          className="flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start hover:bg-accent disabled:pointer-events-none disabled:opacity-64"
+          className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start disabled:pointer-events-none disabled:opacity-64"
           disabled={disabled}
         />
       }

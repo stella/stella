@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -25,14 +26,14 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
-import { useDeleteWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { getFieldValue } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import { useDeleteWorkspace } from "@/routes/_protected.workspaces/-mutations";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 type ExportToCSVProps = {
   workspaceName: string;
@@ -51,13 +52,13 @@ const exportToCSV = ({
 
   const headers = properties.map((property) => property.name);
 
-  const rows = entities.map((entity) => {
-    return properties.map((property) => {
+  const rows = entities.map((entity) =>
+    properties.map((property) => {
       const field = entity.fields[property.id];
 
       return getFieldValue(field);
-    });
-  });
+    }),
+  );
 
   const csvData = [headers, ...rows];
   const csv = Papa.unparse(csvData);
@@ -106,6 +107,7 @@ export const TableSettings = ({ workspaceId }: TableSettingsProps) => {
             type: "error",
           });
         },
+        // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: async () => {
           toastManager.update(toastId, {
             title: t("success.workspaceDeletedSuccessfully"),

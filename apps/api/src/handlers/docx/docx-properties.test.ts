@@ -89,8 +89,8 @@ const extractAcceptedText = (xml: string): string[] => {
 const sanitizeForXml = (s: string): string =>
   s
     .replace(/[<>&"']/g, "")
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: strip XML-illegal control chars
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+    // eslint-disable-next-line no-control-regex -- strip XML-illegal control chars
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     // Lone surrogates and non-characters are forbidden in XML 1.0.
     // fast-check unit:"binary" produces raw UTF-16 code units which
     // can include these.
@@ -175,8 +175,8 @@ const longParagraph = fc
  * CJK-heavy text: each character is a separate token
  * since \p{L} matches individual CJK ideographs.
  */
-// biome-ignore lint/security/noSecrets: CJK test data, not a secret
-const CJK_CHARS = Array.from("契約条項法律裁判所判決証拠原告被告弁護士");
+
+const CJK_CHARS = [..."契約条項法律裁判所判決証拠原告被告弁護士"];
 const cjkText = fc
   .array(fc.constantFrom(...CJK_CHARS), {
     minLength: 3,
@@ -187,13 +187,13 @@ const cjkText = fc
 /** Same word repeated, forcing diff alignment decisions. */
 const repeatedText = fc
   .tuple(word, fc.integer({ min: 3, max: 8 }))
-  .map(([w, n]) => new Array(n).fill(w).join(" "));
+  .map(([w, n]) => Array.from({ length: n }, () => w).join(" "));
 
 // ── Property: diff → apply roundtrip ─────────────────────
 
 describe("property: diff → apply roundtrip", () => {
   test("rewriting a paragraph preserves the new text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         // Skip trivially equal inputs
         if (oldText === newText) {
@@ -222,7 +222,7 @@ describe("property: diff → apply roundtrip", () => {
   });
 
   test("unchanged text produces no edits", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, (text) => {
         const extracted = {
           paragraphs: [{ index: 0, text }],
@@ -241,7 +241,7 @@ describe("property: diff → apply roundtrip", () => {
   });
 
   test("deletion produces shorter accepted text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         sentence.filter((s) => s.length > 5),
         (text) => {
@@ -279,7 +279,7 @@ describe("property: diff → apply roundtrip", () => {
   });
 
   test("insertion produces longer accepted text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, sentence, (text, extra) => {
         const extended = `${text} ${extra}`;
         const xml = WRAP(P(text));
@@ -309,7 +309,7 @@ describe("property: diff → apply roundtrip", () => {
 
 describe("property: multi-paragraph editing", () => {
   test("editing one paragraph doesn't affect others", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, sentence, sentence, (text1, text2, newText2) => {
         if (text2 === newText2) {
           return;
@@ -347,7 +347,7 @@ describe("property: multi-paragraph editing", () => {
 
 describe("property: ID generation", () => {
   test("generated IDs never collide with existing", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -370,7 +370,7 @@ describe("property: ID generation", () => {
   });
 
   test("generated IDs are always unique", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -397,7 +397,7 @@ describe("property: ID generation", () => {
 
 describe("property: run map coverage", () => {
   test("offsets are contiguous and cover full text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(xmlSafeWord, (text) => {
         const xml = WRAP(P(text));
         const doc = slimdom.parseXmlDocument(xml);
@@ -542,7 +542,7 @@ describe("snapshot: tracked change XML structure", () => {
 
 describe("property: tokenization roundtrip", () => {
   test("tokenize(text).join('') === text for any Unicode", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         fc.string({ minLength: 1, maxLength: 80, unit: "grapheme" }),
         (text) => {
@@ -558,7 +558,7 @@ describe("property: tokenization roundtrip", () => {
 
 describe("property: output w:id uniqueness", () => {
   test("all w:id values are unique after editing", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         if (oldText === newText) {
           return;
@@ -591,7 +591,7 @@ describe("property: output w:id uniqueness", () => {
 
 describe("property: multi-w:t per run", () => {
   test("replacing text that spans two w:t elements doesn't crash", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -633,7 +633,7 @@ describe("property: multi-w:t per run", () => {
   });
 
   test("deleting trailing w:t preserves leading w:t text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, (textA, textB) => {
         const multiT =
           "<w:p><w:r>" +
@@ -669,7 +669,7 @@ describe("property: multi-w:t per run", () => {
   });
 
   test("deleting leading w:t preserves trailing w:t text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, (textA, textB) => {
         const multiT =
           "<w:p><w:r>" +
@@ -705,7 +705,7 @@ describe("property: multi-w:t per run", () => {
   });
 
   test("three w:t nodes, editing middle preserves siblings", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -746,7 +746,7 @@ describe("property: multi-w:t per run", () => {
   });
 
   test("multi-w:t output passes OOXML validation", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -793,7 +793,7 @@ describe("property: multi-w:t per run", () => {
 
 describe("property: OOXML validation on generated output", () => {
   test("applyEdits output passes validation", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, sentence, (oldText, newText) => {
         if (oldText === newText) {
           return;
@@ -825,7 +825,7 @@ describe("property: OOXML validation on generated output", () => {
   });
 
   test("multi-paragraph edits pass validation", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         sentence,
         sentence,
@@ -890,13 +890,13 @@ const buildDocxBuffer = async (bodyXml: string): Promise<Buffer> => {
  * Cyrillic, CJK). Avoids XML-incompatible compatibility
  * ideographs that don't roundtrip through XML parsers.
  */
-const PLACEHOLDER_CHARS = Array.from(
-  "abcdefghijklmnopqrstuvwxyz" +
+const PLACEHOLDER_CHARS = [
+  ...("abcdefghijklmnopqrstuvwxyz" +
     "áéíóúčřšžňďťůý" +
     "бвгдежзиклмнопрстуфхцчшщ" +
     "名前住所日付" +
-    "0123456789_",
-);
+    "0123456789_"),
+];
 const placeholderName = fc
   .array(fc.constantFrom(...PLACEHOLDER_CHARS), {
     minLength: 1,
@@ -956,7 +956,7 @@ const multiRunP = (texts: string[]) => {
 
 describe("property: structural isolation", () => {
   test("editing one run in a multi-run paragraph preserves other runs", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -992,7 +992,7 @@ describe("property: structural isolation", () => {
   });
 
   test("runs inside w:hyperlink are edited correctly", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -1035,7 +1035,7 @@ describe("property: structural isolation", () => {
   });
 
   test("insert in middle of multi-w:t run preserves sibling w:t text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         xmlSafeWord,
         xmlSafeWord,
@@ -1043,7 +1043,7 @@ describe("property: structural isolation", () => {
         (textA, textB, insertion) => {
           // Use code-point array to avoid splitting
           // surrogate pairs at the insert position
-          const cpA = Array.from(textA);
+          const cpA = [...textA];
           if (cpA.length < 2) {
             return;
           }
@@ -1086,7 +1086,7 @@ describe("property: structural isolation", () => {
   });
 
   test("multiple edits in the same paragraph produce correct result", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(word, word, word, word, word, (w1, w2, w3, newW1, newW3) => {
         const oldText = `${w1} ${w2} ${w3}`;
         // Replace first and last words, keep middle
@@ -1117,7 +1117,7 @@ describe("property: structural isolation", () => {
   });
 
   test("deleting all text produces empty accepted text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(sentence, (text) => {
         const xml = WRAP(P(text));
         const extracted = {
@@ -1235,7 +1235,7 @@ describe("regression: multi-w:t text ordering", () => {
   });
 
   test("property: partial edit of non-first w:t roundtrips", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(xmlSafeWord, xmlSafeWord, word, (textA, textB, insert) => {
         if (textB.length < 2) {
           return;
@@ -1250,7 +1250,7 @@ describe("regression: multi-w:t text ordering", () => {
         const combined = textA + textB;
 
         // Insert into the second w:t (after first char)
-        const cpB = Array.from(textB);
+        const cpB = [...textB];
         const newText = textA + cpB[0] + insert + cpB.slice(1).join("");
 
         if (combined === newText) {
@@ -1299,46 +1299,37 @@ const assertRoundtrip = (oldText: string, newText: string) => {
   const idGen = createIdGenerator(new Set());
   const result = applyEdits(xml, edits, AUTHOR, idGen);
   const accepted = extractAcceptedText(result);
-  // biome-ignore lint/suspicious/noMisplacedAssertion: helper called from test()
+  // eslint-disable-next-line vitest/no-standalone-expect
   expect(accepted[0]).toBe(newText);
 };
 
 describe("property: adversarial text roundtrip", () => {
   test("punctuation-heavy text (legal citations)", async () => {
-    await fc.assert(
-      fc.property(punctuatedText, punctuatedText, assertRoundtrip),
-      {
-        numRuns: 100,
-      },
-    );
+    fc.assert(fc.property(punctuatedText, punctuatedText, assertRoundtrip), {
+      numRuns: 100,
+    });
   });
 
   test("whitespace variants (tabs, double spaces)", async () => {
-    await fc.assert(
-      fc.property(whitespaceText, whitespaceText, assertRoundtrip),
-      {
-        numRuns: 100,
-      },
-    );
+    fc.assert(fc.property(whitespaceText, whitespaceText, assertRoundtrip), {
+      numRuns: 100,
+    });
   });
 
   test("CJK text roundtrip", async () => {
-    await fc.assert(fc.property(cjkText, cjkText, assertRoundtrip), {
+    fc.assert(fc.property(cjkText, cjkText, assertRoundtrip), {
       numRuns: 100,
     });
   });
 
   test("long paragraph roundtrip (50-200 words)", async () => {
-    await fc.assert(
-      fc.property(longParagraph, longParagraph, assertRoundtrip),
-      {
-        numRuns: 20,
-      },
-    );
+    fc.assert(fc.property(longParagraph, longParagraph, assertRoundtrip), {
+      numRuns: 20,
+    });
   });
 
   test("repeated words: removing one occurrence", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(repeatedText, (text) => {
         const words = text.split(" ");
         if (words.length < 3) {
@@ -1354,7 +1345,7 @@ describe("property: adversarial text roundtrip", () => {
   });
 
   test("repeated words: replacing one occurrence", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(repeatedText, word, (text, replacement) => {
         const words = text.split(" ");
         if (words.length < 3) {
@@ -1369,14 +1360,14 @@ describe("property: adversarial text roundtrip", () => {
   });
 
   test("single character edit in long text", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         longParagraph,
         word,
         fc.integer({ min: 0, max: 1_000_000 }),
         (text, insert, rawPos) => {
           // Use code-point-safe insertion position
-          const codePoints = Array.from(text);
+          const codePoints = [...text];
           if (codePoints.length < 2) {
             return;
           }
@@ -1393,13 +1384,13 @@ describe("property: adversarial text roundtrip", () => {
   });
 
   test("full Unicode graphemes roundtrip (emoji, combining marks, CJK)", async () => {
-    await fc.assert(fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip), {
+    fc.assert(fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip), {
       numRuns: 200,
     });
   });
 
   test("token boundary edit: adding/removing spaces between words", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(word, word, word, (a, b, c) => {
         const spaced = `${a} ${b} ${c}`;
         // Collapse one space (merge two words)
@@ -1447,7 +1438,7 @@ describe("property: known-problematic strings", () => {
     // Mixed scripts
     ["Hello мир 世界", "Hello мир мир", "mixed script edit"],
     // Parenthetical nesting (legal citations)
-    // biome-ignore lint/security/noSecrets: test data, not a secret
+
     ["(a)(1)(A)(i)", "(a)(2)(A)(i)", "nested parentheticals"],
     // Repeated identical words
     ["the the the the", "the the the", "remove repeated word"],
@@ -1485,16 +1476,13 @@ const binaryUnicode = fc
 
 describe("property: binary Unicode stress test", () => {
   test("roundtrip with arbitrary Unicode (binary unit)", async () => {
-    await fc.assert(
-      fc.property(binaryUnicode, binaryUnicode, assertRoundtrip),
-      {
-        numRuns: 300,
-      },
-    );
+    fc.assert(fc.property(binaryUnicode, binaryUnicode, assertRoundtrip), {
+      numRuns: 300,
+    });
   });
 
   test("binary Unicode multi-w:t roundtrip", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(
         binaryUnicode,
         binaryUnicode,
@@ -1536,7 +1524,7 @@ describe("property: binary Unicode stress test", () => {
   });
 
   test("binary Unicode OOXML validation", async () => {
-    await fc.assert(
+    fc.assert(
       fc.property(binaryUnicode, binaryUnicode, (oldText, newText) => {
         if (oldText === newText || oldText.length === 0) {
           return;

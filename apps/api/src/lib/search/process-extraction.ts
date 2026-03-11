@@ -132,11 +132,11 @@ export const processExtraction = async (entityId: string): Promise<void> => {
             },
           });
       }
-    } catch (err) {
+    } catch (error) {
       // Extraction failures must not prevent search
       // indexing; the entity is still searchable by its
       // field-level text.
-      captureError(err, {
+      captureError(error, {
         entityId,
         mimeType: fileField.mimeType,
       });

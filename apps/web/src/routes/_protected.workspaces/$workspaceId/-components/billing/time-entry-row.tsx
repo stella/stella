@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   CheckCheckIcon,
   PencilIcon,
@@ -69,7 +70,7 @@ export const TimeEntryRow = ({
     <>
       <div
         className={cn(
-          "group flex items-center gap-3 rounded-md border px-3 py-2 transition-colors hover:bg-muted/50",
+          "group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
           isActive && "border-green-500/30 bg-green-500/5",
           selected && "border-primary/30 bg-primary/5",
         )}
@@ -85,7 +86,7 @@ export const TimeEntryRow = ({
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{matterName}</span>
             {!entry.billable && (
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+              <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
                 {t("billing.nonBillable")}
               </span>
             )}
@@ -106,7 +107,7 @@ export const TimeEntryRow = ({
             </span>
           </div>
           {entry.narrative && (
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="text-muted-foreground truncate text-xs">
               {entry.narrative}
             </p>
           )}
@@ -114,12 +115,12 @@ export const TimeEntryRow = ({
 
         {/* Billing amount */}
         {entry.billable && billedAmount > 0 && (
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {formatCurrencyAmount(billedAmount, entry.currency)}
           </span>
         )}
 
-        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+        <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {isActive ? (
             <span className="flex items-center gap-1.5">
               <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
@@ -181,7 +182,7 @@ export const TimeEntryRow = ({
           )}
           {entry.status === "draft" && canDeleteEntry && (
             <Button
-              className="size-7 text-destructive"
+              className="text-destructive size-7"
               onClick={() => onDelete(entry.id)}
               size="icon"
               variant="ghost"

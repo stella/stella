@@ -25,7 +25,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { COMMON_TIMEZONES, type CommonTimezone } from "@/lib/timezones";
+import { COMMON_TIMEZONES } from "@/lib/timezones";
+import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
 
 export const Route = createFileRoute("/_protected/account/settings")({
@@ -79,7 +80,7 @@ function Settings() {
           <Label htmlFor="timezone-select">
             {t("account.settings.timezone")}
           </Label>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {t("account.settings.timezoneDescription")}
           </p>
           <Select

@@ -15,7 +15,6 @@
  */
 
 import "dotenv/config";
-
 import { createScopedDb, db } from "@/api/db";
 import {
   caseLawCitations,
@@ -918,7 +917,7 @@ async function seed() {
   process.exit(0);
 }
 
-seed().catch((err) => {
-  console.error("Seed failed:", err);
+seed().catch((error) => {
+  console.error("Seed failed:", error);
   process.exit(1);
 });

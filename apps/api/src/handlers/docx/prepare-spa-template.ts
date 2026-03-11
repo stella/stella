@@ -5,14 +5,14 @@
  *
  * Run: bun apps/api/src/handlers/docx/prepare-spa-template.ts
  */
-/** biome-ignore-all lint/suspicious/noConsole: internal script */
+/* eslint-disable no-console */
 
 import JSZip from "jszip";
 
-const INPUT = new URL("./fixtures/spa-template.docx", import.meta.url).pathname;
+const INPUT = new URL("fixtures/spa-template.docx", import.meta.url).pathname;
 
 const OUTPUT = new URL(
-  "./fixtures/spa-template-with-placeholders.docx",
+  "fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 
@@ -84,7 +84,7 @@ const run = async () => {
   await Bun.write(OUTPUT, buffer);
 };
 
-run().catch((err) => {
-  console.error(err);
+run().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

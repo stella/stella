@@ -152,7 +152,7 @@ const parseCursor = (cursor: string): CursorState => {
   );
 
   if (Number.isNaN(number) || Number.isNaN(year)) {
-    throw new Error("Invalid cz-constitutional cursor format");
+    throw new TypeError("Invalid cz-constitutional cursor format");
   }
 
   return { number, year };
@@ -209,8 +209,8 @@ export const czConstitutionalAdapter: SourceAdapter = {
             } else {
               consecutiveMisses++;
             }
-          } catch (err) {
-            if (err instanceof DOMException && err.name === "AbortError") {
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
               // Caller cancelled: return partial results
               // so the pipeline can persist cursor progress
               return {
@@ -218,7 +218,10 @@ export const czConstitutionalAdapter: SourceAdapter = {
                 nextCursor: makeCursor(state),
               };
             }
-            if (err instanceof DOMException && err.name === "TimeoutError") {
+            if (
+              error instanceof DOMException &&
+              error.name === "TimeoutError"
+            ) {
               // Per-request timeout: treat as a miss
               consecutiveMisses++;
               await sleep(1000);
@@ -238,7 +241,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
             }
             // Unknown per-request error: propagate up
             // via the outer Result.tryPromise catch
-            throw err;
+            throw error;
           }
 
           // Rate limit: 1 req/s to avoid overwhelming NALUS

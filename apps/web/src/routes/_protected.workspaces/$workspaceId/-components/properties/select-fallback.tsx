@@ -56,11 +56,11 @@ export const SelectFallback = ({
 
   return (
     <div>
-      <span className="px-1 text-sm text-muted-foreground">
+      <span className="text-muted-foreground px-1 text-sm">
         {t("workspaces.properties.ifNoMatchFound")}
       </span>
       <Select items={selectItems} onValueChange={onValueChange} value={value}>
-        <SelectTrigger className="border-0 shadow-none ring-0 before:shadow-none! hover:bg-muted">
+        <SelectTrigger className="hover:bg-muted border-0 shadow-none ring-0 before:shadow-none!">
           <SelectValue />
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>

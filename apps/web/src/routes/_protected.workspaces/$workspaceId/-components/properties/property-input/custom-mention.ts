@@ -1,7 +1,5 @@
-import {
-  default as MentionExtension,
-  type MentionNodeAttrs,
-} from "@tiptap/extension-mention";
+import MentionExtension from "@tiptap/extension-mention";
+import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import {
   mergeAttributes,
   ReactNodeViewRenderer,
@@ -39,11 +37,10 @@ export const createSuggestion = (
   mentionItems: MentionOption[],
 ): Omit<SuggestionOptions<MentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
-  items: ({ query }) => {
-    return mentionItems.filter((item) =>
+  items: ({ query }) =>
+    mentionItems.filter((item) =>
       item.label.toLowerCase().includes(query.toLowerCase()),
-    );
-  },
+    ),
 
   render: () => {
     let component: ReactRenderer<

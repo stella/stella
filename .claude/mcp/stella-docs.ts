@@ -16,6 +16,7 @@ const SOURCES: Record<string, string> = {
   Rivet: "https://rivet.dev/llms.txt",
   PostHog: "https://posthog.com/llms.txt",
   Zustand: "https://zustand.docs.pmnd.rs/llms.txt",
+  Oxlint: "https://oxc.rs/llms.txt",
 };
 
 const server = new McpServer({

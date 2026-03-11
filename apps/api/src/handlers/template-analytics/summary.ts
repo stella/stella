@@ -3,6 +3,7 @@ import { and, countDistinct, eq, gte, lte, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db";
 import { templateFills, templates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+
 import type { DateRangeQuery } from "../analytics/date-range-schema";
 
 type SummaryHandlerProps = {

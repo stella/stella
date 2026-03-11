@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+
 import {
   attachClosestEdge,
   extractClosestEdge,
-  type Edge,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
@@ -235,7 +237,7 @@ export const KanbanColumn = ({
     if (!files || files.length === 0) {
       return;
     }
-    onFileUpload?.(Array.from(files));
+    onFileUpload?.([...files]);
     e.target.value = "";
   };
 
@@ -289,7 +291,7 @@ export const KanbanColumn = ({
         "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-all",
         !colorBg && "bg-muted/50",
         (isFileDragOver || isEntityDragOver) &&
-          "bg-primary/5 ring-2 ring-primary/50",
+          "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",
       )}
       ref={columnRef}
@@ -304,11 +306,11 @@ export const KanbanColumn = ({
       {closestColumnEdge && !isDragging && (
         <div
           className={cn(
-            "pointer-events-none absolute top-0 z-10 flex h-full w-0.5 flex-col items-center bg-primary",
+            "bg-primary pointer-events-none absolute top-0 z-10 flex h-full w-0.5 flex-col items-center",
             closestColumnEdge === "left" ? "-left-[9px]" : "-right-[9px]",
           )}
         >
-          <div className="-mt-0.5 size-2 rounded-full bg-primary" />
+          <div className="bg-primary -mt-0.5 size-2 rounded-full" />
         </div>
       )}
       <div className="flex items-center gap-2 px-3 py-2">
@@ -355,14 +357,14 @@ export const KanbanColumn = ({
             >
               {title}
             </button>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               {entities.length}
             </span>
           </span>
         )}
         {isDraggable && (
           <div
-            className="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/column:opacity-100 hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
             ref={dragHandleRef}
           >
             <GripVerticalIcon className="size-3.5" />
@@ -447,8 +449,8 @@ export const KanbanColumn = ({
           />
         ))}
         {isFileDragOver && (
-          <div className="flex items-center gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3 text-xs text-muted-foreground">
-            <FileUpIcon className="size-4 shrink-0 text-primary/60" />
+          <div className="border-primary/40 bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg border border-dashed p-3 text-xs">
+            <FileUpIcon className="text-primary/60 size-4 shrink-0" />
             {t("workspaces.dropToUploadFiles")}
           </div>
         )}

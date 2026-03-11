@@ -87,11 +87,11 @@ export type EditWithTrackingResult = {
   /** Comment paragraph indices that didn't exist. */
   skippedComments: number[];
   /** OOXML structural violations (non-blocking warnings). */
-  validationViolations?: Array<{
+  validationViolations?: {
     rule: string;
     message: string;
     element?: string;
-  }>;
+  }[];
 };
 
 export type ParagraphRewrite = {

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { PropsWithChildren } from "react";
+
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import {
   containsFiles,
@@ -54,8 +56,8 @@ export const DropZone = ({ workspaceId, children }: DropZoneProps) => {
     <div className="relative flex min-h-0 flex-1 flex-col" ref={dropRef}>
       {children}
       {isDropTarget && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-foreground/20 bg-foreground/5">
-          <div className="flex flex-col items-center gap-2 text-foreground/50">
+        <div className="border-foreground/20 bg-foreground/5 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed">
+          <div className="text-foreground/50 flex flex-col items-center gap-2">
             <UploadIcon className="size-8" />
             <span className="text-sm font-medium">
               {t("workspaces.dropToUploadFiles")}

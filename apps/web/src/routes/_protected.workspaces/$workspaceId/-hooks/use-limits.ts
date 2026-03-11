@@ -1,9 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 export const usePropertiesCountLimit = (workspaceId: string) => {
   const propertiesCount = useSuspenseQuery({

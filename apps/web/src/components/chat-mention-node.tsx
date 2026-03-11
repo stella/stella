@@ -1,4 +1,5 @@
-import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { NodeViewWrapper } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
 import {
   ContactIcon,
   FileTextIcon,
@@ -67,8 +68,8 @@ export const ChatMentionNode = (props: NodeViewProps) => {
       <span
         className={cn(
           "inline-flex items-center gap-0.5",
-          "rounded bg-accent px-1 py-0.5",
-          "text-xs font-medium text-accent-foreground",
+          "bg-accent rounded px-1 py-0.5",
+          "text-accent-foreground text-xs font-medium",
         )}
       >
         <CategoryIcon

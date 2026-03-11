@@ -7,7 +7,8 @@
  * for potential rule generation.
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { google } from "@ai-sdk/google";
+import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
@@ -16,6 +17,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+
 import type { Polarity } from "./consts";
 
 const SYSTEM_PROMPT = `You are a legal citation polarity classifier.
@@ -118,5 +120,4 @@ ${context}`,
       }),
   });
 
-// biome-ignore lint/performance/noBarrelFile: re-export for public API
 export { isValidPolarity, phraseToPattern } from "./consts";

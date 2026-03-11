@@ -18,17 +18,16 @@ import {
   POLARITY,
   PROMOTION_THRESHOLD,
   RULE_SOURCE,
-  type Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import {
   incrementMatchCount,
   matchRule,
-  type RuleCache,
 } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/posthog";
 
-// biome-ignore lint/performance/noBarrelFile: re-export for public API
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 
 export type ClassifyResult = {
@@ -66,8 +65,8 @@ export const classifyCitation = async (
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch((err) => {
-        captureError(err, { ruleId: ruleMatch.ruleId });
+      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch((error) => {
+        captureError(error, { ruleId: ruleMatch.ruleId });
       });
     }
     return {
@@ -99,8 +98,8 @@ export const classifyCitation = async (
 
   // Track surface form for potential rule promotion
   if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
-    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch((err) => {
-      captureError(err, { language, polarity });
+    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch((error) => {
+      captureError(error, { language, polarity });
     });
   }
 

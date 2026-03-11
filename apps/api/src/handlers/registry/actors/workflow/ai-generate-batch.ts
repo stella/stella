@@ -1,5 +1,6 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-import { generateText, Output, type FilePart, type TextPart } from "ai";
+import { generateText, Output } from "ai";
+import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
 
 import {
@@ -7,8 +8,8 @@ import {
   buildPromptsMessage,
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
-  type Answer,
 } from "@/api/handlers/registry/actors/workflow/ai-prompts";
+import type { Answer } from "@/api/handlers/registry/actors/workflow/ai-prompts";
 import type { TextInput } from "@/api/handlers/registry/actors/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
 import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
@@ -44,7 +45,7 @@ export const generateWorkflowData = ({
 > => {
   const schema = buildBatchSchema(properties, filenames);
 
-  const messageContent: Array<FilePart | TextPart> = [];
+  const messageContent: (FilePart | TextPart)[] = [];
 
   for (const file of files) {
     messageContent.push({

@@ -1,12 +1,11 @@
 import { useEffect } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 
-import {
-  getSyncActorConfig,
-  type SyncActorEvent,
-} from "@stella/rivet/actors/sync-actor-config";
+import { getSyncActorConfig } from "@stella/rivet/actors/sync-actor-config";
+import type { SyncActorEvent } from "@stella/rivet/actors/sync-actor-config";
 
 import { useActor } from "@/lib/api";
 import { captureError } from "@/lib/posthog/utils";
@@ -40,6 +39,7 @@ export const useSyncQueries = () => {
   }, [actor.error, posthog]);
 
   actor.useEvent(invalidateEvent, (queryKey: SyncActorEvent["data"]) => {
+    // eslint-disable-next-line typescript/no-floating-promises
     queryClient.invalidateQueries({ queryKey });
   });
 };

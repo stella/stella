@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -98,7 +99,7 @@ export const LinkClauseDialog = ({
       }
     };
 
-    // biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     load();
   }, [open, t]);
 
@@ -164,7 +165,7 @@ export const LinkClauseDialog = ({
         <DialogPanel className="grid gap-4">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <SearchIcon className="absolute start-2.5 top-2.5 size-4 text-muted-foreground" />
+              <SearchIcon className="text-muted-foreground absolute start-2.5 top-2.5 size-4" />
               <Input
                 aria-label={t("clauses.searchClauses")}
                 className="ps-8"
@@ -189,7 +190,7 @@ export const LinkClauseDialog = ({
 
           <div className="max-h-64 overflow-y-auto rounded-lg border">
             {filtered.length === 0 && (
-              <p className="p-4 text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground p-4 text-center text-sm">
                 {t("clauses.noResults")}
               </p>
             )}
@@ -205,11 +206,11 @@ export const LinkClauseDialog = ({
                     onClick={() => setSelectedClauseId(clause.id)}
                     type="button"
                   >
-                    <TextQuoteIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-medium">
                       {clause.title}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <span className="text-muted-foreground shrink-0 text-xs">
                       {t("clauses.version", {
                         version: String(clause.currentVersion),
                       })}
@@ -247,6 +248,7 @@ export const LinkClauseDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
+          {/* eslint-disable-next-line typescript/no-misused-promises */}
           <Button disabled={linking || !selectedClauseId} onClick={handleLink}>
             {t("clauses.linkClause")}
           </Button>

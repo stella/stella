@@ -9,7 +9,6 @@
  */
 
 import "dotenv/config";
-
 import { createScopedDb, db } from "@/api/db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -125,7 +124,7 @@ const main = async () => {
   process.exit(0);
 };
 
-main().catch((err) => {
-  console.error("Ingestion failed:", err);
+main().catch((error) => {
+  console.error("Ingestion failed:", error);
   process.exit(1);
 });

@@ -2,8 +2,8 @@ import {
   CONDITIONAL_KINDS,
   DirectiveLabel,
   HighlightedText,
-  type BlockDirectiveKind,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 
 // ── Types ────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export const ClauseBody = ({
   return (
     <div className="space-y-0.5 py-2 text-sm">
       {paragraphs.map((p, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are a static ordered list without stable IDs
+        // eslint-disable-next-line react/no-array-index-key
         <ClauseParagraphRow key={i} paragraph={p} />
       ))}
     </div>
@@ -84,7 +84,7 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
             content = <em>{content}</em>;
           }
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: runs are ordered inline spans
+            // eslint-disable-next-line react/no-array-index-key
             <span key={ri}>{content}</span>
           );
         })}

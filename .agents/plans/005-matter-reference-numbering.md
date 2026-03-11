@@ -46,13 +46,12 @@ export const matterCounters = p.pgTable(
       .varchar("organization_id", { length: 128 })
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    scopeKey: p
-      .varchar("scope_key", { length: 128 })
-      .notNull(),
+    scopeKey: p.varchar("scope_key", { length: 128 }).notNull(),
     lastValue: p.integer("last_value").notNull().default(0),
   },
   (table) => [
-    p.uniqueIndex("matter_counters_org_scope_uidx")
+    p
+      .uniqueIndex("matter_counters_org_scope_uidx")
       .on(table.organizationId, table.scopeKey),
   ],
 );
@@ -64,29 +63,20 @@ static prefix of the pattern (see section 2b).
 ### 1c. New `organizationSettings` table
 
 ```ts
-export const organizationSettings = p.pgTable(
-  "organization_settings",
-  {
-    id: pNanoid.primaryKey(),
-    organizationId: p
-      .varchar("organization_id", { length: 128 })
-      .notNull()
-      .unique()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    matterNumberPattern: p
-      .varchar("matter_number_pattern", { length: 128 })
-      .notNull()
-      .default("{SEQ}"),
-    matterNumberPadding: p
-      .integer("matter_number_padding")
-      .notNull()
-      .default(3),
-    updatedAt: p
-      .timestamp("updated_at")
-      .notNull()
-      .defaultNow(),
-  },
-);
+export const organizationSettings = p.pgTable("organization_settings", {
+  id: pNanoid.primaryKey(),
+  organizationId: p
+    .varchar("organization_id", { length: 128 })
+    .notNull()
+    .unique()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  matterNumberPattern: p
+    .varchar("matter_number_pattern", { length: 128 })
+    .notNull()
+    .default("{SEQ}"),
+  matterNumberPadding: p.integer("matter_number_padding").notNull().default(3),
+  updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+});
 ```
 
 1:1 with organization. Separate from organization table
@@ -100,12 +90,12 @@ Push all three changes with `bun drizzle-kit push`.
 
 ### 2a. Token language
 
-| Token  | Output         | Example |
-| ------ | -------------- | ------- |
-| {SEQ}  | Padded seq     | 001     |
-| {YYYY} | 4-digit year   | 2026    |
-| {YY}   | 2-digit year   | 26      |
-| {MM}   | 2-digit month  | 02      |
+| Token  | Output        | Example |
+| ------ | ------------- | ------- |
+| {SEQ}  | Padded seq    | 001     |
+| {YYYY} | 4-digit year  | 2026    |
+| {YY}   | 2-digit year  | 26      |
+| {MM}   | 2-digit month | 02      |
 
 Everything else is a literal character. Examples:
 
@@ -159,11 +149,11 @@ Pure functions (no DB, easy to test):
 
 ### 3b. New handlers: `apps/api/src/handlers/organization-settings/`
 
-| Route                              | Method | Handler    | Auth        |
-| ---------------------------------- | ------ | ---------- | ----------- |
-| `/v1/organization-settings/`       | GET    | read.ts    | Any member  |
-| `/v1/organization-settings/`       | POST   | update.ts  | Admin/owner |
-| `/v1/organization-settings/preview`| POST   | preview.ts | Admin/owner |
+| Route                               | Method | Handler    | Auth        |
+| ----------------------------------- | ------ | ---------- | ----------- |
+| `/v1/organization-settings/`        | GET    | read.ts    | Any member  |
+| `/v1/organization-settings/`        | POST   | update.ts  | Admin/owner |
+| `/v1/organization-settings/preview` | POST   | preview.ts | Admin/owner |
 
 **read:** Returns current settings or defaults if no row exists.
 
@@ -192,10 +182,7 @@ const [counter] = await tx
     lastValue: 1,
   })
   .onConflictDoUpdate({
-    target: [
-      matterCounters.organizationId,
-      matterCounters.scopeKey,
-    ],
+    target: [matterCounters.organizationId, matterCounters.scopeKey],
     set: {
       lastValue: sql`${matterCounters.lastValue} + 1`,
     },
@@ -246,12 +233,14 @@ Collapsed sidebar tooltip: `"2026/001 - Smith v. Jones"`.
 Show reference next to the name in monospace font:
 
 ```tsx
-<h1 className="text-lg font-bold">{workspace.name}</h1>
-{workspace.reference && (
-  <span className="text-sm font-mono text-muted-foreground">
-    {workspace.reference}
-  </span>
-)}
+<h1 className="text-lg font-bold">{workspace.name}</h1>;
+{
+  workspace.reference && (
+    <span className="text-sm font-mono text-muted-foreground">
+      {workspace.reference}
+    </span>
+  );
+}
 ```
 
 ### 4c. Organization settings (`apps/web/src/routes/_protected.organization/route.tsx`)
@@ -277,6 +266,7 @@ factory pattern.
 ### 4e. Translations (`apps/web/src/i18n/locales/en.json`)
 
 Add keys under `organization.matterNumber`:
+
 - `title`, `description`, `pattern`, `padding`,
   `paddingDescription`, `nextPreview`
 - `presets.sequential`, `presets.yearSequential`,
@@ -318,25 +308,25 @@ After editing, run `bun packages/scripts/src/i18n-typegen.ts`.
 
 ## 7. Files to Create
 
-| Path                                                    | Purpose                                      |
-| ------------------------------------------------------- | -------------------------------------------- |
-| `apps/api/src/lib/matter-reference.ts`                  | Pattern parsing, scope derivation, rendering  |
-| `apps/api/src/handlers/organization-settings/read.ts`   | GET settings                                 |
-| `apps/api/src/handlers/organization-settings/update.ts` | POST upsert settings                         |
-| `apps/api/src/handlers/organization-settings/preview.ts`| POST preview next ref                        |
-| `apps/api/src/handlers/organization-settings/routes.ts` | Elysia route group                           |
+| Path                                                     | Purpose                                      |
+| -------------------------------------------------------- | -------------------------------------------- |
+| `apps/api/src/lib/matter-reference.ts`                   | Pattern parsing, scope derivation, rendering |
+| `apps/api/src/handlers/organization-settings/read.ts`    | GET settings                                 |
+| `apps/api/src/handlers/organization-settings/update.ts`  | POST upsert settings                         |
+| `apps/api/src/handlers/organization-settings/preview.ts` | POST preview next ref                        |
+| `apps/api/src/handlers/organization-settings/routes.ts`  | Elysia route group                           |
 
 ## 8. Files to Modify
 
-| Path                                                              | Change                                              |
-| ----------------------------------------------------------------- | --------------------------------------------------- |
-| `apps/api/src/db/schema.ts`                                      | Add `reference` col, `matterCounters`, `organizationSettings` tables |
-| `apps/api/src/handlers/workspaces/create.ts`                     | Add reference generation inside transaction          |
-| `apps/api/src/index.ts`                                          | Register new routes                                  |
-| `apps/web/src/components/app-sidebar.tsx`                        | Show reference in MatterItem                         |
-| `apps/web/src/routes/_protected.workspaces/index.tsx`            | Show reference on cards                              |
-| `apps/web/src/routes/_protected.organization/route.tsx`          | Add numbering config to settings                     |
-| `apps/web/src/i18n/locales/en.json`                              | Add translation keys                                 |
+| Path                                                    | Change                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `apps/api/src/db/schema.ts`                             | Add `reference` col, `matterCounters`, `organizationSettings` tables |
+| `apps/api/src/handlers/workspaces/create.ts`            | Add reference generation inside transaction                          |
+| `apps/api/src/index.ts`                                 | Register new routes                                                  |
+| `apps/web/src/components/app-sidebar.tsx`               | Show reference in MatterItem                                         |
+| `apps/web/src/routes/_protected.workspaces/index.tsx`   | Show reference on cards                                              |
+| `apps/web/src/routes/_protected.organization/route.tsx` | Add numbering config to settings                                     |
+| `apps/web/src/i18n/locales/en.json`                     | Add translation keys                                                 |
 
 ---
 

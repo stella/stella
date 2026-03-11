@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useNavigate } from "@tanstack/react-router";
 import { PasswordResponses } from "pdfjs-dist";
 import { useTranslations } from "use-intl";
@@ -33,6 +34,7 @@ export const PdfPasswordDialog = () => {
 
   return (
     <Dialog
+      // eslint-disable-next-line typescript/no-misused-promises
       onOpenChange={async (open) => {
         if (!open) {
           cancelPassword();
@@ -63,6 +65,7 @@ export const PdfPasswordDialog = () => {
         </DialogPanel>
         <DialogFooter>
           <DialogClose
+            // eslint-disable-next-line typescript/no-misused-promises
             onClick={async () => {
               cancelPassword();
               await navigate({ to: "/workspaces/$workspaceId" });

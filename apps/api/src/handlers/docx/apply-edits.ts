@@ -16,7 +16,8 @@
 import * as slimdom from "slimdom";
 
 import { isElement, W_NS } from "./ooxml";
-import { buildRunMap, type RunSpan } from "./run-map";
+import { buildRunMap } from "./run-map";
+import type { RunSpan } from "./run-map";
 import type { DocxEdit, RevisionAuthor, TextFormat } from "./types";
 
 // ── Run splitting ─────────────────────────────────────────
@@ -75,10 +76,10 @@ const buildRunProps = (
 
   const result = rPr ?? doc.createElementNS(W_NS, "w:rPr");
   if (format.bold && !result.getElementsByTagNameNS(W_NS, "b").length) {
-    result.appendChild(doc.createElementNS(W_NS, "w:b"));
+    result.append(doc.createElementNS(W_NS, "w:b"));
   }
   if (format.italic && !result.getElementsByTagNameNS(W_NS, "i").length) {
-    result.appendChild(doc.createElementNS(W_NS, "w:i"));
+    result.append(doc.createElementNS(W_NS, "w:i"));
   }
   return result;
 };
@@ -99,9 +100,9 @@ const createRun = (
 ): slimdom.Element => {
   const r = doc.createElementNS(W_NS, "w:r");
   if (rPr) {
-    r.appendChild(rPr);
+    r.append(rPr);
   }
-  r.appendChild(createT(doc, text));
+  r.append(createT(doc, text));
   return r;
 };
 
@@ -122,9 +123,9 @@ const createDelRun = (
 ): slimdom.Element => {
   const r = doc.createElementNS(W_NS, "w:r");
   if (rPr) {
-    r.appendChild(rPr);
+    r.append(rPr);
   }
-  r.appendChild(createDelText(doc, text));
+  r.append(createDelText(doc, text));
   return r;
 };
 
@@ -141,7 +142,7 @@ const createIns = (
   ins.setAttributeNS(W_NS, "w:author", author.name);
   ins.setAttributeNS(W_NS, "w:date", author.date);
   for (const child of children) {
-    ins.appendChild(child);
+    ins.append(child);
   }
   return ins;
 };
@@ -157,14 +158,14 @@ const createDel = (
   del.setAttributeNS(W_NS, "w:author", author.name);
   del.setAttributeNS(W_NS, "w:date", author.date);
   for (const child of children) {
-    del.appendChild(child);
+    del.append(child);
   }
   return del;
 };
 
 /** True when a w:r still contains at least one w:t child. */
 const runHasText = (run: slimdom.Element): boolean =>
-  Array.from(run.childNodes).some(
+  [...run.childNodes].some(
     (c) => isElement(c) && c.localName === "t" && c.namespaceURI === W_NS,
   );
 
@@ -185,7 +186,7 @@ const splitPrecedingSiblings = (
   idGenerator: () => number,
 ) => {
   const preceding: slimdom.Element[] = [];
-  for (const child of Array.from(run.childNodes)) {
+  for (const child of [...run.childNodes]) {
     if (!isElement(child)) {
       continue;
     }
@@ -204,10 +205,10 @@ const splitPrecedingSiblings = (
   const preRun = doc.createElementNS(W_NS, "w:r");
   const rPr = cloneRunProps(run, idGenerator);
   if (rPr) {
-    preRun.appendChild(rPr);
+    preRun.append(rPr);
   }
   for (const t of preceding) {
-    preRun.appendChild(t);
+    preRun.append(t);
   }
   run.parentNode?.insertBefore(preRun, run);
 };
@@ -260,7 +261,7 @@ const applyInsert = (
     !lastSpan ||
     charOffset >= lastSpan.start + lastSpan.length
   ) {
-    p.appendChild(makeIns(lastSpan?.run ?? null));
+    p.append(makeIns(lastSpan?.run ?? null));
     return;
   }
 
@@ -319,7 +320,7 @@ const applyInsert = (
   }
 
   // Fallback: append at end
-  p.appendChild(makeIns(spans[0]?.run ?? null));
+  p.append(makeIns(spans[0]?.run ?? null));
 };
 
 const applyDelete = (
@@ -456,7 +457,7 @@ export const applyEdits = (
 
   // Sort edits in reverse document order: highest paragraph index
   // first, then highest charOffset first within the same paragraph
-  const sorted = [...edits].sort((a, b) => {
+  const sorted = [...edits].toSorted((a, b) => {
     if (a.paragraphIndex !== b.paragraphIndex) {
       return b.paragraphIndex - a.paragraphIndex;
     }

@@ -63,7 +63,6 @@ export const SEED_RULES: SeedRule[] = [
   { pattern: "na\\s+rozdiel\\s+od", polarity: "negative", language: "sk" },
   { pattern: "prekonan[áéý]?", polarity: "negative", language: "sk" },
   {
-    // biome-ignore lint/security/noSecrets: regex pattern, not a secret
     pattern: "bol[aoi]?\\s+zrušen[áéý]?",
     polarity: "negative",
     language: "sk",

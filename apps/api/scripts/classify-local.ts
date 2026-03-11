@@ -20,11 +20,8 @@
  */
 
 import "dotenv/config";
-
-import {
-  isValidPolarity,
-  type Polarity,
-} from "@/api/handlers/case-law/polarity/consts";
+import { isValidPolarity } from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 
 type Args = {
@@ -167,12 +164,12 @@ const classifyCitationContext = (
 };
 
 const POLARITY_COLORS: Record<Polarity, string> = {
-  positive: "\x1b[32m", // green
-  neutral: "\x1b[33m", // yellow
-  negative: "\x1b[31m", // red
-  unknown: "\x1b[90m", // gray
+  positive: "\u001b[32m", // green
+  neutral: "\u001b[33m", // yellow
+  negative: "\u001b[31m", // red
+  unknown: "\u001b[90m", // gray
 };
-const RESET = "\x1b[0m";
+const RESET = "\u001b[0m";
 
 const printMatch = (match: Match, index: number) => {
   const color = POLARITY_COLORS[match.polarity];
@@ -322,7 +319,7 @@ const main = async () => {
   }
 };
 
-main().catch((err) => {
-  console.error("Classification failed:", err);
+main().catch((error) => {
+  console.error("Classification failed:", error);
   process.exit(1);
 });
