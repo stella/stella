@@ -50,7 +50,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
       viewId: view.id,
-      layout: { ...view.layout, ...changes } as ViewLayout,
+      // SAFETY: view.layout + changes match ViewLayout shape
+      layout:
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        { ...view.layout, ...changes } as ViewLayout,
     });
   };
 

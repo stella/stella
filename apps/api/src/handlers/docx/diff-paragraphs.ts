@@ -61,7 +61,9 @@ const wordDiff = (oldText: string, newText: string): Diff[] => {
   return diffs.map(
     ([op, chars]): Diff => [
       op,
-      [...chars].map((c) => tokenList[c.codePointAt(0) ?? 0]).join(""),
+      Array.from(chars)
+        .map((c) => tokenList[c.codePointAt(0) ?? 0])
+        .join(""),
     ],
   );
 };
@@ -87,7 +89,7 @@ const diffSingleParagraph = (
 
     if (op === DIFF_DELETE) {
       // DELETE followed by INSERT = REPLACE
-      const next = diffs[i + 1];
+      const next = diffs.at(i + 1);
       if (next && next[0] === DIFF_INSERT) {
         edits.push({
           kind: "replace",

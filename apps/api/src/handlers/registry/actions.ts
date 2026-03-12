@@ -17,8 +17,8 @@ type InvalidateQueryArgs = {
   queryKey: string[];
 };
 
-export const invalidateQueryAction = (args: InvalidateQueryArgs) =>
-  Result.tryPromise({
+export const invalidateQueryAction = async (args: InvalidateQueryArgs) =>
+  await Result.tryPromise({
     try: async () => {
       const actorConfig = getSyncActorConfig({
         type: "vanilla",

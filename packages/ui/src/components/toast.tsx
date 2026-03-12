@@ -70,7 +70,9 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
       >
         {toasts.map((toast) => {
           const Icon = toast.type
-            ? TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
+            ? // SAFETY: toast.type matches TOAST_ICONS keys
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
             : null;
 
           return (
@@ -176,7 +178,7 @@ function AnchoredToastProvider({ children, ...props }: Toast.Provider.Props) {
 }
 
 function AnchoredToasts() {
-  const { toasts } = Toast.useToastManager();
+  const { toasts } = Toast.useToastManager<{ tooltipStyle?: boolean }>();
 
   return (
     <Toast.Portal data-slot="toast-portal-anchored">
@@ -186,10 +188,11 @@ function AnchoredToasts() {
       >
         {toasts.map((toast) => {
           const Icon = toast.type
-            ? TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
+            ? // SAFETY: toast.type matches TOAST_ICONS keys
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
             : null;
-          const tooltipStyle =
-            (toast.data as { tooltipStyle?: boolean })?.tooltipStyle ?? false;
+          const tooltipStyle = toast.data?.tooltipStyle ?? false;
           const positionerProps = toast.positionerProps;
 
           if (!positionerProps?.anchor) {

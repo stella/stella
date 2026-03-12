@@ -84,11 +84,11 @@ const ensureCommentsRel = (relsXml: string): string => {
 
 // ── Main orchestrator ─────────────────────────────────────
 
-export const editWithTracking = (
+export const editWithTracking = async (
   docxBuffer: Buffer,
   editSet: DocxEditSet,
 ): Promise<Result<EditWithTrackingResult, DocxEditError>> =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const zip = await JSZip.loadAsync(docxBuffer);
 
@@ -104,7 +104,7 @@ export const editWithTracking = (
       const existingIds = collectExistingIds(doc);
       const idGenerator = createIdGenerator(existingIds);
 
-      const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+      const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
       let paraCount = 0;
       if (body) {
         for (const child of body.childNodes) {

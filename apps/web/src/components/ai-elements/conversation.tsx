@@ -58,7 +58,7 @@ export const ConversationEmptyState = ({
   >
     {children ?? (
       <>
-        {icon && <div className="text-muted-foreground">{icon}</div>}
+        {Boolean(icon) && <div className="text-muted-foreground">{icon}</div>}
         <div className="space-y-1">
           <h3 className="text-sm font-medium">{title}</h3>
           {description && (
@@ -84,7 +84,7 @@ export const ConversationScrollButton = ({
         <Button
           className={cn("rounded-full", className)}
           // eslint-disable-next-line typescript/no-misused-promises
-          onClick={() => scrollToBottom()}
+          onClick={async () => await scrollToBottom()}
           size="icon"
           type="button"
           variant="outline"

@@ -33,11 +33,11 @@ export const awsS3 = new AwsS3Client({
  * Filenames are sanitized at upload time. RFC 6266 encoding
  * is applied here for non-ASCII characters.
  */
-export const presignDownloadUrl = (
+export const presignDownloadUrl = async (
   key: string,
   options: { expiresIn: number; fileName: string },
 ) =>
-  getSignedUrl(
+  await getSignedUrl(
     awsS3,
     new GetObjectCommand({
       Bucket: env.S3_BUCKET,

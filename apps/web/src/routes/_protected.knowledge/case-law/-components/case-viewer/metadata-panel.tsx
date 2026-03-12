@@ -36,7 +36,7 @@ const MetadataField = ({
   label: string;
   value: Date | string | null | undefined;
 }) => {
-  if (!value) {
+  if (value === undefined || value === null) {
     return null;
   }
 

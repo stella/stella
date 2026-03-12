@@ -30,11 +30,11 @@ const getMasterKey = (): Buffer | null => {
  * The org ID is used as the `info` parameter so each
  * organization gets an independent key.
  */
-const deriveOrgKey = (
+const deriveOrgKey = async (
   masterKey: Buffer,
   organizationId: string,
 ): Promise<Buffer> =>
-  new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     hkdf(
       "sha256",
       masterKey,

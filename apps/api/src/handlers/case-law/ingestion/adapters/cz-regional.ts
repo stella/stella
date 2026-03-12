@@ -76,8 +76,8 @@ export const czRegionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1000,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         // Default cursor: 30 days ago
         const date =

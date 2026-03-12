@@ -178,6 +178,8 @@ if (import.meta.main) {
 
   const readLang = async (filename: string): Promise<NestedMessages> => {
     const content = await Bun.file(resolve(langsDir, filename)).text();
+    // SAFETY: i18n JSON files conform to NestedMessages; script validates
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return JSON.parse(content) as NestedMessages;
   };
 

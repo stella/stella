@@ -44,7 +44,7 @@ const P = (text: string) =>
 /** Extract "accepted" text from a paragraph in edited XML. */
 const extractAcceptedText = (xml: string): string[] => {
   const doc = slimdom.parseXmlDocument(xml);
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return [];
   }
@@ -54,6 +54,8 @@ const extractAcceptedText = (xml: string): string[] => {
     if (child.nodeType !== child.ELEMENT_NODE) {
       continue;
     }
+    // SAFETY: ELEMENT_NODE implies Element in slimdom
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const el = child as slimdom.Element;
     if (el.localName !== "p" || el.namespaceURI !== W_NS) {
       continue;
@@ -64,6 +66,8 @@ const extractAcceptedText = (xml: string): string[] => {
       if (node.nodeType !== node.ELEMENT_NODE) {
         return;
       }
+      // SAFETY: ELEMENT_NODE implies Element in slimdom
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const n = node as slimdom.Element;
       // Skip deleted content
       if (n.localName === "del" && n.namespaceURI === W_NS) {
@@ -176,7 +180,7 @@ const longParagraph = fc
  * since \p{L} matches individual CJK ideographs.
  */
 
-const CJK_CHARS = [..."契約条項法律裁判所判決証拠原告被告弁護士"];
+const CJK_CHARS = Array.from("契約条項法律裁判所判決証拠原告被告弁護士");
 const cjkText = fc
   .array(fc.constantFrom(...CJK_CHARS), {
     minLength: 3,
@@ -890,13 +894,13 @@ const buildDocxBuffer = async (bodyXml: string): Promise<Buffer> => {
  * Cyrillic, CJK). Avoids XML-incompatible compatibility
  * ideographs that don't roundtrip through XML parsers.
  */
-const PLACEHOLDER_CHARS = [
-  ...("abcdefghijklmnopqrstuvwxyz" +
+const PLACEHOLDER_CHARS = Array.from(
+  "abcdefghijklmnopqrstuvwxyz" +
     "áéíóúčřšžňďťůý" +
     "бвгдежзиклмнопрстуфхцчшщ" +
     "名前住所日付" +
-    "0123456789_"),
-];
+    "0123456789_",
+);
 const placeholderName = fc
   .array(fc.constantFrom(...PLACEHOLDER_CHARS), {
     minLength: 1,
@@ -1041,9 +1045,8 @@ describe("property: structural isolation", () => {
         xmlSafeWord,
         xmlSafeWord,
         (textA, textB, insertion) => {
-          // Use code-point array to avoid splitting
-          // surrogate pairs at the insert position
-          const cpA = [...textA];
+          // Use code-point array to avoid splitting surrogate pairs at insert position
+          const cpA = Array.from(textA);
           if (cpA.length < 2) {
             return;
           }
@@ -1250,7 +1253,7 @@ describe("regression: multi-w:t text ordering", () => {
         const combined = textA + textB;
 
         // Insert into the second w:t (after first char)
-        const cpB = [...textB];
+        const cpB = Array.from(textB);
         const newText = textA + cpB[0] + insert + cpB.slice(1).join("");
 
         if (combined === newText) {
@@ -1367,7 +1370,7 @@ describe("property: adversarial text roundtrip", () => {
         fc.integer({ min: 0, max: 1_000_000 }),
         (text, insert, rawPos) => {
           // Use code-point-safe insertion position
-          const codePoints = [...text];
+          const codePoints = Array.from(text);
           if (codePoints.length < 2) {
             return;
           }

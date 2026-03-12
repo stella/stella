@@ -109,7 +109,9 @@ function ThreadRoute() {
                             <AskUserCard
                               key={part.toolCallId}
                               // eslint-disable-next-line typescript/no-misused-promises
-                              onSubmit={(text) => sendMessage({ text })}
+                              onSubmit={async (text) =>
+                                await sendMessage({ text })
+                              }
                               part={part}
                             />
                           );
@@ -168,13 +170,13 @@ function ThreadRoute() {
           className="min-h-10 flex-1 rounded-lg border px-3 py-2"
           mentionContext={GLOBAL_MENTION_CONTEXT}
           // eslint-disable-next-line typescript/no-misused-promises
-          onSubmit={(text) => sendMessage({ text })}
+          onSubmit={async (text) => await sendMessage({ text })}
         />
         {isGenerating && (
           <Button
             aria-label={t("common.cancel")}
             // eslint-disable-next-line typescript/no-misused-promises
-            onClick={() => stop()}
+            onClick={async () => await stop()}
             size="icon-sm"
             variant="outline"
           >

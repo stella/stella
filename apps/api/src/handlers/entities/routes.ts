@@ -85,8 +85,8 @@ export const entitiesRoute = new Elysia({
   })
   .put(
     "/",
-    (ctx) =>
-      createEntitiesHandler({
+    async (ctx) =>
+      await createEntitiesHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -100,8 +100,8 @@ export const entitiesRoute = new Elysia({
   )
   .post(
     "/upload",
-    (ctx) =>
-      uploadEntityHandler({
+    async (ctx) =>
+      await uploadEntityHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
@@ -116,8 +116,8 @@ export const entitiesRoute = new Elysia({
   )
   .get(
     "/",
-    (ctx) =>
-      readEntitiesHandler({
+    async (ctx) =>
+      await readEntitiesHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         filters: ctx.query.filters ?? [],
@@ -131,8 +131,8 @@ export const entitiesRoute = new Elysia({
   )
   .delete(
     "/",
-    (ctx) =>
-      deleteEntitiesHandler({
+    async (ctx) =>
+      await deleteEntitiesHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
@@ -146,8 +146,8 @@ export const entitiesRoute = new Elysia({
   )
   .patch(
     "/move",
-    (ctx) =>
-      moveEntityHandler({
+    async (ctx) =>
+      await moveEntityHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -160,8 +160,8 @@ export const entitiesRoute = new Elysia({
   )
   .patch(
     "/rename",
-    (ctx) =>
-      renameEntityHandler({
+    async (ctx) =>
+      await renameEntityHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -174,8 +174,8 @@ export const entitiesRoute = new Elysia({
   )
   .post(
     "/duplicate",
-    (ctx) =>
-      duplicateEntityHandler({
+    async (ctx) =>
+      await duplicateEntityHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -189,8 +189,8 @@ export const entitiesRoute = new Elysia({
   )
   .post(
     "/check-stamp",
-    (ctx) =>
-      checkStampHandler({
+    async (ctx) =>
+      await checkStampHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
@@ -201,8 +201,8 @@ export const entitiesRoute = new Elysia({
   )
   .get(
     "/summaries",
-    (ctx) =>
-      readEntitySummariesHandler({
+    async (ctx) =>
+      await readEntitySummariesHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
         page: ctx.query.page ?? 1,
@@ -215,8 +215,8 @@ export const entitiesRoute = new Elysia({
   )
   .get(
     "/zip/:entityId",
-    (ctx) =>
-      downloadZipHandler({
+    async (ctx) =>
+      await downloadZipHandler({
         scopedDb: ctx.scopedDb,
         entityId: ctx.params.entityId,
         organizationId: ctx.session.activeOrganizationId,
@@ -237,6 +237,7 @@ export const entitiesRoute = new Elysia({
         workspaceId: ctx.workspaceId,
         entityId: ctx.params.entityId,
       });
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- result may be status Response
       if (!result) {
         return status(404, { message: "Entity not found" });
       }

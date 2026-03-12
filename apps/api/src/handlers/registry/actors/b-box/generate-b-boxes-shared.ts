@@ -131,6 +131,11 @@ const getFieldContentAsString = (content?: FieldContent) => {
       return content.currency
         ? `${content.value} ${content.currency}`
         : String(content.value);
+    case "error":
+    case "pending":
+    case "unsupported":
+    case "file":
+      return null;
     default:
       return null;
   }
@@ -148,13 +153,13 @@ export type PreparedJustificationData = {
   pdf: PDF;
 };
 
-export const prepareJustificationData = (
+export const prepareJustificationData = async (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
   justificationId: string,
   scopedDb: ScopedDb,
 ) =>
-  Result.gen(async function* prepareJustificationDataGen() {
+  await Result.gen(async function* prepareJustificationDataGen() {
     const data = await scopedDb((tx) =>
       tx.query.justifications.findFirst({
         where: { id: justificationId },

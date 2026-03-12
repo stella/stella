@@ -95,8 +95,8 @@ export const PdfViewerControls = () => {
         render={
           <Button
             // eslint-disable-next-line typescript/no-misused-promises
-            onClick={() =>
-              navigate({
+            onClick={async () =>
+              await navigate({
                 to: "/workspaces/$workspaceId",
               })
             }
@@ -124,7 +124,7 @@ export const PdfViewerControls = () => {
                 replace: true,
                 search: (prev) =>
                   produce(prev, (s) => {
-                    if (!s.file) {
+                    if (s.file === undefined) {
                       return;
                     }
 
@@ -161,7 +161,7 @@ export const PdfViewerControls = () => {
                 replace: true,
                 search: (prev) =>
                   produce(prev, (s) => {
-                    if (!s.file) {
+                    if (s.file === undefined) {
                       return;
                     }
 
@@ -198,7 +198,7 @@ export const PdfViewerControls = () => {
                 replace: true,
                 search: (prev) =>
                   produce(prev, (s) => {
-                    if (!s.file) {
+                    if (s.file === undefined) {
                       return;
                     }
 
@@ -318,8 +318,8 @@ export const PdfViewerControls = () => {
         render={
           <Button
             // eslint-disable-next-line typescript/no-misused-promises
-            onClick={() =>
-              navigate({
+            onClick={async () =>
+              await navigate({
                 replace: true,
                 to: ".",
                 search: (prev) =>

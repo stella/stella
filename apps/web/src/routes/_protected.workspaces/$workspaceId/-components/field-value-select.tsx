@@ -24,7 +24,11 @@ const SelectValueContent = ({
 }: SelectValueContentProps) => {
   const t = useTranslations();
 
-  if (!value || (Array.isArray(value) && value.length === 0)) {
+  if (
+    value === undefined ||
+    value === null ||
+    (Array.isArray(value) && value.length === 0)
+  ) {
     return type === "multi-select"
       ? t("workspaces.fields.selectValues")
       : t("workspaces.fields.selectAValue");

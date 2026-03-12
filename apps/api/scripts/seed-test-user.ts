@@ -387,7 +387,7 @@ async function seed() {
 }
 
 if (import.meta.main) {
-  seed().catch((error) => {
+  seed().catch((error: unknown) => {
     console.error("Seed failed:", error);
     process.exit(1);
   });

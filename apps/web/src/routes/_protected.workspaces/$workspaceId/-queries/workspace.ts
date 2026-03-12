@@ -58,9 +58,10 @@ export const workflowOptions = ({
       });
 
       const timeoutSignal = AbortSignal.timeout(10_000);
-      const combinedSignal = signal
-        ? AbortSignal.any([signal, timeoutSignal])
-        : timeoutSignal;
+      const combinedSignal =
+        signal !== undefined
+          ? AbortSignal.any([signal, timeoutSignal])
+          : timeoutSignal;
 
       const rivetActor = rivet.workflow.getOrCreate(actorConfig[0], {
         ...actorConfig[1],

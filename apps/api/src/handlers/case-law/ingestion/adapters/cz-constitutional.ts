@@ -45,9 +45,6 @@ const PAGE_SIZE = 20;
 /** First year of the Constitutional Court's existence. */
 const FIRST_YEAR = 1993;
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 /** Zero-pad 2-digit year suffix for NALUS URLs. */
 const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
@@ -167,8 +164,8 @@ export const czConstitutionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1000,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         const callerSignal = signal;
 
@@ -224,7 +221,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
             ) {
               // Per-request timeout: treat as a miss
               consecutiveMisses++;
-              await sleep(1000);
+              await Bun.sleep(1000);
               state.number++;
               if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
                 if (state.year <= FIRST_YEAR) {
@@ -245,7 +242,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
           }
 
           // Rate limit: 1 req/s to avoid overwhelming NALUS
-          await sleep(1000);
+          await Bun.sleep(1000);
 
           state.number++;
 

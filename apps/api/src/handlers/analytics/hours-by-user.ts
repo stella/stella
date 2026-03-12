@@ -13,7 +13,7 @@ type HoursByUserHandlerProps = {
   query: DateRangeQuery;
 };
 
-export const hoursByUserHandler = ({
+export const hoursByUserHandler = async ({
   scopedDb,
   workspaceId,
   query,
@@ -26,7 +26,7 @@ export const hoursByUserHandler = ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         userId: timeEntries.userId,

@@ -238,7 +238,13 @@ const FieldRenderer = ({
             onChange(field.path, val);
             onBlur?.(field.path);
           }}
-          value={value === "" ? undefined : (value as string)}
+          value={
+            value === ""
+              ? undefined
+              : // SAFETY: inputType discriminates; value is string for select
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                (value as string)
+          }
         >
           <SelectTrigger>
             <SelectValue placeholder={label} />
@@ -269,7 +275,11 @@ const FieldRenderer = ({
               name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
-              value={(value as string) ?? ""}
+              value={
+                // SAFETY: inputType discriminates; value is string for textarea
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                (value as string) ?? ""
+              }
             />
           }
         />
@@ -292,7 +302,11 @@ const FieldRenderer = ({
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
               type="number"
-              value={(value as string) ?? ""}
+              value={
+                // SAFETY: inputType discriminates; value is string for number input
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                (value as string) ?? ""
+              }
             />
           }
         />
@@ -314,7 +328,11 @@ const FieldRenderer = ({
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
             type={inputType === "date" ? "date" : "text"}
-            value={(value as string) ?? ""}
+            value={
+              // SAFETY: inputType discriminates; value is string for text/date
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              (value as string) ?? ""
+            }
           />
         }
       />
@@ -343,7 +361,10 @@ const ArrayFieldRenderer = ({
   const t = useTranslations();
   const itemFields: ResolvedField[] = field.itemFields ?? [];
   const arrayKey = `__array_${field.path}`;
-  const items = (values[arrayKey] as number[] | undefined) ?? [];
+  // SAFETY: __array_* keys hold number[] from form state
+  const items =
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    (values[arrayKey] as number[] | undefined) ?? [];
 
   const addItem = () => {
     const nextIndex = items.length;
@@ -450,6 +471,8 @@ const buildSubmitValues = (
   for (const field of fields) {
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
+      // SAFETY: __array_* keys hold number[] from form state
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const items = (values[arrayKey] as number[] | undefined) ?? [];
       const itemFields: ResolvedField[] = field.itemFields ?? [];
       const arrayValues: Record<string, unknown>[] = [];
@@ -506,6 +529,8 @@ const setNestedValue = (
     if (!(part in current) || typeof current[part] !== "object") {
       current[part] = {};
     }
+    // SAFETY: guarded by typeof current[part] === "object" above
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     current = current[part] as Record<string, unknown>;
   }
 
@@ -523,6 +548,8 @@ const collectValidatableFields = (
   for (const field of fields) {
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
+      // SAFETY: __array_* keys hold number[] from form state
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const items = (values[arrayKey] as number[] | undefined) ?? [];
       const itemFields: ResolvedField[] = field.itemFields ?? [];
 
@@ -763,6 +790,7 @@ export const TemplateForm = ({
             {
               // SAFETY: the discriminated union guarantees `file`
               // is defined when `templateId` is absent.
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
               file: file as File,
               values: valuesJson,
             },
@@ -795,6 +823,7 @@ export const TemplateForm = ({
           : // SAFETY: Eden returns a typed object for the fill
             // endpoint, but the actual response is binary
             // data; the double cast bridges the type mismatch.
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             new Blob([data as unknown as BlobPart], {
               type: mimeType,
             });
@@ -828,9 +857,11 @@ export const TemplateForm = ({
   );
 
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    (e: React.SubmitEvent<HTMLFormElement>) => {
       e.preventDefault();
       // Errors are surfaced as toasts inside handleDownload
+      // TODO: fix this
+      // oxlint-disable-next-line no-empty-function
       handleDownload("docx").catch(() => {});
     },
     [handleDownload],
@@ -973,8 +1004,9 @@ export const TemplateForm = ({
             )}
             <Button
               disabled={loading || hasErrors}
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick={() => handleDownload("pdf").catch(() => {})}
+              // TODO: fix this
+              // eslint-disable-next-line typescript/no-misused-promises no-empty-function
+              onClick={async () => await handleDownload("pdf").catch(() => {})}
               type="button"
               variant="outline"
             >

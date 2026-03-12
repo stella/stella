@@ -195,6 +195,7 @@ export const validateAIOutput = ({
   aiResult,
   property,
 }: ValidateAIOutputProps): ValidateResult => {
+  // oxlint-disable-next-line typescript/strict-boolean-expressions -- aiResult required param
   if (!aiResult) {
     return Result.err(
       new WorkflowValidationError({

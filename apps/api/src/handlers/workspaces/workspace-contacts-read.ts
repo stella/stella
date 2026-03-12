@@ -7,11 +7,11 @@ type ReadWorkspaceContactsHandlerProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-export const readWorkspaceContactsHandler = ({
+export const readWorkspaceContactsHandler = async ({
   scopedDb,
   workspaceId,
 }: ReadWorkspaceContactsHandlerProps) =>
-  scopedDb((tx) =>
+  await scopedDb((tx) =>
     tx.query.workspaceContacts.findMany({
       where: { workspaceId: { eq: workspaceId } },
       limit: LIMITS.workspaceContactsCount,

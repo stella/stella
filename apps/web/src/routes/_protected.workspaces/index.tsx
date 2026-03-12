@@ -1052,8 +1052,7 @@ const MatterCard = ({
 
   const [previewEnabled, setPreviewEnabled] = useState(false);
   const [hovered, setHovered] = useState(false);
-  // eslint-disable-next-line unicorn/no-useless-undefined -- React 19 useRef requires an explicit initial value
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: preview } = useQuery({
     ...overviewOptions(workspace.id),
@@ -1081,7 +1080,7 @@ const MatterCard = ({
   const onMouseLeave = useCallback(() => {
     setHovered(false);
     setPreviewEnabled(false);
-    clearTimeout(hoverTimer.current);
+    clearTimeout(hoverTimer.current ?? undefined);
   }, []);
 
   const others = workspace.contributors.filter((c) => c.userId !== null);

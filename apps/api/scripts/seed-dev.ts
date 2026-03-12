@@ -3226,6 +3226,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const ws = at(seedWorkspaces, i);
     const wsLabel = at(wsLabels, i);
     const docNames = workspaceDocNames[wsLabel];
+    // oxlint-disable-next-line typescript/strict-boolean-expressions -- docNames may be undefined
     if (docNames) {
       docPlans.push({ wsId: ws.id, wsLabel, docNames });
     }
@@ -3452,7 +3453,7 @@ if (import.meta.main) {
 
   seed()
     .then(() => process.exit(0))
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.error("Seed failed:", error);
       process.exit(1);
     });

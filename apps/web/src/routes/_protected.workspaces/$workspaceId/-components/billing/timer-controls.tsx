@@ -49,7 +49,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
 
-  const isRunning = activeTimer?.timerStartedAt != null;
+  const isRunning = activeTimer?.timerStartedAt !== null;
 
   // Tick the elapsed time every second when timer is running
   useEffect(() => {

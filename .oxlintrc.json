@@ -2,9 +2,10 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json"
+    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
   ],
   "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
+
   "rules": {
     // Override ultracite defaults for Stella
     "no-console": "warn",
@@ -31,17 +32,12 @@
     "no-inline-comments": "off",
     "max-statements": "off",
     "prefer-destructuring": "off",
-    "no-void": "off",
     "no-negated-condition": "off",
-    "no-eq-null": "off",
     "no-nested-ternary": "off",
     "no-use-before-define": "off",
     "no-useless-return": "off",
-    "no-empty-function": "off",
     "no-warning-comments": "off",
     "no-unexpected-multiline": "off",
-    "no-promise-executor-return": "off",
-    "no-useless-concat": "off",
     "max-classes-per-file": "off",
     "class-methods-use-this": "off",
     "no-unmodified-loop-condition": "off",
@@ -69,11 +65,10 @@
     "unicorn/no-await-expression-member": "off",
     "unicorn/no-nested-ternary": "off",
     "unicorn/prefer-set-has": "off",
+    "unicorn/prefer-spread": "off",
 
     // React perf
     "react_perf/jsx-no-new-function-as-prop": "off",
-    "react_perf/jsx-no-new-object-as-prop": "off",
-    "react_perf/jsx-no-new-array-as-prop": "off",
 
     // React
     "react/no-array-index-key": "off",
@@ -94,79 +89,53 @@
     // JSDoc
     "jsdoc/require-param-type": "off",
 
-    // JSX accessibility
-    "jsx-a11y/no-static-element-interactions": "off",
-    "jsx-a11y/click-events-have-key-events": "off",
-
-    // Jest (top-level; repeated in test-file override below)
-    "jest/no-conditional-in-test": "off",
-    "jest/no-conditional-expect": "off",
-    "jest/require-hook": "off",
-    "jest/prefer-each": "off",
-    "jest/valid-title": "off",
-
     // Rules without oxlint equivalents (tracked for future):
     // - noSecrets (entropy-based secret detection)
     // - noDuplicateDependencies (package.json lint)
     // - noJsxLiterals (JSX string literal enforcement)
     // - useSimplifiedLogicExpression
-    // - noExcessiveCognitiveComplexity
     // - useErrorCause
     // - noScriptUrl (partially covered by jsx-a11y)
 
     // --- Type-aware suppressions (temporarily disabled to adopt oxlint-tsgolint incrementally) ---
-    "typescript/strict-boolean-expressions": "off",
-    "typescript/no-confusing-void-expression": "off",
-    "typescript/promise-function-async": "off",
-    "typescript/no-unsafe-type-assertion": "off",
-    "typescript/await-thenable": "off",
+    "typescript/strict-boolean-expressions": [
+      "error",
+      {
+        "allowNullableString": true,
+        "allowNullableBoolean": true,
+      },
+    ],
+    "typescript/no-confusing-void-expression": "off", // not needed
     "typescript/prefer-nullish-coalescing": "off",
     "typescript/no-unsafe-assignment": "off",
-    "typescript/use-unknown-in-catch-callback-variable": "off",
-    "typescript/unbound-method": "off",
-    "typescript/only-throw-error": "off",
-    "typescript/no-base-to-string": "off",
+    "typescript/only-throw-error": [
+      "error",
+      {
+        "allow": [
+          {
+            "from": "package",
+            "name": ["Redirect", "AnyRedirect", "NotFoundError"],
+            "package": "@tanstack/router-core",
+          },
+        ],
+      },
+    ],
     "typescript/no-unsafe-member-access": "off",
     "typescript/no-unsafe-argument": "off",
-    "typescript/return-await": "off",
-    "typescript/switch-exhaustiveness-check": "off",
-    "typescript/no-deprecated": "off",
-    "typescript/no-misused-spread": "off",
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/no-unsafe-return": "off",
     "typescript/no-unsafe-call": "off",
-    "typescript/no-unnecessary-boolean-literal-compare": "off",
     "typescript/non-nullable-type-assertion-style": "off",
-    "typescript/restrict-template-expressions": "off",
-    "typescript/prefer-reduce-type-parameter": "off",
-    "eqeqeq": ["error", "always", { "null": "ignore" }]
   },
   "overrides": [
     {
-      "files": [
-        "apps/api/src/handlers/docx/**",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer.tsx"
-      ],
-      "rules": {
-        "unicorn/prefer-dom-node-remove": "off",
-        "unicorn/prefer-dom-node-append": "off",
-        "unicorn/prefer-modern-dom-apis": "off"
-      }
-    },
-    {
-      "files": [
-        "apps/web/scripts/**",
-        "apps/api/scripts/**",
-        "scripts/**",
-        "packages/scripts/**"
-      ],
-      "rules": {
-        "no-console": "off"
-      }
+      "files": ["**/scripts/**"],
+      "rules": { "no-console": "off" },
     },
     {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
-        "**/__tests__/**/*.{ts,tsx,js,jsx}"
+        "**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
       "plugins": ["jest", "vitest"],
       "rules": {
@@ -177,32 +146,12 @@
         "jest/require-hook": "off",
         "jest/prefer-each": "off",
         "jest/valid-title": "off",
+        "no-console": "off",
         // Mock functions are often async without await to satisfy interface
         // return types (Promise<T>) without an actual async operation.
-        "require-await": "off"
-      }
+        "require-await": "off",
+        "typescript/unbound-method": "off",
+      },
     },
-    {
-      "files": ["apps/api/src/handlers/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "@/api/lib/branded-types",
-                "importNames": ["toSafeId"],
-                "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
-              },
-              {
-                "name": "ai",
-                "importNames": ["tool"],
-                "message": "Use defineTool from chat-tools.ts instead of tool() directly. defineTool automatically wraps execute with safeExecute."
-              }
-            ]
-          }
-        ]
-      }
-    }
-  ]
+  ],
 }

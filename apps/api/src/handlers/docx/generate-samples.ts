@@ -221,7 +221,7 @@ const run = async () => {
   console.log("\nDone. Open the files in Word to verify.");
 };
 
-run().catch((error) => {
+run().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });

@@ -43,7 +43,11 @@ export const Justification = ({ justification }: JustificationProps) => (
             justification={justification}
             pageNumber={pageNumber}
           >
-            {domToReact(node.children as DOMNode[])}
+            {domToReact(
+              // SAFETY: html-react-parser DOMNode children
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              node.children as DOMNode[],
+            )}
           </Citation>
         );
       },

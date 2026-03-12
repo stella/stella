@@ -17,7 +17,7 @@ export const resolveVerificationCodeAuth = async (
   organizationId: SafeId<"organization">,
   scopedDb: ScopedDb,
 ) => {
-  const [row] = await scopedDb((tx) =>
+  const rows = await scopedDb((tx) =>
     tx
       .select({
         workspaceId: entities.workspaceId,
@@ -35,6 +35,7 @@ export const resolveVerificationCodeAuth = async (
       .where(eq(entityVersions.verificationCode, code))
       .limit(1),
   );
+  const row = rows.at(0);
 
   if (!row) {
     return status(404);

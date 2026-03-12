@@ -16,7 +16,7 @@ export const PinProperty = ({ column }: PinPropertyProps) => {
     return null;
   }
 
-  if (column.getIsPinned()) {
+  if (column.getIsPinned() !== false) {
     return (
       <Button
         className="justify-start font-semibold"

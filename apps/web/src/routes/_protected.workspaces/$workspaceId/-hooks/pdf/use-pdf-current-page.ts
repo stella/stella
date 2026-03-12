@@ -68,7 +68,7 @@ export const useUpdateCurrentPage = ({
         for (const entry of entries) {
           const pageNumber = getPageNumber(entry.target);
 
-          if (!pageNumber) {
+          if (pageNumber === null) {
             continue;
           }
 
@@ -100,7 +100,7 @@ export const useUpdateCurrentPage = ({
           }
         }
 
-        if (!nextPage) {
+        if (nextPage === undefined) {
           return;
         }
 
@@ -128,7 +128,11 @@ export const useUpdateCurrentPage = ({
     for (const pageElement of pageElements) {
       const pageNumber = getPageNumber(pageElement);
 
-      if (initialPage && initialPage > 1 && pageNumber === initialPage) {
+      if (
+        initialPage !== null &&
+        initialPage > 1 &&
+        pageNumber === initialPage
+      ) {
         initialPageRef.current = null;
         pageElement.scrollIntoView({ block: "start" });
       }

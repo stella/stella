@@ -135,11 +135,12 @@ export const RowActions = ({
     const targets = isBulk ? selectedEntities : [entity];
     let failed = false;
     for (const e of targets) {
-      const result = await Result.tryPromise(() =>
-        api.entities({ workspaceId }).duplicate.post({
-          queryKey: entitiesKeys.all(workspaceId),
-          entityId: e.entityId,
-        }),
+      const result = await Result.tryPromise(
+        async () =>
+          await api.entities({ workspaceId }).duplicate.post({
+            queryKey: entitiesKeys.all(workspaceId),
+            entityId: e.entityId,
+          }),
       );
       if (Result.isError(result) || result.value.error) {
         failed = true;
@@ -220,14 +221,14 @@ export const RowActions = ({
         </MenuItem>
         {hasAnyFile && (
           // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={() => handleDownload()}>
+          <MenuItem onClick={async () => await handleDownload()}>
             <DownloadIcon />
             {t("common.download")}
           </MenuItem>
         )}
         {!isBulk && hasPdfConversion && (
           // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={() => handleDownload(true)}>
+          <MenuItem onClick={async () => await handleDownload(true)}>
             <FileOutputIcon />
             {t("common.saveAsPdf")}
           </MenuItem>

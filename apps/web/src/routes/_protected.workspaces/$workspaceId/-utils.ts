@@ -42,6 +42,7 @@ export const getInternalPropertyId = (
 
 export const isInternalPropertyId = (id: string): id is InternalPropertyId =>
   id.startsWith("_") &&
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: guarded by INTERNAL_PROPERTIES.includes
   INTERNAL_PROPERTIES.includes(id.slice(1) as InternalProperty);
 
 export const getPinningStyles = <T = WorkspaceEntity>(
@@ -160,6 +161,10 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.currency
         ? `${field.content.value} ${field.content.currency}`
         : String(field.content.value);
+    case "error":
+    case "pending":
+    case "unsupported":
+      return "";
     default:
       return "";
   }
@@ -406,17 +411,14 @@ export const parseEntities = (entities: RawEntity[]): WorkspaceEntity[] =>
     createdByImage: e.createdByImage,
     updatedAt: e.updatedAt,
     version: e.version,
-    fields: e.fields.reduce(
-      (acc, field) => {
-        acc[field.propertyId] = {
-          id: field.id,
-          entityId: e.entityId,
-          content: field.content,
-        };
-        return acc;
-      },
-      {} as Record<string, WorkspaceField>,
-    ),
+    fields: e.fields.reduce<Record<string, WorkspaceField>>((acc, field) => {
+      acc[field.propertyId] = {
+        id: field.id,
+        entityId: e.entityId,
+        content: field.content,
+      };
+      return acc;
+    }, {}),
   }));
 
 // -- Tree utilities (shared between filesystem and table views) --

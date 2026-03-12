@@ -23,12 +23,12 @@ type ReadFileHandlerProps = {
 
 const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 
-const fileFieldQuery = (
+const fileFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: string,
   workspaceId: SafeId<"workspace">,
 ) =>
-  scopedDb((tx) =>
+  await scopedDb((tx) =>
     tx
       .select({
         content: fields.content,
@@ -55,7 +55,8 @@ export const readFileHandler = async ({
   workspaceId,
   purpose,
 }: ReadFileHandlerProps) => {
-  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const row = rows.at(0);
 
   if (!row) {
     return status(404);
@@ -134,7 +135,8 @@ export const stampedDownloadHandler = async ({
   organizationId,
   workspaceId,
 }: StampedDownloadHandlerProps) => {
-  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const row = rows.at(0);
 
   if (!row) {
     return status(404);

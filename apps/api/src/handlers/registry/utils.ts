@@ -11,13 +11,13 @@ import { userErrors } from "@stella/rivet/errors";
 import type { UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
-import { createScopedDb, db } from '@/api/db';
-import type { ScopedDb } from '@/api/db';
+import { createScopedDb, db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { auth, resolveAccessibleWorkspaces } from "@/api/lib/auth";
 // oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
-import { toSafeId } from '@/api/lib/branded-types';
-import type { SafeId } from '@/api/lib/branded-types';
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { posthogIdentify } from "@/api/lib/posthog";
 
 export const createUserError = (

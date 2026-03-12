@@ -92,7 +92,7 @@ function OTP() {
             await authClient.updateUser({ timezoneId: browserTz });
           }
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           captureError(posthog, error);
         });
 

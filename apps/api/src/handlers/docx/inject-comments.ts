@@ -65,7 +65,7 @@ const injectAnchors = (
   const commentIds: number[] = [];
 
   for (const comment of comments) {
-    const p = paragraphs[comment.paragraphIndex];
+    const p = paragraphs.at(comment.paragraphIndex);
     if (!p) {
       continue;
     }
@@ -191,7 +191,7 @@ export const injectComments = (
 ): { documentXml: string; commentsXml: string } => {
   const doc = slimdom.parseXmlDocument(documentXml);
 
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return {
       documentXml,

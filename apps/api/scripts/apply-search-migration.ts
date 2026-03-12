@@ -152,7 +152,7 @@ const main = async () => {
   process.exit(0);
 };
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("Migration failed:", error);
   process.exit(1);
 });

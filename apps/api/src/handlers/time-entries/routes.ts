@@ -60,8 +60,8 @@ export const timeEntriesRoute = new Elysia({
   })
   .get(
     "/",
-    (ctx) =>
-      readTimeEntriesHandler({
+    async (ctx) =>
+      await readTimeEntriesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -70,17 +70,19 @@ export const timeEntriesRoute = new Elysia({
       query: readTimeEntriesQuerySchema,
     },
   )
-  .get("/:id", (ctx) =>
-    readTimeEntryByIdHandler({
-      workspaceId: ctx.workspaceId,
-      id: ctx.params.id,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/:id",
+    async (ctx) =>
+      await readTimeEntryByIdHandler({
+        workspaceId: ctx.workspaceId,
+        id: ctx.params.id,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .put(
     "/",
-    (ctx) =>
-      createTimeEntryHandler({
+    async (ctx) =>
+      await createTimeEntryHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -95,8 +97,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .patch(
     "/",
-    (ctx) =>
-      updateTimeEntryByIdHandler({
+    async (ctx) =>
+      await updateTimeEntryByIdHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -109,8 +111,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .delete(
     "/",
-    (ctx) =>
-      deleteTimeEntryByIdHandler({
+    async (ctx) =>
+      await deleteTimeEntryByIdHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -123,8 +125,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .post(
     "/timer/start",
-    (ctx) =>
-      timerStartHandler({
+    async (ctx) =>
+      await timerStartHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -139,8 +141,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .post(
     "/timer/stop",
-    (ctx) =>
-      timerStopHandler({
+    async (ctx) =>
+      await timerStopHandler({
         userId: ctx.user.id,
         scopedDb: ctx.scopedDb,
       }),
@@ -151,8 +153,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .post(
     "/batch",
-    (ctx) =>
-      batchUpdateHandler({
+    async (ctx) =>
+      await batchUpdateHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -165,8 +167,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .delete(
     "/batch",
-    (ctx) =>
-      batchDeleteHandler({
+    async (ctx) =>
+      await batchDeleteHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -179,8 +181,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .post(
     "/split",
-    (ctx) =>
-      splitEntryHandler({
+    async (ctx) =>
+      await splitEntryHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -193,8 +195,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .get(
     "/export/csv",
-    (ctx) =>
-      exportCsvHandler({
+    async (ctx) =>
+      await exportCsvHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -205,8 +207,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .get(
     "/export/ledes",
-    (ctx) =>
-      exportLedesHandler({
+    async (ctx) =>
+      await exportLedesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -217,8 +219,8 @@ export const timeEntriesRoute = new Elysia({
   )
   .get(
     "/export/pdf",
-    (ctx) =>
-      exportPdfHandler({
+    async (ctx) =>
+      await exportPdfHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,

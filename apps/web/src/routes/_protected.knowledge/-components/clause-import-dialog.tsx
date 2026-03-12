@@ -63,7 +63,9 @@ export const ClauseImportDialog = ({
             "clauses" in parsed &&
             Array.isArray((parsed as Record<string, unknown>).clauses)
           ) {
+            // SAFETY: guarded by "clauses" in parsed and Array.isArray
             setPreviewCount(
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
               ((parsed as Record<string, unknown>).clauses as unknown[]).length,
             );
           } else {

@@ -161,8 +161,10 @@ export const FieldInfo = ({
   );
 
   if (
-    !property ||
-    !content ||
+    property === undefined ||
+    property === null ||
+    content === undefined ||
+    content === null ||
     property.content.type === "file" ||
     skipFieldFilter(content) ||
     property.tool.type !== "ai-model"

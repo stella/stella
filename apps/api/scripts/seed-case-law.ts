@@ -919,7 +919,7 @@ async function seed() {
   process.exit(0);
 }
 
-seed().catch((error) => {
+seed().catch((error: unknown) => {
   console.error("Seed failed:", error);
   process.exit(1);
 });

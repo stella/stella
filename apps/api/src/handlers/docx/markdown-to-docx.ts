@@ -71,6 +71,8 @@ const parseInlineTokens = (
     switch (token.type) {
       case "strong":
         runs.push(
+          // SAFETY: token.type discriminates; branch narrows to Tokens.Strong
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           ...parseInlineTokens((token as Tokens.Strong).tokens, {
             ...format,
             bold: true,
@@ -80,6 +82,8 @@ const parseInlineTokens = (
 
       case "em":
         runs.push(
+          // SAFETY: token.type discriminates; branch narrows to Tokens.Em
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           ...parseInlineTokens((token as Tokens.Em).tokens, {
             ...format,
             italics: true,
@@ -90,6 +94,8 @@ const parseInlineTokens = (
       case "codespan":
         runs.push(
           new TextRun({
+            // SAFETY: token.type discriminates; branch narrows to Tokens.Codespan
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             text: (token as Tokens.Codespan).text,
             font: "Courier New",
             ...format,
@@ -98,6 +104,8 @@ const parseInlineTokens = (
         break;
 
       case "link": {
+        // SAFETY: token.type discriminates; branch narrows to Tokens.Link
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const link = token as Tokens.Link;
         runs.push(
           new TextRun({
@@ -112,6 +120,8 @@ const parseInlineTokens = (
       case "text":
         runs.push(
           new TextRun({
+            // SAFETY: token.type discriminates; branch narrows to Tokens.Text
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             text: (token as Tokens.Text).text,
             ...format,
           }),
@@ -161,6 +171,8 @@ const createConverters = (mapping: StyleMapping) => {
         return [
           new Paragraph({
             style: mapping.blockquote,
+            // SAFETY: inner.type discriminates; branch narrows to Tokens.Paragraph
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             children: parseInlineTokens((inner as Tokens.Paragraph).tokens),
           }),
         ];
@@ -246,23 +258,33 @@ const createConverters = (mapping: StyleMapping) => {
   const convertToken = (token: Token): DocxChild[] => {
     switch (token.type) {
       case "heading":
+        // SAFETY: token.type discriminates; branch narrows to Tokens.Heading
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return [convertHeading(token as Tokens.Heading)];
 
       case "paragraph":
         return [
           new Paragraph({
             style: mapping.paragraph,
+            // SAFETY: token.type discriminates; branch narrows to Tokens.Paragraph
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             children: parseInlineTokens((token as Tokens.Paragraph).tokens),
           }),
         ];
 
       case "blockquote":
+        // SAFETY: token.type discriminates; branch narrows to Tokens.Blockquote
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return convertBlockquote(token as Tokens.Blockquote);
 
       case "list":
+        // SAFETY: token.type discriminates; branch narrows to Tokens.List
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return convertList(token as Tokens.List);
 
       case "table":
+        // SAFETY: token.type discriminates; branch narrows to Tokens.Table
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return [convertTable(token as Tokens.Table)];
 
       case "code":
@@ -270,6 +292,8 @@ const createConverters = (mapping: StyleMapping) => {
           new Paragraph({
             children: [
               new TextRun({
+                // SAFETY: token.type discriminates; branch narrows to Tokens.Code
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                 text: (token as Tokens.Code).text,
                 font: "Courier New",
               }),

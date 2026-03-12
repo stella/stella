@@ -22,12 +22,12 @@
       "outputs": [".cache/tsbuildinfo.json"]
     },
     "lint": {
-      "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "{root}/.oxlintrc.json"]
+      "cache": false,
+      "dependsOn": ["transit"]
     },
     "format": {
-      "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "{root}/.oxfmtrc.json"]
+      "cache": false,
+      "dependsOn": ["transit"]
     },
     "i18n:check": {
       "dependsOn": ["transit"],

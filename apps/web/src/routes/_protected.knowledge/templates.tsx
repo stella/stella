@@ -312,7 +312,7 @@ function RouteComponent() {
       onCategoriesChanged={fetchCategories}
       onCategorySelect={handleCategorySelect}
       // eslint-disable-next-line typescript/no-misused-promises
-      onDeleted={() => fetchTemplates()}
+      onDeleted={async () => await fetchTemplates()}
       onDiscovered={(file, schema) =>
         setView({
           kind: "configure",

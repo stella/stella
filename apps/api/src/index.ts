@@ -48,7 +48,7 @@ const rivetApp = new Elysia()
       context: new RedisRateLimitContext(),
     }),
   )
-  .all("/api/rivet/*", (c) => registry.handler(c.request));
+  .all("/api/rivet/*", async (c) => await registry.handler(c.request));
 
 const api = new Elysia()
   .onRequest((ctx) => setSecurityHeaders(ctx.set))
@@ -94,7 +94,7 @@ const api = new Elysia()
 
     const posthog = getPostHog();
 
-    await posthog.flush().catch((error) => {
+    await posthog.flush().catch((error: unknown) => {
       // eslint-disable-next-line no-console
       console.error("Error flushing posthog", error);
     });

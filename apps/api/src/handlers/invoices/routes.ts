@@ -41,8 +41,8 @@ export const invoicesRoute = new Elysia({
   })
   .get(
     "/",
-    (ctx) =>
-      readInvoicesHandler({
+    async (ctx) =>
+      await readInvoicesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -53,8 +53,8 @@ export const invoicesRoute = new Elysia({
   )
   .get(
     "/:invoiceId",
-    (ctx) =>
-      readInvoiceByIdHandler({
+    async (ctx) =>
+      await readInvoiceByIdHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         scopedDb: ctx.scopedDb,
@@ -68,8 +68,8 @@ export const invoicesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createInvoiceHandler({
+    async (ctx) =>
+      await createInvoiceHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -83,8 +83,8 @@ export const invoicesRoute = new Elysia({
   )
   .patch(
     "/:invoiceId",
-    (ctx) =>
-      updateInvoiceHandler({
+    async (ctx) =>
+      await updateInvoiceHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
@@ -102,8 +102,8 @@ export const invoicesRoute = new Elysia({
   )
   .post(
     "/:invoiceId/transition",
-    (ctx) =>
-      transitionInvoiceHandler({
+    async (ctx) =>
+      await transitionInvoiceHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
@@ -121,8 +121,8 @@ export const invoicesRoute = new Elysia({
   )
   .delete(
     "/:invoiceId",
-    (ctx) =>
-      deleteInvoiceHandler({
+    async (ctx) =>
+      await deleteInvoiceHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         scopedDb: ctx.scopedDb,
@@ -138,8 +138,8 @@ export const invoicesRoute = new Elysia({
   )
   .post(
     "/:invoiceId/entries",
-    (ctx) =>
-      addEntriesHandler({
+    async (ctx) =>
+      await addEntriesHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,
@@ -157,8 +157,8 @@ export const invoicesRoute = new Elysia({
   )
   .delete(
     "/:invoiceId/entries",
-    (ctx) =>
-      removeEntriesHandler({
+    async (ctx) =>
+      await removeEntriesHandler({
         workspaceId: ctx.workspaceId,
         invoiceId: ctx.params.invoiceId,
         body: ctx.body,

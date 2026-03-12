@@ -119,7 +119,7 @@ export const ConfigureStep = ({
   );
 
   const handleSave = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: React.SubmitEvent<HTMLFormElement>) => {
       e.preventDefault();
 
       const trimmed = name.trim();
@@ -323,9 +323,8 @@ const OptionsTagInput = ({
   );
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    // TODO: fix this
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
     <div
       className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 transition-shadow outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
       onClick={() => inputRef.current?.focus()}
@@ -394,7 +393,14 @@ export const FieldConfigEditor = ({
       <Field>
         <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
         <Select
-          onValueChange={(val) => onUpdate({ inputType: val as InputType })}
+          onValueChange={(val) =>
+            // SAFETY: val from Select with INPUT_TYPES options
+            onUpdate({
+              inputType:
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                val as InputType,
+            })
+          }
           value={field.inputType}
         >
           <SelectTrigger>
@@ -416,9 +422,7 @@ export const FieldConfigEditor = ({
         <div className="flex items-center gap-2">
           <Checkbox
             checked={field.required}
-            onCheckedChange={(checked) =>
-              onUpdate({ required: checked === true })
-            }
+            onCheckedChange={(checked) => onUpdate({ required: checked })}
           />
           <FieldLabel>{t("common.required")}</FieldLabel>
         </div>

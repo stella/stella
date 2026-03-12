@@ -53,7 +53,7 @@ export const Route = createFileRoute(
     middlewares: [retainSearchParams(true)],
   },
   // eslint-disable-next-line typescript/no-misused-promises
-  onLeave: () => {
+  onLeave: async () => {
     const container = document.querySelector(`#${PDF_CONTAINER_ID}`);
 
     // for whatever reason chrome keeps detached nodes in the DOM
@@ -62,7 +62,7 @@ export const Route = createFileRoute(
       container.innerHTML = "";
     }
 
-    return usePdfStore.getState().cleanupPdfs();
+    return await usePdfStore.getState().cleanupPdfs();
   },
 });
 
@@ -103,21 +103,19 @@ function RouteComponent() {
           </ScrollArea>
         </Panel>
 
-        <Activity mode={entitySearch.visible && entity ? "visible" : "hidden"}>
+        <Activity mode={entitySearch.visible ? "visible" : "hidden"}>
           <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
             <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
           </Separator>
           <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
-            {entity && (
-              <div className="bg-background h-full overflow-y-auto">
-                <EntityFileInfo
-                  entityId={entity.entityId}
-                  fields={entity.fields}
-                  scrollContainerRef={scrollContainerRef}
-                />
-                <FieldInfoList entity={entity} workspaceId={workspaceId} />
-              </div>
-            )}
+            <div className="bg-background h-full overflow-y-auto">
+              <EntityFileInfo
+                entityId={entity.entityId}
+                fields={entity.fields}
+                scrollContainerRef={scrollContainerRef}
+              />
+              <FieldInfoList entity={entity} workspaceId={workspaceId} />
+            </div>
           </Panel>
         </Activity>
       </Group>

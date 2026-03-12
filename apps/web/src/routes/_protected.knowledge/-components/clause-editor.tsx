@@ -30,7 +30,7 @@ export const clauseBodyToTipTap = (body: ClauseParagraph[]): JSONContent => ({
   content: body
     .filter((p) => !p.isDirective)
     .map((p): JSONContent => {
-      const isHeading = p.style === "heading" && p.level;
+      const isHeading = p.style === "heading" && p.level !== undefined;
       const runs = p.runs ?? [{ text: p.text }];
 
       const content: JSONContent[] = runs.map((run): JSONContent => {
@@ -143,9 +143,6 @@ export const ClauseEditor = ({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!editor) {
-      return;
-    }
     const currentText = editor.getText();
     if (currentText !== contentKey) {
       editor.commands.setContent(clauseBodyToTipTap(content));
@@ -167,10 +164,6 @@ export const ClauseEditor = ({
     },
     [editor],
   );
-
-  if (!editor) {
-    return null;
-  }
 
   return (
     // Stop modifier key combos from propagating to global

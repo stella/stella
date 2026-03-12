@@ -12,10 +12,10 @@ import {
   resetActorState,
 } from "@/api/handlers/registry/utils";
 
-export const finishWorkflowAction = (
+export const finishWorkflowAction = async (
   c: ActionContextOf<typeof workflowActor>,
 ) =>
-  Result.tryPromise(async () => {
+  await Result.tryPromise(async () => {
     if (!c.state.isRunning) {
       panic("Workflow is not running");
     }

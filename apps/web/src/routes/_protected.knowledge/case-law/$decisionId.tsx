@@ -1,6 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { DecisionText } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/decision-text";
 import { MetadataPanel } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/metadata-panel";
@@ -10,25 +9,14 @@ import { decisionOptions } from "@/routes/_protected.knowledge/case-law/-queries
 export const Route = createFileRoute(
   "/_protected/knowledge/case-law/$decisionId",
 )({
-  loader: ({ context: { queryClient }, params: { decisionId } }) =>
-    queryClient.ensureQueryData(decisionOptions(decisionId)),
+  loader: async ({ context: { queryClient }, params: { decisionId } }) =>
+    await queryClient.ensureQueryData(decisionOptions(decisionId)),
   component: DecisionViewer,
 });
 
 function DecisionViewer() {
-  const t = useTranslations();
   const { decisionId } = Route.useParams();
   const { data: decision } = useSuspenseQuery(decisionOptions(decisionId));
-
-  if (!decision) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground text-sm">
-          {t("caseLaw.decisionNotFound")}
-        </p>
-      </div>
-    );
-  }
 
   // SAFETY: sections is JSONB written by our segmenter
   // (DecisionSection[]). Drizzle types JSONB as unknown.

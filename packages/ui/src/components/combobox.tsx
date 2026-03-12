@@ -75,7 +75,7 @@ function ComboboxInput({
 
   return (
     <div className="text-foreground relative w-full not-has-[>*.w-full]:w-fit has-disabled:opacity-64">
-      {startAddon && (
+      {Boolean(startAddon) && (
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 start-px z-10 flex items-center ps-[calc(--spacing(3)-1px)] opacity-80 has-[+[data-size=sm]]:ps-[calc(--spacing(2.5)-1px)] [&_svg]:-mx-0.5 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4"
@@ -86,7 +86,7 @@ function ComboboxInput({
       )}
       <ComboboxPrimitive.Input
         className={cn(
-          startAddon &&
+          Boolean(startAddon) &&
             "*:data-[slot=combobox-input]:ps-[calc(--spacing(8.5)-1px)] data-[size=sm]:*:data-[slot=combobox-input]:ps-[calc(--spacing(7.5)-1px)] sm:*:data-[slot=combobox-input]:ps-[calc(--spacing(8)-1px)] sm:data-[size=sm]:*:data-[slot=combobox-input]:ps-[calc(--spacing(7)-1px)]",
           sizeValue === "sm"
             ? "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-6.5"
@@ -352,6 +352,8 @@ function ComboboxChips({
       )}
       data-slot="combobox-chips"
       onMouseDown={(e) => {
+        // SAFETY: DOM mouse event target is Element for UI interaction
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const target = e.target as HTMLElement;
         const isChip = target.closest('[data-slot="combobox-chip"]');
         if (isChip || !chipsRef?.current) {
@@ -364,10 +366,12 @@ function ComboboxChips({
           input.focus();
         }
       }}
+      // SAFETY: chipsRef is HTMLDivElement from ComboboxPrimitive.Chips
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       ref={chipsRef as React.Ref<HTMLDivElement> | null}
       {...props}
     >
-      {startAddon && (
+      {Boolean(startAddon) && (
         <div
           aria-hidden="true"
           className="flex shrink-0 items-center ps-2 opacity-80 has-[+[data-slot=combobox-chip]]:pe-2 has-[~[data-size=sm]]:ps-1.5 has-[~[data-size=sm]]:has-[+[data-slot=combobox-chip]]:pe-1.5 [&_svg]:pointer-events-none [&_svg]:-ms-0.5 [&_svg]:-me-1.5 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4"

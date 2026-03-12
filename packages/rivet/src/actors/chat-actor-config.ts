@@ -60,9 +60,13 @@ export const getChatActorConfig = <T extends OptionsType>(
       enabled: !!options.authToken,
       ...commonOptions,
     };
+    // SAFETY: framework type erasure; clientOptions satisfies ChatActorReturn
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return clientOptions as ChatActorReturn<T>;
   }
 
   const vanillaOptions: ChatActorReturn<"vanilla"> = [[key], commonOptions];
+  // SAFETY: framework type erasure; vanillaOptions satisfies ChatActorReturn
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vanillaOptions as ChatActorReturn<T>;
 };

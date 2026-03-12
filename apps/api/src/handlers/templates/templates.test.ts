@@ -14,7 +14,7 @@ import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
 import { manifestHandler } from "@/api/handlers/templates/manifest";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   return Buffer.from(buf);
 };
 
-const makeEmptyDocx = () => makeDocx(WRAP(P("Hello")));
+const makeEmptyDocx = async () => makeDocx(WRAP(P("Hello")));
 
 const WRAP_HDR = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -100,19 +100,21 @@ const makeDocxWithParts = async (opts: {
 const DOCX_MIME =
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-const fakeOrgId = "org_test" as SafeId<"organization">;
+const fakeOrgId = toSafeId<"organization">("org_test");
 const fakeUserId = "user_test";
 
 /** No-op ScopedDb stub for tests. Calls the callback but
  *  returns `undefined`; sufficient for handlers where the
  *  scopedDb call is best-effort (e.g., analytics inserts). */
-const stubScopedDb = ((fn: unknown) => {
+// SAFETY: test stub; shape satisfies ScopedDb interface for handler mocks
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const stubScopedDb = (async (fn: unknown) => {
   if (typeof fn === "function") {
     // Swallow the result; the callback runs against a
     // fake tx that will throw on actual DB access.
-    return Promise.resolve();
+    return;
   }
-  return Promise.resolve();
+  return;
 }) as unknown as ScopedDb;
 
 const makeDocxFile = async (buf: Buffer) =>
@@ -419,6 +421,8 @@ describe("template manifest", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("'path'");
   });
@@ -441,6 +445,8 @@ describe("template manifest", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("'expression'");
   });
@@ -479,8 +485,12 @@ describe("handler MIME validation", () => {
     });
 
     expect(result).toBeInstanceOf(Response);
+    // SAFETY: test asserts Response; toBeInstanceOf narrows at runtime
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const resp = result as Response;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("DOCX");
   });
@@ -497,6 +507,8 @@ describe("handler MIME validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("DOCX");
   });
@@ -517,6 +529,8 @@ describe("handler MIME validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("DOCX");
   });
@@ -539,6 +553,8 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("Invalid JSON");
   });
@@ -557,6 +573,8 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("object");
   });
@@ -575,6 +593,8 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("object");
   });
@@ -593,6 +613,8 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("null");
   });
@@ -614,6 +636,8 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
+    // SAFETY: test asserts 400; response body shape is known
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const body = (await resp.json()) as { error: string };
     expect(body.error).toContain("null");
   });

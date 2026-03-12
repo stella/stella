@@ -64,9 +64,13 @@ export const getViewsActorConfig = <T extends OptionsType>(
       enabled: !!options.authToken,
       ...commonOptions,
     };
+    // SAFETY: framework type erasure; options satisfy ViewsActorReturn
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return clientOptions as ViewsActorReturn<T>;
   }
 
   const vanillaOptions: ViewsActorReturn<"vanilla"> = [[key], commonOptions];
+  // SAFETY: framework type erasure; vanillaOptions satisfies ViewsActorReturn
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vanillaOptions as ViewsActorReturn<T>;
 };

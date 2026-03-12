@@ -40,7 +40,7 @@ export const summaryHandler = async ({
       .where(and(...conditions)),
   );
 
-  const result = rows[0];
+  const result = rows.at(0);
   if (!result || result.totalFills === 0) {
     return {
       totalFills: 0,

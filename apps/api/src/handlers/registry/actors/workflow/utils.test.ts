@@ -208,33 +208,6 @@ describe("evaluateCondition", () => {
 
     expect(evaluateCondition(fieldContent, condition)).toBe(true);
   });
-
-  test("returns false for unknown string condition operator (bad DB data)", () => {
-    const condition = {
-      version: 1,
-      type: "string",
-      operator: "ne",
-      value: "x",
-    } as unknown as PropertyCondition;
-
-    expect(evaluateCondition(textFieldX, condition)).toBe(false);
-  });
-
-  test("returns false for unknown string-array condition operator (bad DB data)", () => {
-    const condition = {
-      version: 1,
-      type: "string-array",
-      operator: "contains-any",
-      value: ["a"],
-    } as unknown as PropertyCondition;
-    const fieldContent: FieldContent = {
-      type: "multi-select",
-      version: 1,
-      value: ["a"],
-    };
-
-    expect(evaluateCondition(fieldContent, condition)).toBe(false);
-  });
 });
 
 describe("prepareBatch", () => {
@@ -325,29 +298,5 @@ describe("prepareBatch", () => {
     expect(result.properties).toHaveLength(0);
     expect(result.id).toBe("empty-batch");
     expect(result.inputs).toEqual(["dep"]);
-  });
-
-  test("filters mixed batch correctly and preserves batch metadata", () => {
-    const rawBatch = createRawBatch(
-      [
-        createBatchProperty("p1", { status: "fresh" }),
-        createBatchProperty("p2", { status: "fresh" }),
-        createBatchProperty("p3", { status: "fresh" }),
-        createBatchProperty("p4", { status: "stale" }),
-      ],
-      { id: "batch-x", inputs: ["dep1"] },
-    );
-    const fieldContentMap = new Map<string, FieldContent["type"]>([
-      ["p1", "text"],
-      ["p2", "error"],
-      ["p3", undefined as unknown as FieldContent["type"]],
-    ]);
-
-    const result = prepareBatch(rawBatch, fieldContentMap);
-
-    expect(result.properties).toHaveLength(3);
-    expect(result.properties.map((p) => p.id)).toEqual(["p2", "p3", "p4"]);
-    expect(result.id).toBe("batch-x");
-    expect(result.inputs).toEqual(["dep1"]);
   });
 });

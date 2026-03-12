@@ -2383,7 +2383,7 @@ if (import.meta.main) {
       console.log("\nDone.");
       process.exit(0);
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.error("Seed failed:", error);
       process.exit(1);
     });

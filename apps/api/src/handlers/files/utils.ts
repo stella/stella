@@ -74,23 +74,24 @@ export const deleteS3Objects = async ({
   for (let i = 0; i < fileRows.length; i += S3_DELETE_BATCH_SIZE) {
     const batch = fileRows.slice(i, i + S3_DELETE_BATCH_SIZE);
 
-    const result = await Result.tryPromise(() =>
-      awsS3.send(
-        new DeleteObjectsCommand({
-          Bucket: env.S3_BUCKET,
-          Delete: {
-            Objects: batch.map(({ fileId, mimeType }) => ({
-              Key: createFileKey({
-                organizationId,
-                workspaceId,
-                fileId,
-                mimeType,
-              }),
-            })),
-            Quiet: true,
-          },
-        }),
-      ),
+    const result = await Result.tryPromise(
+      async () =>
+        await awsS3.send(
+          new DeleteObjectsCommand({
+            Bucket: env.S3_BUCKET,
+            Delete: {
+              Objects: batch.map(({ fileId, mimeType }) => ({
+                Key: createFileKey({
+                  organizationId,
+                  workspaceId,
+                  fileId,
+                  mimeType,
+                }),
+              })),
+              Quiet: true,
+            },
+          }),
+        ),
     );
 
     if (Result.isError(result)) {

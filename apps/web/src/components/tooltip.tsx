@@ -32,7 +32,7 @@ export default function Tooltip({
         align={align}
         // text nowrap fixes tooltip for buttons in pdf viewer controls
         className={cn("max-w-70 text-nowrap", className)}
-        hidden={!content}
+        hidden={content === undefined || content === null || content === ""}
         side={side}
       >
         {content}

@@ -29,8 +29,8 @@ export const verifyAuthRoute = new Elysia({ prefix: "/verify" })
   .guard({ validateAuth: true })
   .get(
     "/:code",
-    (ctx) =>
-      resolveVerificationCodeAuth(
+    async (ctx) =>
+      await resolveVerificationCodeAuth(
         ctx.params.code,
         ctx.session.activeOrganizationId,
         ctx.scopedDb,

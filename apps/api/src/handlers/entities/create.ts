@@ -142,6 +142,7 @@ export const createEntitiesHandler = async ({
     return { entityId };
   });
 
+  // oxlint-disable-next-line typescript/strict-boolean-expressions -- txResult discriminated union check
   if (txResult && typeof txResult === "object" && "entityId" in txResult) {
     getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
   }

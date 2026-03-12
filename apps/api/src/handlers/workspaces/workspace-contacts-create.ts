@@ -40,13 +40,13 @@ type CreateWorkspaceContactHandlerProps = {
   body: CreateWorkspaceContactBody;
 };
 
-export const createWorkspaceContactHandler = ({
+export const createWorkspaceContactHandler = async ({
   scopedDb,
   workspaceId,
   organizationId,
   body,
 }: CreateWorkspaceContactHandlerProps) =>
-  scopedDb(async (tx) => {
+  await scopedDb(async (tx) => {
     const contact = await tx.query.contacts.findFirst({
       where: {
         id: body.contactId,

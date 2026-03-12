@@ -121,8 +121,8 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
                 className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={() =>
-                  navigate({
+                onClick={async () =>
+                  await navigate({
                     to: "/workspaces/$workspaceId/invoices/$invoiceId",
                     params: {
                       workspaceId,

@@ -252,6 +252,6 @@ const FilterSelectTrigger = ({ children }: PropsWithChildren) => (
     className="w-auto! min-w-min! gap-0.5 border-0 bg-transparent px-1 text-xs! shadow-none [&_svg]:size-3"
     size="sm"
   >
-    <SelectValue>{() => children}</SelectValue>
+    <SelectValue>{(): ReactNode => children}</SelectValue>
   </SelectTrigger>
 );

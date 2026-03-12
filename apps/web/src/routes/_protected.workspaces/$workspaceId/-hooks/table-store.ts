@@ -6,11 +6,11 @@ import type {
 import superjson from "superjson";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PersistStorage } from "zustand/middleware";
+import type { PersistStorage, StorageValue } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 const superjsonStorage: PersistStorage<PersistedState> = {
-  getItem: (name) => {
+  getItem: (name): StorageValue<PersistedState> | null => {
     const raw = localStorage.getItem(name);
     if (!raw) {
       return null;

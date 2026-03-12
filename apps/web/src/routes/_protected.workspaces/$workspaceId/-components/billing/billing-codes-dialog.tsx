@@ -130,7 +130,7 @@ export const BillingCodesDialog = ({
             />
           )}
 
-          {codes && codes.length > 0 ? (
+          {codes !== undefined && codes.length > 0 ? (
             <div className="flex flex-col gap-1.5">
               {codes.map((code) => (
                 <div

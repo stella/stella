@@ -25,8 +25,8 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   })
   .get(
     "/",
-    (ctx) =>
-      readContactsHandler({
+    async (ctx) =>
+      await readContactsHandler({
         organizationId: ctx.session.activeOrganizationId,
         limit: ctx.query.limit,
         cursor: ctx.query.cursor,
@@ -47,8 +47,8 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   )
   .get(
     "/search",
-    (ctx) =>
-      searchContactsHandler({
+    async (ctx) =>
+      await searchContactsHandler({
         organizationId: ctx.session.activeOrganizationId,
         q: ctx.query.q,
         type: ctx.query.type,
@@ -65,8 +65,8 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   )
   .put(
     "/",
-    (ctx) =>
-      createContactHandler({
+    async (ctx) =>
+      await createContactHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -84,17 +84,19 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     },
     (app) =>
       app
-        .get("/", (ctx) =>
-          readContactByIdHandler({
-            organizationId: ctx.session.activeOrganizationId,
-            contactId: ctx.params.contactId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/",
+          async (ctx) =>
+            await readContactByIdHandler({
+              organizationId: ctx.session.activeOrganizationId,
+              contactId: ctx.params.contactId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
         .post(
           "/",
-          (ctx) =>
-            updateContactByIdHandler({
+          async (ctx) =>
+            await updateContactByIdHandler({
               organizationId: ctx.session.activeOrganizationId,
               contactId: ctx.params.contactId,
               body: ctx.body,
@@ -107,8 +109,8 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
         )
         .delete(
           "/",
-          (ctx) =>
-            deleteContactByIdHandler({
+          async (ctx) =>
+            await deleteContactByIdHandler({
               organizationId: ctx.session.activeOrganizationId,
               contactId: ctx.params.contactId,
               scopedDb: ctx.scopedDb,

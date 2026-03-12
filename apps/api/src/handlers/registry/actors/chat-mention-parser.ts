@@ -42,6 +42,8 @@ export const parseMentions = (text: string): MentionRef[] => {
         refs.push({ type: "entity", id: rawId, workspaceId: null });
       }
     } else {
+      // SAFETY: type is from validated prefix; MentionRef shape is constructed
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       refs.push({ type: type as MentionRef["type"], id: rawId } as MentionRef);
     }
   }
@@ -95,6 +97,8 @@ export const collectThreadMentions = (
 ): MentionRef[] => {
   const allText = messages
     .flatMap((m) =>
+      // TODO: fix this
+      // oxlint-disable-next-line typescript/strict-boolean-expressions
       m.parts
         .filter((p) => p.type === "text" && p.text)
         .map((p) => p.text ?? ""),

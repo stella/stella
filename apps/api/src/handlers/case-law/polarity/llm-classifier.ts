@@ -69,13 +69,13 @@ const getAIModel = () =>
  * @param citationText - The citation reference itself
  * @param language - ISO language code (e.g. "cs", "sk", "de")
  */
-export const classifyWithLLM = (
+export const classifyWithLLM = async (
   context: string,
   citationText: string,
   language: string,
   abortSignal?: AbortSignal,
 ): Promise<Result<ClassificationResult, WorkflowIntegrationError>> =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getAIModel(),

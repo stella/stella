@@ -41,7 +41,12 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
     part.state === "input-streaming" || part.state === "input-available";
   const isDone = part.state === "output-available";
 
-  const input = "input" in part ? (part.input as AskUserInput) : null;
+  // SAFETY: input shape from validated ask-user tool
+  const input =
+    "input" in part
+      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        (part.input as AskUserInput)
+      : null;
 
   const [answers, setAnswers] = useState<Record<number, string>>(() => {
     if (!input) {

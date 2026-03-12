@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
-import { status, t } from 'elysia';
-import type { Static } from 'elysia';
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 import { nanoid } from "nanoid";
 
-import type         { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
   matterCounters,
@@ -12,9 +12,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 // oxlint-disable-next-line no-restricted-imports: freshly-inserted workspace PK for FK usage
-import { toSafeId } from '@/api/lib/branded-types';
-import type { SafeId } from '@/api/lib/branded-types';
-
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -42,13 +41,13 @@ type CreateWorkspacesHandlerProps = {
 // After inserting the workspace row, we append the new ID to
 // app.workspace_ids so that subsequent inserts into child
 // tables (workspaceMembers, properties) pass RLS checks.
-export const createWorkspacesHandler = ({
+export const createWorkspacesHandler = async ({
   scopedDb,
   organizationId,
   userId,
   body,
 }: CreateWorkspacesHandlerProps) =>
-  scopedDb(async (tx) => {
+  await scopedDb(async (tx) => {
     const workspacesResult = await tx.query.workspaces.findMany({
       columns: {
         name: true,

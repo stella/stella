@@ -114,7 +114,7 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
       judges: item.judges?.map((j) => j.name),
       keywords: item.keywords,
       division: item.division?.name,
-      ...(additionalCaseNumbers?.length && {
+      ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,
       }),
     },
@@ -129,8 +129,8 @@ export const plCourtsAdapter: SourceAdapter = {
   language: "pl",
   minRequestIntervalMs: 1000,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         const page = cursor ? Number.parseInt(cursor, 10) : 0;
         if (Number.isNaN(page)) {

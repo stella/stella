@@ -1,20 +1,22 @@
 {
   "tailwindCSS.classFunctions": ["cva", "cn"],
   "tailwindCSS.experimental.configFile": "packages/ui/src/styles/globals.css",
-  "editor.defaultFormatter": "nicolo-ribaudo.oxfmt-vscode",
+  "editor.defaultFormatter": "oxc.oxc-vscode",
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.formatOnSave": true,
   "emmet.showExpandedAbbreviation": "never",
+  "typescript.experimental.useTsgo": false,
   "editor.codeActionsOnSave": {
-    "source.fixAll.oxc": "explicit"
+    "source.fixAll.oxc": "explicit",
   },
+  "oxc.typeAware": true,
   "search.exclude": {
-    "**/routeTree.gen.ts": true
+    "**/routeTree.gen.ts": true,
   },
   "files.readonlyInclude": {
-    "**/routeTree.gen.ts": true
+    "**/routeTree.gen.ts": true,
   },
   "files.associations": {
-    "*.css": "tailwindcss"
-  }
+    "*.css": "tailwindcss",
+  },
 }

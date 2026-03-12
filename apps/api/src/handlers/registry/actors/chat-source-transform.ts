@@ -34,6 +34,7 @@ const nameFromReadEntity = (output: Record<string, unknown>): string | null => {
         typeof field.value === "string"
       ) {
         const match = field.value.match(FILE_FIELD_RE);
+        // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpExecArray | null
         if (match) {
           return match[1];
         }
@@ -58,12 +59,13 @@ const extractMimeType = (output: Record<string, unknown>): string | null => {
       typeof field.value === "string"
     ) {
       const match = field.value.match(FILE_FIELD_RE);
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpExecArray | null
       if (match) {
         const name = match[1];
-        if (name.endsWith(".pdf")) {
+        if (typeof name === "string" && name.endsWith(".pdf")) {
           return "application/pdf";
         }
-        if (name.endsWith(".docx")) {
+        if (typeof name === "string" && name.endsWith(".docx")) {
           return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         }
       }
@@ -104,7 +106,7 @@ const nameFromDb = async (
       },
     }),
   );
-
+  // oxlint-disable-next-line typescript/strict-boolean-expressions -- findFirst returns T | undefined
   if (!entity) {
     return null;
   }
@@ -154,7 +156,7 @@ const nameFromDbOrgScoped = async (
   // Find which workspace this entity belongs to within
   // the organization. Uses a JOIN so the DB never returns
   // data from another org (no fetch-then-check).
-  const [row] = await scopedDb((tx) =>
+  const rows = await scopedDb((tx) =>
     tx
       .select({ workspaceId: entities.workspaceId })
       .from(entities)
@@ -167,6 +169,7 @@ const nameFromDbOrgScoped = async (
       )
       .limit(1),
   );
+  const row = rows.at(0);
 
   if (!row) {
     return null;
@@ -213,6 +216,7 @@ export const createSourceInjectionTransform = (
       // SAFETY: chunk.output is typed as `unknown` by the AI
       // SDK. The tools always return JSON objects, so casting
       // to Record is sound after the typeof guard below.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const output = chunk.output as Record<string, unknown> | null;
       if (!output || typeof output !== "object") {
         return;
@@ -222,6 +226,7 @@ export const createSourceInjectionTransform = (
       }
 
       const entityId = output.entityId;
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- output from AI SDK (unknown)
       if (!entityId || typeof entityId !== "string") {
         return;
       }

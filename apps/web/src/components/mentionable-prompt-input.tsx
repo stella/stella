@@ -41,12 +41,16 @@ const serializeToText = (editor: Editor): string => {
 
     if (node.type.name === "mention") {
       const { id, label, category = "entity", sourceWorkspaceId } = node.attrs;
+      // SAFETY: category from our mention extension schema
       const prefix =
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         MENTION_HASH_PREFIX[category as MentionCategory] ??
         MENTION_HASH_PREFIX.entity;
       // Encode workspace context for cross-workspace entities
       const encodedId =
-        category === "entity" && sourceWorkspaceId
+        category === "entity" &&
+        sourceWorkspaceId !== undefined &&
+        sourceWorkspaceId !== null
           ? `${sourceWorkspaceId}:${id}`
           : id;
       parts.push(`[${label}](${prefix}${encodedId})`);
@@ -205,10 +209,13 @@ export const ChatEditor = ({
           const mentionPluginActive = state.plugins.some((plugin) => {
             const meta = plugin.getState(state);
             return (
-              meta &&
+              meta !== undefined &&
+              meta !== null &&
               typeof meta === "object" &&
               "active" in meta &&
-              meta.active
+              // SAFETY: validated shape above; plugin state has active: boolean
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              (meta as { active: boolean }).active
             );
           });
           if (mentionPluginActive) {
@@ -232,7 +239,12 @@ export const ChatEditor = ({
   // Expose a submit function so parent components (e.g. a
   // send button) can trigger submit without keyboard events.
   useEffect(() => {
-    if (!submitRef || !editor) {
+    if (
+      submitRef === undefined ||
+      submitRef === null ||
+      editor === undefined ||
+      editor === null
+    ) {
       return;
     }
     submitRef.current = () => {

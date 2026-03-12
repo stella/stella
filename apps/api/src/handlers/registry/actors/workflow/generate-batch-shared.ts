@@ -106,16 +106,16 @@ type FetchInputFieldsForBatchProps = {
   scopedDb: ScopedDb;
 };
 
-export const fetchInputFieldsForBatch = ({
+export const fetchInputFieldsForBatch = async ({
   entityVersionId,
   inputPropertyIds,
   scopedDb,
 }: FetchInputFieldsForBatchProps): Promise<InputFieldRow[]> => {
   if (inputPropertyIds.length === 0) {
-    return Promise.resolve([]);
+    return [];
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         id: fields.id,

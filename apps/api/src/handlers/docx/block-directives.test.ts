@@ -413,6 +413,8 @@ describe("parseBlockTree", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("if");
 
+    // SAFETY: blocks[0].kind === "if" asserted above
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(1);
     expect(ifBlock.branches[0].condition).toBe("x");
@@ -429,6 +431,8 @@ describe("parseBlockTree", () => {
     const { blocks, errors } = parseBlockTree(directives);
 
     expect(errors).toEqual([]);
+    // SAFETY: blocks[0].kind === "if" from if/else/endif structure
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(2);
     expect(ifBlock.branches[0].condition).toBe("x");
@@ -445,6 +449,8 @@ describe("parseBlockTree", () => {
     const { blocks, errors } = parseBlockTree(directives);
 
     expect(errors).toEqual([]);
+    // SAFETY: blocks[0].kind === "if" from if/elseif/else/endif structure
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(3);
     expect(ifBlock.branches[0].condition).toBe("a");
@@ -471,6 +477,8 @@ describe("parseBlockTree", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].kind).toBe("each");
 
+    // SAFETY: blocks[0].kind === "each" asserted above
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const each = blocks[0] as (typeof blocks)[0] & { kind: "each" };
     expect(each.arrayPath).toBe("sellers");
     expect(each.contentStart).toBe(1);

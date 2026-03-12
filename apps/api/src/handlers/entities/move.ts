@@ -20,14 +20,14 @@ type MoveEntityHandlerProps = {
   body: MoveEntityBodySchema;
 };
 
-export const moveEntityHandler = ({
+export const moveEntityHandler = async ({
   scopedDb,
   workspaceId,
   body,
 }: MoveEntityHandlerProps) =>
-  scopedDb(async (tx) => {
+  await scopedDb(async (tx) => {
     // Lock the entity row to prevent concurrent moves.
-    const [entity] = await tx
+    const entityRows = await tx
       .select({ id: entities.id, kind: entities.kind })
       .from(entities)
       .where(
@@ -37,6 +37,7 @@ export const moveEntityHandler = ({
         ),
       )
       .for("update");
+    const entity = entityRows.at(0);
 
     if (!entity) {
       return status(404, { message: "Entity not found" });
@@ -63,7 +64,7 @@ export const moveEntityHandler = ({
 
     // Lock and verify the target parent is a folder
     // in the same workspace.
-    const [parent] = await tx
+    const parentRows = await tx
       .select({ id: entities.id, kind: entities.kind })
       .from(entities)
       .where(
@@ -73,6 +74,7 @@ export const moveEntityHandler = ({
         ),
       )
       .for("update");
+    const parent = parentRows.at(0);
 
     if (!parent) {
       return status(400, {

@@ -71,7 +71,7 @@ export const DefaultErrorComponent = ({
             query.state.fetchStatus === "idle" &&
             query.state.status === "error",
         })
-        .catch((refetchError) => {
+        .catch((refetchError: unknown) => {
           captureError(posthog, refetchError);
         });
 

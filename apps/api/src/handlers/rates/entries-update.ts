@@ -128,11 +128,12 @@ export const updateRateEntryHandler = async ({
         overlapConditions.push(overlapFromCondition);
       }
 
-      const [overlap] = await tx
+      const overlapRows = await tx
         .select({ id: rateEntries.id })
         .from(rateEntries)
         .where(and(...overlapConditions))
         .limit(1);
+      const overlap = overlapRows.at(0);
 
       if (overlap) {
         return status(400, {

@@ -57,7 +57,7 @@ export const downloadZipHandler = async ({
   organizationId,
   workspaceId,
 }: DownloadZipHandlerProps) => {
-  const [folder] = await scopedDb((tx) =>
+  const folderRows = await scopedDb((tx) =>
     tx
       .select({ id: entities.id, kind: entities.kind })
       .from(entities)
@@ -66,6 +66,7 @@ export const downloadZipHandler = async ({
       )
       .limit(1),
   );
+  const folder = folderRows.at(0);
 
   if (!folder) {
     return status(404);

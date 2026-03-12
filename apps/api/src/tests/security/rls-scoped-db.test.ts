@@ -2,10 +2,13 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { createScopedDb } from "@/api/db";
 import { entities, fields, properties } from "@/api/db/schema";
-import { createTestIds, setupRlsTestData } from '@/api/tests/security/rls-helpers';
-import type { TestIds } from '@/api/tests/security/rls-helpers';
-import { createTestDb } from '@/api/tests/security/test-utils';
-import type { TestDatabase } from '@/api/tests/security/test-utils';
+import {
+  createTestIds,
+  setupRlsTestData,
+} from "@/api/tests/security/rls-helpers";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import { createTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;

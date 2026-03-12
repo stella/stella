@@ -101,7 +101,11 @@ export const UserMessageText = ({ text }: { text: string }) => {
     const [, label, category, id] = match;
     parts.push(
       <MentionChip
-        category={category as MentionCategory}
+        category={
+          // SAFETY: category from regex match of mention pattern
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          category as MentionCategory
+        }
         id={id}
         key={match.index}
         label={label}

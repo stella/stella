@@ -137,7 +137,7 @@ describe("patchSheetXml", () => {
 // ── applyFitToPage ───────────────────────────────────────
 
 /** Build a minimal in-memory XLSX (OOXML ZIP) with 1 sheet. */
-const makeXlsx = (sheetXml: string): Promise<ArrayBuffer> => {
+const makeXlsx = async (sheetXml: string): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   zip.file(
     "xl/workbook.xml",

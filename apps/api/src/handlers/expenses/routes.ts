@@ -30,8 +30,8 @@ export const expensesRoute = new Elysia({
   })
   .get(
     "/",
-    (ctx) =>
-      readExpensesHandler({
+    async (ctx) =>
+      await readExpensesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -42,8 +42,8 @@ export const expensesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createExpenseHandler({
+    async (ctx) =>
+      await createExpenseHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
@@ -58,8 +58,8 @@ export const expensesRoute = new Elysia({
   )
   .patch(
     "/",
-    (ctx) =>
-      updateExpenseHandler({
+    async (ctx) =>
+      await updateExpenseHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -72,8 +72,8 @@ export const expensesRoute = new Elysia({
   )
   .delete(
     "/",
-    (ctx) =>
-      deleteExpenseHandler({
+    async (ctx) =>
+      await deleteExpenseHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,

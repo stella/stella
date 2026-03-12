@@ -449,9 +449,11 @@ describe("property: flattenTemplateData roundtrip", () => {
 
         // Every flattened key should correspond to a value
         // reachable by resolvePath on the original
+        const toComparable = (x: unknown): string =>
+          x === undefined ? "undefined" : JSON.stringify(x);
         for (const [key, value] of Object.entries(flattened)) {
           const resolved = resolvePath(key, obj);
-          expect(String(resolved)).toBe(String(value));
+          expect(toComparable(resolved)).toBe(toComparable(value));
         }
 
         // Specific paths must be present (array syntax to

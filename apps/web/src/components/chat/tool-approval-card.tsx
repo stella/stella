@@ -28,6 +28,11 @@ const DOCX_MIME =
 /** Guess a mime type from a file name extension. */
 const mimeFromName = (name: string): string => {
   const ext = name.split(".").pop()?.toLowerCase();
+
+  if (!ext) {
+    return "application/octet-stream";
+  }
+
   switch (ext) {
     case "pdf":
       return "application/pdf";
@@ -103,9 +108,13 @@ type UpdateSummaryProps = {
 
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   const qc = useQueryClient();
+  // SAFETY: from validated update-entity-fields tool input
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const propName = (input.propertyName as string | undefined) ?? "field";
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: from validated tool input
   const entityName = input.entityName as string | undefined;
   const newVal = input.value;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: from validated tool input
   const oldVal = input.oldValue as string | undefined;
 
   // Look up the property from cache for colors.
@@ -114,7 +123,11 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
     const cached = qc.getQueryData<WorkspaceProperty[]>(
       propertiesKeys.all(workspaceId),
     );
-    if (cached && input.propertyId) {
+    if (
+      cached !== undefined &&
+      input.propertyId !== undefined &&
+      input.propertyId !== null
+    ) {
       property = cached.find((p) => p.id === input.propertyId);
     }
   }
@@ -128,7 +141,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
       ? null
       : Array.isArray(newVal)
         ? newVal.join(", ")
-        : String(newVal);
+        : JSON.stringify(newVal);
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
@@ -137,7 +150,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
         <span className="text-muted-foreground">{propName}:</span>
         {isSelect ? (
           <>
-            {oldVal != null && (
+            {oldVal && (
               <>
                 <SelectBadge property={property} value={oldVal} />
                 <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
@@ -147,7 +160,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
           </>
         ) : (
           <span className="font-medium">
-            {oldVal != null && (
+            {oldVal && (
               <>
                 <span className="text-muted-foreground line-through">
                   {oldVal}
@@ -185,7 +198,9 @@ type CreateSummaryProps = {
 };
 
 const CreateSummary = ({ input }: CreateSummaryProps) => {
-  const name = `${input.name}.docx`;
+  const rawName = input.name;
+  const name =
+    typeof rawName === "string" ? `${rawName}.docx` : "document.docx";
   return (
     <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
       <DocumentIcon className="size-3.5 shrink-0" mimeType={DOCX_MIME} />
@@ -246,8 +261,12 @@ export const ToolApprovalCard = ({
     onApprove(id);
   }, [isApprovalRequested, autoApprovedTools, name, part, onApprove]);
 
+  // SAFETY: input from validated tool part
   const input =
-    "input" in part ? (part.input as Record<string, unknown>) : null;
+    "input" in part
+      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        (part.input as Record<string, unknown>)
+      : null;
 
   const toolLabels: Record<string, string> = {
     updateEntityFields: t("chat.tool.updateEntityFields"),

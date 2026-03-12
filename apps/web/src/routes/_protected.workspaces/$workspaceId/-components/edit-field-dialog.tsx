@@ -168,7 +168,7 @@ export const EditFieldDialog = ({
                 entityIds: [entityId],
                 entityIdsOrder: [],
               })
-              .catch((error) => captureError(posthog, error));
+              .catch((error: unknown) => captureError(posthog, error));
           },
           onSettled: () => {
             setIsOpen(false);
@@ -230,6 +230,7 @@ export const EditFieldDialog = ({
                           type="single-select"
                           // SAFETY: guarded by fieldContent.type check
                           value={
+                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"single-select">
                           }
                         />
@@ -249,6 +250,7 @@ export const EditFieldDialog = ({
                           type="multi-select"
                           // SAFETY: guarded by fieldContent.type check
                           value={
+                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"multi-select">
                           }
                         />
@@ -271,7 +273,9 @@ export const EditFieldDialog = ({
                           }
                           placeholder="YYYY-MM-DD"
                           type="date"
+                          // SAFETY: guarded by fieldContent.type check
                           value={
+                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             (field.state.value as FieldFormValue<"date">) ?? ""
                           }
                         />
@@ -303,6 +307,7 @@ export const EditFieldDialog = ({
                             )}
                             type="number"
                             // SAFETY: guarded by fieldContent.type check
+                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             value={field.state.value as FieldFormValue<"int">}
                           />
                           <FieldError />

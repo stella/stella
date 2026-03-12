@@ -63,7 +63,7 @@ function CaseLawIndex() {
           <Button
             disabled={isFetchingNextPage}
             // eslint-disable-next-line typescript/no-misused-promises
-            onClick={() => fetchNextPage()}
+            onClick={async () => await fetchNextPage()}
             variant="outline"
           >
             {isFetchingNextPage

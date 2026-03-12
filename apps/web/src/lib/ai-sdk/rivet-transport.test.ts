@@ -404,17 +404,19 @@ describe(RivetChatTransport, () => {
     it("merges buffered events arriving during snapshot fetch", async () => {
       const { connection, emit, listeners } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(() => {
-        // Simulate: realtime event arrives while the
-        // snapshot RPC is in flight. seq=2 is beyond
-        // the snapshot's last seq of 1.
-        emit(textDelta(2, "buffered-realtime"));
+      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
+        async () => {
+          // Simulate: realtime event arrives while the
+          // snapshot RPC is in flight. seq=2 is beyond
+          // the snapshot's last seq of 1.
+          emit(textDelta(2, "buffered-realtime"));
 
-        return Promise.resolve({
-          done: false as const,
-          snapshot: [textDelta(0, "snap-0"), textDelta(1, "snap-1")],
-        });
-      });
+          return {
+            done: false as const,
+            snapshot: [textDelta(0, "snap-0"), textDelta(1, "snap-1")],
+          };
+        },
+      );
 
       const transport = new RivetChatTransport({
         connection,
@@ -443,17 +445,19 @@ describe(RivetChatTransport, () => {
     it("deduplicates overlapping snapshot and buffer events", async () => {
       const { connection, emit, listeners } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(() => {
-        // Realtime event with seq=1 arrives during
-        // snapshot fetch. Snapshot also has seq=1.
-        // Only one copy should appear.
-        emit(textDelta(1, "dup"));
+      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
+        async () => {
+          // Realtime event with seq=1 arrives during
+          // snapshot fetch. Snapshot also has seq=1.
+          // Only one copy should appear.
+          emit(textDelta(1, "dup"));
 
-        return Promise.resolve({
-          done: false as const,
-          snapshot: [textDelta(0, "snap-0"), textDelta(1, "dup")],
-        });
-      });
+          return {
+            done: false as const,
+            snapshot: [textDelta(0, "snap-0"), textDelta(1, "dup")],
+          };
+        },
+      );
 
       const transport = new RivetChatTransport({
         connection,
@@ -556,16 +560,18 @@ describe(RivetChatTransport, () => {
     it("finish chunk in realtime buffer closes stream", async () => {
       const { connection, emit, listeners } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(() => {
-        // Finish arrives in the buffer while the
-        // snapshot RPC is in flight.
-        emit(finishChunk(2));
+      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
+        async () => {
+          // Finish arrives in the buffer while the
+          // snapshot RPC is in flight.
+          emit(finishChunk(2));
 
-        return Promise.resolve({
-          done: false as const,
-          snapshot: [textDelta(0, "a"), textDelta(1, "b")],
-        });
-      });
+          return {
+            done: false as const,
+            snapshot: [textDelta(0, "a"), textDelta(1, "b")],
+          };
+        },
+      );
 
       const transport = new RivetChatTransport({
         connection,
@@ -587,17 +593,19 @@ describe(RivetChatTransport, () => {
     it("empty snapshot with buffered events", async () => {
       const { connection, emit, listeners } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(() => {
-        // Events arrive while snapshot returns empty
-        // (server just started emitting).
-        emit(textDelta(0, "buf-0"));
-        emit(textDelta(1, "buf-1"));
+      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
+        async () => {
+          // Events arrive while snapshot returns empty
+          // (server just started emitting).
+          emit(textDelta(0, "buf-0"));
+          emit(textDelta(1, "buf-1"));
 
-        return Promise.resolve({
-          done: false as const,
-          snapshot: [],
-        });
-      });
+          return {
+            done: false as const,
+            snapshot: [],
+          };
+        },
+      );
 
       const transport = new RivetChatTransport({
         connection,

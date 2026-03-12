@@ -1,0 +1,42 @@
+{
+  "extends": ["../../.oxlintrc.json"],
+  "overrides": [
+    {
+      "files": ["src/handlers/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/api/lib/branded-types",
+                "importNames": ["toSafeId"],
+                "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
+              },
+              {
+                "name": "ai",
+                "importNames": ["tool"],
+                "message": "Use defineTool from chat-tools.ts instead of tool() directly. defineTool automatically wraps execute with safeExecute."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "**/__tests__/**/*.{ts,tsx,js,jsx}"
+      ],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/handlers/docx/**"],
+      "rules": {
+        "unicorn/prefer-dom-node-remove": "off",
+        "unicorn/prefer-dom-node-append": "off",
+        "unicorn/prefer-modern-dom-apis": "off"
+      }
+    }
+  ]
+}

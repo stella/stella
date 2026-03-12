@@ -100,7 +100,7 @@ export const useInspectorStore = create<State & Actions>()(
         state.activationSeq += 1;
       }),
 
-    closeTab: (id) => {
+    closeTab: async (id) => {
       const tab = get().tabs.find((t) => t.id === id);
 
       set((state) => {
@@ -118,7 +118,7 @@ export const useInspectorStore = create<State & Actions>()(
       });
 
       if (tab?.type === "pdf") {
-        void usePdfStore.getState().cleanupPdf(id);
+        await usePdfStore.getState().cleanupPdf(id);
       }
     },
 
@@ -127,7 +127,7 @@ export const useInspectorStore = create<State & Actions>()(
         state.activeId = id;
       }),
 
-    closeAll: () => {
+    closeAll: async () => {
       const tabs = get().tabs;
       const pdfIds = tabs.filter((t) => t.type === "pdf").map((t) => t.id);
 
@@ -138,7 +138,7 @@ export const useInspectorStore = create<State & Actions>()(
 
       const pdfStore = usePdfStore.getState();
       for (const id of pdfIds) {
-        void pdfStore.cleanupPdf(id);
+        await pdfStore.cleanupPdf(id);
       }
     },
 

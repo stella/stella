@@ -55,12 +55,12 @@ type DeleteWorkspaceHandlerProps = {
 // The workspace is in the user's workspace_ids when deleting
 // (the route validates workspace access). The route guards
 // this with permissions: { workspace: ['delete'] }.
-export const changeWorkspaceStatus = (
+export const changeWorkspaceStatus = async (
   scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
 ) =>
-  scopedDb((tx) =>
+  await scopedDb((tx) =>
     tx
       .update(workspaces)
       .set({ status: newStatus })
@@ -123,9 +123,9 @@ export const deleteWorkspaceHandler = async ({
     const viewsActorHandle = rivet.views.get(...viewsActorConfig);
 
     const [workflowDestroy, bBoxDestroy, viewsDestroy] = await Promise.all([
-      safeDestroy(() => workflowActor.destroy()),
-      safeDestroy(() => bBoxActor.destroy()),
-      safeDestroy(() => viewsActorHandle.destroy()),
+      safeDestroy(async () => await workflowActor.destroy()),
+      safeDestroy(async () => await bBoxActor.destroy()),
+      safeDestroy(async () => await viewsActorHandle.destroy()),
     ]);
 
     if (

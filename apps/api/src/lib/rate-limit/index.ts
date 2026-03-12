@@ -33,6 +33,8 @@ export class RedisRateLimitContext implements Context {
     const redisKey = KEY_PREFIX + key;
     const ttlSeconds = Math.ceil(this.durationMs / 1000);
 
+    // SAFETY: Redis EVAL returns [number, number] per INCREMENT_LUA contract
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const [count, ttl] = (await redis.send("EVAL", [
       INCREMENT_LUA,
       "1",

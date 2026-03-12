@@ -52,9 +52,13 @@ export const getBBoxActorConfig = <T extends OptionsType>(
       enabled: !!options.authToken,
       ...commonOptions,
     };
+    // SAFETY: framework type erasure; options satisfy BBoxActorReturn
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return clientOptions as BBoxActorReturn<T>;
   }
 
   const vanillaOptions: BBoxActorReturn<"vanilla"> = [[key], commonOptions];
+  // SAFETY: framework type erasure; vanillaOptions satisfies BBoxActorReturn
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vanillaOptions as BBoxActorReturn<T>;
 };

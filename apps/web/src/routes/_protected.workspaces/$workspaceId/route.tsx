@@ -21,10 +21,14 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     api
       .workspaces({ workspaceId: wsId })
       ["last-active"].post()
+      // TODO: fix this
+      // oxlint-disable-next-line no-empty-function
       .catch(() => {});
   },
-  loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(workspaceOptions(params.workspaceId)),
+  loader: async ({ context, params }) =>
+    await context.queryClient.ensureQueryData(
+      workspaceOptions(params.workspaceId),
+    ),
   head: ({ loaderData }) => ({
     meta: [
       {

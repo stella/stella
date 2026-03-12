@@ -12,6 +12,8 @@ export const MentionNode = (props: NodeViewProps) => {
     from: "/_protected/workspaces/$workspaceId",
     select: (p) => p.workspaceId,
   });
+  // SAFETY: attrs from our mention extension schema
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const attributes = props.node.attrs as {
     id: string;
     label: string;

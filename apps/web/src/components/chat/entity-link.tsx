@@ -65,7 +65,7 @@ export const openEntityInPeek = (entityId: string, label: string) => {
 export const EntityMentionIcon = ({ entityId: _ }: { entityId: string }) => {
   // TODO: fix me
   const entity: WorkspaceEntity | undefined = undefined;
-  const file = entity ? getFirstFile(entity) : null;
+  const file = entity !== undefined ? getFirstFile(entity) : null;
   const kind: string = "document";
 
   if (kind === "folder") {
@@ -126,8 +126,8 @@ export const EntityLink = ({
           "hover:decoration-foreground cursor-pointer",
         )}
         // eslint-disable-next-line typescript/no-misused-promises
-        onClick={() =>
-          navigate({
+        onClick={async () =>
+          await navigate({
             to: "/knowledge/case-law/$decisionId",
             params: { decisionId },
           })

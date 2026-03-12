@@ -52,7 +52,7 @@ type ThreatDocxOpts = {
 };
 
 /** Creates a DOCX ZIP with injected threat content for YARA tests. */
-const makeThreatDocx = (opts: ThreatDocxOpts): Promise<Uint8Array> => {
+const makeThreatDocx = async (opts: ThreatDocxOpts): Promise<Uint8Array> => {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",

@@ -12,6 +12,6 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .guard({ validateAuth: true })
   .post(
     "/upload-context-file",
-    ({ body: { file } }) => uploadContextFileHandler({ file }),
+    async ({ body: { file } }) => await uploadContextFileHandler({ file }),
     { body: uploadContextFileBodySchema },
   );

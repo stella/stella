@@ -18,8 +18,8 @@ export const templateAnalyticsRoute = new Elysia({
   .guard({ validateAuth: true })
   .get(
     "/summary",
-    (ctx) =>
-      summaryHandler({
+    async (ctx) =>
+      await summaryHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -28,8 +28,8 @@ export const templateAnalyticsRoute = new Elysia({
   )
   .get(
     "/fills-by-period",
-    (ctx) =>
-      fillsByPeriodHandler({
+    async (ctx) =>
+      await fillsByPeriodHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -38,8 +38,8 @@ export const templateAnalyticsRoute = new Elysia({
   )
   .get(
     "/top-templates",
-    (ctx) =>
-      topTemplatesHandler({
+    async (ctx) =>
+      await topTemplatesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -48,8 +48,8 @@ export const templateAnalyticsRoute = new Elysia({
   )
   .get(
     "/fills-by-user",
-    (ctx) =>
-      fillsByUserHandler({
+    async (ctx) =>
+      await fillsByUserHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,

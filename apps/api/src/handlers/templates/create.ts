@@ -67,6 +67,7 @@ const parseClientManifest = (value: unknown): TemplateManifest | null => {
   }
   // SAFETY: top-level shape validated above; FieldMeta
   // optional properties handled gracefully downstream.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return parsed as TemplateManifest;
 };
 

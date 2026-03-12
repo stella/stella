@@ -55,12 +55,14 @@ export const defineTool = <INPUT, OUTPUT>({
         // SAFETY: the outer `as Tool<INPUT, OUTPUT | { error: string }>`
         // widens the execute return type; this narrower return is sound
         // within that widened context.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return { error: "Tool execution failed" } as unknown as OUTPUT;
       }
     },
     // SAFETY: the execute wrapper widens the return type to
     // include { error: string }; the cast aligns tool()'s
     // inferred OUTPUT with the actual wrapped return type.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   } as Tool<INPUT, OUTPUT | { error: string }>);
 
 /** Summarize a field value into a human-readable string. */
@@ -466,6 +468,7 @@ export const createMatterTools = ({
         // for non-null values; null values hit the isEmpty
         // path which skips the insert.
         let content!: FieldContent;
+        // oxlint-disable-next-line typescript/switch-exhaustiveness-check
         switch (propType) {
           case "text": {
             if (typeof value !== "string") {

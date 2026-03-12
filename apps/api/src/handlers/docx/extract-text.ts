@@ -183,8 +183,8 @@ const extractParagraphsFromContainer = (
       if (boldChars > totalCharsInRuns / 2) {
         entry.bold = true;
       }
-      const firstSize = runs.find((r) => r.fontSize)?.fontSize;
-      if (firstSize) {
+      const firstSize = runs.find((r) => (r.fontSize ?? 0) > 0)?.fontSize;
+      if ((firstSize ?? 0) > 0) {
         entry.fontSize = firstSize;
       }
     }
@@ -231,7 +231,7 @@ const extractHeaderFooterParagraphs = async (
 
     const xml = await entry.async("string");
     const doc = slimdom.parseXmlDocument(xml);
-    const container = doc.getElementsByTagNameNS(W_NS, rootTag)[0];
+    const container = doc.getElementsByTagNameNS(W_NS, rootTag).at(0);
 
     if (!container) {
       continue;
@@ -266,7 +266,7 @@ export const extractText = async (
   const xml = await docEntry.async("string");
   const doc = slimdom.parseXmlDocument(xml);
 
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return emptyResult;
   }

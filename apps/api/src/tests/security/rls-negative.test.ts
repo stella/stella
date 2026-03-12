@@ -35,12 +35,28 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
-import { createTestIds, orgScopedTables, setupRlsTestData, wsScopedTables } from '@/api/tests/security/rls-helpers';
-import type { InsertCase, MutationCase, TestIds } from '@/api/tests/security/rls-helpers';
-import { createDryScopedQuery, createScopedQuery, createTestDb } from '@/api/tests/security/test-utils';
-import type { TestDatabase, TestDatabaseTransaction } from '@/api/tests/security/test-utils';
+import {
+  createTestIds,
+  orgScopedTables,
+  setupRlsTestData,
+  wsScopedTables,
+} from "@/api/tests/security/rls-helpers";
+import type {
+  InsertCase,
+  MutationCase,
+  TestIds,
+} from "@/api/tests/security/rls-helpers";
+import {
+  createDryScopedQuery,
+  createScopedQuery,
+  createTestDb,
+} from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -305,8 +321,8 @@ describe("workspace INSERT — wrong scope", () => {
 
   for (const { table, values } of cases) {
     test(`INSERT ${getTableName(table)} with wrong workspace_id → policy violation`, async () => {
-      const error = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
-        tryCatch(() => values(tx)),
+      const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+        tryCatch(async () => values(tx)),
       );
       expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
     });
@@ -456,8 +472,8 @@ describe("organization INSERT — wrong scope", () => {
 
   for (const { table, values } of cases) {
     test(`INSERT ${getTableName(table)} with wrong org_id → policy violation`, async () => {
-      const error = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
-        tryCatch(() => values(tx)),
+      const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+        tryCatch(async () => values(tx)),
       );
       expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
     });
@@ -1058,10 +1074,10 @@ describe("workspaces table — wrong scope", () => {
   });
 
   test("INSERT workspace with wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(() =>
         tx.insert(workspaces).values({
-          id: "rls_neg_ws_ins" as SafeId<"workspace">,
+          id: toSafeId<"workspace">("rls_neg_ws_ins"),
           organizationId: ids.orgB,
           name: "Bad Workspace",
           status: "active" as const,
@@ -1209,7 +1225,7 @@ describe("scope reassignment via UPDATE", () => {
     // PostgreSQL applies USING as WITH CHECK on the new row
     // when no explicit WITH CHECK is set. The updated row's
     // workspace_id would not match the session wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(() =>
         tx
           .update(entities)
@@ -1223,7 +1239,7 @@ describe("scope reassignment via UPDATE", () => {
 
   test("UPDATE workspace id to foreign workspace → policy violation", async () => {
     // USING defaults as WITH CHECK; the new id must be in wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(() =>
         tx
           .update(workspaces)

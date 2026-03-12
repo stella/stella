@@ -40,7 +40,7 @@ export const summaryHandler = async ({
   );
 
   // Aggregate without GROUP BY always returns exactly one row
-  const result = rows[0];
+  const result = rows.at(0);
   if (!result) {
     return {
       totalMinutes: 0,

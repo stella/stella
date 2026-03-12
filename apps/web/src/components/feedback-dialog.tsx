@@ -85,7 +85,7 @@ export const FeedbackDialog = () => {
     [captureScreenshot, posthog, reset],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!issueDescription.trim()) {
       return;
@@ -158,9 +158,7 @@ export const FeedbackDialog = () => {
                     checked={includeScreenshot}
                     disabled={!screenshotRef.current}
                     id="feedback-screenshot"
-                    onCheckedChange={(val) =>
-                      setIncludeScreenshot(val === true)
-                    }
+                    onCheckedChange={(val) => setIncludeScreenshot(val)}
                   />
                   <Label className="font-normal" htmlFor="feedback-screenshot">
                     <CameraIcon className="text-muted-foreground size-3.5" />
@@ -182,7 +180,7 @@ export const FeedbackDialog = () => {
             <DialogFooter>
               <Button
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={() => handleOpen(false)}
+                onClick={async () => await handleOpen(false)}
                 type="button"
                 variant="outline"
               >

@@ -71,8 +71,10 @@ export const createScopedDb = <
 ) => {
   const wsIds = `{${workspaceIds.join(",")}}`;
 
-  return <T>(fn: (tx: TransactionOf<TDatabase>) => Promise<T>): Promise<T> =>
-    database.transaction(async (tx) => {
+  return async <T>(
+    fn: (tx: TransactionOf<TDatabase>) => Promise<T>,
+  ): Promise<T> =>
+    await database.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT
           set_config('role', '${sql.raw(stella.name)}', true),

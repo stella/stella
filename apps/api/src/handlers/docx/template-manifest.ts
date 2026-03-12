@@ -540,11 +540,19 @@ const mergeField = (
 const inputTypeToFieldKind = (
   inputType: InputType | undefined,
 ): ResolvedField["kind"] => {
+  if (!inputType) {
+    return "string";
+  }
+
   switch (inputType) {
     case "boolean":
       return "boolean";
-    case "number":
-      return "string"; // numbers are strings in templates
+    case "number": // numbers are strings in templates
+    case "date":
+    case "select":
+    case "text":
+    case "textarea":
+      return "string";
     default:
       return "string";
   }

@@ -23,12 +23,12 @@ type ScanFileInput = {
   fileName: string;
 };
 
-export const scanFile = ({
+export const scanFile = async ({
   buffer,
   declaredMimeType,
   fileName,
 }: ScanFileInput): Promise<Result<ScanResult, FileScanError>> =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const findings: ScanFinding[] = [];
 

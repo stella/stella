@@ -40,9 +40,7 @@ import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { useChatAttachments } from "@/components/chat/use-chat-attachments";
 import { UserMessageText } from "@/components/chat/user-message-text";
-import {
-  ChatEditor,
-} from "@/components/mentionable-prompt-input";
+import { ChatEditor } from "@/components/mentionable-prompt-input";
 import type { MentionContext } from "@/components/mentionable-prompt-input";
 import type {
   ActiveFileContext,
@@ -90,6 +88,7 @@ const useEntityDropTarget = (workspaceId: string | undefined) => {
       onDrop: ({ source }) => {
         setIsDragOver(false);
         // SAFETY: entities is always set by our own draggable getInitialData.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const entities = source.data.entities as {
           entityId: string;
           name: string;
@@ -513,14 +512,13 @@ const NewChat = ({
             );
             const { files, textAttachments } = splitAttachments(drained);
             if (textAttachments.length > 0 && "setAttachments" in chat) {
-              // SAFETY: `setAttachments` is added by our custom
-              // rivet transport; the `in` check above narrows at
-              // runtime but TS cannot infer the shape.
-              (
-                chat as {
-                  setAttachments: (a: ProcessedAttachment[]) => void;
-                }
-              ).setAttachments(textAttachments);
+              // SAFETY: `setAttachments` is added by our custom rivet transport;
+              // the `in` check above narrows at runtime but TS cannot infer.
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              const chatWithAttachments = chat as {
+                setAttachments: (a: ProcessedAttachment[]) => void;
+              };
+              chatWithAttachments.setAttachments(textAttachments);
             }
             // eslint-disable-next-line typescript/no-floating-promises
             chat.sendMessage(files.length > 0 ? { text, files } : { text });
@@ -729,7 +727,9 @@ const ActiveThreadInner = ({
                             <AskUserCard
                               key={part.toolCallId}
                               // eslint-disable-next-line typescript/no-misused-promises
-                              onSubmit={(text) => sendMessage({ text })}
+                              onSubmit={async (text) =>
+                                await sendMessage({ text })
+                              }
                               part={part}
                             />
                           );
@@ -737,11 +737,13 @@ const ActiveThreadInner = ({
                         if (
                           getToolName(part) === "displayDocument" &&
                           part.state === "output-available" &&
-                          part.output
+                          part.output !== undefined &&
+                          part.output !== null
                         ) {
                           // SAFETY: output matches the displayDocument
                           // tool's return shape; the tool is defined in
                           // chat-document-tools.ts.
+                          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                           const output = part.output as {
                             filename: string;
                             view: string;
@@ -825,14 +827,13 @@ const ActiveThreadInner = ({
           onSubmit={(text, drained) => {
             const { files, textAttachments } = splitAttachments(drained);
             if (textAttachments.length > 0 && "setAttachments" in chat) {
-              // SAFETY: `setAttachments` is added by our custom
-              // rivet transport; the `in` check above narrows at
-              // runtime but TS cannot infer the shape.
-              (
-                chat as {
-                  setAttachments: (a: ProcessedAttachment[]) => void;
-                }
-              ).setAttachments(textAttachments);
+              // SAFETY: `setAttachments` is added by our custom rivet transport;
+              // the `in` check above narrows at runtime but TS cannot infer.
+              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              const chatWithAttachments = chat as {
+                setAttachments: (a: ProcessedAttachment[]) => void;
+              };
+              chatWithAttachments.setAttachments(textAttachments);
             }
             // eslint-disable-next-line typescript/no-floating-promises
             sendMessage(files.length > 0 ? { text, files } : { text });

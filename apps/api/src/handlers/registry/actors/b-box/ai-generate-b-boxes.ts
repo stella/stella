@@ -19,7 +19,7 @@ type GenerateBBoxDataProps = {
   abortSignal: AbortSignal;
 };
 
-export const generateBBoxData = ({
+export const generateBBoxData = async ({
   pdfData,
   prompt,
   fieldContent,
@@ -28,7 +28,7 @@ export const generateBBoxData = ({
 }: GenerateBBoxDataProps): Promise<
   Result<[number, number, number, number][], WorkflowIntegrationError>
 > =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModel(PDF_NATIVE_MODEL),

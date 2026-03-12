@@ -34,7 +34,10 @@ export const addEntriesHandler = async ({
   invoiceId,
   body,
 }: AddEntriesHandlerProps) => {
-  if (!body.timeEntryIds?.length && !body.expenseIds?.length) {
+  if (
+    (body.timeEntryIds?.length ?? 0) === 0 &&
+    (body.expenseIds?.length ?? 0) === 0
+  ) {
     return status(400, {
       message: "At least one time entry or expense ID is required",
     });
@@ -65,7 +68,7 @@ export const addEntriesHandler = async ({
 
   // Pre-validate time entries.
   const timeEntryIds = body.timeEntryIds;
-  if (timeEntryIds?.length) {
+  if (timeEntryIds && timeEntryIds.length > 0) {
     const entries = await scopedDb((tx) =>
       tx
         .select({
@@ -106,7 +109,7 @@ export const addEntriesHandler = async ({
 
   // Pre-validate expenses.
   const expenseIds = body.expenseIds;
-  if (expenseIds?.length) {
+  if (expenseIds && expenseIds.length > 0) {
     const expenseRows = await scopedDb((tx) =>
       tx
         .select({
@@ -161,7 +164,7 @@ export const addEntriesHandler = async ({
       });
     }
 
-    if (timeEntryIds?.length) {
+    if (timeEntryIds && timeEntryIds.length > 0) {
       const updated = await tx
         .update(timeEntries)
         .set({
@@ -187,7 +190,7 @@ export const addEntriesHandler = async ({
       }
     }
 
-    if (expenseIds?.length) {
+    if (expenseIds && expenseIds.length > 0) {
       const updated = await tx
         .update(expenses)
         .set({

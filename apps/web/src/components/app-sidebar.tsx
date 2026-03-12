@@ -362,6 +362,7 @@ const MatterItem = ({
         onDrop: ({ source }) => {
           setIsDropTarget(false);
           // SAFETY: matterId is always a string; set by our own draggable getInitialData.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           const draggedId = source.data.matterId as string;
           if (draggedId !== ws.id) {
             onReorderRef.current?.(draggedId, ws.id);
@@ -664,10 +665,10 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     { action: () => setSearchOpen(true) },
     { action: comingSoon },
     // eslint-disable-next-line typescript/no-misused-promises
-    { action: () => navigate({ to: "/workspaces" }) },
+    { action: async () => await navigate({ to: "/workspaces" }) },
     { action: comingSoon },
     // eslint-disable-next-line typescript/no-misused-promises
-    { action: () => navigate({ to: "/knowledge" }) },
+    { action: async () => await navigate({ to: "/knowledge" }) },
     {
       // eslint-disable-next-line typescript/no-misused-promises
       action: async () => {
@@ -683,8 +684,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const navTargets: NavTarget[] = [
     ...fixedNavTargets,
     ...pinned.slice(0, 3).map((ws) => ({
-      action: () =>
-        navigate({
+      action: async () =>
+        await navigate({
           to: "/workspaces/$workspaceId",
           params: { workspaceId: ws.id },
         }),
@@ -820,7 +821,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             <SidebarMenuItem>
               <SidebarMenuButton
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={() => navigate({ to: "/chat" })}
+                onClick={async () => await navigate({ to: "/chat" })}
                 tooltip={t("navigation.chat")}
               >
                 <MessageCircleIcon />

@@ -65,9 +65,11 @@ export const classifyCitation = async (
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch((error) => {
-        captureError(error, { ruleId: ruleMatch.ruleId });
-      });
+      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch(
+        (error: unknown) => {
+          captureError(error, { ruleId: ruleMatch.ruleId });
+        },
+      );
     }
     return {
       polarity: ruleMatch.polarity,
@@ -98,9 +100,11 @@ export const classifyCitation = async (
 
   // Track surface form for potential rule promotion
   if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
-    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch((error) => {
-      captureError(error, { language, polarity });
-    });
+    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch(
+      (error: unknown) => {
+        captureError(error, { language, polarity });
+      },
+    );
   }
 
   return { polarity, ruleId: null, source: "llm" };

@@ -147,7 +147,7 @@ export const TemplateVersionsTab = ({
               </span>
               <Button
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={() => handleView(ver.id)}
+                onClick={async () => await handleView(ver.id)}
                 size="icon-xs"
                 variant="ghost"
               >

@@ -14,7 +14,7 @@ type FillsByUserHandlerProps = {
   query: DateRangeQuery;
 };
 
-export const fillsByUserHandler = ({
+export const fillsByUserHandler = async ({
   scopedDb,
   organizationId,
   query,
@@ -29,7 +29,7 @@ export const fillsByUserHandler = ({
     );
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         userId: templateFills.userId,
