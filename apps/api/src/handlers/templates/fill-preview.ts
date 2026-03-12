@@ -69,7 +69,12 @@ export const fillPreviewHandler = async ({
   // Resolve clause slots before filling
   const slots = await discoverClauseSlots(buffer);
   if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(templateId, slots, scopedDb);
+    const clausePatches = await resolveClauseSlots(
+      templateId,
+      slots,
+      scopedDb,
+      organizationId,
+    );
     for (const [key, value] of Object.entries(clausePatches)) {
       record[key] = value;
     }

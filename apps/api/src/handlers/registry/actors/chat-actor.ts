@@ -18,8 +18,8 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { adminDb, createScopedDb } from "@/api/db";
-import type { ScopedDb } from "@/api/db";
+import { createScopedDb, db } from '@/api/db';
+import type { ScopedDb } from '@/api/db';
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type {
@@ -455,13 +455,15 @@ export const chatActor = actor({
       });
 
       // SAFETY: createConnState (validateUserActorSession) returns
-      // UserActorConnState which types organizationId and userId,
-      // but RivetKit erases the type on c.conn.state.
+      // UserActorConnState which types organizationId, userId, and
+      // scopedDb, but RivetKit erases the type on c.conn.state.
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
         userId: string;
+        scopedDb: ScopedDb;
       };
       const orgId = connState.organizationId;
+      const connScopedDb = connState.scopedDb;
 
       backgroundTask(c, async () => {
         try {
@@ -489,13 +491,15 @@ export const chatActor = actor({
           // non-workspace thread.
           let validatedWsId: SafeId<"workspace"> | null = null;
           if (wsId) {
-            const ws = await adminDb.query.workspaces.findFirst({
-              where: {
-                id: wsId,
-                organizationId: { eq: orgId },
-              },
-              columns: { id: true },
-            });
+            const ws = await connScopedDb((tx) =>
+              tx.query.workspaces.findFirst({
+                where: {
+                  id: wsId,
+                  organizationId: { eq: orgId },
+                },
+                columns: { id: true },
+              }),
+            );
             validatedWsId = ws ? toSafeId<"workspace">(wsId) : null;
           }
 
@@ -504,6 +508,7 @@ export const chatActor = actor({
           const validatedMentionedIds = await validateWorkspaceIds(
             allMentionedWsIds,
             orgId,
+            connScopedDb,
           );
 
           // Build the set of workspace IDs the AI can access:
@@ -520,7 +525,7 @@ export const chatActor = actor({
 
           // Org tools and case law are always available. Matter
           // tools are added when there are accessible workspaces.
-          const scopedDb = createScopedDb(allWorkspaceIds);
+          const scopedDb = createScopedDb(db, allWorkspaceIds, orgId);
           const orgTools = createOrgTools({
             organizationId: orgId,
             scopedDb,
@@ -772,7 +777,7 @@ export const chatActor = actor({
       };
       if (rawWsId) {
         const wsId = toSafeId<"workspace">(rawWsId);
-        const promptDb = createScopedDb([wsId]);
+        const promptDb = createScopedDb(db, [wsId], connState.organizationId);
         return {
           prompt: await buildSystemPrompt(
             promptDb,

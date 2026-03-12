@@ -123,6 +123,7 @@ export const createEntityFromBuffer = async ({
 
       await tx.insert(entityVersions).values({
         id: entityVersionId,
+        workspaceId,
         entityId,
         versionNumber: 1,
         stamp: entityStamp.stamp,
@@ -135,6 +136,7 @@ export const createEntityFromBuffer = async ({
         .where(eq(entities.id, entityId));
 
       await tx.insert(fields).values({
+        workspaceId,
         propertyId: fileProperty.id,
         entityVersionId,
         content: {

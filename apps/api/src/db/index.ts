@@ -4,6 +4,11 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_WORKSPACE_IDS,
+  stella,
+} from "@/api/db/rls";
+import {
   invoiceStatusEnum,
   propertyStatusEnum,
   relations,
@@ -11,26 +16,24 @@ import {
   timeEntryStatusEnum,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-// https://github.com/drizzle-team/drizzle-orm/issues/4942
+export type TransactionOf<TDatabase extends Database | TestDatabase> =
+  Parameters<Parameters<TDatabase["transaction"]>[0]>[0];
+
+// https://github.com/drizzle-team/drizzle-orm/issues/5287
 // const client = new SQL(env.DATABASE_URL);
 
-if (!env.DATABASE_APP_URL) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[WARN] DATABASE_APP_URL is not set. " +
-      "RLS policies will be bypassed if DATABASE_URL " +
-      `uses a superuser role.${env.isDev ? " (dev mode)" : ""}`,
-  );
-}
-
 /**
- * Primary database handle. When `DATABASE_APP_URL` is set this
- * connects as `stella_app` (RLS-enforced role). All workspace-
- * scoped queries MUST go through `ScopedDb` which sets
- * `app.workspace_ids` per transaction.
+ * Primary database handle connecting as postgres (table owner).
+ * RLS is enforced per-transaction via `SET LOCAL ROLE stella`.
+ *
+ * All handler queries MUST go through `ScopedDb`.
+ * Direct `db` usage is reserved for internal infrastructure
+ * (workspace resolution in authMacro, better-auth).
  */
-export const db = drizzle(env.DATABASE_APP_URL ?? env.DATABASE_URL, {
+export const db = drizzle(env.DATABASE_URL, {
   relations: { ...relations, ...authRelationsPart },
   schema: {
     propertyStatusEnum,
@@ -40,58 +43,42 @@ export const db = drizzle(env.DATABASE_APP_URL ?? env.DATABASE_URL, {
   },
 });
 
-/**
- * Admin database handle that always connects as the superuser
- * (via `DATABASE_URL`). Used ONLY for bootstrap queries that
- * run before `app.workspace_ids` is known: resolving which
- * workspaces a user can access, and validating workspace
- * existence. Never pass this to handlers.
- */
-export const adminDb = env.DATABASE_APP_URL
-  ? drizzle(env.DATABASE_URL, {
-      relations: { ...relations, ...authRelationsPart },
-      schema: {
-        propertyStatusEnum,
-        timeEntryStatusEnum,
-        timeEntrySourceEnum,
-        invoiceStatusEnum,
-      },
-    })
-  : db;
-
-export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Database = typeof db;
+export type Transaction = TransactionOf<Database>;
 
 /**
  * Scoped database handle that wraps every operation in a
  * short-lived RLS transaction. Each call to `scopedDb(fn)`
- * opens a transaction, sets `app.workspace_ids` via
- * SET LOCAL, runs `fn`, and commits. The connection returns
- * to the pool immediately after — safe with PgBouncer in
- * transaction mode and streaming-friendly.
+ * opens a transaction, switches to the `stella` role (which
+ * activates RLS), sets `app.workspace_ids` and
+ * `app.organization_id` via SET LOCAL, runs `fn`, and
+ * commits. The connection returns to the pool immediately
+ * after; safe with PgBouncer in transaction mode.
  *
  * Handlers receive this from `authMacro` and must never
- * import `db` directly (enforced by oxlint rule).
+ * import `db` directly.
  */
-export type ScopedDb = {
-  <T>(fn: (tx: Transaction) => Promise<T>): Promise<T>;
-  readonly workspaceIds: readonly string[];
-};
+export type ScopedDb = <T>(
+  fn: (tx: TransactionOf<Database>) => Promise<T>,
+) => Promise<T>;
 
-export const createScopedDb = (workspaceIds: string[]): ScopedDb => {
-  const ids = workspaceIds.join(",");
-  const frozen = Object.freeze(workspaceIds);
+export const createScopedDb = <
+  TDatabase extends Database | TestDatabase = Database,
+>(
+  database: TDatabase,
+  workspaceIds: string[],
+  organizationId: SafeId<"organization">,
+) => {
+  const wsIds = `{${workspaceIds.join(",")}}`;
 
-  const call = <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
-    db.transaction(async (tx) => {
+  return <T>(fn: (tx: TransactionOf<TDatabase>) => Promise<T>): Promise<T> =>
+    database.transaction(async (tx) => {
       await tx.execute(
-        sql`SELECT set_config(
-          'app.workspace_ids', ${ids}, true
-        )`,
+        sql`SELECT
+          set_config('role', '${sql.raw(stella.name)}', true),
+          set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${wsIds}, true),
+          set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true)`,
       );
       return fn(tx);
     });
-
-  return Object.assign(call, {
-    workspaceIds: frozen,
-  } as const);
 };

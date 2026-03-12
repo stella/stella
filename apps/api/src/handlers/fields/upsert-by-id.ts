@@ -134,6 +134,7 @@ export const upsertFieldHandler = async ({
       );
 
     await tx.insert(fields).values({
+      workspaceId,
       propertyId: property.id,
       entityVersionId,
       content: body.content,

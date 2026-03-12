@@ -6,8 +6,8 @@ import type { ActionContextOf } from "rivetkit";
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
 import { isMockAI } from "@/api/consts";
-import { createScopedDb } from "@/api/db";
-import type { ScopedDb } from "@/api/db";
+import { createScopedDb, db } from '@/api/db';
+import type { ScopedDb } from '@/api/db';
 import { jsonField } from "@/api/db/json-utils";
 import { fields, justifications } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
@@ -35,8 +35,8 @@ export const processBatchAction = (
   { batchId, level, entityId }: WorkflowActionSchemas[typeof processBatch],
 ) =>
   Result.tryPromise(async () => {
-    const { workspaceId } = parseBrandedWorkflowActorKey(c.key);
-    const scopedDb = createScopedDb([workspaceId]);
+    const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
+    const scopedDb = createScopedDb(db, [workspaceId], organizationId);
 
     const rawBatch = c.state.executionPlan
       .at(level)
@@ -110,6 +110,7 @@ export const processBatchAction = (
       await setFieldsContent(
         c,
         {
+          workspaceId,
           entityId,
           entityVersionId,
           batch,
@@ -149,6 +150,7 @@ const processWorkflowBatch = (
     await setFieldsContent(
       c,
       {
+        workspaceId,
         entityId,
         entityVersionId,
         batch,
@@ -176,6 +178,7 @@ const processWorkflowBatch = (
       await setFieldsContent(
         c,
         {
+          workspaceId,
           entityId,
           entityVersionId,
           batch,
@@ -216,6 +219,7 @@ const processWorkflowBatch = (
         ...processedFields.aiResults.map(
           ({ fieldId, propertyId, content }) => ({
             id: fieldId,
+            workspaceId,
             propertyId,
             entityVersionId,
             content,
@@ -223,6 +227,7 @@ const processWorkflowBatch = (
         ),
         ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
           id: nanoid(),
+          workspaceId,
           propertyId,
           entityVersionId,
           content: {
@@ -242,6 +247,7 @@ const processWorkflowBatch = (
         await tx.insert(justifications).values(
           processedFields.aiJustifications.map((j) => ({
             id: j.justificationId,
+            workspaceId,
             fieldId: j.fieldId,
             htmlVersion: j.htmlVersion,
             htmlContent: j.htmlContent,

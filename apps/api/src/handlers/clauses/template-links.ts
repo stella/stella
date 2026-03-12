@@ -64,7 +64,10 @@ export const listTemplateClausesHandler = async ({
 
   const links = await scopedDb((tx) =>
     tx.query.templateClauses.findMany({
-      where: { templateId },
+      where: {
+        templateId,
+        organizationId: { eq: organizationId },
+      },
       columns: {
         id: true,
         clauseId: true,
@@ -158,6 +161,7 @@ export const linkClauseHandler = async ({
         where: {
           id: body.variantId,
           clauseId: body.clauseId,
+          organizationId: { eq: organizationId },
         },
         columns: { id: true },
       }),
@@ -176,6 +180,7 @@ export const linkClauseHandler = async ({
       where: {
         clauseId: body.clauseId,
         version: clause.currentVersion,
+        organizationId: { eq: organizationId },
       },
       columns: { id: true },
     }),
@@ -201,6 +206,7 @@ export const linkClauseHandler = async ({
       .insert(templateClauses)
       .values({
         id: nanoid(),
+        organizationId,
         templateId,
         clauseId: body.clauseId,
         clauseVariantId: body.variantId ?? null,
@@ -257,7 +263,11 @@ export const unlinkClauseHandler = async ({
 
   const existing = await scopedDb((tx) =>
     tx.query.templateClauses.findFirst({
-      where: { id: linkId, templateId },
+      where: {
+        id: linkId,
+        templateId,
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true },
     }),
   );
@@ -307,7 +317,11 @@ export const syncClauseHandler = async ({
 
   const link = await scopedDb((tx) =>
     tx.query.templateClauses.findFirst({
-      where: { id: linkId, templateId },
+      where: {
+        id: linkId,
+        templateId,
+        organizationId: { eq: organizationId },
+      },
       columns: {
         id: true,
         clauseId: true,
@@ -346,6 +360,7 @@ export const syncClauseHandler = async ({
       where: {
         clauseId,
         version: clause.currentVersion,
+        organizationId: { eq: organizationId },
       },
       columns: { id: true, version: true },
     }),

@@ -192,6 +192,7 @@ export const createTemplateHandler = async ({
 
     await tx.insert(templateVersions).values({
       id: versionId,
+      organizationId,
       templateId,
       version: 1,
       s3Key,

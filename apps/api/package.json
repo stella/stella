@@ -9,7 +9,7 @@
     "test": "bun test",
     "dev": "bun run docker:dev && bun --port 3001 --watch src/index.ts",
     "docker:dev": "docker compose --profile dev up -d",
-    "docker:reset-dev": "docker compose --profile dev down -v",
+    "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsc --noEmit",
@@ -62,6 +62,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "@stella/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "@types/diff-match-patch": "catalog:",

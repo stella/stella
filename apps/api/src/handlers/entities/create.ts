@@ -53,9 +53,9 @@ const validateParentId = async (
   const parent = await tx.query.entities.findFirst({
     where: {
       id: parentId,
+      workspaceId: { eq: workspaceId },
     },
     columns: {
-      workspaceId: true,
       kind: true,
     },
   });
@@ -63,12 +63,6 @@ const validateParentId = async (
   if (!parent) {
     return status(400, {
       message: "Parent entity not found in this workspace",
-    });
-  }
-
-  if (parent?.workspaceId !== workspaceId) {
-    return status(403, {
-      message: "Parent entity doesn't belong to this workspace",
     });
   }
 
@@ -128,6 +122,7 @@ export const createEntitiesHandler = async ({
 
     await tx.insert(entityVersions).values({
       id: entityVersionId,
+      workspaceId,
       entityId,
       versionNumber: 1,
       stamp: entityStamp?.stamp ?? null,

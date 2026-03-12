@@ -34,6 +34,7 @@ import {
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+import { toSafeId } from "@/api/lib/branded-types";
 
 type Args = {
   limit: number;
@@ -93,7 +94,8 @@ const seedRules = async () => {
 
 const main = async () => {
   const args = parseArgs();
-  const scopedDb = createScopedDb([]);
+  // SAFETY: CLI script operates on global case law data (no tenant).
+  const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
 
   if (args.seed) {
     await seedRules();

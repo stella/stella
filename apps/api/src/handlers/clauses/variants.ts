@@ -73,7 +73,10 @@ export const listVariantsHandler = async ({
 
   const result = await scopedDb((tx) =>
     tx.query.clauseVariants.findMany({
-      where: { clauseId },
+      where: {
+        clauseId,
+        organizationId: { eq: organizationId },
+      },
       columns: {
         id: true,
         label: true,
@@ -130,6 +133,7 @@ export const createVariantHandler = async ({
       .insert(clauseVariants)
       .values({
         id: nanoid(),
+        organizationId,
         clauseId,
         label: body.label,
         body: body.body,
@@ -174,7 +178,11 @@ export const updateVariantHandler = async ({
 
   const existing = await scopedDb((tx) =>
     tx.query.clauseVariants.findFirst({
-      where: { id: variantId, clauseId },
+      where: {
+        id: variantId,
+        clauseId,
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true },
     }),
   );
@@ -236,7 +244,11 @@ export const deleteVariantHandler = async ({
 
   const existing = await scopedDb((tx) =>
     tx.query.clauseVariants.findFirst({
-      where: { id: variantId, clauseId },
+      where: {
+        id: variantId,
+        clauseId,
+        organizationId: { eq: organizationId },
+      },
       columns: { id: true },
     }),
   );

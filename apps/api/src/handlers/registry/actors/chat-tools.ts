@@ -1,12 +1,11 @@
+import type { Tool, ToolExecutionOptions } from "ai";
 // eslint-disable-next-line no-restricted-imports -- defineTool wraps tool() internally
 import { tool } from "ai";
-import type { Tool, ToolExecutionOptions } from "ai";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { adminDb } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
-import { entities, fields, workspaces } from "@/api/db/schema";
+import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
@@ -608,6 +607,7 @@ export const createMatterTools = ({
 
           if (!isEmpty) {
             await tx.insert(fields).values({
+              workspaceId,
               propertyId,
               entityVersionId: versionId,
               content,
@@ -840,24 +840,25 @@ export const createOrgTools = ({
     inputSchema: z.object({
       contactId: z.string().describe("The contact ID to read"),
     }),
-    // contacts is org-level (no RLS); use adminDb
     execute: async ({ contactId }) => {
-      const contact = await adminDb.query.contacts.findFirst({
-        where: {
-          id: contactId,
-          organizationId: { eq: organizationId },
-        },
-        columns: {
-          id: true,
-          type: true,
-          displayName: true,
-          firstName: true,
-          lastName: true,
-          organizationName: true,
-          emails: true,
-          phones: true,
-        },
-      });
+      const contact = await scopedDb((tx) =>
+        tx.query.contacts.findFirst({
+          where: {
+            id: contactId,
+            organizationId: { eq: organizationId },
+          },
+          columns: {
+            id: true,
+            type: true,
+            displayName: true,
+            firstName: true,
+            lastName: true,
+            organizationName: true,
+            emails: true,
+            phones: true,
+          },
+        }),
+      );
 
       if (!contact) {
         return { error: "Contact not found" };
@@ -883,22 +884,23 @@ export const createOrgTools = ({
       query: z.string().optional().describe("Filter by name (substring match)"),
       limit: z.number().int().min(1).max(50).optional().default(20),
     }),
-    // templates is org-level (no RLS); use adminDb
     execute: async ({ query, limit }) => {
-      const templates = await adminDb.query.templates.findMany({
-        where: {
-          organizationId: { eq: organizationId },
-          ...(query ? { name: { ilike: `%${escapeLike(query)}%` } } : {}),
-        },
-        columns: {
-          id: true,
-          name: true,
-          fileName: true,
-          createdAt: true,
-        },
-        limit,
-        orderBy: { createdAt: "desc" },
-      });
+      const templates = await scopedDb((tx) =>
+        tx.query.templates.findMany({
+          where: {
+            organizationId: { eq: organizationId },
+            ...(query ? { name: { ilike: `%${escapeLike(query)}%` } } : {}),
+          },
+          columns: {
+            id: true,
+            name: true,
+            fileName: true,
+            createdAt: true,
+          },
+          limit,
+          orderBy: { createdAt: "desc" },
+        }),
+      );
 
       return templates.map((t) => ({
         templateId: t.id,
@@ -915,22 +917,23 @@ export const createOrgTools = ({
     inputSchema: z.object({
       clauseId: z.string().describe("The clause ID to read"),
     }),
-    // clauses is org-level (no RLS); use adminDb
     execute: async ({ clauseId }) => {
-      const clause = await adminDb.query.clauses.findFirst({
-        where: {
-          id: clauseId,
-          organizationId: { eq: organizationId },
-        },
-        columns: {
-          id: true,
-          title: true,
-          language: true,
-          description: true,
-          body: true,
-          currentVersion: true,
-        },
-      });
+      const clause = await scopedDb((tx) =>
+        tx.query.clauses.findFirst({
+          where: {
+            id: clauseId,
+            organizationId: { eq: organizationId },
+          },
+          columns: {
+            id: true,
+            title: true,
+            language: true,
+            description: true,
+            body: true,
+            currentVersion: true,
+          },
+        }),
+      );
 
       if (!clause) {
         return { error: "Clause not found" };
@@ -1001,24 +1004,21 @@ export const createOrgTools = ({
 export const validateWorkspaceIds = async (
   rawIds: string[],
   organizationId: SafeId<"organization">,
+  scopedDb: ScopedDb,
 ): Promise<SafeId<"workspace">[]> => {
   if (rawIds.length === 0) {
     return [];
   }
 
-  // adminDb: this runs before scopedDb is created (resolves
-  // which workspaces the user can access). The workspaces
-  // table has RLS, so the app role would fail without
-  // workspace_ids set.
-  const rows = await adminDb
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      and(
-        inArray(workspaces.id, rawIds),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    );
+  const rows = await scopedDb((tx) =>
+    tx.query.workspaces.findMany({
+      where: {
+        id: { in: rawIds },
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   return rows.map((w) => toSafeId<"workspace">(w.id));
 };

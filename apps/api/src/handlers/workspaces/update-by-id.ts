@@ -1,12 +1,12 @@
-import { and, eq, ne } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import { eq } from "drizzle-orm";
+import { status, t } from 'elysia';
+import type { Static } from 'elysia';
 
-import { adminDb } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 export const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -39,63 +39,51 @@ export const updateWorkspaceHandler = async ({
     body.reference = null;
   }
 
-  // Reference uniqueness check needs full org visibility.
-  // Under RLS, scopedDb only sees the caller's workspaces;
-  // a conflict in another workspace would be missed, causing
-  // a 500 UNIQUE_VIOLATION instead of a 409.
-  if (body.reference) {
-    const [existing] = await adminDb
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.reference, body.reference),
-          ne(workspaces.id, workspaceId),
-        ),
-      )
-      .limit(1);
+  try {
+    return await scopedDb(async (tx) => {
+      if (body.clientId) {
+        const contact = await tx.query.contacts.findFirst({
+          where: {
+            id: body.clientId,
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true },
+        });
 
-    if (existing) {
+        if (!contact) {
+          return status(400, { message: "Contact not found" });
+        }
+      }
+
+      return tx
+        .update(workspaces)
+        .set({
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.clientId !== undefined && {
+            clientId: body.clientId,
+          }),
+          ...(body.reference !== undefined && {
+            reference: body.reference,
+          }),
+          ...(body.billingReference !== undefined && {
+            billingReference: body.billingReference,
+          }),
+          ...(body.color !== undefined && {
+            color: body.color,
+          }),
+        })
+        .where(eq(workspaces.id, workspaceId));
+    });
+  } catch (error) {
+    // The unique index (workspaces_org_reference_uidx) enforces
+    // reference uniqueness across the entire org, including
+    // workspaces behind ethical walls that scopedDb can't see.
+    if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
       return status(409, {
         message: "Reference already exists",
         code: "REFERENCE_TAKEN",
       });
     }
+    throw error;
   }
-
-  return scopedDb(async (tx) => {
-    if (body.clientId) {
-      const contact = await tx.query.contacts.findFirst({
-        where: {
-          id: body.clientId,
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true },
-      });
-
-      if (!contact) {
-        return status(400, { message: "Contact not found" });
-      }
-    }
-
-    return tx
-      .update(workspaces)
-      .set({
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.clientId !== undefined && {
-          clientId: body.clientId,
-        }),
-        ...(body.reference !== undefined && {
-          reference: body.reference,
-        }),
-        ...(body.billingReference !== undefined && {
-          billingReference: body.billingReference,
-        }),
-        ...(body.color !== undefined && {
-          color: body.color,
-        }),
-      })
-      .where(eq(workspaces.id, workspaceId));
-  });
 };

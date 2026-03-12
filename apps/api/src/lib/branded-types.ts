@@ -1,6 +1,6 @@
 declare const __brand: unique symbol;
 
-type SafeIdType = "workspace" | "organization" | "contact";
+type SafeIdType = "workspace" | "organization" | "contact" | "user";
 
 export type SafeId<T extends SafeIdType> = string & {
   readonly [__brand]: T;

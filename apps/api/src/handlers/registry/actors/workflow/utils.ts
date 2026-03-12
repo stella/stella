@@ -13,8 +13,9 @@ import type { PropertyBatch } from "@/api/handlers/registry/actors/workflow/get-
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
 import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
 import { broadcastEvent, resetActorState } from "@/api/handlers/registry/utils";
-import { captureActorError } from "@/api/lib/errors/actions";
-import type { CaptureActorErrorProps } from "@/api/lib/errors/actions";
+import type { SafeId } from "@/api/lib/branded-types";
+import { captureActorError } from '@/api/lib/errors/actions';
+import type { CaptureActorErrorProps } from '@/api/lib/errors/actions';
 
 export const prepareBatch = (
   rawBatch: PropertyBatch,
@@ -50,6 +51,7 @@ export function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
 }
 
 type SetFieldsContentProps = {
+  workspaceId: SafeId<"workspace">;
   entityId: string;
   entityVersionId: string;
   batch: PropertyBatch;
@@ -58,7 +60,13 @@ type SetFieldsContentProps = {
 
 export const setFieldsContent = async (
   c: ActionContextOf<typeof workflowActor>,
-  { entityId, entityVersionId, batch, contentType }: SetFieldsContentProps,
+  {
+    workspaceId,
+    entityId,
+    entityVersionId,
+    batch,
+    contentType,
+  }: SetFieldsContentProps,
   scopedDb: ScopedDb,
 ) => {
   const propertyIds = batch.properties.map((p) => p.id);
@@ -75,6 +83,7 @@ export const setFieldsContent = async (
 
     const fieldValues = propertyIds.map((propertyId) => ({
       id: nanoid(),
+      workspaceId,
       propertyId,
       entityVersionId,
       content: {

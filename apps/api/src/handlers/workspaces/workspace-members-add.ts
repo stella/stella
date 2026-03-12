@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { adminDb } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { workspaceMembers } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,15 +29,17 @@ export const addWorkspaceMemberHandler = async ({
   body,
 }: AddWorkspaceMemberHandlerProps) => {
   // Verify user is a member of the organization.
-  // Uses adminDb because `member` has no RLS policy (it's
-  // an org-level auth table, not workspace-scoped).
-  const orgMember = await adminDb.query.member.findFirst({
-    where: {
-      userId: { eq: body.userId },
-      organizationId: { eq: organizationId },
-    },
-    columns: { id: true },
-  });
+  // `member` is an org-level auth table (no RLS policy);
+  // scopedDb works for querying it.
+  const orgMember = await scopedDb((tx) =>
+    tx.query.member.findFirst({
+      where: {
+        userId: { eq: body.userId },
+        organizationId: { eq: organizationId },
+      },
+      columns: { id: true },
+    }),
+  );
 
   if (!orgMember) {
     return status(400, {

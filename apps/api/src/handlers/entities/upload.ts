@@ -229,6 +229,7 @@ export const uploadEntityHandler = async ({
 
       await tx.insert(entityVersions).values({
         id: entityVersionId,
+        workspaceId,
         entityId,
         versionNumber: 1,
         stamp: entityStamp.stamp,
@@ -241,6 +242,7 @@ export const uploadEntityHandler = async ({
         .where(eq(entities.id, entityId));
 
       await tx.insert(fields).values({
+        workspaceId,
         propertyId: property.id,
         entityVersionId,
         content: {

@@ -3,60 +3,49 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
-import { WORKSPACE_ACTIVE_STATUS } from "@/api/lib/auth";
-// eslint-disable-next-line no-restricted-imports -- brands DB-returned workspace PKs for map lookups
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+// oxlint-disable-next-line no-restricted-imports: brands DB-returned workspace PKs for map lookups
+import { toSafeId } from '@/api/lib/branded-types';
+import type { SafeId } from '@/api/lib/branded-types';
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadWorkspacesHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  accessibleWorkspaceIds: string[];
 };
 
 export const readWorkspacesHandler = async ({
   scopedDb,
   organizationId,
-  accessibleWorkspaceIds,
 }: ReadWorkspacesHandlerProps) => {
-  if (accessibleWorkspaceIds.length === 0) {
-    return { workspaces: [], workspacesCountLimit: LIMITS.workspacesCount };
-  }
-
-  const accessibleSet = new Set(accessibleWorkspaceIds);
-
   const { result, counts, contributorRows } = await scopedDb(async (tx) => {
-    const workspaceRows = (
-      await tx.query.workspaces.findMany({
-        where: {
-          organizationId: { eq: organizationId },
-          status: WORKSPACE_ACTIVE_STATUS,
-        },
-        columns: {
-          id: true,
-          name: true,
-          reference: true,
-          clientId: true,
-          color: true,
-          status: true,
-          lastActivityAt: true,
-          createdAt: true,
-        },
-        with: {
-          client: {
-            columns: {
-              id: true,
-              displayName: true,
-            },
+    const workspaceRows = await tx.query.workspaces.findMany({
+      where: {
+        organizationId: { eq: organizationId },
+        status: "active",
+      },
+      columns: {
+        id: true,
+        name: true,
+        reference: true,
+        clientId: true,
+        color: true,
+        status: true,
+        lastActivityAt: true,
+        createdAt: true,
+      },
+      with: {
+        client: {
+          columns: {
+            id: true,
+            displayName: true,
           },
         },
-        orderBy: {
-          lastActivityAt: "desc",
-        },
-        limit: LIMITS.workspacesCount,
-      })
-    ).filter((w) => accessibleSet.has(w.id));
+      },
+      orderBy: {
+        lastActivityAt: "desc",
+      },
+      limit: LIMITS.workspacesCount,
+    });
 
     const wsIds = workspaceRows.map((w) => toSafeId<"workspace">(w.id));
 

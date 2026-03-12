@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
-import { adminDb } from "@/api/db";
+import { db } from "@/api/db";
 import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -134,10 +134,10 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
 
   // All four queries are independent; run in parallel.
   const [hitsResult, countResult, kindResult, wsResult] = await Promise.all([
-    adminDb.execute(hitsQuery),
-    adminDb.execute(countQuery),
-    adminDb.execute(kindFacetQuery),
-    adminDb.execute(workspaceFacetQuery),
+    db.execute(hitsQuery),
+    db.execute(countQuery),
+    db.execute(kindFacetQuery),
+    db.execute(workspaceFacetQuery),
   ]);
 
   const hasMore = hitsResult.rows.length > limit;
@@ -188,7 +188,7 @@ const searchContent = async (
   const tsQuery = sql`plainto_tsquery('simple', ${query.query})`;
 
   const [hitsResult, countResult] = await Promise.all([
-    adminDb.execute(sql`
+    db.execute(sql`
       SELECT
         sd.entity_id,
         sd.kind,
@@ -207,7 +207,7 @@ const searchContent = async (
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
     `),
-    adminDb.execute(sql`
+    db.execute(sql`
       SELECT count(*)::int AS total
       FROM search_documents sd
       WHERE sd.organization_id = ${organizationId}
@@ -233,7 +233,7 @@ const indexEntity = async (entityId: string): Promise<void> => {
 };
 
 const removeEntity = async (entityId: string): Promise<void> => {
-  await adminDb
+  await db
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
 };
@@ -241,7 +241,7 @@ const removeEntity = async (entityId: string): Promise<void> => {
 // Upsert all entities without deleting first to avoid search
 // blackout. CASCADE FK handles deleted entities' search docs.
 const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
-  const orgWorkspaces = await adminDb.query.workspaces.findMany({
+  const orgWorkspaces = await db.query.workspaces.findMany({
     where: { organizationId: { eq: orgId } },
     columns: { id: true },
     limit: LIMITS.workspacesCount,
@@ -253,7 +253,7 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
     let hasMore = true;
     while (hasMore) {
       // Keyset pagination: O(1) per batch vs O(N) for offset
-      const batch = await adminDb
+      const batch = await db
         .select({ id: entities.id })
         .from(entities)
         .where(

@@ -2,13 +2,14 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
-import { and, eq } from "drizzle-orm";
+import { and, eq } from 'drizzle-orm';
+import type { InferSelectModel } from 'drizzle-orm';
 import Elysia, { t } from "elysia";
 
 import { ac, roles } from "@stella/permissions";
 import type { PermissionInput } from "@stella/permissions";
 
-import { adminDb, createScopedDb, db } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -16,11 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
-import {
-  AUTH_RATE_LIMIT_MAX_WINDOW,
-  AUTH_RATE_LIMITS,
-  LIMITS,
-} from "@/api/lib/limits";
+import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { posthogIdentify } from "@/api/lib/posthog";
 import { redis } from "@/api/lib/redis";
@@ -169,25 +166,34 @@ export const auth = betterAuth({
   ],
 });
 
-const ADMIN_BYPASS_ROLES = new Set(["owner", "admin"]);
-export const WORKSPACE_ACTIVE_STATUS = "active" as const;
+const ADMIN_BYPASS_ROLES = ["owner", "admin"];
+
+type WorkspaceStatus = InferSelectModel<typeof workspaces>["status"];
+
+export type AccessibleWorkspace = {
+  id: string;
+  status: WorkspaceStatus;
+};
 
 /**
- * Resolve which workspace IDs a user can access within an
- * organization. Admins/owners see all active workspaces;
+ * Resolve which workspaces a user can access within an
+ * organization. Admins/owners see all workspaces;
  * regular members see only workspaces they belong to.
+ *
+ * Returns id + status so callers can gate on active status
+ * without an extra DB round-trip. RLS receives all IDs
+ * regardless of status.
  *
  * Shared between the Elysia `authMacro` and RivetKit actor
  * validators so workspace resolution logic lives in one place.
  */
-export const resolveAccessibleWorkspaceIds = async (
-  userId: string,
+export const resolveAccessibleWorkspaces = async (
+  userId: SafeId<"user">,
   organizationId: SafeId<"organization">,
-): Promise<string[]> => {
-  // Bootstrap queries use adminDb (superuser) because RLS
-  // is active on `workspaces` but `app.workspace_ids` is
-  // not set yet; that's exactly what we're resolving here.
-  const orgMember = await adminDb.query.member.findFirst({
+): Promise<AccessibleWorkspace[]> => {
+  // Runs as postgres (no RLS) because workspace_ids are not
+  // known yet; that's exactly what we're resolving here.
+  const orgMember = await db.query.member.findFirst({
     where: {
       userId: { eq: userId },
       organizationId: { eq: organizationId },
@@ -195,35 +201,29 @@ export const resolveAccessibleWorkspaceIds = async (
     columns: { role: true },
   });
 
-  if (orgMember && ADMIN_BYPASS_ROLES.has(orgMember.role)) {
-    const orgWorkspaces = await adminDb.query.workspaces.findMany({
-      where: {
-        organizationId: { eq: organizationId },
-        status: WORKSPACE_ACTIVE_STATUS,
-      },
-      columns: { id: true },
-      limit: LIMITS.workspacesCount,
+  if (orgMember && ADMIN_BYPASS_ROLES.includes(orgMember.role)) {
+    return db.query.workspaces.findMany({
+      where: { organizationId: { eq: organizationId } },
+      columns: { id: true, status: true },
     });
-    return orgWorkspaces.map((w) => w.id);
   }
 
-  // SQL join pushes org + status filter to the DB before
-  // LIMIT, preventing cross-org leaks when a user belongs
-  // to multiple organizations.
-  const rows = await adminDb
-    .select({ workspaceId: workspaceMembers.workspaceId })
+  // JOIN with workspaces filters by org, preventing
+  // cross-org leaks when a user belongs to multiple
+  // organizations.
+  return db
+    .select({
+      id: workspaceMembers.workspaceId,
+      status: workspaces.status,
+    })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
     .where(
       and(
         eq(workspaceMembers.userId, userId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, WORKSPACE_ACTIVE_STATUS),
       ),
-    )
-    .limit(LIMITS.workspacesCount);
-
-  return rows.map((r) => r.workspaceId);
+    );
 };
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
@@ -240,20 +240,25 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       }
 
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
+      const userId = toSafeId<"user">(session.user.id);
 
       posthogIdentify({
-        distinctId: session.user.id,
+        distinctId: userId,
         properties: {
           active_organization_id: activeOrganizationId,
         },
       });
 
-      const accessibleWorkspaceIds = await resolveAccessibleWorkspaceIds(
-        session.user.id,
+      const accessibleWorkspaces = await resolveAccessibleWorkspaces(
+        userId,
         activeOrganizationId,
       );
 
-      const scopedDb = createScopedDb(accessibleWorkspaceIds);
+      const scopedDb = createScopedDb(
+        db,
+        accessibleWorkspaces.map((w) => w.id),
+        activeOrganizationId,
+      );
 
       return {
         user: session.user,
@@ -261,7 +266,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
           ...session.session,
           activeOrganizationId,
         },
-        accessibleWorkspaceIds,
+        accessibleWorkspaces,
         scopedDb,
       };
     },
@@ -302,26 +307,12 @@ export const workspaceAccessMacro = new Elysia({
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
-    async resolve(ctx) {
-      // Defense in depth: validates workspace existence,
-      // active status, and org ownership independently
-      // of RLS. Catches bugs where scopedDb might be
-      // misconfigured or bypassed.
-      const workspace = await adminDb.query.workspaces.findFirst({
-        where: {
-          id: ctx.params.workspaceId,
-        },
-        columns: {
-          organizationId: true,
-          status: true,
-        },
-      });
+    resolve(ctx) {
+      const ws = ctx.accessibleWorkspaces.find(
+        (w) => w.id === ctx.params.workspaceId,
+      );
 
-      if (
-        !workspace ||
-        workspace.status !== WORKSPACE_ACTIVE_STATUS ||
-        workspace.organizationId !== ctx.session.activeOrganizationId
-      ) {
+      if (!ws || ws.status !== "active") {
         return ctx.status(404);
       }
 

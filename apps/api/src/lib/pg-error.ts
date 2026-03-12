@@ -1,22 +1,29 @@
 import { DrizzleQueryError } from "drizzle-orm";
 
+type PgCause = { code: string };
+
+const hasPgCause = (cause: unknown): cause is PgCause =>
+  cause !== null &&
+  typeof cause === "object" &&
+  "code" in cause &&
+  typeof cause.code === "string";
+
 /**
- * Returns true when `error` is a Postgres constraint violation with the
- * given error code. Useful for catching specific constraint errors without
- * swallowing unrelated exceptions.
+ * Returns true when `error` is a Postgres error with the
+ * given error code. Drizzle wraps the original driver
+ * error (pg `DatabaseError` or PGlite equivalent) as
+ * `.cause`; we duck-type the `code` property so this
+ * works with both drivers.
  *
- * Common codes:
- *   23503 — foreign_key_violation
- *   23505 — unique_violation
+ * Common codes: see `PG_ERROR` below.
  */
 export const isPgError = (error: unknown, code: string): boolean =>
   error instanceof DrizzleQueryError &&
-  error.cause !== null &&
-  typeof error.cause === "object" &&
-  "code" in error.cause &&
+  hasPgCause(error.cause) &&
   error.cause.code === code;
 
 export const PG_ERROR = {
   FOREIGN_KEY_VIOLATION: "23503",
   UNIQUE_VIOLATION: "23505",
+  INSUFFICIENT_PRIVILEGE: "42501",
 } as const;

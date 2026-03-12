@@ -84,7 +84,12 @@ export const fillByIdHandler = async ({
   // Discover and resolve clause slots ({{@clause:...}})
   const slots = await discoverClauseSlots(buffer);
   if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(templateId, slots, scopedDb);
+    const clausePatches = await resolveClauseSlots(
+      templateId,
+      slots,
+      scopedDb,
+      organizationId,
+    );
     for (const [key, value] of Object.entries(clausePatches)) {
       parsed[key] = value;
     }

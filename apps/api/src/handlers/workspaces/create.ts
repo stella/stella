@@ -1,19 +1,20 @@
 import { sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import { status, t } from 'elysia';
+import type { Static } from 'elysia';
 import { nanoid } from "nanoid";
 
-import { adminDb } from "@/api/db";
+import type         { ScopedDb } from "@/api/db";
+import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
   matterCounters,
   properties,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { WORKSPACE_ACTIVE_STATUS } from "@/api/lib/auth";
-// eslint-disable-next-line no-restricted-imports -- brands freshly-inserted workspace PK for FK usage
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+// oxlint-disable-next-line no-restricted-imports: freshly-inserted workspace PK for FK usage
+import { toSafeId } from '@/api/lib/branded-types';
+import type { SafeId } from '@/api/lib/branded-types';
+
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -32,26 +33,29 @@ export const createWorkspacesBodySchema = t.Object({
 type CreateWorkspacesBodySchema = Static<typeof createWorkspacesBodySchema>;
 
 type CreateWorkspacesHandlerProps = {
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: string;
   body: CreateWorkspacesBodySchema;
 };
 
-// Uses adminDb because the new workspace ID isn't in
-// `app.workspace_ids` yet; RLS would block the INSERT.
+// After inserting the workspace row, we append the new ID to
+// app.workspace_ids so that subsequent inserts into child
+// tables (workspaceMembers, properties) pass RLS checks.
 export const createWorkspacesHandler = ({
+  scopedDb,
   organizationId,
   userId,
   body,
 }: CreateWorkspacesHandlerProps) =>
-  adminDb.transaction(async (tx) => {
+  scopedDb(async (tx) => {
     const workspacesResult = await tx.query.workspaces.findMany({
       columns: {
         name: true,
       },
       where: {
         organizationId: { eq: organizationId },
-        status: WORKSPACE_ACTIVE_STATUS,
+        status: "active",
       },
     });
 
@@ -111,6 +115,21 @@ export const createWorkspacesHandler = ({
       name: newName,
       reference,
     });
+
+    // Append the new workspace ID to the RLS session variable
+    // so child inserts (workspaceMembers, properties) pass the
+    // workspace_insert policy within this transaction.
+    // The session var is a Postgres array literal: {id1,id2}.
+    await tx.execute(
+      sql`SELECT set_config(
+        ${SETTING_WORKSPACE_IDS},
+        array_append(
+          current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
+          ${body.id}
+        )::text,
+        true
+      )`,
+    );
 
     const wsId = toSafeId<"workspace">(body.id);
 

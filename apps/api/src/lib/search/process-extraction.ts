@@ -112,6 +112,7 @@ export const processExtraction = async (entityId: string): Promise<void> => {
         await db
           .insert(extractedContent)
           .values({
+            workspaceId: wsId,
             entityId,
             organizationId: workspace.organizationId,
             ciphertext: encrypted.ciphertext,
