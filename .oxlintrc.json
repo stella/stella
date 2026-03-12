@@ -20,6 +20,7 @@
     "unicorn/no-useless-undefined": "error",
 
     "react/no-forward-ref": "error",
+    "react/rules-of-hooks": "error",
 
     "import/no-cycle": "error",
 
@@ -136,9 +137,6 @@
     "typescript/restrict-template-expressions": "off",
     "typescript/prefer-reduce-type-parameter": "off",
     "eqeqeq": ["error", "always", { "null": "ignore" }]
-  },
-  "options": {
-    "typeAware": true
   },
   "overrides": [
     {
