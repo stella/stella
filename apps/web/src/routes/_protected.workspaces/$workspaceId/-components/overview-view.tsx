@@ -156,7 +156,10 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     }
     return {
       entityId: entity.entityId,
-      kind: entity.kind as WorkspaceEntity["kind"],
+      // SAFETY: entity.kind from workspace entity
+      kind:
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        entity.kind as WorkspaceEntity["kind"],
       name: entity.name,
       parentId: null,
       createdAt: entity.updatedAt ?? "",
@@ -270,9 +273,8 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           {formatRelativeTime(entity.updatedAt, lang)}
         </span>
       )}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      {/* TODO: fix this */}
+      {/* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions */}
       <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
         <RowActions
           anchor={contextAnchor}

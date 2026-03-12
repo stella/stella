@@ -34,7 +34,7 @@ export const diffClauseBodies = (
     const oldP = oldBody[i];
     const newP = newBody[i];
 
-    if (!oldP) {
+    if (oldP === undefined) {
       result.push({
         status: "added",
         segments: [{ text: newP.text, type: "added" }],
@@ -42,7 +42,7 @@ export const diffClauseBodies = (
       continue;
     }
 
-    if (!newP) {
+    if (newP === undefined) {
       result.push({
         status: "removed",
         segments: [{ text: oldP.text, type: "removed" }],

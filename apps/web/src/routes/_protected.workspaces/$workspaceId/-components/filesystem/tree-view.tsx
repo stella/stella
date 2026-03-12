@@ -120,6 +120,8 @@ const resolveExtraColumns = (
     if (METADATA_IDS.has(id)) {
       cols.push({
         type: "metadata",
+        // SAFETY: id from METADATA_IDS (internal property ids)
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         id: id as InternalPropertyId,
         label: metadataLabels[id] ?? id,
       });
@@ -458,12 +460,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         canMonitor: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
         onDragStart: ({ source }) => {
           // Check if any entity in the drag has a parentId.
-          const entities = source.data.entities as
-            | { parentId: string | null }[]
-            | undefined;
+          // SAFETY: from our draggable getInitialData
+          const entities =
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            source.data.entities as { parentId: string | null }[] | undefined;
           const hasNested = entities
             ? entities.some((e) => e.parentId)
-            : !!source.data.parentId;
+            : source.data.parentId !== undefined &&
+              source.data.parentId !== null;
           if (hasNested) {
             setIsDragActive(true);
           }
@@ -487,6 +491,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       onDrop: ({ source }) => {
         setIsRootDropTarget(false);
         // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const entityIds = source.data.entityIds as string[];
         for (const entityId of entityIds) {
           moveEntityRefRoot.current.mutate(
@@ -516,14 +521,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events
+    // TODO: fix this
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
     <div
       className="h-full flex-1 overflow-auto p-2"
       onClick={(e) => {
         // Clear selection when clicking empty background
         // (not inside a row).
+        // SAFETY: e.target is EventTarget, DOM click target is HTMLElement
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const target = e.target as HTMLElement;
         if (!target.closest("[data-entity-row]")) {
           clearSelection();
@@ -539,7 +545,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                 <button
                   className="text-muted-foreground hover:text-foreground text-xs"
                   // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={() => navigateToFolder()}
+                  onClick={async () => await navigateToFolder()}
                   type="button"
                 >
                   <FolderIcon className="size-3.5" />
@@ -574,7 +580,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         <button
                           className="text-xs font-medium"
                           // eslint-disable-next-line typescript/no-misused-promises
-                          onClick={() => navigateToFolder()}
+                          onClick={async () => await navigateToFolder()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             setBreadcrumbEditValue(crumb.name);
@@ -588,7 +594,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         <button
                           className="text-muted-foreground hover:text-foreground text-xs"
                           // eslint-disable-next-line typescript/no-misused-promises
-                          onClick={() => navigateToFolder(crumb.id)}
+                          onClick={async () => await navigateToFolder(crumb.id)}
                           type="button"
                         >
                           {crumb.name}
@@ -882,7 +888,10 @@ const FilesystemRow = ({
                 source.data.type === ENTITY_DRAG_TYPE &&
                 source.data.entityId !== node.entityId &&
                 // SAFETY: entityId is always a string; set by our own draggable getInitialData.
-                !ancestorIdsRef.current.has(source.data.entityId as string),
+                !ancestorIdsRef.current.has(
+                  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                  source.data.entityId as string,
+                ),
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
                 setIsDropTarget(true);
@@ -906,6 +915,7 @@ const FilesystemRow = ({
                   autoExpandTimer.current = null;
                 }
                 // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                 const entityIds = source.data.entityIds as string[];
                 for (const entityId of entityIds) {
                   if (ancestorIdsRef.current.has(entityId)) {
@@ -1059,7 +1069,7 @@ const FilesystemRow = ({
         }
       };
     }
-    if (navigable && file) {
+    if (navigable && file !== undefined) {
       return () =>
         usePeekStore.getState().openTab({
           fieldId: file.fieldId,
@@ -1188,7 +1198,7 @@ type ExtraColumnCellProps = {
 };
 
 const formatDateValue = (value: string | Date | null | undefined): string => {
-  if (!value) {
+  if (value === undefined || value === null) {
     return "";
   }
   return new Date(value).toLocaleDateString(undefined, {
@@ -1201,6 +1211,7 @@ const formatDateValue = (value: string | Date | null | undefined): string => {
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (column.type === "metadata") {
+    // oxlint-disable-next-line typescript/switch-exhaustiveness-check
     switch (column.id) {
       case getInternalPropertyId("created-by"):
         return <AuthorCell entity={entity} />;

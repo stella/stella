@@ -27,6 +27,8 @@ const VIEW_LABELS = {
 export const DocumentViewCard = ({ result }: DocumentViewCardProps) => {
   const t = useTranslations();
 
+  // SAFETY: view from validated document-view tool output
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const viewKey = result.view as keyof typeof VIEW_LABELS;
   const viewLabel =
     viewKey in VIEW_LABELS ? t(VIEW_LABELS[viewKey]) : result.view;

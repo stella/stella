@@ -307,7 +307,7 @@ describe("writeManifest", () => {
     );
     const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 
-    await expect(writeManifest(buf, sampleManifest)).rejects.toThrow(
+    expect(writeManifest(buf, sampleManifest)).rejects.toThrow(
       "non-Stella custom XML",
     );
   });

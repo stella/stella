@@ -81,6 +81,7 @@ const cleanStalePropertyIds = (
       changed = true;
     }
 
+    // oxlint-disable-next-line typescript/strict-boolean-expressions -- columnPinning array check
     if (layout.columnPinning) {
       const cleanedPinning = layout.columnPinning.filter(
         (id) => propertyIds.has(id) || isInternal(id),
@@ -153,7 +154,8 @@ export const viewsActor = actor({
     "views-changed": event<{ views: ViewState[] }>(),
     "view-deleted": event<{ viewId: string }>(),
   },
-  createConnState: (c, params) => validateActorSession(c.key, params),
+  createConnState: async (c, params) =>
+    await validateActorSession(c.key, params),
   onWake: (c) => {
     if (c.state.views.length > 0) {
       return;
@@ -172,6 +174,7 @@ export const viewsActor = actor({
     getViews: (c, input: GetViewsInput): ViewState[] => {
       const { propertyIds } = validateActorInput(getViewsInputSchema, input);
 
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- propertyIds optional
       if (propertyIds) {
         for (const view of c.state.views) {
           cleanStalePropertyIds(view.layout, new Set(propertyIds));

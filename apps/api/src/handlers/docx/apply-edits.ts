@@ -440,7 +440,7 @@ export const applyEdits = (
   const doc = slimdom.parseXmlDocument(documentXml);
 
   // Index all w:p elements in document order
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return documentXml;
   }
@@ -473,7 +473,7 @@ export const applyEdits = (
   });
 
   for (const edit of sorted) {
-    const p = paragraphs[edit.paragraphIndex];
+    const p = paragraphs.at(edit.paragraphIndex);
     if (!p) {
       continue;
     }

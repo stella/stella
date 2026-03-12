@@ -240,6 +240,7 @@ export const duplicateEntityHandler = async ({
     return { entityId: newEntityId };
   });
 
+  // oxlint-disable-next-line typescript/strict-boolean-expressions -- result discriminated union check
   if (result && typeof result === "object" && "entityId" in result) {
     processExtraction(result.entityId).catch(captureError);
   }

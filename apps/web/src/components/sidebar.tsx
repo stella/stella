@@ -195,6 +195,8 @@ function Sidebar({
           data-slot="sidebar"
           side={side}
           style={
+            // SAFETY: CSS custom properties are valid CSSProperties
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
@@ -532,7 +534,7 @@ function SidebarMenuButton({
     />
   );
 
-  if (!tooltip) {
+  if (tooltip === undefined || tooltip === null) {
     return button;
   }
 
@@ -633,6 +635,8 @@ function SidebarMenuSkeleton({
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
         style={
+          // SAFETY: CSS custom properties are valid CSSProperties
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           {
             "--skeleton-width": width,
           } as React.CSSProperties

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { status, t } from 'elysia';
-import type { Static } from 'elysia';
+import { status, t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { workspaces } from "@/api/db/schema";

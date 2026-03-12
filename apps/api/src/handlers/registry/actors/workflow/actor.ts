@@ -45,7 +45,8 @@ type DestroyActionResult =
 
 export const workflowActor = actor({
   state: defaultWorkflowState(),
-  createConnState: (c, params) => validateActorSession(c.key, params),
+  createConnState: async (c, params) =>
+    await validateActorSession(c.key, params),
   onWake: (c) => {
     if (!c.state.isRunning) {
       return;
@@ -183,6 +184,7 @@ export const workflowActor = actor({
       c,
       input: WorkflowActionSchemas[typeof advanceQueue],
     ) => {
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- c.conn connection check
       if (c.conn) {
         throw createUserError("forbidden");
       }
@@ -206,6 +208,7 @@ export const workflowActor = actor({
       c,
       input: WorkflowActionSchemas[typeof processBatch],
     ) => {
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- c.conn connection check
       if (c.conn) {
         throw createUserError("forbidden");
       }
@@ -226,6 +229,7 @@ export const workflowActor = actor({
       }
     },
     [finishWorkflow]: async (c) => {
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- c.conn connection check
       if (c.conn) {
         throw createUserError("forbidden");
       }

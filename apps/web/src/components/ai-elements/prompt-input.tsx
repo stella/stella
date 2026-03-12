@@ -2,10 +2,10 @@
 
 import { useCallback, useRef, useState } from "react";
 import type {
-  FormEvent,
-  FormEventHandler,
   HTMLAttributes,
   KeyboardEventHandler,
+  SubmitEvent,
+  SubmitEventHandler,
 } from "react";
 
 import type { ChatStatus } from "ai";
@@ -34,7 +34,7 @@ export type PromptInputProps = Omit<
 > & {
   onSubmit: (
     message: PromptInputMessage,
-    event: FormEvent<HTMLFormElement>,
+    event: SubmitEvent<HTMLFormElement>,
   ) => void | Promise<void>;
 };
 
@@ -46,7 +46,7 @@ export const PromptInput = ({
 }: PromptInputProps) => {
   const formRef = useRef<HTMLFormElement | null>(null);
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = useCallback(
     (event) => {
       event.preventDefault();
       const formData = new FormData(event.currentTarget);

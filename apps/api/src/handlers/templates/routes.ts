@@ -70,8 +70,8 @@ export const templatesRoute = new Elysia({
   // ── Existing transient endpoints ───────────────────
   .post(
     "/discover",
-    (ctx) =>
-      discoverHandler({
+    async (ctx) =>
+      await discoverHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
       }),
@@ -79,8 +79,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/fill",
-    (ctx) =>
-      fillHandler({
+    async (ctx) =>
+      await fillHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -95,8 +95,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/manifest",
-    (ctx) =>
-      manifestHandler({
+    async (ctx) =>
+      await manifestHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
       }),
@@ -105,8 +105,8 @@ export const templatesRoute = new Elysia({
   // ── CRUD endpoints ─────────────────────────────────
   .get(
     "/",
-    (ctx) =>
-      listTemplatesHandler({
+    async (ctx) =>
+      await listTemplatesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -115,8 +115,8 @@ export const templatesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createTemplateHandler({
+    async (ctx) =>
+      await createTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -129,8 +129,8 @@ export const templatesRoute = new Elysia({
   )
   .get(
     "/:templateId/preview",
-    (ctx) =>
-      previewTemplateHandler({
+    async (ctx) =>
+      await previewTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         scopedDb: ctx.scopedDb,
@@ -139,8 +139,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/:templateId/fill-preview",
-    (ctx) =>
-      fillPreviewHandler({
+    async (ctx) =>
+      await fillPreviewHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
@@ -153,8 +153,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/:templateId/fill",
-    (ctx) =>
-      fillByIdHandler({
+    async (ctx) =>
+      await fillByIdHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
@@ -171,8 +171,8 @@ export const templatesRoute = new Elysia({
   )
   .get(
     "/:templateId",
-    (ctx) =>
-      getTemplateHandler({
+    async (ctx) =>
+      await getTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         scopedDb: ctx.scopedDb,
@@ -181,8 +181,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/:templateId",
-    (ctx) =>
-      updateTemplateHandler({
+    async (ctx) =>
+      await updateTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         templateId: ctx.params.templateId,
@@ -197,8 +197,8 @@ export const templatesRoute = new Elysia({
   )
   .delete(
     "/:templateId",
-    (ctx) =>
-      deleteTemplateHandler({
+    async (ctx) =>
+      await deleteTemplateHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         scopedDb: ctx.scopedDb,
@@ -211,8 +211,8 @@ export const templatesRoute = new Elysia({
   // ── Versions ──────────────────────────────────────
   .get(
     "/:templateId/versions",
-    (ctx) =>
-      listTemplateVersionsHandler({
+    async (ctx) =>
+      await listTemplateVersionsHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         scopedDb: ctx.scopedDb,
@@ -221,8 +221,8 @@ export const templatesRoute = new Elysia({
   )
   .get(
     "/:templateId/versions/:versionId",
-    (ctx) =>
-      getTemplateVersionHandler({
+    async (ctx) =>
+      await getTemplateVersionHandler({
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
         versionId: ctx.params.versionId,
@@ -238,8 +238,8 @@ export const templatesRoute = new Elysia({
   // ── Clause linking ──────────────────────────────────
   .get(
     "/:templateId/clauses",
-    (ctx) =>
-      listTemplateClausesHandler({
+    async (ctx) =>
+      await listTemplateClausesHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
@@ -248,8 +248,8 @@ export const templatesRoute = new Elysia({
   )
   .put(
     "/:templateId/clauses",
-    (ctx) =>
-      linkClauseHandler({
+    async (ctx) =>
+      await linkClauseHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
@@ -263,8 +263,8 @@ export const templatesRoute = new Elysia({
   )
   .delete(
     "/:templateId/clauses/:linkId",
-    (ctx) =>
-      unlinkClauseHandler({
+    async (ctx) =>
+      await unlinkClauseHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
@@ -280,8 +280,8 @@ export const templatesRoute = new Elysia({
   )
   .post(
     "/:templateId/clauses/:linkId/sync",
-    (ctx) =>
-      syncClauseHandler({
+    async (ctx) =>
+      await syncClauseHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         templateId: ctx.params.templateId,
@@ -303,16 +303,18 @@ export const templateCategoriesRoute = new Elysia({
 })
   .use(authMacro)
   .guard({ validateAuth: true })
-  .get("/", (ctx) =>
-    listTemplateCategoriesHandler({
-      organizationId: ctx.session.activeOrganizationId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await listTemplateCategoriesHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .put(
     "/",
-    (ctx) =>
-      createTemplateCategoryHandler({
+    async (ctx) =>
+      await createTemplateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -324,8 +326,8 @@ export const templateCategoriesRoute = new Elysia({
   )
   .post(
     "/:categoryId",
-    (ctx) =>
-      updateTemplateCategoryHandler({
+    async (ctx) =>
+      await updateTemplateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         body: ctx.body,
@@ -339,8 +341,8 @@ export const templateCategoriesRoute = new Elysia({
   )
   .delete(
     "/:categoryId",
-    (ctx) =>
-      deleteTemplateCategoryHandler({
+    async (ctx) =>
+      await deleteTemplateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         scopedDb: ctx.scopedDb,

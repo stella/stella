@@ -157,7 +157,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 entityIds: [entityId],
                 entityIdsOrder: [],
               })
-              .catch((error) => {
+              .catch((error: unknown) => {
                 captureError(posthog, error);
                 toastManager.add({
                   title: t("errors.failedToStartWorkflow"),
@@ -358,7 +358,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
               }
               onDrop={(entityId) => handleDrop(value, entityId)}
               // eslint-disable-next-line typescript/no-misused-promises
-              onFileUpload={(files) => handleFileUpload(value, files)}
+              onFileUpload={async (files) =>
+                await handleFileUpload(value, files)
+              }
               onHideColumn={
                 value !== null ? () => handleHideColumn(value) : undefined
               }

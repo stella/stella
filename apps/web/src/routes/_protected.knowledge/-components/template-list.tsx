@@ -122,6 +122,8 @@ export const TemplateList = ({
       const file = e.target.files?.item(0);
       if (file) {
         // Errors are surfaced as toasts inside discover
+        // TODO: fix this
+        // oxlint-disable-next-line no-empty-function
         discover(file).catch(() => {});
       }
       e.target.value = "";

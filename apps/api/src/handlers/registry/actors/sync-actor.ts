@@ -13,7 +13,8 @@ type InvalidateQueryArgs = v.InferOutput<typeof invalidateQuerySchema>;
 
 export const syncActor = actor({
   state: {},
-  createConnState: (c, params) => validateGlobalActorSession(c.key, params),
+  createConnState: async (c, params) =>
+    await validateGlobalActorSession(c.key, params),
   actions: {
     invalidateQuery: (c, args: InvalidateQueryArgs) => {
       const queryKey = v.safeParse(invalidateQuerySchema, args);

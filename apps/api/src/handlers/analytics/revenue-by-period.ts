@@ -18,7 +18,7 @@ const TRUNC_MAP: Record<(typeof GRANULARITY_VALUES)[number], string> = {
   month: "month",
 };
 
-export const revenueByPeriodHandler = ({
+export const revenueByPeriodHandler = async ({
   scopedDb,
   workspaceId,
   query,
@@ -34,7 +34,7 @@ export const revenueByPeriodHandler = ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         period: sql<string>`date_trunc(${trunc}, ${timeEntries.dateWorked}::date)::date::text`,

@@ -23,7 +23,7 @@ type CreatePropertyHandlerProps = {
   body: CreatePropertyBodySchema;
 };
 
-export const createPropertyHandler = ({
+export const createPropertyHandler = async ({
   scopedDb,
   workspaceId,
   body,
@@ -63,7 +63,7 @@ export const createPropertyHandler = ({
     return status(422);
   }
 
-  return scopedDb(async (tx) => {
+  return await scopedDb(async (tx) => {
     // Lock rows then count to serialize concurrent adds.
     // PG rejects FOR UPDATE with aggregate functions.
     const lockedRows = await tx

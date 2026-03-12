@@ -52,16 +52,18 @@ import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pd
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
-const LazyTemplateAssistantPanel = lazy(() =>
-  import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
-    (m) => ({ default: m.TemplateAssistantPanel }),
-  ),
+const LazyTemplateAssistantPanel = lazy(
+  async () =>
+    await import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
+      (m) => ({ default: m.TemplateAssistantPanel }),
+    ),
 );
 
-const LazyRightPanelChat = lazy(() =>
-  import("@/components/right-panel-chat").then((m) => ({
-    default: m.RightPanelChat,
-  })),
+const LazyRightPanelChat = lazy(
+  async () =>
+    await import("@/components/right-panel-chat").then((m) => ({
+      default: m.RightPanelChat,
+    })),
 );
 
 export const Route = createFileRoute("/_protected")({

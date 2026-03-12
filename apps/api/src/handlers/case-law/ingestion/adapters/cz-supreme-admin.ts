@@ -78,8 +78,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1500,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         const page = cursor ? Number.parseInt(cursor, 10) : 1;
 

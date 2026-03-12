@@ -64,7 +64,7 @@ export const ExpenseListView = ({
   const deleteExpense = useDeleteExpense();
 
   const totalsByCurrency = useMemo(() => {
-    if (!expenses || expenses.length === 0) {
+    if (expenses === undefined || expenses.length === 0) {
       return [];
     }
     const map = new Map<string, number>();
@@ -171,7 +171,7 @@ export const ExpenseListView = ({
       </div>
 
       {/* Expenses list */}
-      {expenses && expenses.length > 0 ? (
+      {expenses !== undefined && expenses.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {expenses.map((expense) => (
             <ExpenseRow

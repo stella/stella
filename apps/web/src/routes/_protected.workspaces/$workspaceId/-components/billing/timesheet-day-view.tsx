@@ -70,7 +70,7 @@ export const TimesheetDayView = ({
 
   // Compute total billed amount
   const totalBilledAmount = useMemo(() => {
-    if (!entries) {
+    if (entries === undefined) {
       return 0;
     }
     let total = 0;
@@ -84,7 +84,7 @@ export const TimesheetDayView = ({
 
   // Find dominant currency for display
   const dominantCurrency = useMemo(() => {
-    if (!entries || entries.length === 0) {
+    if (entries === undefined || entries.length === 0) {
       return DEFAULT_CURRENCY;
     }
     return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
@@ -193,7 +193,7 @@ export const TimesheetDayView = ({
   }, []);
 
   const handleSelectAll = () => {
-    if (!entries) {
+    if (entries === undefined) {
       return;
     }
     if (selectedIds.size === entries.length) {
@@ -211,7 +211,7 @@ export const TimesheetDayView = ({
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {entries && entries.length > 0 && (
+          {entries !== undefined && entries.length > 0 && (
             <Checkbox
               checked={
                 selectedIds.size === entries.length && entries.length > 0
@@ -247,7 +247,7 @@ export const TimesheetDayView = ({
       />
 
       {/* Entries list */}
-      {entries && entries.length > 0 ? (
+      {entries !== undefined && entries !== null && entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <TimeEntryRow

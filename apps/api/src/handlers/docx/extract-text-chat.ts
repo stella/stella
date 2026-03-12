@@ -246,7 +246,7 @@ const extractHeaderFooterViews = async (
 
     const xml = await entry.async("string");
     const doc = slimdom.parseXmlDocument(xml);
-    const container = doc.getElementsByTagNameNS(W_NS, rootTag)[0];
+    const container = doc.getElementsByTagNameNS(W_NS, rootTag).at(0);
 
     if (!container) {
       continue;
@@ -282,7 +282,7 @@ export const extractTextForChat = async (
 
   const xml = await docEntry.async("string");
   const doc = slimdom.parseXmlDocument(xml);
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return empty;
   }

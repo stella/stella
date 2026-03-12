@@ -84,7 +84,7 @@ export const useWorkspaceStore = create<State & Actions>()(
           (j) => j.id === justificationId,
         );
 
-        if (justification && boundingBoxes) {
+        if (justification) {
           justification.boundingBoxes = boundingBoxes;
         }
       }),

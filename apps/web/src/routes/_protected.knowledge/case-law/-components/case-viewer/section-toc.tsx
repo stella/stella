@@ -36,7 +36,9 @@ export const SectionToc = ({ sections }: SectionTocProps) => {
     if (section.title) {
       return section.title;
     }
+    // SAFETY: section.type from validated case-law API
     const key =
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       SECTION_TYPE_KEYS[section.type as keyof typeof SECTION_TYPE_KEYS];
     return key ? t(key) : t("caseLaw.sectionTypes.unknown");
   };

@@ -31,17 +31,22 @@ const globalCaseLawRoute = new Elysia({
 })
   .use(authMacro)
   .guard({ validateAuth: true })
-  .get("/decisions", (ctx) => listDecisionsHandler(ctx.query, ctx.scopedDb), {
-    query: listDecisionsQuerySchema,
-  })
+  .get(
+    "/decisions",
+    async (ctx) => await listDecisionsHandler(ctx.query, ctx.scopedDb),
+    {
+      query: listDecisionsQuerySchema,
+    },
+  )
   .get(
     "/decisions/:decisionId",
-    (ctx) => readDecisionHandler(ctx.params.decisionId, ctx.scopedDb),
+    async (ctx) =>
+      await readDecisionHandler(ctx.params.decisionId, ctx.scopedDb),
     { params: t.Object({ decisionId: tNanoid }) },
   )
   .post(
     "/decisions/search",
-    (ctx) => searchDecisionsHandler(ctx.body, ctx.scopedDb),
+    async (ctx) => await searchDecisionsHandler(ctx.body, ctx.scopedDb),
     {
       body: searchDecisionsBodySchema,
     },
@@ -57,16 +62,18 @@ const caseLawMatterLinksRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get("/", (ctx) =>
-    listMatterLinksHandler({
-      workspaceId: ctx.workspaceId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await listMatterLinksHandler({
+        workspaceId: ctx.workspaceId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .post(
     "/",
-    (ctx) =>
-      createMatterLinkHandler({
+    async (ctx) =>
+      await createMatterLinkHandler({
         workspaceId: ctx.workspaceId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -79,8 +86,8 @@ const caseLawMatterLinksRoute = new Elysia({
   )
   .delete(
     "/:linkId",
-    (ctx) =>
-      deleteMatterLinkHandler({
+    async (ctx) =>
+      await deleteMatterLinkHandler({
         workspaceId: ctx.workspaceId,
         linkId: ctx.params.linkId,
         scopedDb: ctx.scopedDb,

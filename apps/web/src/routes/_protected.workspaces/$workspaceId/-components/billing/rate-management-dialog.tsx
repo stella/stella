@@ -155,7 +155,7 @@ const RateTablesView = ({
         />
       )}
 
-      {tables && tables.length > 0 ? (
+      {tables !== undefined && tables.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {tables.map((table) => (
             <div

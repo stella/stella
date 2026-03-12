@@ -109,9 +109,13 @@ export const getWorkflowActorConfig = <T extends OptionsType>(
       enabled: !!options.authToken,
       ...commonOptions,
     };
+    // SAFETY: framework type erasure; options satisfy WorkflowActorReturn
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return clientOptions as WorkflowActorReturn<T>;
   }
 
   const vanillaOptions: WorkflowActorReturn<"vanilla"> = [[key], commonOptions];
+  // SAFETY: framework type erasure; vanillaOptions satisfies WorkflowActorReturn
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vanillaOptions as WorkflowActorReturn<T>;
 };

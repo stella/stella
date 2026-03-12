@@ -9,6 +9,9 @@ import { defineTool } from "./chat-tools";
 
 const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";
 
+const toNullableString = (x: unknown): string | null =>
+  x === null ? null : JSON.stringify(x);
+
 /** Strip HTML tags from ts_headline output so the AI sees
  *  plain text without markup. */
 const stripTags = (html: string): string => html.replace(/<[^>]+>/g, "");
@@ -88,12 +91,15 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
         decisions: result.rows.map((row) => ({
           decisionId: String(row.id),
           caseNumber: String(row.case_number),
-          ecli: row.ecli ? String(row.ecli) : null,
+          ecli: toNullableString(row.ecli),
           court: String(row.court),
           country: String(row.country),
-          decisionDate: row.decision_date ? String(row.decision_date) : null,
-          decisionType: row.decision_type ? String(row.decision_type) : null,
-          excerpt: row.headline ? stripTags(String(row.headline)) : null,
+          decisionDate: toNullableString(row.decision_date),
+          decisionType: toNullableString(row.decision_type),
+          // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
+          excerpt: row.headline
+            ? stripTags(JSON.stringify(row.headline))
+            : null,
         })),
       };
     },

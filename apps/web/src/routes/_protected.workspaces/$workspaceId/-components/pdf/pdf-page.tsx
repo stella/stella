@@ -45,7 +45,7 @@ export const PdfPage = ({ fileId, pageId, isActive }: PdfPageProps) => {
     useShallow((s) => {
       const scrollTo = s.scrollTo.get(fileId);
 
-      if (!scrollTo || !pageNumber) {
+      if (scrollTo === undefined || pageNumber === undefined) {
         return false;
       }
 
@@ -128,7 +128,7 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
     const canvas = canvasRef.current;
     const textLayerContainer = textLayerRef.current;
 
-    if (!canvas || !textLayerContainer || !page || !shouldRenderPage) {
+    if (canvas === null || textLayerContainer === null || !shouldRenderPage) {
       return;
     }
 

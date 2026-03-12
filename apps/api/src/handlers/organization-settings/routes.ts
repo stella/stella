@@ -19,16 +19,18 @@ export const organizationSettingsRoute = new Elysia({
   .guard({
     validateAuth: true,
   })
-  .get("/", (ctx) =>
-    readOrganizationSettingsHandler({
-      organizationId: ctx.session.activeOrganizationId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await readOrganizationSettingsHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .post(
     "/",
-    (ctx) =>
-      updateOrganizationSettingsHandler({
+    async (ctx) =>
+      await updateOrganizationSettingsHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -40,8 +42,8 @@ export const organizationSettingsRoute = new Elysia({
   )
   .post(
     "/preview",
-    (ctx) =>
-      previewOrganizationSettingsHandler({
+    async (ctx) =>
+      await previewOrganizationSettingsHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,

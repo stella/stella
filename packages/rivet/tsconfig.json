@@ -1,8 +1,9 @@
 {
   "extends": "@stella/typescript-config/base.json",
   "compilerOptions": {
-    "lib": ["ES2023"]
+    "lib": ["ES2023"],
+    "types": ["vite/client"]
   },
-  "include": ["."],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }

@@ -67,6 +67,7 @@ const getConditionData = (
   let defaultOperator: NonNullable<Condition>["operator"] | undefined;
   let defaultValue: NonNullable<Condition>["value"] | undefined;
 
+  // oxlint-disable-next-line typescript/switch-exhaustiveness-check
   switch (property.content.type) {
     case "text":
     case "single-select":
@@ -237,7 +238,10 @@ const buildCondition = ({
       ? {
           version: 1,
           type: "string-array",
-          operator: operator as StringArrayOperators,
+          // SAFETY: operator from property content type
+          operator:
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            operator as StringArrayOperators,
           value,
         }
       : null;
@@ -248,7 +252,10 @@ const buildCondition = ({
       ? {
           version: 1,
           type: "string",
-          operator: operator as StringOperators,
+          // SAFETY: operator from property content type
+          operator:
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            operator as StringOperators,
           value: value.trim(),
         }
       : null;

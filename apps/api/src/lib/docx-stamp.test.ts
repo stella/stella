@@ -24,7 +24,7 @@ const CONTENT_TYPES_XML = [
   "</Types>",
 ].join("\n");
 
-const makeDocx = (opts?: {
+const makeDocx = async (opts?: {
   documentXml?: string;
   footerXml?: string;
   footerRels?: string;

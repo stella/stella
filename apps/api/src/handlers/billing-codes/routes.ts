@@ -30,8 +30,8 @@ export const billingCodesRoute = new Elysia({
   })
   .get(
     "/",
-    (ctx) =>
-      readBillingCodesHandler({
+    async (ctx) =>
+      await readBillingCodesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -42,8 +42,8 @@ export const billingCodesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createBillingCodeHandler({
+    async (ctx) =>
+      await createBillingCodeHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -57,8 +57,8 @@ export const billingCodesRoute = new Elysia({
   )
   .patch(
     "/",
-    (ctx) =>
-      updateBillingCodeHandler({
+    async (ctx) =>
+      await updateBillingCodeHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -71,8 +71,8 @@ export const billingCodesRoute = new Elysia({
   )
   .delete(
     "/",
-    (ctx) =>
-      deleteBillingCodeHandler({
+    async (ctx) =>
+      await deleteBillingCodeHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,

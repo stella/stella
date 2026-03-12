@@ -88,12 +88,12 @@ type FileWithContent = {
   simplifiedName: string;
 };
 
-const fetchAndPrepareFiles = (
+const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
 ): Promise<FileWithContent[]> =>
-  Promise.all(
+  await Promise.all(
     resolvedFiles.map(async (meta, index) => {
       // Prefer the converted PDF; fall back to source if
       // the source is already a PDF.
@@ -120,7 +120,7 @@ const fetchAndPrepareFiles = (
     }),
   );
 
-export const generateBatch = ({
+export const generateBatch = async ({
   abortSignal,
   batch,
   entityVersionId,
@@ -128,7 +128,7 @@ export const generateBatch = ({
   workspaceId,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  Result.gen(async function* generateBatchGen() {
+  await Result.gen(async function* generateBatchGen() {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,

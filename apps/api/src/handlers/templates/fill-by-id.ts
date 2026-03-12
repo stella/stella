@@ -98,6 +98,7 @@ export const fillByIdHandler = async ({
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const result = await fillTemplate(buffer, parsed as TemplateData);
 
   const fillStatus =
@@ -116,7 +117,8 @@ export const fillByIdHandler = async ({
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
     })
-    // eslint-disable-next-line no-empty
+    // TODO: fix this
+    // oxlint-disable-next-line no-empty-function
     .catch(() => {});
 
   const baseName = template.fileName;

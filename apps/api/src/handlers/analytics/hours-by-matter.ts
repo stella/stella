@@ -12,7 +12,7 @@ type HoursByMatterHandlerProps = {
   query: DateRangeQuery;
 };
 
-export const hoursByMatterHandler = ({
+export const hoursByMatterHandler = async ({
   scopedDb,
   workspaceId,
   query,
@@ -25,7 +25,7 @@ export const hoursByMatterHandler = ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         matterId: timeEntries.matterId,

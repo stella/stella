@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "printWidth": 80,
   "ignorePatterns": ["**/*.gen.*", "sbom.cdx.json"],
+  "printWidth": 80,
   "sortImports": {
     "customGroups": [
       {
@@ -35,13 +35,5 @@
   },
   "sortTailwindcss": {
     "functions": ["cn", "cva"]
-  },
-  "overrides": [
-    {
-      "files": ["*.jsonc", "*.code-workspace"],
-      "options": {
-        "trailingComma": "none"
-      }
-    }
-  ]
+  }
 }

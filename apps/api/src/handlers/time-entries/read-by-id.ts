@@ -17,7 +17,7 @@ export const readTimeEntryByIdHandler = async ({
   workspaceId,
   id,
 }: ReadTimeEntryByIdHandlerProps) => {
-  const [row] = await scopedDb((tx) =>
+  const rows = await scopedDb((tx) =>
     tx
       .select({
         id: timeEntries.id,
@@ -47,6 +47,7 @@ export const readTimeEntryByIdHandler = async ({
         and(eq(timeEntries.id, id), eq(timeEntries.workspaceId, workspaceId)),
       ),
   );
+  const row = rows.at(0);
 
   if (!row) {
     return status(404, { message: "Time entry not found" });

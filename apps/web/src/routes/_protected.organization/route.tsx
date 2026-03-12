@@ -164,7 +164,7 @@ const SettingsDialog = () => {
           return;
         }
 
-        if (slugCheckData?.status !== true) {
+        if (!slugCheckData?.status) {
           formApi.setErrorMap({
             onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
           });

@@ -13,7 +13,7 @@ type TopTemplatesHandlerProps = {
   query: DateRangeQuery;
 };
 
-export const topTemplatesHandler = ({
+export const topTemplatesHandler = async ({
   scopedDb,
   organizationId,
   query,
@@ -28,7 +28,7 @@ export const topTemplatesHandler = ({
     );
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         templateId: templateFills.templateId,

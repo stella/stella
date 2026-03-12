@@ -31,6 +31,8 @@ export const langMessages = {
 
 export type SupportedLanguage = keyof typeof langMessages;
 
+// SAFETY: langMessages keys are SupportedLanguage; Object.keys preserves them
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 export const supportedLanguages = Object.keys(
   langMessages,
 ) as SupportedLanguage[];
@@ -53,6 +55,8 @@ const detectLang = (): SupportedLanguage => {
   for (const candidate of navigator.languages) {
     const prefix = candidate.split("-")[0];
     if (prefix in langMessages) {
+      // SAFETY: prefix in langMessages narrows to SupportedLanguage
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return prefix as SupportedLanguage;
     }
   }

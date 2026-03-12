@@ -48,8 +48,8 @@ export const addWorkspaceMemberHandler = async ({
   }
 
   const result = await Result.tryPromise({
-    try: () =>
-      scopedDb(async (tx) => {
+    try: async () =>
+      await scopedDb(async (tx) => {
         // Lock rows then count to serialize concurrent adds.
         // PG rejects FOR UPDATE with aggregate functions, so
         // we select rows first and count in application code.

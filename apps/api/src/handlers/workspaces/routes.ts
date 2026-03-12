@@ -39,16 +39,18 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .guard({
     validateAuth: true,
   })
-  .get("/", (ctx) =>
-    readWorkspacesHandler({
-      organizationId: ctx.session.activeOrganizationId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await readWorkspacesHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .put(
     "/",
-    (ctx) =>
-      createWorkspacesHandler({
+    async (ctx) =>
+      await createWorkspacesHandler({
         scopedDb: ctx.scopedDb,
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
@@ -61,12 +63,14 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
       body: createWorkspacesBodySchema,
     },
   )
-  .get("/last-active", (ctx) =>
-    readLastActiveWorkspaceHandler({
-      scopedDb: ctx.scopedDb,
-      userId: ctx.user.id,
-      organizationId: ctx.session.activeOrganizationId,
-    }),
+  .get(
+    "/last-active",
+    async (ctx) =>
+      await readLastActiveWorkspaceHandler({
+        scopedDb: ctx.scopedDb,
+        userId: ctx.user.id,
+        organizationId: ctx.session.activeOrganizationId,
+      }),
   )
   .group(
     "/:workspaceId",
@@ -75,36 +79,44 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     },
     (app) =>
       app
-        .get("/", (ctx) =>
-          readWorkspaceHandler({
-            workspaceId: ctx.workspaceId,
-            organizationId: ctx.session.activeOrganizationId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/",
+          async (ctx) =>
+            await readWorkspaceHandler({
+              workspaceId: ctx.workspaceId,
+              organizationId: ctx.session.activeOrganizationId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
-        .get("/workflow", (ctx) =>
-          readWorkflowHandler({
-            workspaceId: ctx.workspaceId,
-            organizationId: ctx.session.activeOrganizationId,
-            authToken: ctx.session.token,
-          }),
+        .get(
+          "/workflow",
+          async (ctx) =>
+            await readWorkflowHandler({
+              workspaceId: ctx.workspaceId,
+              organizationId: ctx.session.activeOrganizationId,
+              authToken: ctx.session.token,
+            }),
         )
-        .get("/justifications", (ctx) =>
-          readJustificationsHandler({
-            workspaceId: ctx.workspaceId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/justifications",
+          async (ctx) =>
+            await readJustificationsHandler({
+              workspaceId: ctx.workspaceId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
-        .get("/overview", (ctx) =>
-          readOverviewHandler({
-            workspaceId: ctx.workspaceId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/overview",
+          async (ctx) =>
+            await readOverviewHandler({
+              workspaceId: ctx.workspaceId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
         .post(
           "/",
-          (ctx) =>
-            updateWorkspaceHandler({
+          async (ctx) =>
+            await updateWorkspaceHandler({
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
               body: ctx.body,
@@ -116,18 +128,20 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             invalidateQuery: true,
           },
         )
-        .post("/last-active", (ctx) =>
-          updateLastActiveWorkspaceHandler({
-            scopedDb: ctx.scopedDb,
-            userId: ctx.user.id,
-            organizationId: ctx.session.activeOrganizationId,
-            workspaceId: ctx.workspaceId,
-          }),
+        .post(
+          "/last-active",
+          async (ctx) =>
+            await updateLastActiveWorkspaceHandler({
+              scopedDb: ctx.scopedDb,
+              userId: ctx.user.id,
+              organizationId: ctx.session.activeOrganizationId,
+              workspaceId: ctx.workspaceId,
+            }),
         )
         .delete(
           "/",
-          (ctx) =>
-            deleteWorkspaceHandler({
+          async (ctx) =>
+            await deleteWorkspaceHandler({
               scopedDb: ctx.scopedDb,
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
@@ -138,16 +152,18 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             invalidateQuery: true,
           },
         )
-        .get("/contacts", (ctx) =>
-          readWorkspaceContactsHandler({
-            workspaceId: ctx.workspaceId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/contacts",
+          async (ctx) =>
+            await readWorkspaceContactsHandler({
+              workspaceId: ctx.workspaceId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
         .put(
           "/contacts",
-          (ctx) =>
-            createWorkspaceContactHandler({
+          async (ctx) =>
+            await createWorkspaceContactHandler({
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
               body: ctx.body,
@@ -161,8 +177,8 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         )
         .delete(
           "/contacts/:workspaceContactId",
-          (ctx) =>
-            deleteWorkspaceContactHandler({
+          async (ctx) =>
+            await deleteWorkspaceContactHandler({
               workspaceId: ctx.workspaceId,
               workspaceContactId: ctx.params.workspaceContactId,
               scopedDb: ctx.scopedDb,
@@ -173,16 +189,18 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             invalidateQuery: true,
           },
         )
-        .get("/members", (ctx) =>
-          readWorkspaceMembersHandler({
-            workspaceId: ctx.workspaceId,
-            scopedDb: ctx.scopedDb,
-          }),
+        .get(
+          "/members",
+          async (ctx) =>
+            await readWorkspaceMembersHandler({
+              workspaceId: ctx.workspaceId,
+              scopedDb: ctx.scopedDb,
+            }),
         )
         .put(
           "/members",
-          (ctx) =>
-            addWorkspaceMemberHandler({
+          async (ctx) =>
+            await addWorkspaceMemberHandler({
               workspaceId: ctx.workspaceId,
               organizationId: ctx.session.activeOrganizationId,
               body: ctx.body,
@@ -196,8 +214,8 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         )
         .delete(
           "/members/:userId",
-          (ctx) =>
-            removeWorkspaceMemberHandler({
+          async (ctx) =>
+            await removeWorkspaceMemberHandler({
               workspaceId: ctx.workspaceId,
               userId: ctx.params.userId,
               scopedDb: ctx.scopedDb,

@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "typegen": "i18n-typegen i18n/langs",
     "i18n:check": "i18n-check i18n/langs",
-    "lint": "oxlint",
+    "lint": "oxlint --type-aware",
     "format": "oxfmt ."
   },
   "dependencies": {

@@ -16,7 +16,7 @@ export const deleteContactByIdHandler = async ({
   organizationId,
   contactId,
 }: DeleteContactByIdHandlerProps) => {
-  const [deleted] = await scopedDb((tx) =>
+  const deletedRows = await scopedDb((tx) =>
     tx
       .delete(contacts)
       .where(
@@ -27,6 +27,7 @@ export const deleteContactByIdHandler = async ({
       )
       .returning({ id: contacts.id }),
   );
+  const deleted = deletedRows.at(0);
 
   if (!deleted) {
     return status(404, { message: "Contact not found" });

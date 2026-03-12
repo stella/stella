@@ -107,8 +107,8 @@ export const uploadContextFileHandler = async ({ file }: { file: File }) => {
 
   // DOCX: extract with tracked changes
   if (mimeType === DOCX_MIME_TYPE) {
-    const docResult = await Result.tryPromise(() =>
-      extractTextForChat(fileBuffer),
+    const docResult = await Result.tryPromise(
+      async () => await extractTextForChat(fileBuffer),
     );
     if (Result.isError(docResult)) {
       return status(422, {

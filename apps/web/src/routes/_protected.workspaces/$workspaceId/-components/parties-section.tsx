@@ -443,6 +443,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
               <SelectTrigger>
                 <SelectValue>
                   {(current) =>
+                    // oxlint-disable-next-line typescript/strict-boolean-expressions: tsgo issue
                     current
                       ? roleItems.find((r) => r.value === current)?.label
                       : t("workspaces.parties.selectRole")

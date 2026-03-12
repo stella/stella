@@ -180,7 +180,7 @@ export const usePdfStore = create<State & Actions>()(
               passwordRequest: {
                 resolve: callback,
                 // eslint-disable-next-line typescript/no-misused-promises
-                reject: () => loadingTask.destroy(),
+                reject: async () => await loadingTask.destroy(),
                 reason,
               },
             });
@@ -209,22 +209,23 @@ export const usePdfStore = create<State & Actions>()(
           // Check for PDF Portfolio (Collection) with
           // embedded file attachments.
           const attachments = await document.getAttachments();
-          const pdfAttachments = attachments
-            ? Object.values(attachments).filter(
-                (
-                  a,
-                ): a is {
-                  content: Uint8Array;
-                  filename: string;
-                } =>
-                  typeof a === "object" &&
-                  a !== null &&
-                  "content" in a &&
-                  "filename" in a &&
-                  typeof a.filename === "string" &&
-                  a.filename.toLowerCase().endsWith(".pdf"),
-              )
-            : [];
+          const pdfAttachments =
+            attachments !== undefined
+              ? Object.values(attachments).filter(
+                  (
+                    a,
+                  ): a is {
+                    content: Uint8Array;
+                    filename: string;
+                  } =>
+                    typeof a === "object" &&
+                    a !== null &&
+                    "content" in a &&
+                    "filename" in a &&
+                    typeof a.filename === "string" &&
+                    a.filename.toLowerCase().endsWith(".pdf"),
+                )
+              : [];
 
           const isPortfolio =
             pdfAttachments.length > 0 && document.numPages <= 1;
@@ -293,7 +294,7 @@ export const usePdfStore = create<State & Actions>()(
           });
 
           const firstPage = pagesResult[0];
-          if (!firstPage) {
+          if (firstPage === undefined) {
             throw new Error("PDF has no renderable pages");
           }
           const firstPageViewport = firstPage.proxy.getViewport({ scale: 1 });
@@ -353,7 +354,9 @@ export const usePdfStore = create<State & Actions>()(
         } catch (error) {
           // always destroy the current document, rerender will just create a new one
           await document.destroy();
-          await Promise.allSettled(attachmentDocuments.map((d) => d.destroy()));
+          await Promise.allSettled(
+            attachmentDocuments.map(async (d) => await d.destroy()),
+          );
 
           if (error instanceof Error && error.name === "AbortError") {
             return;
@@ -402,8 +405,8 @@ export const usePdfStore = create<State & Actions>()(
         // Destroy attachment documents from PDF Portfolios
         if (pdf.attachmentDocuments) {
           await Promise.allSettled(
-            pdf.attachmentDocuments.map((d) =>
-              d.loadingTask.destroyed ? null : d.destroy(),
+            pdf.attachmentDocuments.map(async (d) =>
+              d.loadingTask.destroyed ? null : await d.destroy(),
             ),
           );
         }
@@ -438,8 +441,8 @@ export const usePdfStore = create<State & Actions>()(
         await Promise.allSettled(
           pdfValues.flatMap((pdf) => {
             const docs = [pdf.document, ...(pdf.attachmentDocuments ?? [])];
-            return docs.map((d) =>
-              d.loadingTask.destroyed ? null : d.destroy(),
+            return docs.map(async (d) =>
+              d.loadingTask.destroyed ? null : await d.destroy(),
             );
           }),
         );

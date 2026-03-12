@@ -8,8 +8,8 @@ export const searchRoute = new Elysia({ prefix: "/search" })
   .guard({ validateAuth: true })
   .post(
     "/",
-    (ctx) =>
-      searchHandler({
+    async (ctx) =>
+      await searchHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,

@@ -99,9 +99,10 @@ const canStartWorkflow = ({
       const field = entity.fields[property.id];
 
       if (
-        !field ||
-        field?.content.type === "error" ||
-        field?.content.type === "pending"
+        field === undefined ||
+        field === null ||
+        field.content.type === "error" ||
+        field.content.type === "pending"
       ) {
         return Result.ok();
       }
@@ -178,6 +179,7 @@ export const RunWorkflowButton = ({ workspaceId, viewId }: RunButtonProps) => {
 
         const error = result.error;
 
+        // oxlint-disable-next-line typescript/switch-exhaustiveness-check
         switch (error) {
           case "all-manual-inputs": {
             toastManager.update(toastId, {

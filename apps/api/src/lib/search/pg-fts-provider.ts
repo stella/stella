@@ -33,7 +33,10 @@ const mapHitRow = (row: RawRow): SearchHit => ({
   workspaceName: String(row.workspace_name),
   kind: parseEntityKind(row.kind),
   title: String(row.title),
-  headline: row.headline ? escapeAndHighlight(String(row.headline)) : null,
+  // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
+  headline: row.headline
+    ? escapeAndHighlight(JSON.stringify(row.headline))
+    : null,
   updatedAt:
     row.updated_at instanceof Date
       ? row.updated_at.toISOString()
@@ -220,7 +223,8 @@ const searchContent = async (
     entityId: String(row.entity_id),
     kind: parseEntityKind(row.kind),
     title: String(row.title),
-    passage: row.passage ? String(row.passage) : "",
+    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.passage from DB (any)
+    passage: row.passage ? JSON.stringify(row.passage) : "",
   }));
 
   const totalCount = Number(countResult.rows.at(0)?.total) || 0;

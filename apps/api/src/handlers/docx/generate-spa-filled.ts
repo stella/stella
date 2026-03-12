@@ -30,7 +30,7 @@ const run = async () => {
   await Bun.write(outputPath, buffer);
 };
 
-run().catch((error) => {
+run().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });

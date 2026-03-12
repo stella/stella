@@ -97,9 +97,11 @@ export const PropertyPromptInput = ({
   useEffect(() => {
     if (
       didAutoPopulate.current ||
-      !editor ||
-      !fileProperty ||
-      field.state.value
+      editor === undefined ||
+      editor === null ||
+      fileProperty === undefined ||
+      fileProperty === null ||
+      (field.state.value !== undefined && field.state.value !== null)
     ) {
       return;
     }

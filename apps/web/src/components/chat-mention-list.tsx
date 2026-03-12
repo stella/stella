@@ -198,7 +198,7 @@ export const ChatMentionList = forwardRef<
 
   const selectItem = (index: number) => {
     const item = activeItems.at(index);
-    if (item) {
+    if (item !== undefined) {
       command(item);
     }
   };
@@ -310,7 +310,8 @@ export const ChatMentionList = forwardRef<
 
           {drillDown &&
             !entitiesLoading &&
-            drillDownItems &&
+            drillDownItems !== undefined &&
+            drillDownItems !== null &&
             drillDownItems.length === 0 && (
               <div className="text-muted-foreground flex items-center justify-center p-2 text-center text-sm">
                 {t("chat.mention.noResults")}

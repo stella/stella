@@ -41,7 +41,11 @@ export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
       query: { id: params.invitationId },
     });
 
-    if (error || !data) {
+    if (
+      (error !== undefined && error !== null) ||
+      data === undefined ||
+      data === null
+    ) {
       throw notFound();
     }
 

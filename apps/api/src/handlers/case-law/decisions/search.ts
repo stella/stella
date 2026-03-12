@@ -11,6 +11,9 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 
+const toNullableString = (x: unknown): string | null =>
+  x === null ? null : JSON.stringify(x);
+
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
     minLength: 1,
@@ -216,14 +219,17 @@ export const searchDecisionsHandler = async (
   const hits = resultRows.map((row) => ({
     decisionId: String(row.decision_id),
     caseNumber: String(row.case_number),
-    ecli: row.ecli ? String(row.ecli) : null,
+    ecli: toNullableString(row.ecli),
     court: String(row.court),
     country: String(row.country),
     language: String(row.language),
-    decisionDate: row.decision_date ? String(row.decision_date) : null,
-    decisionType: row.decision_type ? String(row.decision_type) : null,
-    sourceUrl: row.source_url ? String(row.source_url) : null,
-    headline: row.headline ? escapeAndHighlight(String(row.headline)) : null,
+    decisionDate: toNullableString(row.decision_date),
+    decisionType: toNullableString(row.decision_type),
+    sourceUrl: toNullableString(row.source_url),
+    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
+    headline: row.headline
+      ? escapeAndHighlight(JSON.stringify(row.headline))
+      : null,
     citationCount: Number(row.citation_count) || 0,
     createdAt:
       row.created_at instanceof Date

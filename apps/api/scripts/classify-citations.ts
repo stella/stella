@@ -177,7 +177,7 @@ const main = async () => {
 
       // Rate limit LLM calls
       if (result.source === "llm") {
-        await new Promise<void>((resolve) => setTimeout(resolve, 200));
+        await Bun.sleep(200);
       }
     } catch (error) {
       console.error(`[polarity] Failed citation ${citation.id}:`, error);
@@ -199,7 +199,7 @@ const main = async () => {
   process.exit(0);
 };
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("Classification failed:", error);
   process.exit(1);
 });

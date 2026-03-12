@@ -95,7 +95,11 @@ export const useChatAttachments = () => {
             file,
           });
 
-          if (error || !data) {
+          if (
+            (error !== undefined && error !== null) ||
+            data === undefined ||
+            data === null
+          ) {
             setPendingFiles((prev) =>
               prev.map((f) =>
                 f.id === pending.id

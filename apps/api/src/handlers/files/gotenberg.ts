@@ -67,12 +67,12 @@ export class GotenbergError extends TaggedError("GotenbergError")<{
   cause?: unknown;
 }>() {}
 
-export const convertToPdf = (
+export const convertToPdf = async (
   fileBuffer: ArrayBuffer,
   fileName: string,
   mimeType: string,
 ): Promise<Result<ConvertToPdfResult, GotenbergError>> =>
-  Result.tryPromise(
+  await Result.tryPromise(
     {
       try: async () => {
         const buffer = XLSX_MIME_TYPES.has(mimeType)

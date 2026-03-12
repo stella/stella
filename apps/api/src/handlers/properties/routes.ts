@@ -24,8 +24,8 @@ export const propertiesRoute = new Elysia({
   })
   .put(
     "/",
-    (ctx) =>
-      createPropertyHandler({
+    async (ctx) =>
+      await createPropertyHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -36,18 +36,20 @@ export const propertiesRoute = new Elysia({
       body: createPropertyBodySchema,
     },
   )
-  .get("/", (ctx) =>
-    readPropertiesHandler({
-      workspaceId: ctx.workspaceId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await readPropertiesHandler({
+        workspaceId: ctx.workspaceId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .group("/property/:propertyId", (app) =>
     app
       .post(
         "/",
-        (ctx) =>
-          updatePropertyHandler({
+        async (ctx) =>
+          await updatePropertyHandler({
             workspaceId: ctx.workspaceId,
             propertyId: ctx.params.propertyId,
             body: ctx.body,
@@ -61,8 +63,8 @@ export const propertiesRoute = new Elysia({
       )
       .delete(
         "/",
-        (ctx) =>
-          deletePropertyHandler({
+        async (ctx) =>
+          await deletePropertyHandler({
             workspaceId: ctx.workspaceId,
             propertyId: ctx.params.propertyId,
             scopedDb: ctx.scopedDb,

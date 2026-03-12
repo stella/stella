@@ -145,7 +145,7 @@ describe("sortKeys", () => {
     const result = sortKeys(input);
 
     expect(Object.keys(result)).toEqual(["a", "z"]);
-    expect(Object.keys(result.z as NestedMessages)).toEqual(["alpha", "beta"]);
+    expect(Object.keys(result.z)).toEqual(["alpha", "beta"]);
   });
 
   test("preserves values while sorting", () => {

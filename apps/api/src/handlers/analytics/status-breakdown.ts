@@ -12,7 +12,7 @@ type StatusBreakdownHandlerProps = {
   query: DateRangeQuery;
 };
 
-export const statusBreakdownHandler = ({
+export const statusBreakdownHandler = async ({
   scopedDb,
   workspaceId,
   query,
@@ -25,7 +25,7 @@ export const statusBreakdownHandler = ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         status: timeEntries.status,

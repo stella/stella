@@ -1,5 +1,7 @@
-export const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = async (ms: number) =>
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export const shuffleArray = <T>(originalArray: T[]): T[] => {
   const array = [...originalArray];

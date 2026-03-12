@@ -166,8 +166,8 @@ export const skCourtsAdapter: SourceAdapter = {
   language: "sk",
   minRequestIntervalMs: 2000,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         const page = cursor ? Number.parseInt(cursor, 10) : 0;
         if (Number.isNaN(page)) {

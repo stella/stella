@@ -23,13 +23,13 @@ type CreateRateTableHandlerProps = {
   body: CreateRateTableBodySchema;
 };
 
-export const createRateTableHandler = ({
+export const createRateTableHandler = async ({
   scopedDb,
   organizationId,
   workspaceId,
   body,
 }: CreateRateTableHandlerProps) =>
-  scopedDb(async (tx) => {
+  await scopedDb(async (tx) => {
     // Lock rows then count to serialize concurrent adds.
     // PG rejects FOR UPDATE with aggregate functions.
     const lockedRows = await tx

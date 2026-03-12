@@ -46,6 +46,10 @@ const getFieldValue = (content: FieldContent | undefined): string => {
       return content.value ?? "";
     case "int":
       return String(content.value);
+    case "error":
+    case "pending":
+    case "unsupported":
+      return "";
     default:
       return "";
   }

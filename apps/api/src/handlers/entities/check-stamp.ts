@@ -83,7 +83,7 @@ const lookupByVerificationCode = async (
   verificationCode: string,
   organizationId: SafeId<"organization">,
 ): Promise<StampMatch | null> => {
-  const [row] = await scopedDb((tx) =>
+  const rows = await scopedDb((tx) =>
     tx
       .select({
         entityId: entities.id,
@@ -105,6 +105,7 @@ const lookupByVerificationCode = async (
       .where(eq(entityVersions.verificationCode, verificationCode))
       .limit(1),
   );
+  const row = rows.at(0);
 
   if (!row || !row.stamp) {
     return null;
@@ -125,7 +126,7 @@ const lookupByStamp = async (
   stamp: string,
   organizationId: SafeId<"organization">,
 ): Promise<StampMatch | null> => {
-  const [row] = await scopedDb((tx) =>
+  const rows = await scopedDb((tx) =>
     tx
       .select({
         entityId: entities.id,
@@ -148,6 +149,7 @@ const lookupByStamp = async (
       .orderBy(desc(entityVersions.createdAt))
       .limit(1),
   );
+  const row = rows.at(0);
 
   if (!row || !row.stamp) {
     return null;

@@ -136,7 +136,7 @@ const computeActiveLines = (
 
 /** Convert DOCX half-points to a CSS-friendly rem value. */
 const fontSizeToRem = (halfPoints: number | undefined): string | undefined => {
-  if (!halfPoints) {
+  if (halfPoints === undefined || halfPoints === 0) {
     return;
   }
   // DOCX stores font size in half-points (24 = 12pt).
@@ -372,8 +372,8 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const hasMultipleSections = sources.size > 1;
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    // TODO: fix this
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions
     <div
       className="space-y-0.5 py-2"
       onKeyUp={handleTextSelection}

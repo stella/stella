@@ -241,7 +241,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
                 workspaceId,
                 entityIdsOrder: entityData.entities.map((e) => e.entityId),
               })
-              .catch((error) => captureError(posthog, error));
+              .catch((error: unknown) => captureError(posthog, error));
           },
           onError: () => {
             toastManager.add({

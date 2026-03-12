@@ -62,8 +62,8 @@ function RouteComponent() {
     organizationId,
   }).queryKey;
 
-  const invalidateQueries = () =>
-    Promise.all([
+  const invalidateQueries = async () =>
+    await Promise.all([
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.byId(workspaceId),
       }),

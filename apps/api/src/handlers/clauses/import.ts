@@ -175,7 +175,8 @@ export const importHandler = async ({
         c.title,
         c.description,
         c.body,
-        // eslint-disable-next-line no-empty
+        // TODO: fix this
+        // oxlint-disable-next-line no-empty-function
       ).catch(() => {});
     }
   }

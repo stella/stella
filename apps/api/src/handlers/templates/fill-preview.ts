@@ -55,6 +55,7 @@ export const fillPreviewHandler = async ({
 
   // SAFETY: null, array, and non-object types are excluded
   // by the guards above; the only remaining shape is an object.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const record = parsed as Record<string, unknown>;
   if (Object.values(record).some(containsNull)) {
     return status(400, {
@@ -81,6 +82,7 @@ export const fillPreviewHandler = async ({
   }
 
   // SAFETY: same as fillByIdHandler
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const result = await fillTemplate(buffer, record as TemplateData);
 
   // Extract text from the filled document

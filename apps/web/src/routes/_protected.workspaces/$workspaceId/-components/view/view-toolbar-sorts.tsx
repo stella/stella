@@ -70,6 +70,10 @@ const getSortChipLabel = (
   propertyType: string | undefined,
   desc: boolean,
 ): string | null => {
+  if (!propertyType) {
+    return null;
+  }
+
   switch (propertyType) {
     case "text":
     case "single-select":

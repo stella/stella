@@ -14,8 +14,8 @@ import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/sc
 import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
 import { broadcastEvent, resetActorState } from "@/api/handlers/registry/utils";
 import type { SafeId } from "@/api/lib/branded-types";
-import { captureActorError } from '@/api/lib/errors/actions';
-import type { CaptureActorErrorProps } from '@/api/lib/errors/actions';
+import { captureActorError } from "@/api/lib/errors/actions";
+import type { CaptureActorErrorProps } from "@/api/lib/errors/actions";
 
 export const prepareBatch = (
   rawBatch: PropertyBatch,
@@ -39,7 +39,7 @@ export const prepareBatch = (
   };
 };
 
-export function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
+export async function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
   c: ActorContextOf<typeof workflowActor>,
   action: T,
   // eslint-disable-next-line typescript/no-invalid-void-type -- void is the correct valibot void_ output type here
@@ -47,7 +47,9 @@ export function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
     ? []
     : [input: WorkflowActionSchemas[T]]
 ): ReturnType<typeof c.schedule.after> {
-  return c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
+  // SAFETY: args is [WorkflowActionSchemas[T]] when T extends non-void schema
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return await c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
 }
 
 type SetFieldsContentProps = {

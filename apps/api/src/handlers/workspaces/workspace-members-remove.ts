@@ -39,7 +39,7 @@ export const removeWorkspaceMemberHandler = async ({
       return { error: "last-member" as const };
     }
 
-    const [deleted] = await tx
+    const deleteResult = await tx
       .delete(workspaceMembers)
       .where(
         and(
@@ -48,6 +48,7 @@ export const removeWorkspaceMemberHandler = async ({
         ),
       )
       .returning({ id: workspaceMembers.id });
+    const deleted = deleteResult.at(0);
 
     if (!deleted) {
       return { error: "not-found" as const };

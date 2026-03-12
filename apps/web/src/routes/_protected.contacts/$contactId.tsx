@@ -103,7 +103,7 @@ function ContactDetailPage() {
       <div className="flex items-center gap-3">
         <Button
           // eslint-disable-next-line typescript/no-misused-promises
-          onClick={() => navigate({ to: "/contacts" })}
+          onClick={async () => await navigate({ to: "/contacts" })}
           size="icon-xs"
           variant="ghost"
         >
@@ -533,7 +533,9 @@ const EditableRow = ({
     let payload: Record<string, unknown>;
     if (isNumeric) {
       const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
+      // SAFETY: guarded by numericFields.includes(field)
       payload = {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         [field as NumericField]:
           parsed !== null && !Number.isNaN(parsed) ? parsed : null,
       };

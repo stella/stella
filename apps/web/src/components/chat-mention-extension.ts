@@ -61,13 +61,15 @@ export const ChatMention = MentionExtension.extend({
         default: null,
         parseHTML: (el: HTMLElement) => el.dataset.mimeType,
         renderHTML: (attrs: Record<string, unknown>) =>
-          attrs.mimeType ? { "data-mime-type": attrs.mimeType } : {},
+          typeof attrs.mimeType === "string"
+            ? { "data-mime-type": attrs.mimeType }
+            : {},
       },
       sourceWorkspaceId: {
         default: null,
         parseHTML: (el: HTMLElement) => el.dataset.sourceWorkspaceId,
         renderHTML: (attrs: Record<string, unknown>) =>
-          attrs.sourceWorkspaceId
+          typeof attrs.sourceWorkspaceId === "string"
             ? { "data-source-workspace-id": attrs.sourceWorkspaceId }
             : {},
       },

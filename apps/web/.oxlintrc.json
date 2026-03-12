@@ -1,0 +1,16 @@
+{
+  "extends": ["../../.oxlintrc.json"],
+  "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
+  "overrides": [
+    {
+      "files": [
+        "src/routes/_protected.workspaces/$workspaceId/-components/pdf/**"
+      ],
+      "rules": {
+        "unicorn/prefer-dom-node-remove": "off",
+        "unicorn/prefer-dom-node-append": "off",
+        "unicorn/prefer-modern-dom-apis": "off"
+      }
+    }
+  ]
+}

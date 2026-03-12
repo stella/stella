@@ -24,7 +24,8 @@ export const bBoxActor = actor({
   state: {
     pendingJustificationIds: new Set<string>(),
   },
-  createConnState: (c, params) => validateActorSession(c.key, params),
+  createConnState: async (c, params) =>
+    await validateActorSession(c.key, params),
   onWake: (c) => {
     // clear pending when actor wakes up if some jobs got stuck
     c.state.pendingJustificationIds = new Set<string>();
@@ -57,23 +58,24 @@ export const bBoxActor = actor({
           scopedDb,
         );
         if (Result.isError(preparedDataResult)) {
-          return preparedDataResult;
+          return Result.err(preparedDataResult.error);
         }
         const preparedData = preparedDataResult.value;
 
         const generateFn = isMockAI() ? generateBBoxesMock : generateBBoxes;
         const bBoxes = await Promise.all(
-          preparedData.pageNumbers.map((pageNumber) =>
-            generateFn({
-              abortSignal: c.abortSignal,
-              data: {
-                pdf: preparedData.pdf,
-                pageNumber,
-                prompt: preparedData.prompt,
-                fieldContent: preparedData.fieldContent,
-                justificationText: preparedData.justificationText,
-              },
-            }),
+          preparedData.pageNumbers.map(
+            async (pageNumber) =>
+              await generateFn({
+                abortSignal: c.abortSignal,
+                data: {
+                  pdf: preparedData.pdf,
+                  pageNumber,
+                  prompt: preparedData.prompt,
+                  fieldContent: preparedData.fieldContent,
+                  justificationText: preparedData.justificationText,
+                },
+              }),
           ),
         );
 

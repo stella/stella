@@ -20,7 +20,9 @@ import type { RouterFullPath } from "@/lib/types";
 const PATH_SEPARATOR = "|";
 
 const serializeKey = (paths: RouterFullPath[]) => paths.join(PATH_SEPARATOR);
+// SAFETY: key comes from breadcrumbMap keys built from RouterFullPath[]
 const deserializeKey = (key: string) =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   key.split(PATH_SEPARATOR) as RouterFullPath[];
 
 type BreadcrumbComponent<TPath extends RouterFullPath> = (
@@ -114,7 +116,9 @@ export const AppBreadcrumbs = () => {
         const parsedKey = deserializeKey(key);
 
         if (parsedKey.some((path) => match.fullPath.startsWith(path))) {
+          // SAFETY: match.params from TanStack Router for known route
           const result = breadcrumbMap[key]?.(
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             match.params as ResolveParams<RouterFullPath>,
           );
 

@@ -16,8 +16,8 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   })
   .post(
     "/",
-    (ctx) =>
-      upsertFieldHandler({
+    async (ctx) =>
+      await upsertFieldHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,

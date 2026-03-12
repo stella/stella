@@ -40,6 +40,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { toFormErrors } from "@/lib/schema";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
@@ -135,7 +136,7 @@ const InvoiceDetail = ({
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
-        throw response.error;
+        throw toAPIError(response.error);
       }
       return response.data;
     },
@@ -155,7 +156,7 @@ const InvoiceDetail = ({
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
-        throw response.error;
+        throw toAPIError(response.error);
       }
       return response.data;
     },
@@ -180,7 +181,7 @@ const InvoiceDetail = ({
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
-        throw response.error;
+        throw toAPIError(response.error);
       }
       return response.data;
     },
@@ -201,7 +202,7 @@ const InvoiceDetail = ({
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
-        throw response.error;
+        throw toAPIError(response.error);
       }
       return response.data;
     },

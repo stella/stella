@@ -19,8 +19,8 @@ export const analyticsRoute = new Elysia({
   })
   .get(
     "/summary",
-    (ctx) =>
-      summaryHandler({
+    async (ctx) =>
+      await summaryHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -29,8 +29,8 @@ export const analyticsRoute = new Elysia({
   )
   .get(
     "/hours-by-matter",
-    (ctx) =>
-      hoursByMatterHandler({
+    async (ctx) =>
+      await hoursByMatterHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -39,8 +39,8 @@ export const analyticsRoute = new Elysia({
   )
   .get(
     "/hours-by-user",
-    (ctx) =>
-      hoursByUserHandler({
+    async (ctx) =>
+      await hoursByUserHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -49,8 +49,8 @@ export const analyticsRoute = new Elysia({
   )
   .get(
     "/hours-by-period",
-    (ctx) =>
-      hoursByPeriodHandler({
+    async (ctx) =>
+      await hoursByPeriodHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -59,8 +59,8 @@ export const analyticsRoute = new Elysia({
   )
   .get(
     "/status-breakdown",
-    (ctx) =>
-      statusBreakdownHandler({
+    async (ctx) =>
+      await statusBreakdownHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -69,8 +69,8 @@ export const analyticsRoute = new Elysia({
   )
   .get(
     "/revenue-by-period",
-    (ctx) =>
-      revenueByPeriodHandler({
+    async (ctx) =>
+      await revenueByPeriodHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,

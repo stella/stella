@@ -30,9 +30,6 @@ type PipelineResult = {
   nextCursor: string | null;
 };
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
@@ -216,7 +213,7 @@ export const runIngestionPipeline = async ({
     }
 
     if (adapter.minRequestIntervalMs > 0) {
-      await sleep(adapter.minRequestIntervalMs);
+      await Bun.sleep(adapter.minRequestIntervalMs);
     }
   }
 

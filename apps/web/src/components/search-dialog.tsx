@@ -165,7 +165,7 @@ export const SearchDialog = ({
       } else if (e.key === "Enter" && selectedIndex >= 0) {
         e.preventDefault();
         const hit = allHits[selectedIndex];
-        if (hit) {
+        if (hit !== undefined) {
           await handleResultClick(hit.workspaceId);
         }
       }
@@ -356,7 +356,7 @@ export const SearchDialog = ({
                       className="w-full"
                       disabled={isFetchingNextPage}
                       // eslint-disable-next-line typescript/no-misused-promises
-                      onClick={() => fetchNextPage()}
+                      onClick={async () => await fetchNextPage()}
                       size="sm"
                       variant="ghost"
                     >

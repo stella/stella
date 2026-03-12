@@ -47,16 +47,18 @@ export const clauseCategoriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", (ctx) =>
-    listCategoriesHandler({
-      organizationId: ctx.session.activeOrganizationId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/",
+    async (ctx) =>
+      await listCategoriesHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        scopedDb: ctx.scopedDb,
+      }),
   )
   .put(
     "/",
-    (ctx) =>
-      createCategoryHandler({
+    async (ctx) =>
+      await createCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -68,8 +70,8 @@ export const clauseCategoriesRoute = new Elysia({
   )
   .post(
     "/:categoryId",
-    (ctx) =>
-      updateCategoryHandler({
+    async (ctx) =>
+      await updateCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         body: ctx.body,
@@ -83,8 +85,8 @@ export const clauseCategoriesRoute = new Elysia({
   )
   .delete(
     "/:categoryId",
-    (ctx) =>
-      deleteCategoryHandler({
+    async (ctx) =>
+      await deleteCategoryHandler({
         organizationId: ctx.session.activeOrganizationId,
         categoryId: ctx.params.categoryId,
         scopedDb: ctx.scopedDb,
@@ -105,8 +107,8 @@ export const clausesRoute = new Elysia({
   .guard({ validateAuth: true })
   .get(
     "/",
-    (ctx) =>
-      listClausesHandler({
+    async (ctx) =>
+      await listClausesHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -115,8 +117,8 @@ export const clausesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createClauseHandler({
+    async (ctx) =>
+      await createClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -129,8 +131,8 @@ export const clausesRoute = new Elysia({
   )
   .get(
     "/export",
-    (ctx) =>
-      exportHandler({
+    async (ctx) =>
+      await exportHandler({
         organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -139,8 +141,8 @@ export const clausesRoute = new Elysia({
   )
   .put(
     "/import",
-    (ctx) =>
-      importHandler({
+    async (ctx) =>
+      await importHandler({
         organizationId: ctx.session.activeOrganizationId,
         userId: ctx.user.id,
         body: ctx.body,
@@ -153,8 +155,8 @@ export const clausesRoute = new Elysia({
   )
   .get(
     "/:clauseId",
-    (ctx) =>
-      getClauseHandler({
+    async (ctx) =>
+      await getClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         scopedDb: ctx.scopedDb,
@@ -163,8 +165,8 @@ export const clausesRoute = new Elysia({
   )
   .post(
     "/:clauseId",
-    (ctx) =>
-      updateClauseHandler({
+    async (ctx) =>
+      await updateClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         body: ctx.body,
@@ -178,8 +180,8 @@ export const clausesRoute = new Elysia({
   )
   .delete(
     "/:clauseId",
-    (ctx) =>
-      deleteClauseHandler({
+    async (ctx) =>
+      await deleteClauseHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         scopedDb: ctx.scopedDb,
@@ -192,8 +194,8 @@ export const clausesRoute = new Elysia({
   // ── Versions ───────────────────────────────────
   .get(
     "/:clauseId/versions/:versionId",
-    (ctx) =>
-      getClauseVersionHandler({
+    async (ctx) =>
+      await getClauseVersionHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         versionId: ctx.params.versionId,
@@ -209,8 +211,8 @@ export const clausesRoute = new Elysia({
   // ── Variants ────────────────────────────────────
   .get(
     "/:clauseId/variants",
-    (ctx) =>
-      listVariantsHandler({
+    async (ctx) =>
+      await listVariantsHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         scopedDb: ctx.scopedDb,
@@ -219,8 +221,8 @@ export const clausesRoute = new Elysia({
   )
   .put(
     "/:clauseId/variants",
-    (ctx) =>
-      createVariantHandler({
+    async (ctx) =>
+      await createVariantHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         body: ctx.body,
@@ -234,8 +236,8 @@ export const clausesRoute = new Elysia({
   )
   .post(
     "/:clauseId/variants/:variantId",
-    (ctx) =>
-      updateVariantHandler({
+    async (ctx) =>
+      await updateVariantHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         variantId: ctx.params.variantId,
@@ -253,8 +255,8 @@ export const clausesRoute = new Elysia({
   )
   .delete(
     "/:clauseId/variants/:variantId",
-    (ctx) =>
-      deleteVariantHandler({
+    async (ctx) =>
+      await deleteVariantHandler({
         organizationId: ctx.session.activeOrganizationId,
         clauseId: ctx.params.clauseId,
         variantId: ctx.params.variantId,

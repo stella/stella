@@ -186,6 +186,7 @@ export const KanbanColumn = ({
           // monitor (forgiving: works even if dropped in gap).
           if (source.data.type === ENTITY_DRAG_TYPE) {
             // SAFETY: entityId is always a string; set by our own draggable getInitialData.
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             const entityId = source.data.entityId as string;
             onDropRef.current(entityId);
           }

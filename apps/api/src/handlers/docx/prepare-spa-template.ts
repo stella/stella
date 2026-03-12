@@ -84,7 +84,7 @@ const run = async () => {
   await Bun.write(OUTPUT, buffer);
 };
 
-run().catch((error) => {
+run().catch((error: unknown) => {
   console.error(error);
   process.exit(1);
 });

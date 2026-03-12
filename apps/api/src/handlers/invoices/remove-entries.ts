@@ -34,7 +34,10 @@ export const removeEntriesHandler = async ({
   invoiceId,
   body,
 }: RemoveEntriesHandlerProps) => {
-  if (!body.timeEntryIds?.length && !body.expenseIds?.length) {
+  if (
+    (body.timeEntryIds?.length ?? 0) === 0 &&
+    (body.expenseIds?.length ?? 0) === 0
+  ) {
     return status(400, {
       message: "At least one time entry or expense ID is required",
     });
@@ -79,7 +82,8 @@ export const removeEntriesHandler = async ({
       });
     }
 
-    if (body.timeEntryIds?.length) {
+    const timeEntryIds = body.timeEntryIds;
+    if (timeEntryIds && timeEntryIds.length > 0) {
       await tx
         .update(timeEntries)
         .set({
@@ -91,12 +95,13 @@ export const removeEntriesHandler = async ({
           and(
             eq(timeEntries.invoiceId, invoiceId),
             eq(timeEntries.workspaceId, workspaceId),
-            inArray(timeEntries.id, body.timeEntryIds),
+            inArray(timeEntries.id, timeEntryIds),
           ),
         );
     }
 
-    if (body.expenseIds?.length) {
+    const expenseIds = body.expenseIds;
+    if (expenseIds && expenseIds.length > 0) {
       await tx
         .update(expenses)
         .set({
@@ -108,7 +113,7 @@ export const removeEntriesHandler = async ({
           and(
             eq(expenses.invoiceId, invoiceId),
             eq(expenses.workspaceId, workspaceId),
-            inArray(expenses.id, body.expenseIds),
+            inArray(expenses.id, expenseIds),
           ),
         );
     }

@@ -16,7 +16,7 @@ export const deleteWorkspaceContactHandler = async ({
   workspaceId,
   workspaceContactId,
 }: DeleteWorkspaceContactHandlerProps) => {
-  const [deleted] = await scopedDb((tx) =>
+  const deletedRows = await scopedDb((tx) =>
     tx
       .delete(workspaceContacts)
       .where(
@@ -27,6 +27,7 @@ export const deleteWorkspaceContactHandler = async ({
       )
       .returning({ id: workspaceContacts.id }),
   );
+  const deleted = deletedRows.at(0);
 
   if (!deleted) {
     return status(404, { message: "Party not found" });

@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { SETTING_ORGANIZATION_ID, SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import { createTestIds, fetchScopedTables, fetchStellaPolicies, setupRlsTestData } from '@/api/tests/security/rls-helpers';
-import type { TestIds } from '@/api/tests/security/rls-helpers';
-import { createTestDb } from '@/api/tests/security/test-utils';
-import type { TestDatabase } from '@/api/tests/security/test-utils';
+import {
+  createTestIds,
+  fetchScopedTables,
+  fetchStellaPolicies,
+  setupRlsTestData,
+} from "@/api/tests/security/rls-helpers";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import { createTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;

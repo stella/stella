@@ -125,7 +125,8 @@ export const WorkspaceBreadcrumb = ({
               const parsed: unknown = raw ? JSON.parse(raw) : null;
               const config: Record<string, unknown> =
                 typeof parsed === "object" && parsed !== null
-                  ? (parsed as Record<string, unknown>)
+                  ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: guarded by typeof/parsed check
+                    (parsed as Record<string, unknown>)
                   : {};
               config.clientFilter = workspace.client?.id ?? null;
               localStorage.setItem(

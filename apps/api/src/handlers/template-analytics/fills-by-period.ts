@@ -22,7 +22,7 @@ const TRUNC_MAP: Record<(typeof GRANULARITY_VALUES)[number], string> = {
   month: "month",
 };
 
-export const fillsByPeriodHandler = ({
+export const fillsByPeriodHandler = async ({
   scopedDb,
   organizationId,
   query,
@@ -40,7 +40,7 @@ export const fillsByPeriodHandler = ({
     );
   }
 
-  return scopedDb((tx) =>
+  return await scopedDb((tx) =>
     tx
       .select({
         period: sql<string>`date_trunc(${sql.raw(`'${trunc}'`)}, ${templateFills.createdAt})::date::text`,

@@ -34,11 +34,20 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
-import type { SafeId } from "@/api/lib/branded-types";
-import { createTestIds, orgScopedTables, setupRlsTestData, wsScopedTables } from '@/api/tests/security/rls-helpers';
-import type { MutationCase, TestIds } from '@/api/tests/security/rls-helpers';
-import { createScopedQuery, createDryScopedQuery, createTestDb } from '@/api/tests/security/test-utils';
-import type { TestDatabase } from '@/api/tests/security/test-utils';
+import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createTestIds,
+  orgScopedTables,
+  setupRlsTestData,
+  wsScopedTables,
+} from "@/api/tests/security/rls-helpers";
+import type { MutationCase, TestIds } from "@/api/tests/security/rls-helpers";
+import {
+  createScopedQuery,
+  createDryScopedQuery,
+  createTestDb,
+} from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -422,7 +431,7 @@ describe("workspaces table — correct scope", () => {
     // Not throwing IS the verification.
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(workspaces).values({
-        id: "rls_ws_ins" as SafeId<"workspace">,
+        id: toSafeId<"workspace">("rls_ws_ins"),
         organizationId: ids.orgA,
         name: "RLS Insert Test",
         status: "active" as const,

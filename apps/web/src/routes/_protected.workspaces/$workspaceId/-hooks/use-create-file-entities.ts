@@ -27,12 +27,12 @@ const formatFailedFiles = (names: string[]): string => {
   return list;
 };
 
-export const uploadFileEntity = (
+export const uploadFileEntity = async (
   file: File,
   workspaceId: string,
   propertyId: string,
 ) =>
-  Result.tryPromise(
+  await Result.tryPromise(
     {
       try: async () => {
         const response = await api.entities({ workspaceId }).upload.post({
@@ -147,7 +147,9 @@ export const uploadFileEntitiesBatched = async ({
     const batch = files.slice(i, i + MAX_PARALLEL_FILE_UPLOADS);
 
     const results = await Promise.all(
-      batch.map((file) => uploadFileEntity(file, workspaceId, propertyId)),
+      batch.map(
+        async (file) => await uploadFileEntity(file, workspaceId, propertyId),
+      ),
     );
 
     for (const [idx, result] of results.entries()) {
@@ -156,7 +158,7 @@ export const uploadFileEntitiesBatched = async ({
       if (Result.isError(result)) {
         onError?.(result.error);
         const file = batch[idx];
-        if (file) {
+        if (file !== undefined) {
           failedFiles.push(file.name);
         }
       } else {

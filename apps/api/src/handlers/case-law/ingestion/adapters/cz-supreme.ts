@@ -104,8 +104,8 @@ export const czSupremeAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 2000,
 
-  fetchPage(cursor, _config, signal) {
-    return Result.tryPromise({
+  async fetchPage(cursor, _config, signal) {
+    return await Result.tryPromise({
       try: async () => {
         const start = cursor ? Number.parseInt(cursor, 10) : 0;
 

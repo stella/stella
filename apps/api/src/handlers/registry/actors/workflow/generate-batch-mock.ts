@@ -48,12 +48,12 @@ const getValueFromInputFields = (input: FieldContentForAI[]): string => {
   return values.join(" + ");
 };
 
-export const generateBatchMock = ({
+export const generateBatchMock = async ({
   batch,
   entityVersionId,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  Result.gen(async function* generateBatchMockGen() {
+  await Result.gen(async function* generateBatchMockGen() {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,

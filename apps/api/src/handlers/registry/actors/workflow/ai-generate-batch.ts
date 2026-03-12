@@ -34,7 +34,7 @@ export type WorkflowDataOutput = Record<
   { answer: Answer; justification: string }
 >;
 
-export const generateWorkflowData = ({
+export const generateWorkflowData = async ({
   files,
   properties,
   filenames,
@@ -67,7 +67,7 @@ export const generateWorkflowData = ({
     text: buildPromptsMessage(properties),
   });
 
-  return Result.tryPromise({
+  return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModel(PDF_NATIVE_MODEL),

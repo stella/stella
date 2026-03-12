@@ -73,7 +73,11 @@ const SourceChip = ({
       return;
     }
     const entityId = "entityId" in stella ? stella.entityId : undefined;
-    if (!entityId || typeof entityId !== "string") {
+    if (
+      entityId === undefined ||
+      entityId === null ||
+      typeof entityId !== "string"
+    ) {
       return;
     }
 

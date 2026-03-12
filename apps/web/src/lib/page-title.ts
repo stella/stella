@@ -10,6 +10,7 @@ export const pageTitle = (i18nKey: string) => {
   // object, not a dot-path union, so we cast to satisfy use-intl's
   // internal overload. Callers pass literal key strings checked
   // against en.json at review time.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return `${t(i18nKey as never)}${SUFFIX}`;
 };
 

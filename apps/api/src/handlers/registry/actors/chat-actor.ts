@@ -18,8 +18,8 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { createScopedDb, db } from '@/api/db';
-import type { ScopedDb } from '@/api/db';
+import { createScopedDb, db } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type {
@@ -209,29 +209,30 @@ const buildSystemPrompt = async (
   organizationId: SafeId<"organization">,
   userContext: UserContext | null,
 ): Promise<string> => {
-  const [workspace, properties, [entityCountRow]] = await scopedDb((tx) =>
-    Promise.all([
-      tx.query.workspaces.findFirst({
-        where: {
-          id: { eq: workspaceId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true, name: true },
-      }),
-      tx.query.properties.findMany({
-        where: { workspaceId: { eq: workspaceId } },
-        columns: {
-          id: true,
-          name: true,
-          status: true,
-          content: true,
-        },
-      }),
-      tx
-        .select({ value: count() })
-        .from(entities)
-        .where(eq(entities.workspaceId, workspaceId)),
-    ]),
+  const [workspace, properties, [entityCountRow]] = await scopedDb(
+    async (tx) =>
+      await Promise.all([
+        tx.query.workspaces.findFirst({
+          where: {
+            id: { eq: workspaceId },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true, name: true },
+        }),
+        tx.query.properties.findMany({
+          where: { workspaceId: { eq: workspaceId } },
+          columns: {
+            id: true,
+            name: true,
+            status: true,
+            content: true,
+          },
+        }),
+        tx
+          .select({ value: count() })
+          .from(entities)
+          .where(eq(entities.workspaceId, workspaceId)),
+      ]),
   );
 
   const entityCount = entityCountRow?.value ?? 0;
@@ -364,7 +365,8 @@ export const chatActor = actor({
     "stream-started": event<{ threadId: string; chatId: string }>(),
     "stream-chunk": event<SequencedChunk>(),
   },
-  createConnState: (c, params) => validateUserActorSession(c.key, params),
+  createConnState: async (c, params) =>
+    await validateUserActorSession(c.key, params),
   vars: {
     stopControllers: new Map<string, AbortController>(),
   },
@@ -457,6 +459,7 @@ export const chatActor = actor({
       // SAFETY: createConnState (validateUserActorSession) returns
       // UserActorConnState which types organizationId, userId, and
       // scopedDb, but RivetKit erases the type on c.conn.state.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
         userId: string;
@@ -772,6 +775,8 @@ export const chatActor = actor({
       }
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
+      // SAFETY: createConnState returns UserActorConnState; RivetKit erases type
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const connState = c.conn.state as {
         organizationId: SafeId<"organization">;
       };

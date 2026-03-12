@@ -97,6 +97,8 @@ export const KanbanCard = ({
             if (!inner) {
               return;
             }
+            // SAFETY: cloneNode of HTMLElement returns HTMLElement
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             const clone = inner.cloneNode(true) as HTMLElement;
             const rect = inner.getBoundingClientRect();
             clone.style.width = `${rect.width}px`;
@@ -175,7 +177,13 @@ export const KanbanCard = ({
           }
           const field = entity.fields[fieldId];
           const prop = properties.find((p) => p.id === fieldId);
-          if (!prop || !field || field.content.type === "file") {
+          if (
+            prop === undefined ||
+            prop === null ||
+            field === undefined ||
+            field === null ||
+            field.content.type === "file"
+          ) {
             return null;
           }
           return (
@@ -198,7 +206,7 @@ export const KanbanCard = ({
     </div>
   ) : null;
 
-  if (navigable && file) {
+  if (navigable && file !== undefined) {
     return (
       <div className="group/card" ref={dragRef}>
         <button

@@ -267,7 +267,7 @@ export const uploadEntityHandler = async ({
       return resolvedName;
     });
 
-    await processExtraction(entityId).catch((error) =>
+    await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
 
@@ -278,7 +278,7 @@ export const uploadEntityHandler = async ({
       renamed: fileName.renamed,
     };
   } catch (error) {
-    await Promise.all(s3Keys.map((key) => s3.delete(key)));
+    await Promise.all(s3Keys.map(async (key) => await s3.delete(key)));
     throw error;
   }
 };

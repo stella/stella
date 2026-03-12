@@ -15,8 +15,8 @@ export const filesRoute = new Elysia({
   })
   .get(
     "/url/:fieldId",
-    (ctx) =>
-      readFileHandler({
+    async (ctx) =>
+      await readFileHandler({
         fieldId: ctx.params.fieldId,
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
@@ -29,11 +29,13 @@ export const filesRoute = new Elysia({
       }),
     },
   )
-  .get("/stamped/:fieldId", (ctx) =>
-    stampedDownloadHandler({
-      fieldId: ctx.params.fieldId,
-      organizationId: ctx.session.activeOrganizationId,
-      workspaceId: ctx.workspaceId,
-      scopedDb: ctx.scopedDb,
-    }),
+  .get(
+    "/stamped/:fieldId",
+    async (ctx) =>
+      await stampedDownloadHandler({
+        fieldId: ctx.params.fieldId,
+        organizationId: ctx.session.activeOrganizationId,
+        workspaceId: ctx.workspaceId,
+        scopedDb: ctx.scopedDb,
+      }),
   );

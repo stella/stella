@@ -319,7 +319,7 @@ const main = async () => {
   }
 };
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error("Classification failed:", error);
   process.exit(1);
 });

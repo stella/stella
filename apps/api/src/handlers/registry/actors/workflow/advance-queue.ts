@@ -10,11 +10,11 @@ const MAX_PARALLEL = 10;
 
 const { processBatch, finishWorkflow, advanceQueue } = workflowActions;
 
-export const advanceQueueAction = (
+export const advanceQueueAction = async (
   c: ActionContextOf<typeof workflowActor>,
   { entityId, batchId }: WorkflowActionSchemas[typeof advanceQueue],
 ) =>
-  Result.tryPromise(async () => {
+  await Result.tryPromise(async () => {
     const pendingEntity = c.state.pendingBatches.get(entityId);
 
     // If entity was running remove completed batch

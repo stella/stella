@@ -38,7 +38,7 @@ const firstParagraph = (xml: string): slimdom.Element => {
 /** Extract "accepted" text from paragraphs in edited XML. */
 const extractAcceptedText = (xml: string): string[] => {
   const doc = slimdom.parseXmlDocument(xml);
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
   if (!body) {
     return [];
   }
@@ -48,6 +48,8 @@ const extractAcceptedText = (xml: string): string[] => {
     if (child.nodeType !== child.ELEMENT_NODE) {
       continue;
     }
+    // SAFETY: ELEMENT_NODE implies Element in slimdom
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const el = child as slimdom.Element;
     if (el.localName !== "p" || el.namespaceURI !== W_NS) {
       continue;
@@ -58,6 +60,8 @@ const extractAcceptedText = (xml: string): string[] => {
       if (node.nodeType !== node.ELEMENT_NODE) {
         return;
       }
+      // SAFETY: ELEMENT_NODE implies Element in slimdom
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const n = node as slimdom.Element;
       if (n.localName === "del" && n.namespaceURI === W_NS) {
         return;
@@ -243,6 +247,8 @@ describe("edge case: w:rPrChange IDs duplicated on run split", () => {
     const allIds: number[] = [];
     const walk = (node: slimdom.Node) => {
       if (node.nodeType === node.ELEMENT_NODE) {
+        // SAFETY: ELEMENT_NODE implies Element in slimdom
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const el = node as slimdom.Element;
         const id = el.getAttributeNS(W_NS, "id") ?? el.getAttribute("w:id");
         if (id !== null) {

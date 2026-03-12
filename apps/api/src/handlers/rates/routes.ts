@@ -51,8 +51,8 @@ export const ratesRoute = new Elysia({
   // Rate tables
   .get(
     "/",
-    (ctx) =>
-      readRateTablesHandler({
+    async (ctx) =>
+      await readRateTablesHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -63,8 +63,8 @@ export const ratesRoute = new Elysia({
   )
   .put(
     "/",
-    (ctx) =>
-      createRateTableHandler({
+    async (ctx) =>
+      await createRateTableHandler({
         organizationId: ctx.session.activeOrganizationId,
         workspaceId: ctx.workspaceId,
         body: ctx.body,
@@ -78,8 +78,8 @@ export const ratesRoute = new Elysia({
   )
   .patch(
     "/",
-    (ctx) =>
-      updateRateTableHandler({
+    async (ctx) =>
+      await updateRateTableHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -92,8 +92,8 @@ export const ratesRoute = new Elysia({
   )
   .delete(
     "/",
-    (ctx) =>
-      deleteRateTableHandler({
+    async (ctx) =>
+      await deleteRateTableHandler({
         workspaceId: ctx.workspaceId,
         body: ctx.body,
         scopedDb: ctx.scopedDb,
@@ -107,8 +107,8 @@ export const ratesRoute = new Elysia({
   // Rate resolution
   .get(
     "/resolve",
-    (ctx) =>
-      resolveRateHandler({
+    async (ctx) =>
+      await resolveRateHandler({
         workspaceId: ctx.workspaceId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
@@ -120,8 +120,8 @@ export const ratesRoute = new Elysia({
   // Rate entries
   .get(
     "/:rateTableId/entries",
-    (ctx) =>
-      readRateEntriesHandler({
+    async (ctx) =>
+      await readRateEntriesHandler({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         query: ctx.query,
@@ -133,8 +133,8 @@ export const ratesRoute = new Elysia({
   )
   .put(
     "/:rateTableId/entries",
-    (ctx) =>
-      createRateEntryHandler({
+    async (ctx) =>
+      await createRateEntryHandler({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,
@@ -148,8 +148,8 @@ export const ratesRoute = new Elysia({
   )
   .patch(
     "/:rateTableId/entries",
-    (ctx) =>
-      updateRateEntryHandler({
+    async (ctx) =>
+      await updateRateEntryHandler({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,
@@ -163,8 +163,8 @@ export const ratesRoute = new Elysia({
   )
   .delete(
     "/:rateTableId/entries",
-    (ctx) =>
-      deleteRateEntryHandler({
+    async (ctx) =>
+      await deleteRateEntryHandler({
         workspaceId: ctx.workspaceId,
         rateTableId: ctx.params.rateTableId,
         body: ctx.body,

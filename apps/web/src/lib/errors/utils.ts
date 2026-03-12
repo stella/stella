@@ -3,7 +3,7 @@ export const transformUnknownError = (error: unknown) => {
     return error;
   }
 
-  if (!error) {
+  if (error === undefined || error === null) {
     return;
   }
 
@@ -11,5 +11,6 @@ export const transformUnknownError = (error: unknown) => {
     return new Error(JSON.stringify(error));
   }
 
+  // oxlint-disable-next-line typescript/no-base-to-string
   return new Error(String(error));
 };

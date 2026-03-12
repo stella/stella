@@ -2,8 +2,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
-import { and, eq } from 'drizzle-orm';
-import type { InferSelectModel } from 'drizzle-orm';
+import { and, eq } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
 import { ac, roles } from "@stella/permissions";

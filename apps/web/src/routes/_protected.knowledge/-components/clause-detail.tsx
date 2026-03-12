@@ -153,6 +153,7 @@ export const ClauseDetailView = ({
 
     // SAFETY: The API returns body as ClauseParagraph[]
     // but Eden types it as unknown due to JSONB.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const detail = data as unknown as ClauseDetail;
     setState({ kind: "ready", detail });
   }, [clauseId, t]);
@@ -492,7 +493,8 @@ const VariantRow = ({
   // Array.isArray and render only the `text` field which
   // is always present per schema.
   const body: { text: string; style?: string }[] = Array.isArray(variant.body)
-    ? (variant.body as { text: string; style?: string }[])
+    ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      (variant.body as { text: string; style?: string }[])
     : [];
 
   return (
@@ -706,6 +708,7 @@ const HistoryTab = ({
       }
 
       // SAFETY: body is ClauseParagraph[] stored as JSONB
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const oldBody = data.body as unknown as ClauseParagraph[];
       const diff = diffClauseBodies(oldBody, currentBody);
       setDiffResult(diff);
@@ -738,7 +741,7 @@ const HistoryTab = ({
                   selectedId === ver.id && "bg-muted",
                 )}
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={() => handleVersionClick(ver.id)}
+                onClick={async () => await handleVersionClick(ver.id)}
                 type="button"
               >
                 <span className="font-medium">

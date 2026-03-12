@@ -52,7 +52,7 @@ export const createMatterLinkHandler = async ({
     });
   }
 
-  const [link] = await scopedDb((tx) =>
+  const links = await scopedDb((tx) =>
     tx
       .insert(caseLawMatterLinks)
       .values({
@@ -66,6 +66,7 @@ export const createMatterLinkHandler = async ({
       })
       .returning(),
   );
+  const link = links.at(0);
 
   if (!link) {
     return status(409, {

@@ -32,10 +32,15 @@ export const parseActorKey = <T extends AuthedActorKey = AuthedActorKey>(
   key: string | string[],
 ): T => {
   if (Array.isArray(key)) {
-    return JSON.parse(key[0]);
+    // SAFETY: key is produced by actorKeyFactory via JSON.stringify(data) where data
+    // conforms to AuthedActorKey; roundtrip yields the same shape.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    return JSON.parse(key[0]) as T;
   }
 
-  return JSON.parse(key);
+  // SAFETY: same as above; key comes from our serialization.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  return JSON.parse(key) as T;
 };
 
 export const actorKeyFactory = <T extends AuthedActorKey>() => {

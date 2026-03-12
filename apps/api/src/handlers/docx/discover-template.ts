@@ -288,8 +288,8 @@ const analyzeHeadersAndFooters = async (
     const doc = slimdom.parseXmlDocument(xml);
 
     // Headers use w:hdr, footers use w:ftr as root element
-    const hdr = doc.getElementsByTagNameNS(W_NS, "hdr")[0];
-    const container = hdr ?? doc.getElementsByTagNameNS(W_NS, "ftr")[0];
+    const hdr = doc.getElementsByTagNameNS(W_NS, "hdr").at(0);
+    const container = hdr ?? doc.getElementsByTagNameNS(W_NS, "ftr").at(0);
 
     if (!container) {
       continue;
@@ -338,7 +338,7 @@ export const discoverTemplate = async (
 
   const xml = await docEntry.async("string");
   const doc = slimdom.parseXmlDocument(xml);
-  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
 
   if (!body) {
     return emptyResult;

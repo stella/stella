@@ -60,7 +60,7 @@ export const updateContactByIdHandler = async ({
   contactId,
   body,
 }: UpdateContactByIdHandlerProps) => {
-  const [updated] = await scopedDb((tx) =>
+  const updatedRows = await scopedDb((tx) =>
     tx
       .update(contacts)
       .set(body)
@@ -72,6 +72,7 @@ export const updateContactByIdHandler = async ({
       )
       .returning({ id: contacts.id }),
   );
+  const updated = updatedRows.at(0);
 
   if (!updated) {
     return status(404, { message: "Contact not found" });

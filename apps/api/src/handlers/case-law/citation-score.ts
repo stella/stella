@@ -68,7 +68,7 @@ export const recencyFactor = (
   citingDate: Date | string | null,
   now: Date = new Date(),
 ): number => {
-  if (!citingDate) {
+  if (citingDate === undefined || citingDate === null) {
     return 0.5; // Unknown date → half weight
   }
 
@@ -124,7 +124,7 @@ export const citationScore = (
   const wSum = weightedCitationSum(citations, now);
 
   let yearsOld = 1;
-  if (decisionDate) {
+  if (decisionDate !== undefined && decisionDate !== null) {
     const d =
       typeof decisionDate === "string" ? new Date(decisionDate) : decisionDate;
     yearsOld = Math.max(

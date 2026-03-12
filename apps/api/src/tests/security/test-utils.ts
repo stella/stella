@@ -3,8 +3,8 @@ import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { createScopedDb } from '@/api/db';
-import type { TransactionOf } from '@/api/db';
+import { createScopedDb } from "@/api/db";
+import type { TransactionOf } from "@/api/db";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
@@ -31,6 +31,7 @@ export const createTestDb = async (): Promise<TestDatabase> => {
   // compatible; only the branded type wrapper differs.
   const { sqlStatements } = await pushSchema(
     allSchema,
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     testDb as unknown as Parameters<typeof pushSchema>[1],
   );
   for (const statement of sqlStatements) {
@@ -48,11 +49,11 @@ export const createTestDb = async (): Promise<TestDatabase> => {
 };
 
 export const createScopedQuery = (testDb: TestDatabase) => {
-  const scopedQuery = <T>(
+  const scopedQuery = async <T>(
     wsIds: string[],
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<T>,
-  ) => createScopedDb(testDb, wsIds, orgId)(fn);
+  ) => await createScopedDb(testDb, wsIds, orgId)(fn);
 
   return scopedQuery;
 };

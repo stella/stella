@@ -88,7 +88,9 @@ export const createEntityFromBuffer = async ({
     const [, pdfResult] = await Promise.all([
       s3.write(s3Key, bytes),
       shouldConvert
-        ? convertToPdf(bytes.buffer as ArrayBuffer, fileName, mimeType)
+        ? // SAFETY: Uint8Array.buffer is ArrayBuffer
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          convertToPdf(bytes.buffer as ArrayBuffer, fileName, mimeType)
         : Promise.resolve(null),
     ]);
     if (pdfResult && Result.isOk(pdfResult)) {
@@ -158,7 +160,7 @@ export const createEntityFromBuffer = async ({
         .where(eq(workspaces.id, workspaceId));
     });
   } catch (error) {
-    await Promise.all(s3Keys.map((k) => s3.delete(k)));
+    await Promise.all(s3Keys.map(async (k) => await s3.delete(k)));
     throw error;
   }
 

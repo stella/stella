@@ -46,7 +46,7 @@ export const updateRateTableHandler = async ({
 
   // Prevent unsetting isDefault if no other default exists
   if (body.isDefault === false) {
-    const [otherDefault] = await scopedDb((tx) =>
+    const otherDefaultRows = await scopedDb((tx) =>
       tx
         .select({ id: rateTables.id })
         .from(rateTables)
@@ -59,6 +59,7 @@ export const updateRateTableHandler = async ({
         )
         .limit(1),
     );
+    const otherDefault = otherDefaultRows.at(0);
 
     if (!otherDefault) {
       return status(400, {

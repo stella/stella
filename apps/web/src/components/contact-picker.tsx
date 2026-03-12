@@ -82,7 +82,7 @@ export const ContactPicker = ({
 
   const { data: results = [] } = useQuery({
     queryKey: ["contacts", "search", debouncedQuery, type],
-    queryFn: () => searchContacts(debouncedQuery, type),
+    queryFn: async () => await searchContacts(debouncedQuery, type),
     enabled: debouncedQuery.length > 0,
   });
 

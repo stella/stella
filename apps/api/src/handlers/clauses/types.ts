@@ -22,6 +22,8 @@ export const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
+  // SAFETY: value is object; any object is Record<string, unknown>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const obj = value as Record<string, unknown>;
   return typeof obj.text === "string";
 };
