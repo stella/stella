@@ -139,6 +139,7 @@ export const updateClauseHandler = async ({
     if (newVersion !== null && body.body !== undefined) {
       await tx.insert(clauseVersions).values({
         id: nanoid(),
+        organizationId,
         clauseId,
         version: newVersion,
         body: body.body,

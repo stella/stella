@@ -23,6 +23,7 @@ import {
 } from "@/api/db/schema";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
+import { toSafeId } from "@/api/lib/branded-types";
 
 const SOURCE_ID = "seed-src-cz-regional";
 
@@ -871,7 +872,8 @@ async function seed() {
       updatedAt: now,
     });
 
-    const scopedDb = createScopedDb([]);
+    // SAFETY: CLI script operates on global case law data (no tenant).
+    const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
     await indexDecision(d.id, scopedDb);
 
     insertedCount++;

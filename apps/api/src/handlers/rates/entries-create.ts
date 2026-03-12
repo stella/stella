@@ -103,6 +103,7 @@ export const createRateEntryHandler = async ({
     const [entry] = await tx
       .insert(rateEntries)
       .values({
+        workspaceId,
         rateTableId,
         userId: body.userId ?? null,
         hourlyRate: body.hourlyRate,

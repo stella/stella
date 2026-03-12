@@ -211,6 +211,7 @@ export const updatePropertyHandler = async ({
     if (dependencies.length > 0) {
       await tx.insert(propertyDependencies).values(
         dependencies.map(({ dependsOnPropertyId, condition }) => ({
+          workspaceId,
           propertyId,
           dependsOnPropertyId,
           condition,

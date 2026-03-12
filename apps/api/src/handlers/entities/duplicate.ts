@@ -207,6 +207,7 @@ export const duplicateEntityHandler = async ({
 
     await tx.insert(entityVersions).values({
       id: newVersionId,
+      workspaceId,
       entityId: newEntityId,
       versionNumber: 1,
       stamp: entityStamp?.stamp ?? null,
@@ -223,6 +224,7 @@ export const duplicateEntityHandler = async ({
     if (sourceFields.length > 0) {
       await tx.insert(fields).values(
         sourceFields.map((field) => ({
+          workspaceId,
           propertyId: field.propertyId,
           entityVersionId: newVersionId,
           content: field.content,

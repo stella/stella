@@ -8,7 +8,6 @@ const REDISS_PROTOCOL = "rediss:";
 export const env = createEnv({
   server: {
     DATABASE_URL: v.pipe(v.string(), v.url()),
-    DATABASE_APP_URL: v.optional(v.pipe(v.string(), v.url())),
     S3_ENDPOINT: v.string(),
     S3_BUCKET: v.string(),
     S3_ACCESS_KEY_ID: v.string(),

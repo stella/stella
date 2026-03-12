@@ -231,7 +231,11 @@ export const getClauseVersionHandler = async ({
 
   const version = await scopedDb((tx) =>
     tx.query.clauseVersions.findFirst({
-      where: { id: versionId, clauseId },
+      where: {
+        id: versionId,
+        clauseId,
+        organizationId: { eq: organizationId },
+      },
       columns: {
         id: true,
         version: true,

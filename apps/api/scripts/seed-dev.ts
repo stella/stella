@@ -2053,6 +2053,7 @@ const buildEntities = (wsId: string, wsLabel: string): EntitySeed[] => {
 
 type FieldSeed = {
   id: string;
+  workspaceId: string;
   propertyId: string;
   entityVersionId: string;
   content: FieldContent;
@@ -2108,6 +2109,7 @@ const buildFields = (
     // Status field
     result.push({
       id: seedId(`${wsLabel}-field-status-${i}`),
+      workspaceId: doc.workspaceId,
       propertyId: statusPropId,
       entityVersionId: doc.versionId,
       content: {
@@ -2120,6 +2122,7 @@ const buildFields = (
     // Due Date field
     result.push({
       id: seedId(`${wsLabel}-field-due-date-${i}`),
+      workspaceId: doc.workspaceId,
       propertyId: dueDatePropId,
       entityVersionId: doc.versionId,
       content: {
@@ -2137,6 +2140,7 @@ const buildFields = (
       ((seedId(`${wsLabel}-note-${i}`).codePointAt(0) ?? 0) + i) % notes.length;
     result.push({
       id: seedId(`${wsLabel}-field-notes-${i}`),
+      workspaceId: doc.workspaceId,
       propertyId: notesPropId,
       entityVersionId: doc.versionId,
       content: {
@@ -2303,6 +2307,7 @@ type RateTableSeed = {
 
 type RateEntrySeed = {
   id: string;
+  workspaceId: string;
   rateTableId: string;
   userId: string;
   hourlyRate: number;
@@ -2340,6 +2345,7 @@ const buildRateTables = (): {
       const userId = at(ALL_USER_IDS, ui);
       entries.push({
         id: seedId(`rate-entry-${wsIndex}-${ui}`),
+        workspaceId: ws.id,
         rateTableId: tableId,
         userId,
         hourlyRate: USER_RATES[userId] ?? 4000,
@@ -3078,6 +3084,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(entityVersions)
       .values({
         id: e.versionId,
+        workspaceId: toWs(e.workspaceId),
         entityId: e.entityId,
       })
       .onConflictDoNothing();
@@ -3158,6 +3165,7 @@ export async function seed(organizationId?: string, userId?: string) {
         .insert(fields)
         .values({
           id: seedId(`${wsLabel}-field-file-${j}`),
+          workspaceId: toWs(entity.workspaceId),
           propertyId: filePropertyId,
           entityVersionId: entity.versionId,
           content: {
@@ -3192,6 +3200,7 @@ export async function seed(organizationId?: string, userId?: string) {
           .values({
             entityId: entity.entityId,
             organizationId: ecOrgId,
+            workspaceId: toWs(entity.workspaceId),
             ciphertext: Buffer.from(docText, "utf8"),
             iv: Buffer.alloc(IV_BYTES),
             charCount: docText.length,
@@ -3256,6 +3265,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(fields)
       .values({
         id: f.id,
+        workspaceId: toWs(f.workspaceId),
         propertyId: f.propertyId,
         entityVersionId: f.entityVersionId,
         content: f.content,
@@ -3335,6 +3345,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .insert(rateEntries)
       .values({
         id: re.id,
+        workspaceId: toWs(re.workspaceId),
         rateTableId: re.rateTableId,
         userId: re.userId,
         hourlyRate: re.hourlyRate,

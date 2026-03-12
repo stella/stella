@@ -45,6 +45,7 @@
     "max-classes-per-file": "off",
     "class-methods-use-this": "off",
     "no-unmodified-loop-condition": "off",
+    "no-loop-func": "off",
     "complexity": "off",
     // func-style: Stella uses both declarations and expressions
     "func-style": "off",
@@ -67,6 +68,7 @@
     "unicorn/no-useless-spread": "off",
     "unicorn/no-await-expression-member": "off",
     "unicorn/no-nested-ternary": "off",
+    "unicorn/prefer-set-has": "off",
 
     // React perf
     "react_perf/jsx-no-new-function-as-prop": "off",

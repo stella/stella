@@ -176,6 +176,7 @@ export const updateTemplateHandler = async ({
 
       await tx.insert(templateVersions).values({
         id: nanoid(),
+        organizationId,
         templateId,
         version: newVersion,
         s3Key: versionS3Key,

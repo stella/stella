@@ -11,17 +11,13 @@ import { userErrors } from "@stella/rivet/errors";
 import type { UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
-import { adminDb, createScopedDb } from "@/api/db";
-import type { ScopedDb } from "@/api/db";
+import { createScopedDb, db } from '@/api/db';
+import type { ScopedDb } from '@/api/db';
 import type { ActorsUnion } from "@/api/handlers/registry";
-import {
-  auth,
-  resolveAccessibleWorkspaceIds,
-  WORKSPACE_ACTIVE_STATUS,
-} from "@/api/lib/auth";
-// eslint-disable-next-line no-restricted-imports -- actor session validator (equivalent to authMacro)
-import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+import { auth, resolveAccessibleWorkspaces } from "@/api/lib/auth";
+// oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
+import { toSafeId } from '@/api/lib/branded-types';
+import type { SafeId } from '@/api/lib/branded-types';
 import { posthogIdentify } from "@/api/lib/posthog";
 
 export const createUserError = (
@@ -83,9 +79,10 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   }
 
   const organizationId = toSafeId<"organization">(rawOrgId);
+  const userId = toSafeId<"user">(session.user.id);
 
   posthogIdentify({
-    distinctId: session.user.id,
+    distinctId: userId,
     properties: {
       active_organization_id: organizationId,
     },
@@ -93,18 +90,22 @@ const validateActorAuth = async (key: string[], params: unknown) => {
 
   // Centralised workspace resolution: same logic as authMacro,
   // so actors and HTTP handlers share one code path.
-  const accessibleWorkspaceIds = await resolveAccessibleWorkspaceIds(
-    session.user.id,
+  const accessibleWorkspaces = await resolveAccessibleWorkspaces(
+    userId,
     organizationId,
   );
-  const scopedDb = createScopedDb(accessibleWorkspaceIds);
+  const scopedDb = createScopedDb(
+    db,
+    accessibleWorkspaces.map((w) => w.id),
+    organizationId,
+  );
 
   return {
     authToken,
     organizationId,
     sessionUserId: session.user.id,
     parsedKey,
-    accessibleWorkspaceIds,
+    accessibleWorkspaces,
     scopedDb,
   };
 };
@@ -152,7 +153,7 @@ export const validateActorSession = async (
     authToken,
     organizationId,
     parsedKey,
-    accessibleWorkspaceIds,
+    accessibleWorkspaces,
     scopedDb,
   } = await validateActorAuth(key, params);
 
@@ -162,30 +163,9 @@ export const validateActorSession = async (
 
   const { workspaceId } = parsedKey;
 
-  // Membership gate: RLS protects DB reads, but actor
-  // side-effects (broadcasts, state mutations) are not
-  // gated by RLS. Reject non-members early.
-  if (!accessibleWorkspaceIds.includes(workspaceId)) {
-    throw createUserError("forbidden");
-  }
+  const ws = accessibleWorkspaces.find((w) => w.id === workspaceId);
 
-  // Defense in depth: validates workspace existence,
-  // active status, and org ownership independently.
-  const workspace = await adminDb.query.workspaces.findFirst({
-    columns: {
-      status: true,
-      organizationId: true,
-    },
-    where: {
-      id: workspaceId,
-    },
-  });
-
-  if (!workspace || workspace.status !== WORKSPACE_ACTIVE_STATUS) {
-    throw createUserError("invalid-arguments");
-  }
-
-  if (workspace.organizationId !== organizationId) {
+  if (!ws || ws.status !== "active") {
     throw createUserError("forbidden");
   }
 

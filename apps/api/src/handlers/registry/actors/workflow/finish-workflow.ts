@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { ActionContextOf } from "rivetkit";
 
-import { createScopedDb } from "@/api/db";
+import { createScopedDb, db } from "@/api/db";
 import { properties } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
@@ -20,8 +20,8 @@ export const finishWorkflowAction = (
       panic("Workflow is not running");
     }
 
-    const { workspaceId } = parseBrandedWorkflowActorKey(c.key);
-    const scopedDb = createScopedDb([workspaceId]);
+    const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
+    const scopedDb = createScopedDb(db, [workspaceId], organizationId);
 
     await scopedDb((tx) =>
       tx

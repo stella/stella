@@ -1,280 +1,214 @@
 # Plan: Workspace-Level Access Control (RLS + Branded Types)
 
 Date: 2026-03-09
+Updated: 2026-03-10
+
+Status: **implemented**
 
 ## Goal
 
-Make cross-workspace data leaks structurally impossible. Add a
-`workspaceMember` junction table so not every org member sees
-every matter; enforce this at two independent layers (TypeScript
-branded types + PostgreSQL Row-Level Security) so both the
-compiler and the database prevent unauthorized access.
+Make cross-workspace data leaks structurally impossible.
+Enforce ethical walls (Chinese walls) at two independent
+layers: TypeScript branded types + PostgreSQL Row-Level
+Security. Both the compiler and the database prevent
+unauthorized access. Users must have zero visibility into
+workspaces they are not assigned to: no names, no members,
+no metadata.
 
-## Design Decisions
+## Architecture
 
-- **Junction table, not a column on `member`.** A user can
-  belong to many workspaces. A workspace can have many members.
-  Many-to-many requires a junction table (`workspaceMember`).
-  Workspace-level roles (e.g., lead vs. viewer) can be added
-  later as a column on this table without schema changes
-  elsewhere.
+### Single database role
 
-- **RLS on all 13 workspace-scoped tables, not just
-  `workspaces`.** A leaked query on `entities`, `timeEntries`,
-  or `invoices` is just as dangerous as one on `workspaces`.
-  Every table with a `workspaceId` column gets a policy. Tables
-  reachable only through FK (e.g., `fields` → `entityVersions`
-  → `entities`) inherit protection transitively; they don't need
-  their own policies because they can only be JOINed through an
-  already-filtered parent.
+The app connects as `stella`, a non-owner role with
+SELECT/INSERT/UPDATE/DELETE grants. RLS applies because
+`stella` does not own the tables. Migrations run as the
+table owner (`stella` superuser via `DATABASE_URL`).
 
-- **`SET LOCAL` per transaction, not per connection.** The app
-  is designed for PgBouncer in transaction mode (CLAUDE.md).
-  `SET LOCAL` scopes the session variable to the current
-  transaction, so it's safe with connection pooling. `SET`
-  (global) would leak context across requests sharing a
-  connection.
+There is no second connection string. `DATABASE_URL` is
+the only env var. The runtime role is enforced by the
+grants SQL (`drizzle/0001_stella-grants.sql`).
 
-- **RLS variable carries an array of workspace IDs, not a single
-  ID.** The workspace list endpoint and search need to filter
-  across all of a user's workspaces. Setting
-  `app.workspace_ids = '{ws1,ws2,...}'` once per request avoids
-  re-querying `workspaceMember` in every RLS policy evaluation.
+### Session variables (PgBouncer-safe)
 
-- **Branded type `VerifiedWorkspaceAccess` gates the macro
-  exit.** `workspaceAccessMacro` already returns
-  `SafeId<"workspace">`; it will now also check
-  `workspaceMember` before minting it. This is the only code
-  path that produces the branded ID. Handlers that require a
-  `SafeId<"workspace">` literally cannot compile without the
-  access check having run.
+All RLS policies read from transaction-scoped session
+variables set via `set_config(..., true)` (SET LOCAL):
 
-- **Owner and admin roles bypass workspace membership.** Org
-  owners and admins can see all workspaces (they need to manage
-  assignments). The RLS policy and the macro both check: "is
-  member of workspace OR has org-wide admin/owner role."
+| Variable                | Set by           | Purpose                        |
+| ----------------------- | ---------------- | ------------------------------ |
+| `app.workspace_ids`     | `createScopedDb` | Workspace-level RLS filtering  |
+| `app.organization_id`   | Both             | Org-level RLS filtering        |
+| `app.user_id`           | `createBootstrapDb` | Bootstrap policy activation |
 
-- **Workspace creation auto-assigns the creator.** When a user
-  creates a workspace, a `workspaceMember` row is inserted in
-  the same transaction. No workspace exists without at least
-  one member.
+Constants are exported from `db/rls.ts` to avoid typos.
 
-- **No workspace-level invitations yet.** Users are invited to
-  the org (existing flow). Workspace assignment is done by
-  admins/owners after org membership. A workspace invitation
-  flow can be added later on top of this table.
+### Two database wrappers
 
-## Scope
+**`createScopedDb(workspaceIds, organizationId)`** — used
+by all handler queries. Opens a transaction, sets all three
+session variables, runs the callback. Every handler receives
+`scopedDb` from `authMacro`.
 
-**In scope:**
+**`createBootstrapDb(userId, organizationId)`** — used only
+in `resolveAccessibleWorkspaceIds`. Sets `app.organization_id`
+and `app.user_id` but NOT `app.workspace_ids`. This activates
+bootstrap policies (see below). Used before `scopedDb` can be
+created.
 
-- `workspaceMember` junction table (schema + migration)
-- PostgreSQL RLS policies on all 13 workspace-scoped tables
-- Transaction wrapper that sets `app.workspace_ids` via
-  `SET LOCAL` at the start of every authenticated request
-- Extend `workspaceAccessMacro` to check workspace membership
-- Extend `readWorkspacesHandler` to filter by membership
-- Update workspace creation to auto-assign creator
-- Update search handler to respect membership
-- Update chat tools to respect membership
-- Security test: structural test that all workspace-scoped
-  tables have RLS policies enabled
-- Drizzle `pgPolicy` definitions in schema
+Raw `db` is reserved for internal infrastructure (connection
+setup, schema introspection). Never used in handlers.
 
-**Out of scope:**
+### RLS policy structure
 
-- Workspace-level roles (lead, viewer, etc.) — column can be
-  added later
-- Workspace-level invitations — use admin assignment for now
-- UI for managing workspace members — can use existing member
-  management patterns
-- Migration of existing data — all existing org members get
-  auto-assigned to all existing workspaces (backfill migration)
+All policies are defined in `db/schema.ts` using Drizzle's
+`pgPolicy`. Shared helpers live in `db/rls.ts`.
 
-## Implementation
+**`db/rls.ts` exports:**
 
-### Schema
+```
+stella          — pgRole("stella")
+wsIdsArray      — sql`current_setting('app.workspace_ids', true)::text[]`
+wsPolicies()    — 4 CRUD policies: workspace_select/insert/update/delete
+orgPolicies()   — 4 CRUD policies: organization_select/insert/update/delete
+```
 
-`apps/api/src/db/schema.ts`:
+Policy SQL checks:
+- Workspace: `workspace_id = ANY(current_setting('app.workspace_ids', true)::text[])`
+- Organization: `organization_id = current_setting('app.organization_id', true)`
 
-- Add `workspaceMember` table:
-  - `id` (nanoid PK)
-  - `workspaceId` (FK → workspaces.id, cascade delete)
-  - `userId` (FK → user.id, cascade delete)
-  - `createdAt` (timestamp)
-  - Unique constraint on `(workspaceId, userId)`
-  - Indexes: `(userId, workspaceId)`, `(workspaceId, userId)`
+### Bootstrap policies
 
-- Add RLS policies (via `pgPolicy`) to all 13 tables:
-  `files`, `workspaceContacts`, `properties`, `entities`,
-  `searchDocuments`, `views`, `timeEntries`, `billingCodes`,
-  `rateTables`, `expenses`, `invoices`, `documentCounters`,
-  `caseLawMatterLinks`
+Problem: `resolveAccessibleWorkspaceIds` queries `workspaces`
+and `workspace_members` before workspace IDs are known. With
+RLS active, these queries return zero rows.
 
-  Each policy:
+Solution: permissive SELECT policies that activate only when
+`app.workspace_ids` IS NULL. PostgreSQL permissive policies
+combine with OR, so if either the normal or bootstrap policy
+passes, the row is visible.
 
-  ```sql
-  USING (
-    workspace_id = ANY(
-      string_to_array(
-        current_setting('app.workspace_ids', true),
-        ','
-      )
-    )
-  )
-  ```
+**`workspaces` — `bootstrap_select`:**
+```sql
+USING (
+  organization_id = current_setting('app.organization_id', true)
+  AND current_setting('app.workspace_ids', true) IS NULL
+)
+```
 
-- Add RLS policy to `workspaces` table itself (for the list
-  endpoint):
-  ```sql
-  USING (
-    id = ANY(
-      string_to_array(
-        current_setting('app.workspace_ids', true),
-        ','
-      )
-    )
-  )
-  ```
+**`workspace_members` — `bootstrap_select`:**
+```sql
+USING (
+  user_id = current_setting('app.user_id', true)
+  AND current_setting('app.workspace_ids', true) IS NULL
+)
+```
 
-### Database layer
+Ethical walls preserved: during bootstrap, a user sees only
+their own membership rows. The JOIN with workspace_members
+filters workspaces to assigned ones only. Once `scopedDb`
+is created, normal workspace policies take over.
 
-`apps/api/src/db/index.ts`:
+## Tables with RLS
 
-- Create a `withWorkspaceContext(userId, orgId, fn)` wrapper
-  that:
-  1. Queries `workspaceMember` + checks admin/owner role
-  2. Collects the user's accessible workspace IDs
-  3. Opens a transaction with
-     `SET LOCAL app.workspace_ids = '{...}'`
-  4. Executes `fn(tx)` within that transaction
-  5. Returns the result
+### Workspace-scoped (18 tables, `...wsPolicies()`)
 
-- This wrapper is used by the auth macro so every
-  authenticated request automatically has RLS context.
+workspaceMembers, workspaceContacts, properties,
+propertyDependencies, entities, entityVersions, fields,
+justifications, searchDocuments, extractedContent,
+timeEntries, billingCodes, rateTables, expenses, invoices,
+documentCounters, caseLawMatterLinks
 
-### Auth macro
+All filter on `workspace_id = ANY(app.workspace_ids)`.
 
-`apps/api/src/lib/auth.ts`:
+### Workspace-scoped with custom policies (1 table)
 
-- `workspaceAccessMacro`: add a `workspaceMember` existence
-  check before minting `SafeId<"workspace">`. Return 404
-  (not 403) if the workspace exists but the user isn't a
-  member — same as "workspace doesn't exist" to prevent
-  enumeration.
+**workspaces** — custom policies using `id = ANY(wsIdsArray)`
+(uses `id` not `workspace_id`). Plus `bootstrap_select`.
+INSERT uses `withCheck: true` (unrestricted, org_id checked
+at app layer).
 
-- Integrate `SET LOCAL` into the request lifecycle. Either:
-  (a) in the `authMacro` resolve (runs once per request), or
-  (b) in a new Elysia `onBeforeHandle` hook that wraps all
-  handlers in a transaction.
+### Organization-scoped (13 tables, `...orgPolicies()`)
 
-### Handlers
+contacts, contactRelationships, templates, templateVersions,
+matterCounters, organizationSettings, clauseCategories,
+clauses, clauseVariants, clauseVersions, templateCategories,
+templateClauses, templateFills
 
-`apps/api/src/handlers/workspaces/create.ts`:
+All filter on `organization_id = app.organization_id`.
 
-- After inserting workspace, insert `workspaceMember` row for
-  the creator in the same transaction.
+### No RLS (global / unscoped)
 
-`apps/api/src/handlers/workspaces/read.ts`:
+caseLawSources, caseLawDecisions, caseLawCitations,
+caseLawPolarityRules, caseLawSearchDocuments — global
+reference data with no tenant column.
 
-- RLS handles filtering automatically. The query can stay
-  as-is (fetches by `organizationId`); RLS will additionally
-  filter by membership. No application code change needed
-  if RLS is set.
+rateEntries — no direct tenant column; accessed only
+through rateTables (which has wsPolicies).
 
-`apps/api/src/handlers/search/search.ts`:
+Auth tables (user, session, account, verification,
+organization, member) — managed by better-auth, no RLS.
 
-- Currently validates workspace manually. With RLS active,
-  the validation is redundant but harmless. Keep the
-  application check as defense-in-depth.
+## Denormalized tenant IDs
 
-`apps/api/src/handlers/registry/actors/chat-tools.ts`:
+Many child tables carry both `workspaceId` and
+`organizationId` even when reachable via FK. This is
+intentional: RLS policies need the scoping column directly
+on each row for efficient filtering without JOINs.
 
-- `allowedWorkspaceIds` already filters. RLS provides the
-  second layer.
+## Key files
 
-New handler — `apps/api/src/handlers/workspaces/members.ts`:
+| File | Role |
+| ---- | ---- |
+| `db/rls.ts` | Role, setting constants, SQL fragments, policy helpers |
+| `db/schema.ts` | Table definitions with `pgPolicy` in table configs |
+| `db/index.ts` | `createScopedDb`, `createBootstrapDb`, `db` |
+| `lib/auth.ts` | `resolveAccessibleWorkspaceIds` (uses bootstrapDb), `workspaceAccessMacro` (uses scopedDb) |
+| `drizzle/0001_stella-grants.sql` | GRANT statements for `stella` role |
+| `tests/security/rls-policies.test.ts` | Structural test: every scoped table has policies |
 
-- `GET /workspaces/:workspaceId/members` — list members
-- `PUT /workspaces/:workspaceId/members` — add member
-  (admin/owner only)
-- `DELETE /workspaces/:workspaceId/members/:userId` — remove
-  member (admin/owner only)
+## Design decisions
 
-### Frontend
+- **Junction table for workspace membership.** Many-to-many
+  via `workspace_members`. Workspace-level roles can be added
+  as a column later without schema changes elsewhere.
 
-`apps/web/src/routes/_protected.workspaces/`:
+- **`SET LOCAL` per transaction, not per connection.** Safe
+  with PgBouncer in transaction mode. Variable scoped to
+  current transaction only.
 
-- Workspace list automatically shows only accessible
-  workspaces (backend filters).
-- Add workspace members UI (member list, add/remove) in the
-  workspace settings or metadata sheet.
+- **Array of workspace IDs, not a single ID.** Workspace list
+  and search need to filter across all of a user's workspaces.
+  Set once per request, avoids re-querying membership in every
+  policy evaluation.
 
-### Migration
+- **Branded type `SafeId<"workspace">` gates access.**
+  `workspaceAccessMacro` checks `workspace_members` before
+  minting the branded ID. Handlers cannot compile without
+  the access check having run.
 
-- Backfill migration: for every existing `(organization,
-member)` pair, insert `workspaceMember` rows for all
-  workspaces in that org. This preserves current behavior
-  (everyone sees everything) and lets admins restrict later.
-- Enable RLS on all 14 tables via `ALTER TABLE ... ENABLE
-ROW LEVEL SECURITY`.
-- Create a dedicated PostgreSQL role for the application
-  connection (RLS does not apply to table owners / superusers).
+- **404, not 403.** Unauthorized workspaces return 404 to
+  prevent enumeration. RLS filters search, lists, chat tools.
 
-### Security test
-
-`apps/api/src/tests/security/rls-policies.test.ts`:
-
-- Static test that reads `schema.ts` and verifies every table
-  with a `workspaceId` column has `pgPolicy` defined.
-- Similar to the permission guards test: fails CI if a new
-  workspace-scoped table is added without RLS.
-
-## Test Cases
-
-- User A (member of workspace X) can read entities in X
-- User A cannot read entities in workspace Y (not a member)
-- User A cannot see workspace Y in the workspace list
-- Admin/owner can see all workspaces regardless of membership
-- Creating a workspace auto-assigns the creator
-- Removing last member from workspace is prevented (or
-  transfers to admin)
-- RLS filters work: a raw SQL query (bypassing application
-  code) returns zero rows for unauthorized workspaces
-- Backfill migration assigns all existing members to all
-  existing workspaces
-- `workspaceAccessMacro` returns 404 for workspaces the user
-  isn't a member of
-- Search results only include documents from accessible
-  workspaces
-
-## Resolved Questions
-
-- **No Redis cache for workspace membership.** The query is
-  a simple indexed lookup on `(userId, workspaceId)` —
-  sub-millisecond. Caching introduces revocation delay
-  (admin removes access, user keeps it for TTL). For
-  privileged legal data, immediate revocation wins over
-  saving a cheap query. Revisit at Magic Circle scale.
+- **No Redis cache for membership.** Simple indexed lookup,
+  sub-millisecond. Caching introduces revocation delay;
+  for privileged legal data, immediate revocation wins.
 
 - **New user joins org → zero workspaces.** Admin explicitly
-  assigns workspaces. This is the safest default for a legal
-  product (no accidental exposure to privileged matters).
+  assigns. Safest default for legal data.
 
-- **Ethical walls handled by design.** 404 (not 403) for
-  unauthorized workspaces prevents enumeration. RLS filters
-  search, lists, chat tools. Remaining discipline: never
-  expose global counts or aggregates that reveal hidden
-  workspace existence. All counts must derive from the
-  filtered result set, not a global `COUNT(*)`.
+- **Owner/admin bypass.** Org owners and admins see all
+  workspaces (needed for management). Checked in both the
+  macro and RLS policies.
 
-- **Two PostgreSQL roles for RLS enforcement.** The app
-  currently connects as `stella` which owns the tables;
-  RLS is silently bypassed for table owners. Split into:
-  - `stella` (owner) — used by `db:push` / migrations only
-    via `DATABASE_URL`
-  - `stella_app` — runtime role with SELECT/INSERT/UPDATE/
-    DELETE grants but no table ownership. RLS applies.
-    Connected via new `DATABASE_APP_URL` env var.
-    The Drizzle config keeps `DATABASE_URL`; the app runtime
-    (`db/index.ts`) switches to `DATABASE_APP_URL`.
+## Resolved questions
+
+- **No `adminDb` / superuser connection.** Bootstrap policies
+  eliminate the need. Single `DATABASE_URL` for everything.
+
+- **`sql.raw()` not needed.** Drizzle's `sql` template tag
+  parameterizes string constants correctly. `::text[]` cast
+  is necessary because `current_setting()` returns `text`.
+
+- **Ethical walls by design.** Zero visibility across
+  workspace boundaries. All counts derive from filtered
+  result sets, never global `COUNT(*)`. Bootstrap policies
+  restrict visibility to own membership rows only.

@@ -13,6 +13,7 @@ import { createScopedDb, db } from "@/api/db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import { toSafeId } from "@/api/lib/branded-types";
 
 type SourceDef = {
   adapterKey: string;
@@ -106,7 +107,8 @@ const main = async () => {
       `\nIngesting: ${name} (cursor: ${source.syncCursor ?? "start"})`,
     );
 
-    const scopedDb = createScopedDb([]);
+    // SAFETY: CLI script operates on global case law data (no tenant).
+    const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
     const result = await runIngestionPipeline({
       source,
       scopedDb,

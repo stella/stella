@@ -5,6 +5,13 @@ import { customType } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 
 import { organization, user } from "@/api/db/auth-schema";
+import {
+  organizationCheck,
+  orgPolicies,
+  stella,
+  workspaceIdCheck,
+  wsPolicies,
+} from "@/api/db/rls";
 import type {
   BankAccount,
   BillingAddress,
@@ -176,6 +183,7 @@ export const contacts = p.pgTable(
     p
       .index("contacts_org_org_name_idx")
       .on(table.organizationId, table.organizationName),
+    ...orgPolicies(),
   ],
 );
 
@@ -217,33 +225,7 @@ export const contactRelationships = p.pgTable(
       "contact_relationships_no_self_reference_check",
       sql`${table.personId} != ${table.relatedContactId}`,
     ),
-  ],
-);
-
-// -- Files --
-
-export const files = p.pgTable(
-  "files",
-  {
-    id: pNanoid.primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
-    sourceFileId: p.varchar("source_file_id", { length: 21 }),
-    fileName: p.varchar("file_name", { length: 256 }).notNull(),
-    mimeType: p.varchar("mime_type", { length: 255 }).notNull(),
-    sizeBytes: p.integer("size_bytes").notNull(),
-    encrypted: p.boolean("encrypted").notNull().default(false),
-    sha256Hex: p.varchar("sha256_hex", { length: 64 }).notNull(),
-    createdAt: p.timestamp("created_at").notNull().defaultNow(),
-  },
-  (table) => [
-    p
-      .index("files_workspace_id_sha256_idx")
-      .on(table.workspaceId, table.sha256Hex),
+    ...orgPolicies(),
   ],
 );
 
@@ -284,6 +266,26 @@ export const workspaces = p.pgTable(
     p
       .index("workspaces_org_last_activity_idx")
       .on(table.organizationId, table.lastActivityAt),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceIdCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: workspaceIdCheck,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: workspaceIdCheck,
+    }),
   ],
 );
 
@@ -305,6 +307,7 @@ export const workspaceMembers = p.pgTable(
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
     p.index("workspace_members_user_id_idx").on(table.userId),
+    ...wsPolicies(),
   ],
 );
 
@@ -350,6 +353,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
+    ...wsPolicies(),
   ],
 );
 
@@ -370,21 +374,22 @@ export const properties = p.pgTable(
     kinds: p.varchar({ length: 64 }).array().$type<EntityKind>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [p.index("properties_workspace_id_idx").on(table.workspaceId)],
+  (table) => [
+    p.index("properties_workspace_id_idx").on(table.workspaceId),
+    p.unique("properties_id_ws_unq").on(table.id, table.workspaceId),
+    ...wsPolicies(),
+  ],
 );
 
 export const propertyDependencies = p.pgTable(
   "property_dependencies",
   {
     id: pNanoid.primaryKey(),
-    propertyId: p
-      .varchar("property_id", { length: 21 })
-      .notNull()
-      .references(() => properties.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    propertyId: p.varchar("property_id", { length: 21 }).notNull(),
     dependsOnPropertyId: p
       .varchar("depends_on_property_id", { length: 21 })
-      .notNull()
-      .references(() => properties.id, { onDelete: "restrict" }),
+      .notNull(),
     condition: p.jsonb().$type<PropertyCondition>(),
   },
   (table) => [
@@ -401,6 +406,20 @@ export const propertyDependencies = p.pgTable(
       "property_dependencies_no_self_reference_check",
       sql`${table.propertyId} != ${table.dependsOnPropertyId}`,
     ),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.dependsOnPropertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("restrict"),
+    p.index("property_dependencies_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 
@@ -444,6 +463,8 @@ export const entities = p.pgTable(
       .uniqueIndex("entities_ws_doc_seq_uidx")
       .on(table.workspaceId, table.docSequence)
       .where(isNotNull(table.docSequence)),
+    p.unique("entities_id_ws_unq").on(table.id, table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 
@@ -451,10 +472,8 @@ export const entityVersions = p.pgTable(
   "entity_versions",
   {
     id: pNanoid.primaryKey(),
-    entityId: p
-      .varchar("entity_id", { length: 21 })
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    entityId: p.varchar("entity_id", { length: 21 }).notNull(),
     versionNumber: p.integer("version_number").notNull().default(1),
     /** Frozen human-readable reference (e.g. "2026/001/015.v3"). */
     stamp: p.varchar("stamp", { length: 128 }),
@@ -474,6 +493,14 @@ export const entityVersions = p.pgTable(
       .uniqueIndex("entity_versions_vcode_uidx")
       .on(table.verificationCode)
       .where(isNotNull(table.verificationCode)),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.index("entity_versions_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 
@@ -481,23 +508,28 @@ export const fields = p.pgTable(
   "fields",
   {
     id: pNanoid.primaryKey(),
-    propertyId: p
-      .varchar("property_id", { length: 21 })
-      .notNull()
-      .references(() => properties.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    propertyId: p.varchar("property_id", { length: 21 }).notNull(),
     entityVersionId: p
       .varchar("entity_version_id", { length: 21 })
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
-    fileId: p
-      .varchar("file_id", { length: 21 })
-      .references(() => files.id, { onDelete: "restrict" }),
+    fileId: p.varchar("file_id", { length: 21 }),
     content: p.jsonb().$type<FieldContent>().notNull(),
   },
   (table) => [
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.index("fields_workspace_id_idx").on(table.workspaceId),
+    p.unique("fields_id_ws_unq").on(table.id, table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 
@@ -505,10 +537,8 @@ export const justifications = p.pgTable(
   "justifications",
   {
     id: pNanoid.primaryKey(),
-    fieldId: p
-      .varchar("field_id", { length: 21 })
-      .notNull()
-      .references(() => fields.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    fieldId: p.varchar("field_id", { length: 21 }).notNull(),
     htmlVersion: p.numeric("html_version", { mode: "number" }).notNull(),
     htmlContent: p.text("html_content").notNull(),
     boundingBoxes: p.jsonb("bounding_boxes").$type<BoundingBoxes>(),
@@ -518,7 +548,17 @@ export const justifications = p.pgTable(
       .notNull()
       .default([]),
   },
-  (table) => [p.uniqueIndex("justifications_field_id_key").on(table.fieldId)],
+  (table) => [
+    p.uniqueIndex("justifications_field_id_key").on(table.fieldId),
+    p
+      .foreignKey({
+        columns: [table.fieldId, table.workspaceId],
+        foreignColumns: [fields.id, fields.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.index("justifications_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
+  ],
 );
 
 export const templates = p.pgTable(
@@ -558,6 +598,8 @@ export const templates = p.pgTable(
     p
       .index("templates_org_category_idx")
       .on(table.organizationId, table.categoryId),
+    p.unique("templates_id_org_unq").on(table.id, table.organizationId),
+    ...orgPolicies(),
   ],
 );
 
@@ -565,10 +607,8 @@ export const templateVersions = p.pgTable(
   "template_versions",
   {
     id: pNanoid.primaryKey(),
-    templateId: p
-      .varchar("template_id", { length: 21 })
-      .notNull()
-      .references(() => templates.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    templateId: p.varchar("template_id", { length: 21 }).notNull(),
     version: p.integer().notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
     manifest: p.jsonb().$type<TemplateManifest>(),
@@ -584,11 +624,20 @@ export const templateVersions = p.pgTable(
       .uniqueIndex("template_versions_template_version_uidx")
       .on(table.templateId, table.version),
     p.index("template_versions_template_id_idx").on(table.templateId),
+    p
+      .foreignKey({
+        columns: [table.templateId, table.organizationId],
+        foreignColumns: [templates.id, templates.organizationId],
+      })
+      .onDelete("cascade"),
+    p.index("template_versions_organization_id_idx").on(table.organizationId),
+    ...orgPolicies(),
   ],
 );
 
 // -- Search --
 
+// TODO: add wsPolicies() once search providers use scopedDb
 export const searchDocuments = p.pgTable(
   "search_documents",
   {
@@ -616,25 +665,33 @@ export const searchDocuments = p.pgTable(
   ],
 );
 
+// TODO: add wsPolicies() once search providers use scopedDb
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
-    entityId: p
-      .varchar("entity_id", { length: 21 })
-      .primaryKey()
-      .references(() => entities.id, { onDelete: "cascade" }),
+    entityId: p.varchar("entity_id", { length: 21 }).primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, {
         onDelete: "cascade",
       }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),
     charCount: p.integer("char_count").notNull(),
     language: p.varchar("language", { length: 10 }),
     extractedAt: p.timestamp("extracted_at").notNull().defaultNow(),
   },
-  (table) => [p.index("extracted_content_org_id_idx").on(table.organizationId)],
+  (table) => [
+    p.index("extracted_content_org_id_idx").on(table.organizationId),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.index("extracted_content_workspace_id_idx").on(table.workspaceId),
+  ],
 );
 
 export const timeEntries = p.pgTable(
@@ -698,6 +755,7 @@ export const timeEntries = p.pgTable(
       "time_entries_billed_minutes_check",
       sql`${table.billedMinutes} >= 0`,
     ),
+    ...wsPolicies(),
   ],
 );
 
@@ -730,6 +788,7 @@ export const billingCodes = p.pgTable(
     p
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
+    ...wsPolicies(),
   ],
 );
 
@@ -755,6 +814,7 @@ export const rateTables = p.pgTable(
       .index("rate_tables_ws_default_idx")
       .on(table.workspaceId, table.isDefault),
     p.index("rate_tables_ws_client_idx").on(table.workspaceId, table.clientId),
+    ...wsPolicies(),
   ],
 );
 
@@ -762,6 +822,9 @@ export const rateEntries = p.pgTable(
   "rate_entries",
   {
     id: pNanoid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     rateTableId: p
       .varchar("rate_table_id", { length: 21 })
       .notNull()
@@ -778,6 +841,8 @@ export const rateEntries = p.pgTable(
     p
       .index("rate_entries_table_user_from_idx")
       .on(table.rateTableId, table.userId, table.effectiveFrom),
+    p.index("rate_entries_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 
@@ -823,6 +888,7 @@ export const expenses = p.pgTable(
       .on(table.workspaceId, table.userId, table.dateIncurred),
     p.index("expenses_invoice_idx").on(table.invoiceId),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
+    ...wsPolicies(),
   ],
 );
 
@@ -870,6 +936,7 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
+    ...wsPolicies(),
   ],
 );
 
@@ -887,6 +954,7 @@ export const matterCounters = p.pgTable(
     p
       .uniqueIndex("matter_counters_org_scope_uidx")
       .on(table.organizationId, table.scopeKey),
+    ...orgPolicies(),
   ],
 );
 
@@ -899,26 +967,36 @@ export const documentCounters = p.pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     lastValue: p.integer("last_value").notNull().default(0),
   },
-  (table) => [p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId)],
+  (table) => [
+    p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId),
+    ...wsPolicies(),
+  ],
 );
 
-export const organizationSettings = p.pgTable("organization_settings", {
-  id: pNanoid.primaryKey(),
-  organizationId: safeOrganizationId("organization_id")
-    .notNull()
-    .unique()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  matterNumberPattern: p
-    .varchar("matter_number_pattern", { length: 128 })
-    .notNull()
-    .default("{SEQ}"),
-  matterNumberPadding: p.integer("matter_number_padding").notNull().default(3),
-  documentStampEnabled: p
-    .boolean("document_stamp_enabled")
-    .notNull()
-    .default(true),
-  updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
-});
+export const organizationSettings = p.pgTable(
+  "organization_settings",
+  {
+    id: pNanoid.primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    matterNumberPattern: p
+      .varchar("matter_number_pattern", { length: 128 })
+      .notNull()
+      .default("{SEQ}"),
+    matterNumberPadding: p
+      .integer("matter_number_padding")
+      .notNull()
+      .default(3),
+    documentStampEnabled: p
+      .boolean("document_stamp_enabled")
+      .notNull()
+      .default(true),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  () => [...orgPolicies()],
+);
 
 export const clauseCategories = p.pgTable(
   "clause_categories",
@@ -943,6 +1021,7 @@ export const clauseCategories = p.pgTable(
     p
       .index("clause_categories_org_parent_idx")
       .on(table.organizationId, table.parentId),
+    ...orgPolicies(),
   ],
 );
 
@@ -982,6 +1061,8 @@ export const clauses = p.pgTable(
       .index("clauses_org_created_at_idx")
       .on(table.organizationId, table.createdAt),
     p.index("clauses_search_vector_gin_idx").using("gin", table.searchVector),
+    p.unique("clauses_id_org_unq").on(table.id, table.organizationId),
+    ...orgPolicies(),
   ],
 );
 
@@ -989,27 +1070,33 @@ export const clauseVariants = p.pgTable(
   "clause_variants",
   {
     id: pNanoid.primaryKey(),
-    clauseId: p
-      .varchar("clause_id", { length: 21 })
-      .notNull()
-      .references(() => clauses.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    clauseId: p.varchar("clause_id", { length: 21 }).notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     body: p.jsonb().$type<ClauseBody>().notNull(),
     sortOrder: p.integer("sort_order").notNull().default(0),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
-  (table) => [p.index("clause_variants_clause_id_idx").on(table.clauseId)],
+  (table) => [
+    p.index("clause_variants_clause_id_idx").on(table.clauseId),
+    p
+      .foreignKey({
+        columns: [table.clauseId, table.organizationId],
+        foreignColumns: [clauses.id, clauses.organizationId],
+      })
+      .onDelete("cascade"),
+    p.index("clause_variants_organization_id_idx").on(table.organizationId),
+    ...orgPolicies(),
+  ],
 );
 
 export const clauseVersions = p.pgTable(
   "clause_versions",
   {
     id: pNanoid.primaryKey(),
-    clauseId: p
-      .varchar("clause_id", { length: 21 })
-      .notNull()
-      .references(() => clauses.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    clauseId: p.varchar("clause_id", { length: 21 }).notNull(),
     version: p.integer().notNull(),
     body: p.jsonb().$type<ClauseBody>().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
@@ -1018,6 +1105,14 @@ export const clauseVersions = p.pgTable(
     p
       .uniqueIndex("clause_versions_clause_version_uidx")
       .on(table.clauseId, table.version),
+    p
+      .foreignKey({
+        columns: [table.clauseId, table.organizationId],
+        foreignColumns: [clauses.id, clauses.organizationId],
+      })
+      .onDelete("cascade"),
+    p.index("clause_versions_organization_id_idx").on(table.organizationId),
+    ...orgPolicies(),
   ],
 );
 
@@ -1044,6 +1139,7 @@ export const templateCategories = p.pgTable(
     p
       .index("template_categories_org_parent_idx")
       .on(table.organizationId, table.parentId),
+    ...orgPolicies(),
   ],
 );
 
@@ -1051,10 +1147,8 @@ export const templateClauses = p.pgTable(
   "template_clauses",
   {
     id: pNanoid.primaryKey(),
-    templateId: p
-      .varchar("template_id", { length: 21 })
-      .notNull()
-      .references(() => templates.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    templateId: p.varchar("template_id", { length: 21 }).notNull(),
     clauseId: p
       .varchar("clause_id", { length: 21 })
       .references(() => clauses.id, { onDelete: "set null" }),
@@ -1079,6 +1173,14 @@ export const templateClauses = p.pgTable(
       .uniqueIndex("template_clauses_template_slot_uidx")
       .on(table.templateId, table.slotName)
       .where(isNotNull(table.slotName)),
+    p
+      .foreignKey({
+        columns: [table.templateId, table.organizationId],
+        foreignColumns: [templates.id, templates.organizationId],
+      })
+      .onDelete("cascade"),
+    p.index("template_clauses_organization_id_idx").on(table.organizationId),
+    ...orgPolicies(),
   ],
 );
 
@@ -1117,6 +1219,7 @@ export const templateFills = p.pgTable(
     p
       .index("template_fills_org_template_idx")
       .on(table.organizationId, table.templateId),
+    ...orgPolicies(),
   ],
 );
 
@@ -1286,6 +1389,7 @@ export const caseLawMatterLinks = p.pgTable(
       .uniqueIndex("case_law_matter_links_decision_ws_idx")
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
+    ...wsPolicies(),
   ],
 );
 

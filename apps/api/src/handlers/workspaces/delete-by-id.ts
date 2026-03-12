@@ -7,7 +7,7 @@ import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
 import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
-import { adminDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import {
   entities,
@@ -46,24 +46,26 @@ const safeDestroy = async (
 };
 
 type DeleteWorkspaceHandlerProps = {
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   authToken: string;
 };
 
-// Workspace deletion uses adminDb (superuser) because it
-// changes workspace status to "deleting", which would remove
-// the workspace from app.workspace_ids and break subsequent
-// RLS-scoped queries within the same flow. The route already
-// guards this with permissions: { workspace: ['delete'] }.
+// The workspace is in the user's workspace_ids when deleting
+// (the route validates workspace access). The route guards
+// this with permissions: { workspace: ['delete'] }.
 export const changeWorkspaceStatus = (
+  scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
 ) =>
-  adminDb
-    .update(workspaces)
-    .set({ status: newStatus })
-    .where(eq(workspaces.id, workspaceId));
+  scopedDb((tx) =>
+    tx
+      .update(workspaces)
+      .set({ status: newStatus })
+      .where(eq(workspaces.id, workspaceId)),
+  );
 
 type FileRef = { fileId: string; mimeType: string };
 
@@ -86,6 +88,7 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 };
 
 export const deleteWorkspaceHandler = async ({
+  scopedDb,
   workspaceId,
   organizationId,
   authToken,
@@ -135,23 +138,25 @@ export const deleteWorkspaceHandler = async ({
     }
 
     // Seal workspace: no new uploads or actor connections.
-    await changeWorkspaceStatus(workspaceId, "deleting");
+    await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
 
     // Query file metadata from fields.content JSONB.
     // Workspace is sealed by status: "deleting", so no
     // concurrent uploads can insert new files.
-    const workspaceEntityVersionIds = adminDb
-      .select({ id: entityVersions.id })
-      .from(entityVersions)
-      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-      .where(eq(entities.workspaceId, workspaceId));
+    const fileRefs = await scopedDb(async (tx) => {
+      const workspaceEntityVersionIds = tx
+        .select({ id: entityVersions.id })
+        .from(entityVersions)
+        .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+        .where(eq(entities.workspaceId, workspaceId));
 
-    const fieldRows = await adminDb
-      .select({ content: fields.content })
-      .from(fields)
-      .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
+      const fieldRows = await tx
+        .select({ content: fields.content })
+        .from(fields)
+        .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
 
-    const fileRefs = fieldRows.flatMap((row) => extractFileRefs(row.content));
+      return fieldRows.flatMap((row) => extractFileRefs(row.content));
+    });
 
     // Delete S3 objects outside any transaction.
     // On retry, already-deleted S3 objects are no-ops.
@@ -167,7 +172,7 @@ export const deleteWorkspaceHandler = async ({
 
     // All S3 objects are gone. Delete DB records in a
     // single transaction.
-    await adminDb.transaction(async (tx) => {
+    await scopedDb(async (tx) => {
       // Delete property dependencies (restrict FK prevents
       // cascade, so explicit cleanup is needed).
       const workspacePropertyIds = tx
@@ -203,7 +208,7 @@ export const deleteWorkspaceHandler = async ({
 
     return;
   } catch (error) {
-    await changeWorkspaceStatus(workspaceId, "active");
+    await changeWorkspaceStatus(scopedDb, workspaceId, "active");
     throw error;
   }
 };

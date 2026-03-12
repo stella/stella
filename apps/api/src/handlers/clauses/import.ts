@@ -142,6 +142,7 @@ export const importHandler = async ({
 
       await tx.insert(clauseVersions).values({
         id: versionId,
+        organizationId,
         clauseId,
         version: 1,
         body: item.body,

@@ -2227,6 +2227,7 @@ export async function seedTemplates(
       .insert(clauseVersions)
       .values({
         id: versionId,
+        organizationId: ORG_ID,
         clauseId,
         version: 1,
         body: c.body,
@@ -2241,6 +2242,7 @@ export async function seedTemplates(
           .insert(clauseVariants)
           .values({
             id: seedId(`${c.label}-var-${vi}`),
+            organizationId: ORG_ID,
             clauseId,
             label: v.label,
             body: v.body,
@@ -2319,6 +2321,7 @@ export async function seedTemplates(
       .insert(templateVersions)
       .values({
         id: versionId,
+        organizationId: ORG_ID,
         templateId,
         version: 1,
         s3Key: versionS3Key,
@@ -2353,6 +2356,7 @@ export async function seedTemplates(
       .insert(templateClauses)
       .values({
         id: seedId(`link-${link.templateLabel}-${link.slotName}`),
+        organizationId: ORG_ID,
         templateId,
         clauseId,
         clauseVariantId,

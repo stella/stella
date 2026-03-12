@@ -135,6 +135,9 @@ For these, use `WebFetch` or `WebSearch` directly.
   `.push()` or pre-allocated arrays instead)
 - Security is extremely important given the volume and nature of
   data we handle.
+- Always choose the most robust, maintainable, and simple
+  solution. Never take shortcuts for speed; "quick fix" and
+  "fast path" are not acceptable trade-offs.
 - If you encounter a pre-existing bug or lint error while
   working on something else, investigate and confirm it, then
   fix it (in a separate commit). Don't leave known defects
@@ -158,6 +161,10 @@ Principles derived from these standards that apply to every change:
   API, file upload) is validated and sanitised before processing.
 - **Separation of concerns** — workspace isolation is mandatory.
   Data from one workspace must never leak to another.
+- **Ethical walls** — workspace boundaries enforce Chinese walls.
+  Users must have zero visibility into workspaces they are not
+  assigned to: no names, no members, no metadata. Treat
+  workspace isolation as absolute confidentiality.
 - **Access control** — every endpoint must enforce auth and
   authorisation. No "internal-only" endpoints without guards.
 - **Dependency hygiene** — keep dependencies minimal, pinned, and
