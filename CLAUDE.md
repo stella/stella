@@ -452,6 +452,24 @@ premium. Linear is a good reference.
   `t.File()` always provides a type). Trust internal code and
   framework guarantees; only add defensive fallbacks at true
   system boundaries (external APIs, user-controlled input).
+- Keep `routes.ts` thin: route files should define the route
+  structure, attach macros, choose the HTTP method and path,
+  and wire in handlers. Route-only concerns such as
+  `invalidateQuery` stay in `routes.ts`.
+- Endpoint modules should default-export one `{ config, handler }`
+  object. The `config` owns handler-level concerns such as
+  `body`, `params`, `query`, and `permissions`; reusable helpers
+  must live in a separate module instead of being exported from
+  the endpoint file.
+- Backend handlers should be created via
+  `createHandler` from `/apps/api/src/lib/api-handlers.ts`.
+  Do not export raw workspace-scoped handlers that accept plain
+  `WorkspaceContext`; use the branded authorized context that
+  `createHandler` provides instead.
+- Permission requirements live in the handler file next to the
+  schema and business logic. Every workspace-scoped mutation
+  handler must declare permissions in `config` and wrap the
+  implementation with `createHandler`.
 - **Ownership IDs are never client-supplied.** Any ID that
   controls data ownership or scoping (`workspaceId`,
   `organizationId`) must come from a server-validated source

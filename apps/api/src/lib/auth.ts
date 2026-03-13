@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { bearer, emailOTP, organization } from "better-auth/plugins";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
@@ -166,13 +167,35 @@ export const auth = betterAuth({
   ],
 });
 
-const ADMIN_BYPASS_ROLES = ["owner", "admin"];
+export type MemberRole = keyof typeof roles;
 
-type WorkspaceStatus = InferSelectModel<typeof workspaces>["status"];
+export const getSessionAndMemberRole = async (headers: HeadersInit) => {
+  const [sessionResult, memberRoleResult] = await Promise.all([
+    Result.tryPromise(
+      async () =>
+        await auth.api.getSession({
+          headers,
+        }),
+    ),
+    Result.tryPromise(
+      async () =>
+        await auth.api.getActiveMemberRole({
+          headers,
+        }),
+    ),
+  ]);
+
+  return {
+    sessionResult,
+    memberRoleResult,
+  };
+};
+
+const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
 
 export type AccessibleWorkspace = {
   id: string;
-  status: WorkspaceStatus;
+  status: InferSelectModel<typeof workspaces>["status"];
 };
 
 /**
@@ -190,19 +213,10 @@ export type AccessibleWorkspace = {
 export const resolveAccessibleWorkspaces = async (
   userId: SafeId<"user">,
   organizationId: SafeId<"organization">,
+  memberRole: MemberRole,
 ): Promise<AccessibleWorkspace[]> => {
-  // Runs as postgres (no RLS) because workspace_ids are not
-  // known yet; that's exactly what we're resolving here.
-  const orgMember = await db.query.member.findFirst({
-    where: {
-      userId: { eq: userId },
-      organizationId: { eq: organizationId },
-    },
-    columns: { role: true },
-  });
-
-  if (orgMember && ADMIN_BYPASS_ROLES.includes(orgMember.role)) {
-    return db.query.workspaces.findMany({
+  if (ADMIN_BYPASS_ROLES.includes(memberRole)) {
+    return await db.query.workspaces.findMany({
       where: { organizationId: { eq: organizationId } },
       columns: { id: true, status: true },
     });
@@ -211,7 +225,7 @@ export const resolveAccessibleWorkspaces = async (
   // JOIN with workspaces filters by org, preventing
   // cross-org leaks when a user belongs to multiple
   // organizations.
-  return db
+  return await db
     .select({
       id: workspaceMembers.workspaceId,
       status: workspaces.status,
@@ -229,18 +243,28 @@ export const resolveAccessibleWorkspaces = async (
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     async resolve({ status, request }) {
-      const session = await auth.api.getSession({
-        headers: request.headers,
-      });
+      const { sessionResult, memberRoleResult } = await getSessionAndMemberRole(
+        request.headers,
+      );
 
-      const rawOrgId = session?.session.activeOrganizationId;
+      if (Result.isError(sessionResult)) {
+        return status(500);
+      }
+      const session = sessionResult.value?.session;
+      const user = sessionResult.value?.user;
+      const rawOrgId = session?.activeOrganizationId;
 
-      if (!session || !rawOrgId) {
+      if (!session || !user || !rawOrgId) {
         return status(401);
       }
 
+      if (Result.isError(memberRoleResult)) {
+        return status(500);
+      }
+
+      const memberRole = memberRoleResult.value;
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
-      const userId = toSafeId<"user">(session.user.id);
+      const userId = toSafeId<"user">(user?.id);
 
       posthogIdentify({
         distinctId: userId,
@@ -252,6 +276,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       const accessibleWorkspaces = await resolveAccessibleWorkspaces(
         userId,
         activeOrganizationId,
+        memberRole.role,
       );
 
       const scopedDb = createScopedDb(
@@ -261,13 +286,16 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       );
 
       return {
-        user: session.user,
+        user: {
+          id: toSafeId<"user">(user.id),
+        },
         session: {
-          ...session.session,
           activeOrganizationId,
+          token: session.token,
         },
         accessibleWorkspaces,
         scopedDb,
+        memberRole,
       };
     },
   },
@@ -295,15 +323,13 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
   }),
 });
 
-const validateWorkspaceAccessParams = t.Object({ workspaceId: tNanoid });
-
 export const workspaceAccessMacro = new Elysia({
   name: "workspaceAccessMacro",
 })
   .use(authMacro)
   .macro("validateWorkspaceAccess", {
     validateAuth: true,
-    params: validateWorkspaceAccessParams,
+    params: t.Object({ workspaceId: tNanoid }),
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),

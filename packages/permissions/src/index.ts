@@ -8,7 +8,7 @@ import { createAccessControl } from "better-auth/plugins/access";
  * these actions per resource.
  */
 export const statements = {
-  workspace: ["create", "update", "delete"],
+  workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
   template: ["create", "update", "delete"],
@@ -23,14 +23,20 @@ export const statements = {
   organizationSettings: ["update"],
 } as const;
 
-export type PermissionInput = {
-  [K in keyof typeof statements]?: (typeof statements)[K][number][];
+type PermissionMap = {
+  [K in keyof typeof statements]: (typeof statements)[K][number][];
 };
+
+type RequireAtLeastOne<T> = {
+  [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
+}[keyof T];
+
+export type PermissionInput = RequireAtLeastOne<Partial<PermissionMap>>;
 
 export const ac = createAccessControl(statements);
 
 const memberAc = ac.newRole({
-  workspace: ["create", "update", "delete"],
+  workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
   template: ["create", "update", "delete"],
@@ -47,7 +53,7 @@ const memberAc = ac.newRole({
 
 export const roles = {
   owner: ac.newRole({
-    workspace: ["create", "update", "delete"],
+    workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
     template: ["create", "update", "delete"],
@@ -62,7 +68,7 @@ export const roles = {
     organizationSettings: ["update"],
   }),
   admin: ac.newRole({
-    workspace: ["create", "update", "delete"],
+    workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
     template: ["create", "update", "delete"],
@@ -78,7 +84,7 @@ export const roles = {
   }),
   member: memberAc,
   intern: ac.newRole({
-    workspace: [],
+    workspace: ["read"],
     contact: [],
     invoice: [],
     template: [],
@@ -93,7 +99,7 @@ export const roles = {
     organizationSettings: [],
   }),
   external: ac.newRole({
-    workspace: [],
+    workspace: ["read"],
     contact: [],
     invoice: [],
     template: [],
