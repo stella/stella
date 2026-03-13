@@ -49,7 +49,7 @@ export async function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
 ): ReturnType<typeof c.schedule.after> {
   // SAFETY: args is [WorkflowActionSchemas[T]] when T extends non-void schema
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return await c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
+  await c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
 }
 
 type SetFieldsContentProps = {

@@ -1,3 +1,4 @@
+// TODO: FIXME — onnxruntime-web types resolve as error/any in web worker context
 /**
  * ONNX Runtime web wrapper.
  *
@@ -18,16 +19,17 @@ export const createOnnxWrapper = (settings: OnnxWebSettings): OnnxWrapper => {
   const wasmPaths = settings.wasmPaths ?? ONNX_WASM_CDN;
 
   const ort = provider === "webgpu" ? ort_WEBGPU : ort_CPU;
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access -- onnxruntime-web env types resolve as any in worker context
   ort.env.wasm.wasmPaths = wasmPaths;
 
-  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- InferenceSession resolves to error type in web worker context
+  // oxlint-disable-next-line typescript-eslint/no-redundant-type-constituents -- InferenceSession resolves to error type in web worker context
   let session: InferenceSession | null = null;
 
   return {
     ort,
 
     async init() {
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- session typed as InferenceSession|null
+      // oxlint-disable-next-line typescript-eslint/strict-boolean-expressions -- session typed as InferenceSession|null
       if (session) {
         return;
       }
@@ -37,11 +39,13 @@ export const createOnnxWrapper = (settings: OnnxWebSettings): OnnxWrapper => {
           const binaryURL = `${wasmPaths}ort-wasm-simd-threaded.wasm`;
           const response = await fetch(binaryURL);
           const binary = await response.arrayBuffer();
+          // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access -- onnxruntime-web env types resolve as any in worker context
           ort.env.wasm.wasmBinary = binary;
         }
 
         if (settings.multiThread) {
           const maxPossible = navigator.hardwareConcurrency ?? 0;
+          // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access -- onnxruntime-web env types resolve as any in worker context
           ort.env.wasm.numThreads = Math.min(
             settings.maxThreads ?? maxPossible,
             maxPossible,
@@ -49,22 +53,24 @@ export const createOnnxWrapper = (settings: OnnxWebSettings): OnnxWrapper => {
         }
       }
 
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access -- onnxruntime-web types resolve as any in worker context
       session = await ort.InferenceSession.create(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ONNX accepts string | Uint8Array | ArrayBuffer
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- ONNX accepts string | Uint8Array | ArrayBuffer
         settings.modelPath as string,
         { executionProviders: [provider] },
       );
     },
 
-    // eslint-disable-next-line require-await -- returns session.run() promise directly
+    // oxlint-disable-next-line require-await -- returns session.run() promise directly
     async run(
       feeds: InferenceSession.FeedsType,
       options: InferenceSession.RunOptions = {},
     ) {
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- session typed as InferenceSession|null
+      // oxlint-disable-next-line typescript-eslint/strict-boolean-expressions -- session typed as InferenceSession|null
       if (!session) {
         throw new Error("ONNX session not initialised. Call init() first.");
       }
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-return, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access -- onnxruntime-web types resolve as any in worker context
       return session.run(feeds, options);
     },
   };

@@ -12,7 +12,7 @@
     "dev": "email dev -p 3002",
     "export": "email export",
     "start": "email start -p 3002",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "typegen": "i18n-typegen i18n/langs",
     "i18n:check": "i18n-check i18n/langs",
     "lint": "oxlint --type-aware",

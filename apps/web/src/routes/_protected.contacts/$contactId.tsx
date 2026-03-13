@@ -367,7 +367,7 @@ function ContactDetailPage() {
         )}
 
         {/* Responsible attorneys */}
-        {(contact.originatingAttorney || contact.responsibleAttorney) && (
+        {(contact.originatingAttorney ?? contact.responsibleAttorney) && (
           <section className="rounded-lg border p-4">
             <h2 className="text-muted-foreground mb-3 text-sm font-medium">
               {t("contacts.attorneys.title")}

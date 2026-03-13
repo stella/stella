@@ -106,6 +106,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
         }
 
         const json: unknown = await response.json();
+        // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
         const data: NssoudApiItem[] = Array.isArray(json) ? json : [];
         const decisions: IngestionResult[] = [];
 

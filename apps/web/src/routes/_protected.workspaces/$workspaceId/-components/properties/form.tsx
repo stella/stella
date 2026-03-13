@@ -16,6 +16,7 @@ export const PropertyFormField = ({
     {children}
   </Field>
 );
+// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
 type PropertyTextInputProps = {
   field: AnyFieldApi;
   placeholder: string;
@@ -25,6 +26,7 @@ export const PropertyTextInput = ({
   field,
   placeholder,
 }: PropertyTextInputProps) => (
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
   <PropertyFormField name={field.name}>
     <input
       autoComplete="off"
@@ -34,6 +36,7 @@ export const PropertyTextInput = ({
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}
       type="text"
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       value={field.state.value}
     />
     <FieldError />

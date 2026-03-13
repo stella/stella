@@ -1,3 +1,4 @@
+// TODO: FIXME — @huggingface/transformers and onnxruntime-web types resolve as error/any
 /**
  * GLiNER span-level NER model (web-only).
  *
@@ -30,16 +31,20 @@ export class Gliner {
   private readonly config: GlinerConfig;
   private readonly maxWidth: number;
   private onnx: OnnxWrapper | null = null;
+  // oxlint-disable-next-line typescript-eslint/no-redundant-type-constituents
   private tokenizer: PreTrainedTokenizer | null = null;
 
   constructor(config: GlinerConfig) {
     this.config = config;
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
     env.allowLocalModels = false;
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
     env.useBrowserCache = false;
     this.maxWidth = config.maxWidth ?? DEFAULT_MAX_WIDTH;
   }
 
   async initialize(): Promise<void> {
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
     this.tokenizer = await AutoTokenizer.from_pretrained(
       this.config.tokenizerPath,
     );
@@ -61,6 +66,7 @@ export class Gliner {
     threshold?: number;
     multiLabel?: boolean;
   }): Promise<EntityResult[][]> {
+    // oxlint-disable-next-line typescript-eslint/strict-boolean-expressions
     if (!this.onnx || !this.tokenizer) {
       throw new Error("Model not initialised. Call initialize() first.");
     }
@@ -81,21 +87,30 @@ export class Gliner {
       dtype: any = "int64",
     ): Tensor =>
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- flat data for ONNX tensor
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-call
       new ort.Tensor(dtype, data.flat(Infinity), shape);
 
     const feeds = {
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       input_ids: tensor(batch.inputsIds, [batchSize, numTokens]),
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       attention_mask: tensor(batch.attentionMasks, [batchSize, numTokens]),
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       words_mask: tensor(batch.wordsMasks, [batchSize, numTokens]),
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       text_lengths: tensor(
         batch.textLengths.map((l) => [l]),
         [batchSize, 1],
       ),
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       span_idx: tensor(batch.spanIdxs, [batchSize, numSpans, 2]),
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       span_mask: tensor(batch.spanMasks, [batchSize, numSpans], "bool"),
     };
 
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     const results = await this.onnx.run(feeds);
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
     const logits = results["logits"];
 
     const inputLength = Math.max(...batch.textLengths);
@@ -113,6 +128,7 @@ export class Gliner {
       batch.batchWordsEndIdx,
       batch.idToClass,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- logits.data is Float32Array, accessed by index like number[]
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access, typescript-eslint/no-unsafe-type-assertion
       logits.data as unknown as number[],
       flatNer,
       threshold,

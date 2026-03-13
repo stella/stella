@@ -468,6 +468,7 @@ type Messages = {
     "kind": "Kind";
     "language": "Language";
     "loadMore": "Load more";
+    "loading": "Loading";
     "matters": "Matters";
     "metadata": "Metadata";
     "name": "Name";
@@ -661,10 +662,10 @@ type Messages = {
     "trigger": "Feedback";
   };
   "filters": {
-    "contains": "contains";
-    "eq": "is";
-    "is_empty": "is empty";
-    "neq": "is not";
+    "contains": "Contains";
+    "eq": "Is";
+    "is_empty": "Is empty";
+    "neq": "Is not";
   };
   "knowledge": {
     "sections": {

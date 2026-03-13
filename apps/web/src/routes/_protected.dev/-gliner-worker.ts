@@ -47,8 +47,8 @@ const detectBackend = async (): Promise<{
   // Only skip for int8/uint8 models where WASM is faster.
   if ("gpu" in navigator) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/no-explicit-any -- WebGPU API not typed in workers
-      const adapter = await (navigator as any).gpu.requestAdapter();
+      // eslint-disable-next-line typescript/no-unsafe-assignment, no-unsafe-call -- WebGPU API not typed in workers
+      const adapter = await navigator.gpu.requestAdapter();
       // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions -- WebGPU adapter may be null
       if (adapter) {
         return {

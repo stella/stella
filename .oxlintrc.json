@@ -97,7 +97,6 @@
     // - useErrorCause
     // - noScriptUrl (partially covered by jsx-a11y)
 
-    // --- Type-aware suppressions (temporarily disabled to adopt oxlint-tsgolint incrementally) ---
     "typescript/strict-boolean-expressions": [
       "error",
       {
@@ -105,9 +104,16 @@
         "allowNullableBoolean": true,
       },
     ],
-    "typescript/no-confusing-void-expression": "off", // not needed
-    "typescript/prefer-nullish-coalescing": "off",
-    "typescript/no-unsafe-assignment": "off",
+    "typescript/no-confusing-void-expression": [
+      "error",
+      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true },
+    ],
+    "typescript/prefer-nullish-coalescing": [
+      "error",
+      {
+        "ignorePrimitives": { "string": true, "boolean": true },
+      },
+    ],
     "typescript/only-throw-error": [
       "error",
       {
@@ -120,11 +126,9 @@
         ],
       },
     ],
-    "typescript/no-unsafe-member-access": "off",
-    "typescript/no-unsafe-argument": "off",
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    "typescript/no-unsafe-return": "off",
-    "typescript/no-unsafe-call": "off",
+    // Conflicts with no-non-null-assertion: this rule wants `x!`
+    // but we ban `!` assertions project-wide.
     "typescript/non-nullable-type-assertion-style": "off",
   },
   "overrides": [

@@ -30,6 +30,8 @@ const getMentions = (editor: Editor): string[] => {
 
   editor.state.doc.descendants((node) => {
     if (node.type.name === "mention") {
+      // TODO: FIXME — ProseMirror node.attrs is Record<string, any>
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-argument
       mentions.add(node.attrs.id);
     }
   });
@@ -37,6 +39,7 @@ const getMentions = (editor: Editor): string[] => {
   return [...mentions];
 };
 
+// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
 type PropertyPromptInputProps = {
   workspaceId: string;
   propertyId: string;
@@ -76,6 +79,7 @@ export const PropertyPromptInput = ({
       }),
       History,
     ],
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     content: field.state.value,
     onUpdate: (props) => {
       const mentions = getMentions(props.editor);
@@ -134,6 +138,7 @@ export const PropertyPromptInput = ({
 
   return (
     <div className="group w-full gap-1">
+      {/* oxlint-disable-next-line typescript-eslint/no-unsafe-assignment */}
       <PropertyFormField className="w-full p-0" name={field.name}>
         <ScrollArea className="h-32 overflow-y-auto">
           <EditorContent editor={editor} />

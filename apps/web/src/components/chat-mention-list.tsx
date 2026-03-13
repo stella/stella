@@ -178,9 +178,8 @@ export const ChatMentionList = forwardRef<
   //   },
   //   enabled: !!drillDown,
   // });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- TODO: fix me
-  const drillDownItems: any[] = [];
+  // TODO: FIXME — replace with real query when drill-down is implemented
+  const drillDownItems: ChatMentionOption[] = [];
   const entitiesLoading = false;
   const activeItems = drillDown ? (drillDownItems ?? []) : items;
   const safeIndex = Math.min(
@@ -197,6 +196,7 @@ export const ChatMentionList = forwardRef<
   }, [safeIndex]);
 
   const selectItem = (index: number) => {
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     const item = activeItems.at(index);
     if (item !== undefined) {
       command(item);
@@ -250,6 +250,7 @@ export const ChatMentionList = forwardRef<
 
       // ArrowRight on a workspace item drills down
       if (event.key === "ArrowRight" && !drillDown) {
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
         const item = activeItems.at(safeIndex);
         if (item?.category === "workspace") {
           handleDrillDown(item);
@@ -375,6 +376,7 @@ export const ChatMentionList = forwardRef<
               );
             })}
 
+          {/* oxlint-disable typescript-eslint/no-unsafe-assignment */}
           {drillDown &&
             !entitiesLoading &&
             drillDownItems?.map((item, i) => (
@@ -398,6 +400,7 @@ export const ChatMentionList = forwardRef<
                 <span className="truncate">{item.label}</span>
               </Button>
             ))}
+          {/* oxlint-enable typescript-eslint/no-unsafe-assignment */}
         </div>
       </PopoverPopup>
     </Popover>

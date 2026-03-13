@@ -163,14 +163,7 @@ function TimesheetsPage() {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-medium">{t("billing.timesheets")}</h1>
-          <Tabs
-            onValueChange={(val) => {
-              if (val === "day" || val === "week") {
-                setView(val);
-              }
-            }}
-            value={view}
-          >
+          <Tabs onValueChange={setView} value={view}>
             <TabsList>
               <TabsTab value="day">{t("billing.day")}</TabsTab>
               <TabsTab value="week">{t("billing.week")}</TabsTab>

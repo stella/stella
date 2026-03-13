@@ -46,7 +46,8 @@ const serializeToText = (editor: Editor): string => {
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         MENTION_HASH_PREFIX[category as MentionCategory] ??
         MENTION_HASH_PREFIX.entity;
-      // Encode workspace context for cross-workspace entities
+      // TODO: FIXME — type node.attrs properly
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       const encodedId =
         category === "entity" &&
         sourceWorkspaceId !== undefined &&
@@ -207,6 +208,8 @@ export const ChatEditor = ({
           // TipTap's suggestion plugin handles Enter itself.
           const { state } = view;
           const mentionPluginActive = state.plugins.some((plugin) => {
+            // TODO: FIXME — plugin.getState returns any
+            // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
             const meta = plugin.getState(state);
             return (
               meta !== undefined &&

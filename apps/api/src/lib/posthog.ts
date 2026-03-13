@@ -6,11 +6,9 @@ import { errorTag } from "@/api/lib/errors/utils";
 let posthogClient: PostHog | null = null;
 
 export const getPostHog = () => {
-  if (!posthogClient) {
-    posthogClient = new PostHog(env.POSTHOG_KEY, {
-      host: env.POSTHOG_HOST,
-    });
-  }
+  posthogClient ??= new PostHog(env.POSTHOG_KEY, {
+    host: env.POSTHOG_HOST,
+  });
 
   return posthogClient;
 };

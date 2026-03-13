@@ -5,7 +5,9 @@ import { ChevronDownIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-function Accordion(props: AccordionPrimitive.Root.Props) {
+function Accordion<Value = unknown>(
+  props: AccordionPrimitive.Root.Props<Value>,
+) {
   return <AccordionPrimitive.Root data-slot="accordion" {...props} />;
 }
 

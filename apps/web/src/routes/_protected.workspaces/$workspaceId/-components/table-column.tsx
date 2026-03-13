@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
-import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -183,27 +182,22 @@ const WithOpenEntityButton = ({
         onClick={async (e) => {
           e.stopPropagation();
 
-          // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-          await (navigate as any)({
+          await navigate({
             to: "/workspaces/$workspaceId/$viewId/pdf",
             params: { workspaceId, viewId: "all" },
-            // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-            search: (prev: unknown) =>
-              // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-              produce(prev, (s: any) => {
-                s.file = {
-                  fieldId,
-                  pageNumber: 1,
-                  scaleOffset: 0,
-                };
-                s.justification = undefined;
-                s.entity = {
-                  id: entityId,
-                  visible: true,
-                  activePropertyId,
-                };
-                // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-              }) as any,
+            search: {
+              file: {
+                fieldId,
+                pageNumber: 1,
+                scaleOffset: 0,
+              },
+              justification: undefined,
+              entity: {
+                id: entityId,
+                visible: true,
+                activePropertyId,
+              },
+            },
           });
         }}
         size="xs"
