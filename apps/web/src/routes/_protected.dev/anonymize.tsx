@@ -233,6 +233,7 @@ function AnonymizePage() {
       setEntities([]);
       setRedactedText(null);
       setRedactionKey(null);
+      setOperatorConfig({ ...DEFAULT_OPERATOR_CONFIG });
       setStatus("running-pipeline");
 
       try {
@@ -277,6 +278,7 @@ function AnonymizePage() {
       setText(inputText);
       setRedactedText(null);
       setRedactionKey(null);
+      setOperatorConfig({ ...DEFAULT_OPERATOR_CONFIG });
       const regexResults = detectRegexPii(inputText);
       setEntities(regexResults);
       log(`Regex-only: ${regexResults.length} matches`);
