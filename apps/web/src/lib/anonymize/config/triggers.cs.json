@@ -1,0 +1,112 @@
+[
+  {
+    "trigger": "bytem:",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "trvale bytem",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "sídlem:",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "sídlem",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "nar.:",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "narozen dne",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "narozena dne",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "narozen/a dne",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "dat.nar.",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "r.č.:",
+    "label": "czech birth number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "rodné číslo:",
+    "label": "czech birth number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "rodné číslo",
+    "label": "czech birth number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "IČO:",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "IČ:",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "DIČ:",
+    "label": "tax identification number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "č.ú.:",
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 2 }
+  },
+  {
+    "trigger": "číslo účtu:",
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 2 }
+  },
+  {
+    "trigger": "zastoupen:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "zastoupena:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "zastoupen/a:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "jednající:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "dále jen",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" }
+  }
+]

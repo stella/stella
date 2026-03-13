@@ -1,0 +1,87 @@
+[
+  {
+    "trigger": "wohnhaft in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "geboren am",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "geb.:",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "geb.",
+    "label": "date of birth",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Steuernummer:",
+    "label": "tax identification number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Steuer-Nr.:",
+    "label": "tax identification number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "USt-IdNr.:",
+    "label": "tax identification number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "vertreten durch",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "Geschäftsführer:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "Geschäftsführerin:",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "eingetragen im",
+    "label": "registration number",
+    "strategy": { "type": "to-end-of-line" }
+  },
+  {
+    "trigger": "Handelsregister:",
+    "label": "registration number",
+    "strategy": { "type": "to-end-of-line" }
+  },
+  {
+    "trigger": "Gläubiger-ID:",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Registernummer:",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "IBAN:",
+    "label": "iban",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "BIC:",
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Kontonummer:",
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 1 }
+  }
+]
