@@ -1,12 +1,18 @@
 import { LRUCache } from "lru-cache";
 import { getDocument } from "pdfjs-dist";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+// Side-effect import: loads the worker code on the main thread.
+// pdfjs-dist detects this and uses a "fake worker" (main-thread
+// fallback) instead of spawning a real Web Worker. This avoids
+// Vite's HMR injection issue where `/@vite/client` hangs inside
+// a Worker context. Performance is equivalent for typical PDFs.
+import "pdfjs-dist/build/pdf.worker.mjs";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
 import { DEFAULT_PAGE_BUFFER_SIZE } from "@/lib/pdf/consts";
-import "pdfjs-dist/build/pdf.worker.mjs";
+import { parseAttachments } from "@/lib/pdf/parse-attachments";
 import { getOrderedPages } from "@/lib/pdf/utils";
 
 export const PDF_WIDTH = 768; // px, screen md
@@ -210,24 +216,8 @@ export const usePdfStore = create<State & Actions>()(
           // embedded file attachments.
           // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- pdfjs-dist types getAttachments() as Promise<any>
           const attachments = await document.getAttachments();
-          const pdfAttachments =
-            attachments !== undefined
-              ? // oxlint-disable-next-line typescript-eslint/no-unsafe-argument -- attachments is any from pdfjs
-                Object.values(attachments).filter(
-                  (
-                    a,
-                  ): a is {
-                    content: Uint8Array;
-                    filename: string;
-                  } =>
-                    typeof a === "object" &&
-                    a !== null &&
-                    "content" in a &&
-                    "filename" in a &&
-                    typeof a.filename === "string" &&
-                    a.filename.toLowerCase().endsWith(".pdf"),
-                )
-              : [];
+          // oxlint-disable-next-line typescript-eslint/no-unsafe-argument -- attachments is typed as any by pdfjs-dist
+          const pdfAttachments = parseAttachments(attachments);
 
           const isPortfolio =
             pdfAttachments.length > 0 && document.numPages <= 1;

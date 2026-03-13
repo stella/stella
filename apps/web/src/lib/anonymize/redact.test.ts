@@ -246,9 +246,10 @@ describe("exportRedactionKey()", () => {
 
   it("returns empty entries for fully-redacted documents", () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse returns unknown
-    const json = JSON.parse(
-      exportRedactionKey(new Map(), new Map()),
-    ) as Record<string, unknown>;
+    const json = JSON.parse(exportRedactionKey(new Map(), new Map())) as Record<
+      string,
+      unknown
+    >;
     expect(json).toStrictEqual({ entries: {} });
   });
 });

@@ -17,6 +17,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import type { WorkspaceEntity } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   getEntityName,
   getFirstFile,
@@ -70,6 +71,8 @@ export const CalendarEntityChip = ({
   const file = getFirstFile(entity);
 
   const dragRef = useRef<HTMLButtonElement>(null);
+
+  useInspectorFlash(entity.entityId, dragRef);
 
   useEffect(() => {
     const el = dragRef.current;

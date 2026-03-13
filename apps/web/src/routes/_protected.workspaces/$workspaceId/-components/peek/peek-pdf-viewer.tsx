@@ -56,12 +56,15 @@ export const PeekPdfViewer = ({
 
       // Fit-to-width: measure the container and adjust
       // the scale so the PDF fills the available width.
-      const containerWidth = containerRef.current?.clientWidth ?? PDF_WIDTH;
+      // Guard: if the container hasn't been laid out yet
+      // (clientWidth is 0), skip the adjustment and use
+      // the default PDF_WIDTH scale.
+      const containerWidth = containerRef.current?.clientWidth ?? 0;
       const available = containerWidth - CONTAINER_PADDING;
       const store = usePdfStore.getState();
       const filePages = store.pages.get(fieldId);
 
-      if (filePages && available < PDF_WIDTH) {
+      if (filePages && available > 0 && available < PDF_WIDTH) {
         const first = filePages.values().next();
         if (!first.done) {
           const { originalWidth } = first.value;

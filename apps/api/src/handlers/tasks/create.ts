@@ -118,9 +118,7 @@ export const createTaskHandler = async ({
         columns: { userId: true },
       });
       const memberIds = new Set(members.map((m) => m.userId));
-      const invalidIds = body.assigneeIds.filter(
-        (uid) => !memberIds.has(uid),
-      );
+      const invalidIds = body.assigneeIds.filter((uid) => !memberIds.has(uid));
       if (invalidIds.length > 0) {
         return status(400, {
           message: "Some assignee IDs are not workspace members",

@@ -23,7 +23,6 @@ import {
   getCanvasTransform,
 } from "@/lib/pdf/utils";
 import { captureError } from "@/lib/posthog/utils";
-import "pdfjs-dist/build/pdf.worker.mjs";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 type PdfPageProps = {

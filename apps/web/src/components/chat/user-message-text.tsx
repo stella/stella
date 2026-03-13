@@ -11,7 +11,7 @@ import { cn } from "@stella/ui/lib/utils";
 import type { MentionCategory } from "@/components/chat-mention-extension";
 import {
   EntityMentionIcon,
-  openEntityInPeek,
+  openEntityInInspector,
 } from "@/components/chat/entity-link";
 
 /** Matches all stella mention link formats:
@@ -50,7 +50,7 @@ const MentionChip = ({
 
   const handleClick = () => {
     if (category === "entity") {
-      openEntityInPeek(entityId, label);
+      openEntityInInspector(entityId, label);
       return;
     }
     if (category === "workspace") {

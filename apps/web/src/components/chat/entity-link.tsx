@@ -14,7 +14,7 @@ import type { MentionCategory } from "@/components/chat-mention-extension";
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
@@ -40,8 +40,12 @@ const parseStellaMentionHref = (
   return null;
 };
 
-/** Open the entity's file in the peek panel. */
-export const openEntityInPeek = (entityId: string, label: string) => {
+/** Open the entity's file in the inspector panel. */
+export const openEntityInInspector = (
+  entityId: string,
+  label: string,
+  workspaceId = "",
+) => {
   const entities: WorkspaceEntity[] = [];
   const entity = entities.find((e) => e.entityId === entityId);
   if (!entity) {
@@ -50,10 +54,12 @@ export const openEntityInPeek = (entityId: string, label: string) => {
 
   for (const field of Object.values(entity.fields)) {
     if (field.content.type === "file" && isFileDisplayable(field.content)) {
-      usePeekStore.getState().openTab({
-        fieldId: field.id,
+      useInspectorStore.getState().openPdf({
+        id: field.id,
         entityId,
         label,
+        mimeType: field.content.mimeType,
+        workspaceId,
       });
       return;
     }
@@ -165,7 +171,7 @@ export const EntityLink = ({
 
   const handleClick = () => {
     if (category === "entity") {
-      openEntityInPeek(id, label);
+      openEntityInInspector(id, label);
       return;
     }
     if (category === "workspace") {

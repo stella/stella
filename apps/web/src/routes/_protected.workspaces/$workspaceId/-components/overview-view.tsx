@@ -21,7 +21,8 @@ import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -135,6 +136,8 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   );
   const rowRef = useRef<HTMLDivElement>(null);
 
+  useInspectorFlash(entity.entityId, rowRef);
+
   // Construct a WorkspaceEntity from overview data so RowActions
   // can render. The overview endpoint returns enough metadata to
   // build a synthetic fields record for the primary file.
@@ -245,14 +248,19 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   const { fieldId } = entity;
 
   const handleOpen =
-    navigable && fieldId
+    entity.kind === "task"
       ? () =>
-          usePeekStore.getState().openTab({
-            fieldId,
-            entityId: entity.entityId,
-            label: entity.name,
-          })
-      : undefined;
+          useInspectorStore.getState().openTask(entity.entityId, entity.name)
+      : navigable && fieldId
+        ? () =>
+            useInspectorStore.getState().openPdf({
+              id: fieldId,
+              entityId: entity.entityId,
+              label: entity.name,
+              mimeType: entity.mimeType ?? undefined,
+              workspaceId,
+            })
+        : undefined;
 
   const content = (
     <>

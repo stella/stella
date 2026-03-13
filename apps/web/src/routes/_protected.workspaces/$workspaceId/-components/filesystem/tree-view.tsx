@@ -20,10 +20,8 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ChevronRightIcon,
   FileIcon,
-  FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
-  FolderPlusIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -33,12 +31,6 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stella/ui/components/breadcrumb";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
@@ -59,16 +51,16 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   AuthorCell,
   LastUpdatedCell,
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
-  useCreateEntities,
   useMoveEntity,
   useRenameEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
@@ -172,7 +164,6 @@ const collectFolderIds = (entities: WorkspaceEntity[]): Set<string> => {
 export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const createEntities = useCreateEntities();
   const moveEntity = useMoveEntity();
   const renameEntity = useRenameEntity();
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
@@ -409,41 +400,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setBgContextOpen(true);
   }, []);
 
-  const handleCreateEntity = useCallback(
-    (kind: "document" | "folder") => {
-      createEntities.mutate(
-        {
-          workspaceId,
-          type: "manual-input",
-          kind,
-          parentId: currentFolderId ?? undefined,
-          name: kind === "folder" ? t("workspaces.newFolder") : undefined,
-        },
-        {
-          onSuccess: (result) => {
-            toastManager.add({
-              title:
-                kind === "folder"
-                  ? t("success.folderCreated")
-                  : t("success.documentCreated"),
-              type: "success",
-            });
-            if (kind === "folder" && result?.entityId) {
-              setEditingEntityId(result.entityId);
-              setExpandedIds((prev) => new Set([...prev, result.entityId]));
-            }
-          },
-          onError: () => {
-            toastManager.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
-        },
-      );
-    },
-    [createEntities, workspaceId, currentFolderId, t],
-  );
+  const handleFolderCreated = useCallback((entityId: string) => {
+    setEditingEntityId(entityId);
+    setExpandedIds((prev) => new Set([...prev, entityId]));
+  }, []);
 
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -671,8 +631,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           workspaceId={workspaceId}
         />
       </div>
-      {/* Background right-click context menu */}
-      <Menu
+      {/* Background right-click context menu (same items as "+") */}
+      <AddEntityMenu
+        anchor={bgContextAnchor}
+        onFolderCreated={handleFolderCreated}
         onOpenChange={(o) => {
           setBgContextOpen(o);
           if (!o) {
@@ -680,19 +642,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           }
         }}
         open={bgContextOpen}
-      >
-        <MenuTrigger render={<span className="sr-only" />} />
-        <MenuPopup anchor={bgContextAnchor ?? undefined}>
-          <MenuItem onClick={() => handleCreateEntity("document")}>
-            <FileTextIcon />
-            {t("workspaces.newDocument")}
-          </MenuItem>
-          <MenuItem onClick={() => handleCreateEntity("folder")}>
-            <FolderPlusIcon />
-            {t("workspaces.newFolder")}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
+        parentId={currentFolderId}
+        render={<span className="sr-only" />}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 };
@@ -794,6 +747,9 @@ const FilesystemRow = ({
 
   // Drag + drop support via pragmatic-drag-and-drop.
   const rowRef = useRef<HTMLDivElement>(null);
+
+  useInspectorFlash(node.entityId, rowRef);
+
   const moveEntity = useMoveEntity();
   const [isDropTarget, setIsDropTarget] = useState(false);
   const autoExpandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1042,9 +998,8 @@ const FilesystemRow = ({
 
   const isBulkSelected = selectedIds.size > 1 && isSelected;
 
-  const openInPeek = (() => {
+  const openInInspector = (() => {
     if (isBulkSelected) {
-      // Open all selected navigable files in peek.
       const entities = getSelectedEntities(selectedIds);
       const navigables = entities
         .map((e) => {
@@ -1053,9 +1008,11 @@ const FilesystemRow = ({
             return null;
           }
           return {
-            fieldId: f.fieldId,
+            id: f.fieldId,
             entityId: e.entityId,
             label: getEntityName(e),
+            mimeType: f.mimeType,
+            workspaceId,
           };
         })
         .filter((x) => x !== null);
@@ -1063,18 +1020,23 @@ const FilesystemRow = ({
         return;
       }
       return () => {
-        const peek = usePeekStore.getState();
+        const store = useInspectorStore.getState();
         for (const tab of navigables) {
-          peek.openTab(tab);
+          store.openPdf(tab);
         }
       };
     }
+    if (node.kind === "task") {
+      return () => useInspectorStore.getState().openTask(node.entityId, name);
+    }
     if (navigable && file !== undefined) {
       return () =>
-        usePeekStore.getState().openTab({
-          fieldId: file.fieldId,
+        useInspectorStore.getState().openPdf({
+          id: file.fieldId,
           entityId: file.entityId,
           label: name,
+          mimeType: file.mimeType,
+          workspaceId,
         });
     }
     return;
@@ -1089,7 +1051,7 @@ const FilesystemRow = ({
       <RowActions
         anchor={contextAnchor}
         entity={node}
-        onOpen={openInPeek}
+        onOpen={openInInspector}
         onOpenChange={(o) => {
           setContextOpen(o);
           if (!o) {
@@ -1143,7 +1105,7 @@ const FilesystemRow = ({
           >
             <button
               onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
-              onDoubleClick={() => openInPeek?.()}
+              onDoubleClick={() => openInInspector?.()}
               style={contentSpanStyle}
               type="button"
             >

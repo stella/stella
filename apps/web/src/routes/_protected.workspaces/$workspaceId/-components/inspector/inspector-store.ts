@@ -3,8 +3,6 @@ import { immer } from "zustand/middleware/immer";
 
 import { usePdfStore } from "@/lib/pdf/pdf-store";
 
-import { usePeekStore } from "../peek/peek-store";
-
 export type PdfTab = {
   type: "pdf";
   id: string;
@@ -22,9 +20,6 @@ export type PdfTab = {
   /** The property column that was clicked (for showing
    *  the active cell highlight in the PDF). */
   propertyId?: string;
-  /** Incrementing sequence to trigger re-activation
-   *  effects (e.g. scroll to page) when re-opening. */
-  activationSeq: number;
 };
 
 export type TaskTab = {
@@ -39,56 +34,55 @@ export type InspectorTab = PdfTab | TaskTab;
 type State = {
   tabs: InspectorTab[];
   activeId: string | null;
+  /** Increments on every activation; lets the UI flash
+   *  a tab that is re-selected (e.g., open same file). */
+  activationSeq: number;
 };
 
 type Actions = {
-  openPdf: (tab: Omit<PdfTab, "type" | "activationSeq">) => void;
+  openPdf: (tab: Omit<PdfTab, "type">) => void;
   openTask: (taskId: string, label?: string, isNew?: boolean) => void;
   closeTab: (id: string) => void;
-  closeAll: () => void;
   setActive: (id: string) => void;
+  closeAll: () => void;
   clearTaskNewFlag: (taskId: string) => void;
 };
 
 export const useInspectorStore = create<State & Actions>()(
-  immer((set) => ({
+  immer((set, get) => ({
     tabs: [],
     activeId: null,
+    activationSeq: 0,
 
-    openPdf: (tab) => {
-      usePeekStore.getState().closeAll();
+    openPdf: (tab) =>
       set((state) => {
         const existing = state.tabs.find((t) => t.id === tab.id);
         if (!existing) {
-          state.tabs.push({
-            type: "pdf",
-            ...tab,
-            activationSeq: 1,
-          });
+          state.tabs.push({ type: "pdf", ...tab });
         } else if (existing.type === "pdf") {
           existing.justificationFieldId = tab.justificationFieldId;
           existing.propertyId = tab.propertyId;
           existing.entityId = tab.entityId;
           existing.workspaceId = tab.workspaceId;
-          // Preserve the original PDF filename; only accept a new label
-          // when the tab does not yet have one or it was a fallback ID.
+          // Preserve the original PDF filename; only accept
+          // a new label when the tab does not yet have one
+          // or it was a fallback ID.
           const isFallbackId = existing.label === existing.id;
           if (tab.label && (!existing.label || isFallbackId)) {
             existing.label = tab.label;
           }
-          // Only overwrite mimeType when the caller supplies one;
-          // clearing it on re-open would drop a previously set value.
+          // Only overwrite mimeType when the caller supplies
+          // one; clearing it on re-open would drop a
+          // previously set value.
           if (tab.mimeType !== undefined) {
             existing.mimeType = tab.mimeType;
           }
-          existing.activationSeq += 1;
         }
         state.activeId = tab.id;
-      });
-    },
+        state.activationSeq += 1;
+      }),
 
-    openTask: (taskId, label = "", isNew = false) => {
-      usePeekStore.getState().closeAll();
+    openTask: (taskId, label = "", isNew = false) =>
       set((state) => {
         const existing = state.tabs.find((t) => t.id === taskId);
         if (!existing) {
@@ -107,32 +101,30 @@ export const useInspectorStore = create<State & Actions>()(
           }
         }
         state.activeId = taskId;
-      });
-    },
+        state.activationSeq += 1;
+      }),
 
     closeTab: (id) => {
-      const tabToClose = useInspectorStore
-        .getState()
-        .tabs.find((t) => t.id === id);
+      const tab = get().tabs.find((t) => t.id === id);
 
       set((state) => {
-        const idx = state.tabs.findIndex((t) => t.id === id);
-        if (idx === -1) {
+        const index = state.tabs.findIndex((t) => t.id === id);
+        if (index === -1) {
           return;
         }
 
-        state.tabs.splice(idx, 1);
+        state.tabs.splice(index, 1);
 
         if (state.activeId === id) {
-          const next = state.tabs[idx] ?? state.tabs[idx - 1];
+          const next = state.tabs[Math.min(index, state.tabs.length - 1)];
           state.activeId = next?.id ?? null;
         }
       });
 
-      if (tabToClose?.type === "pdf") {
+      if (tab?.type === "pdf") {
         usePdfStore
           .getState()
-          .cleanupPdf(tabToClose.id)
+          .cleanupPdf(id)
           .catch(() => {
             /* fire-and-forget cleanup */
           });
@@ -142,13 +134,12 @@ export const useInspectorStore = create<State & Actions>()(
     setActive: (id) =>
       set((state) => {
         state.activeId = id;
+        state.activationSeq += 1;
       }),
 
     closeAll: () => {
-      const pdfIds = useInspectorStore
-        .getState()
-        .tabs.filter((t) => t.type === "pdf")
-        .map((t) => t.id);
+      const tabs = get().tabs;
+      const pdfIds = tabs.filter((t) => t.type === "pdf").map((t) => t.id);
 
       set((state) => {
         state.tabs = [];
