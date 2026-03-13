@@ -169,6 +169,10 @@ export type WorkspaceEntity = {
   createdByImage: string | null;
   updatedAt: string | null;
   version: number;
+  status: string | null;
+  priority: string | null;
+  dueDate: string | null;
+  sortOrder: string | null;
   fields: Record<string, WorkspaceField>;
 };
 

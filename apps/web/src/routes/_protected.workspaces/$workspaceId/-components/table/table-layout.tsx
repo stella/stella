@@ -7,7 +7,15 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import type { ExpandedState } from "@tanstack/react-table";
-import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  CalendarIcon,
+  CircleDotIcon,
+  ClockIcon,
+  HashIcon,
+  TableIcon,
+  UserIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stella/ui/components/checkbox";
@@ -24,6 +32,11 @@ import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-co
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import {
+  DueDateCell,
+  PriorityCell,
+  StatusCell,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -88,6 +101,54 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
       const col = getPropertyColumn(property);
       columnDefs.push(col);
     }
+
+    columnDefs.push({
+      id: getInternalPropertyId("status"),
+      accessorKey: getInternalPropertyId("status"),
+      meta: { muted: true },
+      header: (ctx) => (
+        <MetadataPopover
+          column={ctx.header.column}
+          icon={CircleDotIcon}
+          label={t("tasks.status")}
+          sortHint="text"
+        />
+      ),
+      cell: (props) => <StatusCell entity={props.row.original} />,
+      size: 120,
+    });
+
+    columnDefs.push({
+      id: getInternalPropertyId("priority"),
+      accessorKey: getInternalPropertyId("priority"),
+      meta: { muted: true },
+      header: (ctx) => (
+        <MetadataPopover
+          column={ctx.header.column}
+          icon={ArrowUpIcon}
+          label={t("tasks.priority")}
+          sortHint="text"
+        />
+      ),
+      cell: (props) => <PriorityCell entity={props.row.original} />,
+      size: 100,
+    });
+
+    columnDefs.push({
+      id: getInternalPropertyId("due-date"),
+      accessorKey: getInternalPropertyId("due-date"),
+      meta: { muted: true },
+      header: (ctx) => (
+        <MetadataPopover
+          column={ctx.header.column}
+          icon={CalendarIcon}
+          label={t("tasks.dueDate")}
+          sortHint="date"
+        />
+      ),
+      cell: (props) => <DueDateCell entity={props.row.original} />,
+      size: 120,
+    });
 
     columnDefs.push({
       id: getInternalPropertyId("created-by"),

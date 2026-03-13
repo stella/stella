@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Ühendus katkes",
-    "connectionLostDescription": "Ühendus serveriga katkes. Proovime automaatselt uuesti.",
+    "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
     "createdAt": "Loodud {date}",
     "currency": "Currency",
@@ -474,7 +474,7 @@
     "pin": "Kinnita",
     "print": "Print",
     "properties": "Omadused",
-    "reconnecting": "Ühendumine…",
+    "reconnecting": "Taasühendamine…",
     "reference": "Reference",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
@@ -658,10 +658,10 @@
     "trigger": "Tagasiside"
   },
   "filters": {
-    "contains": "Sisaldab",
-    "eq": "On",
-    "is_empty": "On tühi",
-    "neq": "Ei ole"
+    "contains": "sisaldab",
+    "eq": "on",
+    "is_empty": "on tühi",
+    "neq": "ei ole"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agendid",
     "analytics": "Analüütika",
+    "calendar": "Kalender",
     "caseLaw": "Case Law",
     "chat": "Vestlus",
     "chatAlreadyOpen": "Chat is already open",
@@ -711,6 +712,7 @@
     "invoices": "Invoices",
     "knowledge": "Teadmus",
     "members": "Liikmed",
+    "myTodos": "Minu ülesanded",
     "newMatter": "Uus toimik",
     "organization": "Organisatsioon",
     "pinned": "Kinnitatud",
@@ -842,7 +844,47 @@
     "partyRemoved": "Osapool eemaldatud",
     "roleUpdated": "Roll uuendatud",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Ülesanne loodud",
     "workspaceDeletedSuccessfully": "Toimik edukalt kustutatud"
+  },
+  "tasks": {
+    "addAssignee": "Lisa isik",
+    "addSubtask": "Lisa alamülesanne",
+    "assigneeRoles": {
+      "assignee": "Täitja",
+      "reviewer": "Ülevaataja"
+    },
+    "assignees": "Määratud",
+    "clearDate": "Tühjenda kuupäev",
+    "dueDate": "Tähtaeg",
+    "linkEntity": "Seo kirje",
+    "linkedEntities": "Seotud kirjed",
+    "myTasksTitle": "Minu ülesanded",
+    "newTask": "Uus ülesanne",
+    "noAssignees": "Kedagi pole määratud",
+    "noLinks": "Seotud kirjed puuduvad",
+    "noSubtasks": "Alamülesanded puuduvad",
+    "noTasksAssigned": "Sulle pole ülesandeid määratud",
+    "overdue": "Tähtaeg ületatud",
+    "priority": "Prioriteet",
+    "priorityValues": {
+      "high": "Kõrge",
+      "low": "Madal",
+      "medium": "Keskmine",
+      "none": "Puudub",
+      "urgent": "Kiire"
+    },
+    "status": "Olek",
+    "statusValues": {
+      "cancelled": "Tühistatud",
+      "done": "Valmis",
+      "in_progress": "Töös",
+      "in_review": "Ülevaatamisel",
+      "open": "Avatud"
+    },
+    "subtasks": "Alamülesanded",
+    "title": "Ülesanded",
+    "untitled": "Pealkirjata ülesanne"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Lisa väljad",
       "aiGenerated": "Tehisintellektiga loodud",
+      "calendar": {
+        "addDates": "+ Kuupäevad",
+        "additionalDates": "+{count} kuupäeva",
+        "createdAt": "Loodud",
+        "dueDateTaskOnly": "Tähtaega saab määrata ainult ülesannetele",
+        "month": "Kuu",
+        "more": "+{count} veel",
+        "noDates": "Kuupäeva omadust pole valitud",
+        "showAdditionalDates": "Lisakuupäevad",
+        "showBy": "Näita",
+        "today": "Täna",
+        "updatedAt": "Viimati muudetud",
+        "week": "Nädal",
+        "year": "Aasta"
+      },
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
       "copySuffix": "{name} (copy)",
       "deleteView": "Kustuta vaade",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "groupBy": "Rühmita:",
       "layouts": {
+        "calendar": "Kalender",
         "filesystem": "Loend",
         "grid": "Ruudustik",
         "kanban": "Kanban",
         "list": "Loend",
         "overview": "Ülevaade",
-        "table": "Tabel"
+        "table": "Tabel",
+        "timeline": "Ajajoon"
       },
       "newView": "Uus {layout}",
-      "selectProperty": "Valige omadus"
+      "selectProperty": "Valige omadus",
+      "timeline": {
+        "day": "Päev",
+        "endDate": "Lõppkuupäev",
+        "month": "Kuu",
+        "noDates": "Kuupäevad pole määratud",
+        "quarter": "Kvartal",
+        "showTable": "Näita tabelit",
+        "startDate": "Alguskuupäev",
+        "week": "Nädal"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",

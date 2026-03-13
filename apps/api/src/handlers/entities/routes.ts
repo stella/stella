@@ -1,6 +1,5 @@
 import Elysia, { status, t } from "elysia";
 
-import { entityKindSchema } from "@/api/db/schema-validators";
 import {
   checkStampBodySchema,
   checkStampHandler,
@@ -33,38 +32,33 @@ import {
   uploadEntityBodySchema,
   uploadEntityHandler,
 } from "@/api/handlers/entities/upload";
+import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
 
+// Eden serializes complex query params (arrays of objects)
+// as JSON strings. Parse and normalize to arrays.
+const parseJsonQueryParam = <T>(raw: string | undefined): T[] => {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      return parsed as T[];
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    return [parsed] as T[];
+  } catch {
+    return [];
+  }
+};
+
 const readEntitiesQuerySchema = t.Object({
-  filters: t.Optional(
-    t.Array(
-      t.Union([
-        t.Object({
-          id: t.String(),
-          field: t.Literal("kind"),
-          op: t.Literal("in"),
-          value: t.Array(entityKindSchema),
-        }),
-        t.Object({
-          id: t.String(),
-          field: t.Literal("property"),
-          propertyId: t.String({ minLength: 1 }),
-          op: t.UnionEnum(["eq", "neq", "contains", "is_empty"]),
-          value: t.Optional(t.Union([t.String(), t.Array(t.String())])),
-        }),
-      ]),
-    ),
-  ),
-  sorts: t.Optional(
-    t.Array(
-      t.Object({
-        propertyId: t.String({ minLength: 1 }),
-        desc: t.Boolean(),
-      }),
-    ),
-  ),
+  filters: t.Optional(t.String()),
+  sorts: t.Optional(t.String()),
   page: t.Optional(t.Integer({ minimum: 1 })),
   pageSize: t.Optional(
     t.Integer({
@@ -116,15 +110,22 @@ export const entitiesRoute = new Elysia({
   )
   .get(
     "/",
-    async (ctx) =>
-      await readEntitiesHandler({
+    async (ctx) => {
+      const filters = parseJsonQueryParam<ViewFilterCondition>(
+        ctx.query.filters,
+      );
+      const sorts = parseJsonQueryParam<{ propertyId: string; desc: boolean }>(
+        ctx.query.sorts,
+      );
+      return await readEntitiesHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
-        filters: ctx.query.filters ?? [],
-        sorts: ctx.query.sorts ?? [],
+        filters,
+        sorts,
         page: ctx.query.page ?? 1,
         pageSize: ctx.query.pageSize ?? LIMITS.entitiesPageSizeDefault,
-      }),
+      });
+    },
     {
       query: readEntitiesQuerySchema,
     },

@@ -20,7 +20,9 @@ type DefaultView = {
   position: number;
 };
 
-const emptyLayout = (type: ViewLayoutType): ViewLayout => {
+const emptyLayout = (
+  type: "overview" | "table" | "filesystem" | "kanban",
+): ViewLayout => {
   const base = {
     filters: [] as ViewLayout["filters"],
     sorts: [] as ViewLayout["sorts"],
@@ -28,7 +30,12 @@ const emptyLayout = (type: ViewLayoutType): ViewLayout => {
   };
 
   if (type === "table") {
-    return { type, ...base, columnOrder: [], columnPinning: [] };
+    return {
+      type,
+      ...base,
+      columnOrder: [],
+      columnPinning: [],
+    };
   }
 
   return { type, ...base };

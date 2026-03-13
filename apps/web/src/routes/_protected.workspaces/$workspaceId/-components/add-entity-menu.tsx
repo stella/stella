@@ -5,6 +5,7 @@ import {
   FileTextIcon,
   FolderPlusIcon,
   PlusIcon,
+  SquareCheckIcon,
   UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -19,10 +20,13 @@ import {
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { api } from "@/lib/api";
 import type { EntityKind } from "@/lib/types";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useCreateEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
@@ -90,6 +94,28 @@ export const AddEntityMenu = ({
     );
   };
 
+  const handleCreateTask = async () => {
+    const response = await api.tasks({ workspaceId }).put({
+      queryKey: entitiesKeys.all(workspaceId),
+      name: t("tasks.untitled"),
+    });
+
+    const entityId = response.data?.entityId;
+    if (response.error || !entityId) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      return;
+    }
+
+    toastManager.add({
+      title: t("success.taskCreated"),
+      type: "success",
+    });
+    useInspectorStore.getState().openTask(entityId, "", true);
+  };
+
   return (
     <>
       <Menu>
@@ -125,6 +151,17 @@ export const AddEntityMenu = ({
           >
             <FileTextIcon />
             {t("workspaces.newDocument")}
+          </MenuItem>
+          <MenuItem
+            disabled={isCreationDisabled}
+            onClick={() => {
+              handleCreateTask().catch(() => {
+                // Error handled inside handleCreateTask
+              });
+            }}
+          >
+            <SquareCheckIcon />
+            {t("tasks.newTask")}
           </MenuItem>
           <MenuItem
             disabled={isCreationDisabled}

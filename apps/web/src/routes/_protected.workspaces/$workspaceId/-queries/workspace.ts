@@ -7,6 +7,7 @@ import { api, rivet } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError, toAuthClientError } from "@/lib/errors";
+import { withActorTimeout } from "@/lib/rivet";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 export const workspaceKeys = {
@@ -57,16 +58,9 @@ export const workflowOptions = ({
         workspaceId,
       });
 
-      const timeoutSignal = AbortSignal.timeout(10_000);
-      const combinedSignal =
-        signal !== undefined
-          ? AbortSignal.any([signal, timeoutSignal])
-          : timeoutSignal;
-
-      const rivetActor = rivet.workflow.getOrCreate(actorConfig[0], {
-        ...actorConfig[1],
-        signal: combinedSignal,
-      });
+      const rivetActor = rivet.workflow.getOrCreate(
+        ...withActorTimeout(actorConfig, signal),
+      );
 
       const workflowStatus = await rivetActor.getWorkflowStatus();
 

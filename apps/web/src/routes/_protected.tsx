@@ -242,19 +242,14 @@ function ProtectedContent({
               </Suspense>
             </>
           )}
-          {!rightOpen && (
+          {!rightOpen && !isOnChatRoute && (
             <>
               <Separator className="mx-1 h-4" orientation="vertical" />
               <Button
                 className="size-7"
-                disabled={isOnChatRoute}
                 onClick={toggleRight}
                 size="icon"
-                title={
-                  isOnChatRoute
-                    ? t("navigation.chatAlreadyOpen")
-                    : t("navigation.toggleChat")
-                }
+                title={t("navigation.toggleChat")}
                 variant="ghost"
               >
                 <PanelRightIcon className="size-4" />

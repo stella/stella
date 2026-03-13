@@ -31,6 +31,9 @@ const INTERNAL_PROPERTIES = [
   "updated-at",
   "version",
   "kind",
+  "status",
+  "priority",
+  "due-date",
 ] as const;
 
 type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];
@@ -189,7 +192,11 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
     return textField.content.value;
   }
 
-  return entity.kind === "folder" ? "Untitled Folder" : "Untitled";
+  return entity.kind === "folder"
+    ? "Untitled Folder"
+    : entity.kind === "task"
+      ? "Untitled Task"
+      : "Untitled";
 };
 
 export const getEntityTypeLabel = (entity: WorkspaceEntity): string => {
@@ -242,9 +249,42 @@ const matchesFilter = (
   filter: ViewFilterCondition,
 ): boolean => {
   if (filter.field === "kind") {
-    // Kind filtering requires entity hierarchy (not yet available).
-    // Pass through all entities for now.
-    return true;
+    if (filter.value.length === 0) {
+      return true;
+    }
+    // "document" implies "folder" (part of the same hierarchy)
+    if (filter.value.includes("document") && entity.kind === "folder") {
+      return true;
+    }
+    return filter.value.includes(entity.kind);
+  }
+
+  if (filter.field === "builtin") {
+    const val =
+      filter.builtinField === "status"
+        ? (entity.status ?? "")
+        : filter.builtinField === "priority"
+          ? (entity.priority ?? "")
+          : "";
+    const filterVal = String(filter.value ?? "");
+    switch (filter.op) {
+      case "eq":
+        return val === filterVal;
+      case "neq":
+        return val !== filterVal;
+      case "in": {
+        const arr = Array.isArray(filter.value)
+          ? filter.value
+          : filterVal
+            ? [filterVal]
+            : [];
+        return arr.length === 0 || arr.includes(val);
+      }
+      case "is_empty":
+        return val === "";
+      default:
+        return true;
+    }
   }
 
   const fieldValue = getFieldValue(entity.fields[filter.propertyId]);
@@ -392,6 +432,10 @@ type RawEntity = {
   createdByImage: string | null;
   updatedAt: string | null;
   version: number;
+  status: string | null;
+  priority: string | null;
+  dueDate: string | null;
+  sortOrder: string | null;
   fields: {
     id: string;
     propertyId: string;
@@ -411,6 +455,10 @@ export const parseEntities = (entities: RawEntity[]): WorkspaceEntity[] =>
     createdByImage: e.createdByImage,
     updatedAt: e.updatedAt,
     version: e.version,
+    status: e.status,
+    priority: e.priority,
+    dueDate: e.dueDate,
+    sortOrder: e.sortOrder,
     fields: e.fields.reduce<Record<string, WorkspaceField>>((acc, field) => {
       acc[field.propertyId] = {
         id: field.id,

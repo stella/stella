@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Savienojums zaudēts",
-    "connectionLostDescription": "Savienojums ar serveri ir zaudēts. Automātiski mēģinām atjaunot.",
+    "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
     "createdAt": "Izveidots {date}",
     "currency": "Currency",
@@ -474,7 +474,7 @@
     "pin": "Piespraust",
     "print": "Print",
     "properties": "Rekvizīti",
-    "reconnecting": "Atjaunojam savienojumu…",
+    "reconnecting": "Atkārtota savienošana…",
     "reference": "Reference",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
@@ -658,10 +658,10 @@
     "trigger": "Atsauksmes"
   },
   "filters": {
-    "contains": "Satur",
-    "eq": "Ir",
-    "is_empty": "Ir tukšs",
-    "neq": "Nav"
+    "contains": "satur",
+    "eq": "ir",
+    "is_empty": "ir tukšs",
+    "neq": "nav"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Aģenti",
     "analytics": "Analītika",
+    "calendar": "Kalendārs",
     "caseLaw": "Case Law",
     "chat": "Tērzēšana",
     "chatAlreadyOpen": "Chat is already open",
@@ -711,6 +712,7 @@
     "invoices": "Invoices",
     "knowledge": "Zināšanas",
     "members": "Dalībnieki",
+    "myTodos": "Mani uzdevumi",
     "newMatter": "Jauna lieta",
     "organization": "Organizācija",
     "pinned": "Piesprausts",
@@ -842,7 +844,47 @@
     "partyRemoved": "Puse noņemta",
     "roleUpdated": "Loma atjaunināta",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Uzdevums izveidots",
     "workspaceDeletedSuccessfully": "Lieta veiksmīgi dzēsta"
+  },
+  "tasks": {
+    "addAssignee": "Pievienot atbildīgo",
+    "addSubtask": "Pievienot apakšuzdevumu",
+    "assigneeRoles": {
+      "assignee": "Izpildītājs",
+      "reviewer": "Pārskatītājs"
+    },
+    "assignees": "Atbildīgie",
+    "clearDate": "Notīrīt datumu",
+    "dueDate": "Izpildes termiņš",
+    "linkEntity": "Saistīt ierakstu",
+    "linkedEntities": "Saistītie ieraksti",
+    "myTasksTitle": "Mani uzdevumi",
+    "newTask": "Jauns uzdevums",
+    "noAssignees": "Nav atbildīgo",
+    "noLinks": "Nav saistīto ierakstu",
+    "noSubtasks": "Nav apakšuzdevumu",
+    "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
+    "overdue": "Nokavēts",
+    "priority": "Prioritāte",
+    "priorityValues": {
+      "high": "Augsta",
+      "low": "Zema",
+      "medium": "Vidēja",
+      "none": "Nav",
+      "urgent": "Steidzams"
+    },
+    "status": "Statuss",
+    "statusValues": {
+      "cancelled": "Atcelts",
+      "done": "Pabeigts",
+      "in_progress": "Izpildē",
+      "in_review": "Pārskatīšanā",
+      "open": "Atvērts"
+    },
+    "subtasks": "Apakšuzdevumi",
+    "title": "Uzdevumi",
+    "untitled": "Uzdevums bez nosaukuma"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Pievienot laukus",
       "aiGenerated": "AI ģenerēts",
+      "calendar": {
+        "addDates": "+ Datumi",
+        "additionalDates": "+{count} datumi",
+        "createdAt": "Izveidots",
+        "dueDateTaskOnly": "Izpildes datumu var iestatīt tikai uzdevumiem",
+        "month": "Mēnesis",
+        "more": "+{count} vairāk",
+        "noDates": "Nav izvēlēta datuma īpašība",
+        "showAdditionalDates": "Papildu datumi",
+        "showBy": "Rādīt pēc",
+        "today": "Šodien",
+        "updatedAt": "Pēdējoreiz atjaunināts",
+        "week": "Nedēļa",
+        "year": "Gads"
+      },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
       "copySuffix": "{name} (copy)",
       "deleteView": "Dzēst skatu",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
       "groupBy": "Grupēt pēc:",
       "layouts": {
+        "calendar": "Kalendārs",
         "filesystem": "Saraksts",
         "grid": "Režģis",
         "kanban": "Kanban",
         "list": "Saraksts",
         "overview": "Pārskats",
-        "table": "Tabula"
+        "table": "Tabula",
+        "timeline": "Laika skala"
       },
       "newView": "Jauns {layout}",
-      "selectProperty": "Izvēlieties rekvizītu"
+      "selectProperty": "Izvēlieties rekvizītu",
+      "timeline": {
+        "day": "Diena",
+        "endDate": "Beigu datums",
+        "month": "Mēnesis",
+        "noDates": "Datumi nav iestatīti",
+        "quarter": "Ceturksnis",
+        "showTable": "Rādīt tabulu",
+        "startDate": "Sākuma datums",
+        "week": "Nedēļa"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

@@ -658,10 +658,10 @@
     "trigger": "Opinia"
   },
   "filters": {
-    "contains": "Zawiera",
-    "eq": "Jest",
-    "is_empty": "Jest puste",
-    "neq": "Nie jest"
+    "contains": "zawiera",
+    "eq": "jest",
+    "is_empty": "jest puste",
+    "neq": "nie jest"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agenci",
     "analytics": "Analityka",
+    "calendar": "Kalendarz",
     "caseLaw": "Case Law",
     "chat": "Czat",
     "chatAlreadyOpen": "Czat jest już otwarty",
@@ -711,6 +712,7 @@
     "invoices": "Faktury",
     "knowledge": "Wiedza",
     "members": "Członkowie",
+    "myTodos": "Moje zadania",
     "newMatter": "Nowa sprawa",
     "organization": "Organizacja",
     "pinned": "Przypięte",
@@ -842,7 +844,47 @@
     "partyRemoved": "Strona usunięta",
     "roleUpdated": "Rola zaktualizowana",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Zadanie utworzone",
     "workspaceDeletedSuccessfully": "Sprawa usunięta pomyślnie"
+  },
+  "tasks": {
+    "addAssignee": "Przypisz osobę",
+    "addSubtask": "Dodaj podzadanie",
+    "assigneeRoles": {
+      "assignee": "Wykonawca",
+      "reviewer": "Recenzent"
+    },
+    "assignees": "Przypisani",
+    "clearDate": "Wyczyść datę",
+    "dueDate": "Termin",
+    "linkEntity": "Powiąż element",
+    "linkedEntities": "Powiązane elementy",
+    "myTasksTitle": "Moje zadania",
+    "newTask": "Nowe zadanie",
+    "noAssignees": "Brak przypisanych",
+    "noLinks": "Brak powiązanych elementów",
+    "noSubtasks": "Brak podzadań",
+    "noTasksAssigned": "Nie masz przypisanych zadań",
+    "overdue": "Po terminie",
+    "priority": "Priorytet",
+    "priorityValues": {
+      "high": "Wysoki",
+      "low": "Niski",
+      "medium": "Średni",
+      "none": "Brak",
+      "urgent": "Pilne"
+    },
+    "status": "Status",
+    "statusValues": {
+      "cancelled": "Anulowane",
+      "done": "Ukończone",
+      "in_progress": "W toku",
+      "in_review": "W przeglądzie",
+      "open": "Otwarte"
+    },
+    "subtasks": "Podzadania",
+    "title": "Zadania",
+    "untitled": "Zadanie bez tytułu"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Dodaj pola",
       "aiGenerated": "Wygenerowane przez AI",
+      "calendar": {
+        "addDates": "+ Daty",
+        "additionalDates": "+{count} dat",
+        "createdAt": "Utworzono",
+        "dueDateTaskOnly": "Termin można ustawić tylko dla zadań",
+        "month": "Miesiąc",
+        "more": "+{count} więcej",
+        "noDates": "Nie wybrano właściwości daty",
+        "showAdditionalDates": "Dodatkowe daty",
+        "showBy": "Pokaż według",
+        "today": "Dziś",
+        "updatedAt": "Ostatnia aktualizacja",
+        "week": "Tydzień",
+        "year": "Rok"
+      },
       "cannotDeleteRequired": "Wymagany jest co najmniej jeden widok tego typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Usuń widok",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# wybrany} few {# wybrane} many {# wybranych} other {# wybranych}}",
       "groupBy": "Grupuj według:",
       "layouts": {
+        "calendar": "Kalendarz",
         "filesystem": "Lista",
         "grid": "Siatka",
         "kanban": "Kanban",
         "list": "Lista",
         "overview": "Przegląd",
-        "table": "Tabela"
+        "table": "Tabela",
+        "timeline": "Oś czasu"
       },
       "newView": "Nowy {layout}",
-      "selectProperty": "Wybierz właściwość"
+      "selectProperty": "Wybierz właściwość",
+      "timeline": {
+        "day": "Dzień",
+        "endDate": "Data zakończenia",
+        "month": "Miesiąc",
+        "noDates": "Brak ustawionych dat",
+        "quarter": "Kwartał",
+        "showTable": "Pokaż tabelę",
+        "startDate": "Data rozpoczęcia",
+        "week": "Tydzień"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",

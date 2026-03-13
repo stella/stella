@@ -1,14 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { flexRender } from "@tanstack/react-table";
 import type { Table as ReactTable, Row } from "@tanstack/react-table";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stella/ui/components/checkbox";
-import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { renderDragPreview } from "@/components/drag-preview";
 import {
   Table,
   TableBody,
@@ -18,25 +19,22 @@ import {
   TableRow,
 } from "@/components/table";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   TableTreeNode,
   WorkspaceTable as WorkspaceTableType,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import {
-  useCreateEntities,
-  useMoveEntity,
-  useRenameEntity,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import {
   countDescendants,
   getEntityName,
+  getFirstFile,
   getInternalColId,
   getPinningStyles,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-const ENTITY_DRAG_TYPE = "stella/entity-id";
 const selectColId = getInternalColId("select");
 
 type WorkspaceTableProps = {
@@ -45,22 +43,26 @@ type WorkspaceTableProps = {
 };
 
 export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
-  const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   const renameEntity = useRenameEntity();
-  const moveEntity = useMoveEntity();
-  const createEntities = useCreateEntities();
 
-  const activeEntityId = usePeekStore((s) => {
-    if (!s.activeFieldId) {
+  const activeEntityId = useInspectorStore((s) => {
+    if (!s.activeId) {
       return null;
     }
-    const tab = s.tabs.find((tabItem) => tabItem.fieldId === s.activeFieldId);
-    return tab?.entityId ?? null;
+    const tab = s.tabs.find((t) => t.id === s.activeId);
+    return tab?.type === "pdf" ? tab.entityId : null;
+  });
+
+  const activeTaskId = useInspectorStore((s) => {
+    if (!s.activeId) {
+      return null;
+    }
+    const tab = s.tabs.find((t) => t.id === s.activeId);
+    return tab?.type === "task" ? tab.id : null;
   });
 
   const rowModel = table.getRowModel();
@@ -91,63 +93,6 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     }
     return labels;
   }, [rowModel]);
-
-  const handleRowDrop = (e: React.DragEvent, target: TableTreeNode) => {
-    e.preventDefault();
-    setDropTargetId(null);
-    const entityId = e.dataTransfer.getData(ENTITY_DRAG_TYPE);
-    if (!entityId || entityId === target.entityId) {
-      return;
-    }
-
-    const onError = () => {
-      toastManager.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    };
-
-    if (target.kind === "folder") {
-      moveEntity.mutate(
-        {
-          workspaceId,
-          entityId,
-          parentId: target.entityId,
-        },
-        { onError },
-      );
-    } else {
-      createEntities.mutate(
-        {
-          workspaceId,
-          type: "manual-input",
-          kind: "folder",
-          parentId: target.parentId ?? undefined,
-          name: t("workspaces.newFolder"),
-        },
-        {
-          onSuccess: (data) => {
-            if (!data?.entityId) {
-              return;
-            }
-            const folderId = data.entityId;
-            moveEntity.mutate({
-              workspaceId,
-              entityId: target.entityId,
-              parentId: folderId,
-            });
-            moveEntity.mutate({
-              workspaceId,
-              entityId,
-              parentId: folderId,
-            });
-            setEditingEntityId(folderId);
-          },
-          onError,
-        },
-      );
-    }
-  };
 
   return (
     <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
@@ -201,145 +146,28 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
           ))}
         </TableHeader>
         <TableBody>
-          {rowModel.rows.map((row, index) => {
-            const isFolder = row.original.kind === "folder";
-            const visibleCells = row.getVisibleCells();
-
-            if (isFolder && visibleCells.length > 2) {
-              const selectCell = visibleCells[0];
-              const nameCell = visibleCells[1];
-              const remainingCount = visibleCells.length - 2;
-
-              return (
-                <TableRow
-                  className={cn(
-                    row.original.entityId === activeEntityId && "bg-muted/50",
-                    dropTargetId === row.original.entityId &&
-                      "ring-primary ring-2",
-                  )}
-                  data-state={row.getIsSelected() && "selected"}
-                  draggable
-                  key={row.id}
-                  onDragLeave={() => setDropTargetId(null)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDropTargetId(row.original.entityId);
-                  }}
-                  onDragStart={(e) =>
-                    e.dataTransfer.setData(
-                      ENTITY_DRAG_TYPE,
-                      row.original.entityId,
-                    )
-                  }
-                  onDrop={(e) => handleRowDrop(e, row.original)}
-                >
-                  <TableCell
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                    key={selectCell.id}
-                    style={{
-                      ...getPinningStyles(selectCell.column),
-                    }}
-                  >
-                    <SelectRowContent
-                      index={index}
-                      label={rowLabels[index]}
-                      lastSelectedIndex={lastSelectedIndex}
-                      row={row}
-                      table={table}
-                    />
-                  </TableCell>
-                  <TableCell
-                    className="cursor-pointer"
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                    key={nameCell.id}
-                    onClick={() => row.toggleExpanded()}
-                    style={{
-                      ...getPinningStyles(nameCell.column),
-                    }}
-                  >
-                    <FolderCell
-                      depth={row.depth}
-                      editingEntityId={editingEntityId}
-                      entity={row.original}
-                      isExpanded={row.getIsExpanded()}
-                      onRename={(entityId, newName) => {
-                        renameEntity.mutate({
-                          workspaceId,
-                          entityId,
-                          name: newName,
-                        });
-                      }}
-                      onStopEditing={() => setEditingEntityId(null)}
-                      startEditing={() =>
-                        setEditingEntityId(row.original.entityId)
-                      }
-                    />
-                  </TableCell>
-                  {remainingCount > 0 && (
-                    <TableCell
-                      className="cursor-pointer"
-                      colSpan={remainingCount}
-                      data-state={row.getIsSelected() ? "selected" : undefined}
-                      onClick={() => row.toggleExpanded()}
-                    />
-                  )}
-                </TableRow>
-              );
-            }
-
-            return (
-              <TableRow
-                className={cn(
-                  row.original.entityId === activeEntityId && "bg-muted/50",
-                  dropTargetId === row.original.entityId &&
-                    "ring-primary ring-2",
-                )}
-                data-state={row.getIsSelected() && "selected"}
-                draggable
-                key={row.id}
-                onDragLeave={() => setDropTargetId(null)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDropTargetId(row.original.entityId);
-                }}
-                onDragStart={(e) =>
-                  e.dataTransfer.setData(
-                    ENTITY_DRAG_TYPE,
-                    row.original.entityId,
-                  )
-                }
-                onDrop={(e) => handleRowDrop(e, row.original)}
-              >
-                {visibleCells.map((cell) => (
-                  <TableCell
-                    className={cn(
-                      cell.column.columnDef.meta?.muted &&
-                        "text-muted-foreground",
-                    )}
-                    data-state={
-                      cell.row.getIsSelected() ? "selected" : undefined
-                    }
-                    key={cell.id}
-                    style={{
-                      ...getPinningStyles(cell.column),
-                    }}
-                  >
-                    {cell.column.id === selectColId ? (
-                      <SelectRowContent
-                        index={index}
-                        label={rowLabels[index]}
-                        lastSelectedIndex={lastSelectedIndex}
-                        row={row}
-                        table={table}
-                      />
-                    ) : (
-                      flexRender(cell.column.columnDef.cell, cell.getContext())
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            );
-          })}
+          {rowModel.rows.map((row, index) => (
+            <DraggableRow
+              activeEntityId={activeEntityId}
+              activeTaskId={activeTaskId}
+              editingEntityId={editingEntityId}
+              index={index}
+              key={row.id}
+              lastSelectedIndex={lastSelectedIndex}
+              onRename={(entityId, newName) => {
+                renameEntity.mutate({
+                  workspaceId,
+                  entityId,
+                  name: newName,
+                });
+              }}
+              onStartEditing={setEditingEntityId}
+              onStopEditing={() => setEditingEntityId(null)}
+              row={row}
+              rowLabel={rowLabels[index]}
+              table={table}
+            />
+          ))}
           <BottomRow
             onFolderCreated={setEditingEntityId}
             table={table}
@@ -350,6 +178,184 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     </div>
   );
 };
+
+// -- Draggable table row --
+
+type DraggableRowProps = {
+  row: Row<TableTreeNode>;
+  index: number;
+  rowLabel: string;
+  table: WorkspaceTableType;
+  activeEntityId: string | null;
+  activeTaskId: string | null;
+  editingEntityId: string | null;
+  lastSelectedIndex: React.RefObject<number | null>;
+  onRename: (entityId: string, newName: string) => void;
+  onStartEditing: (entityId: string) => void;
+  onStopEditing: () => void;
+};
+
+const DraggableRow = ({
+  row,
+  index,
+  rowLabel,
+  table,
+  activeEntityId,
+  activeTaskId,
+  editingEntityId,
+  lastSelectedIndex,
+  onRename,
+  onStartEditing,
+  onStopEditing,
+}: DraggableRowProps) => {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  const entity = row.original;
+  const isFolder = entity.kind === "folder";
+  const isTask = entity.kind === "task";
+  const visibleCells = row.getVisibleCells();
+  const name = getEntityName(entity);
+  const file = getFirstFile(entity);
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) {
+      return;
+    }
+
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: ENTITY_DRAG_TYPE,
+        entityId: entity.entityId,
+        entityIds: [entity.entityId],
+        entities: [
+          {
+            entityId: entity.entityId,
+            name,
+            kind: entity.kind,
+            mimeType: file?.mimeType ?? null,
+            parentId: entity.parentId ?? null,
+          },
+        ],
+      }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) => {
+        setCustomNativeDragPreview({
+          nativeSetDragImage,
+          render: ({ container }) =>
+            renderDragPreview(container, {
+              name,
+              kind: entity.kind,
+              mimeType: file?.mimeType ?? null,
+            }),
+        });
+      },
+    });
+  }, [entity.entityId, entity.kind, entity.parentId, name, file?.mimeType]);
+
+  if (isFolder && visibleCells.length > 2) {
+    const selectCell = visibleCells[0];
+    const nameCell = visibleCells[1];
+    const remainingCount = visibleCells.length - 2;
+
+    return (
+      <TableRow
+        className={cn(entity.entityId === activeEntityId && "bg-muted/50")}
+        data-state={row.getIsSelected() && "selected"}
+        key={row.id}
+        ref={rowRef}
+      >
+        <TableCell
+          data-state={row.getIsSelected() ? "selected" : undefined}
+          key={selectCell.id}
+          style={{
+            ...getPinningStyles(selectCell.column),
+          }}
+        >
+          <SelectRowContent
+            index={index}
+            label={rowLabel}
+            lastSelectedIndex={lastSelectedIndex}
+            row={row}
+            table={table}
+          />
+        </TableCell>
+        <TableCell
+          className="cursor-pointer"
+          data-state={row.getIsSelected() ? "selected" : undefined}
+          key={nameCell.id}
+          onClick={() => row.toggleExpanded()}
+          style={{
+            ...getPinningStyles(nameCell.column),
+          }}
+        >
+          <FolderCell
+            depth={row.depth}
+            editingEntityId={editingEntityId}
+            entity={entity}
+            isExpanded={row.getIsExpanded()}
+            onRename={onRename}
+            onStopEditing={onStopEditing}
+            startEditing={() => onStartEditing(entity.entityId)}
+          />
+        </TableCell>
+        {remainingCount > 0 && (
+          <TableCell
+            className="cursor-pointer"
+            colSpan={remainingCount}
+            data-state={row.getIsSelected() ? "selected" : undefined}
+            onClick={() => row.toggleExpanded()}
+          />
+        )}
+      </TableRow>
+    );
+  }
+
+  return (
+    <TableRow
+      className={cn(
+        (entity.entityId === activeEntityId ||
+          entity.entityId === activeTaskId) &&
+          "bg-muted/50",
+        isTask && "cursor-pointer",
+      )}
+      data-state={row.getIsSelected() && "selected"}
+      key={row.id}
+      onClick={
+        isTask
+          ? () => useInspectorStore.getState().openTask(entity.entityId, name)
+          : undefined
+      }
+      ref={rowRef}
+    >
+      {visibleCells.map((cell) => (
+        <TableCell
+          className={cn(
+            cell.column.columnDef.meta?.muted && "text-muted-foreground",
+          )}
+          data-state={cell.row.getIsSelected() ? "selected" : undefined}
+          key={cell.id}
+          style={{
+            ...getPinningStyles(cell.column),
+          }}
+        >
+          {cell.column.id === selectColId ? (
+            <SelectRowContent
+              index={index}
+              label={rowLabel}
+              lastSelectedIndex={lastSelectedIndex}
+              row={row}
+              table={table}
+            />
+          ) : (
+            flexRender(cell.column.columnDef.cell, cell.getContext())
+          )}
+        </TableCell>
+      ))}
+    </TableRow>
+  );
+};
+
+// -- Select row content --
 
 type SelectRowContentProps = {
   index: number;
@@ -407,6 +413,8 @@ const SelectRowContent = ({
     </div>
   );
 };
+
+// -- Folder cell --
 
 type FolderCellProps = {
   entity: TableTreeNode;

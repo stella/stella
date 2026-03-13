@@ -70,6 +70,11 @@ export const entityKindEnum = p.pgEnum("entity_kind", [
   "message",
 ]);
 
+export const taskAssigneeRoleEnum = p.pgEnum("task_assignee_role", [
+  "assignee",
+  "reviewer",
+]);
+
 export const timeEntryStatusEnum = p.pgEnum("time_entry_status", [
   "draft",
   "approved",
@@ -449,6 +454,10 @@ export const entities = p.pgTable(
       }),
     /** Sequential document number within the workspace (null for folders). */
     docSequence: p.integer("doc_sequence"),
+    status: p.varchar({ length: 32 }),
+    priority: p.varchar({ length: 16 }),
+    dueDate: p.date("due_date", { mode: "string" }),
+    sortOrder: p.varchar("sort_order", { length: 64 }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
   },
@@ -464,6 +473,90 @@ export const entities = p.pgTable(
       .on(table.workspaceId, table.docSequence)
       .where(isNotNull(table.docSequence)),
     p.unique("entities_id_ws_unq").on(table.id, table.workspaceId),
+    p
+      .index("entities_workspace_status_idx")
+      .on(table.workspaceId, table.status)
+      .where(isNotNull(table.status)),
+    p
+      .index("entities_workspace_priority_idx")
+      .on(table.workspaceId, table.priority)
+      .where(isNotNull(table.priority)),
+    p
+      .index("entities_due_date_idx")
+      .on(table.workspaceId, table.dueDate)
+      .where(isNotNull(table.dueDate)),
+    ...wsPolicies(),
+  ],
+);
+
+export const taskAssignees = p.pgTable(
+  "task_assignees",
+  {
+    id: pNanoid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: p
+      .varchar("entity_id", { length: 21 })
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: taskAssigneeRoleEnum().notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
+    p.index("task_assignees_entity_id_idx").on(table.entityId),
+    p.index("task_assignees_user_id_idx").on(table.userId),
+    p
+      .uniqueIndex("task_assignees_entity_user_uidx")
+      .on(table.entityId, table.userId),
+    ...wsPolicies(),
+  ],
+);
+
+export const entityLinks = p.pgTable(
+  "entity_links",
+  {
+    id: pNanoid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    sourceEntityId: p
+      .varchar("source_entity_id", { length: 21 })
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    targetEntityId: p
+      .varchar("target_entity_id", { length: 21 })
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    linkType: p
+      .varchar("link_type", { length: 32 })
+      .notNull()
+      .default("related"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("entity_links_workspace_id_idx").on(table.workspaceId),
+    p.index("entity_links_source_idx").on(table.sourceEntityId),
+    p.index("entity_links_target_idx").on(table.targetEntityId),
+    p
+      .uniqueIndex("entity_links_source_target_uidx")
+      .on(table.sourceEntityId, table.targetEntityId),
+    p
+      .uniqueIndex("entity_links_pair_uidx")
+      .using(
+        "btree",
+        sql`LEAST(${table.sourceEntityId}, ${table.targetEntityId})`,
+        sql`GREATEST(${table.sourceEntityId}, ${table.targetEntityId})`,
+      ),
+    p.check(
+      "entity_links_no_self_ref_check",
+      sql`${table.sourceEntityId} != ${table.targetEntityId}`,
+    ),
     ...wsPolicies(),
   ],
 );
@@ -1428,6 +1521,8 @@ export const relations = defineRelations(
     properties,
     propertyDependencies,
     entities,
+    taskAssignees,
+    entityLinks,
     entityVersions,
     fields,
     justifications,
@@ -1617,6 +1712,46 @@ export const relations = defineRelations(
       extractedContent: r.one.extractedContent({
         from: r.entities.id,
         to: r.extractedContent.entityId,
+      }),
+      assignees: r.many.taskAssignees({
+        from: r.entities.id,
+        to: r.taskAssignees.entityId,
+      }),
+      linksAsSource: r.many.entityLinks({
+        from: r.entities.id,
+        to: r.entityLinks.sourceEntityId,
+        alias: "entityLinkSource",
+      }),
+      linksAsTarget: r.many.entityLinks({
+        from: r.entities.id,
+        to: r.entityLinks.targetEntityId,
+        alias: "entityLinkTarget",
+      }),
+    },
+    taskAssignees: {
+      entity: r.one.entities({
+        from: r.taskAssignees.entityId,
+        to: r.entities.id,
+      }),
+      user: r.one.user({
+        from: r.taskAssignees.userId,
+        to: r.user.id,
+      }),
+    },
+    entityLinks: {
+      workspace: r.one.workspaces({
+        from: r.entityLinks.workspaceId,
+        to: r.workspaces.id,
+      }),
+      sourceEntity: r.one.entities({
+        from: r.entityLinks.sourceEntityId,
+        to: r.entities.id,
+        alias: "entityLinkSource",
+      }),
+      targetEntity: r.one.entities({
+        from: r.entityLinks.targetEntityId,
+        to: r.entities.id,
+        alias: "entityLinkTarget",
       }),
     },
     entityVersions: {

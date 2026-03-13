@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Spojenie stratené",
-    "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky skúšame znova.",
+    "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky opakujeme.",
     "convertTo": "Previesť na",
     "createdAt": "Vytvorené {date}",
     "currency": "Currency",
@@ -474,7 +474,7 @@
     "pin": "Pripnúť",
     "print": "Print",
     "properties": "Vlastnosti",
-    "reconnecting": "Obnovuje sa spojenie…",
+    "reconnecting": "Obnovenie spojenia…",
     "reference": "Reference",
     "rename": "Premenovať",
     "required": "Povinné",
@@ -658,10 +658,10 @@
     "trigger": "Spätná väzba"
   },
   "filters": {
-    "contains": "Obsahuje",
-    "eq": "Je",
-    "is_empty": "Je prázdne",
-    "neq": "Nie je"
+    "contains": "obsahuje",
+    "eq": "je",
+    "is_empty": "je prázdne",
+    "neq": "nie je"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agenti",
     "analytics": "Analytika",
+    "calendar": "Kalendár",
     "caseLaw": "Case Law",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat je už otvorený",
@@ -711,6 +712,7 @@
     "invoices": "Faktúry",
     "knowledge": "Znalosti",
     "members": "Členovia",
+    "myTodos": "Moje úlohy",
     "newMatter": "Nový spis",
     "organization": "Organizácia",
     "pinned": "Pripnuté",
@@ -842,7 +844,47 @@
     "partyRemoved": "Strana odstránená",
     "roleUpdated": "Rola aktualizovaná",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Úloha vytvorená",
     "workspaceDeletedSuccessfully": "Spis úspešne vymazaný"
+  },
+  "tasks": {
+    "addAssignee": "Pridať osobu",
+    "addSubtask": "Pridať podúlohu",
+    "assigneeRoles": {
+      "assignee": "Riešiteľ",
+      "reviewer": "Revident"
+    },
+    "assignees": "Priradení",
+    "clearDate": "Vymazať dátum",
+    "dueDate": "Termín",
+    "linkEntity": "Prepojiť položku",
+    "linkedEntities": "Prepojené položky",
+    "myTasksTitle": "Moje úlohy",
+    "newTask": "Nová úloha",
+    "noAssignees": "Žiadni priradení",
+    "noLinks": "Žiadne prepojené položky",
+    "noSubtasks": "Žiadne podúlohy",
+    "noTasksAssigned": "Nemáte priradené žiadne úlohy",
+    "overdue": "Po termíne",
+    "priority": "Priorita",
+    "priorityValues": {
+      "high": "Vysoká",
+      "low": "Nízka",
+      "medium": "Stredná",
+      "none": "Žiadna",
+      "urgent": "Urgentná"
+    },
+    "status": "Stav",
+    "statusValues": {
+      "cancelled": "Zrušená",
+      "done": "Hotovo",
+      "in_progress": "Rozpracovaná",
+      "in_review": "V revízii",
+      "open": "Otvorená"
+    },
+    "subtasks": "Podúlohy",
+    "title": "Úlohy",
+    "untitled": "Úloha bez názvu"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Pridať polia",
       "aiGenerated": "Vygenerované AI",
+      "calendar": {
+        "addDates": "+ Dátumy",
+        "additionalDates": "+{count} dátumov",
+        "createdAt": "Vytvorené",
+        "dueDateTaskOnly": "Termín je možné nastaviť iba pre úlohy",
+        "month": "Mesiac",
+        "more": "+{count} ďalších",
+        "noDates": "Nevybratá žiadna vlastnosť dátumu",
+        "showAdditionalDates": "Ďalšie dátumy",
+        "showBy": "Zobraziť podľa",
+        "today": "Dnes",
+        "updatedAt": "Naposledy aktualizované",
+        "week": "Týždeň",
+        "year": "Rok"
+      },
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Vymazať pohľad",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
       "groupBy": "Zoskupiť podľa:",
       "layouts": {
+        "calendar": "Kalendár",
         "filesystem": "Zoznam",
         "grid": "Mriežka",
         "kanban": "Kanban",
         "list": "Zoznam",
         "overview": "Prehľad",
-        "table": "Tabuľka"
+        "table": "Tabuľka",
+        "timeline": "Časová os"
       },
       "newView": "Nový {layout}",
-      "selectProperty": "Vybrať vlastnosť"
+      "selectProperty": "Vybrať vlastnosť",
+      "timeline": {
+        "day": "Deň",
+        "endDate": "Dátum ukončenia",
+        "month": "Mesiac",
+        "noDates": "Žiadne dátumy nastavené",
+        "quarter": "Štvrťrok",
+        "showTable": "Zobraziť tabuľku",
+        "startDate": "Dátum začiatku",
+        "week": "Týždeň"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",

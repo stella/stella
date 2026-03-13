@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { FolderIcon, LayoutDashboardIcon } from "lucide-react";
+import { LayoutDashboardIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -34,7 +34,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const lang = useI18nStore((s) => s.lang);
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
 
-  const hasActivity = data.recentEntities.length > 0;
+  const recentEntities = useMemo(
+    () => data.recentEntities.filter((e) => e.kind !== "folder"),
+    [data.recentEntities],
+  );
+  const hasActivity = recentEntities.length > 0;
 
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
@@ -66,7 +70,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </h2>
         {hasActivity ? (
           <div className="divide-y rounded-lg border">
-            {data.recentEntities.map((entity) => (
+            {recentEntities.map((entity) => (
               <OverviewRow
                 entity={entity}
                 key={entity.entityId}
@@ -167,6 +171,10 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       createdByImage: entity.createdByImage,
       updatedAt: entity.updatedAt,
       version: 0,
+      status: null,
+      priority: null,
+      dueDate: null,
+      sortOrder: null,
       fields,
     };
   }, [entity]);
@@ -190,8 +198,8 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     });
 
   const icon =
-    entity.kind === "folder" ? (
-      <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+    entity.kind === "task" ? (
+      <SquareCheckIcon className="text-muted-foreground size-4 shrink-0" />
     ) : entity.mimeType ? (
       <DocumentIcon className="size-4 shrink-0" mimeType={entity.mimeType} />
     ) : null;

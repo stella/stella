@@ -2,6 +2,8 @@ import * as v from "valibot";
 
 const entityKindValues = ["document", "folder", "task", "message"] as const;
 
+const builtinFieldValues = ["status", "priority"] as const;
+
 export const viewFilterConditionSchema = v.union([
   v.object({
     id: v.string(),
@@ -14,6 +16,13 @@ export const viewFilterConditionSchema = v.union([
     field: v.literal("property"),
     propertyId: v.pipe(v.string(), v.minLength(1)),
     op: v.picklist(["eq", "neq", "contains", "is_empty"]),
+    value: v.optional(v.union([v.string(), v.array(v.string())])),
+  }),
+  v.object({
+    id: v.string(),
+    field: v.literal("builtin"),
+    builtinField: v.picklist(builtinFieldValues),
+    op: v.picklist(["eq", "neq", "in", "is_empty"]),
     value: v.optional(v.union([v.string(), v.array(v.string())])),
   }),
 ]);
@@ -60,11 +69,34 @@ const kanbanLayoutSchema = v.object({
   groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
+const calendarLayoutSchema = v.object({
+  type: v.literal("calendar"),
+  ...baseLayoutSchema,
+  datePropertyId: v.pipe(v.string(), v.minLength(1)),
+  endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  additionalDatePropertyIds: v.optional(
+    v.array(v.pipe(v.string(), v.minLength(1))),
+  ),
+  mode: v.picklist(["month", "week", "year"]),
+});
+
+const timelineLayoutSchema = v.object({
+  type: v.literal("timeline"),
+  ...baseLayoutSchema,
+  startDatePropertyId: v.pipe(v.string(), v.minLength(1)),
+  endDatePropertyId: v.pipe(v.string(), v.minLength(1)),
+  zoom: v.picklist(["day", "week", "month", "quarter"]),
+  groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  showTable: v.boolean(),
+});
+
 const layoutSchemas = [
   overviewLayoutSchema,
   tableLayoutSchema,
   filesystemLayoutSchema,
   kanbanLayoutSchema,
+  calendarLayoutSchema,
+  timelineLayoutSchema,
 ] as const;
 
 export const viewLayoutSchema = v.variant("type", layoutSchemas);
@@ -99,6 +131,8 @@ export const viewLayoutTypeSchema = v.picklist([
   "table",
   "filesystem",
   "kanban",
+  "calendar",
+  "timeline",
 ]);
 
 export const convertViewInputSchema = v.object({

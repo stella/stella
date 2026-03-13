@@ -24,7 +24,10 @@ export const readOverviewHandler = async ({
           .where(eq(entities.workspaceId, workspaceId))
           .then((rows) => rows.at(0)?.count ?? 0),
         tx.query.entities.findMany({
-          where: { workspaceId: { eq: workspaceId } },
+          where: {
+            workspaceId: { eq: workspaceId },
+            kind: { ne: "folder" },
+          },
           columns: {
             id: true,
             name: true,
