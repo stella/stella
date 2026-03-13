@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { extractDefinedTerms, findCoreferenceSpans } from "./coreference";
 import type { Entity } from "./types";
 import { DETECTION_SOURCES } from "./types";

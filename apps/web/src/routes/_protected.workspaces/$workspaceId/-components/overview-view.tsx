@@ -22,8 +22,8 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
 type OverviewViewProps = {

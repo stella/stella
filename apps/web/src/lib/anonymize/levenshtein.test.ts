@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { levenshtein } from "./levenshtein";
 
 describe("levenshtein()", () => {

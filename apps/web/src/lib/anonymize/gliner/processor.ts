@@ -21,7 +21,10 @@ export const tokenizeText = (
   const ends: number[] = [];
 
   for (const { segment, index, isWordLike } of segmenter.segment(text)) {
-    if (!isWordLike) {
+    // Include words and numeric segments (Intl.Segmenter
+    // marks pure digit sequences as non-word-like, but the
+    // NER model needs them for entity detection).
+    if (!isWordLike && !/\d/u.test(segment)) {
       continue;
     }
     words.push(segment);
