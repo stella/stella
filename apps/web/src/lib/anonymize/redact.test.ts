@@ -1,5 +1,5 @@
-import { deanonymise, redactText } from "./redact";
-import type { Entity } from "./types";
+import { deanonymise, exportRedactionKey, redactText } from "./redact";
+import type { Entity, OperatorConfig, OperatorType } from "./types";
 import { DETECTION_SOURCES } from "./types";
 
 const entity = (
@@ -14,6 +14,15 @@ const entity = (
   text,
   score: 1,
   source: DETECTION_SOURCES.REGEX,
+});
+
+const config = (
+  operators: Record<string, string>,
+  redactString = "[REDACTED]",
+): OperatorConfig => ({
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test helper
+  operators: operators as OperatorConfig["operators"],
+  redactString,
 });
 
 describe("redactText()", () => {
@@ -82,7 +91,6 @@ describe("redactText()", () => {
 
     it("normalizes email casing", () => {
       const text = "Jan@Example.COM and jan@example.com";
-      //            0              15  20             34
       const entities = [
         entity(0, 15, "email address", "Jan@Example.COM"),
         entity(20, 35, "email address", "jan@example.com"),
@@ -93,7 +101,6 @@ describe("redactText()", () => {
 
     it("normalizes phone formatting", () => {
       const text = "+420777123456 or +420 777 123 456";
-      //            0            13   17               33
       const entities = [
         entity(0, 13, "phone number", "+420777123456"),
         entity(17, 33, "phone number", "+420 777 123 456"),
@@ -120,6 +127,81 @@ describe("redactText()", () => {
       expect(r.redactionMap.get("[PERSON_1]")).toBe("Jan Novák");
     });
   });
+
+  describe("operatorMap", () => {
+    it("records operator type per placeholder", () => {
+      const text = "Jan Novák";
+      const r = redactText(
+        text,
+        [entity(0, 9, "person", "Jan Novák")],
+        config({ person: "replace" }),
+      );
+      expect(r.operatorMap.get("[PERSON_1]")).toBe("replace");
+    });
+  });
+});
+
+describe("operator dispatch", () => {
+  it("replace operator: identical to default behaviour", () => {
+    const text = "call Jan Novák today";
+    const r = redactText(
+      text,
+      [entity(5, 14, "person", "Jan Novák")],
+      config({ person: "replace" }),
+    );
+    expect(r.redactedText).toBe("call [PERSON_1] today");
+    expect(r.redactionMap.get("[PERSON_1]")).toBe("Jan Novák");
+  });
+
+  it("redact operator: custom string, empty map", () => {
+    const text = "call Jan Novák today";
+    const r = redactText(
+      text,
+      [entity(5, 14, "person", "Jan Novák")],
+      config({ person: "redact" }),
+    );
+    expect(r.redactedText).toBe("call [REDACTED] today");
+    expect(r.redactionMap.size).toBe(0);
+  });
+
+  it("redact operator: uses custom redact string", () => {
+    const text = "call Jan Novák today";
+    const r = redactText(
+      text,
+      [entity(5, 14, "person", "Jan Novák")],
+      config({ person: "redact" }, "█████"),
+    );
+    expect(r.redactedText).toBe("call █████ today");
+    expect(r.redactionMap.size).toBe(0);
+  });
+
+  it("mixed operators: each label uses its operator", () => {
+    const text = "Jan Novák has IBAN CZ6508000000192000145399";
+    const entities = [
+      entity(0, 9, "person", "Jan Novák"),
+      entity(19, 43, "iban", "CZ6508000000192000145399"),
+    ];
+    const r = redactText(
+      text,
+      entities,
+      config({ person: "replace", iban: "redact" }),
+    );
+    expect(r.redactedText).toBe("[PERSON_1] has IBAN [REDACTED]");
+    // Only person has a map entry (replace is reversible)
+    expect(r.redactionMap.size).toBe(1);
+    expect(r.redactionMap.has("[PERSON_1]")).toBeTruthy();
+  });
+
+  it("defaults to replace when label not in config", () => {
+    const text = "call Jan Novák today";
+    const r = redactText(
+      text,
+      [entity(5, 14, "person", "Jan Novák")],
+      config({}),
+    );
+    expect(r.redactedText).toBe("call [PERSON_1] today");
+    expect(r.redactionMap.size).toBe(1);
+  });
 });
 
 describe("deanonymise()", () => {
@@ -133,5 +215,40 @@ describe("deanonymise()", () => {
     const map = new Map([["[PERSON_1]", "Jan"]]);
     const result = deanonymise("[PERSON_1] a [PERSON_1]", map);
     expect(result).toBe("Jan a Jan");
+  });
+
+  it("returns text unchanged with empty map (irreversible-only)", () => {
+    const map = new Map<string, string>();
+    const result = deanonymise("[REDACTED] data", map);
+    expect(result).toBe("[REDACTED] data");
+  });
+});
+
+describe("exportRedactionKey()", () => {
+  it("serialises replace entries with operator metadata", () => {
+    const redactionMap = new Map([["[PERSON_1]", "Jan Novák"]]);
+    const operatorMap = new Map<string, OperatorType>([
+      ["[PERSON_1]", "replace"],
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse returns unknown
+    const json = JSON.parse(
+      exportRedactionKey(redactionMap, operatorMap),
+    ) as Record<string, unknown>;
+    expect(json).toStrictEqual({
+      entries: {
+        "[PERSON_1]": {
+          original: "Jan Novák",
+          operator: "replace",
+        },
+      },
+    });
+  });
+
+  it("returns empty entries for fully-redacted documents", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON.parse returns unknown
+    const json = JSON.parse(
+      exportRedactionKey(new Map(), new Map()),
+    ) as Record<string, unknown>;
+    expect(json).toStrictEqual({ entries: {} });
   });
 });

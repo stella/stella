@@ -28,16 +28,36 @@ redaction runs; the output adapts accordingly.
   out of scope for now. This is consistent with the existing per-label
   review workflow and keeps the UI simple.
 
-- **Six built-in operators:**
+- **Two built-in operators (reduced from six):**
 
   | Operator | Output | Reversible |
   |---|---|---|
   | `replace` | `[LABEL_N]` stable placeholder | Yes (via redaction key) |
-  | `redact` | `[REDACTED]` | No |
-  | `mask` | `J*** N****` / `****1234` | No |
-  | `hash` | `[sha256:a3f2…]` (first 12 hex chars) | No (linkable) |
-  | `generalise` | year / city / initials | No |
-  | `encrypt` | `[enc:base64…]` (AES-GCM) | Yes (with key) |
+  | `redact` | customizable string (default `[REDACTED]`) | No |
+
+  Originally planned six operators (mask, hash, generalise, encrypt
+  in addition to replace and redact). Dropped four after evaluating
+  against the ICP:
+
+  - **mask** (`J** N****`): partially guessable from context,
+    AI can't meaningfully reference masked text back to the user.
+    A compliance/data-science pattern, not useful for the
+    "anonymise → AI review → map back" workflow.
+  - **generalise** (`1985`, `J.N.`): degrades information the AI
+    might need, initials and postcodes can still be identifying,
+    and the AI can't reference them back via the redaction map.
+  - **hash** (`[sha256:…]`): a data-engineering pattern for
+    linkability across datasets. No use case for a law firm
+    anonymising a single document for AI review.
+  - **encrypt**: adds key-management complexity (passphrase,
+    PBKDF2, salt storage) that doesn't fit the ICP. If the
+    redaction map needs protection, encrypt the export file
+    at the storage layer, not per-entity.
+
+  Replace + redact cover the two real needs: "anonymise for AI
+  processing, then map back" and "permanently remove, never
+  recoverable." Additional operators can be added later if a
+  concrete use case emerges.
 
 - **`replace` remains the default for all labels.** Existing
   pipeline behaviour is unchanged unless the user explicitly
