@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
@@ -69,13 +71,13 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
     },
   });
 
-  return () => {
+  return useCallback(() => {
     if (pendingMutationsCount > 0) {
       return;
     }
 
     mutation.mutate();
-  };
+  }, [pendingMutationsCount, mutation]);
 };
 
 export const useIsCreatingBBoxes = () => {

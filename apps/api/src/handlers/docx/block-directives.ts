@@ -929,7 +929,11 @@ export const processBlockDirectives = (
 
     // Insert expanded paragraphs at the saved position
     for (const p of finalParagraphs) {
-      bodyEl.insertBefore(p, insertionRef);
+      if (insertionRef) {
+        bodyEl.insertBefore(p, insertionRef);
+      } else {
+        bodyEl.appendChild(p);
+      }
     }
   };
 

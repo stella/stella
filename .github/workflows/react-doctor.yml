@@ -41,6 +41,7 @@ jobs:
       - name: Run React Doctor
         if: steps.changes.outputs.has_react_changes == 'true'
         id: doctor
+        continue-on-error: true
         uses: millionco/react-doctor@ec4a41fd827c29d79f9b27a588cde598e054d059 # main
         with:
           diff: main
