@@ -3,8 +3,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
 import { isToolUIPart } from "ai";
-import type { UIMessage } from "ai";
 
+import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 import type { ChatActor } from "@/lib/api";
 import { eventHandlerV2 } from "@/lib/rivet";
@@ -14,7 +14,7 @@ import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
 const chatEvent = eventHandlerV2<ChatActor>();
 
 type UseChatSessionOptions = {
-  chat: Chat<UIMessage>;
+  chat: Chat<ChatMessage>;
   threadId: string;
 };
 
@@ -82,7 +82,10 @@ export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
         threadId,
       });
       if (latest) {
-        setMessages(latest);
+        // SAFETY: messages from the actor are structurally
+        // ChatMessage — narrowing adds typed tool parts.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        setMessages(latest as ChatMessage[]);
       }
       await chat.resumeStream();
     }),

@@ -5,6 +5,7 @@ import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
 import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
+import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 import { RivetChatTransport } from "@/lib/ai-sdk/rivet-transport";
 import type {
   ActiveFileContext,
@@ -69,8 +70,12 @@ export const chatThreadOptions = (opts: {
         getActiveFile: opts.getActiveFile,
       });
 
-      const chat = new Chat({
-        messages: initialMessages,
+      // SAFETY: messages from the actor are structurally
+      // ChatMessage — narrowing adds typed tool parts.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const messages = initialMessages as ChatMessage[];
+      const chat = new Chat<ChatMessage>({
+        messages,
         transport,
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,

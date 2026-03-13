@@ -1,6 +1,6 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { getToolName, isToolUIPart } from "ai";
+import { isToolUIPart } from "ai";
 import { PlusIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -18,6 +18,8 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import { DocumentViewCard } from "@/components/chat/document-view-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
@@ -103,44 +105,47 @@ function ThreadRoute() {
                           </MessageResponse>
                         );
                       }
-                      if (isToolUIPart(part)) {
-                        if (getToolName(part) === "askUser") {
-                          return (
-                            <AskUserCard
-                              key={part.toolCallId}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onSubmit={async (text) =>
-                                await sendMessage({ text })
-                              }
-                              part={part}
-                            />
-                          );
-                        }
-                        if (
-                          part.state === "approval-requested" ||
-                          part.state === "approval-responded" ||
-                          (part.state === "output-available" &&
-                            "approval" in part) ||
-                          (part.state === "output-error" && "approval" in part)
-                        ) {
-                          return (
-                            <ToolApprovalCard
-                              autoApprovedTools={autoApprovedTools}
-                              key={part.toolCallId}
-                              onAlwaysAllow={handleAlwaysAllow}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onApprove={handleApprove}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onDeny={handleDeny}
-                              part={part}
-                            />
-                          );
-                        }
-                        if (showToolCalls) {
-                          return (
-                            <ToolCallCard key={part.toolCallId} part={part} />
-                          );
-                        }
+                      if (part.type === "tool-askUser") {
+                        return (
+                          <AskUserCard
+                            key={part.toolCallId}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onSubmit={async (text) =>
+                              await sendMessage({ text })
+                            }
+                            part={part}
+                          />
+                        );
+                      }
+                      if (
+                        part.type === "tool-displayDocument" &&
+                        part.state === "output-available"
+                      ) {
+                        return (
+                          <DocumentViewCard
+                            key={part.toolCallId}
+                            result={part.output}
+                          />
+                        );
+                      }
+                      if (isApprovalPart(part)) {
+                        return (
+                          <ToolApprovalCard
+                            autoApprovedTools={autoApprovedTools}
+                            key={part.toolCallId}
+                            onAlwaysAllow={handleAlwaysAllow}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onApprove={handleApprove}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onDeny={handleDeny}
+                            part={part}
+                          />
+                        );
+                      }
+                      if (isToolUIPart(part) && showToolCalls) {
+                        return (
+                          <ToolCallCard key={part.toolCallId} part={part} />
+                        );
                       }
                       return null;
                     })}

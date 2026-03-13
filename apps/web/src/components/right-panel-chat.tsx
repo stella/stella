@@ -5,7 +5,7 @@ import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Editor as TipTapEditor } from "@tiptap/react";
 import { getToolName, isToolUIPart } from "ai";
-import type { FileUIPart, UIMessage } from "ai";
+import type { FileUIPart } from "ai";
 import {
   ArrowUpIcon,
   FileTextIcon,
@@ -33,6 +33,8 @@ import {
 } from "@/components/ai-elements/message";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChips } from "@/components/chat/attachment-chips";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { DocumentViewCard } from "@/components/chat/document-view-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SystemPromptMessage } from "@/components/chat/system-prompt-message";
@@ -193,7 +195,7 @@ const ThinkingIndicator = () => {
 /** Check if the last assistant message has any visible content
  *  (non-empty text or tool call parts). Used to determine
  *  whether to show the thinking indicator. */
-const hasVisibleContent = (messages: UIMessage[]): boolean => {
+const hasVisibleContent = (messages: ChatMessage[]): boolean => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg.role !== "assistant") {
@@ -588,7 +590,7 @@ type ActiveThreadInnerProps = {
   threadId: string;
   workspaceId?: string;
   mentionContext: MentionContext;
-  chat: Chat<UIMessage>;
+  chat: Chat<ChatMessage>;
   onBack: () => void;
   onSwitchThread: (threadId: string) => void;
 };
@@ -721,62 +723,45 @@ const ActiveThreadInner = ({
                           </MessageResponse>
                         );
                       }
+                      if (part.type === "tool-askUser") {
+                        return (
+                          <AskUserCard
+                            key={part.toolCallId}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onSubmit={async (text) =>
+                              await sendMessage({ text })
+                            }
+                            part={part}
+                          />
+                        );
+                      }
+                      if (
+                        part.type === "tool-displayDocument" &&
+                        part.state === "output-available"
+                      ) {
+                        return (
+                          <DocumentViewCard
+                            key={part.toolCallId}
+                            result={part.output}
+                          />
+                        );
+                      }
+                      if (isApprovalPart(part)) {
+                        return (
+                          <ToolApprovalCard
+                            autoApprovedTools={autoApprovedTools}
+                            key={part.toolCallId}
+                            onAlwaysAllow={handleAlwaysAllow}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onApprove={handleApprove}
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onDeny={handleDeny}
+                            part={part}
+                            workspaceId={workspaceId}
+                          />
+                        );
+                      }
                       if (isToolUIPart(part)) {
-                        if (getToolName(part) === "askUser") {
-                          return (
-                            <AskUserCard
-                              key={part.toolCallId}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onSubmit={async (text) =>
-                                await sendMessage({ text })
-                              }
-                              part={part}
-                            />
-                          );
-                        }
-                        if (
-                          getToolName(part) === "displayDocument" &&
-                          part.state === "output-available" &&
-                          part.output !== undefined &&
-                          part.output !== null
-                        ) {
-                          // SAFETY: output matches the displayDocument
-                          // tool's return shape; the tool is defined in
-                          // chat-document-tools.ts.
-                          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-                          const output = part.output as {
-                            filename: string;
-                            view: string;
-                            text: string;
-                          };
-                          return (
-                            <DocumentViewCard
-                              key={part.toolCallId}
-                              result={output}
-                            />
-                          );
-                        }
-                        if (
-                          part.state === "approval-requested" ||
-                          part.state === "approval-responded" ||
-                          (part.state === "output-available" &&
-                            "approval" in part) ||
-                          (part.state === "output-error" && "approval" in part)
-                        ) {
-                          return (
-                            <ToolApprovalCard
-                              autoApprovedTools={autoApprovedTools}
-                              key={part.toolCallId}
-                              onAlwaysAllow={handleAlwaysAllow}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onApprove={handleApprove}
-                              // eslint-disable-next-line typescript/no-misused-promises
-                              onDeny={handleDeny}
-                              part={part}
-                              workspaceId={workspaceId}
-                            />
-                          );
-                        }
                         return (
                           <ToolCallCard
                             key={part.toolCallId}

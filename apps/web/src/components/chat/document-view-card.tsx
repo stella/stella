@@ -8,14 +8,10 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
-type DocumentViewResult = {
-  filename: string;
-  view: string;
-  text: string;
-};
+import type { DisplayDocumentOutput } from "@/components/chat/chat-ui-tools";
 
 type DocumentViewCardProps = {
-  result: DocumentViewResult;
+  result: DisplayDocumentOutput;
 };
 
 const VIEW_LABELS = {
