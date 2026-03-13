@@ -53,10 +53,13 @@ function RouteComponent() {
   // field IDs from the previous workspace don't cause broken
   // PDF previews.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => {
-    usePeekStore.getState().closeAll();
-    useInspectorStore.getState().closeAll();
-  }, [workspaceId]);
+  useEffect(
+    () => () => {
+      usePeekStore.getState().closeAll();
+      useInspectorStore.getState().closeAll();
+    },
+    [workspaceId],
+  );
 
   const timesheetsMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/timesheets",
