@@ -482,7 +482,7 @@ const MatterItem = ({
         <NavBadge digit={navBadge} />
       ) : (
         <div
-          className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[pinned]:opacity-100"
+          className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100"
           data-pinned={isPinned || undefined}
         >
           <button
@@ -516,6 +516,55 @@ const MatterItem = ({
         </div>
       )}
     </SidebarMenuItem>
+  );
+};
+
+const CollapsedContextArea = ({
+  onCreateWorkspace,
+}: {
+  onCreateWorkspace: () => void;
+}) => {
+  const t = useTranslations();
+  const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxAnchor, setCtxAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+
+  return (
+    <div
+      className="flex-1"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const x = e.clientX;
+        const y = e.clientY;
+        setCtxAnchor({
+          getBoundingClientRect: () =>
+            new DOMRect(x, y, 0, 0),
+        });
+        setCtxOpen(true);
+      }}
+    >
+      <Menu
+        onOpenChange={(open) => {
+          setCtxOpen(open);
+          if (!open) {
+            setCtxAnchor(null);
+          }
+        }}
+        open={ctxOpen}
+      >
+        <MenuTrigger
+          nativeButton={false}
+          render={<span className="sr-only" />}
+        />
+        <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuItem onClick={onCreateWorkspace}>
+            <PlusIcon />
+            {t("navigation.newMatter")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </div>
   );
 };
 
@@ -1019,6 +1068,11 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        )}
+
+        {/* Blank area: right-click to create a new matter */}
+        {isCollapsed && (
+          <CollapsedContextArea onCreateWorkspace={handleCreateWorkspace} />
         )}
       </SidebarContent>
 
