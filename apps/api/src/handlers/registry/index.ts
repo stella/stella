@@ -16,6 +16,9 @@ export const registry = setup({
     chat: chatActor,
     views: viewsActor,
   },
+  // Required since 2.1.6: the manager no longer auto-starts
+  // unless explicitly opted in (Cloudflare Workers compat).
+  serveManager: true,
 });
 
 export type Registry = typeof registry;
