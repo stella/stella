@@ -145,213 +145,39 @@ For these, use `WebFetch` or `WebSearch` directly.
 
 ## Regulated Industry
 
-Stella handles privileged legal data (attorney-client privilege,
-litigation holds, personal data). All code must be written as if we
-are operating under **SOC 2 Type II** and **ISO 27001** controls.
-
-Principles derived from these standards that apply to every change:
-
-- **Least privilege** — services, users, and tokens get the minimum
-  permissions needed. No wildcard IAM policies, no admin-by-default.
-- **Audit trail** — state-changing operations must be traceable to
-  an actor and timestamp. Never silently mutate data.
-- **Encryption in transit and at rest** — TLS everywhere, S3 SSE,
-  no plaintext secrets in code or logs.
-- **Input validation at boundaries** — all external input (user,
-  API, file upload) is validated and sanitised before processing.
-- **Separation of concerns** — workspace isolation is mandatory.
-  Data from one workspace must never leak to another.
-- **Ethical walls** — workspace boundaries enforce Chinese walls.
-  Users must have zero visibility into workspaces they are not
-  assigned to: no names, no members, no metadata. Treat
-  workspace isolation as absolute confidentiality.
-- **Access control** — every endpoint must enforce auth and
-  authorisation. No "internal-only" endpoints without guards.
-- **Dependency hygiene** — keep dependencies minimal, pinned, and
-  audited.
-- **Logging without leaking** — log enough to investigate incidents,
-  never log secrets, tokens, PII, or document contents.
-- **Change management** — all changes go through PR review. No
-  direct commits to main.
-- **Data retention** — respect deletion requests. When data is
-  deleted, it is actually deleted (not soft-deleted indefinitely).
+Stella handles privileged legal data. All code must meet **SOC 2
+Type II** and **ISO 27001** standards: least privilege, audit
+trails, encryption, workspace isolation, ethical walls. Full
+checklist in `/conventions-security`.
 
 ## Design Principles
 
-### Clarity, not magic.
-
-Every part of Stella should be understandable: how it works, what it
-costs, why it does what it does. No hidden complexity. If a user or
-contributor cannot understand a feature by reading the code, that might
-be considered a bug.
-
-### Built to last.
-
-Every operation (opening a matter, searching documents, reviewing
-documents) can be performed by a person, a script, or by an AI agent.
-
-### Your practice, your data.
-
-No lock-in. Standard file formats. Easy export. Self-hosting is a
-first-class option, not an afterthought.
-
-### Responsible by design.
-
-The legal profession has ethical obligations that predate software by
-centuries. We design around them from the start. AI outputs are
-grounded by citations and traceable to source material.
-
-### AI is a tool, not a persona.
-
-Do not anthropomorphize AI with names or personas
-("I am Stella, your assistant"). Be honest about
-AI capabilities.
-
-### Performance is non-negotiable.
-
-This is a professional tool. Every interaction should feel fast.
-Batch operations, minimize round-trips, lazy-load aggressively.
-
-### Vertical slices over horizontal layers.
-
-Structure features as independent end-to-end slices (own
-routes, components, handlers) rather than editing shared
-horizontal layers. This minimizes merge conflicts when multiple
-people work in parallel: PDF rendering lives under its own
-route, so improving it never touches the table view; DOCX
-templates get their own routes behind a feature flag, reading
-workspace data but rendered in complete isolation.
-
-Vertical slices also serve as an isolation boundary for
-AI-generated exploratory features. New capabilities land in
-their own slice with limited scope, keeping existing clean code
-untouched. When the experiment concludes, the slice is either
-rewritten properly or removed entirely; neither operation
-requires surgery on unrelated code.
+- **Clarity, not magic.** No hidden complexity; code is the docs.
+- **Built to last.** Every operation works for humans, scripts,
+  and AI agents.
+- **Your practice, your data.** No lock-in; standard formats;
+  self-hosting is first-class.
+- **Responsible by design.** AI outputs grounded by citations.
+- **AI is a tool, not a persona.** No anthropomorphizing.
+- **Performance is non-negotiable.** Batch operations, minimize
+  round-trips, lazy-load aggressively.
+- **Vertical slices over horizontal layers.** Features are
+  independent end-to-end slices (own routes, components,
+  handlers). New capabilities land in their own slice; existing
+  code stays untouched.
 
 ## Scalability
 
-**Principle: never paint yourself into a corner.**
+Never paint yourself into a corner. Architecture must support
+Magic Circle scale without a rewrite. Never return unbounded
+result sets; keep the API stateless; filter by tenant ID in the
+query. Full guidelines in `/conventions-scale`.
 
-Stella's current focus is mid-size firms, but the architecture must
-support Magic Circle scale (2,000–5,000+ lawyers, millions of
-documents, global offices) without a rewrite. Apply this rule of
-thumb to every design decision:
+## UX & Brand
 
-- If the scalable solution costs roughly the same effort as the
-  simple one, choose the scalable solution now.
-- If real scalability requires significantly more work, the
-  simple solution is fine, but it must be _replaceable_ without
-  restructuring surrounding code. Isolate it behind an interface,
-  a config flag, or a clean module boundary.
-
-### What this means in practice
-
-**Pagination and streaming.** Never return unbounded result sets.
-Every list endpoint must accept `limit`/`cursor` (or
-`limit`/`offset`). Even if the UI does not paginate today, the
-API must support it so the frontend can adopt pagination or
-virtual scrolling independently. For file processing, prefer
-streaming over loading entire files into memory.
-
-**Tenant isolation.** Application-level filtering (via `SafeId`
-and `workspaceAccessMacro`) is the current approach. Do not
-introduce patterns that would prevent adding PostgreSQL
-Row-Level Security (RLS) later: always filter by tenant ID in
-the query itself, never fetch-then-check in application code.
-
-**Stateless API processes.** Keep the Elysia server stateless so
-it can run behind a load balancer with N replicas. No in-process
-singletons that hold mutable state (caches, queues, locks).
-Background work should be delegable to a separate worker or
-queue consumer.
-
-**Resource limits as configuration.** Limits (entity count,
-property count, file size) must never be magic numbers scattered
-in handlers. Define them in `lib/limits.ts` and design the
-schema so they can become per-plan or per-organization settings
-without code changes.
-
-**AI provider abstraction.** Do not hardcode a single AI
-provider in business logic. The provider should be selectable
-via configuration so that failover, multi-provider, or
-self-hosted models can be added without rewriting workflow
-actors.
-
-**Indexes.** When adding a column that will be used in `WHERE`,
-`ORDER BY`, or `JOIN`, add an index in the same migration.
-Composite indexes should lead with the tenant-scoping column
-(`workspaceId`, `organizationId`). Justify _omitting_ an index,
-not adding one.
-
-**Connection pooling.** Assume the database connection pool is a
-shared, finite resource. Avoid long-held transactions; keep
-transactions as short as possible. Design for an external pooler
-(PgBouncer) sitting between the app and PostgreSQL.
-
-### Known scale gaps (acceptable today, tracked for later)
-
-These exist, are known, and do not need fixing right now; but
-new code must not make them worse:
-
-- No session caching (session lookups hit DB every request;
-  Redis is available for rate limiting but not yet used as a
-  general cache)
-- No granular RBAC (auth and workspace-level access control are
-  enforced; role-based permissions within a workspace are not)
-- Frontend entity table has no virtualization or server pagination
-- Random nanoid PKs (B-tree insert fragmentation at scale;
-  prefer time-ordered IDs like ULIDs for new high-volume tables)
-
-## Brand & Visual Identity
-
-Keywords: **crystal-clear, subtle, detail-oriented, high-precision.**
-
-Visual inspiration: glass-like surfaces. Clean, translucent, precise.
-
-The default palette is clean neutral grays on white. Accent palettes
-(Nord, Flexoki) are available as user preferences; the brand itself
-stays monochrome with the Stella § mark.
-
-Colours from the brand deck (for reference, not for hard-coding):
-
-| Name        | Hex       | Usage                          |
-| ----------- | --------- | ------------------------------ |
-| Black       | `#000`    | Primary text, logo mark        |
-| Soft Blue   | `#cae1fb` | Illustration/accent background |
-| Pale Blue   | `#e2f6fd` | Light tint surfaces            |
-| Blue Accent | `#59a1d4` | Accent in marketing material   |
-
-In the product UI, use semantic tokens (`bg-muted`, `text-foreground`,
-`border`) rather than raw colour values. The palette CSS variables
-handle light/dark/palette switching automatically.
-
-## UX Philosophy
-
-**Core beliefs:**
-
-- Users notice the little things.
-- Every interaction should feel smooth.
-- Good UX is invisible; it just works.
-- Keep users focused and in the flow: minimum clutter.
-
-**Micro-interactions that delight:**
-
-Small, almost invisible touches that make the experience feel
-premium. Linear is a good reference.
-
-- Number/count transitions: subtle fade (~200ms). No flashy
-  slot-machine animations; this is a professional tool.
-- State transitions (loading, success, error) should feel
-  continuous, not jarring.
-- Keep it subtle. The goal is "oh, that's nice", not "look at that
-  animation". When in doubt, simpler is better, or skip it.
-
-**Reduce visual noise:**
-
-- Secondary information (counts, metadata) should be subtle by
-  default. Use opacity transitions to reveal details on hover.
-- Don't compete for attention; let the content speak.
+Use semantic tokens (`bg-muted`, `text-foreground`, `border`),
+not raw colour values. Full brand deck, micro-interaction
+guidelines, and visual noise rules in `/conventions-ux`.
 
 ## Coding Conventions
 
@@ -425,15 +251,10 @@ premium. Linear is a good reference.
   `Bun.S3Client`). This is a Bun runtime; don't write
   browser-compatible code on the backend.
 - Drizzle ORM for all database access — no raw SQL unless
-  absolutely necessary
+  absolutely necessary (see `/conventions-db`)
 - Don't use `?.` or `?? []` to silently handle relations that are
   structural invariants of the data model (e.g. `entity.currentVersion`
-  always exists after creation). Use `panic()` instead so violations
-  are caught immediately rather than silently returning corrupt data.
-- Prefer Drizzle's relational query API (`db.query.*.findFirst`,
-  `findMany`) over SQL-like syntax (`select().from().where()`).
-  Use SQL-like syntax only for queries that genuinely benefit
-  from it (cross-table filtering, aggregations, unions).
+  always exists after creation). Use `panic()` instead.
 - Timeouts on all external calls:
   ```typescript
   fetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -497,25 +318,9 @@ premium. Linear is a good reference.
 
 ### Database
 
-- Schema lives in `/apps/api/src/db/schema.ts`
-- Use Drizzle migrations (`bun run db:push`)
-- Cascade deletes for workspace-owned resources
-- Restrict deletes for file references (prevent orphaning)
-- When writing multi-delete transactions, trace the FK graph
-  from `schema.ts` and delete in dependency order: delete the
-  parent with cascade FKs first (removing referencing rows),
-  then delete restrict-FK targets last.
-- JSONB columns for flexible content schemas
-- Every new list query must support `limit` and a cursor or
-  offset. Never return an unbounded `findMany` without a limit.
-- Add indexes for any column used in `WHERE`, `ORDER BY`, or
-  `JOIN`. Lead composite indexes with the tenant-scoping column.
-- Keep transactions short: do I/O (S3, external APIs) outside
-  the transaction, not inside.
-- Don't filter on unindexed JSONB fields in `WHERE` clauses.
-  Fetch by an indexed column, then validate the JSONB content
-  in application code. Narrow the discriminated union with a
-  type guard instead of using `as` casts.
+Schema in `/apps/api/src/db/schema.ts`. Drizzle ORM for all
+access. Full conventions (FK ordering, JSONB, indexes,
+transactions) in `/conventions-db`.
 
 ### Testing
 
@@ -542,35 +347,10 @@ or isolating external services. Every bug fix gets a regression test.
 
 ## Internationalization (i18n)
 
-**Stack:** `use-intl` for runtime.
-
-**Supported languages:** en (source), cs, de, hu, pl, sk.
-
-**Translation flow:**
-
-1. Add or modify keys in
-   `apps/web/src/i18n/langs/en.json`.
-2. Add corresponding translations to all target language
-   files (`cs.json`, `de.json`, `hu.json`, `pl.json`,
-   `sk.json`). Write natural, idiomatic translations;
-   avoid literal/robotic phrasing.
-3. Run `i18n-typegen src/i18n/langs` (from `apps/web`) to
-   regenerate type declarations (also runs automatically
-   before `bun run typecheck`).
-
-**Prefer generic, reusable keys over feature-specific ones.**
-Before adding any new i18n key, search `en.json` for an existing
-key with the same or similar wording (e.g., `common.filter`,
-`common.sort`, `common.columns`). Reuse `common.*` or shared
-namespace keys instead of creating feature-scoped duplicates
-like `billing.expenses.deleteExpense`. Feature-specific keys
-are only justified when the wording truly differs from the
-generic version (e.g., a confirmation message that mentions
-the resource by name). This keeps the translation file compact
-and reduces translator workload.
-
-Key naming, pluralization, and style rules are documented
-in `apps/web/src/i18n/TERMINOLOGY.md`.
+`use-intl` runtime. Source language: en. Check
+`apps/web/src/i18n/langs/` for supported languages. Prefer
+reusable `common.*` keys over feature-scoped duplicates. Full
+translation flow and key naming rules in `/conventions-i18n`.
 
 ## GitHub Interactions
 
