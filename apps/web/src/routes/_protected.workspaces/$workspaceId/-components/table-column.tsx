@@ -9,16 +9,15 @@ import { Button } from "@stella/ui/components/button";
 import type {
   EntityKind,
   WorkspaceEntity,
-  WorkspaceJustification,
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditFieldDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -85,18 +84,44 @@ const PropertyCell = ({
     );
   }
 
-  // AI-model property: link to file viewer when justification exists
-  if (property.tool.type === "ai-model") {
-    const fileFieldId =
-      justification?.fileFieldIds.at(0) ?? getFirstFile(entity)?.fieldId;
+  // AI-model property: click opens peek PDF with justification
+  if (property.tool.type === "ai-model" && field !== undefined) {
+    const firstFile = getFirstFile(entity);
+    const justFieldId = justification?.fileFieldIds.at(0);
+    const fileFieldId = justFieldId ?? firstFile?.fieldId;
 
-    if (justification && fileFieldId) {
+    // When the justification references a specific file,
+    // look it up so label and mimeType match the actual PDF.
+    const referencedFile =
+      justFieldId !== undefined
+        ? Object.values(entity.fields).find(
+            (f) => f.id === justFieldId && f.content.type === "file",
+          )
+        : undefined;
+
+    const fileName =
+      (referencedFile?.content.type === "file"
+        ? referencedFile.content.fileName
+        : undefined) ??
+      firstFile?.fileName ??
+      entity.name ??
+      "";
+
+    const mimeType =
+      referencedFile?.content.type === "file"
+        ? referencedFile.content.mimeType
+        : firstFile?.mimeType;
+
+    if (fileFieldId) {
       return (
         <WithOpenEntityButton
-          activePropertyId={property.id}
           entityId={entity.entityId}
           fieldId={fileFieldId}
-          justification={justification}
+          justificationFieldId={field.id}
+          label={fileName}
+          mimeType={mimeType}
+          propertyId={property.id}
+          workspaceId={property.workspaceId}
         >
           <CellResult field={field} property={property} />
         </WithOpenEntityButton>
@@ -110,38 +135,62 @@ const PropertyCell = ({
 type WithOpenEntityButtonProps = {
   fieldId: string;
   entityId: string;
-  justification: WorkspaceJustification;
-  activePropertyId: string;
+  justificationFieldId: string;
+  label: string;
+  mimeType?: string;
+  propertyId: string;
+  workspaceId: string;
 };
 
+/** Makes the cell clickable to open the peek PDF viewer
+ *  in the inspector with the AI justification visible. */
 const WithOpenEntityButton = ({
   fieldId,
   entityId,
-  justification,
-  activePropertyId,
+  justificationFieldId,
+  label,
+  mimeType,
+  propertyId,
+  workspaceId,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
+  const navigate = useNavigate();
   const t = useTranslations();
-  const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
-  });
-  const createBoundingBoxes = useCreateBBoxes({
-    justification,
-  });
+  const openPdf = useInspectorStore((s) => s.openPdf);
+
+  const activePropertyId = propertyId;
 
   return (
-    <>
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div
+      className="w-full cursor-pointer text-start"
+      onClick={() =>
+        openPdf({
+          id: fieldId,
+          entityId,
+          label,
+          mimeType,
+          justificationFieldId,
+          propertyId,
+          workspaceId,
+        })
+      }
+    >
       {children}
       <Button
         className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
         // eslint-disable-next-line typescript/no-misused-promises
-        onClick={async () => {
-          createBoundingBoxes();
+        onClick={async (e) => {
+          e.stopPropagation();
 
-          await navigate({
+          // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
+          await (navigate as any)({
             to: "/workspaces/$workspaceId/$viewId/pdf",
-            search: (prev) =>
-              produce(prev, (s) => {
+            params: { workspaceId, viewId: "all" },
+            // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
+            search: (prev: unknown) =>
+              // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
+              produce(prev, (s: any) => {
                 s.file = {
                   fieldId,
                   pageNumber: 1,
@@ -153,14 +202,15 @@ const WithOpenEntityButton = ({
                   visible: true,
                   activePropertyId,
                 };
-              }),
+                // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
+              }) as any,
           });
         }}
         size="xs"
       >
         {t("common.open")}
       </Button>
-    </>
+    </div>
   );
 };
 

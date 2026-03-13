@@ -8,3 +8,4 @@ export const MAX_PARALLEL_FILE_UPLOADS = 5;
 export const getStorageKey = (key: string) => `stella-${key}`;
 
 export const PDF_MIME_TYPE = "application/pdf";
+export const TEXT_PLAIN_MIME_TYPE = "text/plain";

@@ -119,6 +119,7 @@
         "better-auth": "catalog:",
         "better-result": "catalog:",
         "diff-match-patch": "catalog:",
+        "dompurify": "^3.3.1",
         "html-react-parser": "^5.2.17",
         "html2canvas-pro": "^2.0.2",
         "immer": "^11.1.4",
@@ -147,6 +148,7 @@
         "@tailwindcss/vite": "^4.2.1",
         "@tanstack/router-plugin": "^1.163.3",
         "@types/diff-match-patch": "catalog:",
+        "@types/dompurify": "^3.0.5",
         "@types/papaparse": "^5.5.2",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
@@ -1456,6 +1458,8 @@
     "@types/deep-eql": ["@types/deep-eql@4.0.2", "", {}, "sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw=="],
 
     "@types/diff-match-patch": ["@types/diff-match-patch@1.0.36", "", {}, "sha512-xFdR6tkm0MWvBfO8xXCSsinYxHcqkQUlcHeSpMC2ukzOb6lwQAfDmW+Qt0AvlGd8HpsS28qKsB+oPeJn9I39jg=="],
+
+    "@types/dompurify": ["@types/dompurify@3.2.0", "", { "dependencies": { "dompurify": "*" } }, "sha512-Fgg31wv9QbLDA0SpTOXO3MaxySc4DKGLi8sna4/Utjo4r3ZRPdCt4UQee8BWr+Q5z21yifghREPJGYaEOEIACg=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 

@@ -6,7 +6,7 @@ import Tooltip from "@/components/tooltip";
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceField, WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   emptyColor,
   optionColorsMap,
@@ -54,13 +54,14 @@ export const CellResult = ({ field, property }: CellResultProps) => {
   if (type === "file") {
     return (
       <FileCell
-        encrypted={field.content.encrypted}
+        encrypted={field.content.encrypted ?? false}
         entityId={field.entityId}
         fieldId={field.id}
         fileName={field.content.fileName}
         mimeType={field.content.mimeType}
-        pdfFileId={field.content.pdfFileId}
+        pdfFileId={field.content.pdfFileId ?? null}
         propertyId={property.id}
+        workspaceId={property.workspaceId}
       />
     );
   }
@@ -116,6 +117,7 @@ type FileCellProps = {
   encrypted: boolean;
   pdfFileId: string | null;
   propertyId: string;
+  workspaceId: string;
 };
 
 const FileCell = ({
@@ -125,9 +127,11 @@ const FileCell = ({
   entityId,
   encrypted,
   pdfFileId,
+  workspaceId,
+  propertyId,
 }: FileCellProps) => {
   const isDisplayable = isFileDisplayable({ mimeType, pdfFileId, encrypted });
-  const openTab = usePeekStore((s) => s.openTab);
+  const openPdf = useInspectorStore((s) => s.openPdf);
 
   if (isDisplayable) {
     return (
@@ -136,7 +140,16 @@ const FileCell = ({
         render={
           <button
             className="bg-muted grid max-w-max cursor-pointer grid-cols-[1rem_auto] items-center gap-1 rounded px-1 py-0.5"
-            onClick={() => openTab({ fieldId, entityId, label: fileName })}
+            onClick={() =>
+              openPdf({
+                id: fieldId,
+                entityId,
+                label: fileName,
+                workspaceId,
+                mimeType,
+                propertyId,
+              })
+            }
             type="button"
           />
         }
