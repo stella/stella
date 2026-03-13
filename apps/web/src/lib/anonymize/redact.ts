@@ -1,4 +1,14 @@
-import type { Entity, RedactionResult } from "./types";
+import {
+  DEFAULT_OPERATOR_CONFIG,
+  OPERATOR_REGISTRY,
+  resolveOperator,
+} from "./operators";
+import type {
+  Entity,
+  OperatorConfig,
+  OperatorType,
+  RedactionResult,
+} from "./types";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
@@ -76,7 +86,7 @@ const buildPlaceholderMap = (entities: Entity[]): Map<string, string> => {
 
 /**
  * Apply redactions to the source text, replacing each
- * confirmed entity span with a stable placeholder.
+ * confirmed entity span using the configured operator.
  *
  * Co-references are consistent: if the same text appears
  * multiple times, all occurrences get the same placeholder.
@@ -84,11 +94,13 @@ const buildPlaceholderMap = (entities: Entity[]): Map<string, string> => {
 export const redactText = (
   fullText: string,
   entities: Entity[],
+  config: OperatorConfig = DEFAULT_OPERATOR_CONFIG,
 ): RedactionResult => {
   if (entities.length === 0) {
     return {
       redactedText: fullText,
       redactionMap: new Map(),
+      operatorMap: new Map(),
       entityCount: 0,
     };
   }
@@ -108,6 +120,8 @@ export const redactText = (
   }
 
   const parts: string[] = [];
+  const redactionMap = new Map<string, string>();
+  const operatorMap = new Map<string, OperatorType>();
   let cursor = 0;
 
   for (const entity of nonOverlapping) {
@@ -118,7 +132,33 @@ export const redactText = (
     const placeholder =
       placeholderMap.get(`${entity.label}\0${entity.text}`) ??
       `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
-    parts.push(placeholder);
+
+    const opType = resolveOperator(config, entity.label);
+    const operator = OPERATOR_REGISTRY[opType];
+
+    const replacement = operator.apply(
+      entity.text,
+      entity.label,
+      placeholder,
+      config.redactString,
+    );
+
+    parts.push(replacement);
+    // operatorMap is keyed by the conceptual placeholder
+    // ([LABEL_N]), not by the replacement text. For "redact"
+    // operators the placeholder never appears in the output;
+    // the map is only consulted via exportRedactionKey which
+    // iterates redactionMap (replace entries only).
+    operatorMap.set(placeholder, opType);
+
+    // Only populate redactionMap for reversible operators
+    if (
+      operator.reversibility === "reversible" &&
+      !redactionMap.has(placeholder)
+    ) {
+      redactionMap.set(placeholder, entity.text);
+    }
+
     cursor = entity.end;
   }
 
@@ -126,36 +166,39 @@ export const redactText = (
     parts.push(fullText.slice(cursor));
   }
 
-  // Build reverse map: placeholder -> original text (first-seen wins)
-  const redactionMap = new Map<string, string>();
-  for (const [compositeKey, placeholder] of placeholderMap) {
-    if (!redactionMap.has(placeholder)) {
-      const originalText = compositeKey.slice(compositeKey.indexOf("\0") + 1);
-      redactionMap.set(placeholder, originalText);
-    }
-  }
-
   return {
     redactedText: parts.join(""),
     redactionMap,
+    operatorMap,
     entityCount: nonOverlapping.length,
   };
 };
 
 /**
  * Serialize the redaction key to JSON for export.
- * This enables authorised de-anonymisation.
+ * Includes operator metadata so the export is self-describing.
  */
 export const exportRedactionKey = (
   redactionMap: Map<string, string>,
+  operatorMap: Map<string, OperatorType>,
 ): string => {
-  const entries = Object.fromEntries(redactionMap);
-  return JSON.stringify(entries, null, 2);
+  const entries: Record<string, { original: string; operator: OperatorType }> =
+    {};
+
+  for (const [placeholder, value] of redactionMap) {
+    entries[placeholder] = {
+      original: value,
+      operator: operatorMap.get(placeholder) ?? "replace",
+    };
+  }
+
+  return JSON.stringify({ entries }, null, 2);
 };
 
 /**
  * De-anonymise text using a redaction key.
  * Replaces placeholders back with original values.
+ * Only works for reversible operators (replace).
  */
 export const deanonymise = (
   redactedText: string,

@@ -68,12 +68,51 @@ export type TriggerExtractionStrategy =
   | { type: "n-words"; count: number };
 
 /**
+ * Anonymisation operator types. Each operator defines
+ * how a confirmed entity is replaced in the output.
+ */
+export const OPERATOR_TYPES = ["replace", "redact"] as const;
+
+export type OperatorType = (typeof OPERATOR_TYPES)[number];
+
+/** Per-label operator selection. Key is the entity label. */
+export type OperatorConfig = {
+  /** Operator per label. Missing labels default to "replace". */
+  operators: Record<string, OperatorType>;
+  /** Custom replacement string for the redact operator. */
+  redactString: string;
+};
+
+/** Whether an operator produces a reversible redaction entry. */
+export type OperatorReversibility = "reversible" | "irreversible";
+
+export type AnonymisationOperator = {
+  type: OperatorType;
+  reversibility: OperatorReversibility;
+  /**
+   * Apply the operator to a single entity occurrence.
+   * Returns the replacement string to embed in the document.
+   */
+  apply: (
+    text: string,
+    label: string,
+    placeholder: string,
+    redactString: string,
+  ) => string;
+};
+
+/**
  * Redacted document output with stable entity mapping.
  */
 export type RedactionResult = {
   redactedText: string;
-  /** Maps placeholder like [PERSON_1] to original text */
+  /**
+   * Maps placeholder to original text. Only populated for
+   * reversible operators (replace). Empty for redact.
+   */
   redactionMap: Map<string, string>;
+  /** Maps placeholder to the operator that produced it. */
+  operatorMap: Map<string, OperatorType>;
   entityCount: number;
 };
 

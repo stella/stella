@@ -12,6 +12,10 @@ import {
   mergeChunkEntities,
 } from "@/lib/anonymize/chunker";
 import { getEntries, putEntry } from "@/lib/anonymize/gazetteer";
+import {
+  DEFAULT_OPERATOR_CONFIG,
+  resolveOperator,
+} from "@/lib/anonymize/operators";
 import { runPipeline } from "@/lib/anonymize/pipeline";
 import type { NerInferenceFn } from "@/lib/anonymize/pipeline";
 import { exportRedactionKey, redactText } from "@/lib/anonymize/redact";
@@ -21,10 +25,13 @@ import {
   DETECTION_SOURCES,
   ENTITY_COLORS,
   MODEL_OPTIONS,
+  OPERATOR_TYPES,
 } from "@/lib/anonymize/types";
 import type {
   Entity,
   GazetteerEntry,
+  OperatorConfig,
+  OperatorType,
   PipelineConfig,
   ReviewDecision,
   ReviewedEntity,
@@ -68,6 +75,9 @@ function AnonymizePage() {
   const [reviewMode, setReviewMode] = useState(false);
   const [redactedText, setRedactedText] = useState<string | null>(null);
   const [redactionKey, setRedactionKey] = useState<string | null>(null);
+  const [operatorConfig, setOperatorConfig] = useState<OperatorConfig>(() => ({
+    ...DEFAULT_OPERATOR_CONFIG,
+  }));
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Terminate worker on unmount to prevent resource leak
@@ -349,11 +359,13 @@ function AnonymizePage() {
 
   const handleRedact = useCallback(() => {
     const confirmed = entities.filter((e) => e.decision !== "rejected");
-    const result = redactText(text, confirmed);
+    const result = redactText(text, confirmed, operatorConfig);
     setRedactedText(result.redactedText);
-    setRedactionKey(exportRedactionKey(result.redactionMap));
+    setRedactionKey(
+      exportRedactionKey(result.redactionMap, result.operatorMap),
+    );
     log(`Redacted ${result.entityCount} entity spans`);
-  }, [entities, text, log]);
+  }, [entities, text, log, operatorConfig]);
 
   // ── Paste text ─────────────────────────────────────
 
@@ -782,8 +794,74 @@ function AnonymizePage() {
 
         {/* Entity sidebar */}
         {filteredEntities.length > 0 && redactedText === null && (
-          <div className="w-80 overflow-auto rounded-lg border p-4">
+          <div className="w-96 overflow-auto rounded-lg border p-4">
             <h3 className="mb-2 text-sm font-semibold">Detected entities</h3>
+
+            {/* Per-label operator config */}
+            <div className="mb-3 border-b pb-3">
+              <h4 className="text-muted-foreground mb-1 text-xs font-medium">
+                Operators per label
+              </h4>
+              <div className="flex flex-col gap-1">
+                {[...new Set(filteredEntities.map((e) => e.label))].map(
+                  (label) => (
+                    <div
+                      className="flex items-center justify-between gap-2 text-xs"
+                      key={label}
+                    >
+                      <span className="truncate">{label}</span>
+                      <select
+                        className="rounded border bg-transparent px-1 py-0.5 text-xs"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (
+                            !OPERATOR_TYPES.includes(
+                              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by includes check
+                              value as OperatorType,
+                            )
+                          ) {
+                            return;
+                          }
+                          setOperatorConfig((prev) => ({
+                            ...prev,
+                            operators: {
+                              ...prev.operators,
+                              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
+                              [label]: value as OperatorType,
+                            },
+                          }));
+                        }}
+                        value={resolveOperator(operatorConfig, label)}
+                      >
+                        {OPERATOR_TYPES.map((op) => (
+                          <option key={op} value={op}>
+                            {op}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ),
+                )}
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Redact string:</span>
+                <input
+                  className="flex-1 rounded border bg-transparent px-1.5 py-0.5 font-mono text-xs"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.length === 0) {
+                      return;
+                    }
+                    setOperatorConfig((prev) => ({
+                      ...prev,
+                      redactString: val,
+                    }));
+                  }}
+                  value={operatorConfig.redactString}
+                />
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1">
               {filteredEntities.map((entity) => {
                 const colorClass =
