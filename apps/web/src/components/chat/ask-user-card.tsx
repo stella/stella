@@ -1,6 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import type { getToolName } from "ai";
+import type { ToolUIPart } from "ai";
 import {
   CheckIcon,
   HelpCircleIcon,
@@ -12,24 +12,16 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
+import type {
+  AskUserInput,
+  ChatUITools,
+} from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 
-type ToolPart = Parameters<typeof getToolName>[0];
-
-type QuestionInput = {
-  question: string;
-  reason: string;
-  options?: string[];
-  default?: string;
-};
-
-type AskUserInput = {
-  analysis: string;
-  questions: QuestionInput[];
-};
+type AskUserPart = ToolUIPart<Pick<ChatUITools, "askUser">>;
 
 type AskUserCardProps = {
-  part: ToolPart;
+  part: AskUserPart;
   onSubmit: (text: string) => void;
 };
 
@@ -41,12 +33,10 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
     part.state === "input-streaming" || part.state === "input-available";
   const isDone = part.state === "output-available";
 
-  // SAFETY: input shape from validated ask-user tool
-  const input =
-    "input" in part
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        (part.input as AskUserInput)
-      : null;
+  // Input is only fully available after input-streaming.
+  // During streaming it's a DeepPartial; treat as null.
+  const input: AskUserInput | null =
+    (part.state !== "input-streaming" ? part.input : null) ?? null;
 
   const [answers, setAnswers] = useState<Record<number, string>>(() => {
     if (!input) {
@@ -61,6 +51,26 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
     }
     return defaults;
   });
+  // Seed defaults once the full input arrives (after streaming).
+  // The useState initializer only runs on mount, when input may
+  // still be null.
+  useEffect(() => {
+    if (!input) {
+      return;
+    }
+    setAnswers((prev) => {
+      let seeded: Record<number, string> | null = null;
+      for (let i = 0; i < input.questions.length; i++) {
+        const def = input.questions[i].default;
+        if (def && !(i in prev)) {
+          seeded ??= { ...prev };
+          seeded[i] = def;
+        }
+      }
+      return seeded ?? prev;
+    });
+  }, [input]);
+
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
 
