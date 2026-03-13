@@ -2,26 +2,24 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { SETTING_ORGANIZATION_ID, SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
-  createTestIds,
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import {
   fetchScopedTables,
   fetchStellaPolicies,
-  setupRlsTestData,
 } from "@/api/tests/security/rls-helpers";
-import type { TestIds } from "@/api/tests/security/rls-helpers";
-import { createTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
-let ids: TestIds;
 
 beforeAll(async () => {
-  testDb = await createTestDb();
-  ids = createTestIds();
-  await setupRlsTestData(testDb, ids);
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
 });
 
 afterAll(async () => {
-  await testDb.$client.close();
+  await releaseRlsFixture();
 });
 
 // ════════════════════════════════════════════════════════

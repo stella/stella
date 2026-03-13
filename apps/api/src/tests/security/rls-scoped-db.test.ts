@@ -3,24 +3,23 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createScopedDb } from "@/api/db";
 import { entities, fields, properties } from "@/api/db/schema";
 import {
-  createTestIds,
-  setupRlsTestData,
-} from "@/api/tests/security/rls-helpers";
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
-import { createTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 let ids: TestIds;
 
 beforeAll(async () => {
-  testDb = await createTestDb();
-  ids = createTestIds();
-  await setupRlsTestData(testDb, ids);
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
+  ids = fixture.ids;
 });
 
 afterAll(async () => {
-  await testDb.$client.close();
+  await releaseRlsFixture();
 });
 
 // ════════════════════════════════════════════════════════

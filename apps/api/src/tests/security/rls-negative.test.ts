@@ -38,9 +38,11 @@ import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  createTestIds,
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+import {
   orgScopedTables,
-  setupRlsTestData,
   wsScopedTables,
 } from "@/api/tests/security/rls-helpers";
 import type {
@@ -48,14 +50,11 @@ import type {
   MutationCase,
   TestIds,
 } from "@/api/tests/security/rls-helpers";
-import {
-  createDryScopedQuery,
-  createScopedQuery,
-  createTestDb,
-} from "@/api/tests/security/test-utils";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
+  createDryScopedQuery,
+  createScopedQuery,
 } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
@@ -64,15 +63,15 @@ let scopedQuery: ReturnType<typeof createScopedQuery>;
 let dryScopedQuery: ReturnType<typeof createDryScopedQuery>;
 
 beforeAll(async () => {
-  testDb = await createTestDb();
-  ids = createTestIds();
-  await setupRlsTestData(testDb, ids);
-  scopedQuery = createScopedQuery(testDb);
-  dryScopedQuery = createDryScopedQuery(testDb);
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
+  ids = fixture.ids;
+  scopedQuery = fixture.scopedQuery;
+  dryScopedQuery = fixture.dryScopedQuery;
 });
 
 afterAll(async () => {
-  await testDb.$client.close();
+  await releaseRlsFixture();
 });
 
 const clauseBody: ClauseBody = [{ text: "test" }];
