@@ -8,8 +8,6 @@ import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { PeekPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-panel";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -23,7 +21,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     api
       .workspaces({ workspaceId: wsId })
       ["last-active"].post()
-      // TODO: fix this
       // oxlint-disable-next-line no-empty-function
       .catch(() => {});
   },
@@ -49,13 +46,12 @@ function RouteComponent() {
     select: (p) => p.workspaceId,
   });
 
-  // Clean up side-panel tabs when the workspace changes so stale
-  // field IDs from the previous workspace don't cause broken
-  // PDF previews.
+  // Clean up inspector tabs when the workspace changes so
+  // stale IDs from the previous workspace don't cause
+  // broken previews.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
-      usePeekStore.getState().closeAll();
       useInspectorStore.getState().closeAll();
     },
     [workspaceId],
@@ -74,18 +70,7 @@ function RouteComponent() {
     shouldThrow: false,
   });
 
-  const hasPeekTabs = usePeekStore((s) => s.tabs.length > 0);
-  const hasInspectorTabs = useInspectorStore((s) => s.tabs.length > 0);
-
-  // The side panel shows inspector XOR peek. When the inspector
-  // gains its first tab, close any open peek tabs so they don't
-  // ghost-reappear when the inspector later closes.
-  useEffect(() => {
-    if (hasInspectorTabs && hasPeekTabs) {
-      usePeekStore.getState().closeAll();
-    }
-  }, [hasInspectorTabs, hasPeekTabs]);
-  const hasSidePanel = hasPeekTabs || hasInspectorTabs;
+  const hasSidePanel = useInspectorStore((s) => s.tabs.length > 0);
 
   // Timesheets, analytics, and invoices have their own layout
   if (timesheetsMatch || analyticsMatch || invoicesMatch) {
@@ -95,7 +80,7 @@ function RouteComponent() {
   return (
     <DropZone workspaceId={workspaceId}>
       <Group orientation="horizontal">
-        <Panel className="flex flex-col">
+        <Panel className="flex min-w-0 flex-col">
           <Outlet />
         </Panel>
         {hasSidePanel && (
@@ -104,11 +89,7 @@ function RouteComponent() {
               <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
             </Separator>
             <Panel defaultSize="32rem" maxSize="50rem" minSize="20rem">
-              {hasInspectorTabs ? (
-                <InspectorPanel workspaceId={workspaceId} />
-              ) : (
-                <PeekPanel workspaceId={workspaceId} />
-              )}
+              <InspectorPanel workspaceId={workspaceId} />
             </Panel>
           </>
         )}

@@ -1130,8 +1130,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
-      "aiTask": "AI Task",
-      "detailViewConstruction": "AI workflow detail view is under construction.",
       "evidence": "Evidence",
       "goBack": "Go back",
       "incorrectPassword": "Incorrect password. Please try again.",
@@ -1140,9 +1138,7 @@
       "passwordLabel": "Enter the PDF password",
       "passwordRequired": "Password required",
       "previousPage": "Previous page",
-      "print": "Print",
       "resetZoom": "Reset zoom",
-      "selectATab": "Select a tab",
       "showOriginal": "Rodyti originalius puslapius",
       "toggleSidebar": "Toggle sidebar",
       "unlock": "Unlock",

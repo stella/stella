@@ -1,4 +1,11 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -6,10 +13,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
+  FileTextIcon,
   MinusIcon,
   PlusIcon,
   PrinterIcon,
   SparklesIcon,
+  SquareCheckIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -20,23 +29,22 @@ import { ScrollArea } from "@stella/ui/components/scroll-area";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import type { WorkspaceProperty } from "@/lib/types";
-import { PDF_MIME_TYPE, TEXT_PLAIN_MIME_TYPE } from "@/consts";
+import { PDF_MIME_TYPE } from "@/consts";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
+import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
+  InspectorTab,
   PdfTab,
-  TaskTab,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
 import { PeekPdfViewer } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
+import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-
-type InspectorTab = PdfTab | TaskTab;
 
 type InspectorPanelProps = {
   workspaceId: string;
@@ -45,6 +53,7 @@ type InspectorPanelProps = {
 const ZOOM_STEP = 0.2;
 const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
+const PINCH_ZOOM_SENSITIVITY = 0.005;
 
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
@@ -56,6 +65,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   );
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
+  const closeAll = useInspectorStore((s) => s.closeAll);
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
@@ -159,9 +169,53 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         },
       });
     } finally {
-      closeTab(activeTab.id);
+      closeAll();
     }
-  }, [activeTab, navigate, closeTab, workspaceId]);
+  }, [activeTab, navigate, closeAll, workspaceId]);
+
+  // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
+  // The active tab is always mounted; the rest are the most recently
+  // viewed ones. Tabs beyond the limit unmount (and re-load on switch).
+  const MAX_MOUNTED_PDFS = 3;
+  const [recentPdfIds, setRecentPdfIds] = useState<string[]>([]);
+
+  const pdfTabs = useMemo(
+    () => tabs.filter((tab): tab is PdfTab => tab.type === "pdf"),
+    [tabs],
+  );
+
+  // Update recency order when the active PDF changes.
+  useEffect(() => {
+    if (!activeId || activeTab?.type !== "pdf") {
+      return;
+    }
+    setRecentPdfIds((prev) => {
+      const next = prev.filter((id) => id !== activeId);
+      next.unshift(activeId);
+      if (next.length > MAX_MOUNTED_PDFS) {
+        next.length = MAX_MOUNTED_PDFS;
+      }
+      return next;
+    });
+  }, [activeId, activeTab?.type]);
+
+  // Also prune closed tabs from the recency list.
+  useEffect(() => {
+    const openIds = new Set(pdfTabs.map((tab) => tab.id));
+    setRecentPdfIds((prev) => {
+      const next = prev.filter((id) => openIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [pdfTabs]);
+
+  const mountedPdfIds = useMemo(() => {
+    const set = new Set(recentPdfIds);
+    // Always include the active PDF.
+    if (activeId && activeTab?.type === "pdf") {
+      set.add(activeId);
+    }
+    return set;
+  }, [recentPdfIds, activeId, activeTab?.type]);
 
   // Pinch-to-zoom for PDF tabs
   const pdfContentRef = useRef<HTMLDivElement>(null);
@@ -172,126 +226,162 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }
 
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        handleZoom(e.deltaY < 0 ? "in" : "out");
+      if (!e.ctrlKey || !activeId) {
+        return;
       }
+      e.preventDefault();
+
+      const offsets = scaleOffsets.current;
+      const current = offsets.get(activeId) ?? 0;
+      const delta = -e.deltaY * PINCH_ZOOM_SENSITIVITY;
+      const next =
+        Math.round(
+          Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, current + delta)) * 100,
+        ) / 100;
+
+      if (next === current) {
+        return;
+      }
+
+      offsets.set(activeId, next);
+      usePdfStore.getState().updateScale({
+        fileId: activeId,
+        scaleOffset: next,
+      });
     };
 
-    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("wheel", onWheel, {
+      passive: false,
+    });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [handleZoom, activeTab?.type]);
+  }, [activeId, activeTab?.type]);
 
   return (
-    <div className="bg-background flex h-full flex-col border-s shadow-lg">
-      {/* Header with horizontal tabs */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b px-2">
-        <div className="flex h-full flex-1 gap-px overflow-x-auto">
-          {tabs.map((tab) => (
-            <VerticalTab
-              active={tab.id === activeId}
-              key={tab.id}
-              onActivate={() => setActive(tab.id)}
-              onClose={() => closeTab(tab.id)}
-              tab={tab}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div
-        className="relative flex min-h-0 flex-1 overflow-hidden"
-        ref={pdfContentRef}
-      >
-        {!activeTab ? (
-          <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-center">
-            <div className="space-y-2">
-              <DocumentIcon
-                className="mx-auto size-12 opacity-20"
-                mimeType={PDF_MIME_TYPE}
-              />
-              <p className="text-sm">{t("workspaces.pdf.selectATab")}</p>
+    <div className="bg-background flex h-full border-s shadow-lg">
+      {/* Vertical tab bar */}
+      {tabs.length > 0 && (
+        <div className="bg-muted/50 flex w-10 shrink-0 flex-col border-e">
+          <ScrollArea className="flex-1">
+            <div className="flex flex-col">
+              {tabs.map((tab) => (
+                <VerticalTab
+                  active={tab.id === activeId}
+                  key={tab.id}
+                  onActivate={() => setActive(tab.id)}
+                  onClose={() => closeTab(tab.id)}
+                  tab={tab}
+                />
+              ))}
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {/* Context bar (PDF only) */}
-            {activeTab.type === "pdf" && (
-              <div className="flex h-10 shrink-0 items-center justify-between border-b px-3">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <DocumentIcon
-                    className="text-muted-foreground size-4 shrink-0"
-                    mimeType={activeTab.mimeType ?? PDF_MIME_TYPE}
-                  />
-                  <span className="truncate text-xs font-medium">
-                    {activeTab.label}
-                  </span>
-                </div>
+          </ScrollArea>
+        </div>
+      )}
 
-                <div className="flex shrink-0 items-center gap-1 ps-4">
-                  <div className="flex items-center rounded-md border p-0.5">
-                    <Tooltip
-                      content={t("workspaces.pdf.zoomOut")}
-                      render={
-                        <Button
-                          onClick={() => handleZoom("out")}
-                          size="icon-xs"
-                          variant="ghost"
-                        >
-                          <MinusIcon className="size-3" />
-                        </Button>
-                      }
-                    />
-                    <Tooltip
-                      content={t("workspaces.pdf.zoomIn")}
-                      render={
-                        <Button
-                          onClick={() => handleZoom("in")}
-                          size="icon-xs"
-                          variant="ghost"
-                        >
-                          <PlusIcon className="size-3" />
-                        </Button>
-                      }
-                    />
-                  </div>
+      {/* Task content */}
+      {activeTab?.type === "task" && (
+        <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
+      )}
 
-                  <div className="bg-border mx-1 h-4 w-px" />
-
-                  <Tooltip
-                    content={t("workspaces.pdf.print")}
-                    render={
-                      <Button
-                        onClick={handlePrint}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <PrinterIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                  <Tooltip
-                    content={t("workspaces.pdf.openFullView")}
-                    render={
-                      <Button
-                        onClick={() => {
-                          handleOpenFullView().catch(() => {
-                            /* fire-and-forget */
-                          });
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <ExternalLinkIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                </div>
-              </div>
+      {/* PDF content — render all open PDF tabs, show only the active one.
+         Keeping inactive viewers mounted avoids the blink on tab switch
+         (no unmount → Suspense fallback → remount cycle). */}
+      {pdfTabs.map((tab) => {
+        const isActive = tab.id === activeId;
+        if (!mountedPdfIds.has(tab.id)) {
+          return null;
+        }
+        return (
+          <div
+            className={cn(
+              "flex flex-1 flex-col overflow-hidden",
+              !isActive && "hidden",
             )}
+            key={tab.id}
+            ref={isActive ? pdfContentRef : undefined}
+          >
+            {/* Context bar: filename + zoom/print/fullview */}
+            <div
+              className={cn(
+                "flex shrink-0 items-center justify-between border-b px-3",
+                TOOLBAR_ROW_HEIGHT,
+              )}
+            >
+              <div className="flex items-center overflow-hidden">
+                <span className="truncate text-xs font-medium">
+                  {tab.label}
+                </span>
+              </div>
 
-            {/* Justification Bar (PDF with justification ID) */}
-            {activeTab.type === "pdf" && activeTab.justificationFieldId && (
+              <div className="flex shrink-0 items-center gap-1 ps-4">
+                <div className="flex items-center rounded-md border p-0.5">
+                  <Tooltip
+                    content={t("workspaces.pdf.zoomOut")}
+                    render={
+                      <Button
+                        onClick={() => handleZoom("out")}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <MinusIcon className="size-3" />
+                      </Button>
+                    }
+                  />
+                  <Tooltip
+                    content={t("workspaces.pdf.zoomIn")}
+                    render={
+                      <Button
+                        onClick={() => handleZoom("in")}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <PlusIcon className="size-3" />
+                      </Button>
+                    }
+                  />
+                </div>
+
+                <div className="bg-border mx-1 h-4 w-px" />
+
+                <Tooltip
+                  content={t("common.print")}
+                  render={
+                    <Button
+                      onClick={handlePrint}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <PrinterIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+                <Tooltip
+                  content={t("workspaces.pdf.openFullView")}
+                  render={
+                    <Button
+                      onClick={() => {
+                        handleOpenFullView().catch(() => {
+                          /* fire-and-forget */
+                        });
+                      }}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <ExternalLinkIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+                <Button
+                  onClick={() => closeTab(tab.id)}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <XIcon className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Justification bar (when opened from AI cell) */}
+            {tab.justificationFieldId && (
               <Suspense
                 fallback={
                   <div
@@ -305,8 +395,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 }
               >
                 <JustificationBar
-                  activeTab={activeTab}
-                  fieldId={activeTab.justificationFieldId}
+                  activeTab={tab}
+                  fieldId={tab.justificationFieldId}
                   workspaceId={workspaceId}
                 />
               </Suspense>
@@ -314,41 +404,30 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
             {/* Scrollable PDF content */}
             <ScrollArea className="flex-1">
-              {activeTab.type === "pdf" ? (
-                <Suspense
-                  fallback={
-                    <div className="flex h-full items-center justify-center p-12">
-                      <SparklesIcon className="text-muted-foreground/30 size-8 animate-pulse" />
-                    </div>
-                  }
-                >
-                  <PeekPdfViewer
-                    fieldId={activeTab.id}
-                    workspaceId={workspaceId}
-                  />
-                </Suspense>
-              ) : (
-                <div className="text-muted-foreground flex h-full items-center justify-center p-12 text-center">
-                  <div className="space-y-4">
-                    <SparklesIcon className="mx-auto size-12 opacity-20" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        {activeTab.label || t("workspaces.pdf.aiTask")}
-                      </p>
-                      <p className="text-xs">
-                        {t("workspaces.pdf.detailViewConstruction")}
-                      </p>
-                    </div>
+              <Suspense
+                fallback={
+                  <div className="text-muted-foreground flex h-full items-center justify-center p-12 text-sm">
+                    {t("common.loading")}...
                   </div>
-                </div>
-              )}
+                }
+              >
+                <PeekPdfViewer
+                  fieldId={tab.id}
+                  onInitialOffset={(id, offset) => {
+                    scaleOffsets.current.set(id, offset);
+                  }}
+                  workspaceId={workspaceId}
+                />
+              </Suspense>
             </ScrollArea>
           </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 };
+
+// ── Justification bar ──────────────────────────────
 
 const JustificationBar = ({
   activeTab,
@@ -375,20 +454,22 @@ const JustificationBar = ({
     if (!justification) {
       return [];
     }
-    return (
-      Object.values(entity.fields)
-        .map((f) => {
-          const prop = properties.find((p) => p.id === f.propertyId);
-          if (!prop || prop.tool.type !== "ai-model") {
-            return null;
-          }
-          return { fieldId: f.id, property: prop };
-        })
-        .filter(
-          (s): s is { fieldId: string; property: WorkspaceProperty } =>
-            s !== null,
-        )
-    );
+    return Object.values(entity.fields)
+      .map((f) => {
+        const prop = properties.find((p) => p.id === f.propertyId);
+        if (!prop || prop.tool.type !== "ai-model") {
+          return null;
+        }
+        return { fieldId: f.id, property: prop };
+      })
+      .filter(
+        (
+          s,
+        ): s is {
+          fieldId: string;
+          property: WorkspaceProperty;
+        } => s !== null,
+      );
   }, [entity, justification, properties]);
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
@@ -465,6 +546,15 @@ const JustificationBar = ({
   );
 };
 
+// ── Vertical tab ───────────────────────────────────
+
+/** Extract a short abbreviation from a filename (stem, not extension). */
+const getTabAbbrev = (label: string): string => {
+  const dot = label.lastIndexOf(".");
+  const stem = dot === -1 ? label : label.slice(0, dot);
+  return stem.slice(0, 3);
+};
+
 type VerticalTabProps = {
   tab: InspectorTab;
   active: boolean;
@@ -481,75 +571,65 @@ const VerticalTab = ({
   const tooltipLabel = tab.label || tab.id.slice(0, 6);
   const tabRef = useRef<HTMLButtonElement>(null);
 
-  // Flash the tab when it becomes active (including
-  // re-activation when the user opens the same file).
-  const activationSeq = useInspectorStore((s) => {
-    const item_ = s.tabs.find((it) => it.id === tab.id);
-    return item_?.type === "pdf" ? item_.activationSeq : 0;
-  });
+  // Flash the tab on (re-)activation.
+  const activationSeq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
   useEffect(() => {
     const el = tabRef.current;
     if (el && active && activationSeq !== prevSeq.current) {
       el.animate(
         [
-          { backgroundColor: "var(--amber-100)" },
-          { backgroundColor: "transparent" },
+          {
+            backgroundColor: "var(--color-primary)",
+            opacity: 0.7,
+          },
+          {
+            backgroundColor: "transparent",
+            opacity: 1,
+          },
         ],
-        { duration: 1000, easing: "ease-out" },
+        { duration: 400, easing: "ease-out" },
       );
     }
     prevSeq.current = activationSeq;
   }, [active, activationSeq]);
 
   return (
-    <div
-      className={cn(
-        "group relative flex h-full max-w-48 min-w-32 items-center gap-2 border-e px-3 transition-colors",
-        active ? "bg-background" : "bg-muted/50 hover:bg-muted/80",
-      )}
-    >
-      <button
-        className="flex h-full flex-1 items-center gap-2 overflow-hidden text-start focus:outline-none"
-        onClick={onActivate}
-        ref={tabRef}
-        type="button"
-      >
-        <DocumentIcon
+    <Tooltip
+      content={tooltipLabel}
+      render={
+        <button
+          ref={tabRef}
           className={cn(
-            "size-3.5 shrink-0",
-            active ? "text-primary" : "text-muted-foreground",
+            "group/tab relative flex w-full items-center justify-center border-b transition-colors",
+            "text-muted-foreground hover:bg-accent hover:text-foreground",
+            TOOLBAR_ROW_HEIGHT,
+            active &&
+              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:start-0 before:w-0.5",
           )}
-          mimeType={
-            tab.type === "pdf"
-              ? (tab.mimeType ?? PDF_MIME_TYPE)
-              : TEXT_PLAIN_MIME_TYPE
-          }
+          onAuxClick={(e) => {
+            if (e.button === 1) {
+              e.preventDefault();
+              onClose();
+            }
+          }}
+          onClick={onActivate}
+          type="button"
         />
-        <span
-          className={cn(
-            "truncate text-xs font-medium",
-            active ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {tooltipLabel}
+      }
+      side="left"
+    >
+      {tab.type === "task" ? (
+        <SquareCheckIcon className="size-3.5" />
+      ) : active && tab.mimeType ? (
+        <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />
+      ) : active ? (
+        <FileTextIcon className="size-3.5" />
+      ) : (
+        <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
+          {getTabAbbrev(tab.label)}
         </span>
-      </button>
-
-      <button
-        className="hover:bg-accent invisible absolute end-1 rounded-sm p-0.5 opacity-60 group-hover:visible hover:opacity-100"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        type="button"
-      >
-        <XIcon className="size-3" />
-      </button>
-
-      {active && (
-        <div className="bg-primary absolute start-0 bottom-0 h-0.5 w-full" />
       )}
-    </div>
+    </Tooltip>
   );
 };

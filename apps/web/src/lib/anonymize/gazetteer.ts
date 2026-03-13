@@ -40,7 +40,7 @@ const getDb = (): Promise<IDBPDatabase<GazetteerDB>> => {
         // oxlint-disable-next-line typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
         store.createIndex("by-workspace", "workspaceId");
       },
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
     }).catch((error: unknown) => {
       dbPromise = null;
       throw error;

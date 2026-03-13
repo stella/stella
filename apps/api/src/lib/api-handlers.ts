@@ -91,8 +91,5 @@ export const createRootHandler = <
 export const createHandler = <TConfig extends HandlerConfig, TResult = unknown>(
   config: TConfig,
   handler: Handler<WorkspaceHandlerContext<TConfig>, TResult>,
-): HandlerDefinition<
-  TConfig,
-  WorkspaceHandlerContext<TConfig>,
-  TResult
-> => createScopedHandler(config, handler);
+): HandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
+  createScopedHandler(config, handler);

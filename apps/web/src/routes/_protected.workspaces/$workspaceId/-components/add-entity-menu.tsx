@@ -30,11 +30,20 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
+type VirtualAnchor = {
+  getBoundingClientRect: () => DOMRect;
+};
+
 type AddEntityMenuProps = {
   workspaceId: string;
   parentId?: string | null;
   render?: React.ReactElement;
   onFolderCreated?: (entityId: string) => void;
+  /** Controlled open state (for context menus). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Virtual anchor for positioning (right-click). */
+  anchor?: VirtualAnchor | null;
 };
 
 export const AddEntityMenu = ({
@@ -42,6 +51,9 @@ export const AddEntityMenu = ({
   parentId,
   render,
   onFolderCreated,
+  open,
+  onOpenChange,
+  anchor,
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isWorkflowRunning = useIsWorkflowRunning();
@@ -118,7 +130,7 @@ export const AddEntityMenu = ({
 
   return (
     <>
-      <Menu>
+      <Menu onOpenChange={onOpenChange} open={open}>
         <MenuTrigger
           render={
             render ?? (
@@ -130,7 +142,7 @@ export const AddEntityMenu = ({
           }
         />
 
-        <MenuPopup>
+        <MenuPopup anchor={anchor ?? undefined}>
           {hasFileProperties && (
             <>
               <MenuItem

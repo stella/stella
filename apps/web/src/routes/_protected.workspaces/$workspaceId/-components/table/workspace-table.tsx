@@ -26,6 +26,7 @@ import type {
   TableTreeNode,
   WorkspaceTable as WorkspaceTableType,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import {
   countDescendants,
@@ -210,6 +211,8 @@ const DraggableRow = ({
 }: DraggableRowProps) => {
   const rowRef = useRef<HTMLTableRowElement>(null);
   const entity = row.original;
+
+  useInspectorFlash(entity.entityId, rowRef);
   const isFolder = entity.kind === "folder";
   const isTask = entity.kind === "task";
   const visibleCells = row.getVisibleCells();

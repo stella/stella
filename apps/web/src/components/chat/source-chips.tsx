@@ -3,7 +3,7 @@ import { FileTextIcon, FolderIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import { openEntityInPeek } from "@/components/chat/entity-link";
+import { openEntityInInspector } from "@/components/chat/entity-link";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SourceChipsProps = {
@@ -81,7 +81,7 @@ const SourceChip = ({
       return;
     }
 
-    openEntityInPeek(entityId, part.title);
+    openEntityInInspector(entityId, part.title, workspaceId);
   };
 
   const stella = part.providerMetadata?.stella;

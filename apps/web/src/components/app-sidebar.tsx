@@ -538,8 +538,7 @@ const CollapsedContextArea = ({
         const x = e.clientX;
         const y = e.clientY;
         setCtxAnchor({
-          getBoundingClientRect: () =>
-            new DOMRect(x, y, 0, 0),
+          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
         });
         setCtxOpen(true);
       }}
