@@ -1,32 +1,37 @@
-import type { ScopedDb } from "@/api/db";
-import type { SafeId } from "@/api/lib/branded-types";
+import { status } from "elysia";
 
-type ReadLastActiveWorkspaceParams = {
-  scopedDb: ScopedDb;
-  userId: string;
-  organizationId: SafeId<"organization">;
-};
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 
-// `member` is an org-level auth table (no RLS policy);
-// scopedDb works for querying it.
-export const readLastActiveWorkspaceHandler = async ({
-  scopedDb,
-  userId,
-  organizationId,
-}: ReadLastActiveWorkspaceParams) => {
-  const result = await scopedDb((tx) =>
-    tx.query.member.findFirst({
-      where: {
-        userId,
-        organizationId: { eq: organizationId },
-      },
-      columns: {
-        lastActiveWorkspaceId: true,
-      },
-    }),
-  );
+const config = {
+  permissions: {
+    workspace: ["read"],
+  },
+} satisfies HandlerConfig;
 
-  return {
-    lastActiveWorkspaceId: result?.lastActiveWorkspaceId ?? null,
-  };
-};
+const readLastActiveWorkspace = createRootHandler(
+  config,
+  async ({ scopedDb, user, session }) => {
+    const result = await scopedDb((tx) =>
+      tx.query.member.findFirst({
+        where: {
+          userId: user.id,
+          organizationId: { eq: session.activeOrganizationId },
+        },
+        columns: {
+          lastActiveWorkspaceId: true,
+        },
+      }),
+    );
+
+    if (!result) {
+      return status(404);
+    }
+
+    return {
+      lastActiveWorkspaceId: result.lastActiveWorkspaceId,
+    };
+  },
+);
+
+export default readLastActiveWorkspace;

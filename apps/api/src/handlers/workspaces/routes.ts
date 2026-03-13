@@ -1,14 +1,11 @@
 import Elysia, { t } from "elysia";
 
-import {
-  createWorkspacesBodySchema,
-  createWorkspacesHandler,
-} from "@/api/handlers/workspaces/create";
+import createWorkspaces from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
-import { readWorkspacesHandler } from "@/api/handlers/workspaces/read";
+import readWorkspaces from "@/api/handlers/workspaces/read";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
-import { readLastActiveWorkspaceHandler } from "@/api/handlers/workspaces/read-last-active";
+import readLastActiveWorkspace from "@/api/handlers/workspaces/read-last-active";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
 import {
@@ -39,39 +36,12 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .guard({
     validateAuth: true,
   })
-  .get(
-    "/",
-    async (ctx) =>
-      await readWorkspacesHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        scopedDb: ctx.scopedDb,
-      }),
-  )
-  .put(
-    "/",
-    async (ctx) =>
-      await createWorkspacesHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        body: ctx.body,
-      }),
-
-    {
-      permissions: { workspace: ["create"] },
-      invalidateQuery: true,
-      body: createWorkspacesBodySchema,
-    },
-  )
-  .get(
-    "/last-active",
-    async (ctx) =>
-      await readLastActiveWorkspaceHandler({
-        scopedDb: ctx.scopedDb,
-        userId: ctx.user.id,
-        organizationId: ctx.session.activeOrganizationId,
-      }),
-  )
+  .get("/", readWorkspaces.handler)
+  .put("/", createWorkspaces.handler, {
+    body: createWorkspaces.config.body,
+    invalidateQuery: true,
+  })
+  .get("/last-active", readLastActiveWorkspace.handler)
   .group(
     "/:workspaceId",
     {

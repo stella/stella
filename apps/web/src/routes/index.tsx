@@ -15,13 +15,8 @@ export const Route = createFileRoute("/")({
       });
     }
 
-    let lastActiveWorkspaceId: string | null = null;
-    try {
-      const { data } = await api.workspaces["last-active"].get();
-      lastActiveWorkspaceId = data?.lastActiveWorkspaceId ?? null;
-    } catch {
-      // Network or server error; fall through to workspace list.
-    }
+    const { data } = await api.workspaces["last-active"].get();
+    const lastActiveWorkspaceId = data?.lastActiveWorkspaceId;
 
     if (lastActiveWorkspaceId) {
       throw redirect({

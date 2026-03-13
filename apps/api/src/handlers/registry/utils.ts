@@ -14,7 +14,10 @@ import type { ActorEvent } from "@stella/rivet/types";
 import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
-import { auth, resolveAccessibleWorkspaces } from "@/api/lib/auth";
+import {
+  getSessionAndMemberRole,
+  resolveAccessibleWorkspaces,
+} from "@/api/lib/auth";
 // oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -57,13 +60,13 @@ export type ActorConnState = GlobalActorConnState & {
 const validateActorAuth = async (key: string[], params: unknown) => {
   const { authToken } = validateActorInput(authedActorParamsSchema, params);
 
-  const session = await auth.api.getSession({
-    headers: {
-      authorization: `Bearer ${authToken}`,
-    },
+  const { sessionResult, memberRoleResult } = await getSessionAndMemberRole({
+    authorization: `Bearer ${authToken}`,
   });
+  const session = sessionResult.unwrapOr(null);
+  const memberRole = memberRoleResult.unwrapOr(null);
 
-  if (!session) {
+  if (!session || !memberRole) {
     throw createUserError("unauthorized");
   }
 
@@ -93,6 +96,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   const accessibleWorkspaces = await resolveAccessibleWorkspaces(
     userId,
     organizationId,
+    memberRole.role,
   );
   const scopedDb = createScopedDb(
     db,
