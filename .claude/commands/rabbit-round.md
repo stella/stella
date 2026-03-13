@@ -119,10 +119,27 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    }'
    ```
 
-6. **Minimize (hide) addressed bot issue comments** using GraphQL. Some bots
-   (e.g. Greptile) post as issue comments instead of review comments. These
-   cannot be "resolved" like review threads; instead, minimize them so they
-   collapse under a "hidden" fold:
+6. **Process Greptile summary comments**:
+
+   Greptile posts a single issue comment containing a summary, confidence
+   score, and sometimes a "Comments Outside Diff" section. **Never minimize
+   this comment** — it serves as a persistent review overview.
+
+   Instead, parse and address the actionable parts:
+
+   - **Confidence Score section**: if it lists specific issues or files
+     holding back the score, treat each as a suggestion to accept or
+     push back on (same decision guidelines as review threads).
+   - **Comments Outside Diff section** (`<!-- greptile_failed_comments -->`):
+     these are code review comments that Greptile couldn't post inline
+     because the lines aren't in the PR diff. Treat each as a regular
+     review comment: read the referenced file and lines, evaluate,
+     and accept or push back. Reply to the Greptile summary comment
+     with your response for each item.
+
+7. **Minimize (hide) other addressed bot issue comments** using GraphQL.
+   Some bots post as issue comments instead of review comments. These
+   cannot be "resolved" like review threads; instead, minimize them:
 
    ```bash
    # Use the node_id from the issue comment JSON response
@@ -137,36 +154,38 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    }'
    ```
 
-   Only minimize bot comments you have already addressed (accepted or pushed
-   back on). Never minimize human comments.
+   Only minimize bot comments you have already addressed (accepted or
+   pushed back on). **Never minimize the Greptile summary comment**
+   (the one containing "Greptile Summary", confidence score, and
+   flowchart). Never minimize human comments.
 
-7. **Check nitpick suggestions** (marked with `[nitpick]` or similar) - these
-   should also be addressed, not ignored.
+8. **Check nitpick suggestions** (marked with `[nitpick]` or similar) -
+   these should also be addressed, not ignored.
 
-8. **Implement accepted suggestions**:
+9. **Implement accepted suggestions**:
    - Make the code changes for suggestions you agreed with
    - Group related changes logically
 
-9. **Check and fix failing CI**:
+10. **Check and fix failing CI**:
 
-   ```bash
-   # Find the latest CI run for this PR's branch
-   gh run list --branch $(git branch --show-current) --limit 5 \
-     --json status,conclusion,name,databaseId
+    ```bash
+    # Find the latest CI run for this PR's branch
+    gh run list --branch $(git branch --show-current) --limit 5 \
+      --json status,conclusion,name,databaseId
 
-   # View failed run logs
-   gh run view {run_id} --log-failed
-   ```
+    # View failed run logs
+    gh run view {run_id} --log-failed
+    ```
 
-   - If CI is failing, read the logs and fix the root cause
-   - Common failures: formatting (run `bun run format` with `--write`),
-     lint errors, type errors, test failures
-   - Fix the issues in code, don't just suppress them
+    - If CI is failing, read the logs and fix the root cause
+    - Common failures: formatting (run `bun run format` with `--write`),
+      lint errors, type errors, test failures
+    - Fix the issues in code, don't just suppress them
 
-10. **Check React Doctor diagnostics**:
+11. **Check React Doctor diagnostics**:
 
-    The React Doctor CI workflow posts a score comment on the PR. Check it
-    and fix real issues.
+    The React Doctor CI workflow posts a score comment on the PR.
+    Check it and fix real issues.
 
     ```bash
     # Find the React Doctor CI run
@@ -185,19 +204,21 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
     - Fix errors (✗) first, then impactful warnings (⚠)
     - **Skip false positives** — common ones in this codebase:
       - `useMemo` wrapping `Math.random()` (keeps value stable)
-      - `passive: false` on wheel listeners that call `preventDefault()`
+      - `passive: false` on wheel listeners that call
+        `preventDefault()`
       - Zustand store syncs in useEffect (legitimate side effects)
     - Note which issues are false positives and which are real in
       your commit message
 
-11. **Run quality checks**:
+12. **Run quality checks**:
 
     Run the quality checks for the project (using `ruff format`,
     `ruff check`, `ty` for Python, `bun run lint`, `bun run format`,
     `bun run typecheck` for TypeScript).
 
-12. **Commit and push**:
-    - Create a commit with a message like `fix: address review comments`
+13. **Commit and push**:
+    - Create a commit with a message like
+      `fix: address review comments`
     - Push to the current branch
 
 ## Decision Guidelines
