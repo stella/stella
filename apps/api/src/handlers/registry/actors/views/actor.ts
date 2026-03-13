@@ -65,7 +65,10 @@ const cleanStalePropertyIds = (
   }
 
   const cleanedFilters = layout.filters.filter(
-    (f) => f.field === "kind" || propertyIds.has(f.propertyId),
+    (f) =>
+      f.field === "kind" ||
+      f.field === "builtin" ||
+      (f.field === "property" && propertyIds.has(f.propertyId)),
   );
   if (cleanedFilters.length !== layout.filters.length) {
     layout.filters = cleanedFilters;
@@ -102,6 +105,44 @@ const cleanStalePropertyIds = (
     changed = true;
   }
 
+  if (layout.type === "calendar") {
+    const valid = (id: string) => isInternal(id) || propertyIds.has(id);
+    if (!valid(layout.datePropertyId)) {
+      layout.datePropertyId = "_created-at";
+      changed = true;
+    }
+    if (layout.endDatePropertyId && !valid(layout.endDatePropertyId)) {
+      layout.endDatePropertyId = undefined;
+      changed = true;
+    }
+    if (layout.additionalDatePropertyIds) {
+      const cleaned = layout.additionalDatePropertyIds.filter(valid);
+      if (cleaned.length !== layout.additionalDatePropertyIds.length) {
+        layout.additionalDatePropertyIds = cleaned;
+        changed = true;
+      }
+    }
+  }
+
+  if (layout.type === "timeline") {
+    const valid = (id: string) => isInternal(id) || propertyIds.has(id);
+    if (!valid(layout.startDatePropertyId)) {
+      layout.startDatePropertyId = "_created-at";
+      changed = true;
+    }
+    if (!valid(layout.endDatePropertyId)) {
+      layout.endDatePropertyId = "_created-at";
+      changed = true;
+    }
+    if (
+      layout.groupByPropertyId &&
+      !propertyIds.has(layout.groupByPropertyId)
+    ) {
+      layout.groupByPropertyId = undefined;
+      changed = true;
+    }
+  }
+
   return changed;
 };
 
@@ -125,6 +166,29 @@ const convertLayout = (
     return { type: "kanban", ...base };
   }
 
+  if (targetType === "calendar") {
+    const prev = source.type === "calendar" ? source : null;
+    return {
+      type: "calendar",
+      ...base,
+      datePropertyId: prev?.datePropertyId ?? "_created-at",
+      mode: prev?.mode ?? "month",
+    };
+  }
+
+  if (targetType === "timeline") {
+    const prev = source.type === "timeline" ? source : null;
+    return {
+      type: "timeline",
+      ...base,
+      startDatePropertyId: prev?.startDatePropertyId ?? "_created-at",
+      endDatePropertyId: prev?.endDatePropertyId ?? "_created-at",
+      zoom: prev?.zoom ?? "month",
+      showTable: prev?.showTable ?? false,
+    };
+  }
+
+  // overview, filesystem
   return { type: targetType, ...base };
 };
 

@@ -36,6 +36,8 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { api } from "@/lib/api";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { WorkspaceEntity } from "@/lib/types";
+import { isFileDisplayable } from "@/lib/types";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useDeleteEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -80,6 +82,30 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+
+  // Derive a default open handler when the caller doesn't
+  // provide one. Tasks open in the inspector; displayable
+  // files open in the PDF peek viewer.
+  const resolvedOnOpen =
+    onOpen ??
+    (() => {
+      if (entity.kind === "task") {
+        return () =>
+          useInspectorStore.getState().openTask(entity.entityId, name);
+      }
+      if (file && isFileDisplayable(file)) {
+        return () =>
+          useInspectorStore.getState().openPdf({
+            id: file.fieldId,
+            entityId: file.entityId,
+            label: name,
+            mimeType: file.mimeType,
+            workspaceId,
+          });
+      }
+      return;
+    })();
+
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
 
@@ -203,8 +229,8 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
-        {onOpen && (
-          <MenuItem onClick={onOpen}>
+        {resolvedOnOpen && (
+          <MenuItem onClick={resolvedOnOpen}>
             <EyeIcon />
             {t("common.open")}
           </MenuItem>

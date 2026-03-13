@@ -439,8 +439,8 @@
     "comingSoon": "Coming soon",
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
-    "connectionLost": "Kapcsolat elveszett",
-    "connectionLostDescription": "Elveszett a kapcsolat a szerverrel. Automatikus újrapróbálkozás folyamatban.",
+    "connectionLost": "Kapcsolat megszakadt",
+    "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
     "createdAt": "Létrehozva: {date}",
     "currency": "Currency",
@@ -658,10 +658,10 @@
     "trigger": "Visszajelzés"
   },
   "filters": {
-    "contains": "Tartalmazza",
-    "eq": "Egyenlő",
-    "is_empty": "Üres",
-    "neq": "Nem egyenlő"
+    "contains": "tartalmazza",
+    "eq": "egyenlő",
+    "is_empty": "üres",
+    "neq": "nem egyenlő"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Ügynökök",
     "analytics": "Analitika",
+    "calendar": "Naptár",
     "caseLaw": "Case Law",
     "chat": "Csevegés",
     "chatAlreadyOpen": "A csevegés már nyitva van",
@@ -711,6 +712,7 @@
     "invoices": "Számlák",
     "knowledge": "Tudásbázis",
     "members": "Tagok",
+    "myTodos": "Feladataim",
     "newMatter": "Új ügy",
     "organization": "Szervezet",
     "pinned": "Rögzített",
@@ -842,7 +844,47 @@
     "partyRemoved": "Fél eltávolítva",
     "roleUpdated": "Szerepkör frissítve",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Feladat létrehozva",
     "workspaceDeletedSuccessfully": "Ügy sikeresen törölve"
+  },
+  "tasks": {
+    "addAssignee": "Felelős hozzáadása",
+    "addSubtask": "Alfeladat hozzáadása",
+    "assigneeRoles": {
+      "assignee": "Felelős",
+      "reviewer": "Ellenőr"
+    },
+    "assignees": "Felelősök",
+    "clearDate": "Dátum törlése",
+    "dueDate": "Határidő",
+    "linkEntity": "Elem kapcsolása",
+    "linkedEntities": "Kapcsolt elemek",
+    "myTasksTitle": "Feladataim",
+    "newTask": "Új feladat",
+    "noAssignees": "Nincs felelős",
+    "noLinks": "Nincsenek kapcsolt elemek",
+    "noSubtasks": "Nincsenek alfeladatok",
+    "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
+    "overdue": "Lejárt",
+    "priority": "Prioritás",
+    "priorityValues": {
+      "high": "Magas",
+      "low": "Alacsony",
+      "medium": "Közepes",
+      "none": "Nincs",
+      "urgent": "Sürgős"
+    },
+    "status": "Állapot",
+    "statusValues": {
+      "cancelled": "Visszavonva",
+      "done": "Kész",
+      "in_progress": "Folyamatban",
+      "in_review": "Ellenőrzés alatt",
+      "open": "Nyitott"
+    },
+    "subtasks": "Alfeladatok",
+    "title": "Feladatok",
+    "untitled": "Névtelen feladat"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Mezők hozzáadása",
       "aiGenerated": "MI által generált",
+      "calendar": {
+        "addDates": "+ Dátumok",
+        "additionalDates": "+{count} dátum",
+        "createdAt": "Létrehozva",
+        "dueDateTaskOnly": "Határidő csak feladatokhoz állítható be",
+        "month": "Hónap",
+        "more": "+{count} további",
+        "noDates": "Nincs kiválasztott dátum tulajdonság",
+        "showAdditionalDates": "További dátumok",
+        "showBy": "Megjelenítés",
+        "today": "Ma",
+        "updatedAt": "Utoljára frissítve",
+        "week": "Hét",
+        "year": "Év"
+      },
       "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
       "copySuffix": "{name} (copy)",
       "deleteView": "Nézet törlése",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
       "groupBy": "Csoportosítás:",
       "layouts": {
+        "calendar": "Naptár",
         "filesystem": "Lista",
         "grid": "Rács",
         "kanban": "Kanban",
         "list": "Lista",
         "overview": "Áttekintés",
-        "table": "Táblázat"
+        "table": "Táblázat",
+        "timeline": "Idővonal"
       },
       "newView": "Új {layout}",
-      "selectProperty": "Tulajdonság kiválasztása"
+      "selectProperty": "Tulajdonság kiválasztása",
+      "timeline": {
+        "day": "Nap",
+        "endDate": "Befejező dátum",
+        "month": "Hónap",
+        "noDates": "Nincsenek dátumok beállítva",
+        "quarter": "Negyedév",
+        "showTable": "Táblázat megjelenítése",
+        "startDate": "Kezdő dátum",
+        "week": "Hét"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

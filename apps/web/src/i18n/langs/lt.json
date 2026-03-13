@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Ryšys nutrūko",
-    "connectionLostDescription": "Praradome ryšį su serveriu. Bandome prisijungti automatiškai.",
+    "connectionLostDescription": "Praradome ryšį su serveriu. Bandoma automatiškai iš naujo.",
     "convertTo": "Konvertuoti į",
     "createdAt": "Sukurta {date}",
     "currency": "Currency",
@@ -658,10 +658,10 @@
     "trigger": "Atsiliepimai"
   },
   "filters": {
-    "contains": "Apima",
-    "eq": "Yra",
-    "is_empty": "Tuščia",
-    "neq": "Nėra"
+    "contains": "apima",
+    "eq": "yra",
+    "is_empty": "yra tuščias",
+    "neq": "nėra"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agentai",
     "analytics": "Analitika",
+    "calendar": "Kalendorius",
     "caseLaw": "Case Law",
     "chat": "Pokalbis",
     "chatAlreadyOpen": "Chat is already open",
@@ -711,6 +712,7 @@
     "invoices": "Invoices",
     "knowledge": "Žinios",
     "members": "Nariai",
+    "myTodos": "Mano užduotys",
     "newMatter": "Nauja byla",
     "organization": "Organizacija",
     "pinned": "Prisegti",
@@ -842,7 +844,47 @@
     "partyRemoved": "Šalis pašalinta",
     "roleUpdated": "Rolė atnaujinta",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Užduotis sukurta",
     "workspaceDeletedSuccessfully": "Byla sėkmingai ištrinta"
+  },
+  "tasks": {
+    "addAssignee": "Priskirti asmenį",
+    "addSubtask": "Pridėti použduotį",
+    "assigneeRoles": {
+      "assignee": "Vykdytojas",
+      "reviewer": "Peržiūrėtojas"
+    },
+    "assignees": "Priskirti",
+    "clearDate": "Išvalyti datą",
+    "dueDate": "Terminas",
+    "linkEntity": "Susieti įrašą",
+    "linkedEntities": "Susiję įrašai",
+    "myTasksTitle": "Mano užduotys",
+    "newTask": "Nauja užduotis",
+    "noAssignees": "Nėra priskirtų",
+    "noLinks": "Nėra susietų įrašų",
+    "noSubtasks": "Nėra použduočių",
+    "noTasksAssigned": "Jums nėra priskirtų užduočių",
+    "overdue": "Vėluojama",
+    "priority": "Prioritetas",
+    "priorityValues": {
+      "high": "Aukštas",
+      "low": "Žemas",
+      "medium": "Vidutinis",
+      "none": "Nėra",
+      "urgent": "Skubu"
+    },
+    "status": "Būsena",
+    "statusValues": {
+      "cancelled": "Atšaukta",
+      "done": "Atlikta",
+      "in_progress": "Vykdoma",
+      "in_review": "Peržiūrima",
+      "open": "Atvira"
+    },
+    "subtasks": "Použduočiai",
+    "title": "Užduotys",
+    "untitled": "Užduotis be pavadinimo"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Pridėti laukus",
       "aiGenerated": "Sugeneruota AI",
+      "calendar": {
+        "addDates": "+ Datos",
+        "additionalDates": "+{count} datų",
+        "createdAt": "Sukurta",
+        "dueDateTaskOnly": "Terminą galima nustatyti tik užduotims",
+        "month": "Mėnuo",
+        "more": "+{count} daugiau",
+        "noDates": "Nepasirinkta datos savybė",
+        "showAdditionalDates": "Papildomos datos",
+        "showBy": "Rodyti pagal",
+        "today": "Šiandien",
+        "updatedAt": "Paskutinį kartą atnaujinta",
+        "week": "Savaitė",
+        "year": "Metai"
+      },
       "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ištrinti rodinį",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
       "groupBy": "Grupuoti pagal:",
       "layouts": {
+        "calendar": "Kalendorius",
         "filesystem": "Sąrašas",
         "grid": "Tinklelis",
         "kanban": "Kanban",
         "list": "Sąrašas",
         "overview": "Apžvalga",
-        "table": "Lentelė"
+        "table": "Lentelė",
+        "timeline": "Laiko juosta"
       },
       "newView": "Naujas {layout}",
-      "selectProperty": "Pasirinkti savybę"
+      "selectProperty": "Pasirinkti savybę",
+      "timeline": {
+        "day": "Diena",
+        "endDate": "Pabaigos data",
+        "month": "Mėnuo",
+        "noDates": "Datos nenustatytos",
+        "quarter": "Ketvirtis",
+        "showTable": "Rodyti lentelę",
+        "startDate": "Pradžios data",
+        "week": "Savaitė"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",

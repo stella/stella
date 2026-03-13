@@ -1,6 +1,7 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 
+import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
@@ -43,6 +44,15 @@ function RouteComponent() {
       return <FilesystemView view={activeView} workspaceId={workspaceId} />;
     case "kanban":
       return <KanbanView view={activeView} workspaceId={workspaceId} />;
+    case "calendar":
+      return (
+        <CalendarView
+          view={{ ...activeView, layout: activeView.layout }}
+          workspaceId={workspaceId}
+        />
+      );
+    case "timeline":
+      return null;
     default: {
       return null;
     }

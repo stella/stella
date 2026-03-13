@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { FolderIcon } from "lucide-react";
+import { FolderIcon, SquareCheckIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -13,13 +13,19 @@ import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   AuthorCell,
   LastUpdatedCell,
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
-import { usePeekStore } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { TaskBadges } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-badges";
+import {
+  DueDateCell,
+  PriorityCell,
+  StatusCell,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
 import {
   getEntityName,
   getFirstFile,
@@ -44,12 +50,12 @@ export const KanbanCard = ({
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
   const navigable = file !== null && isFileDisplayable(file);
-  const isActivePeek = usePeekStore((s) => {
-    if (!s.activeFieldId) {
+  const isActivePeek = useInspectorStore((s) => {
+    if (!s.activeId) {
       return false;
     }
-    const tab = s.tabs.find((t) => t.fieldId === s.activeFieldId);
-    return tab?.entityId === entity.entityId;
+    const tab = s.tabs.find((t) => t.id === s.activeId);
+    return tab?.type === "pdf" && tab.entityId === entity.entityId;
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(name);
@@ -125,6 +131,8 @@ export const KanbanCard = ({
   const icon =
     entity.kind === "folder" ? (
       <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+    ) : entity.kind === "task" ? (
+      <SquareCheckIcon className="text-muted-foreground size-4 shrink-0" />
     ) : file?.mimeType ? (
       <DocumentIcon className="size-4 shrink-0" mimeType={file.mimeType} />
     ) : null;
@@ -144,16 +152,49 @@ export const KanbanCard = ({
     <span className="truncate">{name}</span>
   );
 
+  const isTask = entity.kind === "task";
+
   const content = (
     <div className="flex flex-col gap-1 pe-5">
       <span className="flex items-center gap-1.5 text-sm leading-snug font-medium">
         {icon}
         {nameElement}
       </span>
+      {isTask && <TaskBadges entity={entity} />}
       {cardFields &&
         cardFields.length > 0 &&
         properties &&
         cardFields.map((fieldId) => {
+          if (fieldId === getInternalPropertyId("status")) {
+            if (isTask) {
+              return null;
+            }
+            return (
+              <div className="text-muted-foreground text-xs" key={fieldId}>
+                <StatusCell entity={entity} />
+              </div>
+            );
+          }
+          if (fieldId === getInternalPropertyId("priority")) {
+            if (isTask) {
+              return null;
+            }
+            return (
+              <div className="text-muted-foreground text-xs" key={fieldId}>
+                <PriorityCell entity={entity} />
+              </div>
+            );
+          }
+          if (fieldId === getInternalPropertyId("due-date")) {
+            if (isTask) {
+              return null;
+            }
+            return (
+              <div className="text-muted-foreground text-xs" key={fieldId}>
+                <DueDateCell entity={entity} />
+              </div>
+            );
+          }
           if (fieldId === getInternalPropertyId("created-by")) {
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
@@ -206,6 +247,34 @@ export const KanbanCard = ({
     </div>
   ) : null;
 
+  const isActiveTask = useInspectorStore((s) => {
+    if (!s.activeId) {
+      return false;
+    }
+    const tab = s.tabs.find((t) => t.id === s.activeId);
+    return tab?.type === "task" && tab.id === entity.entityId;
+  });
+
+  if (isTask) {
+    return (
+      <div className="group/card" ref={dragRef}>
+        <button
+          className={cn(
+            "bg-card relative block w-full rounded-lg border p-3 text-left shadow-xs transition-shadow hover:shadow-md",
+            isActiveTask && "ring-primary/30 ring-2",
+          )}
+          onClick={() =>
+            useInspectorStore.getState().openTask(entity.entityId, name)
+          }
+          type="button"
+        >
+          {content}
+          {actionsButton}
+        </button>
+      </div>
+    );
+  }
+
   if (navigable && file !== undefined) {
     return (
       <div className="group/card" ref={dragRef}>
@@ -215,10 +284,12 @@ export const KanbanCard = ({
             isActivePeek && "ring-primary/30 ring-2",
           )}
           onClick={() =>
-            usePeekStore.getState().openTab({
-              fieldId: file.fieldId,
+            useInspectorStore.getState().openPdf({
+              id: file.fieldId,
               entityId: file.entityId,
               label: name,
+              mimeType: file.mimeType,
+              workspaceId,
             })
           }
           type="button"

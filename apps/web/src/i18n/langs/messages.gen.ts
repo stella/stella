@@ -661,10 +661,10 @@ type Messages = {
     "trigger": "Feedback";
   };
   "filters": {
-    "eq": "Is";
-    "neq": "Is not";
-    "contains": "Contains";
-    "is_empty": "Is empty";
+    "contains": "contains";
+    "eq": "is";
+    "is_empty": "is empty";
+    "neq": "is not";
   };
   "knowledge": {
     "sections": {
@@ -702,6 +702,7 @@ type Messages = {
     "account": "Account";
     "agents": "Agents";
     "analytics": "Analytics";
+    "calendar": "Calendar";
     "caseLaw": "Case Law";
     "chat": "Chat";
     "chatAlreadyOpen": "Chat is already open";
@@ -714,6 +715,7 @@ type Messages = {
     "invoices": "Invoices";
     "knowledge": "Knowledge";
     "members": "Members";
+    "myTodos": "My tasks";
     "newMatter": "New matter";
     "organization": "Organization";
     "pinned": "Pinned";
@@ -845,7 +847,47 @@ type Messages = {
     "partyRemoved": "Party removed";
     "roleUpdated": "Role updated";
     "sessionRevoked": "Session revoked";
+    "taskCreated": "Task created";
     "workspaceDeletedSuccessfully": "Matter deleted successfully";
+  };
+  "tasks": {
+    "addAssignee": "Add assignee";
+    "addSubtask": "Add subtask";
+    "assigneeRoles": {
+      "assignee": "Assignee";
+      "reviewer": "Reviewer";
+    };
+    "assignees": "Assignees";
+    "clearDate": "Clear date";
+    "dueDate": "Due date";
+    "linkEntity": "Link entity";
+    "linkedEntities": "Linked entities";
+    "myTasksTitle": "My tasks";
+    "newTask": "New task";
+    "noAssignees": "No assignees";
+    "noLinks": "No linked entities";
+    "noSubtasks": "No subtasks";
+    "noTasksAssigned": "No tasks assigned to you";
+    "overdue": "Overdue";
+    "priority": "Priority";
+    "priorityValues": {
+      "high": "High";
+      "low": "Low";
+      "medium": "Medium";
+      "none": "None";
+      "urgent": "Urgent";
+    };
+    "status": "Status";
+    "statusValues": {
+      "cancelled": "Cancelled";
+      "done": "Done";
+      "in_progress": "In progress";
+      "in_review": "In review";
+      "open": "Open";
+    };
+    "subtasks": "Subtasks";
+    "title": "Tasks";
+    "untitled": "Untitled task";
   };
   "templateAnalytics": {
     "errorRate": "Error rate";
@@ -1090,6 +1132,9 @@ type Messages = {
     };
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
+      "aiTask": "AI Task";
+      "detailViewConstruction": "AI workflow detail view is under construction.";
+      "evidence": "Evidence";
       "goBack": "Go back";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";
@@ -1097,7 +1142,9 @@ type Messages = {
       "passwordLabel": "Enter the PDF password";
       "passwordRequired": "Password required";
       "previousPage": "Previous page";
+      "print": "Print";
       "resetZoom": "Reset zoom";
+      "selectATab": "Select a tab";
       "showOriginal": "Show original pages";
       "toggleSidebar": "Toggle sidebar";
       "unlock": "Unlock";
@@ -1163,6 +1210,21 @@ type Messages = {
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";
+      "calendar": {
+        "addDates": "+ Dates";
+        "additionalDates": "+{count} dates";
+        "createdAt": "Created at";
+        "month": "Month";
+        "more": "+{count} more";
+        "noDates": "No date property selected";
+        "showAdditionalDates": "Additional dates";
+        "showBy": "Show by";
+        "today": "Today";
+        "updatedAt": "Last updated";
+        "week": "Week";
+        "year": "Year";
+        "dueDateTaskOnly": "Due date can only be set for tasks";
+      };
       "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
@@ -1176,15 +1238,27 @@ type Messages = {
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "groupBy": "Group by:";
       "layouts": {
+        "calendar": "Calendar";
         "filesystem": "List";
         "grid": "Grid";
         "kanban": "Kanban";
         "list": "List";
         "overview": "Overview";
         "table": "Table";
+        "timeline": "Timeline";
       };
       "newView": "New {layout}";
       "selectProperty": "Select property";
+      "timeline": {
+        "day": "Day";
+        "endDate": "End date";
+        "month": "Month";
+        "noDates": "No dates set";
+        "quarter": "Quarter";
+        "showTable": "Show table";
+        "startDate": "Start date";
+        "week": "Week";
+      };
     };
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow";

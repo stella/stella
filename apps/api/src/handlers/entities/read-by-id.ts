@@ -55,6 +55,7 @@ export const readEntityByIdHandler = async ({
 
   return {
     entityId,
+    kind: entity.kind,
     name: entity.name,
     fields,
   };

@@ -1,4 +1,4 @@
-import { asc, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
@@ -66,7 +66,18 @@ const matchesFilter = <T extends FilterableEntity>(
   filter: ViewFilterCondition,
 ): boolean => {
   if (filter.field === "kind") {
+    if (filter.value.length === 0) {
+      return true;
+    }
+    if (filter.value.includes("document") && entity.kind === "folder") {
+      return true;
+    }
     return filter.value.includes(entity.kind);
+  }
+
+  if (filter.field === "builtin") {
+    // Builtin filters are handled server-side only.
+    return true;
   }
 
   const field = findField(entity.fields, filter.propertyId);
@@ -185,6 +196,57 @@ const buildPropertyFilterCondition = (
 };
 
 /**
+ * Maps a builtin field name to its database column.
+ */
+const builtinColumn = (field: string) => {
+  switch (field) {
+    case "status":
+      return entities.status;
+    case "priority":
+      return entities.priority;
+    default:
+      return null;
+  }
+};
+
+const buildBuiltinFilterCondition = (
+  filter: Extract<ViewFilterCondition, { field: "builtin" }>,
+): SQL | null => {
+  const col = builtinColumn(filter.builtinField);
+  if (!col) {
+    return null;
+  }
+
+  switch (filter.op) {
+    case "eq":
+      if (filter.value === undefined || filter.value === "") {
+        return null;
+      }
+      return eq(col, String(filter.value));
+    case "neq":
+      if (filter.value === undefined || filter.value === "") {
+        return null;
+      }
+      return or(ne(col, String(filter.value)), isNull(col)) ?? null;
+    case "in": {
+      const vals = Array.isArray(filter.value)
+        ? filter.value
+        : filter.value
+          ? [filter.value]
+          : [];
+      if (vals.length === 0) {
+        return null;
+      }
+      return inArray(col, vals);
+    }
+    case "is_empty":
+      return sql`(${col} IS NULL OR ${col} = '')`;
+    default:
+      return null;
+  }
+};
+
+/**
  * Converts ViewFilterCondition[] into SQL WHERE conditions
  * that can be combined with `and()`.
  */
@@ -195,7 +257,19 @@ export const buildFilterConditions = (
 
   for (const filter of filters) {
     if (filter.field === "kind") {
-      conditions.push(inArray(entities.kind, filter.value));
+      if (filter.value.length > 0) {
+        // "document" implies "folder" (folders are part of
+        // the document hierarchy, not independently filterable)
+        const expanded = filter.value.includes("document")
+          ? [...new Set([...filter.value, "folder" as const])]
+          : filter.value;
+        conditions.push(inArray(entities.kind, expanded));
+      }
+    } else if (filter.field === "builtin") {
+      const cond = buildBuiltinFilterCondition(filter);
+      if (cond) {
+        conditions.push(cond);
+      }
     } else {
       conditions.push(buildPropertyFilterCondition(filter));
     }

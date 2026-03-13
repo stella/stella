@@ -1,6 +1,15 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
-import { FilterIcon, XIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  CircleDotIcon,
+  FileTextIcon,
+  FilterIcon,
+  FolderIcon,
+  SignalIcon,
+  SquareCheckIcon,
+  XIcon,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
@@ -23,6 +32,12 @@ import {
 import type { ViewFilterCondition, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
+const KIND_ICONS: Record<string, LucideIcon> = {
+  document: FileTextIcon,
+  folder: FolderIcon,
+  task: SquareCheckIcon,
+};
+
 type FilterChipsProps = {
   filters: ViewFilterCondition[];
   properties: WorkspaceProperty[];
@@ -42,28 +57,37 @@ export const FilterChips = ({
     onUpdate(filters.filter((f) => f.id !== id));
   };
 
-  return (
-    <>
-      {filters.map((filter) =>
-        filter.field === "kind" ? (
-          <KindFilterChip
-            filter={filter}
-            key={filter.id}
-            onChange={(updated) => handleChange(filter.id, updated)}
-            onRemove={() => handleRemove(filter.id)}
-          />
-        ) : (
+  const renderChip = (filter: ViewFilterCondition) => {
+    const shared = {
+      key: filter.id,
+      onChange: (updated: ViewFilterCondition) =>
+        handleChange(filter.id, updated),
+      onRemove: () => handleRemove(filter.id),
+    };
+
+    switch (filter.field) {
+      case "kind":
+        return <KindFilterChip filter={filter} {...shared} />;
+      case "builtin":
+        return <BuiltinFilterChip filter={filter} {...shared} />;
+      case "property":
+        return (
           <PropertyFilterChip
             filter={filter}
-            key={filter.id}
-            onChange={(updated) => handleChange(filter.id, updated)}
-            onRemove={() => handleRemove(filter.id)}
             properties={properties}
+            {...shared}
           />
-        ),
-      )}
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <>
+      {filters.map(renderChip)}
       <AddFilterButton
-        hasKindFilter={filters.some((f) => f.field === "kind")}
+        filters={filters}
         onAdd={(filter) => onUpdate([...filters, filter])}
         properties={properties}
       />
@@ -73,14 +97,26 @@ export const FilterChips = ({
 
 type AddFilterButtonProps = {
   properties: WorkspaceProperty[];
+  filters: ViewFilterCondition[];
   onAdd: (filter: ViewFilterCondition) => void;
-  hasKindFilter?: boolean;
 };
+
+const hasFilter = (
+  filters: ViewFilterCondition[],
+  field: string,
+  builtinField?: string,
+) =>
+  filters.some(
+    (f) =>
+      f.field === field &&
+      (builtinField === undefined ||
+        (f.field === "builtin" && f.builtinField === builtinField)),
+  );
 
 const AddFilterButton = ({
   properties,
+  filters,
   onAdd,
-  hasKindFilter,
 }: AddFilterButtonProps) => {
   const t = useTranslations();
 
@@ -91,7 +127,7 @@ const AddFilterButton = ({
       </MenuTrigger>
       <MenuPopup>
         <MenuItem
-          disabled={hasKindFilter}
+          disabled={hasFilter(filters, "kind")}
           onClick={() =>
             onAdd({
               id: nanoid(),
@@ -101,31 +137,64 @@ const AddFilterButton = ({
             })
           }
         >
+          <FilterIcon className="size-3.5" />
           {t("common.kind")}
         </MenuItem>
-        {properties.map((prop) => (
-          <MenuItem
-            key={prop.id}
-            onClick={() =>
-              onAdd({
-                id: nanoid(),
-                field: "property",
-                propertyId: prop.id,
-                op: "eq",
-                value: "",
-              })
-            }
-          >
-            <PropertyIcon type={prop.content.type} />
-            {prop.name}
-          </MenuItem>
-        ))}
+        <MenuItem
+          disabled={hasFilter(filters, "builtin", "status")}
+          onClick={() =>
+            onAdd({
+              id: nanoid(),
+              field: "builtin",
+              builtinField: "status",
+              op: "eq",
+              value: "",
+            })
+          }
+        >
+          <CircleDotIcon className="size-3.5" />
+          {t("tasks.status")}
+        </MenuItem>
+        <MenuItem
+          disabled={hasFilter(filters, "builtin", "priority")}
+          onClick={() =>
+            onAdd({
+              id: nanoid(),
+              field: "builtin",
+              builtinField: "priority",
+              op: "eq",
+              value: "",
+            })
+          }
+        >
+          <SignalIcon className="size-3.5" />
+          {t("tasks.priority")}
+        </MenuItem>
+        {properties
+          .filter((p) => p.content.type !== "file")
+          .map((prop) => (
+            <MenuItem
+              key={prop.id}
+              onClick={() =>
+                onAdd({
+                  id: nanoid(),
+                  field: "property",
+                  propertyId: prop.id,
+                  op: "eq",
+                  value: "",
+                })
+              }
+            >
+              <PropertyIcon type={prop.content.type} />
+              {prop.name}
+            </MenuItem>
+          ))}
       </MenuPopup>
     </Menu>
   );
 };
 
-const ENTITY_KINDS = ["document", "folder", "task", "message"] as const;
+const ENTITY_KINDS = ["document", "task"] as const;
 
 type FilterChipWrapperProps = {
   label: string;
@@ -153,14 +222,27 @@ type KindFilterChipProps = {
   onRemove: () => void;
 };
 
+const useKindLabels = () => {
+  const t = useTranslations();
+  return {
+    document: t("search.kinds.document"),
+    folder: t("search.kinds.folder"),
+    task: t("search.kinds.task"),
+    message: t("search.kinds.message"),
+  } as Record<string, string>;
+};
+
 const KindFilterChip = ({
   filter,
   onChange,
   onRemove,
 }: KindFilterChipProps) => {
   const t = useTranslations();
+  const kindLabels = useKindLabels();
   const label =
-    filter.value.length === 0 ? t("common.all") : filter.value.join(", ");
+    filter.value.length === 0
+      ? t("common.all")
+      : filter.value.map((k) => kindLabels[k] ?? k).join(", ");
 
   return (
     <FilterChipWrapper label={t("common.kind")} onRemove={onRemove}>
@@ -171,13 +253,106 @@ const KindFilterChip = ({
       >
         <FilterSelectTrigger>{label}</FilterSelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
-          {ENTITY_KINDS.map((kind) => (
-            <SelectItem key={kind} value={kind}>
-              {kind}
+          {ENTITY_KINDS.map((kind) => {
+            const Icon = KIND_ICONS[kind];
+            return (
+              <SelectItem key={kind} value={kind}>
+                <Icon className="size-3.5" />
+                {kindLabels[kind] ?? kind}
+              </SelectItem>
+            );
+          })}
+        </SelectPopup>
+      </Select>
+    </FilterChipWrapper>
+  );
+};
+
+// -- Builtin field filter (status, priority) --
+
+const STATUS_VALUES = [
+  "open",
+  "in_progress",
+  "in_review",
+  "done",
+  "cancelled",
+] as const;
+
+const PRIORITY_VALUES = ["none", "urgent", "high", "medium", "low"] as const;
+
+type BuiltinFilterChipProps = {
+  filter: Extract<ViewFilterCondition, { field: "builtin" }>;
+  onChange: (filter: ViewFilterCondition) => void;
+  onRemove: () => void;
+};
+
+const BuiltinFilterChip = ({
+  filter,
+  onChange,
+  onRemove,
+}: BuiltinFilterChipProps) => {
+  const t = useTranslations();
+  const isStatus = filter.builtinField === "status";
+  const label = isStatus ? t("tasks.status") : t("tasks.priority");
+  const values = isStatus ? STATUS_VALUES : PRIORITY_VALUES;
+
+  const resolveLabel = (val: string) =>
+    isStatus
+      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        t(`tasks.statusValues.${val}` as "tasks.statusValues.open")
+      : // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        t(`tasks.priorityValues.${val}` as "tasks.priorityValues.none");
+
+  const opOptions = [
+    { value: "eq", label: t("filters.eq") },
+    { value: "neq", label: t("filters.neq") },
+    { value: "is_empty", label: t("filters.is_empty") },
+  ] as const;
+
+  return (
+    <FilterChipWrapper label={label} onRemove={onRemove}>
+      <Select
+        onValueChange={(op) => {
+          if (op) {
+            onChange({ ...filter, op });
+          }
+        }}
+        value={filter.op}
+      >
+        <FilterSelectTrigger>
+          {opOptions.find((o) => o.value === filter.op)?.label}
+        </FilterSelectTrigger>
+        <SelectPopup alignItemWithTrigger={false}>
+          {opOptions.map((op) => (
+            <SelectItem key={op.value} value={op.value}>
+              {op.label}
             </SelectItem>
           ))}
         </SelectPopup>
       </Select>
+      {filter.op !== "is_empty" && (
+        <Select
+          onValueChange={(val) => {
+            if (val !== null) {
+              onChange({ ...filter, value: val });
+            }
+          }}
+          value={String(filter.value ?? "")}
+        >
+          <FilterSelectTrigger>
+            {filter.value !== "" && filter.value !== null
+              ? resolveLabel(String(filter.value))
+              : "…"}
+          </FilterSelectTrigger>
+          <SelectPopup alignItemWithTrigger={false}>
+            {values.map((val) => (
+              <SelectItem key={val} value={val}>
+                {resolveLabel(val)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      )}
     </FilterChipWrapper>
   );
 };
@@ -196,21 +371,39 @@ const PropertyFilterChip = ({
   onRemove,
 }: PropertyFilterChipProps) => {
   const t = useTranslations();
-  const label = properties.find((p) => p.id === filter.propertyId)?.name;
+  const property = properties.find((p) => p.id === filter.propertyId);
 
-  const options = [
-    { value: "eq", label: t("filters.eq") },
-    { value: "neq", label: t("filters.neq") },
-    { value: "contains", label: t("filters.contains") },
-    { value: "is_empty", label: t("filters.is_empty") },
-  ] as const;
-
-  if (!label) {
+  if (!property) {
     return null;
   }
 
+  const isSingleSelect =
+    property.content.type === "single-select" ||
+    property.content.type === "multi-select";
+
+  const selectOptions =
+    isSingleSelect &&
+    (property.content.type === "single-select" ||
+      property.content.type === "multi-select")
+      ? property.content.options
+      : [];
+
+  // For single-select: simpler ops (is / is not / is empty)
+  const opOptions = isSingleSelect
+    ? ([
+        { value: "eq", label: t("filters.eq") },
+        { value: "neq", label: t("filters.neq") },
+        { value: "is_empty", label: t("filters.is_empty") },
+      ] as const)
+    : ([
+        { value: "eq", label: t("filters.eq") },
+        { value: "neq", label: t("filters.neq") },
+        { value: "contains", label: t("filters.contains") },
+        { value: "is_empty", label: t("filters.is_empty") },
+      ] as const);
+
   return (
-    <FilterChipWrapper label={label} onRemove={onRemove}>
+    <FilterChipWrapper label={property.name} onRemove={onRemove}>
       <Select
         onValueChange={(op) => {
           if (op) {
@@ -220,29 +413,52 @@ const PropertyFilterChip = ({
         value={filter.op}
       >
         <FilterSelectTrigger>
-          {options.find((o) => o.value === filter.op)?.label}
+          {opOptions.find((o) => o.value === filter.op)?.label}
         </FilterSelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
-          {options.map((op) => (
+          {opOptions.map((op) => (
             <SelectItem key={op.value} value={op.value}>
               {op.label}
             </SelectItem>
           ))}
         </SelectPopup>
       </Select>
-      {filter.op !== "is_empty" && (
-        <Input
-          className="h-6! w-24 border-0 bg-transparent px-1 text-xs shadow-none"
-          onChange={(e) =>
-            onChange({
-              ...filter,
-              value: e.currentTarget.value,
-            })
-          }
-          size="sm"
-          value={String(filter.value ?? "")}
-        />
-      )}
+      {filter.op !== "is_empty" &&
+        (isSingleSelect ? (
+          <Select
+            onValueChange={(val) => {
+              if (val !== null) {
+                onChange({ ...filter, value: val });
+              }
+            }}
+            value={String(filter.value ?? "")}
+          >
+            <FilterSelectTrigger>
+              {filter.value !== "" && filter.value !== null
+                ? String(filter.value)
+                : "…"}
+            </FilterSelectTrigger>
+            <SelectPopup alignItemWithTrigger={false}>
+              {selectOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.value}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        ) : (
+          <Input
+            className="h-6! w-24 border-0 bg-transparent px-1 text-xs shadow-none"
+            onChange={(e) =>
+              onChange({
+                ...filter,
+                value: e.currentTarget.value,
+              })
+            }
+            size="sm"
+            value={String(filter.value ?? "")}
+          />
+        ))}
     </FilterChipWrapper>
   );
 };

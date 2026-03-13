@@ -1,5 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
+  CalendarIcon,
   ClockIcon,
   EyeIcon,
   HashIcon,
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from "@stella/ui/components/select";
 
+import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
@@ -58,7 +60,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 px-2 py-1">
+    <div className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1">
       <FilterChips
         filters={filters}
         onUpdate={(updatedFilters) => handleUpdate({ filters: updatedFilters })}
@@ -86,6 +88,55 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
               handleUpdate({ groupByPropertyId })
             }
             properties={properties}
+          />
+        </>
+      )}
+
+      {view.layout.type === "calendar" && (
+        <>
+          <span className="bg-border mx-1 h-4 w-px" />
+          <CalendarDatePropertyControl
+            datePropertyId={view.layout.datePropertyId}
+            endDatePropertyId={view.layout.endDatePropertyId}
+            onChange={(datePropertyId, endDatePropertyId) =>
+              handleUpdate({ datePropertyId, endDatePropertyId })
+            }
+            properties={properties}
+          />
+          <AdditionalDatesControl
+            additionalDatePropertyIds={
+              view.layout.additionalDatePropertyIds ?? []
+            }
+            onChange={(additionalDatePropertyIds) =>
+              handleUpdate({ additionalDatePropertyIds })
+            }
+            primaryDatePropertyId={view.layout.datePropertyId}
+            properties={properties}
+          />
+          <CalendarModeControl
+            mode={view.layout.mode}
+            onChange={(mode) => handleUpdate({ mode })}
+          />
+        </>
+      )}
+
+      {view.layout.type === "timeline" && (
+        <>
+          <span className="bg-border mx-1 h-4 w-px" />
+          <TimelineDatePropertyControl
+            endDatePropertyId={view.layout.endDatePropertyId}
+            onChange={(startDatePropertyId, endDatePropertyId) =>
+              handleUpdate({
+                startDatePropertyId,
+                endDatePropertyId,
+              })
+            }
+            properties={properties}
+            startDatePropertyId={view.layout.startDatePropertyId}
+          />
+          <TimelineZoomControl
+            onChange={(zoom) => handleUpdate({ zoom })}
+            zoom={view.layout.zoom}
           />
         </>
       )}
@@ -265,5 +316,334 @@ const PropertiesToggle = ({
         )}
       </MenuPopup>
     </Menu>
+  );
+};
+
+// -- Calendar controls --
+
+const INTERNAL_DATE_OPTIONS = [
+  {
+    id: "_created-at",
+    labelKey: "workspaces.views.calendar.createdAt",
+  },
+  {
+    id: "_updated-at",
+    labelKey: "workspaces.views.calendar.updatedAt",
+  },
+] as const;
+
+const TASK_DATE_OPTIONS = [
+  { id: "_due-date", labelKey: "tasks.dueDate" },
+  { id: "_start-date", labelKey: "workspaces.views.timeline.startDate" },
+] as const;
+
+type CalendarDatePropertyControlProps = {
+  properties: WorkspaceProperty[];
+  datePropertyId: string;
+  endDatePropertyId?: string;
+  onChange: (datePropertyId: string, endDatePropertyId?: string) => void;
+};
+
+const CalendarDatePropertyControl = ({
+  properties,
+  datePropertyId,
+  endDatePropertyId,
+  onChange,
+}: CalendarDatePropertyControlProps) => {
+  const t = useTranslations();
+  const dateProperties = properties.filter((p) => p.content.type === "date");
+
+  const resolveLabel = (id: string) => {
+    const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
+    if (internal) {
+      return t(internal.labelKey);
+    }
+    const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
+    if (taskDate) {
+      return t(taskDate.labelKey);
+    }
+    return (
+      dateProperties.find((p) => p.id === id)?.name ??
+      t("workspaces.views.selectProperty")
+    );
+  };
+
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <span className="text-muted-foreground">
+        {t("workspaces.views.calendar.showBy")}
+      </span>
+      <Select
+        onValueChange={(v) => {
+          if (v !== null) {
+            onChange(v, endDatePropertyId);
+          }
+        }}
+        value={datePropertyId}
+      >
+        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+          <SelectValue placeholder={resolveLabel(datePropertyId)}>
+            {resolveLabel(datePropertyId)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {TASK_DATE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.id} value={opt.id}>
+              <CalendarIcon className="size-3.5" />
+              {t(opt.labelKey)}
+            </SelectItem>
+          ))}
+          {INTERNAL_DATE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.id} value={opt.id}>
+              <ClockIcon className="size-3.5" />
+              {t(opt.labelKey)}
+            </SelectItem>
+          ))}
+          {dateProperties.map((prop) => (
+            <SelectItem key={prop.id} value={prop.id}>
+              <CalendarIcon className="size-3.5" />
+              {prop.name}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </span>
+  );
+};
+
+type AdditionalDatesControlProps = {
+  properties: WorkspaceProperty[];
+  primaryDatePropertyId: string;
+  additionalDatePropertyIds: string[];
+  onChange: (ids: string[]) => void;
+};
+
+const AdditionalDatesControl = ({
+  properties,
+  primaryDatePropertyId,
+  additionalDatePropertyIds,
+  onChange,
+}: AdditionalDatesControlProps) => {
+  const t = useTranslations();
+  const dateProperties = properties.filter((p) => p.content.type === "date");
+
+  // Eligible: internal date options + custom date properties,
+  // excluding the primary one (already shown separately)
+  const eligible = [
+    ...INTERNAL_DATE_OPTIONS.filter((o) => o.id !== primaryDatePropertyId).map(
+      (o) => ({ id: o.id, name: t(o.labelKey) }),
+    ),
+    ...dateProperties
+      .filter((p) => p.id !== primaryDatePropertyId)
+      .map((p) => ({ id: p.id, name: p.name })),
+  ];
+
+  if (eligible.length === 0) {
+    return null;
+  }
+
+  const toggleProperty = (id: string) => {
+    if (additionalDatePropertyIds.includes(id)) {
+      onChange(additionalDatePropertyIds.filter((x) => x !== id));
+    } else {
+      onChange([...additionalDatePropertyIds, id]);
+    }
+  };
+
+  const count = additionalDatePropertyIds.length;
+
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button size="xs" variant="ghost">
+            <CalendarIcon className="mr-1 size-3" />
+            {count > 0
+              ? t("workspaces.views.calendar.additionalDates", {
+                  count: String(count),
+                })
+              : t("workspaces.views.calendar.addDates")}
+          </Button>
+        }
+      />
+      <MenuPopup>
+        <MenuGroup>
+          <MenuGroupLabel>
+            {t("workspaces.views.calendar.showAdditionalDates")}
+          </MenuGroupLabel>
+          {eligible.map((item) => {
+            const isSelected = additionalDatePropertyIds.includes(item.id);
+            return (
+              <MenuItem key={item.id} onClick={() => toggleProperty(item.id)}>
+                <CalendarIcon className="size-3.5" />
+                <span className="flex-1">{item.name}</span>
+                {isSelected && <span className="text-primary">{"\u2713"}</span>}
+              </MenuItem>
+            );
+          })}
+        </MenuGroup>
+      </MenuPopup>
+    </Menu>
+  );
+};
+
+type CalendarMode = "month" | "week" | "year";
+
+type CalendarModeControlProps = {
+  mode: CalendarMode;
+  onChange: (mode: CalendarMode) => void;
+};
+
+const CALENDAR_MODES = ["year", "month", "week"] as const;
+
+const calendarModeKeys = {
+  year: "workspaces.views.calendar.year",
+  month: "workspaces.views.calendar.month",
+  week: "workspaces.views.calendar.week",
+} as const satisfies Record<CalendarMode, TranslationKey>;
+
+const CalendarModeControl = ({ mode, onChange }: CalendarModeControlProps) => {
+  const t = useTranslations();
+
+  return (
+    <span className="flex items-center gap-0.5 text-xs">
+      {CALENDAR_MODES.map((m) => (
+        <Button
+          key={m}
+          onClick={() => onChange(m)}
+          size="xs"
+          variant={mode === m ? "secondary" : "ghost"}
+        >
+          {t(calendarModeKeys[m])}
+        </Button>
+      ))}
+    </span>
+  );
+};
+
+// -- Timeline controls --
+
+type TimelineDatePropertyControlProps = {
+  properties: WorkspaceProperty[];
+  startDatePropertyId: string;
+  endDatePropertyId: string;
+  onChange: (startDatePropertyId: string, endDatePropertyId: string) => void;
+};
+
+const TimelineDatePropertyControl = ({
+  properties,
+  startDatePropertyId,
+  endDatePropertyId,
+  onChange,
+}: TimelineDatePropertyControlProps) => {
+  const t = useTranslations();
+  const dateProperties = properties.filter((p) => p.content.type === "date");
+
+  const resolveLabel = (id: string) => {
+    const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
+    if (internal) {
+      return t(internal.labelKey);
+    }
+    const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
+    if (taskDate) {
+      return t(taskDate.labelKey);
+    }
+    return (
+      dateProperties.find((p) => p.id === id)?.name ??
+      t("workspaces.views.selectProperty")
+    );
+  };
+
+  const dateOptions = (
+    <>
+      {INTERNAL_DATE_OPTIONS.map((opt) => (
+        <SelectItem key={opt.id} value={opt.id}>
+          <ClockIcon className="size-3.5" />
+          {t(opt.labelKey)}
+        </SelectItem>
+      ))}
+      {dateProperties.map((prop) => (
+        <SelectItem key={prop.id} value={prop.id}>
+          <CalendarIcon className="size-3.5" />
+          {prop.name}
+        </SelectItem>
+      ))}
+    </>
+  );
+
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <span className="text-muted-foreground">
+        {t("workspaces.views.timeline.startDate")}
+      </span>
+      <Select
+        onValueChange={(v) => {
+          if (v !== null) {
+            onChange(v, endDatePropertyId);
+          }
+        }}
+        value={startDatePropertyId}
+      >
+        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+          <SelectValue placeholder={resolveLabel(startDatePropertyId)}>
+            {resolveLabel(startDatePropertyId)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>{dateOptions}</SelectPopup>
+      </Select>
+      <span className="text-muted-foreground">
+        {t("workspaces.views.timeline.endDate")}
+      </span>
+      <Select
+        onValueChange={(v) => {
+          if (v !== null) {
+            onChange(startDatePropertyId, v);
+          }
+        }}
+        value={endDatePropertyId}
+      >
+        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+          <SelectValue placeholder={resolveLabel(endDatePropertyId)}>
+            {resolveLabel(endDatePropertyId)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>{dateOptions}</SelectPopup>
+      </Select>
+    </span>
+  );
+};
+
+type TimelineZoomControlProps = {
+  zoom: "day" | "week" | "month" | "quarter";
+  onChange: (zoom: "day" | "week" | "month" | "quarter") => void;
+};
+
+const ZOOM_OPTIONS = ["day", "week", "month", "quarter"] as const;
+
+type TimelineZoom = "day" | "week" | "month" | "quarter";
+
+const ZOOM_LABEL_KEYS = {
+  day: "workspaces.views.timeline.day",
+  week: "workspaces.views.timeline.week",
+  month: "workspaces.views.timeline.month",
+  quarter: "workspaces.views.timeline.quarter",
+} as const satisfies Record<TimelineZoom, TranslationKey>;
+
+const TimelineZoomControl = ({ zoom, onChange }: TimelineZoomControlProps) => {
+  const t = useTranslations();
+
+  return (
+    <span className="flex items-center gap-0.5 text-xs">
+      {ZOOM_OPTIONS.map((z) => (
+        <Button
+          key={z}
+          onClick={() => onChange(z)}
+          size="xs"
+          variant={zoom === z ? "secondary" : "ghost"}
+        >
+          {t(ZOOM_LABEL_KEYS[z])}
+        </Button>
+      ))}
+    </span>
   );
 };

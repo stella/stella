@@ -19,10 +19,12 @@ import {
 import {
   EllipsisVerticalIcon,
   EyeOffIcon,
+  FileTextIcon,
   FileUpIcon,
   GripVerticalIcon,
   PaletteIcon,
   PlusIcon,
+  SquareCheckIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -53,7 +55,11 @@ import {
 } from "@stella/ui/components/popover";
 import { cn } from "@stella/ui/lib/utils";
 
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import type {
+  EntityKind,
+  WorkspaceEntity,
+  WorkspaceProperty,
+} from "@/lib/types";
 import {
   COLUMN_DRAG_TYPE,
   ENTITY_DRAG_TYPE,
@@ -79,6 +85,7 @@ type KanbanColumnProps = {
   onRenameColumn?: (newName: string) => void;
   onRenameEntity?: (entityId: string, newName: string) => void;
   onHideColumn?: () => void;
+  onCreate?: (kind: EntityKind) => void;
   onDeleteAll?: () => void;
   onReorderColumn?: (
     sourceValue: string,
@@ -103,6 +110,7 @@ export const KanbanColumn = ({
   onRenameColumn,
   onRenameEntity,
   onHideColumn,
+  onCreate,
   onDeleteAll,
   onReorderColumn,
 }: KanbanColumnProps) => {
@@ -112,6 +120,25 @@ export const KanbanColumn = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(title);
+
+  // Context menu state
+  const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxAnchor, setCtxAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onCreate) {
+      return;
+    }
+    e.preventDefault();
+    const x = e.clientX;
+    const y = e.clientY;
+    setCtxAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+    setCtxOpen(true);
+  };
   const [isFileDragOver, setIsFileDragOver] = useState(false);
   const [isEntityDragOver, setIsEntityDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -438,7 +465,12 @@ export const KanbanColumn = ({
           </Menu>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: context menu on column body */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on column body */}
+      <div
+        className="flex flex-1 flex-col gap-2 overflow-y-auto p-2"
+        onContextMenu={handleContextMenu}
+      >
         {entities.map((entity) => (
           <KanbanCard
             cardFields={cardFields}
@@ -456,6 +488,29 @@ export const KanbanColumn = ({
           </div>
         )}
       </div>
+      {onCreate && (
+        <Menu
+          onOpenChange={(o) => {
+            setCtxOpen(o);
+            if (!o) {
+              setCtxAnchor(null);
+            }
+          }}
+          open={ctxOpen}
+        >
+          <MenuTrigger render={<span className="sr-only" />} />
+          <MenuPopup anchor={ctxAnchor ?? undefined}>
+            <MenuItem onClick={() => onCreate("document")}>
+              <FileTextIcon />
+              {t("workspaces.newDocument")}
+            </MenuItem>
+            <MenuItem onClick={() => onCreate("task")}>
+              <SquareCheckIcon />
+              {t("tasks.newTask")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      )}
       {onFileUpload && (
         <div className="border-t p-2">
           <input

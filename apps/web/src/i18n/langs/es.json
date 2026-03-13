@@ -658,10 +658,10 @@
     "trigger": "Comentarios"
   },
   "filters": {
-    "contains": "Contiene",
-    "eq": "Es",
-    "is_empty": "Está vacío",
-    "neq": "No es"
+    "contains": "contiene",
+    "eq": "es",
+    "is_empty": "está vacío",
+    "neq": "no es"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agentes",
     "analytics": "Analítica",
+    "calendar": "Calendario",
     "caseLaw": "Case Law",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat is already open",
@@ -711,6 +712,7 @@
     "invoices": "Invoices",
     "knowledge": "Conocimiento",
     "members": "Miembros",
+    "myTodos": "Mis tareas",
     "newMatter": "Nuevo asunto",
     "organization": "Organización",
     "pinned": "Fijados",
@@ -842,7 +844,47 @@
     "partyRemoved": "Parte eliminada",
     "roleUpdated": "Rol actualizado",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Tarea creada",
     "workspaceDeletedSuccessfully": "Asunto eliminado correctamente"
+  },
+  "tasks": {
+    "addAssignee": "Añadir asignado",
+    "addSubtask": "Añadir subtarea",
+    "assigneeRoles": {
+      "assignee": "Asignado",
+      "reviewer": "Revisor"
+    },
+    "assignees": "Asignados",
+    "clearDate": "Borrar fecha",
+    "dueDate": "Fecha límite",
+    "linkEntity": "Vincular elemento",
+    "linkedEntities": "Elementos vinculados",
+    "myTasksTitle": "Mis tareas",
+    "newTask": "Nueva tarea",
+    "noAssignees": "Sin asignados",
+    "noLinks": "Sin elementos vinculados",
+    "noSubtasks": "Sin subtareas",
+    "noTasksAssigned": "No tienes tareas asignadas",
+    "overdue": "Vencida",
+    "priority": "Prioridad",
+    "priorityValues": {
+      "high": "Alta",
+      "low": "Baja",
+      "medium": "Media",
+      "none": "Ninguna",
+      "urgent": "Urgente"
+    },
+    "status": "Estado",
+    "statusValues": {
+      "cancelled": "Cancelada",
+      "done": "Hecha",
+      "in_progress": "En curso",
+      "in_review": "En revisión",
+      "open": "Abierta"
+    },
+    "subtasks": "Subtareas",
+    "title": "Tareas",
+    "untitled": "Tarea sin título"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Añadir campos",
       "aiGenerated": "Generado por IA",
+      "calendar": {
+        "addDates": "+ Fechas",
+        "additionalDates": "+{count} fechas",
+        "createdAt": "Creado el",
+        "dueDateTaskOnly": "La fecha de vencimiento solo se puede establecer para tareas",
+        "month": "Mes",
+        "more": "+{count} más",
+        "noDates": "Ninguna propiedad de fecha seleccionada",
+        "showAdditionalDates": "Fechas adicionales",
+        "showBy": "Mostrar por",
+        "today": "Hoy",
+        "updatedAt": "Última actualización",
+        "week": "Semana",
+        "year": "Año"
+      },
       "cannotDeleteRequired": "Se requiere al menos una vista de este tipo",
       "copySuffix": "{name} (copy)",
       "deleteView": "Eliminar vista",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# seleccionado} other {# seleccionados}}",
       "groupBy": "Agrupar por:",
       "layouts": {
+        "calendar": "Calendario",
         "filesystem": "Lista",
         "grid": "Cuadrícula",
         "kanban": "Kanban",
         "list": "Lista",
         "overview": "Resumen",
-        "table": "Tabla"
+        "table": "Tabla",
+        "timeline": "Línea de tiempo"
       },
       "newView": "Nueva {layout}",
-      "selectProperty": "Seleccionar propiedad"
+      "selectProperty": "Seleccionar propiedad",
+      "timeline": {
+        "day": "Día",
+        "endDate": "Fecha de fin",
+        "month": "Mes",
+        "noDates": "Sin fechas establecidas",
+        "quarter": "Trimestre",
+        "showTable": "Mostrar tabla",
+        "startDate": "Fecha de inicio",
+        "week": "Semana"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

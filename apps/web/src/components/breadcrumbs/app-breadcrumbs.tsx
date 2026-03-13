@@ -47,6 +47,9 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/workspaces/$workspaceId/$viewId/pdf"])]: () => (
         <PdfBreadcrumb />
       ),
+      [serializeKey(["/todos/"])]: () => (
+        <BreadcrumbLink to="/todos">{t("navigation.myTodos")}</BreadcrumbLink>
+      ),
       [serializeKey(["/knowledge"])]: () => (
         <BreadcrumbLink to="/knowledge">
           {t("navigation.knowledge")}

@@ -85,6 +85,10 @@ export const readEntitiesHandler = async ({
           updatedAt: entities.updatedAt,
           createdByName: user.name,
           createdByImage: user.image,
+          status: entities.status,
+          priority: entities.priority,
+          dueDate: entities.dueDate,
+          sortOrder: entities.sortOrder,
         })
         .from(entities)
         .leftJoin(user, eq(entities.createdBy, user.id))
@@ -145,6 +149,10 @@ export const readEntitiesHandler = async ({
     createdByImage: string | null;
     version: number;
     updatedAt: string | null;
+    status: string | null;
+    priority: string | null;
+    dueDate: string | null;
+    sortOrder: string | null;
     fields: {
       id: string;
       propertyId: string;
@@ -176,6 +184,10 @@ export const readEntitiesHandler = async ({
       createdByImage: entity.createdByImage ?? null,
       version: versionCountMap.get(entity.id) ?? 0,
       updatedAt: entity.updatedAt?.toISOString() ?? null,
+      status: entity.status,
+      priority: entity.priority,
+      dueDate: entity.dueDate,
+      sortOrder: entity.sortOrder,
       fields: entityFields.map((field) => ({
         id: field.id,
         propertyId: field.propertyId,

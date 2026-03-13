@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Connexion perdue",
-    "connectionLostDescription": "La connexion au serveur a été perdue. Reconnexion automatique en cours.",
+    "connectionLostDescription": "La connexion au serveur a été perdue. Nouvelle tentative automatique.",
     "convertTo": "Convertir en",
     "createdAt": "Créé le {date}",
     "currency": "Currency",
@@ -658,10 +658,10 @@
     "trigger": "Commentaires"
   },
   "filters": {
-    "contains": "Contient",
-    "eq": "Est",
-    "is_empty": "Est vide",
-    "neq": "N'est pas"
+    "contains": "contient",
+    "eq": "est",
+    "is_empty": "est vide",
+    "neq": "n’est pas"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agents",
     "analytics": "Analytique",
+    "calendar": "Calendrier",
     "caseLaw": "Case Law",
     "chat": "Discussion",
     "chatAlreadyOpen": "Chat is already open",
@@ -711,6 +712,7 @@
     "invoices": "Invoices",
     "knowledge": "Connaissances",
     "members": "Membres",
+    "myTodos": "Mes tâches",
     "newMatter": "Nouveau dossier",
     "organization": "Organisation",
     "pinned": "Épinglés",
@@ -842,7 +844,47 @@
     "partyRemoved": "Partie retirée",
     "roleUpdated": "Rôle mis à jour",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Tâche créée",
     "workspaceDeletedSuccessfully": "Dossier supprimé avec succès"
+  },
+  "tasks": {
+    "addAssignee": "Ajouter un assigné",
+    "addSubtask": "Ajouter une sous-tâche",
+    "assigneeRoles": {
+      "assignee": "Assigné",
+      "reviewer": "Réviseur"
+    },
+    "assignees": "Assignés",
+    "clearDate": "Effacer la date",
+    "dueDate": "Échéance",
+    "linkEntity": "Lier un élément",
+    "linkedEntities": "Éléments liés",
+    "myTasksTitle": "Mes tâches",
+    "newTask": "Nouvelle tâche",
+    "noAssignees": "Aucun assigné",
+    "noLinks": "Aucun élément lié",
+    "noSubtasks": "Aucune sous-tâche",
+    "noTasksAssigned": "Aucune tâche ne vous est assignée",
+    "overdue": "En retard",
+    "priority": "Priorité",
+    "priorityValues": {
+      "high": "Haute",
+      "low": "Basse",
+      "medium": "Moyenne",
+      "none": "Aucune",
+      "urgent": "Urgent"
+    },
+    "status": "Statut",
+    "statusValues": {
+      "cancelled": "Annulé",
+      "done": "Terminé",
+      "in_progress": "En cours",
+      "in_review": "En révision",
+      "open": "Ouvert"
+    },
+    "subtasks": "Sous-tâches",
+    "title": "Tâches",
+    "untitled": "Tâche sans titre"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Ajouter des champs",
       "aiGenerated": "Généré par IA",
+      "calendar": {
+        "addDates": "+ Dates",
+        "additionalDates": "+{count} dates",
+        "createdAt": "Créé le",
+        "dueDateTaskOnly": "La date d'échéance ne peut être définie que pour les tâches",
+        "month": "Mois",
+        "more": "+{count} de plus",
+        "noDates": "Aucune propriété de date sélectionnée",
+        "showAdditionalDates": "Dates supplémentaires",
+        "showBy": "Afficher par",
+        "today": "Aujourd'hui",
+        "updatedAt": "Dernière mise à jour",
+        "week": "Semaine",
+        "year": "Année"
+      },
       "cannotDeleteRequired": "Au moins une vue de ce type est requise",
       "copySuffix": "{name} (copy)",
       "deleteView": "Supprimer la vue",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# sélectionné} many {# sélectionnés} other {# sélectionnés}}",
       "groupBy": "Regrouper par :",
       "layouts": {
+        "calendar": "Calendrier",
         "filesystem": "Liste",
         "grid": "Grille",
         "kanban": "Kanban",
         "list": "Liste",
         "overview": "Aperçu",
-        "table": "Tableau"
+        "table": "Tableau",
+        "timeline": "Chronologie"
       },
       "newView": "Nouvelle {layout}",
-      "selectProperty": "Sélectionner une propriété"
+      "selectProperty": "Sélectionner une propriété",
+      "timeline": {
+        "day": "Jour",
+        "endDate": "Date de fin",
+        "month": "Mois",
+        "noDates": "Aucune date définie",
+        "quarter": "Trimestre",
+        "showTable": "Afficher le tableau",
+        "startDate": "Date de début",
+        "week": "Semaine"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",

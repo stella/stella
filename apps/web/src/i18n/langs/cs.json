@@ -658,10 +658,10 @@
     "trigger": "Zpětná vazba"
   },
   "filters": {
-    "contains": "Obsahuje",
-    "eq": "Je",
-    "is_empty": "Je prázdné",
-    "neq": "Není"
+    "contains": "obsahuje",
+    "eq": "je",
+    "is_empty": "je prázdné",
+    "neq": "není"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agenti",
     "analytics": "Analytika",
+    "calendar": "Kalendář",
     "caseLaw": "Case Law",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat je již otevřený",
@@ -711,6 +712,7 @@
     "invoices": "Faktury",
     "knowledge": "Znalosti",
     "members": "Členové",
+    "myTodos": "Moje úkoly",
     "newMatter": "Nový spis",
     "organization": "Organizace",
     "pinned": "Připnuté",
@@ -842,7 +844,47 @@
     "partyRemoved": "Strana odebrána",
     "roleUpdated": "Role aktualizována",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Úkol vytvořen",
     "workspaceDeletedSuccessfully": "Spis úspěšně smazán"
+  },
+  "tasks": {
+    "addAssignee": "Přidat osobu",
+    "addSubtask": "Přidat podúkol",
+    "assigneeRoles": {
+      "assignee": "Řešitel",
+      "reviewer": "Revident"
+    },
+    "assignees": "Přiřazení",
+    "clearDate": "Vymazat datum",
+    "dueDate": "Termín",
+    "linkEntity": "Propojit položku",
+    "linkedEntities": "Propojené položky",
+    "myTasksTitle": "Moje úkoly",
+    "newTask": "Nový úkol",
+    "noAssignees": "Žádní přiřazení",
+    "noLinks": "Žádné propojené položky",
+    "noSubtasks": "Žádné podúkoly",
+    "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
+    "overdue": "Po termínu",
+    "priority": "Priorita",
+    "priorityValues": {
+      "high": "Vysoká",
+      "low": "Nízká",
+      "medium": "Střední",
+      "none": "Žádná",
+      "urgent": "Urgentní"
+    },
+    "status": "Stav",
+    "statusValues": {
+      "cancelled": "Zrušený",
+      "done": "Hotovo",
+      "in_progress": "Rozpracovaný",
+      "in_review": "V revizi",
+      "open": "Otevřený"
+    },
+    "subtasks": "Podúkoly",
+    "title": "Úkoly",
+    "untitled": "Úkol bez názvu"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Přidat pole",
       "aiGenerated": "Generováno AI",
+      "calendar": {
+        "addDates": "+ Datumy",
+        "additionalDates": "+{count} datumů",
+        "createdAt": "Vytvořeno",
+        "dueDateTaskOnly": "Datum splnění lze nastavit pouze u úkolů",
+        "month": "Měsíc",
+        "more": "+{count} dalších",
+        "noDates": "Nevybrána žádná vlastnost data",
+        "showAdditionalDates": "Další datumy",
+        "showBy": "Zobrazit podle",
+        "today": "Dnes",
+        "updatedAt": "Naposledy aktualizováno",
+        "week": "Týden",
+        "year": "Rok"
+      },
       "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
       "copySuffix": "{name} (copy)",
       "deleteView": "Smazat pohled",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
       "groupBy": "Seskupit podle:",
       "layouts": {
+        "calendar": "Kalendář",
         "filesystem": "Seznam",
         "grid": "Mřížka",
         "kanban": "Kanban",
         "list": "Seznam",
         "overview": "Přehled",
-        "table": "Tabulka"
+        "table": "Tabulka",
+        "timeline": "Časová osa"
       },
       "newView": "Nový {layout}",
-      "selectProperty": "Vybrat vlastnost"
+      "selectProperty": "Vybrat vlastnost",
+      "timeline": {
+        "day": "Den",
+        "endDate": "Datum ukončení",
+        "month": "Měsíc",
+        "noDates": "Žádná data nenastavena",
+        "quarter": "Čtvrtletí",
+        "showTable": "Zobrazit tabulku",
+        "startDate": "Datum zahájení",
+        "week": "Týden"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Pro spuštění pracovního postupu přidejte alespoň jednu AI vlastnost",

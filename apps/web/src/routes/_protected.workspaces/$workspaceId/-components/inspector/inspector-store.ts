@@ -43,7 +43,7 @@ type State = {
 
 type Actions = {
   openPdf: (tab: Omit<PdfTab, "type" | "activationSeq">) => void;
-  openTask: (taskId: string, label: string, isNew?: boolean) => void;
+  openTask: (taskId: string, label?: string, isNew?: boolean) => void;
   closeTab: (id: string) => void;
   closeAll: () => void;
   setActive: (id: string) => void;
@@ -87,7 +87,7 @@ export const useInspectorStore = create<State & Actions>()(
       });
     },
 
-    openTask: (taskId, label, isNew) => {
+    openTask: (taskId, label = "", isNew = false) => {
       usePeekStore.getState().closeAll();
       set((state) => {
         const existing = state.tabs.find((t) => t.id === taskId);
@@ -95,13 +95,15 @@ export const useInspectorStore = create<State & Actions>()(
           state.tabs.push({
             type: "task",
             id: taskId,
-            label: label ?? "",
-            isNew: isNew ?? false,
+            label,
+            isNew,
           });
         } else if (existing.type === "task") {
-          existing.label = label;
-          if (isNew !== undefined) {
-            existing.isNew = isNew;
+          if (label) {
+            existing.label = label;
+          }
+          if (isNew) {
+            existing.isNew = true;
           }
         }
         state.activeId = taskId;

@@ -7,9 +7,11 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
+  CalendarIcon,
   CopyIcon,
   EllipsisVerticalIcon,
   FolderTreeIcon,
+  GanttChartIcon,
   KanbanIcon,
   LayoutDashboardIcon,
   PencilIcon,
@@ -72,6 +74,8 @@ const layoutIcons: Record<ViewLayoutType, React.ElementType> = {
   table: TableIcon,
   filesystem: FolderTreeIcon,
   kanban: KanbanIcon,
+  calendar: CalendarIcon,
+  timeline: GanttChartIcon,
 };
 
 const LAYOUT_LABEL_KEYS = {
@@ -79,9 +83,13 @@ const LAYOUT_LABEL_KEYS = {
   table: "workspaces.views.layouts.table",
   filesystem: "workspaces.views.layouts.list",
   kanban: "workspaces.views.layouts.kanban",
+  calendar: "workspaces.views.layouts.calendar",
+  timeline: "workspaces.views.layouts.timeline",
 } as const satisfies Record<ViewLayoutType, TranslationKey>;
 
-const emptyLayout = (type: ViewLayoutType): ViewLayout => {
+const emptyLayout = (
+  type: "overview" | "table" | "filesystem" | "kanban",
+): ViewLayout => {
   const base = {
     filters: [],
     sorts: [],
@@ -89,7 +97,12 @@ const emptyLayout = (type: ViewLayoutType): ViewLayout => {
   };
 
   if (type === "table") {
-    return { type, ...base, columnOrder: [], columnPinning: [] };
+    return {
+      type,
+      ...base,
+      columnOrder: [],
+      columnPinning: [],
+    };
   }
 
   return { type, ...base };
@@ -100,6 +113,24 @@ const defaultLayouts: Record<ViewLayoutType, ViewLayout> = {
   table: emptyLayout("table"),
   filesystem: emptyLayout("filesystem"),
   kanban: emptyLayout("kanban"),
+  calendar: {
+    type: "calendar",
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+    datePropertyId: "_due-date",
+    mode: "month",
+  },
+  timeline: {
+    type: "timeline",
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+    startDatePropertyId: "_created-at",
+    endDatePropertyId: "_created-at",
+    zoom: "month",
+    showTable: false,
+  },
 };
 
 const LAYOUT_OPTIONS: ViewLayoutType[] = [
@@ -107,6 +138,7 @@ const LAYOUT_OPTIONS: ViewLayoutType[] = [
   "table",
   "filesystem",
   "kanban",
+  "calendar",
 ];
 
 type ViewSwitcherProps = {
@@ -155,7 +187,7 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex items-center gap-1 px-2">
+    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
@@ -362,8 +394,8 @@ const ViewTab = ({
         }}
         value={id}
       >
-        <Icon className="size-3.5" />
-        {name}
+        <Icon className="size-3.5 shrink-0" />
+        <span className="max-w-36 truncate">{name}</span>
       </TabsTab>
       {isActive && (canUpdateView || canCreateView || canDeleteView) && (
         <ViewTabMenu

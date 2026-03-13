@@ -1,4 +1,31 @@
-import type { ActorEvent } from "@stella/rivet/types";
+import type { ActorEvent, VanillaOptions } from "@stella/rivet/types";
+
+// --- Actor timeout ---
+
+/** Hard timeout for Rivet actor connection + RPC calls.
+ *  Prevents route loaders and queries from hanging
+ *  indefinitely when actors are slow to start. */
+const ACTOR_TIMEOUT_MS = 10_000;
+
+/** Merge a timeout signal into vanilla actor config options.
+ *  Use this for every vanilla `getOrCreate` call so that
+ *  forgetting the timeout is a conscious deviation, not an
+ *  accidental omission.
+ *
+ *  @example
+ *  const handle = rivet.views.getOrCreate(
+ *    ...withActorTimeout(actorConfig, signal),
+ *  ); */
+export const withActorTimeout = (
+  config: VanillaOptions,
+  querySignal?: AbortSignal,
+): [string[], VanillaOptions[1] & { signal: AbortSignal }] => {
+  const timeout = AbortSignal.timeout(ACTOR_TIMEOUT_MS);
+  const signal = querySignal
+    ? AbortSignal.any([querySignal, timeout])
+    : timeout;
+  return [config[0], { ...config[1], signal }];
+};
 
 // --- Event handler utility ---
 

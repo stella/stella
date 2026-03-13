@@ -1,5 +1,5 @@
 import { usePostHog } from "@posthog/react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -7,6 +7,7 @@ import { captureError } from "@/lib/posthog/utils";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 type CreateEntitiesVars =
   | {
@@ -57,6 +58,7 @@ type DeleteEntitiesVars = {
 
 export const useDeleteEntities = () => {
   const posthog = usePostHog();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityIds }: DeleteEntitiesVars) => {
@@ -70,6 +72,11 @@ export const useDeleteEntities = () => {
       }
 
       return response.data;
+    },
+    onSuccess: async (_data, { workspaceId }) => {
+      await queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      });
     },
     onError: (error) => {
       captureError(posthog, error);

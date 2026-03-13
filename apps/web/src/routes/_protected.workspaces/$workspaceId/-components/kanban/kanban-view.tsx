@@ -16,8 +16,10 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stella/api/types";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { api } from "@/lib/api";
 import { captureError } from "@/lib/posthog/utils";
 import type {
+  EntityKind,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
@@ -25,6 +27,7 @@ import type {
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { optionColorsMap } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import {
@@ -33,12 +36,16 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import {
+  useCreateEntities,
   useDeleteEntities,
   useRenameEntity,
   useUpsertField,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import {
+  entitiesKeys,
+  entitiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   getFieldValue,
@@ -59,10 +66,58 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const upsertField = useUpsertField();
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
+  const createEntities = useCreateEntities();
   const deleteEntities = useDeleteEntities();
   const workflowActor = useWorkflowActor(workspaceId);
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
+
+  const handleCreate = async (kind: EntityKind) => {
+    if (kind === "task") {
+      const response = await api.tasks({ workspaceId }).put({
+        queryKey: entitiesKeys.all(workspaceId),
+        name: t("tasks.untitled"),
+      });
+
+      const entityId = response.data?.entityId;
+      if (response.error || !entityId) {
+        toastManager.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        return;
+      }
+
+      toastManager.add({
+        title: t("success.taskCreated"),
+        type: "success",
+      });
+      useInspectorStore.getState().openTask(entityId, "", true);
+      return;
+    }
+
+    createEntities.mutate(
+      {
+        workspaceId,
+        type: "manual-input",
+        kind,
+      },
+      {
+        onSuccess: () => {
+          toastManager.add({
+            title: t("success.documentCreated"),
+            type: "success",
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
 
   const { hiddenProperties } = view.layout;
   const configuredGroupBy =
@@ -77,6 +132,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const allPropertyIds = properties.map((p) => p.id);
   const allFieldIds = [
     ...allPropertyIds,
+    getInternalPropertyId("status"),
+    getInternalPropertyId("priority"),
+    getInternalPropertyId("due-date"),
     getInternalPropertyId("created-by"),
     getInternalPropertyId("updated-at"),
     getInternalPropertyId("version"),
@@ -91,7 +149,8 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const groupByPropertyId = resolvedGroupBy;
   const isBuiltInGrouping =
     groupByPropertyId === getInternalPropertyId("kind") ||
-    groupByPropertyId === getInternalPropertyId("created-by");
+    groupByPropertyId === getInternalPropertyId("created-by") ||
+    groupByPropertyId === getInternalPropertyId("status");
   const groupByProperty = isBuiltInGrouping
     ? null
     : properties.find((p) => p.id === groupByPropertyId);
@@ -356,6 +415,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                   ? () => handleDeleteAll(group.entities.map((e) => e.entityId))
                   : undefined
               }
+              onCreate={(kind) => {
+                handleCreate(kind).catch(() => {
+                  // Error handled inside handleCreate
+                });
+              }}
               onDrop={(entityId) => handleDrop(value, entityId)}
               // eslint-disable-next-line typescript/no-misused-promises
               onFileUpload={async (files) =>
@@ -387,6 +451,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     if (groupByPropertyId === getInternalPropertyId("kind")) {
       return key.charAt(0).toUpperCase() + key.slice(1);
     }
+    if (groupByPropertyId === getInternalPropertyId("status")) {
+      return (
+        t(
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          `tasks.statusValues.${key}` as "tasks.statusValues.open",
+        ) ?? key
+      );
+    }
     return key || t("workspaces.kanban.unknown");
   };
   const builtInGroups = groupByBuiltIn(
@@ -403,6 +475,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           columnValue={null}
           entities={group.entities}
           key={group.label}
+          onCreate={(kind) => {
+            handleCreate(kind).catch(() => {
+              // Error handled inside handleCreate
+            });
+          }}
           onDrop={() => {
             // Built-in groupings are read-only
           }}
@@ -597,7 +674,9 @@ const groupByBuiltIn = (
     const key =
       mode === getInternalPropertyId("kind")
         ? entity.kind
-        : (entity.createdBy ?? "");
+        : mode === getInternalPropertyId("status")
+          ? (entity.status ?? "")
+          : (entity.createdBy ?? "");
 
     const bucket = grouped.get(key);
     if (bucket) {

@@ -440,7 +440,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connectionLost": "Verbindung verloren",
-    "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederverbindung läuft.",
+    "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederholung.",
     "convertTo": "Konvertieren zu",
     "createdAt": "Erstellt am {date}",
     "currency": "Currency",
@@ -658,10 +658,10 @@
     "trigger": "Feedback"
   },
   "filters": {
-    "contains": "Enthält",
-    "eq": "Ist",
-    "is_empty": "Ist leer",
-    "neq": "Ist nicht"
+    "contains": "enthält",
+    "eq": "ist",
+    "is_empty": "ist leer",
+    "neq": "ist nicht"
   },
   "knowledge": {
     "sections": {
@@ -699,6 +699,7 @@
     "account": "Account",
     "agents": "Agenten",
     "analytics": "Analytik",
+    "calendar": "Kalender",
     "caseLaw": "Case Law",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat ist bereits geöffnet",
@@ -711,6 +712,7 @@
     "invoices": "Rechnungen",
     "knowledge": "Wissen",
     "members": "Mitglieder",
+    "myTodos": "Meine Aufgaben",
     "newMatter": "Neue Akte",
     "organization": "Organisation",
     "pinned": "Angeheftet",
@@ -842,7 +844,47 @@
     "partyRemoved": "Partei entfernt",
     "roleUpdated": "Rolle aktualisiert",
     "sessionRevoked": "Session revoked",
+    "taskCreated": "Aufgabe erstellt",
     "workspaceDeletedSuccessfully": "Akte erfolgreich gelöscht"
+  },
+  "tasks": {
+    "addAssignee": "Person zuweisen",
+    "addSubtask": "Unteraufgabe hinzufügen",
+    "assigneeRoles": {
+      "assignee": "Bearbeiter",
+      "reviewer": "Prüfer"
+    },
+    "assignees": "Zugewiesene",
+    "clearDate": "Datum löschen",
+    "dueDate": "Fälligkeitsdatum",
+    "linkEntity": "Eintrag verknüpfen",
+    "linkedEntities": "Verknüpfte Einträge",
+    "myTasksTitle": "Meine Aufgaben",
+    "newTask": "Neue Aufgabe",
+    "noAssignees": "Keine Zuweisungen",
+    "noLinks": "Keine verknüpften Einträge",
+    "noSubtasks": "Keine Unteraufgaben",
+    "noTasksAssigned": "Keine Aufgaben zugewiesen",
+    "overdue": "Überfällig",
+    "priority": "Priorität",
+    "priorityValues": {
+      "high": "Hoch",
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "none": "Keine",
+      "urgent": "Dringend"
+    },
+    "status": "Status",
+    "statusValues": {
+      "cancelled": "Abgebrochen",
+      "done": "Erledigt",
+      "in_progress": "In Bearbeitung",
+      "in_review": "In Prüfung",
+      "open": "Offen"
+    },
+    "subtasks": "Unteraufgaben",
+    "title": "Aufgaben",
+    "untitled": "Aufgabe ohne Titel"
   },
   "templateAnalytics": {
     "errorRate": "Error rate",
@@ -1165,6 +1207,21 @@
     "views": {
       "addFields": "Felder hinzufügen",
       "aiGenerated": "KI-generiert",
+      "calendar": {
+        "addDates": "+ Daten",
+        "additionalDates": "+{count} Daten",
+        "createdAt": "Erstellt am",
+        "dueDateTaskOnly": "Das Fälligkeitsdatum kann nur für Aufgaben gesetzt werden",
+        "month": "Monat",
+        "more": "+{count} weitere",
+        "noDates": "Keine Datumseigenschaft ausgewählt",
+        "showAdditionalDates": "Weitere Daten",
+        "showBy": "Anzeigen nach",
+        "today": "Heute",
+        "updatedAt": "Zuletzt aktualisiert",
+        "week": "Woche",
+        "year": "Jahr"
+      },
       "cannotDeleteRequired": "Mindestens eine Ansicht dieses Typs ist erforderlich",
       "copySuffix": "{name} (copy)",
       "deleteView": "Ansicht löschen",
@@ -1178,15 +1235,27 @@
       "fieldsSelected": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
       "groupBy": "Gruppieren nach:",
       "layouts": {
+        "calendar": "Kalender",
         "filesystem": "Liste",
         "grid": "Raster",
         "kanban": "Kanban",
         "list": "Liste",
         "overview": "Übersicht",
-        "table": "Tabelle"
+        "table": "Tabelle",
+        "timeline": "Zeitleiste"
       },
       "newView": "Neue {layout}",
-      "selectProperty": "Eigenschaft auswählen"
+      "selectProperty": "Eigenschaft auswählen",
+      "timeline": {
+        "day": "Tag",
+        "endDate": "Enddatum",
+        "month": "Monat",
+        "noDates": "Keine Daten festgelegt",
+        "quarter": "Quartal",
+        "showTable": "Tabelle anzeigen",
+        "startDate": "Startdatum",
+        "week": "Woche"
+      }
     },
     "workflow": {
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",

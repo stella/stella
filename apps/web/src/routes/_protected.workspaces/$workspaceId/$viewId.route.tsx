@@ -5,8 +5,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { toastManager } from "@stella/ui/components/toast";
+import { cn } from "@stella/ui/lib/utils";
 
 import type { Actors } from "@/lib/api";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { createEventHandler, eventHandler } from "@/lib/rivet";
 import type { WorkspaceView } from "@/lib/types";
 import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-pagination";
@@ -232,7 +234,12 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
 
   return (
     <>
-      <div className="flex items-center justify-between border-b">
+      <div
+        className={cn(
+          "flex min-w-0 items-center justify-between border-b",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <ViewSwitcher
           activeViewId={activeView.id}
           // eslint-disable-next-line typescript/no-misused-promises
