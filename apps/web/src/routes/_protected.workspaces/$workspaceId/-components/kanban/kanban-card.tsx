@@ -14,7 +14,6 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -27,6 +26,7 @@ import {
   PriorityCell,
   StatusCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   getEntityName,
   getFirstFile,
@@ -290,7 +290,6 @@ export const KanbanCard = ({
           )}
           onClick={() =>
             useInspectorStore.getState().openPdf({
-
               id: file.fieldId,
               entityId: file.entityId,
               label: name,

@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { padArray, tokenizeText } from "./processor";
 
 // ── tokenizeText ─────────────────────────────────────

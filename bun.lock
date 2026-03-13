@@ -160,7 +160,6 @@
         "react-grab": "^0.1.26",
         "typescript": "catalog:",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.0.18",
       },
     },
     "packages/permissions": {

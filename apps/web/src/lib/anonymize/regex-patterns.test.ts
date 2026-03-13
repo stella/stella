@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { detectRegexPii } from "./regex-patterns";
 
 const entitiesOf = (text: string) => detectRegexPii(text);

@@ -12,7 +12,7 @@
     "lint": "oxlint --type-aware",
     "format": "oxfmt .",
     "i18n:check": "i18n-check src/i18n/langs",
-    "test": "vitest run"
+    "test": "bun test"
   },
   "dependencies": {
     "@ai-sdk/react": "3.0.108",
@@ -98,7 +98,6 @@
     "elysia": "catalog:",
     "react-grab": "^0.1.26",
     "typescript": "catalog:",
-    "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.0.18"
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }

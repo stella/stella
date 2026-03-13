@@ -20,9 +20,7 @@ export const useInspectorFlash = (
     if (!tab) {
       return false;
     }
-    return tab.type === "pdf"
-      ? tab.entityId === entityId
-      : tab.id === entityId;
+    return tab.type === "pdf" ? tab.entityId === entityId : tab.id === entityId;
   });
   const seq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(seq);
@@ -58,10 +56,7 @@ export const useInspectorFlash = (
 
           const cell = cells[i];
           if (cell instanceof HTMLElement) {
-            cell.animate(
-              [{ boxShadow: on }, { boxShadow: off }],
-              options,
-            );
+            cell.animate([{ boxShadow: on }, { boxShadow: off }], options);
           }
         }
       } else {

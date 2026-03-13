@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { deanonymise, exportRedactionKey, redactText } from "./redact";
 import type { Entity, OperatorConfig, OperatorType } from "./types";
 import { DETECTION_SOURCES } from "./types";

@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { boostNearMissEntities } from "./confidence-boost";
 import type { Entity } from "./types";
 import { DETECTION_SOURCES } from "./types";

@@ -1,3 +1,5 @@
+import { describe, expect, it } from "bun:test";
+
 import { detectTriggerPhrases } from "./trigger-phrases";
 
 const find = (text: string) => detectTriggerPhrases(text);

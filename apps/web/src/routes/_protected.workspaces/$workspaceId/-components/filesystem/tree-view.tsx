@@ -52,7 +52,6 @@ import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -60,6 +59,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import {
   useMoveEntity,
   useRenameEntity,

@@ -1,4 +1,5 @@
 import type { UIMessage, UIMessageChunk } from "ai";
+import { describe, expect, it, mock, spyOn } from "bun:test";
 
 import { RivetChatTransport } from "./rivet-transport";
 import type { ChatStreamConnection, SequencedChunk } from "./rivet-transport";
@@ -15,26 +16,36 @@ type ChunkCallback = (payload: SequencedChunk) => void;
 const createMockConnection = () => {
   const listeners: ChunkCallback[] = [];
 
+  const onMock = mock((_eventName: "stream-chunk", callback: ChunkCallback) => {
+    listeners.push(callback);
+    return () => {
+      const idx = listeners.indexOf(callback);
+      if (idx !== -1) {
+        listeners.splice(idx, 1);
+      }
+    };
+  });
+
+  const sendMessagesMock = mock(
+    async (): Promise<{ status: "started" | "busy" }> => ({
+      status: "started",
+    }),
+  );
+
+  const stopMock = mock(async () => {
+    // no-op
+  });
+
+  const getStreamSnapshotMock = mock(async () => ({
+    done: false,
+    snapshot: [] as SequencedChunk[],
+  }));
+
   const connection: ChatStreamConnection = {
-    on: vi.fn((_eventName: "stream-chunk", callback: ChunkCallback) => {
-      listeners.push(callback);
-      return () => {
-        const idx = listeners.indexOf(callback);
-        if (idx !== -1) {
-          listeners.splice(idx, 1);
-        }
-      };
-    }),
-    sendMessages: vi.fn(async () => ({
-      status: "started" as const,
-    })),
-    stop: vi.fn(async () => {
-      // no-op
-    }),
-    getStreamSnapshot: vi.fn(async () => ({
-      done: false,
-      snapshot: [] as SequencedChunk[],
-    })),
+    on: onMock,
+    sendMessages: sendMessagesMock,
+    stop: stopMock,
+    getStreamSnapshot: getStreamSnapshotMock,
   };
 
   const emit = (chunk: SequencedChunk) => {
@@ -43,7 +54,17 @@ const createMockConnection = () => {
     }
   };
 
-  return { connection, emit, listeners };
+  return {
+    connection,
+    emit,
+    listeners,
+    mocks: {
+      on: onMock,
+      sendMessages: sendMessagesMock,
+      stop: stopMock,
+      getStreamSnapshot: getStreamSnapshotMock,
+    },
+  };
 };
 
 const collectStream = async <T>(stream: ReadableStream<T>): Promise<T[]> => {
@@ -88,6 +109,24 @@ const makeSendOptions = (messages: UIMessage[]) => ({
   messages,
   abortSignal: undefined,
 });
+
+/** Poll until `fn` does not throw (max 2s). */
+const waitFor = async (fn: () => void, timeout = 2000) => {
+  const start = Date.now();
+  for (;;) {
+    try {
+      fn();
+      return;
+    } catch (error) {
+      if (Date.now() - start > timeout) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+    }
+  }
+};
 
 // ── Tests ──────────────────────────────────────────────────
 
@@ -152,7 +191,7 @@ describe(RivetChatTransport, () => {
     });
 
     it("resets lastSeq on each call", async () => {
-      const { connection, emit } = createMockConnection();
+      const { connection, emit, mocks } = createMockConnection();
       const transport = new RivetChatTransport({
         connection,
         threadId: THREAD_ID,
@@ -169,10 +208,10 @@ describe(RivetChatTransport, () => {
       // Second call resets lastSeq to -1. Reconnect
       // immediately before any chunks arrive, so
       // lastSeq is still -1 and resumeFrom = 0.
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: true,
         snapshot: [],
-      });
+      }));
 
       await transport.sendMessages(makeSendOptions([makeMessage("Second")]));
 
@@ -191,9 +230,17 @@ describe(RivetChatTransport, () => {
         threadId: THREAD_ID,
       });
 
-      await expect(transport.sendMessages(makeSendOptions([]))).rejects.toThrow(
-        "No messages to send",
-      );
+      let threw = false;
+      try {
+        await transport.sendMessages(makeSendOptions([]));
+      } catch (error) {
+        threw = true;
+        expect(error).toBeInstanceOf(Error);
+        if (error instanceof Error) {
+          expect(error.message).toBe("No messages to send");
+        }
+      }
+      expect(threw).toBe(true);
     });
 
     it("sends the last message to the connection", async () => {
@@ -232,7 +279,7 @@ describe(RivetChatTransport, () => {
 
       controller.abort();
 
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(connection.stop).toHaveBeenCalledWith({
           threadId: THREAD_ID,
         });
@@ -246,10 +293,10 @@ describe(RivetChatTransport, () => {
     });
 
     it("cancels stream when status is busy", async () => {
-      const { connection, listeners } = createMockConnection();
-      vi.mocked(connection.sendMessages).mockResolvedValueOnce({
+      const { connection, listeners, mocks } = createMockConnection();
+      mocks.sendMessages.mockImplementationOnce(async () => ({
         status: "busy",
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -267,23 +314,23 @@ describe(RivetChatTransport, () => {
     });
 
     it("unsubscribes on enqueue failure", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
       // Use reconnect: its live pipe has no cancel
       // callback, so cancelling the reader leaves
       // the listener active while the controller
       // is closed.
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
         threadId: THREAD_ID,
       });
 
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      const consoleSpy = spyOn(console, "error").mockImplementation(() => {
         // suppress
       });
 
@@ -304,21 +351,21 @@ describe(RivetChatTransport, () => {
       // should unsubscribe.
       emit(textDelta(0, "after cancel"));
 
-      // eslint-disable-next-line jest/prefer-called-with -- verifying call happened, not specific args
+      // eslint-disable-next-line jest/prefer-called-with
       expect(consoleSpy).toHaveBeenCalled();
       expect(listeners).toHaveLength(0);
 
-      vi.restoreAllMocks();
+      consoleSpy.mockRestore();
     });
   });
 
   describe("reconnectToStream", () => {
     it("returns null when stream is done", async () => {
-      const { connection } = createMockConnection();
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      const { connection, mocks } = createMockConnection();
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: true,
         snapshot: [],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -331,7 +378,7 @@ describe(RivetChatTransport, () => {
     });
 
     it("requests snapshot from lastSeq + 1", async () => {
-      const { connection, emit } = createMockConnection();
+      const { connection, emit, mocks } = createMockConnection();
       const transport = new RivetChatTransport({
         connection,
         threadId: THREAD_ID,
@@ -347,10 +394,10 @@ describe(RivetChatTransport, () => {
       await collectStream(s1);
 
       // Reconnect should request from seq 3
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [textDelta(3, "c")],
-      });
+      }));
 
       const stream = await transport.reconnectToStream();
 
@@ -367,12 +414,12 @@ describe(RivetChatTransport, () => {
     });
 
     it("replays snapshot then pipes live events", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [textDelta(0, "snap-1"), textDelta(1, "snap-2")],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -402,21 +449,19 @@ describe(RivetChatTransport, () => {
     });
 
     it("merges buffered events arriving during snapshot fetch", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
-        async () => {
-          // Simulate: realtime event arrives while the
-          // snapshot RPC is in flight. seq=2 is beyond
-          // the snapshot's last seq of 1.
-          emit(textDelta(2, "buffered-realtime"));
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => {
+        // Simulate: realtime event arrives while the
+        // snapshot RPC is in flight. seq=2 is beyond
+        // the snapshot's last seq of 1.
+        emit(textDelta(2, "buffered-realtime"));
 
-          return {
-            done: false as const,
-            snapshot: [textDelta(0, "snap-0"), textDelta(1, "snap-1")],
-          };
-        },
-      );
+        return {
+          done: false as const,
+          snapshot: [textDelta(0, "snap-0"), textDelta(1, "snap-1")],
+        };
+      });
 
       const transport = new RivetChatTransport({
         connection,
@@ -443,21 +488,19 @@ describe(RivetChatTransport, () => {
     });
 
     it("deduplicates overlapping snapshot and buffer events", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
-        async () => {
-          // Realtime event with seq=1 arrives during
-          // snapshot fetch. Snapshot also has seq=1.
-          // Only one copy should appear.
-          emit(textDelta(1, "dup"));
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => {
+        // Realtime event with seq=1 arrives during
+        // snapshot fetch. Snapshot also has seq=1.
+        // Only one copy should appear.
+        emit(textDelta(1, "dup"));
 
-          return {
-            done: false as const,
-            snapshot: [textDelta(0, "snap-0"), textDelta(1, "dup")],
-          };
-        },
-      );
+        return {
+          done: false as const,
+          snapshot: [textDelta(0, "snap-0"), textDelta(1, "dup")],
+        };
+      });
 
       const transport = new RivetChatTransport({
         connection,
@@ -485,12 +528,12 @@ describe(RivetChatTransport, () => {
     });
 
     it("closes stream if snapshot contains finish chunk", async () => {
-      const { connection, listeners } = createMockConnection();
+      const { connection, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [textDelta(0, "data"), finishChunk(1)],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -510,12 +553,12 @@ describe(RivetChatTransport, () => {
     });
 
     it("unsubscribes buffer listener when done", async () => {
-      const { connection, listeners } = createMockConnection();
+      const { connection, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: true,
         snapshot: [],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -528,14 +571,14 @@ describe(RivetChatTransport, () => {
     });
 
     it("reconnects from a fresh transport", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
       // Never called sendMessages; lastSeq is -1,
       // so resumeFrom should be 0.
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [textDelta(0, "first")],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -558,20 +601,18 @@ describe(RivetChatTransport, () => {
     });
 
     it("finish chunk in realtime buffer closes stream", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
-        async () => {
-          // Finish arrives in the buffer while the
-          // snapshot RPC is in flight.
-          emit(finishChunk(2));
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => {
+        // Finish arrives in the buffer while the
+        // snapshot RPC is in flight.
+        emit(finishChunk(2));
 
-          return {
-            done: false as const,
-            snapshot: [textDelta(0, "a"), textDelta(1, "b")],
-          };
-        },
-      );
+        return {
+          done: false as const,
+          snapshot: [textDelta(0, "a"), textDelta(1, "b")],
+        };
+      });
 
       const transport = new RivetChatTransport({
         connection,
@@ -591,21 +632,19 @@ describe(RivetChatTransport, () => {
     });
 
     it("empty snapshot with buffered events", async () => {
-      const { connection, emit, listeners } = createMockConnection();
+      const { connection, emit, listeners, mocks } = createMockConnection();
 
-      vi.mocked(connection.getStreamSnapshot).mockImplementationOnce(
-        async () => {
-          // Events arrive while snapshot returns empty
-          // (server just started emitting).
-          emit(textDelta(0, "buf-0"));
-          emit(textDelta(1, "buf-1"));
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => {
+        // Events arrive while snapshot returns empty
+        // (server just started emitting).
+        emit(textDelta(0, "buf-0"));
+        emit(textDelta(1, "buf-1"));
 
-          return {
-            done: false as const,
-            snapshot: [],
-          };
-        },
-      );
+        return {
+          done: false as const,
+          snapshot: [],
+        };
+      });
 
       const transport = new RivetChatTransport({
         connection,
@@ -632,13 +671,13 @@ describe(RivetChatTransport, () => {
     });
 
     it("advances lastSeq through snapshot replay", async () => {
-      const { connection, emit } = createMockConnection();
+      const { connection, emit, mocks } = createMockConnection();
 
       // First reconnect: replay snapshot up to seq 2.
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: false,
         snapshot: [textDelta(0, "a"), textDelta(1, "b"), textDelta(2, "c")],
-      });
+      }));
 
       const transport = new RivetChatTransport({
         connection,
@@ -653,10 +692,10 @@ describe(RivetChatTransport, () => {
       await collectStream(s1);
 
       // Second reconnect should resume from seq 4.
-      vi.mocked(connection.getStreamSnapshot).mockResolvedValueOnce({
+      mocks.getStreamSnapshot.mockImplementationOnce(async () => ({
         done: true,
         snapshot: [],
-      });
+      }));
 
       await transport.reconnectToStream();
 
