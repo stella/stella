@@ -208,10 +208,12 @@ export const usePdfStore = create<State & Actions>()(
 
           // Check for PDF Portfolio (Collection) with
           // embedded file attachments.
+          // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- pdfjs-dist types getAttachments() as Promise<any>
           const attachments = await document.getAttachments();
           const pdfAttachments =
             attachments !== undefined
-              ? Object.values(attachments).filter(
+              ? // oxlint-disable-next-line typescript-eslint/no-unsafe-argument -- attachments is any from pdfjs
+                Object.values(attachments).filter(
                   (
                     a,
                   ): a is {

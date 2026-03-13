@@ -8,7 +8,7 @@
     "build": "vite build",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "i18n-typegen src/i18n/langs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "lint": "oxlint --type-aware",
     "format": "oxfmt .",
     "i18n:check": "i18n-check src/i18n/langs",

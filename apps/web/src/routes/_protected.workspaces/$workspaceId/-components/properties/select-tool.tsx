@@ -11,6 +11,7 @@ import {
 
 import type { WorkspaceToolType } from "@/lib/types";
 
+// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
 type SelectToolProps = {
   field: AnyFieldApi;
 };
@@ -27,6 +28,7 @@ export const SelectTool = ({ field }: SelectToolProps) => {
     <Select
       items={selectItems}
       onValueChange={field.handleChange}
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       value={field.state.value}
     >
       <SelectTrigger className="hover:bg-muted border-0 px-1.5 shadow-none ring-0 before:shadow-none!">

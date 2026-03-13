@@ -82,11 +82,9 @@ export const BillingCodesDialog = ({
           </div>
 
           <Tabs
-            onValueChange={(v) => {
-              if (v === "task" || v === "activity") {
-                setActiveTab(v);
-                setShowForm(false);
-              }
+            onValueChange={(v: typeof activeTab) => {
+              setActiveTab(v);
+              setShowForm(false);
             }}
             value={activeTab}
           >

@@ -120,11 +120,14 @@ export const manifestHandler = async ({
   // are validated above. Optional FieldMeta properties (label,
   // inputType, options, validation) are handled gracefully by
   // buildFieldXml which uses ?? and conditional checks.
+  // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
+  // oxlint-disable typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
   const manifest = {
     version: parsed.version,
     fields: parsed.fields,
     conditions: parsed.conditions,
   } as TemplateManifest;
+  // oxlint-enable typescript-eslint/no-unsafe-assignment
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const resultBuffer = await writeManifest(buffer, manifest);

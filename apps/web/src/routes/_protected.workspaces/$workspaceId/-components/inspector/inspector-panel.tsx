@@ -20,6 +20,7 @@ import { ScrollArea } from "@stella/ui/components/scroll-area";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import type { WorkspaceProperty } from "@/lib/types";
 import { PDF_MIME_TYPE, TEXT_PLAIN_MIME_TYPE } from "@/consts";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
@@ -46,8 +47,7 @@ const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-  const t = useTranslations() as any;
+  const t = useTranslations();
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -145,8 +145,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       return;
     }
     try {
-      // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-      await (navigate as any)({
+      await navigate({
         to: "/workspaces/$workspaceId/$viewId/pdf",
         params: { workspaceId, viewId: "all" },
         search: {
@@ -360,8 +359,7 @@ const JustificationBar = ({
   fieldId: string;
   workspaceId: string;
 }) => {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-  const t = useTranslations() as any;
+  const t = useTranslations();
   const openPdf = useInspectorStore((s) => s.openPdf);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -379,16 +377,17 @@ const JustificationBar = ({
     }
     return (
       Object.values(entity.fields)
-        // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-        .map((f: any) => {
+        .map((f) => {
           const prop = properties.find((p) => p.id === f.propertyId);
           if (!prop || prop.tool.type !== "ai-model") {
             return null;
           }
           return { fieldId: f.id, property: prop };
         })
-        // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-        .filter((s): s is { fieldId: string; property: any } => s !== null)
+        .filter(
+          (s): s is { fieldId: string; property: WorkspaceProperty } =>
+            s !== null,
+        )
     );
   }, [entity, justification, properties]);
 

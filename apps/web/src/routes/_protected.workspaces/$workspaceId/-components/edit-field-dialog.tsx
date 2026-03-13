@@ -228,8 +228,8 @@ export const EditFieldDialog = ({
                           onChange={(value) => field.handleChange(value)}
                           options={options}
                           type="single-select"
-                          // SAFETY: guarded by fieldContent.type check
                           value={
+                            // SAFETY: guarded by fieldContent.type check
                             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"single-select">
                           }
@@ -248,8 +248,8 @@ export const EditFieldDialog = ({
                           onChange={field.handleChange}
                           options={options}
                           type="multi-select"
-                          // SAFETY: guarded by fieldContent.type check
                           value={
+                            // SAFETY: guarded by fieldContent.type check
                             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"multi-select">
                           }
@@ -273,8 +273,8 @@ export const EditFieldDialog = ({
                           }
                           placeholder="YYYY-MM-DD"
                           type="date"
-                          // SAFETY: guarded by fieldContent.type check
                           value={
+                            // SAFETY: guarded by fieldContent.type check
                             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                             (field.state.value as FieldFormValue<"date">) ?? ""
                           }
@@ -364,6 +364,7 @@ export const EditFieldDialog = ({
   );
 };
 
+// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
 type TextFormFieldProps = {
   field: AnyFieldApi;
 };
@@ -372,12 +373,14 @@ const TextFormField = ({ field }: TextFormFieldProps) => {
   const t = useTranslations();
 
   return (
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     <Field name={field.name}>
       <FieldLabel>{t("workspaces.fields.fieldValueLabel")}</FieldLabel>
       <Input
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("workspaces.fields.fieldValuePlaceholder")}
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
         value={field.state.value}
       />
       <FieldError />

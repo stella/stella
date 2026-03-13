@@ -1,3 +1,4 @@
+// TODO: FIXME — @huggingface/transformers PreTrainedTokenizer resolves as error type
 /**
  * Tokenization and input preparation for GLiNER span model.
  *
@@ -97,6 +98,7 @@ const encodeInputs = (
 
     let wordCounter = 1;
     for (let wordId = 0; wordId < words.length; wordId++) {
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access -- PreTrainedTokenizer resolves as error type
       const wordTokens: number[] = tokenizer.encode(words[wordId]).slice(1, -1);
 
       for (let tokenId = 0; tokenId < wordTokens.length; tokenId++) {
@@ -113,6 +115,7 @@ const encodeInputs = (
       }
     }
 
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-argument, typescript-eslint/no-unsafe-member-access -- PreTrainedTokenizer resolves as error type
     inputIds.push(tokenizer.sep_token_id);
     wordsMask.push(0);
     attentionMask.push(1);
@@ -156,7 +159,7 @@ const prepareSpans = (
 /** Pad a 2D or 3D array to uniform inner length. */
 export const padArray = <T>(arr: T[][], dimensions: number = 2): T[][] => {
   const maxLength = Math.max(...arr.map((sub) => sub.length));
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- 3D arrays have number[] inner elements
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- 3D arrays have number[] inner elements
   const firstInner = arr[0]?.[0] as unknown as number[] | undefined;
   const finalDim = dimensions === 3 && firstInner ? firstInner.length : 0;
 
@@ -169,7 +172,7 @@ export const padArray = <T>(arr: T[][], dimensions: number = 2): T[][] => {
           )
         : Array.from<number>({ length: padCount }).fill(0);
     // SAFETY: fill values (zero arrays) match the shape of T
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic padding for ONNX tensor arrays
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- generic padding for ONNX tensor arrays
     return [...sub, ...(fill as T[])] as T[];
   });
 };

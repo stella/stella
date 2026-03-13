@@ -155,16 +155,15 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   return (
     <Accordion
       key={entity.entityId}
-      // eslint-disable-next-line typescript/no-misused-promises
-      onValueChange={async (nextValue) => {
+      onValueChange={(nextValue) => {
         const nextId = nextValue.at(0);
 
-        await navigate({
+        // oxlint-disable-next-line typescript/no-floating-promises
+        navigate({
           replace: true,
           search: (prev) =>
             produce(prev, (s) => {
-              s.entity.activePropertyId =
-                typeof nextId === "string" ? nextId : activePropertyId;
+              s.entity.activePropertyId = nextId ?? activePropertyId;
             }),
         });
       }}

@@ -16,6 +16,15 @@ const SOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
 const DEFAULT_KIND = "document";
 const FILE_FIELD_RE = /^\[file: (.+)\]$/;
 
+type ToolField = { value: string };
+
+// TODO: FIXME — this is a bit of a hack to get the type system to work
+const isToolField = (x: unknown): x is ToolField =>
+  typeof x === "object" &&
+  x !== null &&
+  "value" in x &&
+  typeof (x as Record<string, unknown>).value === "string";
+
 /** Extract a display name from a readEntity tool output.
  *  Prefers entity.name, falls back to the first file field's
  *  filename (formatted as `[file: name]` by the tool). */
@@ -27,14 +36,9 @@ const nameFromReadEntity = (output: Record<string, unknown>): string | null => {
   // readEntity formats file fields as "[file: <name>]".
   if (Array.isArray(output.fields)) {
     for (const field of output.fields) {
-      if (
-        typeof field === "object" &&
-        field !== null &&
-        "value" in field &&
-        typeof field.value === "string"
-      ) {
+      if (isToolField(field)) {
         const match = field.value.match(FILE_FIELD_RE);
-        // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpExecArray | null
+        // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpMatchArray | null
         if (match) {
           return match[1];
         }
@@ -52,14 +56,9 @@ const extractMimeType = (output: Record<string, unknown>): string | null => {
     return null;
   }
   for (const field of output.fields) {
-    if (
-      typeof field === "object" &&
-      field !== null &&
-      "value" in field &&
-      typeof field.value === "string"
-    ) {
+    if (isToolField(field)) {
       const match = field.value.match(FILE_FIELD_RE);
-      // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpExecArray | null
+      // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpMatchArray | null
       if (match) {
         const name = match[1];
         if (typeof name === "string" && name.endsWith(".pdf")) {

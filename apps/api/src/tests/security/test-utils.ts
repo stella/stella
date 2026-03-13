@@ -71,9 +71,9 @@ let dbRefCount = 0;
 // eslint-disable-next-line require-await
 export const getTestDb = async (): Promise<TestDatabase> => {
   dbRefCount++;
-  if (!dbPromise) {
-    dbPromise = createTestDb();
-  }
+
+  dbPromise ??= createTestDb();
+
   return dbPromise;
 };
 

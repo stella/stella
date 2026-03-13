@@ -68,9 +68,7 @@ export const PeekJustification = ({
           return node;
         }
 
-        if (fp === null) {
-          fp = pageNumber;
-        }
+        fp ??= pageNumber;
 
         const isSameFile = fileFieldId === activeFileFieldId;
 

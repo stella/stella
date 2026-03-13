@@ -311,7 +311,7 @@ export const KanbanColumn = ({
     </div>
   );
 
-  const hasColumnActions = onChangeColor || onHideColumn || onDeleteAll;
+  const hasColumnActions = onChangeColor ?? onHideColumn ?? onDeleteAll;
 
   return (
     <div

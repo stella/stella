@@ -12,7 +12,7 @@
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "lint": "oxlint --type-aware",
     "format": "oxfmt .",
     "db:push": "bun --bun drizzle-kit push",

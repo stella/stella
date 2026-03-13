@@ -1,6 +1,3 @@
 {
-  "recommendations": [
-    "nicolo-ribaudo.oxfmt-vscode",
-    "nicolo-ribaudo.oxc-vscode"
-  ]
+  "recommendations": ["oxc.oxc-vscode", "typescriptteam.native-preview"],
 }
