@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { evaluateCondition } from "@stella/template-conditions";
 import { Button } from "@stella/ui/components/button";
 import { Checkbox } from "@stella/ui/components/checkbox";
 import {
@@ -172,6 +173,23 @@ const buildInitialValues = (fields: ResolvedField[]): FormValues => {
     }
   }
   return values;
+};
+
+/**
+ * Check if a field is visible given current form values
+ * and named conditions. Returns true if the field has no
+ * `visibleWhen` condition, or if the condition evaluates
+ * to true.
+ */
+const isFieldVisible = (
+  field: ResolvedField,
+  values: FormValues,
+  conditions: NamedCondition[],
+): boolean => {
+  if (!field.visibleWhen) {
+    return true;
+  }
+  return evaluateCondition(field.visibleWhen, values, conditions);
 };
 
 const RequiredIndicator = () => (
@@ -465,10 +483,16 @@ const ArrayFieldRenderer = ({
 const buildSubmitValues = (
   values: FormValues,
   fields: ResolvedField[],
+  conditions: NamedCondition[],
 ): Record<string, unknown> => {
   const result: Record<string, unknown> = {};
 
   for (const field of fields) {
+    // Skip hidden fields
+    if (!isFieldVisible(field, values, conditions)) {
+      continue;
+    }
+
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
       // SAFETY: __array_* keys hold number[] from form state
@@ -538,14 +562,21 @@ const setNestedValue = (
 };
 
 /** Collect all validatable fields, including array
- *  sub-fields expanded for each item. */
+ *  sub-fields expanded for each item. Hidden fields
+ *  are excluded so they don't block validation. */
 const collectValidatableFields = (
   fields: ResolvedField[],
   values: FormValues,
+  conditions: NamedCondition[],
 ): { path: string; field: ResolvedField }[] => {
   const result: { path: string; field: ResolvedField }[] = [];
 
   for (const field of fields) {
+    // Skip hidden fields
+    if (!isFieldVisible(field, values, conditions)) {
+      continue;
+    }
+
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
       // SAFETY: __array_* keys hold number[] from form state
@@ -570,7 +601,7 @@ const collectValidatableFields = (
 
 export const TemplateForm = ({
   fields,
-  conditions: _conditions,
+  conditions,
   structureErrors,
   file,
   templateId,
@@ -731,7 +762,7 @@ export const TemplateForm = ({
   /** Validate all fields; returns true if valid. */
   const validateAll = useCallback(
     (currentValues: FormValues): boolean => {
-      const all = collectValidatableFields(fields, currentValues);
+      const all = collectValidatableFields(fields, currentValues, conditions);
       const nextErrors: FieldErrors = {};
       const nextTouched: TouchedFields = {};
       let valid = true;
@@ -749,16 +780,39 @@ export const TemplateForm = ({
       setErrors(nextErrors);
       return valid;
     },
-    [fields, resolveError],
+    [fields, conditions, resolveError],
   );
 
-  const hasErrors = Object.values(errors).some(Boolean);
+  // Only count errors for currently visible fields;
+  // hidden fields may retain stale errors in state.
+  const hasErrors = Object.entries(errors).some(
+    ([path, msg]) => {
+      if (!msg) {
+        return false;
+      }
+      const def = findFieldDef(path);
+      if (!def) {
+        return true;
+      }
+      // Find the top-level field to check visibility
+      const topField = fields.find(
+        (f) =>
+          f.path === path ||
+          (f.kind === "array" &&
+            path.startsWith(`${f.path}[`)),
+      );
+      if (topField && !isFieldVisible(topField, values, conditions)) {
+        return false;
+      }
+      return true;
+    },
+  );
 
   const handleDownload = useCallback(
     async (format: FillFormat) => {
       if (!validateAll(values)) {
         // Scroll to the first errored field
-        const all = collectValidatableFields(fields, values);
+        const all = collectValidatableFields(fields, values, conditions);
         for (const { path, field: f } of all) {
           const msg = resolveError(validateField(f, values[path]));
           if (msg) {
@@ -779,7 +833,7 @@ export const TemplateForm = ({
 
       setLoading(true);
 
-      const submitValues = buildSubmitValues(values, fields);
+      const submitValues = buildSubmitValues(values, fields, conditions);
       const valuesJson = JSON.stringify(submitValues);
 
       const response = templateId
@@ -846,6 +900,7 @@ export const TemplateForm = ({
     [
       values,
       fields,
+      conditions,
       file,
       templateId,
       fileName,
@@ -897,7 +952,7 @@ export const TemplateForm = ({
 
     setPreview({ kind: "loading" });
 
-    const submitValues = buildSubmitValues(values, fields);
+    const submitValues = buildSubmitValues(values, fields, conditions);
     const response = await api.templates({ templateId })["fill-preview"].post({
       values: JSON.stringify(submitValues),
     });
@@ -921,10 +976,16 @@ export const TemplateForm = ({
       unmatchedPlaceholders: data.unmatchedPlaceholders,
       unusedValues: data.unusedValues,
     });
-  }, [templateId, values, fields, validateAll, t]);
+  }, [templateId, values, fields, conditions, validateAll, t]);
 
-  const grouped = groupFieldsByPrefix(fields.filter((f) => f.kind !== "array"));
-  const arrayFields = fields.filter((f) => f.kind === "array");
+  // Filter visible non-array fields, then group
+  const visibleScalarFields = fields.filter(
+    (f) => f.kind !== "array" && isFieldVisible(f, values, conditions),
+  );
+  const grouped = groupFieldsByPrefix(visibleScalarFields);
+  const arrayFields = fields.filter(
+    (f) => f.kind === "array" && isFieldVisible(f, values, conditions),
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

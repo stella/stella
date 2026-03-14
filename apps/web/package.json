@@ -30,6 +30,7 @@
     "@stella/api": "workspace:*",
     "@stella/permissions": "workspace:*",
     "@stella/rivet": "workspace:*",
+    "@stella/template-conditions": "workspace:*",
     "@stella/ui": "workspace:*",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/code": "^1.1.0",

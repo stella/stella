@@ -180,4 +180,130 @@ describe("discoverTemplate", () => {
     const nameP = result.placeholders.find((p) => p.name === "name");
     expect(nameP?.count).toBe(3);
   });
+
+  // ── visibleWhen inference ──────────────────────────────
+
+  test("field inside #if gets visibleWhen", async () => {
+    const xml = WRAP(
+      [P("{{#if isUK}}"), P("Number: {{uk_number}}"), P("{{/if}}")].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const ukField = result.fields.find((f) => f.path === "uk_number");
+    expect(ukField).toBeDefined();
+    expect(ukField?.visibleWhen).toBe("isUK");
+  });
+
+  test("field outside #if has no visibleWhen", async () => {
+    const xml = WRAP(
+      [P("{{name}}"), P("{{#if isUK}}"), P("{{uk_number}}"), P("{{/if}}")].join(
+        "",
+      ),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const nameField = result.fields.find((f) => f.path === "name");
+    expect(nameField?.visibleWhen).toBeUndefined();
+  });
+
+  test("field in both inside and outside has no visibleWhen", async () => {
+    const xml = WRAP(
+      [
+        P("{{name}}"),
+        P("{{#if isUK}}"),
+        P("{{name}} again"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const nameField = result.fields.find((f) => f.path === "name");
+    expect(nameField?.visibleWhen).toBeUndefined();
+  });
+
+  test("field in #else gets negated visibleWhen", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if isUK}}"),
+        P("{{uk_number}}"),
+        P("{{#else}}"),
+        P("{{other_number}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const otherField = result.fields.find((f) => f.path === "other_number");
+    expect(otherField?.visibleWhen).toBe("!isUK");
+  });
+
+  test("field in #elseif gets compound visibleWhen", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if isUK}}"),
+        P("{{uk_field}}"),
+        P("{{#elseif isDE}}"),
+        P("{{de_field}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const deField = result.fields.find((f) => f.path === "de_field");
+    expect(deField?.visibleWhen).toBe("!isUK and isDE");
+  });
+
+  test("nested #if combines conditions with and", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if isUK}}"),
+        P("{{#if hasLicense}}"),
+        P("{{license_number}}"),
+        P("{{/if}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const field = result.fields.find((f) => f.path === "license_number");
+    expect(field?.visibleWhen).toBe("isUK and hasLicense");
+  });
+
+  test("condition driver field has no visibleWhen", async () => {
+    const xml = WRAP(
+      [P("{{#if isUK}}"), P("{{uk_number}}"), P("{{/if}}")].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    // isUK is a boolean used in conditions, not a
+    // placeholder — it should have no visibleWhen
+    const isUKField = result.fields.find((f) => f.path === "isUK");
+    expect(isUKField?.visibleWhen).toBeUndefined();
+  });
+
+  test("else after elseif gets full negation", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if isUK}}"),
+        P("{{uk_field}}"),
+        P("{{#elseif isDE}}"),
+        P("{{de_field}}"),
+        P("{{#else}}"),
+        P("{{other_field}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const otherField = result.fields.find((f) => f.path === "other_field");
+    expect(otherField?.visibleWhen).toBe("!isUK and !isDE");
+  });
 });
