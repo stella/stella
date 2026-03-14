@@ -19,7 +19,6 @@ import {
 import {
   EllipsisVerticalIcon,
   EyeOffIcon,
-  FileTextIcon,
   FileUpIcon,
   GripVerticalIcon,
   PaletteIcon,
@@ -500,10 +499,6 @@ export const KanbanColumn = ({
         >
           <MenuTrigger render={<span className="sr-only" />} />
           <MenuPopup anchor={ctxAnchor ?? undefined}>
-            <MenuItem onClick={() => onCreate("document")}>
-              <FileTextIcon />
-              {t("workspaces.newDocument")}
-            </MenuItem>
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}

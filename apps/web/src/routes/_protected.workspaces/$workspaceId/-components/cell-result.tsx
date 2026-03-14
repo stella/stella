@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { SquareMinusIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
 import { isFileDisplayable } from "@/lib/types";
@@ -19,6 +19,7 @@ type CellResultProps = {
 
 export const CellResult = ({ field, property }: CellResultProps) => {
   const t = useTranslations();
+  const locale = useLocale();
 
   if (!field) {
     return null;
@@ -87,15 +88,12 @@ export const CellResult = ({ field, property }: CellResultProps) => {
       return <SelectResult property={property} value={null} />;
     }
 
-    const formatted = new Date(field.content.value).toLocaleDateString(
-      undefined,
-      {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        timeZone: "UTC",
-      },
-    );
+    const formatted = new Date(field.content.value).toLocaleDateString(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
 
     return <div>{formatted}</div>;
   }

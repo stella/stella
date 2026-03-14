@@ -9,7 +9,7 @@ import {
   MinusIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -101,6 +101,7 @@ export const PriorityCell = ({ entity }: { entity: WorkspaceEntity }) => {
 
 export const DueDateCell = ({ entity }: { entity: WorkspaceEntity }) => {
   const t = useTranslations("tasks");
+  const locale = useLocale();
 
   if (!entity.dueDate) {
     return null;
@@ -120,7 +121,8 @@ export const DueDateCell = ({ entity }: { entity: WorkspaceEntity }) => {
     >
       <CalendarIcon className="size-3" />
       <span>
-        {new Date(entity.dueDate).toLocaleDateString(undefined, {
+        {new Date(entity.dueDate).toLocaleDateString(locale, {
+          year: "numeric",
           month: "short",
           day: "numeric",
           timeZone: "UTC",
