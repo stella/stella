@@ -49,6 +49,7 @@ const processDecision = async (
       where: {
         sourceId,
         caseNumber: result.caseNumber,
+        language: result.language,
       },
       columns: { id: true, sourceHash: true },
     }),
@@ -64,6 +65,8 @@ const processDecision = async (
     sections.map((s) => ({ index: s.index, text: s.text })),
   );
 
+  const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
+
   let decisionId: string | undefined;
 
   await scopedDb(async (tx) => {
@@ -75,6 +78,7 @@ const processDecision = async (
           court: result.court,
           country: result.country,
           language: result.language,
+          languageGroupKey,
           decisionDate: result.decisionDate,
           decisionType: result.decisionType,
           fulltext: result.fulltext,
@@ -114,6 +118,7 @@ const processDecision = async (
         court: result.court,
         country: result.country,
         language: result.language,
+        languageGroupKey,
         decisionDate: result.decisionDate,
         decisionType: result.decisionType,
         fulltext: result.fulltext,
@@ -176,10 +181,11 @@ export const runIngestionPipeline = async ({
   let pagesProcessed = 0;
 
   while (pagesProcessed < MAX_SYNC_PAGES) {
+    const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
     const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
-      AbortSignal.timeout(ADAPTER_TIMEOUT.PAGE),
+      AbortSignal.timeout(pageTimeout),
     );
 
     if (Result.isError(pageResult)) {

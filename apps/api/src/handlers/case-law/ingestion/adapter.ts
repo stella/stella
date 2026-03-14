@@ -43,4 +43,6 @@ export type SourceAdapter = {
   ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
+  /** Override per-page timeout (ms). Defaults to ADAPTER_TIMEOUT.PAGE. */
+  pageTimeoutMs?: number;
 };
