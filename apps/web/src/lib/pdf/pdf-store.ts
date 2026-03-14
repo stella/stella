@@ -475,25 +475,50 @@ export const usePdfStore = create<State & Actions>()(
 
           const reordered = getOrderedPages(pageIds, currentPageNumber - 1);
 
-          // Clear the buffer so all pages re-render at new scale
+          // Reset the buffer so pages re-render at the new
+          // scale, but keep renderedPages intact so the old
+          // canvas stays visible until the new render
+          // overwrites it (no flash).
           const buffer = pageBuffers.get(fileId);
           if (buffer) {
             buffer.clear();
+            // Discard evictions from the bulk clear above.
+            // Without this, advancePageRendering drains
+            // them and removes the renderedPages entries
+            // we preserve via rerenderedSet below.
+            const evictions = pendingEvictions.get(fileId);
+            if (evictions) {
+              evictions.length = 0;
+            }
           }
 
+          const renderingOrder = reordered.items.slice(
+            0,
+            DEFAULT_PAGE_BUFFER_SIZE - reordered.immediatePages.length,
+          );
+
           renderMap.set(fileId, {
-            renderingOrder: reordered.items.slice(
-              0,
-              DEFAULT_PAGE_BUFFER_SIZE - reordered.immediatePages.length,
-            ),
+            renderingOrder,
             renderingPageIds: reordered.immediatePages,
           });
+
+          // Keep pages from other files untouched. For the
+          // zoomed file, keep pages queued for re-render so
+          // their old canvas stays visible during the
+          // transition.
+          const rerenderedSet = new Set([
+            ...reordered.immediatePages,
+            ...renderingOrder,
+          ]);
 
           return {
             pages,
             renderMap,
             renderedPages: new Set(
-              [...s.renderedPages].filter((id) => !filePages.has(id)),
+              [...s.renderedPages].filter(
+                (id) =>
+                  !filePages.has(id) || rerenderedSet.has(id),
+              ),
             ),
           };
         }),
