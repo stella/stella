@@ -1,0 +1,19 @@
+{
+  "name": "@stella/template-conditions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint --type-aware",
+    "format": "oxfmt ."
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

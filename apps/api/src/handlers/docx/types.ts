@@ -206,6 +206,10 @@ export type DiscoveredField = {
   kind: TemplateFieldKind;
   itemFields?: DiscoveredField[];
   count: number;
+  /** Condition expression that must be true for this
+   *  field to be visible in the fill form. Absent when
+   *  the field is always visible. */
+  visibleWhen?: string;
 };
 
 export type TemplateStructureError = {
@@ -250,6 +254,10 @@ export type FieldMeta = {
   required?: boolean;
 };
 
+/**
+ * Matches `NamedCondition` from `@stella/template-conditions`.
+ * Kept here for co-location with `TemplateManifest`.
+ */
 export type NamedCondition = {
   name: string;
   expression: string;
@@ -272,4 +280,7 @@ export type ResolvedField = {
   validation?: FieldValidation;
   required?: boolean;
   itemFields?: ResolvedField[];
+  /** Condition expression that must be true for this
+   *  field to be visible in the fill form. */
+  visibleWhen?: string;
 };

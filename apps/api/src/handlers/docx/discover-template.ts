@@ -78,6 +78,156 @@ const kindPriority = (kind: TemplateFieldKind): number => {
   }
 };
 
+// ── Condition map building ─────────────────────────────
+
+/**
+ * Negate a condition expression.
+ *
+ * - Simple: `isUK` → `!isUK`
+ * - Already negated: `!isUK` → `isUK`
+ * - Compound: `isUK and hasLicense` → `!(isUK and hasLicense)`
+ *
+ * Uses parentheses for compound expressions so that
+ * `evaluateCondition` treats the negation as applying
+ * to the entire sub-expression (De Morgan via grouping).
+ */
+const negateExpr = (expr: string): string => {
+  const trimmed = expr.trim();
+  if (trimmed.startsWith("!") && !trimmed.includes(" ")) {
+    return trimmed.slice(1);
+  }
+  // Compound expression: wrap in parens to negate as a unit
+  if (trimmed.includes(" ")) {
+    return `!(${trimmed})`;
+  }
+  return `!${trimmed}`;
+};
+
+/**
+ * Build a paragraph-index-to-condition map by walking
+ * the flat directive list with a stack. Handles
+ * arbitrary nesting and elseif/else compound negation.
+ *
+ * Each directive marks a boundary; paragraphs between
+ * boundaries inherit the current stack's combined
+ * condition.
+ */
+const buildConditionMapFromRanges = (
+  directives: {
+    kind: string;
+    expression: string;
+    paragraphIndex: number;
+  }[],
+  paragraphCount: number,
+): Map<number, string> => {
+  type IfState = {
+    /** Original directive expressions for all preceding
+     *  branches (not compound; used for negation). */
+    originalExprs: string[];
+    currentBranchExpr: string;
+  };
+
+  const stack: IfState[] = [];
+
+  /** Combine all stack frames into one expression.
+   *  Wraps sub-expressions containing `or` in parens
+   *  so `and` joining doesn't change precedence. */
+  const currentFullCondition = (): string | undefined => {
+    if (stack.length === 0) {
+      return;
+    }
+    let result: string | undefined;
+    for (const frame of stack) {
+      const expr = frame.currentBranchExpr;
+      // Wrap in parens if the expression contains `or`
+      // to preserve correct precedence when joined
+      const wrapped = expr.includes(" or ") ? `(${expr})` : expr;
+      result = result ? `${result} and ${wrapped}` : wrapped;
+    }
+    return result;
+  };
+
+  type Boundary = {
+    paragraphIndex: number;
+    condition: string | undefined;
+  };
+
+  const boundaries: Boundary[] = [];
+
+  for (const d of directives) {
+    if (d.kind === "if") {
+      stack.push({
+        originalExprs: [d.expression],
+        currentBranchExpr: d.expression,
+      });
+      boundaries.push({
+        paragraphIndex: d.paragraphIndex + 1,
+        condition: currentFullCondition(),
+      });
+    } else if (d.kind === "elseif") {
+      const frame = stack.at(-1);
+      if (!frame) {
+        continue;
+      }
+      // Wrap the elseif expression in parens if it
+      // contains `or` to preserve precedence when joined
+      const exprPart = d.expression.includes(" or ")
+        ? `(${d.expression})`
+        : d.expression;
+      const parts = [...frame.originalExprs.map(negateExpr), exprPart];
+      frame.currentBranchExpr = parts.join(" and ");
+      frame.originalExprs.push(d.expression);
+      boundaries.push({
+        paragraphIndex: d.paragraphIndex + 1,
+        condition: currentFullCondition(),
+      });
+    } else if (d.kind === "else") {
+      const frame = stack.at(-1);
+      if (!frame) {
+        continue;
+      }
+      frame.currentBranchExpr = frame.originalExprs
+        .map(negateExpr)
+        .join(" and ");
+      boundaries.push({
+        paragraphIndex: d.paragraphIndex + 1,
+        condition: currentFullCondition(),
+      });
+    } else if (d.kind === "endif") {
+      if (stack.length > 0) {
+        stack.pop();
+      }
+      boundaries.push({
+        paragraphIndex: d.paragraphIndex + 1,
+        condition: currentFullCondition(),
+      });
+    }
+    // each/endeach: no condition change
+  }
+
+  boundaries.sort((a, b) => a.paragraphIndex - b.paragraphIndex);
+
+  const map = new Map<number, string>();
+
+  for (let i = 0; i < boundaries.length; i++) {
+    const boundary = boundaries[i];
+    const nextIdx =
+      i + 1 < boundaries.length
+        ? boundaries[i + 1].paragraphIndex
+        : paragraphCount;
+
+    if (boundary.condition === undefined) {
+      continue;
+    }
+
+    for (let idx = boundary.paragraphIndex; idx < nextIdx; idx++) {
+      map.set(idx, boundary.condition);
+    }
+  }
+
+  return map;
+};
+
 /**
  * Analyze a container element (w:body, w:hdr, or w:ftr) to
  * extract field information from its paragraphs.
@@ -88,10 +238,15 @@ const analyzeContainer = (
   fields: FieldAccumulator;
   errors: TemplateStructureError[];
   placeholderCounts: Map<string, number>;
+  /** Map of placeholder path to its visibleWhen expr. */
+  fieldConditions: Map<string, string | null>;
 } => {
   const fields: FieldAccumulator = new Map();
   const placeholderCounts = new Map<string, number>();
   const errors: TemplateStructureError[] = [];
+  // Track per-field condition. `null` means the field
+  // appears outside any conditional (always visible).
+  const fieldConditions = new Map<string, string | null>();
 
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
 
@@ -106,6 +261,12 @@ const analyzeContainer = (
   for (const d of directives) {
     directiveIndices.add(d.paragraphIndex);
   }
+
+  // Build paragraph → condition map from directives
+  const conditionMap = buildConditionMapFromRanges(
+    directives,
+    paragraphs.length,
+  );
 
   // 2. Analyze blocks for field types
   for (const block of blocks) {
@@ -183,9 +344,29 @@ const analyzeContainer = (
     }
 
     const text = paragraphText(paragraphs[i]);
+    const paraCondition = conditionMap.get(i);
+
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
       const name = match[1];
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
+
+      // Track field condition visibility
+      const existing = fieldConditions.get(name);
+      if (existing === null) {
+        // Already seen outside a conditional; stays
+        // always visible
+      } else if (paraCondition === undefined) {
+        // This occurrence is outside any conditional
+        // → field is always visible
+        fieldConditions.set(name, null);
+      } else if (existing === undefined) {
+        // First occurrence, inside a conditional
+        fieldConditions.set(name, paraCondition);
+      } else if (existing !== paraCondition) {
+        // Seen in a different conditional branch;
+        // mark as always visible
+        fieldConditions.set(name, null);
+      }
 
       // Infer field kind from path structure
       if (name.includes(".")) {
@@ -206,26 +387,25 @@ const analyzeContainer = (
     }
   }
 
-  return { fields, errors, placeholderCounts };
+  return { fields, errors, placeholderCounts, fieldConditions };
 };
 
 // ── Merge helpers ────────────────────────────────────────
+
+type AnalysisResult = {
+  fields: FieldAccumulator;
+  errors: TemplateStructureError[];
+  placeholderCounts: Map<string, number>;
+  fieldConditions: Map<string, string | null>;
+};
 
 /**
  * Merge fields from a secondary container (header/footer)
  * into the primary accumulators. Deduplicates by path.
  */
 const mergeAnalysis = (
-  primary: {
-    fields: FieldAccumulator;
-    errors: TemplateStructureError[];
-    placeholderCounts: Map<string, number>;
-  },
-  secondary: {
-    fields: FieldAccumulator;
-    errors: TemplateStructureError[];
-    placeholderCounts: Map<string, number>;
-  },
+  primary: AnalysisResult,
+  secondary: AnalysisResult,
 ): void => {
   for (const [path, info] of secondary.fields) {
     registerField(primary.fields, path, info.kind);
@@ -249,6 +429,19 @@ const mergeAnalysis = (
       (primary.placeholderCounts.get(name) ?? 0) + count,
     );
   }
+
+  // Merge field conditions: if a field appears outside
+  // a conditional in either container, it's always visible
+  for (const [name, cond] of secondary.fieldConditions) {
+    const existing = primary.fieldConditions.get(name);
+    if (existing === null || cond === null) {
+      primary.fieldConditions.set(name, null);
+    } else if (existing === undefined) {
+      primary.fieldConditions.set(name, cond);
+    } else if (existing !== cond) {
+      primary.fieldConditions.set(name, null);
+    }
+  }
 };
 
 /**
@@ -257,15 +450,17 @@ const mergeAnalysis = (
  */
 const analyzeHeadersAndFooters = async (
   zip: JSZip,
-): Promise<{
-  fields: FieldAccumulator;
-  errors: TemplateStructureError[];
-  placeholderCounts: Map<string, number>;
-}> => {
+): Promise<AnalysisResult> => {
   const fields: FieldAccumulator = new Map();
   const errors: TemplateStructureError[] = [];
   const placeholderCounts = new Map<string, number>();
-  const result = { fields, errors, placeholderCounts };
+  const fieldConditions = new Map<string, string | null>();
+  const result: AnalysisResult = {
+    fields,
+    errors,
+    placeholderCounts,
+    fieldConditions,
+  };
 
   // Sort entries alphabetically to match the order used by
   // extractText (which assigns globally sequential indices).
@@ -355,7 +550,7 @@ export const discoverTemplate = async (
   const hfAnalysis = await analyzeHeadersAndFooters(zip);
   mergeAnalysis(primary, hfAnalysis);
 
-  const { fields, errors, placeholderCounts } = primary;
+  const { fields, errors, placeholderCounts, fieldConditions } = primary;
 
   // Build DiscoveredPlaceholder[] (backward-compat)
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
@@ -376,6 +571,16 @@ export const discoverTemplate = async (
       kind: info.kind,
       count: info.count,
     };
+
+    // Attach visibleWhen from condition map.
+    // `null` means always visible (field appears outside
+    // conditionals); `undefined` means not seen as a
+    // placeholder (condition-driver booleans); a string
+    // is the condition expression.
+    const cond = fieldConditions.get(path);
+    if (typeof cond === "string") {
+      field.visibleWhen = cond;
+    }
 
     if (info.kind === "array" && info.itemPaths.size > 0) {
       field.itemFields = [...info.itemPaths].toSorted().map((p) => ({

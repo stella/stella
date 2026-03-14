@@ -35,6 +35,7 @@
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@stella/permissions": "workspace:*",
     "@stella/rivet": "workspace:*",
+    "@stella/template-conditions": "workspace:*",
     "@stella/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@tamtamchik/json-deep-sort": "catalog:",

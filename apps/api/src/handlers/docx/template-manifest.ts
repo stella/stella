@@ -529,6 +529,11 @@ const mergeField = (
     }
   }
 
+  // Preserve visibleWhen from discovery
+  if (discovered.visibleWhen !== undefined) {
+    resolved.visibleWhen = discovered.visibleWhen;
+  }
+
   if (discovered.itemFields) {
     // Item-level metadata not yet supported
     resolved.itemFields = discovered.itemFields.map((item) => mergeField(item));
