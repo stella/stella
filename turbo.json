@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": [".oxlintrc.json", ".oxfmtrc.json"],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]
@@ -22,11 +23,9 @@
       "outputs": [".cache/tsbuildinfo.json"]
     },
     "lint": {
-      "cache": false,
       "dependsOn": ["transit"]
     },
     "format": {
-      "cache": false,
       "dependsOn": ["transit"]
     },
     "i18n:check": {
@@ -35,7 +34,7 @@
     },
     "test": {
       "dependsOn": ["^test"],
-      "cache": false
+      "inputs": ["$TURBO_DEFAULT$"]
     },
     "clean": {
       "cache": false

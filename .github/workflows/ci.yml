@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@ecf28ddc73e819eb6fa29df6b34ef8921c743461 # v2
@@ -82,11 +84,21 @@ jobs:
           cd ../web
           mv .env.example .env
 
+      - name: Compute affected flag
+        id: affected
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/${{ github.base_ref || 'main' }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Check i18n sync
         run: bun run i18n:check
 
       - name: Lint
-        run: bun run lint
+        run: bun run lint -- ${{ steps.affected.outputs.flag }}
 
       - name: Lint colors
         run: bash scripts/lint-colors.sh
@@ -98,13 +110,13 @@ jobs:
         run: bash scripts/lint-logical-properties.sh
 
       - name: Format
-        run: bun run format
+        run: bun run format -- ${{ steps.affected.outputs.flag }}
 
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run typecheck -- ${{ steps.affected.outputs.flag }}
 
       - name: Test
-        run: bun run test -- --concurrency=2
+        run: bun run test -- --concurrency=2 ${{ steps.affected.outputs.flag }}
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
