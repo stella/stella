@@ -104,7 +104,7 @@ jobs:
         run: bun run typecheck
 
       - name: Test
-        run: bun run test
+        run: bun run test -- --concurrency=2
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be

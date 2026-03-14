@@ -1,4 +1,3 @@
-// TODO: FIXME — @huggingface/transformers PreTrainedTokenizer resolves as error type
 /**
  * Tokenization and input preparation for GLiNER span model.
  *
@@ -6,7 +5,7 @@
  * tokenizer, and builds the span index grid that the ONNX
  * model expects as input.
  */
-import type { PreTrainedTokenizer } from "@huggingface/transformers";
+import type { Encoding, Tokenizer } from "@huggingface/tokenizers";
 
 const segmenter = new Intl.Segmenter(undefined, {
   granularity: "word",
@@ -80,7 +79,7 @@ const prepareTextInputs = (
 
 /** Encode word sequences into token IDs with masks. */
 const encodeInputs = (
-  tokenizer: PreTrainedTokenizer,
+  tokenizer: Tokenizer,
   texts: string[][],
   promptLengths: number[],
 ): [
@@ -88,6 +87,12 @@ const encodeInputs = (
   attentionMasks: number[][],
   wordsMasks: number[][],
 ] => {
+  // Resolve special token IDs dynamically instead of
+  // hardcoding DeBERTa-v3 values. Fallbacks (1, 2) match
+  // the current model but future models may differ.
+  const clsTokenId = tokenizer.token_to_id("[CLS]") ?? 1;
+  const sepTokenId = tokenizer.token_to_id("[SEP]") ?? 2;
+
   const allInputIds: number[][] = [];
   const allAttentionMasks: number[][] = [];
   const allWordsMasks: number[][] = [];
@@ -96,13 +101,15 @@ const encodeInputs = (
     const promptLength = promptLengths[idx];
     const words = texts[idx];
     const wordsMask: number[] = [0];
-    const inputIds: number[] = [1];
+    const inputIds: number[] = [clsTokenId];
     const attentionMask: number[] = [1];
 
     let wordCounter = 1;
     for (let wordId = 0; wordId < words.length; wordId++) {
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access -- PreTrainedTokenizer resolves as error type
-      const wordTokens: number[] = tokenizer.encode(words[wordId]).slice(1, -1);
+      // encode() returns { ids, tokens, attention_mask }
+      // with BOS/EOS; strip them with slice(1, -1)
+      const encoded: Encoding = tokenizer.encode(words[wordId]);
+      const wordTokens: number[] = encoded.ids.slice(1, -1);
 
       for (let tokenId = 0; tokenId < wordTokens.length; tokenId++) {
         attentionMask.push(1);
@@ -118,8 +125,7 @@ const encodeInputs = (
       }
     }
 
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-argument, typescript-eslint/no-unsafe-member-access -- PreTrainedTokenizer resolves as error type
-    inputIds.push(tokenizer.sep_token_id);
+    inputIds.push(sepTokenId);
     wordsMask.push(0);
     attentionMask.push(1);
 
@@ -161,10 +167,24 @@ const prepareSpans = (
 
 /** Pad a 2D or 3D array to uniform inner length. */
 export const padArray = <T>(arr: T[][], dimensions: number = 2): T[][] => {
+  if (arr.length === 0) {
+    return [];
+  }
   const maxLength = Math.max(...arr.map((sub) => sub.length));
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- 3D arrays have number[] inner elements
-  const firstInner = arr[0]?.[0] as unknown as number[] | undefined;
-  const finalDim = dimensions === 3 && firstInner ? firstInner.length : 0;
+  // For 3D arrays, infer inner dimension from the first
+  // non-empty element (arr[0] may be empty when a batch
+  // element had zero word tokens).
+  let finalDim = 0;
+  if (dimensions === 3) {
+    for (const sub of arr) {
+      if (sub.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- 3D arrays have number[] inner elements
+        const inner = sub[0] as unknown as number[];
+        finalDim = inner.length;
+        break;
+      }
+    }
+  }
 
   return arr.map((sub) => {
     const padCount = maxLength - sub.length;
@@ -175,14 +195,14 @@ export const padArray = <T>(arr: T[][], dimensions: number = 2): T[][] => {
           )
         : Array.from<number>({ length: padCount }).fill(0);
     // SAFETY: fill values (zero arrays) match the shape of T
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- generic padding for ONNX tensor arrays
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- generic padding for ONNX tensor arrays
     return [...sub, ...(fill as T[])] as T[];
   });
 };
 
 /** Prepare a complete batch for ONNX inference. */
 export const prepareBatch = (
-  tokenizer: PreTrainedTokenizer,
+  tokenizer: Tokenizer,
   texts: string[],
   entities: string[],
   maxWidth: number,

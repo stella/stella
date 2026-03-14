@@ -17,9 +17,13 @@ import {
   DEFAULT_OPERATOR_CONFIG,
   resolveOperator,
 } from "@/lib/anonymize/operators";
+import type { CharSpan } from "@/lib/anonymize/pdf-coords";
+import { extractPdfText } from "@/lib/anonymize/pdf-coords";
+import { redactPdf } from "@/lib/anonymize/pdf-redact";
 import { runPipeline } from "@/lib/anonymize/pipeline";
 import type { NerInferenceFn } from "@/lib/anonymize/pipeline";
 import { exportRedactionKey, redactText } from "@/lib/anonymize/redact";
+import { saveRedactionMap } from "@/lib/anonymize/redaction-map";
 import { detectRegexPii } from "@/lib/anonymize/regex-patterns";
 import {
   DEFAULT_ENTITY_LABELS,
@@ -65,7 +69,9 @@ function AnonymizePage() {
   ]);
   const [showRegex, setShowRegex] = useState(true);
   const [threshold, setThreshold] = useState(0.3);
-  const [selectedModel, setSelectedModel] = useState(MODEL_OPTIONS[0].id);
+  const [selectedModel, setSelectedModel] = useState(
+    MODEL_OPTIONS.find((m) => m.id === "pii-edge")?.id ?? MODEL_OPTIONS[0].id,
+  );
   const [backend, setBackend] = useState("");
   const [downloadProgress, setDownloadProgress] = useState<{
     percent: number;
@@ -79,6 +85,17 @@ function AnonymizePage() {
   const [operatorConfig, setOperatorConfig] = useState<OperatorConfig>(() => ({
     ...DEFAULT_OPERATOR_CONFIG,
   }));
+  // PDF-specific state
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const [pdfSpans, setPdfSpans] = useState<CharSpan[]>([]);
+  const [redactedPdfBytes, setRedactedPdfBytes] = useState<Uint8Array | null>(
+    null,
+  );
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showRedactionMap, setShowRedactionMap] = useState(false);
+  const [redactionEntries, setRedactionEntries] = useState<
+    { placeholder: string; original: string; operator: string }[]
+  >([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Terminate worker on unmount to prevent resource leak
@@ -248,6 +265,10 @@ function AnonymizePage() {
       setEntities([]);
       setRedactedText(null);
       setRedactionKey(null);
+      setRedactedPdfBytes(null);
+      setShowPdfPreview(false);
+      setShowRedactionMap(false);
+      setRedactionEntries([]);
       setOperatorConfig({ ...DEFAULT_OPERATOR_CONFIG });
       setStatus("running-pipeline");
 
@@ -294,6 +315,12 @@ function AnonymizePage() {
       setText(inputText);
       setRedactedText(null);
       setRedactionKey(null);
+      setRedactedPdfBytes(null);
+      setPdfBytes(null);
+      setPdfSpans([]);
+      setShowPdfPreview(false);
+      setShowRedactionMap(false);
+      setRedactionEntries([]);
       setOperatorConfig({ ...DEFAULT_OPERATOR_CONFIG });
       const regexResults = detectRegexPii(inputText);
       setEntities(regexResults);
@@ -313,8 +340,43 @@ function AnonymizePage() {
 
       try {
         let extracted: string;
-        if (file.name.toLowerCase().endsWith(".txt")) {
+        const lowerName = file.name.toLowerCase();
+
+        if (lowerName.endsWith(".pdf")) {
+          const buffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          setPdfBytes(bytes);
+
+          // Dynamic import to avoid loading pdfjs-dist
+          // eagerly when not needed
+          const { getDocument, GlobalWorkerOptions } =
+            await import("pdfjs-dist");
+          // Configure worker so parsing runs off the main
+          // thread. In dev, use the static copy from public/.
+          if (!GlobalWorkerOptions.workerSrc) {
+            GlobalWorkerOptions.workerSrc = import.meta.env.DEV
+              ? "/pdf.worker.min.mjs"
+              : (await import("pdfjs-dist/build/pdf.worker.min.mjs?url"))
+                  .default;
+          }
+          // .slice() prevents pdfjs from transferring the
+          // underlying ArrayBuffer, which would detach pdfBytes
+          const pdf = await getDocument({ data: bytes.slice() }).promise;
+          try {
+            const result = await extractPdfText(pdf);
+            extracted = result.text;
+            setPdfSpans(result.spans);
+            log(
+              `PDF: ${result.pageCount} pages, ` +
+                `${result.spans.length} text fragments`,
+            );
+          } finally {
+            await pdf.destroy();
+          }
+        } else if (lowerName.endsWith(".txt")) {
           extracted = await file.text();
+          setPdfBytes(null);
+          setPdfSpans([]);
         } else {
           const buffer = await file.arrayBuffer();
           // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
@@ -323,6 +385,8 @@ function AnonymizePage() {
           });
           // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
           extracted = result.value;
+          setPdfBytes(null);
+          setPdfSpans([]);
         }
 
         log(
@@ -378,7 +442,7 @@ function AnonymizePage() {
 
   // ── Redaction ──────────────────────────────────────
 
-  const handleRedact = useCallback(() => {
+  const handleRedact = useCallback(async () => {
     const confirmed = entities.filter((e) => e.decision !== "rejected");
     const result = redactText(text, confirmed, operatorConfig);
     setRedactedText(result.redactedText);
@@ -386,7 +450,75 @@ function AnonymizePage() {
       exportRedactionKey(result.redactionMap, result.operatorMap),
     );
     log(`Redacted ${result.entityCount} entity spans`);
-  }, [entities, text, log, operatorConfig]);
+
+    // Build redaction map entries for display
+    const entries: {
+      placeholder: string;
+      original: string;
+      operator: string;
+    }[] = [];
+    for (const [placeholder, original] of result.redactionMap) {
+      entries.push({
+        placeholder,
+        original,
+        operator: result.operatorMap.get(placeholder) ?? "replace",
+      });
+    }
+    setRedactionEntries(entries);
+
+    // Persist redaction map to IndexedDB
+    const docId = fileName || `paste-${Date.now()}`;
+    saveRedactionMap(
+      docId,
+      fileName || "Pasted text",
+      result.redactionMap,
+      result.operatorMap,
+    ).catch((_error: unknown) => {
+      log("Failed to persist redaction map to IndexedDB");
+    });
+
+    // If we have a PDF loaded, produce the redacted PDF too
+    if (pdfBytes && pdfSpans.length > 0) {
+      try {
+        const pdfResult = await redactPdf(
+          pdfBytes,
+          text,
+          pdfSpans,
+          confirmed,
+          operatorConfig,
+        );
+        setRedactedPdfBytes(pdfResult.pdfBytes);
+        log(
+          `PDF redaction complete ` +
+            `(${(pdfResult.pdfBytes.length / 1024).toFixed(0)} KB)`,
+        );
+      } catch (error) {
+        log(
+          `PDF redaction error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }, [entities, text, log, operatorConfig, pdfBytes, pdfSpans, fileName]);
+
+  // ── PDF preview URL ────────────────────────────────
+
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!redactedPdfBytes) {
+      setPdfPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(
+      new Blob([new Uint8Array(redactedPdfBytes)], {
+        type: "application/pdf",
+      }),
+    );
+    setPdfPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [redactedPdfBytes]);
 
   // ── Paste text ─────────────────────────────────────
 
@@ -546,7 +678,7 @@ function AnonymizePage() {
             disabled={status !== "model-ready" && status !== "done"}
             onClick={() => inputRef.current?.click()}
           >
-            Upload DOCX
+            Upload File
           </Button>
 
           {fileName && (
@@ -554,7 +686,7 @@ function AnonymizePage() {
           )}
 
           <input
-            accept=".docx,.txt"
+            accept=".docx,.txt,.pdf"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.item(0);
@@ -589,6 +721,8 @@ function AnonymizePage() {
               }
               onClick={() => {
                 setFileName("");
+                setPdfBytes(null);
+                setPdfSpans([]);
                 runFullPipeline(pasteText).catch(() => {
                   /* fire-and-forget */
                 });
@@ -724,7 +858,15 @@ function AnonymizePage() {
           </div>
 
           {status === "done" && entities.length > 0 && (
-            <Button onClick={handleRedact}>Redact Document</Button>
+            <Button
+              onClick={() => {
+                handleRedact().catch((error: unknown) => {
+                  log(`Unexpected redaction error: ${String(error)}`);
+                });
+              }}
+            >
+              Redact Document
+            </Button>
           )}
         </div>
       </div>
@@ -770,10 +912,46 @@ function AnonymizePage() {
                       Copy Key
                     </Button>
                   )}
+                  {redactedPdfBytes && (
+                    <>
+                      <Button
+                        onClick={() => {
+                          const blob = new Blob(
+                            [new Uint8Array(redactedPdfBytes)],
+                            { type: "application/pdf" },
+                          );
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = fileName.replace(
+                            /\.pdf$/i,
+                            "_redacted.pdf",
+                          );
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          log("Downloading redacted PDF");
+                        }}
+                      >
+                        Download PDF
+                      </Button>
+                      <Button onClick={() => setShowPdfPreview((v) => !v)}>
+                        {showPdfPreview ? "Hide Preview" : "Preview PDF"}
+                      </Button>
+                    </>
+                  )}
+                  {redactionEntries.length > 0 && (
+                    <Button onClick={() => setShowRedactionMap((v) => !v)}>
+                      {showRedactionMap ? "Hide Map" : "Redaction Map"}
+                    </Button>
+                  )}
                   <Button
                     onClick={() => {
                       setRedactedText(null);
                       setRedactionKey(null);
+                      setRedactedPdfBytes(null);
+                      setShowPdfPreview(false);
+                      setShowRedactionMap(false);
+                      setRedactionEntries([]);
                     }}
                   >
                     Back
@@ -783,6 +961,63 @@ function AnonymizePage() {
               <pre className="bg-muted/30 rounded p-3 font-mono text-sm leading-relaxed whitespace-pre-wrap">
                 {redactedText}
               </pre>
+
+              {/* PDF preview */}
+              {showPdfPreview && pdfPreviewUrl && (
+                <div className="mt-3">
+                  <h4 className="text-muted-foreground mb-1 text-xs font-medium">
+                    Anonymised PDF preview
+                  </h4>
+                  <iframe
+                    className="h-[600px] w-full rounded border"
+                    sandbox="allow-same-origin"
+                    src={pdfPreviewUrl}
+                    title="Anonymised PDF preview"
+                  />
+                </div>
+              )}
+
+              {/* Redaction map */}
+              {showRedactionMap && redactionEntries.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="text-muted-foreground mb-1 text-xs font-medium">
+                    Redaction map ({redactionEntries.length} entries)
+                  </h4>
+                  <div className="bg-muted/30 overflow-auto rounded border">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            Placeholder
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            Original
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            Operator
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {redactionEntries.map((entry) => (
+                          <tr
+                            className="border-b last:border-b-0"
+                            key={entry.placeholder}
+                          >
+                            <td className="px-3 py-1 font-mono">
+                              {entry.placeholder}
+                            </td>
+                            <td className="px-3 py-1">{entry.original}</td>
+                            <td className="text-muted-foreground px-3 py-1">
+                              {entry.operator}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           ) : status === "done" && filteredEntities.length > 0 ? (
             <>
@@ -806,8 +1041,8 @@ function AnonymizePage() {
           ) : (
             !text && (
               <p className="text-muted-foreground text-sm">
-                Load the model, then upload a DOCX or paste text to see results
-                here.
+                Load the model, then upload a file (PDF, DOCX, TXT) or paste
+                text to see results here.
               </p>
             )
           )}

@@ -197,14 +197,6 @@ guidelines, and visual noise rules in `/conventions-ux`.
   guards, `in` checks, records instead of arrays). If truly
   unavoidable, ask before adding and include a `// SAFETY:`
   comment explaining why the cast is sound.
-- **Never use `as any`**. It silences every downstream type
-  error and defeats the purpose of TypeScript. If a library
-  type is wrong or incomplete, annotate the parameter
-  (`(v: string)`) or use a type guard; if a framework call
-  doesn't type-check, pass the correct generic or restructure
-  the call (e.g., TanStack Router's `from` param, passing
-  `search` as an object instead of a reducer). `as any` is
-  never the answer.
 - When a type mismatch appears, trace it to the source (e.g.,
   the handler or query that produces the wrong type) rather
   than casting at the consumer. Check git to verify you didn't
@@ -264,8 +256,7 @@ guidelines, and visual noise rules in `/conventions-ux`.
   implementations (e.g., `Bun.CryptoHasher`, `Bun.file`,
   `Bun.S3Client`). This is a Bun runtime; don't write
   browser-compatible code on the backend.
-- Drizzle ORM for all database access — no raw SQL unless
-  absolutely necessary (see `/conventions-db`)
+- Drizzle ORM for all database access (see `/conventions-db`)
 - Don't use `?.` or `?? []` to silently handle relations that are
   structural invariants of the data model (e.g. `entity.currentVersion`
   always exists after creation). Use `panic()` instead.

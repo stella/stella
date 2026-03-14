@@ -190,23 +190,48 @@ const handleInit = async (modelPath: string, tokenizerPath?: string) => {
     const modelBytes = await downloadWithProgress(modelPath, post);
     post({
       type: "init-progress",
-      message: `Download complete (${(modelBytes.length / (1024 * 1024)).toFixed(0)} MB). Initializing ONNX session...`,
+      message:
+        `Download complete ` +
+        `(${(modelBytes.length / (1024 * 1024)).toFixed(0)} MB). ` +
+        `Initializing ONNX session...`,
     });
 
-    gliner = new Gliner({
-      tokenizerPath: tokenizerPath ?? "onnx-community/gliner_multi_pii-v1",
-      onnxSettings: {
-        modelPath: modelBytes,
-        executionProvider: backend.provider,
-        multiThread: backend.multiThread,
-        maxThreads: 4,
-      },
-      maxWidth: 12,
-    });
+    const createGliner = (provider: ExecutionProvider, multiThread: boolean) =>
+      new Gliner({
+        tokenizerPath: tokenizerPath ?? "onnx-community/gliner_multi_pii-v1",
+        onnxSettings: {
+          modelPath: modelBytes,
+          executionProvider: provider,
+          multiThread,
+          maxThreads: 4,
+        },
+        maxWidth: 12,
+      });
 
-    await gliner.initialize();
+    // Try preferred backend; fall back to WASM if it fails
+    // (e.g., Edge's WebGPU ONNX support is incomplete).
+    let usedLabel = backend.label;
+    gliner = createGliner(backend.provider, backend.multiThread);
+    try {
+      await gliner.initialize();
+    } catch (primaryError) {
+      if (backend.provider !== "wasm") {
+        post({
+          type: "init-progress",
+          message:
+            `${backend.label} failed ` +
+            `(${primaryError instanceof Error ? primaryError.message : String(primaryError)}), ` +
+            `falling back to WASM...`,
+        });
+        usedLabel = "WASM (fallback)";
+        gliner = createGliner("wasm", false);
+        await gliner.initialize();
+      } else {
+        throw primaryError;
+      }
+    }
 
-    post({ type: "init-done", backend: backend.label });
+    post({ type: "init-done", backend: usedLabel });
   } catch (error) {
     post({
       type: "error",
