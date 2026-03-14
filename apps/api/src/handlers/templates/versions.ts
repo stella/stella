@@ -113,7 +113,7 @@ export const getTemplateVersionHandler = async ({
     });
   }
 
-  const downloadUrl = await presignDownloadUrl(version.s3Key, {
+  const downloadUrl = presignDownloadUrl(version.s3Key, {
     expiresIn: 3600,
     fileName: template.fileName,
   });

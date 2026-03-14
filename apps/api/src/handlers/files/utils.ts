@@ -1,9 +1,7 @@
-import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { Result, TaggedError } from "better-result";
 
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import { awsS3 } from "@/api/lib/s3";
+import { s3 } from "@/api/lib/s3";
 
 const fileExtensionMap: Record<string, string> = {
   "application/pdf": "pdf",
@@ -50,8 +48,12 @@ export const createFileKey = ({
 }: CreateFileKeyProps) =>
   `${organizationId}/${workspaceId}/${fileId}.${getFileExtension(mimeType)}`;
 
-/** S3 DeleteObjects supports up to 1000 keys per request. */
-const S3_DELETE_BATCH_SIZE = 1000;
+/**
+ * Concurrency limit for individual s3.delete() calls. Bun's
+ * S3Client has no batch-delete API, so we chunk to avoid
+ * overwhelming the endpoint with concurrent HTTP requests.
+ */
+const S3_DELETE_CONCURRENCY = 50;
 
 type DeleteS3ObjectsProps = {
   fileRows: { fileId: string; mimeType: string }[];
@@ -70,43 +72,30 @@ export const deleteS3Objects = async ({
   fileRows,
   organizationId,
   workspaceId,
-}: DeleteS3ObjectsProps): Promise<Result<void, Error>> => {
-  for (let i = 0; i < fileRows.length; i += S3_DELETE_BATCH_SIZE) {
-    const batch = fileRows.slice(i, i + S3_DELETE_BATCH_SIZE);
+}: DeleteS3ObjectsProps): Promise<Result<void, S3Error>> => {
+  const keys = fileRows.map(({ fileId, mimeType }) =>
+    createFileKey({
+      organizationId,
+      workspaceId,
+      fileId,
+      mimeType,
+    }),
+  );
+
+  for (let i = 0; i < keys.length; i += S3_DELETE_CONCURRENCY) {
+    const chunk = keys.slice(i, i + S3_DELETE_CONCURRENCY);
 
     const result = await Result.tryPromise(
       async () =>
-        await awsS3.send(
-          new DeleteObjectsCommand({
-            Bucket: env.S3_BUCKET,
-            Delete: {
-              Objects: batch.map(({ fileId, mimeType }) => ({
-                Key: createFileKey({
-                  organizationId,
-                  workspaceId,
-                  fileId,
-                  mimeType,
-                }),
-              })),
-              Quiet: true,
-            },
-          }),
-        ),
+        await Promise.all(chunk.map(async (key) => await s3.delete(key))),
     );
 
     if (Result.isError(result)) {
-      return result;
-    }
-
-    const error = result.value.Errors?.at(0);
-
-    if (error) {
       return Result.err(
         new S3Error({
-          message: "Failed to delete S3 objects",
-          code: error.Code,
-          key: error.Key,
-          cause: error,
+          message: `Failed to delete S3 objects (${chunk.length} keys in chunk)`,
+          key: chunk.at(0),
+          cause: result.error,
         }),
       );
     }
