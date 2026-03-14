@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import type { FileRoutesByFullPath, FileRouteTypes } from "@/routeTree.gen";
 
-export type AcceptInvitationPath = Extract<
+type AcceptInvitationPath = Extract<
   keyof FileRoutesByFullPath,
   `/auth/accept-invitation/${string}`
 >;

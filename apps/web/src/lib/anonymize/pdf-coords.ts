@@ -35,7 +35,7 @@ export type CharSpan = {
 /**
  * Result of extracting text with coordinate mapping.
  */
-export type PdfTextExtractionResult = {
+type PdfTextExtractionResult = {
   /** Concatenated plaintext from all pages. */
   text: string;
   /** Character-offset → coordinate spans, sorted by start. */

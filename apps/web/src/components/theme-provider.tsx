@@ -173,4 +173,3 @@ export const useTheme = (): ThemeProviderState => {
 };
 
 export { THEMES, PALETTES };
-export type { Theme, Palette };

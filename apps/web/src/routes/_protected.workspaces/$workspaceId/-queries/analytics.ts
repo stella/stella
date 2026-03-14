@@ -12,7 +12,7 @@ type PeriodParams = DateRange & {
   granularity?: "day" | "week" | "month";
 };
 
-export const analyticsKeys = {
+const analyticsKeys = {
   all: (workspaceId: string) => ["analytics", workspaceId] as const,
   summary: (workspaceId: string, range: DateRange) =>
     [...analyticsKeys.all(workspaceId), "summary", range] as const,
@@ -22,8 +22,6 @@ export const analyticsKeys = {
     [...analyticsKeys.all(workspaceId), "hours-by-user", range] as const,
   hoursByPeriod: (workspaceId: string, params: PeriodParams) =>
     [...analyticsKeys.all(workspaceId), "hours-by-period", params] as const,
-  statusBreakdown: (workspaceId: string, range: DateRange) =>
-    [...analyticsKeys.all(workspaceId), "status-breakdown", range] as const,
   revenueByPeriod: (workspaceId: string, params: PeriodParams) =>
     [...analyticsKeys.all(workspaceId), "revenue-by-period", params] as const,
 };
@@ -88,23 +86,6 @@ export const hoursByPeriodOptions = (
         .analytics({ workspaceId })
         ["hours-by-period"].get({
           query: params,
-          fetch: { signal },
-        });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-  });
-
-export const statusBreakdownOptions = (workspaceId: string, range: DateRange) =>
-  queryOptions({
-    queryKey: analyticsKeys.statusBreakdown(workspaceId, range),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .analytics({ workspaceId })
-        ["status-breakdown"].get({
-          query: range,
           fetch: { signal },
         });
       if (response.error) {

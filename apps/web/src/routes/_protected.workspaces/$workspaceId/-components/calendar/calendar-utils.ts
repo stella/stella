@@ -81,27 +81,6 @@ export const getWeekDays = (referenceDate: Date): CalendarDay[] => {
   return days;
 };
 
-/** Get the date range (inclusive) for a month grid. */
-export const getMonthRange = (
-  year: number,
-  month: number,
-): { start: string; end: string } => {
-  const days = getMonthDays(year, month);
-  // SAFETY: getMonthDays always returns 42 days
-  const last = days.at(-1) ?? days[0];
-  return { start: days[0].date, end: last.date };
-};
-
-/** Get the date range for a week view. */
-export const getWeekRange = (
-  referenceDate: Date,
-): { start: string; end: string } => {
-  const days = getWeekDays(referenceDate);
-  // SAFETY: getWeekDays always returns 7 days
-  const last = days.at(-1) ?? days[0];
-  return { start: days[0].date, end: last.date };
-};
-
 /**
  * Extract a date string from an entity for a given property ID.
  * Handles both custom date properties and internal properties.

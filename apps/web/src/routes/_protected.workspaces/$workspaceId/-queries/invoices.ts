@@ -57,4 +57,4 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
     },
   });
 
-export type { InvoiceStatus, InvoicesFilters };
+export type { InvoiceStatus };

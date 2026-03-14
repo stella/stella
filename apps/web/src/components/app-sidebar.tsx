@@ -608,6 +608,20 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const currentWorkspaceId =
     workspaceMatch?.params.workspaceId ?? workspaces?.at(0)?.id;
 
+  const handleCreateWorkspace = () => {
+    if (createWorkspace.isPending) {
+      return;
+    }
+    createWorkspace.mutate(undefined, {
+      onError: () => {
+        toastManager.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+      },
+    });
+  };
+
   useHotkey(HOTKEYS.SEARCH, () => {
     setSearchOpen((prev) => !prev);
   });
@@ -770,20 +784,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [showNavBadges]);
-
-  const handleCreateWorkspace = () => {
-    if (createWorkspace.isPending) {
-      return;
-    }
-    createWorkspace.mutate(undefined, {
-      onError: () => {
-        toastManager.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
-      },
-    });
-  };
 
   return (
     <Sidebar {...props} collapsible="icon">

@@ -24,14 +24,6 @@ export type GlinerConfig = {
   maxWidth?: number;
 };
 
-export type InferenceParams = {
-  texts: string[];
-  entities: string[];
-  flatNer?: boolean;
-  threshold?: number;
-  multiLabel?: boolean;
-};
-
 export type EntityResult = {
   spanText: string;
   start: number;

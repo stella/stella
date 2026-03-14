@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-export type PdfAttachment = {
+type PdfAttachment = {
   content: Uint8Array;
   filename: string;
 };

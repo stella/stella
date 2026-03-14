@@ -12,7 +12,7 @@ type PeriodParams = DateRange & {
   granularity?: "day" | "week" | "month";
 };
 
-export const templateAnalyticsKeys = {
+const templateAnalyticsKeys = {
   all: () => ["template-analytics"] as const,
   summary: (range: DateRange) =>
     [...templateAnalyticsKeys.all(), "summary", range] as const,

@@ -62,7 +62,7 @@ export type TriggerRule = {
   strategy: TriggerExtractionStrategy;
 };
 
-export type TriggerExtractionStrategy =
+type TriggerExtractionStrategy =
   | { type: "to-next-comma" }
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number };
@@ -84,7 +84,7 @@ export type OperatorConfig = {
 };
 
 /** Whether an operator produces a reversible redaction entry. */
-export type OperatorReversibility = "reversible" | "irreversible";
+type OperatorReversibility = "reversible" | "irreversible";
 
 export type AnonymisationOperator = {
   type: OperatorType;
@@ -134,7 +134,7 @@ export type PipelineConfig = {
 /**
  * GLiNER model option for the UI selector.
  */
-export type ModelOption = {
+type ModelOption = {
   id: string;
   label: string;
   url: string;

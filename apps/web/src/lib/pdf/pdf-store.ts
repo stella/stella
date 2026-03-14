@@ -20,12 +20,12 @@ GlobalWorkerOptions.workerSrc = import.meta.env.DEV
 
 export const PDF_WIDTH = 768; // px, screen md
 
-export type ScrollTo = {
+type ScrollTo = {
   pageNumber: number;
   justificationId?: string;
 };
 
-export type PasswordRequest = {
+type PasswordRequest = {
   resolve: (password: string) => void;
   reject: () => void;
   reason: number;

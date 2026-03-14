@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
-export const myTasksKeys = {
+const myTasksKeys = {
   all: ["my-tasks"],
 };
 

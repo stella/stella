@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 // ── Placeholder regex ────────────────────────────────
 
-export const PLACEHOLDER_RE = /\{\{([^{}]+)\}\}/g;
+const PLACEHOLDER_RE = /\{\{([^{}]+)\}\}/g;
 
 // ── Types ────────────────────────────────────────────
 

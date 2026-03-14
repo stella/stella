@@ -66,9 +66,6 @@ export const SHORTCUT_HINT_GROUPS = [
 export type ShortcutHint =
   (typeof SHORTCUT_HINT_GROUPS)[number]["hints"][number];
 
-export const SHORTCUT_HINTS: readonly ShortcutHint[] =
-  SHORTCUT_HINT_GROUPS.flatMap((g): readonly ShortcutHint[] => g.hints);
-
 const CTRL_PREFIX_RE = /^Ctrl\+/;
 
 /**

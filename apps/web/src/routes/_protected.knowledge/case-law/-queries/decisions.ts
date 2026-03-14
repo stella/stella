@@ -5,7 +5,7 @@ import { toAPIError } from "@/lib/errors";
 
 const DEFAULT_PAGE_SIZE = 50;
 
-export const caseLawDecisionKeys = {
+const caseLawDecisionKeys = {
   all: ["case-law-decisions"],
   list: (filters?: Record<string, unknown>) => [
     ...caseLawDecisionKeys.all,
@@ -26,7 +26,7 @@ export type DecisionListFilters = {
   sourceId?: string;
 };
 
-export type FacetBucket = { value: string; count: number };
+type FacetBucket = { value: string; count: number };
 
 export type SearchFacets = {
   court: FacetBucket[];

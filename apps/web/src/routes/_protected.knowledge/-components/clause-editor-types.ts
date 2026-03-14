@@ -13,5 +13,3 @@ export type ClauseParagraph = {
   directiveKind?: "if" | "elseif" | "else" | "endif" | "each" | "endeach";
   directiveExpression?: string;
 };
-
-export type ClauseBody = ClauseParagraph[];

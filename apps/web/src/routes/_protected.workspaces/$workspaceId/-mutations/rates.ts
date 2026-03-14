@@ -133,43 +133,6 @@ export const useCreateRateEntry = () => {
   });
 };
 
-type UpdateRateEntryVars = {
-  workspaceId: string;
-  rateTableId: string;
-  id: string;
-  hourlyRate?: number;
-  effectiveFrom?: string;
-  effectiveTo?: string | null;
-};
-
-export const useUpdateRateEntry = () => {
-  const posthog = usePostHog();
-
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      rateTableId,
-      ...body
-    }: UpdateRateEntryVars) => {
-      const response = await api
-        .rates({ workspaceId })({ rateTableId })
-        .entries.patch({
-          queryKey: ratesKeys.all(workspaceId),
-          ...body,
-        });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
-    },
-    onError: (error) => {
-      captureError(posthog, error);
-    },
-  });
-};
-
 type DeleteRateEntryVars = {
   workspaceId: string;
   rateTableId: string;

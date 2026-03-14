@@ -156,7 +156,7 @@ type PageRedaction = {
 /**
  * Result of PDF anonymisation.
  */
-export type PdfRedactionResult = {
+type PdfRedactionResult = {
   /** The anonymised PDF as bytes, ready for download. */
   pdfBytes: Uint8Array;
   /** The text-level redaction result (map, operators, etc.). */

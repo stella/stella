@@ -39,7 +39,7 @@ export type StructureError = DiscoverData["structureErrors"][number];
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 const REQUIRED_MARKER = "*";
 
-export const INPUT_TYPES = [
+const INPUT_TYPES = [
   "text",
   "textarea",
   "number",
@@ -48,7 +48,7 @@ export const INPUT_TYPES = [
   "select",
 ] as const;
 
-export type InputType = (typeof INPUT_TYPES)[number];
+type InputType = (typeof INPUT_TYPES)[number];
 
 export type EditableField = {
   path: string;
@@ -82,7 +82,7 @@ export const buildEditableFields = (fields: ResolvedField[]): EditableField[] =>
     options: f.options ?? [],
   }));
 
-export type ConfigureStepProps = {
+type ConfigureStepProps = {
   file: File;
   fields: ResolvedField[];
   conditions: NamedCondition[];

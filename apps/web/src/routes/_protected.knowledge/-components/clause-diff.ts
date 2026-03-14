@@ -77,4 +77,4 @@ export const diffClauseBodies = (
   return result;
 };
 
-export type { ParagraphDiff, DiffSegment };
+export type { ParagraphDiff };
