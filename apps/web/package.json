@@ -88,7 +88,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
-    "@rolldown/plugin-babel": "^0.2.0",
+    "@rolldown/plugin-babel": "^0.2.1",
     "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.2.1",

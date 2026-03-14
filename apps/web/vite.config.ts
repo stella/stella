@@ -1,5 +1,5 @@
-import tailwindcss from "@tailwindcss/vite";
 import babel from "@rolldown/plugin-babel";
+import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -21,7 +21,7 @@ export default defineConfig({
     }),
     react(),
     babel({
-      filter: /\.[jt]sx?$/,
+      include: /\.[jt]sx?$/,
       parserOpts: { plugins: ["typescript", "jsx"] },
       presets: [reactCompilerPreset()],
     }),
