@@ -11,4 +11,3 @@ export const shuffleArray = <T>(originalArray: T[]): T[] => {
 
   return array;
 };
-

@@ -88,5 +88,3 @@ export const saveRedactionMap = async (
   const db = await getDb();
   await db.put(STORE_NAME, record);
 };
-
-

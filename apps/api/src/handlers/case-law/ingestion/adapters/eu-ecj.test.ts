@@ -69,68 +69,72 @@ describe("euEcjAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("parses SPARQL + HTML into multi-lang decisions", async () => {
-    globalThis.fetch = mock((url: string) => {
-      const urlStr = String(url);
+  test(
+    "parses SPARQL + HTML into multi-lang decisions",
+    async () => {
+      globalThis.fetch = mock((url: string) => {
+        const urlStr = String(url);
 
-      if (urlStr.includes("sparql")) {
-        return Promise.resolve(
-          new Response(JSON.stringify(sparqlFixture), {
-            status: 200,
-            headers: {
-              "Content-Type": "application/sparql-results+json",
-            },
-          }),
-        );
+        if (urlStr.includes("sparql")) {
+          return Promise.resolve(
+            new Response(JSON.stringify(sparqlFixture), {
+              status: 200,
+              headers: {
+                "Content-Type": "application/sparql-results+json",
+              },
+            }),
+          );
+        }
+
+        if (urlStr.includes("eur-lex.europa.eu")) {
+          return Promise.resolve(
+            new Response(fulltextHtml, {
+              status: 200,
+              headers: {
+                "Content-Type": "text/html",
+              },
+            }),
+          );
+        }
+
+        return Promise.resolve(new Response("Not found", { status: 404 }));
+      }) as unknown as typeof fetch;
+
+      const { euEcjAdapter } =
+        await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
+
+      const result = await euEcjAdapter.fetchPage("2024-01-18", {});
+
+      if (!Result.isOk(result)) {
+        throw new TypeError("Expected Ok result");
       }
+      const page = result.value;
 
-      if (urlStr.includes("eur-lex.europa.eu")) {
-        return Promise.resolve(
-          new Response(fulltextHtml, {
-            status: 200,
-            headers: {
-              "Content-Type": "text/html",
-            },
-          }),
-        );
-      }
+      // 13 real bindings × 24 languages = 312 decisions
+      const BINDING_COUNT = sparqlFixture.results.bindings.length;
+      expect(page.decisions).toHaveLength(BINDING_COUNT * LANG_COUNT);
+      expect(page.nextCursor).toBe("2024-01-19");
 
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as unknown as typeof fetch;
+      // Verify first binding (C-128/21) produced all languages
+      const langs = page.decisions
+        .filter((d) => d.caseNumber === "C-128/21")
+        .map((d) => d.language)
+        .sort();
+      expect(langs).toEqual(ECJ_LANGUAGES.map((l) => l.toLowerCase()).sort());
 
-    const { euEcjAdapter } =
-      await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
-
-    const result = await euEcjAdapter.fetchPage("2024-01-18", {});
-
-    if (!Result.isOk(result)) {
-      throw new TypeError("Expected Ok result");
-    }
-    const page = result.value;
-
-    // 13 real bindings × 24 languages = 312 decisions
-    const BINDING_COUNT = sparqlFixture.results.bindings.length;
-    expect(page.decisions).toHaveLength(BINDING_COUNT * LANG_COUNT);
-    expect(page.nextCursor).toBe("2024-01-19");
-
-    // Verify first binding (C-128/21) produced all languages
-    const langs = page.decisions
-      .filter((d) => d.caseNumber === "C-128/21")
-      .map((d) => d.language)
-      .sort();
-    expect(langs).toEqual(ECJ_LANGUAGES.map((l) => l.toLowerCase()).sort());
-
-    // Snapshot one representative decision (BG, first lang).
-    // Normalize fulltext to a boolean: exact char count varies
-    // across platforms due to CRLF/LF line ending differences
-    // in the HTML fixture.
-    const first = page.decisions[0];
-    expect({
-      ...first,
-      rawHash: "[hash]",
-      fulltext: Boolean(first.fulltext),
-    }).toMatchSnapshot();
-  }, { timeout: 30_000 });
+      // Snapshot one representative decision (BG, first lang).
+      // Normalize fulltext to a boolean: exact char count varies
+      // across platforms due to CRLF/LF line ending differences
+      // in the HTML fixture.
+      const first = page.decisions[0];
+      expect({
+        ...first,
+        rawHash: "[hash]",
+        fulltext: Boolean(first.fulltext),
+      }).toMatchSnapshot();
+    },
+    { timeout: 30_000 },
+  );
 
   test("handles SPARQL error", async () => {
     globalThis.fetch = mock(() =>

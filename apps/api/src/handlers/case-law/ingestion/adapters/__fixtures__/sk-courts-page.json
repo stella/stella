@@ -1,0 +1,843 @@
+{
+  "adapter": "sk-courts",
+  "recordedAt": "2026-03-14T13:23:58.820Z",
+  "page": {
+    "decisions": [
+      {
+        "caseNumber": "0T/32/2026",
+        "ecli": "ECLI:SK:OSTT:2026:2126010698.1",
+        "court": "Okresný súd Trnava",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-13",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/be5ae040-fef0-4d9a-8970-be906017bbf6",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/be5ae040-fef0-4d9a-8970-be906017bbf6",
+        "metadata": {
+          "guid": "3e443e9b-f42c-4b68-95e2-8f25e10c49af:be5ae040-fef0-4d9a-8970-be906017bbf6",
+          "identifikacneCislo": "2126010698",
+          "judge": "JUDr. Katarína Maniačková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            }
+          ]
+        },
+        "rawHash": "66c337d05994361b7dfc4059dcda3d3007e76fcc3970630d361a243d8c01a5fe"
+      },
+      {
+        "caseNumber": "0T/220/2026",
+        "ecli": "ECLI:SK:MSBA1:2026:1126011150.1",
+        "court": "Mestský súd Bratislava I",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-13",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/88dc91e9-7963-48f2-bfa2-2b11fc7976ca",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/88dc91e9-7963-48f2-bfa2-2b11fc7976ca",
+        "metadata": {
+          "guid": "a4102a48-3a2e-4381-aaa7-9632d41e07be:88dc91e9-7963-48f2-bfa2-2b11fc7976ca",
+          "identifikacneCislo": "1126011150",
+          "judge": "JUDr. Pavol Juhás",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-48.odsek-2.pismeno-a",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-48.odsek-2.pismeno-a"
+            }
+          ]
+        },
+        "rawHash": "e8c08915aad351a4fe35baf2390896ccc66435f1bb21d69c92815d08b28aabf0"
+      },
+      {
+        "caseNumber": "8P/29/2026",
+        "ecli": "ECLI:SK:OSRV:2026:7826200324.3",
+        "court": "Okresný súd Rožňava",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-13",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/3b7346e6-0893-46f7-a378-5f63acbb2158",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/3b7346e6-0893-46f7-a378-5f63acbb2158",
+        "metadata": {
+          "guid": "d44c85dd-3a8b-41be-b3bf-48a1341ca41d:3b7346e6-0893-46f7-a378-5f63acbb2158",
+          "identifikacneCislo": "7826200324",
+          "judge": "JUDr. Jarmila Dušáková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Spätvzatie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2015/161",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/161/#paragraf-29.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161/#paragraf-29.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "4da7a71991ff0151979a7ef35aa156fb60f164d6fa1dfe57c16c716e1fe788f7"
+      },
+      {
+        "caseNumber": "37T/4/2024",
+        "ecli": "ECLI:SK:OSNR:2026:4124010084.9",
+        "court": "Okresný súd Nitra",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-13",
+        "decisionType": "Rozsudok bez odôvodnenia",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/854940ac-1270-45b5-a143-51a86b74d607",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/854940ac-1270-45b5-a143-51a86b74d607",
+        "metadata": {
+          "guid": "ab7bef4e-4d86-429b-a0c3-b785f7a88a77:854940ac-1270-45b5-a143-51a86b74d607",
+          "identifikacneCislo": "4124010084",
+          "judge": "JUDr. Jana Šatková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-221.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-221.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-221.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-221.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-221.odsek-3.pismeno-c",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-221.odsek-3.pismeno-c"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-14.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-14.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "8613419491919a297f310b62818358e1e66daf92c64a89c67d8e5c4eee233f7b"
+      },
+      {
+        "caseNumber": "1Nt/2/2026",
+        "ecli": "ECLI:SK:OSNR:2026:4126010175.1",
+        "court": "Okresný súd Nitra",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-13",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/f53b4101-feca-4c7b-a702-5f55121a0594",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/f53b4101-feca-4c7b-a702-5f55121a0594",
+        "metadata": {
+          "guid": "c2a23dde-547c-42bf-bf47-d8cc38b8b740:f53b4101-feca-4c7b-a702-5f55121a0594",
+          "identifikacneCislo": "4126010175",
+          "judge": "JUDr. Natália Ďurčová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Sloboda a ľudská dôstojnosť"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            }
+          ]
+        },
+        "rawHash": "c3369eb99bcd7cdf488afc4d1622357a16f929c5864ec4e3618dc4392d115129"
+      },
+      {
+        "caseNumber": "1T/14/2026",
+        "ecli": "ECLI:SK:OSZA:2026:5126010269.2",
+        "court": "Okresný súd Žilina",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/a4896180-954b-4dc6-8006-1c1bf6a439c8",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/a4896180-954b-4dc6-8006-1c1bf6a439c8",
+        "metadata": {
+          "guid": "f89f29dd-42f8-4e0f-9f78-133901ca1d9d:a4896180-954b-4dc6-8006-1c1bf6a439c8",
+          "identifikacneCislo": "5126010269",
+          "judge": "JUDr. Michal Mravec",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Ostatné"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-270.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-270.odsek-2"
+            }
+          ]
+        },
+        "rawHash": "684a5fa5c1c84f4aec4efbb58d2f5f5654cd33dae3873c7d81b0c30c51a01969"
+      },
+      {
+        "caseNumber": "0T/89/2026",
+        "ecli": "ECLI:SK:MSKE:2026:7126010946.1",
+        "court": "Mestský súd Košice",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/998568c9-a636-4970-9718-bbebd27aadd4",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/998568c9-a636-4970-9718-bbebd27aadd4",
+        "metadata": {
+          "guid": "35987766-0f5c-4a64-9584-3049ba7b193d:998568c9-a636-4970-9718-bbebd27aadd4",
+          "identifikacneCislo": "7126010946",
+          "judge": "ThDr. JUDr. Peter Melichárek",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-38.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-38.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-49.odsek-1.pismeno-a",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-49.odsek-1.pismeno-a"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-50.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-50.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/301",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/301"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-287.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-287.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "45ceb2b6276d9211f24b44e6f3ba83d735190658da8d247d6809fa3ca9e05001"
+      },
+      {
+        "caseNumber": "8Ps/4/2026",
+        "ecli": "ECLI:SK:OSRV:2026:7826200548.1",
+        "court": "Okresný súd Rožňava",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/17eb9bae-444a-4363-a8d5-5ded932cce62",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/17eb9bae-444a-4363-a8d5-5ded932cce62",
+        "metadata": {
+          "guid": "8305fbb2-3a97-4f2b-86a1-35ade531ca10:17eb9bae-444a-4363-a8d5-5ded932cce62",
+          "identifikacneCislo": "7826200548",
+          "judge": "JUDr. Jarmila Dušáková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Spätvzatie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2015/161",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/161/#paragraf-29.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161/#paragraf-29.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "1a34b8da4178588a982861511bfa75f9d804df0e27df1f0907db6ae18eb5c906"
+      },
+      {
+        "caseNumber": "57Pp/7/2026",
+        "ecli": "ECLI:SK:MSBA1:2026:1126010551.1",
+        "court": "Mestský súd Bratislava I",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/48ba4d44-bf7c-4a30-b4e7-2cb88927a582",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/48ba4d44-bf7c-4a30-b4e7-2cb88927a582",
+        "metadata": {
+          "guid": "53524421-e48b-49f2-ab70-01e177af0a2e:48ba4d44-bf7c-4a30-b4e7-2cb88927a582",
+          "identifikacneCislo": "1126010551",
+          "judge": "JUDr. Zoltán Valentovič, PhD.",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Ostatné"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-66.odsek-1.pismeno-a",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-66.odsek-1.pismeno-a"
+            }
+          ]
+        },
+        "rawHash": "01c9f8ddb4ebc4758cd66114b2b46ca47b2e187900f34089b5ba966d73937878"
+      },
+      {
+        "caseNumber": "57Pp/2/2026",
+        "ecli": "ECLI:SK:MSBA1:2026:1126010192.1",
+        "court": "Mestský súd Bratislava I",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/41ded91d-9f41-48b3-bfdb-f9c692361c40",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/41ded91d-9f41-48b3-bfdb-f9c692361c40",
+        "metadata": {
+          "guid": "478269b6-610b-4730-ba1e-31257057b3b7:41ded91d-9f41-48b3-bfdb-f9c692361c40",
+          "identifikacneCislo": "1126010192",
+          "judge": "JUDr. Zoltán Valentovič, PhD.",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Život a zdravie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-67.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-67.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "d6999891e352351a9cec9cc7d32f2ff1c4dd493b4a4c6e508ffce00cd636b5a2"
+      },
+      {
+        "caseNumber": "4T/35/2025",
+        "ecli": "ECLI:SK:OSNR:2026:4125010846.4",
+        "court": "Okresný súd Nitra",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/fa6e1e65-d0ad-457b-8648-58a98457a344",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/fa6e1e65-d0ad-457b-8648-58a98457a344",
+        "metadata": {
+          "guid": "dbebe303-fe33-460c-8541-cbd07e0c03c9:fa6e1e65-d0ad-457b-8648-58a98457a344",
+          "identifikacneCislo": "4125010846",
+          "judge": "Mgr. Monika Farkašová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Všeobecne nebezpečné a proti životnému prostrediu"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            }
+          ]
+        },
+        "rawHash": "eb7f189c23f64d384a83e767cfcea5375969a09717594ff44db17477199439c6"
+      },
+      {
+        "caseNumber": "31OdS/11/2025",
+        "ecli": "ECLI:SK:OSNR:2026:4125208801.2",
+        "court": "Okresný súd Nitra",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/304a5296-ad51-4111-b32c-d5869914ed1b",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/304a5296-ad51-4111-b32c-d5869914ed1b",
+        "metadata": {
+          "guid": "5986d9c0-1217-42ad-8c93-4c3e86f39fcd:304a5296-ad51-4111-b32c-d5869914ed1b",
+          "identifikacneCislo": "4125208801",
+          "judge": "Mgr. Filip Grznárik",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Konkurz"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/7",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-206q.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-206q.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-3",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-3"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-4",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-4"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-5",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-5"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/7/#paragraf-168c.odsek-6",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/7/#paragraf-168c.odsek-6"
+            }
+          ]
+        },
+        "rawHash": "affa1126bace5a53c0a98a2aeece517b9110f7bc858eb990e2ddfeff37ebaf96"
+      },
+      {
+        "caseNumber": "21T/9/2026",
+        "ecli": "ECLI:SK:OSBJ:2026:8226010079.1",
+        "court": "Okresný súd Bardejov",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/d3fe6c21-7237-4f0f-9e2b-5449d6181aae",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/d3fe6c21-7237-4f0f-9e2b-5449d6181aae",
+        "metadata": {
+          "guid": "e94631be-b620-4468-a7f7-672c815b000c:d3fe6c21-7237-4f0f-9e2b-5449d6181aae",
+          "identifikacneCislo": "8226010079",
+          "judge": "Mgr. Mariana Mikulová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Ostatné"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2013/204/#paragraf-306.odsek-2.pismeno-a",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2013/204/#paragraf-306.odsek-2.pismeno-a"
+            }
+          ]
+        },
+        "rawHash": "a37cd2013f0a3c14509d7983fd0ab4eb49301805193bd19f23a92f18e52f38d9"
+      },
+      {
+        "caseNumber": "5T/40/2024",
+        "ecli": "ECLI:SK:OSZV:2026:6724010627.13",
+        "court": "Okresný súd Zvolen",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/13dba554-41b7-41f5-b544-992a64b5d242",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/13dba554-41b7-41f5-b544-992a64b5d242",
+        "metadata": {
+          "guid": "e6e56d69-05a2-4f29-8b48-aea74bfcdbcc:13dba554-41b7-41f5-b544-992a64b5d242",
+          "identifikacneCislo": "6724010627",
+          "judge": "JUDr. Michaela Svoreňová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Život a zdravie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-3",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-3"
+            }
+          ]
+        },
+        "rawHash": "4130a5006695d63ec62dc07eeebe5dc61e66846301a4a8d5d53218e6650d1735"
+      },
+      {
+        "caseNumber": "14Ps/108/2025",
+        "ecli": "ECLI:SK:OSDS:2026:2225203285.4",
+        "court": "Okresný súd Dunajská Streda",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Rozsudok bez odôvodnenia",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/a4ef321a-9af7-41c3-980e-8e98496341b7",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/a4ef321a-9af7-41c3-980e-8e98496341b7",
+        "metadata": {
+          "guid": "681f2a92-d084-4077-bd47-66bf23045892:a4ef321a-9af7-41c3-980e-8e98496341b7",
+          "identifikacneCislo": "2225203285",
+          "judge": "JUDr. Monika Jakubová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Ostatné"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2015/160",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/160/#paragraf-221",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160/#paragraf-221"
+            }
+          ]
+        },
+        "rawHash": "9a02731787023cf5f1dd2d469c6004bf718b5673815e31daa4aba240e78ad88a"
+      },
+      {
+        "caseNumber": "2T/10/2026",
+        "ecli": "ECLI:SK:OSLC:2026:6626010066.1",
+        "court": "Okresný súd Lučenec",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/bbcc90a9-43c1-4b62-89af-873a9aa0a566",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/bbcc90a9-43c1-4b62-89af-873a9aa0a566",
+        "metadata": {
+          "guid": "ff3383b6-05bb-4aea-a03f-31fdc391a676:bbcc90a9-43c1-4b62-89af-873a9aa0a566",
+          "identifikacneCislo": "6626010066",
+          "judge": "JUDr. Stanislav Galovič",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Život a zdravie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-4.pismeno-b",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-4.pismeno-b"
+            }
+          ]
+        },
+        "rawHash": "b48bf8efc46a1d2fbbf20194bf43bf8cb07e2aaa78eacb5a0a6d9b375e8f95d6"
+      },
+      {
+        "caseNumber": "57Pp/4/2026",
+        "ecli": "ECLI:SK:MSBA1:2026:1126010276.1",
+        "court": "Mestský súd Bratislava I",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-12",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/a929a9a8-b4df-4fe3-a935-84dd68b98146",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/a929a9a8-b4df-4fe3-a935-84dd68b98146",
+        "metadata": {
+          "guid": "408bacc7-07b8-44c0-a3d8-d36dbe608756:a929a9a8-b4df-4fe3-a935-84dd68b98146",
+          "identifikacneCislo": "1126010276",
+          "judge": "JUDr. Zoltán Valentovič, PhD.",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Ostatné"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-66.odsek-1.pismeno-c",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-66.odsek-1.pismeno-c"
+            }
+          ]
+        },
+        "rawHash": "94e342358fba0476dcdfc8385362a4100947053b88f01b1120953e7d7c403e5b"
+      },
+      {
+        "caseNumber": "54Ps/2/2026",
+        "ecli": "ECLI:SK:OSPK:2026:1726200227.1",
+        "court": "Okresný súd Pezinok",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/88a435c1-9424-48a9-a809-c94739a2b0a0",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/88a435c1-9424-48a9-a809-c94739a2b0a0",
+        "metadata": {
+          "guid": "034392b1-1b37-4edc-b5e4-0dbe65ccd8bb:88a435c1-9424-48a9-a809-c94739a2b0a0",
+          "identifikacneCislo": "1726200227",
+          "judge": "JUDr. Mária Adamečková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Opatrovníctvo"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2015/160",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/160/#paragraf-221",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160/#paragraf-221"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/160/#paragraf-234.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160/#paragraf-234.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/161",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161"
+            },
+            {
+              "nazov": "/SK/ZZ/2015/161/#paragraf-2.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/161/#paragraf-2.odsek-1"
+            }
+          ]
+        },
+        "rawHash": "f44237b1dabe797aa1a91afcdb1576a7684d16e33c1bca2134d3afaaef4b9024"
+      },
+      {
+        "caseNumber": "4T/21/2025",
+        "ecli": "ECLI:SK:OSBB:2026:6125010416.4",
+        "court": "Okresný súd Banská Bystrica",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/fa276832-47c7-42cd-966d-aed61cf2bc40",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/fa276832-47c7-42cd-966d-aed61cf2bc40",
+        "metadata": {
+          "guid": "7bfc8cdb-1cef-4213-8667-32334481d3bc:fa276832-47c7-42cd-966d-aed61cf2bc40",
+          "identifikacneCislo": "6125010416",
+          "judge": "JUDr. Eva Korbeľová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Život a zdravie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-157",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-157"
+            }
+          ]
+        },
+        "rawHash": "479766644cfb8dfaa5dd574830569acea9c975f7118a634f32f63998de2c9de2"
+      },
+      {
+        "caseNumber": "17Co/18/2025",
+        "ecli": "ECLI:SK:KSBB:2026:6713216826.6",
+        "court": "Krajský súd Banská Bystrica",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/ab3b572b-f7cb-4562-ad31-d1c07ad0cbba",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/ab3b572b-f7cb-4562-ad31-d1c07ad0cbba",
+        "metadata": {
+          "guid": "3d68dc58-9549-4518-a393-32b4bf5f4ef9:ab3b572b-f7cb-4562-ad31-d1c07ad0cbba",
+          "identifikacneCislo": "6713216826",
+          "judge": "JUDr. Zita Nagypálová",
+          "decisionNature": "Zmeňujúce",
+          "subArea": [
+            "Zodpovednosť za škodu pri výkone verejnej moci"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2003/514/#paragraf-17.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2003/514/#paragraf-17.odsek-2"
+            }
+          ]
+        },
+        "rawHash": "266e7a5dc5378192da8025a7a9671deba55858493b3bd90ee3a04f7268367786"
+      },
+      {
+        "caseNumber": "6T/20/2026",
+        "ecli": "ECLI:SK:OSZH:2026:6426010091.2",
+        "court": "Okresný súd Žiar nad Hronom",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/f9001ea9-983a-4aa6-b28e-435d5d048695",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/f9001ea9-983a-4aa6-b28e-435d5d048695",
+        "metadata": {
+          "guid": "c1b0e929-d44b-4f19-8a18-43868b30951c:f9001ea9-983a-4aa6-b28e-435d5d048695",
+          "identifikacneCislo": "6426010091",
+          "judge": "JUDr. Adriána Považanová",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-2112.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-2112.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-36",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-36"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-36",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-36"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-37",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-37"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-38.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-38.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-48.odsek-2.pismeno-b",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-48.odsek-2.pismeno-b"
+            }
+          ]
+        },
+        "rawHash": "571efcb59feffeb21db86a59e52e78018b87617fc17ab7f1051a8c4d862ea0c8"
+      },
+      {
+        "caseNumber": "17T/33/2025",
+        "ecli": "ECLI:SK:MSBA1:2026:1125012809.2",
+        "court": "Mestský súd Bratislava I",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/3429acde-dc8d-4f63-87c6-eb878d3c62e5",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/3429acde-dc8d-4f63-87c6-eb878d3c62e5",
+        "metadata": {
+          "guid": "ef48b464-5630-491b-a666-6d7855a12461:3429acde-dc8d-4f63-87c6-eb878d3c62e5",
+          "identifikacneCislo": "1125012809",
+          "judge": "JUDr. Andrea Vodičková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Život a zdravie"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-2",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-2"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-171.odsek-4.pismeno-b",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-171.odsek-4.pismeno-b"
+            }
+          ]
+        },
+        "rawHash": "6898a61e9c31c6cd0f3db9c1639e10cdd6842b86dd91b5a6086fdac4c52f93a2"
+      },
+      {
+        "caseNumber": "4PP/13/2026",
+        "ecli": "ECLI:SK:OSPO:2026:8126010202.1",
+        "court": "Okresný súd Prešov",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Uznesenie",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/d25fb817-5ff1-44b1-aecc-a48af66c7939",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/d25fb817-5ff1-44b1-aecc-a48af66c7939",
+        "metadata": {
+          "guid": "3743c56a-07cf-413c-ac6c-3ca87e65d4a1:d25fb817-5ff1-44b1-aecc-a48af66c7939",
+          "identifikacneCislo": "8126010202",
+          "judge": "JUDr. Juraj Fujerík",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Sloboda a ľudská dôstojnosť",
+            "Majetok"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-2.pismeno-b",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-2.pismeno-b"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-194.odsek-1",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-194.odsek-1"
+            },
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-194.odsek-2.pismeno-a",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-194.odsek-2.pismeno-a"
+            }
+          ]
+        },
+        "rawHash": "043a22e744bc52c593314175a0bf768cb33e833d8875e95f50ab13f7c7bc1371"
+      },
+      {
+        "caseNumber": "6P/73/2025",
+        "ecli": "ECLI:SK:OSPD:2026:3825205764.3",
+        "court": "Okresný súd Prievidza",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Rozsudok",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/c2bbffdf-02db-4f50-86f5-e44bb238237f",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/c2bbffdf-02db-4f50-86f5-e44bb238237f",
+        "metadata": {
+          "guid": "565cbf5e-3801-4ff7-a3be-b0b3fe7ab187:c2bbffdf-02db-4f50-86f5-e44bb238237f",
+          "identifikacneCislo": "3825205764",
+          "judge": "JUDr. Miriam Kohútová, PhD.",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Vyživovacie povinnosti",
+            "Starostlivosť o maloletých",
+            "Rozvod"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2006/16/#paragraf-221",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2006/16/#paragraf-221"
+            }
+          ]
+        },
+        "rawHash": "bec99f056e976994126703ea08661a263bc8d1b294cae5db1b0068744815a255"
+      },
+      {
+        "caseNumber": "0T/40/2026",
+        "ecli": "ECLI:SK:OSDS:2026:2226010218.1",
+        "court": "Okresný súd Dunajská Streda",
+        "country": "SVK",
+        "language": "sk",
+        "decisionDate": "2026-03-11",
+        "decisionType": "Trestný rozkaz",
+        "sourceUrl": "https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/e87cb2fe-b964-4e20-be29-b8978d170f80",
+        "documentUrl": "https://obcan.justice.sk/content/public/item/e87cb2fe-b964-4e20-be29-b8978d170f80",
+        "metadata": {
+          "guid": "5fcf8a5d-b091-4991-86d3-adb850c07a2e:e87cb2fe-b964-4e20-be29-b8978d170f80",
+          "identifikacneCislo": "2226010218",
+          "judge": "JUDr. Jana Koblišková",
+          "decisionNature": "Prvostupňové nenapadnuté opravnými prostriedkami",
+          "subArea": [
+            "Poriadok vo verejných veciach"
+          ],
+          "referencedLegislation": [
+            {
+              "nazov": "/SK/ZZ/2005/300/#paragraf-348.odsek-1.pismeno-d",
+              "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-348.odsek-1.pismeno-d"
+            }
+          ]
+        },
+        "rawHash": "4f3237f809560a026c2acd37bcd564866a1f35c321cb8e3784c2aad84443b406"
+      }
+    ],
+    "nextCursor": "1"
+  }
+}

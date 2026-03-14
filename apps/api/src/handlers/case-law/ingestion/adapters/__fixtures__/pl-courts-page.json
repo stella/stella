@@ -1,0 +1,1011 @@
+{
+  "adapter": "pl-courts",
+  "recordedAt": "2026-03-14T13:24:04.718Z",
+  "page": {
+    "decisions": [
+      {
+        "caseNumber": "I ACa 772/13",
+        "court": "Sąd Apelacyjny w Łodzi",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "3013-12-04",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt I ACa 772/13 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 4 grudnia 3013 roku Sąd Apelacyjny w Łodzi I Wydział Cywilny w składzie: Przewodniczący: SSA Małgorzata Stanek Sędziowie:SSA Hanna Rojewska (spr.) SSA Wiesława Kuberska Protokolant:st. sekr. sądowy Jacek Raciborski po rozpoznaniu w dniu 4 grudnia 2013r. w Łodzi na rozprawie sprawy z powództw P. S. oraz J. S. przeciwko (...) Spółce Akcyjnej z siedzibą w W. o zadośćuczynienie na skutek apelacji powodów i pozwanego od wyroku łącznego Sądu Okręgowego w Sieradzu z dnia 8 marca 2013 roku sygn. akt I C 186/12 I) z apelacji powoda P. S. zmienia zaskarżony wyrok w punktach 2 i 5 w ten sposób, że ponad zasądzoną w punkcie 1 kwotę 20.000 złotych zasądza od pozwanego (...) Spółki Akcyjnej z siedzibą w W. na rzecz powoda P. S. dalszą",
+        "metadata": {
+          "saosId": 31345,
+          "courtType": "COMMON",
+          "judges": [
+            "Małgorzata Stanek Sędziowiehanna Rojewska",
+            "Wiesława Kuberska"
+          ],
+          "keywords": [
+            "dobra osobiste",
+            "zadośćuczynienie"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "505307ed083be5794a6a89f62b58826c162eb93981bf071b9cf8d830a37d6048"
+      },
+      {
+        "caseNumber": "II K 84/16",
+        "court": "Sąd Rejonowy w Toruniu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2101-04-14",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt: II K 84/16 3 Ds. 8.2016 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 14 kwietnia 21016 r. Sąd Rejonowy w Toruniu II Wydział Karny w składzie: Przewodniczący: Sędzia SR Joanna Becińska Protokolant: st. sekr. sąd. Joanna Rybińska w obecności prokuratora Prokuratury Rejonowej Toruń Centrum-Zachód Marka Partyki po rozpoznaniu dnia 10.03.2016r., 14.04.2016r. sprawy: R. I. s. F. i M. z domu H., ur. (...) w T. oskarżonego o to, że: w dniu 9 stycznia 2016 r., około godz. 11:40 kierował pojazdem marki V. (...) o nr rej.(...)po drodze publicznej w miejscowości P., ul. (...), gm. Ł. znajdując się w stanie nietrzeźwości, tj. 0,37 mg/1, 0,30 mg/1, 0,31 mg/1 alkoholu w wydychanym powietrzu, przy czym czynu tego dopuścił się po uprzednim prawomocnym skazaniu za prowadzenie pojazdu mechaniczn",
+        "metadata": {
+          "saosId": 227221,
+          "courtType": "COMMON",
+          "judges": [
+            "Joanna Becińska"
+          ],
+          "keywords": [
+            "środki karne"
+          ],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "ed717ad8abc389bd8afbda8bcaa52fc1925d308c4eee8a34722040f49d29b3a1"
+      },
+      {
+        "caseNumber": "VIII Pa 215/25",
+        "court": "Sąd Okręgowy w Łodzi",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-03-04",
+        "decisionType": "REASONS",
+        "fulltext": "Sygnatura akt VIII Pa 215/25 UZASADNIENIE Zaskarżonym wyrokiem z dnia 24 czerwca 2025 r. wydanym w sprawie o sygn. akt IV P 57/23 Sąd Rejonowy w Skierniewicach IV Wydział Pracy po rozpoznaniu w dniu 12 czerwca 2025 r. w P. na rozprawie sprawy z powództwa I. G. przeciwko pozwanej (...) w P. o sprostowanie protokołu powypadkowego, oddalił powództwo. Przedmiotowe rozstrzygnięcie Sąd Rejonowy oparł na następujących ustaleniach faktycznych i rozważaniach prawnych: Zmarły O. G. pełnił służbę w (...) w P. od dnia 1 sierpnia 2003 r. na stanowisku ratownika w (...) na podstawie decyzji nr (...) z dnia 28 lipca 2003 r. Następnie został przeniesiony na stanowisko starszego ratownika w powyższej jednostce, z dniem 1 grudnia 2004 r., a od dnia 1 października 2007 r. został dowódcą (...). Od 1 września ",
+        "metadata": {
+          "saosId": 542485,
+          "courtType": "COMMON",
+          "judges": [
+            "Agnieszka Olejniczak-Kosiara"
+          ],
+          "keywords": [
+            "sprostowanie"
+          ],
+          "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "1faa38b880461bd179212674698c250ba7e3060115a4dfdb88970f5e3325e366"
+      },
+      {
+        "caseNumber": "IX U 173/25",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-03-03",
+        "decisionType": "REGULATION",
+        "fulltext": "sygn. akt IX U 173/25 UZASADNIENIE Decyzją z dnia 18 grudnia 2023 r. znak (...), nr sprawy (...) Zakład Ubezpieczeń Społecznych Oddział w O. odmówił H. B. prawa do zasiłku chorobowego za okres od 26 sierpnia 2023 r. do 25 września 2023 r. oraz zobowiązał odwołującego do zwrotu nienależnie pobranego świadczenia wraz z odsetkami w łącznej kwocie 7 140,75 zł. W uzasadnieniu decyzji wskazano, że odwołujący miał uczestniczyć w wystawie makiet kolejowych w dniach 9-10 września 2025 r., tj. w okresie kiedy przebywał na zwolnieniu lekarskim. H. B. wniósł odwołanie od wymienionej decyzji w dniu 20 lutego 2025 r., wnosząc o: przywrócenie terminu do wniesienia odwołania z uwagi na faktyczne i skuteczne doręczenie decyzji dopiero w dniu 20 stycznia 2025 r., a także uchylenie lub zmianę zaskarżonej dec",
+        "metadata": {
+          "saosId": 542540,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "zasiłek chorobowy"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "3851505c31abfbb042d34793401ffd1760fa6cd61594c7d4df1058d15178212a"
+      },
+      {
+        "caseNumber": "XII Ko 217/25",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-03-03",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt XII Ko 217/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ 12 lutego 2026 roku Sąd Okręgowy w Warszawie w XII Wydziale Karnym w składzie: Przewodnicząca: SSO Katarzyna Stasiów Protokolant: Mirosław Grzęda przy udziale prokuratora Jarosława Szklarczyka oraz Prezesa Sądu Okręgowego w Lublinie reprezentującego Skarb Państwa po rozpoznaniu 4 lutego 2026 r. sprawy z wniosku J. N. przeciwko Skarbowi Państwa o zadośćuczynienie z tytułu niewątpliwie niesłusznego tymczasowego aresztowania na podstawie art. 552 § 4 k.p.k. i art. 554 § 4 k.p.k. I. zasądza od Skarbu Państwa na rzecz J. N. kwotę 120 000 (stu dwudziestu tysięcy) złotych tytułem zadośćuczynienia za krzywdę doznaną z tytułu niewątpliwie niesłusznego tymczasowego aresztowania stosowanego w okresie od 11 grudnia 2012 r. do 6 listopad",
+        "metadata": {
+          "saosId": 542676,
+          "courtType": "COMMON",
+          "judges": [
+            "Katarzyna Stasiów"
+          ],
+          "keywords": [
+            "odszkodowanie za niesłuszne skazanie, tymczasowe aresztowanie lub zatrzymanie",
+            "zadośćuczynienie"
+          ],
+          "division": "XII Wydział Karny"
+        },
+        "rawHash": "ac1eec0ab5241389c6d272bcbc6955dce8a97846191f612432631a519548af8a"
+      },
+      {
+        "caseNumber": "VI Ka 931/25",
+        "court": "Sąd Okręgowy Warszawa-Praga w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-03-03",
+        "decisionType": "REASONS",
+        "fulltext": "Warszawa, dnia 11 lutego 2026 r. Sygn. akt VI Ka 931/25 1 2WYROK 2.1W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ 3Sąd Okręgowy Warszawa-Praga w Warszawie VI Wydział Karny Odwoławczy w składzie: 4 Przewodniczący: SSO Agnieszka Wojciechowska-Langda 6protokolant: protokolant sądowy Zuzanna Kurek 7przy udziale prokuratora Mariusz Matys 8po rozpoznaniu dnia 11 lutego 2026 r. 9sprawy C. P. syna P. i Ł., ur. (...) w S. 10oskarżonego o przestępstwo z art. 178a § 4 kk 11na skutek apelacji wniesionej przez prokuratora 12od wyroku Sądu Rejonowego w Wołominie 13z dnia 14 maja 2025 r. sygn. akt V K 798/19 17utrzymuje w mocy zaskarżony wyrok; koszty procesu w postępowaniu odwoławczym przejmuje na rachunek Skarbu Państwa. UZASADNIENIE Formularz UK 2 Sygnatura akt VI Ka 931/25 Załącznik dołącza się w każdym przypa",
+        "metadata": {
+          "saosId": 542652,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "kara"
+          ],
+          "division": "VI Wydział Karny Odwoławczy"
+        },
+        "rawHash": "af893ed442f8cb5d9e754377dec7eb7cfdf391c2c60cd95d63e0fdc75d7acfbd"
+      },
+      {
+        "caseNumber": "X Ka 1242/25",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-03-03",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt X Ka 1242/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 3 marca 2026 r. Sąd Okręgowy w Warszawie X Wydział Karny-Odwoławczy w składzie: Przewodniczący: SSO Sebastian Ładoś Protokolant: Filip Frymark przy udziale prokuratora Małgorzaty Ślęzak po rozpoznaniu w dniu 3 marca 2026 r. sprawy K. D. i innych oskarżonego o czyn z art. 279 § 1 k.k. na skutek apelacji wniesionej przez oskarżyciela publicznego – prokuratora Prokuratury Rejonowej Warszawa-Ochota w Warszawie od wyroku Sądu Rejonowego dla m.st. Warszawy w Warszawie z dnia 13 czerwca 2025 r., sygn. akt V K 926/20 orzeka: I.  wyrok w zaskarżonej części utrzymuje w mocy; II.  zasądza od Skarbu Państwa na rzecz adw. X. U. kwotę 840 (osiemset czterdzieści) złotych powiększoną o stawkę podatku od towarów i usług tytułem wynagrodz",
+        "metadata": {
+          "saosId": 542675,
+          "courtType": "COMMON",
+          "judges": [
+            "Sebastian Ładoś"
+          ],
+          "keywords": [
+            "kradzież"
+          ],
+          "division": "X Wydział Karny"
+        },
+        "rawHash": "3790ae72dadf706f3b92d3b764df2c03cc94c625a748937663ad859fd714149d"
+      },
+      {
+        "caseNumber": "I C 733/24",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-27",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygnatura akt I C 733/24 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Warszawa, dnia 9 stycznia 2026 r. Sąd Okręgowy w Warszawie I Wydział Cywilny w następującym składzie: Przewodniczący: Sędzia Andrzej Kuryłek Protokolant: Jakub Wojdyna po rozpoznaniu w dniu 10 grudnia 2025 r. w Warszawie na rozprawie sprawy z powództwa (...) sp. z o.o. z siedzibą w W. przeciwko (...) Szpitalowi (...) z siedzibą w Z. o zapłatę I zasądza od pozwanego (...) Szpitala (...) z siedzibą w Z. na rzecz powoda (...) sp. z o.o. z siedzibą w Z. kwotę 234 946,19 (dwieście trzydzieści cztery tysiące dziewięćset czterdzieści sześć i 19/100) złotych z odsetkami ustawowymi za opóźnienie w transakcjach handlowych, w których dłużnikiem jest podmiot publiczny będący podmiotem leczniczym, liczonymi od kwoty 234 621,70 (dwieście",
+        "metadata": {
+          "saosId": 542327,
+          "courtType": "COMMON",
+          "judges": [
+            "Andrzej Kuryłek"
+          ],
+          "keywords": [
+            "sprzedaż"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "d94dd2fef282c8af9f8df77e56661de0376bfe76737104a3b99b9868b697e6d7"
+      },
+      {
+        "caseNumber": "V Ka 537/25",
+        "court": "Sąd Okręgowy w Płocku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-27",
+        "decisionType": "REASONS",
+        "fulltext": "UZASADNIENIE Formularz UK 2 Sygnatura akt V Ka 537/25 Załącznik dołącza się w każdym przypadku. Podać liczbę załączników: 2 1.  CZĘŚĆ WSTĘPNA 1.1.  Oznaczenie wyroku sądu pierwszej instancji Wyrok Sądu Rejonowego w Mławie z dnia 16 kwietnia 2025 r. wydany w sprawie II K 818/23 1.2.  Podmiot wnoszący apelację ☐ oskarżyciel publiczny albo prokurator w sprawie o wydanie wyroku łącznego ☐ oskarżyciel posiłkowy ☒ oskarżyciel prywatny ☒ obrońca ☐ oskarżony albo skazany w sprawie o wydanie wyroku łącznego ☐ inny 1.3.  Granice zaskarżenia 1.1.1.  Kierunek i zakres zaskarżenia ☒ na korzyść ☒ na niekorzyść ☒ w całości ☒ w części ☐co do winy ☐co do kary ☒co do środka karnego lub innego rozstrzygnięcia albo ustalenia 1.1.2.  Podniesione zarzuty Zaznaczyć zarzuty wskazane przez strony w apelacji ☒art. ",
+        "metadata": {
+          "saosId": 542282,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "V Wydział Karny Odwoławczy"
+        },
+        "rawHash": "81d1bc799b27b1f66f72efb1eb09110fe68f7003af1a2e653767958cae780b6a"
+      },
+      {
+        "caseNumber": "VII U 358/25",
+        "court": "Sąd Rejonowy Lublin-Zachód w Lublinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-27",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt VII U 358/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 27 lutego 2026 roku. Sąd Rejonowy Lublin-Zachód w Lublinie – VII Wydział Pracy i Ubezpieczeń Społecznych w składzie: Przewodniczący: sędzia Monika Woś-Gajowiak po rozpoznaniu w dniu (...) roku w F. na posiedzeniu niejawnym sprawy małoletniej Z. G. -reprezentowanej przez przedstawiciela ustawowego J. G. sprawy przeciwko Wojewódzkiemu Zespołowi do Spraw Orzekania o Niepełnosprawności w F. o ustalenie stopnia niepełnosprawności w wyniku odwołania od orzeczenia Wojewódzkiego Zespołu do Spraw Orzekania o Niepełnosprawności w F. z dnia (...)roku nr WZO.(...) I.  zmienia zaskarżone orzeczenie i zalicza Z. G. do znacznego stopnia niepełnosprawności do dnia (...) roku, wskazując, że niepełnosprawność Z. G. powoduje konieczność st",
+        "metadata": {
+          "saosId": 542580,
+          "courtType": "COMMON",
+          "judges": [
+            "Monika Woś-Gajowiak"
+          ],
+          "keywords": [],
+          "division": "VII Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "fba40c77bd01ac9b7cd20aa4f10f488a260d9a056b5ad66cd879d38d5a932fb1"
+      },
+      {
+        "caseNumber": "VII U 1427/23",
+        "court": "Sąd Okręgowy Warszawa-Praga w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-27",
+        "decisionType": "SENTENCE",
+        "fulltext": "VII U 1427/23 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ 30 grudnia 2025 r. Sąd Okręgowy Warszawa – Praga w Warszawie VII Wydział Pracy i Ubezpieczeń Społecznych w składzie: Przewodnicząca: sędzia (del.) Magdalena Pytel Protokolant: Jakub Strzałkowski po rozpoznaniu 5 grudnia 2025 r. w Warszawie na rozprawie sprawy M. I. przeciwko Zakładowi Ubezpieczeń Społecznych (...) Oddział w M. z udziałem płatnika (...) sp. z o. o. z siedzibą w M. o ustalenie podlegania ubezpieczeniom społecznym na skutek odwołania M. I. od decyzji Zakładu Ubezpieczeń Społecznych(...) Oddział w M. z 8 sierpnia 2023 r. nr (...) - (...) - D 1)  zmienia zaskarżoną decyzję, stwierdzając, że M. I. od 1 maja do 30 czerwca 2023 r. podlegał ubezpieczeniom społecznym jako pracownik (...) sp. z o. o. z siedzibą w M., 2)  odwołan",
+        "metadata": {
+          "saosId": 542656,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "powództwo o ustalenie"
+          ],
+          "division": "VII Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "84eb575ed04c0207362b4a24fc6f9d2a3b2f52befa8073d74deea878aa967826"
+      },
+      {
+        "caseNumber": "IV GC 975/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 975/25 UZASADNIENIE co do całości wyroku z 8 stycznia 2026 roku 1.  (...) S.A. wniosła pozew w postępowaniu nakazowym przeciwko V. Z. i I. Z. (2), żądając zapłaty na podstawie weksla kwoty 12 843,19 zł z ustawowymi odsetkami za opóźnienie od 25 lutego 2023 roku do dnia zapłaty oraz zwrotu kosztów procesu. Pozwani wnieśli o uchylenie nakazu zapłaty i oddalenie powództwa w całości oraz o zwrot kosztów procesu. 2.  Referendarz sądowy Sądu Rejonowego Gdańsk-Północ w Gdańsku uwzględnił w całości roszczenie nakazem zapłaty wydanym 24 stycznia 2025 roku w postępowaniu nakazowym prowadzonym pod sygnaturą akt V GNc 3775/24. Postępowanie toczyło się ponadto według przepisów o postępowaniu gospodarczym i o postępowaniu uproszczonym. I.  Stan faktyczny 3.  (...) sp. z o.o. jako korzyst",
+        "metadata": {
+          "saosId": 542390,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "22a05217535236b30b17b9ca727f54ecd5d973b2d1bf62b828d2f786979970c6"
+      },
+      {
+        "caseNumber": "IV GC 990/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 990/25 UZASADNIENIE co do całości wyroku z 5 lutego 2026 roku (ograniczone zgodnie z art. 505 8 § 4 k.p.c.) 1.  (...) S.A. pozwała (...) S.A. o zapłatę 1207,12 zł wraz z odsetkami ustawowymi za opóźnienie od 5.04.2023 r. do dnia zapłaty oraz o zwrot kosztów procesu. Pozwana wniosła o oddalenie powództwa i o zwrot kosztów procesu. Postępowanie toczyło się według przepisów o postępowaniu w sprawach gospodarczych i w sprawach uproszczonych. 2.  Powódka wywodziła swoje roszczenie z faktu, że pozwana jako ubezpieczyciel odpowiedzialności sprawcy szkody zobowiązała się do zapłacenia określonego umownie odszkodowania za szkody wyrządzone powódce, wobec której odpowiedzialność za szkodę ponosi ubezpieczony (art. 805 § 1 k.c. i art. 822 § 1 k.c.). Uprawniony do odszkodowania w związ",
+        "metadata": {
+          "saosId": 542391,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "a9fe4bdab9a76d58be8ae506151e256ed09486a9b1218b3adac2fc891f51541d"
+      },
+      {
+        "caseNumber": "I ACa 82/26",
+        "court": "Sąd Apelacyjny w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "DECISION",
+        "fulltext": "Sygnatura akt I ACa 82/26 POSTANOWIENIE Dnia 26 lutego 2026 r. Sąd Apelacyjny w Warszawie I Wydział Cywilny w następującym składzie: Przewodniczący: Sędzia Marzena Konsek-Bitkowska (spr.) Sędziowie: Marzanna Góral Dorota Markiewicz Protokolant: Wiktoria Skibińska po rozpoznaniu w dniu 26 lutego 2026 r. w Warszawie na rozprawie sprawy z powództwa Ł. P. przeciwko Redaktorowi Naczelnemu (...) o opublikowanie sprostowania na skutek apelacji pozwanego od wyroku Sądu Okręgowego w Warszawie z dnia 10 stycznia 2024 r., sygn. akt IV C 842/23 postanawia: I.  na podstawie art. 267 Traktatu o Funkcjonowaniu Unii Europejskiej zwrócić się do Trybunału Sprawiedliwości Unii Europejskiej z następującymi pytaniami: 1.  Czy art. 19 ust. 1 akapit drugi Traktatu o Unii Europejskiej należy interpretować w ten s",
+        "metadata": {
+          "saosId": 542202,
+          "courtType": "COMMON",
+          "judges": [
+            "Marzanna Góral",
+            "Marzena Konsek-Bitkowska"
+          ],
+          "keywords": [
+            "postępowanie cywilne",
+            "prawo unii europejskiej"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "e3f24ccbe88bb46cd333e3e8df61385e4a1876485f67ab62e34454c4a2207a7f"
+      },
+      {
+        "caseNumber": "IV GC 870/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 870/25 UZASADNIENIE co do całości wyroku z 5 lutego 2026 roku 1.  (...) sp. z o.o. pozwała (...) sp. z o.o. o zapłatę 4674 zł wraz z odsetkami ustawowymi za opóźnienie od dnia wniesienia pozwu (28.04.2025 r.) do dnia zapłaty oraz o zwrot kosztów procesu. Pozwana wniosła o oddalenie powództwa oraz o zwrot kosztów procesu. Postępowanie toczyło się według przepisów o postępowaniu w sprawach gospodarczych i w sprawach uproszczonych. 2.  Powódka oparła swoje roszczenie na fakcie, że pozwana zobowiązała się dostarczyć powódce określony agregat, podłączyć go, uruchomić i przeprowadzić z niego szkolenie. Umówione wynagrodzenie wyniosło 137 378,84 zł brutto oraz dodatkowo podłączenie i uruchomienie 4305 zł brutto. Według powódki podwykonawca pozwanej dostarczył agregat, ale nie podł",
+        "metadata": {
+          "saosId": 542389,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "ab5fc8a9dbaea464f73f2cffc3a493151dbf2a09fb72d6fbf099b8568663c456"
+      },
+      {
+        "caseNumber": "IV GC 737/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 737/25 UZASADNIENIE co do całości wyroku z 5 lutego 2026 roku 1.  (...) sp. z o.o. pozwała (...) sp. z o.o. o zapłatę 91 301,67 zł oraz 450,11 USD wraz z odsetkami ustawowymi za opóźnienie w transakcjach handlowych liczonymi od kwot: - 56 641,50 zł od dnia 14 czerwca 2024 roku do dnia zapłaty, - 952,02 zł od dnia 18 czerwca 2024 roku do dnia zapłaty, - 3763,80 zł od dnia 10 lipca 2024 roku do dnia zapłaty, - 13 284,00 zł od dnia 16 sierpnia 2024 roku do dnia zapłaty, - 16 660,35 zł od dnia 13 września 2024 roku do dnia zapłaty, - 56,52 dolarów od dnia 15 czerwca 2024 roku do dnia zapłaty, - 56,52 dolarów od dnia 10 lipca 2024 roku do dnia zapłaty, - 114,07 dolarów od dnia 16 sierpnia 2024 roku do dnia zapłaty, - 110,44 dolarów od dnia 13 września 2024 roku do dnia zapłaty, ",
+        "metadata": {
+          "saosId": 542388,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "570e1d8c212bde79f3e163f33d6a994520b3664c04b9d37ce549a357912c4fe9"
+      },
+      {
+        "caseNumber": "I C 35/25",
+        "court": "Sąd Rejonowy w Piszu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-26",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542683,
+          "courtType": "COMMON",
+          "judges": [
+            "Anna Lisowska"
+          ],
+          "keywords": [
+            "zachowek"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "c4247a66015aed60a8d77a99d2350dc8759ec60b7f17cd5e8166bc16be49be87"
+      },
+      {
+        "caseNumber": "IV Ca 530/25",
+        "court": "Sąd Okręgowy w Radomiu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-25",
+        "decisionType": "DECISION",
+        "fulltext": "Sygn. akt IV Ca 530/25 POSTANOWIENIE Dnia 25 lutego 2026 roku Sąd Okręgowy w Radomiu IV Wydział Cywilny Odwoławczy w składzie: Przewodniczący: sędzia SO Grzegorz Wójtowicz po rozpoznaniu w dniu 25 lutego 2026 roku w Radomiu na posiedzeniu niejawnym sprawy z powództwa L. H. przeciwko J. I. o ustalenie wygaśnięcia obowiązku alimentacyjnego na skutek apelacji powoda od wyroku Sądu Rejonowego w Radomiu z 8 kwietnia 2025 roku sygn. akt III RC 873/22 postanawia: uchylić zaskarżony wyrok i umorzyć postępowanie. Grzegorz Wójtowicz Sygn. akt IV Ca 530/25 UZASADNIENIE Wyrokiem z 8 kwietnia 2025 roku Sąd Rejonowy w Radomiu oddalił powództwo L. H. o ustalenie wygaśnięcia obowiązku alimentacyjnego wobec pozwanej J. I. zasądzając od pozwanego na rzecz powódki kwotę 1.800 złotych tytułem opłaty za czynno",
+        "metadata": {
+          "saosId": 542387,
+          "courtType": "COMMON",
+          "judges": [
+            "Grzegorz Wójtowicz"
+          ],
+          "keywords": [
+            "obowiązek alimentacyjny",
+            "umorzenie postępowania"
+          ],
+          "division": "IV Wydział Cywilny Odwoławczy"
+        },
+        "rawHash": "cc544af9f201cddab0d77a7b2422b9c03c5d4fd119744ade5f89eb1eba45de5e"
+      },
+      {
+        "caseNumber": "V GC 430/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-25",
+        "decisionType": "REGULATION",
+        "fulltext": "Sygn. akt V GC 430/25 UZASADNIENIE Powód T. Ł., prowadzący działalność gospodarczą pod (...) w D., wniósł pozew przeciwko pozwanej (...) I spółce z ograniczoną odpowiedzialnością w O. o zapłatę kwoty 4.972,04 zł wraz z ustawowymi odsetkami za opóźnienie w transakcjach handlowych liczonymi od kwoty 4.800,00 zł od dnia 23 kwietnia 2024 r. do dnia zapłaty, odsetek ustawowych za opóźnienie od kwoty 172,04 zł od dnia 23 kwietnia 2024 r. do dnia zapłaty, a także kosztów procesu, w tym kosztów zastępstwa procesowego oraz opłaty skarbowej od pełnomocnictwa. Uzasadniając żądanie wskazał, że strony łączyła umowa z dnia 12 marca 2024 r. na wykonanie prac tynkarskich i malarskich w lokalu położonym w D., przy ul. (...). Zakres prac obejmował wykonanie tynków, prac malarskich oraz elementów sztukaterii",
+        "metadata": {
+          "saosId": 542280,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "V Wydział Gospodarczy"
+        },
+        "rawHash": "1a159f01581555a902ba3d66cd1f236b1c754a556f603e72457924f76b7bd3af"
+      },
+      {
+        "caseNumber": "X K 14/25",
+        "court": "Sąd Rejonowy dla Warszawy-Śródmieścia w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-25",
+        "decisionType": "REASONS",
+        "fulltext": "UZASADNIENIE Formularz UK 1 Sygnatura akt X K 14/25 Jeżeli wniosek o uzasadnienie wyroku dotyczy tylko niektórych czynów lub niektórych oskarżonych, sąd może ograniczyć uzasadnienie do części wyroku objętych wnioskiem. Jeżeli wyrok został wydany w trybie art. 343, art. 343a lub art. 387 k.p.k. albo jeżeli wniosek o uzasadnienie wyroku obejmuje jedynie rozstrzygnięcie o karze i o innych konsekwencjach prawnych czynu, sąd może ograniczyć uzasadnienie do informacji zawartych w częściach 3–8 formularza. 1.  USTALENIE FAKTÓW 1.1.  Fakty uznane za udowodnione Lp. Oskarżony Czyn przypisany oskarżonemu (ewentualnie zarzucany, jeżeli czynu nie przypisano) 1.1.1. J. K. w dniu 15 marca 2024 r. w W., na posiedzeniu sejmowej komisji śledczej do zbadania legalności, prawidłowości oraz celowości czynnośc",
+        "metadata": {
+          "saosId": 542197,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "X Wydział Karny"
+        },
+        "rawHash": "82a933caa1f0056364907c8aaea624cec7e2481e3a5e81c2177c83b807915c27"
+      },
+      {
+        "caseNumber": "VIII Ua 72/25",
+        "court": "Sąd Okręgowy w Łodzi",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-25",
+        "decisionType": "REASONS",
+        "fulltext": "Sygn. akt VIII Ua upr. 72/25 UZASADNIENIE Zaskarżonym wyrokiem z 24 września 2025 roku Sąd Rejonowy dla Łodzi-Śródmieścia w Łodzi, X Wydział Pracy i Ubezpieczeń Społecznych, po rozpoznaniu sprawy X U 589/25 z odwołania R. X. przeciwko (...) w T. o zasiłek chorobowy w związku z odwołaniem od decyzji: z 3 czerwca 2025 roku i z 10 czerwca 2025 roku I.  zmienił zaskarżone decyzje i przyznał R. X. prawo do zasiłku chorobowego za okres od 1 maja 2025 roku do 5 czerwca 2025 roku i od 6 czerwca 2025 roku do 26 czerwca 2025 roku; II.  zasądził od (...) w T. na rzecz R. X. kwotę 720,00 zł tytułem zwrotu kosztów procesu. Apelację od ww. wyroku złożył pozwany organ rentowy, będąc reprezentowanym przez profesjonalnego pełnomocnika w osobie radcy prawnego, zaskarżając przedmiotowe rozstrzygnięcie w cało",
+        "metadata": {
+          "saosId": 542501,
+          "courtType": "COMMON",
+          "judges": [
+            "Magdalena Lisowska"
+          ],
+          "keywords": [
+            "zasiłek chorobowy"
+          ],
+          "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "ab8fcf8219f3635c70b11e528d0966356b47318e4c72ae043de9eb313d9d8dbe"
+      },
+      {
+        "caseNumber": "I C 756/24",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542159,
+          "courtType": "COMMON",
+          "judges": [
+            "Marcin Polit"
+          ],
+          "keywords": [
+            "uzgodnienie treści księgi wieczystej z rzeczywistym stanem prawnym"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "f2e0753678aed2c94641069098b46c46d106e79916ddb5873b36cc4857b5b9a0"
+      },
+      {
+        "caseNumber": "II K 223/24",
+        "court": "Sąd Rejonowy w Nysie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "REASONS",
+        "fulltext": "Sygnatura akt II K 223/24 UZASADNIENIE Na podstawie wyników rozprawy głównej sąd ustalił następujący stan faktyczny W. U. (1), F. U., H. U. (2), H. U. (1), R. U. (1) i A. U. prowadzą od szeregu lat w Ł., wsi nieopodal W., hodowlę świń. Zgodnie z dokumentacją prowadzonych jest sześć, mniejszych, odrębnych hodowli i tak W.’a U. prowadzi działalność gospodarczą w zakresie hodowli trzody chlewnej w chlewniach położonych na (...)- chlewnia numer (...), F. U. w chlewniach położonych na działce (...)- chlewnia numer (...) oraz numer 614/5 chlewnie numer (...), H. U. (2) na działce (...)- chlewnia numer 5 (...), H. U. (1) na działkach (...) - chlewnia numer 1 oraz numer 615/5 chlewnie numer 2,3 i 4, R. U. (1) na działce (...) - chlewnia numer 6 i na działce (...) - chlewnia numer 3. W rzeczywistoś",
+        "metadata": {
+          "saosId": 542409,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "dbf8a19fecffc3573822496e9e3e83ceb90c7840d11d4e0ee762d30403817e70"
+      },
+      {
+        "caseNumber": "VIII Ua 71/25",
+        "court": "Sąd Okręgowy w Łodzi",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "REASONS",
+        "fulltext": "Sygnatura akt: VIII Ua 71/25 UZASADNIENIE Zaskarżonym wyrokiem z dnia 24 września 2025 r. w sprawie o sygnaturze akt: X U 584/25 Sąd Rejonowy dla Łodzi-Śródmieścia w (...) X Wydział Pracy i Ubezpieczeń Społecznych po rozpoznaniu w dniu 24 września 2025 roku w I. na rozprawie sprawy z odwołania J. U. przeciwko (...) w C. o zasiłek chorobowy w związku z odwołaniem od decyzji: z 3 czerwca 2025 roku, z 25 czerwca 2025 roku: oddalił odwołania. (wyrok k. 57). Powyższe orzeczenie zapadło w oparciu o następujący stan faktyczny: Wnioskodawca był zatrudniony na podstawie umowy o pracę w (...) (...) (...) (...) w I. do 1 kwietnia 2025 roku i z tego tytułu podlegał ubezpieczeniom społecznym w tym ubezpieczeniu chorobowemu. Ubezpieczony w dniu 30 grudnia 2024 roku zawarł z (...) spółką z ograniczoną od",
+        "metadata": {
+          "saosId": 542499,
+          "courtType": "COMMON",
+          "judges": [
+            "Anna Przybylska"
+          ],
+          "keywords": [
+            "zasiłek chorobowy"
+          ],
+          "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "7ffabe0d699f0f34ae279b968112711013c02ef71e8008051f753b40122d753e"
+      },
+      {
+        "caseNumber": "IV P 69/25",
+        "court": "Sąd Rejonowy w Człuchowie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt IV P 69/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 24/02/2026 r. Sąd Rejonowy w Człuchowie IV Wydział Pracy w składzie następującym: Przewodniczący: Ławnicy: Sędzia Marek Osowicki Sonia Klonowska Ewa Połom Protokolant: stażysta I. V. po rozpoznaniu w dniu 13 lutego 2026 r. w U. sprawy z powództwa C. P. przeciwko (...) Spółka z o.o. z siedzibą w G. o odszkodowanie 1.  Oddala powództwo 2.  Koszty procesu znosi wzajemnie (-) Ł. V. (-) R. Z. (-) (...) Sygn. akt IV P 69/25 UZASADNIENIE Pełnomocnik powódki C. P. wniosła przeciwko (...) sp. z o.o. w G. o zapłatę 18 000 zł odszkodowania wraz z ustawowymi odsetkami za opóźnienie od dnia wniesienia pozwu do dnia zapłaty tytułem rozwiązania umowy o pracę bez wypowiedzenia z naruszeniem przepisów o rozwiązywaniu umów o pracę przez pra",
+        "metadata": {
+          "saosId": 542475,
+          "courtType": "COMMON",
+          "judges": [
+            "Ewa Połom",
+            "Marek Osowicki",
+            "Sonia Klonowska"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Pracy"
+        },
+        "rawHash": "f74506e959fe4d93ddeb2401ece68cd9efdb981f6670f63e674aa49eb6b642f6"
+      },
+      {
+        "caseNumber": "II K 411/25",
+        "court": "Sąd Rejonowy w Kętrzynie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt II K 411/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 24 lutego 2026r. Sąd Rejonowy w Kętrzynie II Wydział Karny w składzie: Przewodniczący: Sędzia Małgorzata Olejarczyk Protokolant: st. sekr. sądowy Ewelina Kazberuk Prokurator Prok. Rej. w Kętrzynie: Jolanta Rzepko po rozpoznaniu w dniu 20 lutego 2026r. sprawy U. A. s. B. i W. z domu R. ur. (...) w R. oskarżonego o to, że: I. W dniu 10 maja 2025 roku na ternie bazy (...) Sp. z o.o. przy ul. (...) w W. dokonał uszkodzenia mieszka skrzyni biegów w pojeździe marki T. (...) o nr rej. (...) powodując w ten sposób straty o łącznej wartości 1000 zł na szkodę (...) Sp. z o.o. ul. (...), (...) - (...) W., przy czym czyn ten stanowi wypadek mniejszej wagi, przy czym czynu tego dopuścił się w ciągu 5 lat po odbyciu kary za umyślne prz",
+        "metadata": {
+          "saosId": 542464,
+          "courtType": "COMMON",
+          "judges": [
+            "Małgorzata Olejarczyk"
+          ],
+          "keywords": [
+            "przestępstwo przeciwko mieniu"
+          ],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "28b6ed40fa6d3f68ffefe9fca7a587576334275309b4e232416e3f9ed9eff752"
+      },
+      {
+        "caseNumber": "I C 1760/21",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt I C 1760/21 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Warszawa, dnia 5 grudnia 2025 roku Sąd Okręgowy w Warszawie I Wydział Cywilny w składzie: Przewodniczący sędzia Marcin Polit Protokolant Kajetan Michałowski po rozpoznaniu w dniu 26 listopada 2025 roku w Warszawie na rozprawie sprawy z powództwa T. B. i M. B. przeciwko Towarzystwu (...) w W. o zapłatę I.  zasądza od pozwanego Towarzystwa (...) w W.na rzecz: 1.  powoda T. B. kwotę 40 000 (czterdzieści tysięcy) złotych wraz z ustawowymi odsetkami za opóźnienie od dnia 17 maja 2018 roku do dnia zapłaty, 2.  powoda M. B. kwotę 130 000 (sto trzydzieści tysięcy) złotych wraz z ustawowymi odsetkami za opóźnienie od dnia 17 maja 2018 roku do dnia zapłaty; II.  oddala powództwo w pozostałej części; III.  znosi wzajemnie koszty procesu ",
+        "metadata": {
+          "saosId": 542439,
+          "courtType": "COMMON",
+          "judges": [
+            "Marcin Polit"
+          ],
+          "keywords": [
+            "zadośćuczynienie za śmierć osoby bliskiej"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "aa0840b423c76600ae1e362061f2aff67ecc50974f48bc0eaa31369048ffff21"
+      },
+      {
+        "caseNumber": "II Ka 897/25",
+        "court": "Sąd Okręgowy w Siedlcach",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt II Ka 897/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 24 lutego 2026r. Sąd Okręgowy w Siedlcach II Wydział Karny w składzie: Przewodniczący: sędzia SO Paweł Mądry Protokolant: p.o. sekr. sąd. Anita Lemisiewicz-Pszczel przy udziale prokuratora Luizy Bichty-Modrzyńskiej po rozpoznaniu w dniu 17 lutego 2026 r. sprawy G. A. oskarżonego z art. 209 § 1 kk w zw. z art. 209 § 1a kk na skutek apelacji wniesionej przez prokuratora od wyroku Sądu Rejonowego w Mińsku Mazowieckim z dnia 3 listopada 2025 r. sygn. akt II K 824/24 I.  zaskarżony wyrok utrzymuje w mocy; II.  określa, że wydatki za postępowanie odwoławcze ponosi Skarb Państwa. UZASADNIENIE Formularz UK 2 Sygnatura akt II Ka 897/25 Załącznik dołącza się w każdym przypadku. Podać liczbę załączników: 1 1.  CZĘŚĆ WSTĘPNA 1.1. Oz",
+        "metadata": {
+          "saosId": 542564,
+          "courtType": "COMMON",
+          "judges": [
+            "Paweł Mądry"
+          ],
+          "keywords": [
+            "alimenty"
+          ],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "a82304dca692df74db3a49091d2a5a6c52e254ab16a9b534ce85f1fcd49d3a77"
+      },
+      {
+        "caseNumber": "II K 856/25",
+        "court": "Sąd Rejonowy w Wieliczce",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542690,
+          "courtType": "COMMON",
+          "judges": [
+            "Alina Szostkowska"
+          ],
+          "keywords": [
+            "grzywna",
+            "koszty procesu",
+            "naprawienie szkody",
+            "przestępstwo przeciwko bezpieczeństwu w komunikacji"
+          ],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "ba54bccd389aa0562b5b483eee21396be59ae53fbbf3a07fa1885ac8012e1e56"
+      },
+      {
+        "caseNumber": "XIV C 317/25",
+        "court": "Sąd Okręgowy w Poznaniu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-24",
+        "decisionType": "DECISION",
+        "fulltext": "XIV C 317/25 POSTANOWIENIE Dnia 24 lutego 2026 r. Sąd Okręgowy w Poznaniu XIV Zamiejscowy Wydział Cywilny z siedzibą w Pile w składzie: Przewodniczący: sędzia Marcin Garcia Fernandez po rozpoznaniu w dniu 24 lutego 2026 r. w Pile na posiedzeniu niejawnym sprawy z powództwa K. G. przeciwko I. S. o zapłatę postanawia na podstawie art. 182 § 1 pkt 1 k.p.c. umorzyć postępowanie. Marcin Garcia Fernandez XIV C 317/25 UZASADNIENIE postanowienia z 24 lutego 2026 r. Postanowieniem z 16 października 2025 r. Sąd zawiesił postępowanie w sprawie na podstawie art. 177 § 1 pkt 6 k.p.c. (k. 35). Zostało ono doręczone powodowi 21 października 2025 r. i uprawomocniło się bez zaskarżenia. Zgodnie z art. 182 § 1 zdanie pierwsze k.p.c., sąd umarza postępowanie zawieszone na zgodny wniosek stron lub na wniosek ",
+        "metadata": {
+          "saosId": 542677,
+          "courtType": "COMMON",
+          "judges": [
+            "Marcin Garcia Fernandez"
+          ],
+          "keywords": [
+            "umorzenie postępowania"
+          ],
+          "division": "XIV Wydział Cywilny z siedzibą w Pile"
+        },
+        "rawHash": "515f20ae380a37f1833f68c398d3c1deb6195c716455fb69cacbfc97e79f361a"
+      },
+      {
+        "caseNumber": "IX P 633/24",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-23",
+        "decisionType": "REGULATION",
+        "fulltext": "Sygn. akt IX P 633/24 UZASADNIENIE Pozwem wniesionym 28 maja 2024 r. i uzupełnionym 14 sierpnia 2024 r. B. X. wniósł o zasądzenie od pozwanej (...) spółki z ograniczoną odpowiedzialnością w K. kwoty 4.242 zł tytułem odszkodowania za naruszenie zasad równego traktowania w zatrudnieniu wraz z odsetkami ustawowymi za opóźnienie liczonymi od 28 maja 2024 r. do dnia zapłaty. Ponadto wniósł o ukształtowanie na przyszłość treści stosunku pracy, tak aby powód otrzymywał dodatek stanowiskowy w wysokości 100 zł miesięcznie oraz o zasądzenie kosztów postępowania, w tym kosztów zastępstwa procesowego według norm przepisanych. W uzasadnieniu powód wskazał, że jest zatrudniony u pozwanej na podstawie umowy o pracę, zawartej 7 lutego 2020 r. B. X. zawarł z pracodawcą umowę o pracę na stanowisku monter tr",
+        "metadata": {
+          "saosId": 542138,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "odszkodowanie"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "b048d02f4087f2aeceb4ac43e4a3510c6f7c4867d96519e9045e9ef201ebc069"
+      },
+      {
+        "caseNumber": "II K 395/25",
+        "court": "Sąd Rejonowy w Toruniu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-23",
+        "decisionType": "REASONS",
+        "fulltext": "UZASADNIENIE Formularz UK 1 Sygnatura akt II K 395/25 Jeżeli wniosek o uzasadnienie wyroku dotyczy tylko niektórych czynów lub niektórych oskarżonych, sąd może ograniczyć uzasadnienie do części wyroku objętych wnioskiem. Jeżeli wyrok został wydany w trybie art. 343, art. 343a lub art. 387 k.p.k. albo jeżeli wniosek o uzasadnienie wyroku obejmuje jedynie rozstrzygnięcie o karze i o innych konsekwencjach prawnych czynu, sąd może ograniczyć uzasadnienie do informacji zawartych w częściach 3–8 formularza. USTALENIE FAKTÓW Fakty uznane za udowodnione Lp. Oskarżony Czyn przypisany oskarżonemu (ewentualnie zarzucany, jeżeli czynu nie przypisano) 1.1.1. G. H. (2) W dniu 12 stycznia 2025 roku w Ł., za pośrednictwem sieci (...), kierowała groźby pozbawienia życia wobec K. D. poprzez zamieszczenie wp",
+        "metadata": {
+          "saosId": 542057,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "1d48f901e2d99f368900d8ec096255f63e9e4a26f8b03ba91cc8a6247be5da59"
+      },
+      {
+        "caseNumber": "IV Cz 467/25",
+        "court": "Sąd Okręgowy w Radomiu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-20",
+        "decisionType": "REASONS",
+        "fulltext": "Sygn. akt IVCz 467/25 UZASADNIENIE Postanowieniem z 20 listopada 2025 roku Sąd Rejonowy w(...) oddalił skargę Zakładu Ubezpieczeń Społecznych na punkt 4 postanowienia Komornika Sądowego przy Sądzie Rejonowym w (...) z 30 września 2025 roku w sprawie Km (...) Sąd Rejonowy powołał treść art. 29 ust. 4 ustawy o kosztach komorniczych. Wskazał, że wierzyciel nie jest Skarbem Państwa i jest zwolniony wyłącznie od opłat sądowych i nie rozciąga się to na opłatę egzekucyjną przewidzianą w art. 29 ust. 4 w/w ustawy. Dlatego komornik prawidłowo wezwała wierzyciela do uiszczenia tej opłaty. Zażalenie na powyższe postanowienie złożył Zakład Ubezpieczeń Społecznych. Zarzucił postanowieniu: 1.  naruszenie art. 114 ust. 4 ustawy o systemie ubezpieczeń społecznych w związku z art. 45 ust. 1 ustawy o koszta",
+        "metadata": {
+          "saosId": 542062,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "IV Wydział Cywilny Odwoławczy"
+        },
+        "rawHash": "a17b2eeb8536fd987fa800a37e1869aa5975402de6fc29185278c32cef73ade5"
+      },
+      {
+        "caseNumber": "IX U 736/24",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-20",
+        "decisionType": "REGULATION",
+        "fulltext": "UZASADNIENIE Decyzją z dnia 10 września 2024 r. znak (...) Ubezpieczeń Społecznych Oddział w N. odmówił ubezpieczonej Z. N. (1) prawa do zasiłku chorobowego za okres od 11 listopada 2020 r. do 3 stycznia 2021 r. oraz zobowiązał ją do zwrotu nienależnie pobranego zasiłku chorobowego za wskazany w decyzji okres wraz z odsetkami w łącznej kwocie 13 354,57 zł. Na ustaloną przez organ rentowy kwotę składa się należność główna w wysokości 9 776,70 zł wraz z odsetkami w kwocie 3 577,87 zł. Uzasadniając powyższą decyzję organ wskazał, iż zgodnie ze swoimi uprawnieniami przeprowadził postępowanie wyjaśniające, mające na celu ustalenie prawidłowości wykorzystywania zwolnień lekarskich przez ubezpieczoną w okresie od 11 listopada 2020 r. do 3 stycznia 2021 r. w trakcie zatrudnienia na umowę o pracę w",
+        "metadata": {
+          "saosId": 542218,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "zasiłek chorobowy",
+            "zwrot nienależnie pobranych świadczeń z ubezpieczenia"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "2572d76c2593972871baf57e3b621922a3e86e55c8f21d2343527fdea7cddf63"
+      },
+      {
+        "caseNumber": "IX U 680/23",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-20",
+        "decisionType": "REGULATION",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542191,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "niepełnosprawność"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "6bd92fad7849d3059ba85cba363ccc5b97e4d2a04007e5416bb2bdbf8befcc3d"
+      },
+      {
+        "caseNumber": "I C 799/24",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-20",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542160,
+          "courtType": "COMMON",
+          "judges": [
+            "Andrzej Kuryłek"
+          ],
+          "keywords": [
+            "sankcja kredytu darmowego"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "cb848f8ea0187f1f4ecad234dbf59a405e26797ffb662a2c2d44e766e83dd6b1"
+      },
+      {
+        "caseNumber": "II K 461/25",
+        "court": "Sąd Rejonowy w Ciechanowie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-20",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt II K 461/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ 20 lutego 2026 r. Sąd Rejonowy w Ciechanowie, II Wydział Karny, w składzie: Przewodniczący – asesor sądowy Mateusz Śnieżek Protokolant – Andżelika Raczkowska w obecności prokuratora Sławomira Fronczaka po rozpoznaniu na rozprawie w dniach 12 grudnia 2025 r., 17 grudnia 2025 r., 16 stycznia 2026 r. oraz 20 lutego 2026 r. sprawy J. G. syna Z. i I. z domu P. urodzonego (...) w O. oskarżonego o to, że: 1. w okresie od 15 lutego 2025 roku do 19 maja 2025 roku w O. uporczywie nękał byłą partnerkę C. S. (2) oraz jej dzieci, tj. S. i S. S. (1), w ten sposób, że nachodził ich w miejscu zamieszkania, dobijał się do drzwi, rzucał butelkami w okna mieszkania, groził spaleniem mieszkania, nękał byłą partnerkę telefonami i wiadomościami gło",
+        "metadata": {
+          "saosId": 542559,
+          "courtType": "COMMON",
+          "judges": [
+            "Asesor Mateusz Śnieżek"
+          ],
+          "keywords": [
+            "przestępstwo przeciwko mieniu"
+          ],
+          "division": "II Wydział Karny"
+        },
+        "rawHash": "86af39ea9372f548ac8e6977011eb705b7ca0e4f63686ac21820c44a94354eab"
+      },
+      {
+        "caseNumber": "I C 885/22",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542163,
+          "courtType": "COMMON",
+          "judges": [
+            "Marcin Polit"
+          ],
+          "keywords": [
+            "zachowek"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "9e68280b7f91d127a015ba5af5a21b1126a9db90a7ce8f521b560a7a96bdd01c"
+      },
+      {
+        "caseNumber": "II Ca 1198/25",
+        "court": "Sąd Okręgowy w Kielcach",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "DECISION",
+        "fulltext": "Sygn. akt II Ca 1198/25 POSTANOWIENIE Dnia 19 lutego 2026 roku Sąd Okręgowy w Kielcach II Wydział Cywilny Odwoławczy w składzie następującym: Przewodniczący: Sędzia Sądu Okręgowego Hubert Wicik Protokolant: Beata Gąsiorek po rozpoznaniu na rozprawie w dniu 19 lutego 2026 roku w V. sprawy z wniosku Skarbu Państwa - Prezydenta Miasta V. z udziałem K. V. (1), I. V. (2), C. M., D. V., Gminy V., O. V. (2) o zasiedzenie na skutek apelacji wnioskodawcy od postanowienia Sądu Rejonowego w Kielcach z dnia 17 kwietnia 2025 roku, sygn. akt I Ns 841/22 postanawia: I.  oddalić apelację; II.  orzec, że wnioskodawca i uczestnicy ponoszą koszty postępowania apelacyjnego związane ze swoim udziałem w sprawie. Sygn. akt II Ca (...)25 UZASADNIENIE Postanowieniem z dnia 17 kwietnia 2025 roku, wydanym w sprawie ",
+        "metadata": {
+          "saosId": 542336,
+          "courtType": "COMMON",
+          "judges": [
+            "Hubert Wicik"
+          ],
+          "keywords": [
+            "zasiedzenie"
+          ],
+          "division": "II Wydział Cywilny Odwołaczy"
+        },
+        "rawHash": "77866fb65feaeda1498fb801ed72d2b51d462fd2b31269ef21c893d68ea11bac"
+      },
+      {
+        "caseNumber": "IV GC 955/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 955/25 UZASADNIENIE co do całości wyroku z 30 stycznia 2026 roku 1.  (...) sp. z o.o. pozwała I. R. o zapłatę 50 000 zł wraz z odsetkami ustawowymi za opóźnienie od 22.11.2024 r. do dnia zapłaty oraz o zwrot kosztów procesu. Pozwany wniósł o oddalenie powództwa i o zwrot kosztów procesu. 2.  Powódka oparła swoje roszczenie na fakcie, że strony przewidziały karę umowną w kwocie 50 000 zł za nienależyte wykonanie umowy w postaci naruszenia zakazu konkurencji, który pozwany naruszył. Pozwany zaprzeczył naruszeniu zakazu konkurencji, mając na uwadze, że świadczył usługi na rzecz kontrahenta powódki, lecz w innym zakresie niż w ramach świadczenia usług na rzecz powódki; podniósł zarzut nieważności postanowienia umownego w zakresie kary umownej ze względu na jego nieprecyzyjność ",
+        "metadata": {
+          "saosId": 542001,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "73f1e1f330f81bff5e7642a95cba8f509015c3b1a37e7c87dd097c9e50fbe032"
+      },
+      {
+        "caseNumber": "IV GC 939/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 939/25 upr UZASADNIENIE co do całości wyroku z 5 lutego 2026 roku (ograniczone zgodnie z art. 505 8 § 4 k.p.c.) 1.  (...) S.A. sp.k. wniosła pozew przeciwko Towarzystwo (...) S.A., żądając zapłaty na swoją rzecz kwoty 2293,21 zł wraz z ustawowymi odsetkami za opóźnienie od 1.04.2025 r. do dnia zapłaty oraz zwrotu kosztów procesu. Pozwana w sprzeciwie wniosła o oddalenie powództwa w całości i zwrot kosztów procesu. Postępowanie toczyło się według przepisów o postępowaniu w sprawach gospodarczych i w sprawach uproszczonych. 2.  Powódka swoje roszczenie wywodziła z faktu, że pozwana jako ubezpieczyciel OC posiadaczy pojazdów mechanicznych zobowiązała się do zapłacenia odszkodowania za szkodę wyrządzoną poszkodowanemu, wobec którego odpowiedzialność za szkodę ponosi ubezpieczon",
+        "metadata": {
+          "saosId": 542000,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "cad8e7e269dd59023bc1a50e1ea8f55c8cb3db4545b308adddf5791e69172f6d"
+      },
+      {
+        "caseNumber": "IV GC 1020/25",
+        "court": "Sąd Rejonowy Gdańsk-Północ w Gdańsku",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "REASONS",
+        "fulltext": "sygn. akt IV GC 1020/25 upr UZASADNIENIE co do całości wyroku z 5 lutego 2026 roku (ograniczone zgodnie z art. 505 8 § 4 k.p.c.) 1.  (...) S.A. sp.k. wniosła pozew przeciwko Towarzystwo (...) S.A. o zapłatę kwoty 3637,80 zł wraz z odsetkami ustawowymi za opóźnienie od 12.04.2025 r. do dnia zapłaty oraz o zwrot kosztów procesu. Pozwana wniosła o oddalenie powództwa i o zwrot kosztów procesu. Spór między stronami dotyczył wysokości należnego odszkodowania z dobrowolnego ubezpieczenia majątkowego pojazdów mechanicznych wyłącznie w zakresie odpowiadającym spornej różnicy co do wysokości stawek za roboczogodzinę prac naprawczych i lakierniczych. Postępowanie toczyło się według przepisów o postępowaniu w sprawach gospodarczych i w sprawach uproszczonych. 2.  Powódka wywodziła swoje roszczenie z ",
+        "metadata": {
+          "saosId": 541997,
+          "courtType": "COMMON",
+          "judges": [
+            "Maciej Skuczyński"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Gospodarczy"
+        },
+        "rawHash": "d9297711e4aa0f2372874083199d53d4cf142fe7b4ca2183caacb904aafc6feb"
+      },
+      {
+        "caseNumber": "IV P 377/24",
+        "court": "Sąd Rejonowy w Łomży",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-19",
+        "decisionType": "SENTENCE",
+        "fulltext": "",
+        "metadata": {
+          "saosId": 542703,
+          "courtType": "COMMON",
+          "judges": [
+            "Dorota Piaścik",
+            "Ewa Skopek-Siwik",
+            "Marta Małgorzata Sulkowska"
+          ],
+          "keywords": [],
+          "division": "IV Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "77cdf141abbde6e4db14b213cf70521e7fbe147f24bef50fb4e2f3c0d4ef963c"
+      },
+      {
+        "caseNumber": "IX U 336/25",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "REGULATION",
+        "fulltext": "sygn. akt IX U 336/25 UZASADNIENIE Decyzją z dnia 21 lutego 2025 r. znak (...) (...) odmówił ubezpieczonemu J. D. prawa do jednorazowego odszkodowania z tytułu wypadku przy pracy (...), jaki miał miejsce w dniu 10 kwietnia 2024 r., ponieważ Komisja Lekarska (...)ustaliła 0% uszczerbku na zdrowiu. Odwołanie od powyższej decyzji wniósł ubezpieczony J. D. wnosząc, po sprecyzowaniu w piśmie z dnia 28 maja 2025 r., o zmianę zaskarżonej decyzji i przyznanie mu prawa do jednorazowego odszkodowania z tytułu wypadku przy pracy w wysokości 22 % stałego uszczerbku na zdrowiu zgodnie z Rozporządzeniem Ministra Pracy i Ubezpieczeń Społecznych z dnia 18 grudnia 2002 r. w sprawie szczegółowych zasad orzekania o stałym lub długotrwałym uszczerbku na zdrowiu, trybu postępowania przy ustalaniu tego uszczerb",
+        "metadata": {
+          "saosId": 541732,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "odszkodowanie jednorazowe",
+            "wypadek przy pracy"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "870cf09cb64dfbc15fdd00c5d49e6c06f20336a1fbe883218e9443c442210345"
+      },
+      {
+        "caseNumber": "IX U 376/23",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "REGULATION",
+        "fulltext": "sygn. akt IX U 376/23 UZASADNIENIE Decyzją z dnia 26 maja 2023 r. znak (...) Zakład Ubezpieczeń Społecznych Oddział w Z. odmówił ubezpieczonemu C. V. prawa do zasiłku chorobowego za okres od 18 lutego 2023 r. do 2 czerwca 2023 r. Podstawą decyzji było ustalenie, że zaświadczenie lekarskie za okres od 18 lutego do 10 marca 2023 r. nie spełniało wymogów formalnych. Jak ustalił organ rentowy zaświadczenie za okres 18 lutego 2023 r. do 10 marca 2023 r. zostało wystawione w dniu 14 marca 2023 r. i jako takie nie odpowiadało wymogom przewidzianym w § 7 Rozporządzenia Ministra Pracy i Polityki Społecznej z dnia 10 listopada 2015 r. w sprawie trybu i sposobu orzekania o czasowej niezdolności do pracy, wystawiania zaświadczenia lekarskiego oraz trybu i sposobu sprostowania błędu w zaświadczeniu lek",
+        "metadata": {
+          "saosId": 541868,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [
+            "zasiłek chorobowy"
+          ],
+          "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
+        },
+        "rawHash": "8b05db501e12c10cb591b9c6c2b431eb305eab53bc1481f2ec562a980606e930"
+      },
+      {
+        "caseNumber": "XIV C 980/25",
+        "court": "Sąd Okręgowy w Poznaniu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "SENTENCE",
+        "fulltext": "WYROK CZĘŚCIOWY W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 18 lutego 2026 r. Sąd Okręgowy w Poznaniu XIV Zamiejscowy Wydział Cywilny z siedzibą w Pile w składzie następującym: Przewodniczący: sędzia Marcin Garcia Fernandez Protokolant: st. sekr. sąd. Dorota Krygiołka po rozpoznaniu w dniu 18 lutego 2026 r. w Pile na rozprawie sprawy z powództwa P. S. przeciwko syndykowi masy upadłości (...) Spółki Akcyjnej w upadłości z siedzibą w W. o ustalenie i zapłatę ustala, że nie istnieje stosunek prawny kredytu, wynikający z umowy kredytu hipotecznego nr (...) indeksowanego do CHF z 30 sierpnia 2007 r., zawartej przez powoda z (...) Spółką Akcyjną z siedzibą wK.. Marcin Garcia Fernandez UZASADNIENIE Powód P. S. w pozwie z 9 listopada 2022 r. wniósł, po pierwsze, o ustalenie, że nie istnieje stosunek ",
+        "metadata": {
+          "saosId": 542402,
+          "courtType": "COMMON",
+          "judges": [
+            "Marcin Garcia Fernandez"
+          ],
+          "keywords": [
+            "kredyt"
+          ],
+          "division": "XIV Wydział Cywilny z siedzibą w Pile"
+        },
+        "rawHash": "0fbeb791534e1b2edc22ad4be352a34229e8a84d2b2ad138717e3a822fdd8476"
+      },
+      {
+        "caseNumber": "I C 510/25",
+        "court": "Sąd Rejonowy w Piszu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt I C 510/25 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 18 lutego 2026 r. Sąd Rejonowy w Piszu I Wydział Cywilny w składzie: Przewodniczący: sędzia Anna Gajewska Protokolant: starszy sekretarz sądowy Agnieszka Zuzga po rozpoznaniu na rozprawie w dniu 18 lutego 2026 r. w T. sprawy z powództwa A. X., L. I. prowadzących działalność gospodarczą pod nazwą: (...) s.c. L. I. & A. X. przeciwko (...) Towarzystwu (...) Spółce Akcyjnej z siedzibą w O. o zapłatę o r z e k a I.  Zasądza od pozwanego (...) Towarzystwa (...) Spółki Akcyjnej z siedzibą w O. na rzecz powodów A. X., L. I. prowadzących działalność gospodarczą pod nazwą: (...) s.c. L. I. & A. X. kwotę 1 859,76 zł (jeden tysiąc osiemset pięćdziesiąt dziewięć złotych 76/100) wraz z odsetkami ustawowymi za opóźnienie od dnia 01.09.20",
+        "metadata": {
+          "saosId": 542314,
+          "courtType": "COMMON",
+          "judges": [
+            "Anna Gajewska"
+          ],
+          "keywords": [
+            "najem pojazdu zastępczego",
+            "ubezpieczenie oc"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "96af7d2942957bd7406bd91a9f134049d0ba431840fd51d59205fa631e06960d"
+      },
+      {
+        "caseNumber": "I C 1003/18",
+        "court": "Sąd Okręgowy w Warszawie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygnatura akt I C 1003/18 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Warszawa, dnia 19 grudnia 2025 r. Sąd Okręgowy w Warszawie I Wydział Cywilny w następującym składzie: Przewodniczący:Sędzia Andrzej Kuryłek Protokolant:Jakub Wojdyna po rozpoznaniu w dniu 3 grudnia 2025 r. w W. na rozprawie sprawy z powództwa (...) S.A. z siedzibą wW. przeciwko M. P. o zapłatę I oddala powództwo, II nakazuje Skarbowi Państwa (Kasie Sądu Okręgowego w Warszawie) wypłacenie adw. P. C.kwotę 6642 (słownie: sześć tysięcy sześćset czterdzieści dwa) złote, w tym 1242 (słownie: tysiąc dwieście czterdzieści dwa) złote stanowiące należny podatek od towaru i usług (VAT) tytułem wynagrodzenia za pełnienie obowiązków kuratora procesowego pozwanego, III nakazuje pobrać od powoda (...) S.A. z siedzibą w W.na rzecz Skarbu ",
+        "metadata": {
+          "saosId": 542243,
+          "courtType": "COMMON",
+          "judges": [
+            "Andrzej Kuryłek"
+          ],
+          "keywords": [
+            "kredyt indeksowany do waluty obcej"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "8392e51b3a6b720b5c4c89cd3e01302cb26f9d27f5dc87d15280f1a96356bda6"
+      },
+      {
+        "caseNumber": "I C 451/24",
+        "court": "Sąd Rejonowy w Piszu",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "SENTENCE",
+        "fulltext": "Sygn. akt I C 451/24 WYROK W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ Dnia 18 lutego 2026 r. Sąd Rejonowy w Piszu I Wydział Cywilny w składzie: Przewodniczący: sędzia Magdalena Łukaszewicz Protokolant: starszy sekretarz sądowy Anita Topa po rozpoznaniu na rozprawie w dniu 5 lutego 2026 roku sprawy z powództwa D. L. (1) przeciwko (...) nieruchomości przy (...) w C. z udziałem interwenienta ubocznego (...) Towarzystwo (...) Spółki Akcyjnej z siedzibą w U. o zapłatę o r z e k a: I.  Oddala powództwo. II.  Zasądza od powódki D. L. (1) na rzecz interwenienta ubocznego (...) Towarzystwa (...) Spółki Akcyjnej z siedzibą w U. kwotę 3 800 zł (trzy tysiące osiemset złotych) tytułem zwrotu kosztów procesu z odsetkami ustawowymi za opóźnienie za czas od dnia uprawomocnienia się niniejszego wyroku do dnia zap",
+        "metadata": {
+          "saosId": 542450,
+          "courtType": "COMMON",
+          "judges": [
+            "Magdalena Łukaszewicz"
+          ],
+          "keywords": [
+            "odszkodowanie"
+          ],
+          "division": "I Wydział Cywilny"
+        },
+        "rawHash": "3b514ba7d1bf33ec5b5976535dab01606f5e89ce08e9758a3089326a75bb06d3"
+      },
+      {
+        "caseNumber": "XI GC 843/25",
+        "court": "Sąd Rejonowy Szczecin-Centrum w Szczecinie",
+        "country": "POL",
+        "language": "pl",
+        "decisionDate": "2026-02-18",
+        "decisionType": "REGULATION",
+        "fulltext": "Sygnatura akt XI GC 843/25 UZASADNIENIE postanowienia z dnia 18 lutego 2026 r. w przedmiocie wstrzymania wykonania tytułu wykonawczego - nakazu zapłaty z postępowaniu upominawczym o sygn. akt XI GC 843/25 zaopatrzonego w klauzulę wykonalności Sąd Rejonowy Ł. – Centrum w Ł. wydał w sprawie XI GC 843/25 nakaz zapłaty w postępowaniu upominawczym, w którym uwzględnił w całości żądanie pozwu, a po stwierdzeniu jego prawomocności nadał w dniu 29 stycznia 2026 r. na wniosek powódki przeciwko pozwanym solidarnym klauzulę wykonalności. Pozwane pismem z dnia 12 lutego 2026 roku wniosły o przywrócenie terminu do wniesienia sprzeciwu do tego nakazu wraz z wnioskiem o wstrzymanie wykonalności przedmiotowego nakazu. Podniosły, iż o wydaniu przedmiotowego nakazu zapłaty dowiedziały się na skutek wszczęte",
+        "metadata": {
+          "saosId": 542607,
+          "courtType": "COMMON",
+          "judges": [],
+          "keywords": [],
+          "division": "XI Wydział Gospodarczy"
+        },
+        "rawHash": "03473771e237f003de0328fb957adcacae0cbb06dcd781963f384e00f25ea30a"
+      }
+    ],
+    "nextCursor": "1"
+  }
+}
