@@ -1,0 +1,20 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`euEcjAdapter.fetchPage parses SPARQL + HTML into multi-lang decisions 1`] = `
+{
+  "caseNumber": "C-128/21",
+  "country": "EU",
+  "court": "Court of Justice",
+  "decisionDate": "2024-01-18",
+  "decisionType": "judgment",
+  "documentUrl": "https://eur-lex.europa.eu/legal-content/BG/TXT/HTML/?uri=CELEX:62021CJ0128",
+  "ecli": "ECLI:EU:C:2024:49",
+  "fulltext": true,
+  "language": "bg",
+  "metadata": {
+    "celex": "62021CJ0128",
+  },
+  "rawHash": "[hash]",
+  "sourceUrl": "https://eur-lex.europa.eu/legal-content/BG/ALL/?uri=CELEX:62021CJ0128",
+}
+`;

@@ -21,6 +21,7 @@ export const listDecisionsQuerySchema = t.Object({
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
   sourceId: t.Optional(t.String({ maxLength: 21 })),
+  language: t.Optional(t.String({ maxLength: 8 })),
 });
 
 type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
@@ -77,6 +78,10 @@ export const listDecisionsHandler = async (
     conditions.push(eq(caseLawDecisions.sourceId, query.sourceId));
   }
 
+  if (query.language) {
+    conditions.push(eq(caseLawDecisions.language, query.language));
+  }
+
   const decisions = await scopedDb((tx) =>
     tx
       .select({
@@ -86,6 +91,7 @@ export const listDecisionsHandler = async (
         court: caseLawDecisions.court,
         country: caseLawDecisions.country,
         language: caseLawDecisions.language,
+        languageGroupKey: caseLawDecisions.languageGroupKey,
         decisionDate: caseLawDecisions.decisionDate,
         decisionType: caseLawDecisions.decisionType,
         sourceUrl: caseLawDecisions.sourceUrl,

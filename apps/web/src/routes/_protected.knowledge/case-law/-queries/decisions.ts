@@ -21,6 +21,7 @@ export type DecisionListFilters = {
   dateFrom?: string;
   dateTo?: string;
   decisionType?: string;
+  language?: string;
   search?: string;
   sourceId?: string;
 };
@@ -30,6 +31,7 @@ export type FacetBucket = { value: string; count: number };
 export type SearchFacets = {
   court: FacetBucket[];
   country: FacetBucket[];
+  language: FacetBucket[];
 } | null;
 
 export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
@@ -60,6 +62,9 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             court: h.court,
             country: h.country,
             language: h.language,
+            // Search endpoint doesn't return languageGroupKey;
+            // language grouping is only available via the list endpoint.
+            languageGroupKey: null as string | null,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,

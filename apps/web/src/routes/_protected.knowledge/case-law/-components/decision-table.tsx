@@ -16,6 +16,7 @@ export type Decision = {
   court: string;
   country: string;
   language: string;
+  languageGroupKey?: string | null;
   decisionDate: Date | string | null;
   decisionType: string | null;
   sourceUrl: string | null;

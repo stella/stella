@@ -1353,6 +1353,9 @@ export const caseLawDecisions = p.pgTable(
     court: p.varchar({ length: 512 }).notNull(),
     country: p.varchar({ length: 3 }).notNull(),
     language: p.varchar({ length: 8 }).notNull(),
+    languageGroupKey: p.varchar("language_group_key", {
+      length: 512,
+    }),
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
@@ -1370,13 +1373,17 @@ export const caseLawDecisions = p.pgTable(
   },
   (t) => [
     p
-      .uniqueIndex("case_law_decisions_source_case_idx")
-      .on(t.sourceId, t.caseNumber),
+      .uniqueIndex("case_law_decisions_source_case_lang_idx")
+      .on(t.sourceId, t.caseNumber, t.language),
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    p
+      .index("case_law_decisions_lang_group_idx")
+      .on(t.languageGroupKey)
+      .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
   ],
 );

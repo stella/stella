@@ -32,6 +32,7 @@ export const searchDecisionsBodySchema = t.Object({
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
   sourceId: t.Optional(t.String({ maxLength: 21 })),
+  language: t.Optional(t.String({ maxLength: 8 })),
 });
 
 type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
@@ -69,6 +70,9 @@ export const searchDecisionsHandler = async (
   const sourceFilter = body.sourceId
     ? sql`AND d.source_id = ${body.sourceId}`
     : sql``;
+  const languageFilter = body.language
+    ? sql`AND d.language = ${body.language}`
+    : sql``;
 
   const cursorFilter = parsedCursor
     ? sql`AND (
@@ -88,6 +92,7 @@ export const searchDecisionsHandler = async (
     ${dateToFilter}
     ${typeFilter}
     ${sourceFilter}
+    ${languageFilter}
   `;
 
   const courtWeightExpr = courtWeightSql("citing_d.court");
@@ -155,7 +160,7 @@ export const searchDecisionsHandler = async (
       ${allFilters}
   `;
 
-  // Court facet: cross-filtered (respects country filter)
+  // Court facet: cross-filtered (respects country + language)
   const courtFacetQuery = sql`
     SELECT d.court AS value, count(*)::int AS count
     FROM case_law_search_documents sd
@@ -167,12 +172,13 @@ export const searchDecisionsHandler = async (
       ${dateToFilter}
       ${typeFilter}
       ${sourceFilter}
+      ${languageFilter}
     GROUP BY d.court
     ORDER BY count DESC
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
-  // Country facet: cross-filtered (respects court filter)
+  // Country facet: cross-filtered (respects court + language)
   const countryFacetQuery = sql`
     SELECT d.country AS value, count(*)::int AS count
     FROM case_law_search_documents sd
@@ -184,7 +190,26 @@ export const searchDecisionsHandler = async (
       ${dateToFilter}
       ${typeFilter}
       ${sourceFilter}
+      ${languageFilter}
     GROUP BY d.country
+    ORDER BY count DESC
+    LIMIT ${LIMITS.caseLawFacetLimit}
+  `;
+
+  // Language facet: cross-filtered (respects court + country)
+  const languageFacetQuery = sql`
+    SELECT d.language AS value, count(*)::int AS count
+    FROM case_law_search_documents sd
+    JOIN case_law_decisions d
+      ON d.id = sd.decision_id
+    WHERE sd.tsv @@ ${tsQuery}
+      ${courtFilter}
+      ${countryFilter}
+      ${dateFromFilter}
+      ${dateToFilter}
+      ${typeFilter}
+      ${sourceFilter}
+    GROUP BY d.language
     ORDER BY count DESC
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
@@ -200,9 +225,10 @@ export const searchDecisionsHandler = async (
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countryFacetQuery)),
+    parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(languageFacetQuery)),
   ];
 
-  const [hitsResult, countResult, courtResult, countryResult] =
+  const [hitsResult, countResult, courtResult, countryResult, languageResult] =
     await Promise.all(queries);
 
   const hasMore = hitsResult.rows.length > limit;
@@ -249,6 +275,10 @@ export const searchDecisionsHandler = async (
           count: Number(row.count),
         })),
         country: countryResult.rows.map((row) => ({
+          value: String(row.value),
+          count: Number(row.count),
+        })),
+        language: languageResult.rows.map((row) => ({
           value: String(row.value),
           count: Number(row.count),
         })),

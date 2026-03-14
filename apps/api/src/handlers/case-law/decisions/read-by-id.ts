@@ -16,6 +16,7 @@ export const readDecisionHandler = async (
         court: true,
         country: true,
         language: true,
+        languageGroupKey: true,
         decisionDate: true,
         decisionType: true,
         fulltext: true,

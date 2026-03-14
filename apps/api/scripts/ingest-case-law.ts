@@ -45,6 +45,10 @@ const SOURCES: SourceDef[] = [
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
   },
+  {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    name: "Court of Justice of the EU (CJEU)",
+  },
 ];
 
 const ensureSource = async (
