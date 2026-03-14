@@ -1,1 +1,0 @@
-../../.claude/commands/new-handler.md
