@@ -93,6 +93,7 @@
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/router-plugin": "^1.163.3",
+    "@types/babel__core": "^7.20.5",
     "@types/diff-match-patch": "catalog:",
     "@types/dompurify": "^3.0.5",
     "@types/papaparse": "^5.5.2",

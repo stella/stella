@@ -194,8 +194,11 @@ export const celexToCaseNumber = (celex: string): string => {
   const year = match[1].slice(2); // "2024" → "24"
   const caseNum = Number.parseInt(match[3], 10);
   const CELEX_PREFIX: Record<string, string> = {
-    CJ: "C", CC: "C", CO: "C",
-    TJ: "T", TO: "T",
+    CJ: "C",
+    CC: "C",
+    CO: "C",
+    TJ: "T",
+    TO: "T",
     FJ: "F",
   };
   const prefix = CELEX_PREFIX[match[2]] ?? "C";
@@ -331,9 +334,7 @@ export const euEcjAdapter: SourceAdapter = {
 
             const langLower = lang.toLowerCase();
             const raw =
-              `${celex}|${ecli}|${date}` +
-              `|${langLower}` +
-              `|${fulltext}`;
+              `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
 
             decisions.push({
               caseNumber,

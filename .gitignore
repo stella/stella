@@ -40,6 +40,9 @@ build
 dist
 .react-email
 
+# Copied at dev server start by vite.config.ts (copyPdfjsWorker)
+apps/web/public/pdf.worker.min.mjs
+
 # Bun binary lockfile (text-based bun.lock is committed instead)
 bun.lockb
 
