@@ -55,7 +55,13 @@ comments.
    If any check fails, fix the issue and re-run. Commit fixes
    with `fix: lint/format/type errors`.
 
-5. **Open the PR**:
+5. **Security audit**:
+
+   Run `/security-audit`. Fix any critical or high findings
+   in files changed in this PR before opening it.
+   Commit fixes with `fix: address security audit findings`.
+
+6. **Open the PR**:
 
    Push the branch and create the PR:
 
@@ -68,10 +74,13 @@ comments.
    following Conventional Commits (`feat:`, `fix:`, etc.) with
    a concise summary and test plan.
 
-6. **Start rabbit round monitoring**:
+7. **Start rabbit round monitoring**:
 
    Once the PR is open, invoke `/loop 5m /rabbit-round` to
    process review bot comments every 5 minutes. `/loop` is a
-   built-in Claude Code skill, not a custom command. Stop the
-   loop once there are no more unresolved bot comments on the
-   PR (all threads resolved or minimized, CI green).
+   built-in Claude Code skill, not a custom command.
+
+   **When to stop:** cancel the cron job (via `CronDelete`)
+   after two consecutive checks find nothing to act on (no
+   unresolved bot comments, no new review threads, CI green).
+   Do not let it run indefinitely.

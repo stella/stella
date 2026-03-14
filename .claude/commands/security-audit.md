@@ -17,10 +17,16 @@ documents — security is non-negotiable.
    route file and confirm auth middleware is applied. Flag any endpoint
    that is publicly accessible without explicit justification.
 
-3. **Ownership check** — handlers that access resource-scoped data must
-   verify that the user is authorized to access that resource (e.g. via
-   org/workspace membership) before granting access. Flag any endpoint
-   that lacks an explicit ownership or authorization check.
+3. **Ownership via branded types** — every workspace-scoped handler
+   must use `createHandler` from `api-handlers.ts`, which provides a
+   `WorkspaceHandlerContext` with `workspaceId: SafeId<"workspace">`.
+   Flag any handler that:
+   - Accepts `workspaceId` from the request body or query params
+     instead of the validated context
+   - Uses `createRootHandler` when it accesses workspace-scoped data
+   - Passes a raw `string` where `SafeId<"workspace">`,
+     `SafeId<"organization">`, or `SafeId<"user">` is expected
+   - Lacks a `permissions` declaration in its `config`
 
 4. **S3 presigned URLs** — read `apps/api/src/handlers/files/presign.ts`
    and any other presign usage. Check that:
@@ -55,10 +61,14 @@ documents — security is non-negotiable.
    verify that user content is clearly separated from system
    instructions.
 
-9. **Workspace isolation** — verify that database queries in handlers
-   always filter by workspace ID. A user in workspace A must never be
-   able to read/modify data from workspace B. Read each handler and
-   check that workspace scoping is applied to every query.
+9. **Workspace isolation** — handlers must use `scopedDb` (which
+   pre-filters by workspace) for all workspace-scoped queries. Flag
+   any handler that:
+   - Uses the unscoped `db` directly for workspace-scoped tables
+   - Constructs ad-hoc `WHERE workspaceId = ...` instead of using
+     `scopedDb`
+   - Passes workspace IDs across handler boundaries without
+     re-validating ownership
 
 10. **Ethical walls (information barriers)** — in law firms, lawyers
     working on opposing sides of a matter (or for competing clients)
@@ -70,9 +80,7 @@ documents — security is non-negotiable.
   not just workspace membership
 - Search results are filtered by matter access — a user must never
   see documents from matters they are not assigned to
-- AI features (review, research) scope their context to matters
-  the requesting user has access to — no cross-matter data leakage
-  through AI prompts or responses
+- AI features: see check #14 for detailed AI isolation requirements
 - Presigned S3 URLs verify matter-level access, not just workspace
   membership
 - Audit logs capture who accessed what document and when (for
@@ -103,6 +111,79 @@ documents — security is non-negotiable.
       URLs and excluded from search/AI context
     - Deletion is logged for GDPR Article 17 compliance (right to
       erasure — ability to prove data was deleted)
+
+13. **Legal privilege leakage** — attorney-client privilege and
+    work product doctrine mean document content must never leak
+    through side channels:
+    - Search indexes, AI embeddings, and analytics events must
+      not contain document body text or metadata that reveals
+      matter substance
+    - Error messages, logs, and stack traces must never include
+      document content, file names, or matter names (these can
+      reveal case strategy)
+    - PDF thumbnails, preview images, and cached renders must
+      respect the same access controls as the source document
+    - Export and download endpoints must re-check permissions at
+      the moment of export, not rely on a stale permission
+      grant
+
+14. **Cross-matter data isolation in AI context** — when AI
+    features (review, research, chat) build context:
+    - The context window must only include documents from
+      matters the requesting user has access to
+    - AI tool calls (`searchMatter`, `readEntity`, etc.) must
+      enforce matter-level permissions per call, not per
+      session
+    - AI-generated summaries, citations, or comparisons must
+      not reference documents from other matters, even if the
+      model has seen them in a prior turn
+    - Conversation history must be scoped to the user and
+      matter; shared threads must not leak one user's queries
+      to another
+
+15. **Document versioning integrity** — legal documents require
+    an unbroken chain of custody:
+    - Version history must be immutable: no endpoint allows
+      overwriting or deleting a prior version
+    - Version metadata (author, timestamp) must come from the
+      server, never from client-supplied values
+    - Concurrent edits to the same document must not silently
+      overwrite; verify optimistic locking or conflict
+      detection is in place
+
+16. **Audit trail completeness** — SOC 2 and ISO 27001 require
+    evidence of who did what and when:
+    - All document access (view, download, print, share) must
+      produce an audit log entry, not just mutations
+    - Audit logs must be append-only; no endpoint allows
+      deletion or modification of log entries
+    - Bulk operations must log each affected resource
+      individually, not just "bulk action on N items"
+    - Audit log entries must include the actor's IP and
+      user-agent for forensic traceability
+
+17. **Sensitive data in logs and errors** — legal data requires
+    stricter controls than typical SaaS:
+    - Request/error logs must never contain document content,
+      file names, matter names, client names, or session tokens
+    - Structured logs must not serialize entire request bodies
+      (which may contain file contents or PII)
+    - Stack traces in production responses must be suppressed
+      (return generic error messages to clients)
+    - Analytics events (PostHog) must not capture matter names,
+      document titles, or any content that could identify a
+      client or case
+
+18. **Atomicity on privileged operations** — operations that
+    affect access to privileged data must be atomic:
+    - Permission revocation (removing a user from a matter or
+      workspace) must invalidate all active sessions and
+      presigned URLs for that user immediately
+    - Role changes must take effect on the next request, not
+      after a cache TTL expires
+    - Bulk permission changes (e.g., reassigning a matter) must
+      be transactional; partial application could leave
+      documents accessible to the wrong users
 
 ## Output
 
