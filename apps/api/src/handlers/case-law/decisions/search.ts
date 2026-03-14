@@ -214,13 +214,12 @@ export const searchDecisionsHandler = async (
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
-  const emptyRows = Promise.resolve({
-    rows: [] as Record<string, unknown>[],
-  });
+  type RawRows = Record<string, unknown>[];
+  const emptyRows = Promise.resolve([] as RawRows);
 
   // Skip expensive COUNT(*) and facet queries on paginated
   // requests; these values don't change between pages.
-  const queries: Promise<{ rows: Record<string, unknown>[] }>[] = [
+  const queries: Promise<RawRows>[] = [
     scopedDb((tx) => tx.execute(hitsQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
@@ -231,10 +230,8 @@ export const searchDecisionsHandler = async (
   const [hitsResult, countResult, courtResult, countryResult, languageResult] =
     await Promise.all(queries);
 
-  const hasMore = hitsResult.rows.length > limit;
-  const resultRows = hasMore
-    ? hitsResult.rows.slice(0, limit)
-    : hitsResult.rows;
+  const hasMore = hitsResult.length > limit;
+  const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
 
   const lastRaw = resultRows.at(-1);
   const nextCursor =
@@ -265,20 +262,20 @@ export const searchDecisionsHandler = async (
 
   const totalCount = parsedCursor
     ? null
-    : Number(countResult.rows.at(0)?.total) || 0;
+    : Number(countResult.at(0)?.total) || 0;
 
   const facets = parsedCursor
     ? null
     : {
-        court: courtResult.rows.map((row) => ({
+        court: courtResult.map((row) => ({
           value: String(row.value),
           count: Number(row.count),
         })),
-        country: countryResult.rows.map((row) => ({
+        country: countryResult.map((row) => ({
           value: String(row.value),
           count: Number(row.count),
         })),
-        language: languageResult.rows.map((row) => ({
+        language: languageResult.map((row) => ({
           value: String(row.value),
           count: Number(row.count),
         })),

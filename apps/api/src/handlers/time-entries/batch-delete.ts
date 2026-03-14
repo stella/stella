@@ -37,7 +37,8 @@ export const batchDeleteHandler = async ({
           inArray(timeEntries.id, ids),
           eq(timeEntries.status, BILLING_STATUS.DRAFT),
         ),
-      );
+      )
+      .returning({ id: timeEntries.id });
 
     const writtenOff = await tx
       .update(timeEntries)
@@ -52,9 +53,10 @@ export const batchDeleteHandler = async ({
           ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
           ne(timeEntries.status, BILLING_STATUS.BILLED),
         ),
-      );
+      )
+      .returning({ id: timeEntries.id });
 
-    return (deleted.rowCount ?? 0) + (writtenOff.rowCount ?? 0);
+    return deleted.length + writtenOff.length;
   });
 
   return { updated };

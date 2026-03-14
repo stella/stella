@@ -31,7 +31,7 @@ const applyPgFtsMigration = async () => {
   `);
 
   const isGenerated =
-    colInfo.rows.length > 0 && colInfo.rows[0].is_generated === "ALWAYS";
+    colInfo.length > 0 && colInfo[0].is_generated === "ALWAYS";
 
   if (isGenerated) {
     console.log("Migrating tsv from generated to regular column...");
@@ -79,7 +79,7 @@ const applyParadedbMigration = async () => {
     WHERE extname = 'pg_search'
   `);
 
-  if (extResult.rows.length === 0) {
+  if (extResult.length === 0) {
     console.log("pg_search extension not found, skipping BM25 index.");
     return;
   }

@@ -143,10 +143,8 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     db.execute(workspaceFacetQuery),
   ]);
 
-  const hasMore = hitsResult.rows.length > limit;
-  const resultRows = hasMore
-    ? hitsResult.rows.slice(0, limit)
-    : hitsResult.rows;
+  const hasMore = hitsResult.length > limit;
+  const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
 
   // Compute cursor from raw row (score is internal, not exposed)
   const lastRaw = resultRows.at(-1);
@@ -156,14 +154,14 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       : null;
 
   const hits: SearchHit[] = resultRows.map(mapHitRow);
-  const totalCount = Number(countResult.rows.at(0)?.total) || 0;
+  const totalCount = Number(countResult.at(0)?.total) || 0;
 
-  const kindFacets: FacetBucket[] = kindResult.rows.map((row) => ({
+  const kindFacets: FacetBucket[] = kindResult.map((row: RawRow) => ({
     value: String(row.value),
     count: Number(row.count),
   }));
 
-  const workspaceFacets: FacetBucket[] = wsResult.rows.map((row) => ({
+  const workspaceFacets: FacetBucket[] = wsResult.map((row: RawRow) => ({
     value: String(row.value),
     label: String(row.label),
     count: Number(row.count),
@@ -219,7 +217,7 @@ const searchContent = async (
     `),
   ]);
 
-  const hits: ContentSearchHit[] = hitsResult.rows.map((row) => ({
+  const hits: ContentSearchHit[] = hitsResult.map((row: RawRow) => ({
     entityId: String(row.entity_id),
     kind: parseEntityKind(row.kind),
     title: String(row.title),
@@ -227,7 +225,7 @@ const searchContent = async (
     passage: row.passage ? JSON.stringify(row.passage) : "",
   }));
 
-  const totalCount = Number(countResult.rows.at(0)?.total) || 0;
+  const totalCount = Number(countResult.at(0)?.total) || 0;
 
   return { hits, totalCount };
 };
