@@ -79,7 +79,7 @@ export const readFileHandler = async ({
       mimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: await presignDownloadUrl(fileKey, {
+      presignedUrl: presignDownloadUrl(fileKey, {
         expiresIn: 900,
         fileName: content.fileName,
       }),

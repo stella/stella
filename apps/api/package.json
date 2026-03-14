@@ -23,8 +23,6 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.33",
     "@ai-sdk/valibot": "^2.0.0",
-    "@aws-sdk/client-s3": "^3.1003.0",
-    "@aws-sdk/s3-request-presigner": "^3.1003.0",
     "@elysiajs/cors": "^1.4.1",
     "@faker-js/faker": "^10.3.0",
     "@hono/node-server": "^1.19.9",
