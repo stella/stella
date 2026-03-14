@@ -131,11 +131,11 @@ export const plCourtsAdapter: SourceAdapter = {
 
     buildRequest: (page) => ({
       url: `${BASE_URL}?${new URLSearchParams({
-          pageSize: String(PAGE_SIZE),
-          pageNumber: String(page),
-          sortingField: "JUDGMENT_DATE",
-          sortingDirection: "DESC",
-        }).toString()}`,
+        pageSize: String(PAGE_SIZE),
+        pageNumber: String(page),
+        sortingField: "JUDGMENT_DATE",
+        sortingDirection: "DESC",
+      }).toString()}`,
       init: {
         headers: { Accept: "application/json" },
       },

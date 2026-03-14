@@ -130,10 +130,7 @@ export const createPagePaginatedFetch = <TResponse>(
 
         for (const item of items) {
           try {
-            const parsed = await opts.parseItem(
-              item,
-              signal,
-            );
+            const parsed = await opts.parseItem(item, signal);
             if (parsed) {
               decisions.push(parsed);
             }

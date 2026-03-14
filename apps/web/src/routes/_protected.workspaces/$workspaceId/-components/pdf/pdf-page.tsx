@@ -269,10 +269,7 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
 
   return (
     <>
-      <div
-        className="absolute inset-0 overflow-hidden"
-        ref={containerRef}
-      />
+      <div className="absolute inset-0 overflow-hidden" ref={containerRef} />
       <div
         className="absolute inset-0 leading-none [&>br,span]:absolute [&>br,span]:z-1 [&>br,span]:origin-top-left [&>br,span]:cursor-text [&>br,span]:whitespace-pre [&>br,span]:text-transparent [&>br::selection]:bg-transparent [&>span::selection]:bg-indigo-600/25"
         {...{ [TEXT_LAYER_ATTRIBUTE]: true }}

@@ -785,28 +785,25 @@ export const TemplateForm = ({
 
   // Only count errors for currently visible fields;
   // hidden fields may retain stale errors in state.
-  const hasErrors = Object.entries(errors).some(
-    ([path, msg]) => {
-      if (!msg) {
-        return false;
-      }
-      const def = findFieldDef(path);
-      if (!def) {
-        return true;
-      }
-      // Find the top-level field to check visibility
-      const topField = fields.find(
-        (f) =>
-          f.path === path ||
-          (f.kind === "array" &&
-            path.startsWith(`${f.path}[`)),
-      );
-      if (topField && !isFieldVisible(topField, values, conditions)) {
-        return false;
-      }
+  const hasErrors = Object.entries(errors).some(([path, msg]) => {
+    if (!msg) {
+      return false;
+    }
+    const def = findFieldDef(path);
+    if (!def) {
       return true;
-    },
-  );
+    }
+    // Find the top-level field to check visibility
+    const topField = fields.find(
+      (f) =>
+        f.path === path ||
+        (f.kind === "array" && path.startsWith(`${f.path}[`)),
+    );
+    if (topField && !isFieldVisible(topField, values, conditions)) {
+      return false;
+    }
+    return true;
+  });
 
   const handleDownload = useCallback(
     async (format: FillFormat) => {

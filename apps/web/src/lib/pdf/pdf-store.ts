@@ -516,8 +516,7 @@ export const usePdfStore = create<State & Actions>()(
             renderMap,
             renderedPages: new Set(
               [...s.renderedPages].filter(
-                (id) =>
-                  !filePages.has(id) || rerenderedSet.has(id),
+                (id) => !filePages.has(id) || rerenderedSet.has(id),
               ),
             ),
           };

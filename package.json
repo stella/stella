@@ -13,6 +13,7 @@
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
     "format": "turbo run format",
+    "format:check": "turbo run format -- --check",
     "lint": "turbo run lint",
     "lint:colors": "scripts/lint-colors.sh",
     "lint:logical-properties": "scripts/lint-logical-properties.sh",
@@ -23,12 +24,15 @@
     "sync:well-known": "cp -r .well-known apps/web/public/",
     "setup:dev": "scripts/dev.sh",
     "setup:mcp": "bun install --cwd .claude/mcp",
+    "hooks:install": "lefthook install",
+    "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:^0.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20260312.1",
     "i18n-unused": "^0.19.0",
+    "lefthook": "^2.1.4",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "^0.16.0",
