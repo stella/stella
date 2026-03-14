@@ -78,6 +78,7 @@ stella/
 Each domain has `routes.ts` + individual endpoint files.
 
 **Core data:**
+
 - `workspaces/` — matter CRUD, members, contacts, access
 - `entities/` — document/file CRUD, upload, download, move
 - `files/` — file processing, PDF utils, Gotenberg
@@ -86,6 +87,7 @@ Each domain has `routes.ts` + individual endpoint files.
 - `search/` — full-text search (ParadeDB / PG FTS)
 
 **Billing:**
+
 - `time-entries/` — time tracking, CSV/LEDES/PDF export
 - `invoices/` — invoice lifecycle, entries
 - `billing-codes/` — billing code tree
@@ -93,6 +95,7 @@ Each domain has `routes.ts` + individual endpoint files.
 - `expenses/` — expense tracking
 
 **Knowledge:**
+
 - `templates/` — template library, fill, preview
 - `template-analytics/` — usage metrics
 - `clauses/` — clause library, vector search
@@ -100,6 +103,7 @@ Each domain has `routes.ts` + individual endpoint files.
 - `case-law/` — ingestion, polarity, citations
 
 **Other:**
+
 - `contacts/` — contact CRUD
 - `tasks/` — task assignment, entity linking
 - `chat/` — chat context, file uploads
@@ -112,6 +116,7 @@ Each domain has `routes.ts` + individual endpoint files.
 ### Shared Libraries (apps/api/src/lib/)
 
 **Core infra:**
+
 - `api-handlers.ts` — `createHandler()` for workspace
   mutations with permission checks
 - `auth.ts` — better-auth setup, permission macro,
@@ -120,24 +125,28 @@ Each domain has `routes.ts` + individual endpoint files.
 - `invalidate-query-macro.ts` — cache invalidation macro
 
 **Database:**
+
 - `custom-schema.ts` — Elysia schema helpers (tNanoid)
 - `entity-filters.ts` — entity query filtering
 - `escape-like.ts` — SQL LIKE escaping
 - `pg-error.ts` — PostgreSQL error parsing
 
 **Document processing:**
+
 - `document-counter.ts` — document numbering stamps
 - `document-reference.ts` — matter reference notation
 - `docx-stamp.ts` — DOCX content stamping
 - `matter-reference.ts` — matter notation utilities
 
 **File handling:**
+
 - `content-disposition.ts` — HTTP header construction
 - `content-encryption.ts` — file encryption/decryption
 - `sanitize-filename.ts` — filename sanitization
 - `s3.ts` — S3 client
 
 **Subdirectories:**
+
 - `errors/` — TaggedError, HTTPError, structured errors
 - `search/` — pluggable search providers (ParadeDB,
   PG FTS), extraction, indexing, language detection
@@ -146,6 +155,7 @@ Each domain has `routes.ts` + individual endpoint files.
 - `markdown/` — markdown processing
 
 **Other:**
+
 - `ai-models.ts` — AI provider config
 - `posthog.ts` — analytics client
 - `redis.ts` — Redis client
@@ -182,6 +192,7 @@ TanStack Router file-based routing.
 - `_protected.tsx` — auth guard
 
 **Route groups:**
+
 - `auth/` — login, OTP, org creation, invitation
 - `_protected.account/` — user settings, sessions
 - `_protected.organization/` — members, invitations
@@ -198,6 +209,7 @@ TanStack Router file-based routing.
 `routes/_protected.workspaces/$workspaceId/`
 
 **Pages:**
+
 - `index` — workspace overview
 - `$viewId.index` — table/kanban views
 - `$viewId.pdf` — PDF viewer with annotations
@@ -207,6 +219,7 @@ TanStack Router file-based routing.
 - `analytics` — workspace analytics
 
 **Colocated structure:**
+
 ```
 $workspaceId/
 ├── -components/        # 70+ workspace UI components
@@ -231,17 +244,17 @@ $workspaceId/
 
 ### Zustand Stores (9 total)
 
-| Store | Location | Purpose |
-|-------|----------|---------|
-| workspace store | `$workspaceId/-store.tsx` | view mode, filters, selected entities |
-| table store | `$workspaceId/-hooks/table-store.ts` | pagination, sorting |
-| inspector store | `-components/inspector/inspector-store.ts` | selected entity, tab |
-| template store | `knowledge/-store/template-assistant-store.ts` | template wizard state |
-| chat panel | `lib/chat-panel-store.ts` | right panel open/closed, thread |
-| pinned | `lib/pinned-store.ts` | sidebar favorites |
-| i18n | `i18n/i18n-store.ts` | language selection |
-| dev | `lib/dev-store.ts` | dev mode toggles |
-| pdf | `lib/pdf/pdf-store.ts` | page, zoom, annotations |
+| Store           | Location                                       | Purpose                               |
+| --------------- | ---------------------------------------------- | ------------------------------------- |
+| workspace store | `$workspaceId/-store.tsx`                      | view mode, filters, selected entities |
+| table store     | `$workspaceId/-hooks/table-store.ts`           | pagination, sorting                   |
+| inspector store | `-components/inspector/inspector-store.ts`     | selected entity, tab                  |
+| template store  | `knowledge/-store/template-assistant-store.ts` | template wizard state                 |
+| chat panel      | `lib/chat-panel-store.ts`                      | right panel open/closed, thread       |
+| pinned          | `lib/pinned-store.ts`                          | sidebar favorites                     |
+| i18n            | `i18n/i18n-store.ts`                           | language selection                    |
+| dev             | `lib/dev-store.ts`                             | dev mode toggles                      |
+| pdf             | `lib/pdf/pdf-store.ts`                         | page, zoom, annotations               |
 
 ### Shared Components (apps/web/src/components/)
 
@@ -282,12 +295,12 @@ Source language: en. Runtime: `use-intl`.
 
 ## Packages
 
-| Package | Purpose |
-|---------|---------|
-| `@stella/ui` | 28 Base UI components (button, input, dialog, table, etc.) |
-| `@stella/rivet` | RivetKit actor configs (workflow, chat, views, bbox, sync) |
-| `@stella/permissions` | Permission/auth utilities |
-| `@stella/transactional` | Email templates (OTP, invitations) |
-| `@stella/scripts` | i18n CLI (check + typegen) |
-| `@stella/skills` | AI skill prompts: case briefing, legal interpretation, GDPR, contracts |
-| `@stella/typescript-config` | Shared strict TS configs |
+| Package                     | Purpose                                                                |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `@stella/ui`                | 28 Base UI components (button, input, dialog, table, etc.)             |
+| `@stella/rivet`             | RivetKit actor configs (workflow, chat, views, bbox, sync)             |
+| `@stella/permissions`       | Permission/auth utilities                                              |
+| `@stella/transactional`     | Email templates (OTP, invitations)                                     |
+| `@stella/scripts`           | i18n CLI (check + typegen)                                             |
+| `@stella/skills`            | AI skill prompts: case briefing, legal interpretation, GDPR, contracts |
+| `@stella/typescript-config` | Shared strict TS configs                                               |

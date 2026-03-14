@@ -48,7 +48,8 @@ const collectDescendantIds = async (
   `),
   );
 
-  return result.map((r) => r.id);
+  // Drizzle's execute() erases the generic to Record<string, any>
+  return result.map((r) => String(r.id));
 };
 
 export const downloadZipHandler = async ({

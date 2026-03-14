@@ -22,8 +22,7 @@ import {
  * Each page fetches PAGE_SIZE items.
  */
 
-const API_URL =
-  "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
+const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 /** RIS API enforces a maximum page size of 20. */
 const PAGE_SIZE = 20;
 
@@ -48,9 +47,7 @@ type RisJustiz = {
     item?: string | string[];
   };
   Entscheidungstexte?: {
-    item?:
-      | RisEntscheidungstext
-      | RisEntscheidungstext[];
+    item?: RisEntscheidungstext | RisEntscheidungstext[];
   };
 };
 
@@ -107,9 +104,7 @@ type RisApiResponse = {
 };
 
 /** Normalize item fields that can be string or string[]. */
-const toArray = (
-  val: string | string[] | undefined | null,
-): string[] => {
+const toArray = (val: string | string[] | undefined | null): string[] => {
   if (val === undefined || val === null) {
     return [];
   }
@@ -117,12 +112,8 @@ const toArray = (
 };
 
 /** Find the HTML fulltext URL from content URLs. */
-const findHtmlUrl = (
-  doc: RisDocumentReference,
-): string | undefined => {
-  const raw =
-    doc.Data?.Dokumentliste?.ContentReference?.Urls
-      ?.ContentUrl;
+const findHtmlUrl = (doc: RisDocumentReference): string | undefined => {
+  const raw = doc.Data?.Dokumentliste?.ContentReference?.Urls?.ContentUrl;
   if (!raw) {
     return;
   }
@@ -140,9 +131,7 @@ const fetchFulltext = async (
       signal: signal
         ? AbortSignal.any([
             signal,
-            AbortSignal.timeout(
-              ADAPTER_TIMEOUT.REQUEST,
-            ),
+            AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
           ])
         : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
     });
@@ -175,9 +164,7 @@ const extractEntscheidungsart = (
   if (!justiz?.Entscheidungstexte?.item) {
     return;
   }
-  const items = Array.isArray(
-    justiz.Entscheidungstexte.item,
-  )
+  const items = Array.isArray(justiz.Entscheidungstexte.item)
     ? justiz.Entscheidungstexte.item
     : [justiz.Entscheidungstexte.item];
   return items[0]?.Entscheidungsart;
@@ -196,21 +183,16 @@ const parseRisItem = async (
   const jud = meta?.Judikatur;
   const justiz = jud?.Justiz;
 
-  const caseNumbers = toArray(
-    jud?.Geschaeftszahl?.item,
-  );
+  const caseNumbers = toArray(jud?.Geschaeftszahl?.item);
   const caseNumber = caseNumbers.at(0);
-  const court =
-    justiz?.Gericht ?? meta?.Technisch?.Organ;
+  const court = justiz?.Gericht ?? meta?.Technisch?.Organ;
 
   if (!caseNumber || !court) {
     return null;
   }
 
   const htmlUrl = findHtmlUrl(doc);
-  const fulltext = htmlUrl
-    ? await fetchFulltext(htmlUrl, signal)
-    : undefined;
+  const fulltext = htmlUrl ? await fetchFulltext(htmlUrl, signal) : undefined;
 
   const raw_ = JSON.stringify(doc.Data?.Metadaten);
 
@@ -229,15 +211,10 @@ const parseRisItem = async (
       risId: meta?.Technisch?.ID,
       applikation: meta?.Technisch?.Applikation,
       normen: toArray(jud?.Normen?.item),
-      rechtsgebiete: toArray(
-        justiz?.Rechtsgebiete?.item,
-      ),
-      entscheidungsart:
-        extractEntscheidungsart(justiz),
+      rechtsgebiete: toArray(justiz?.Rechtsgebiete?.item),
+      entscheidungsart: extractEntscheidungsart(justiz),
       additionalCaseNumbers:
-        caseNumbers.length > 1
-          ? caseNumbers.slice(1)
-          : undefined,
+        caseNumbers.length > 1 ? caseNumbers.slice(1) : undefined,
       published: meta?.Allgemein?.Veroeffentlicht,
       modified: meta?.Allgemein?.Geaendert,
     },
@@ -281,8 +258,7 @@ export const atCourtsAdapter: SourceAdapter = {
     },
 
     extractItems: (data) => {
-      const results =
-        data.OgdSearchResult?.OgdDocumentResults;
+      const results = data.OgdSearchResult?.OgdDocumentResults;
       const rawTotal = results?.Hits?.["#text"]
         ? Number.parseInt(results.Hits["#text"], 10)
         : undefined;

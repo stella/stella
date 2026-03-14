@@ -33,11 +33,11 @@ grants SQL (`drizzle/0001_stella-grants.sql`).
 All RLS policies read from transaction-scoped session
 variables set via `set_config(..., true)` (SET LOCAL):
 
-| Variable                | Set by           | Purpose                        |
-| ----------------------- | ---------------- | ------------------------------ |
-| `app.workspace_ids`     | `createScopedDb` | Workspace-level RLS filtering  |
-| `app.organization_id`   | Both             | Org-level RLS filtering        |
-| `app.user_id`           | `createBootstrapDb` | Bootstrap policy activation |
+| Variable              | Set by              | Purpose                       |
+| --------------------- | ------------------- | ----------------------------- |
+| `app.workspace_ids`   | `createScopedDb`    | Workspace-level RLS filtering |
+| `app.organization_id` | Both                | Org-level RLS filtering       |
+| `app.user_id`         | `createBootstrapDb` | Bootstrap policy activation   |
 
 Constants are exported from `db/rls.ts` to avoid typos.
 
@@ -72,6 +72,7 @@ orgPolicies()   — 4 CRUD policies: organization_select/insert/update/delete
 ```
 
 Policy SQL checks:
+
 - Workspace: `workspace_id = ANY(current_setting('app.workspace_ids', true)::text[])`
 - Organization: `organization_id = current_setting('app.organization_id', true)`
 
@@ -87,6 +88,7 @@ combine with OR, so if either the normal or bootstrap policy
 passes, the row is visible.
 
 **`workspaces` — `bootstrap_select`:**
+
 ```sql
 USING (
   organization_id = current_setting('app.organization_id', true)
@@ -95,6 +97,7 @@ USING (
 ```
 
 **`workspace_members` — `bootstrap_select`:**
+
 ```sql
 USING (
   user_id = current_setting('app.user_id', true)
@@ -156,14 +159,14 @@ on each row for efficient filtering without JOINs.
 
 ## Key files
 
-| File | Role |
-| ---- | ---- |
-| `db/rls.ts` | Role, setting constants, SQL fragments, policy helpers |
-| `db/schema.ts` | Table definitions with `pgPolicy` in table configs |
-| `db/index.ts` | `createScopedDb`, `createBootstrapDb`, `db` |
-| `lib/auth.ts` | `resolveAccessibleWorkspaceIds` (uses bootstrapDb), `workspaceAccessMacro` (uses scopedDb) |
-| `drizzle/0001_stella-grants.sql` | GRANT statements for `stella` role |
-| `tests/security/rls-policies.test.ts` | Structural test: every scoped table has policies |
+| File                                  | Role                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `db/rls.ts`                           | Role, setting constants, SQL fragments, policy helpers                                     |
+| `db/schema.ts`                        | Table definitions with `pgPolicy` in table configs                                         |
+| `db/index.ts`                         | `createScopedDb`, `createBootstrapDb`, `db`                                                |
+| `lib/auth.ts`                         | `resolveAccessibleWorkspaceIds` (uses bootstrapDb), `workspaceAccessMacro` (uses scopedDb) |
+| `drizzle/0001_stella-grants.sql`      | GRANT statements for `stella` role                                                         |
+| `tests/security/rls-policies.test.ts` | Structural test: every scoped table has policies                                           |
 
 ## Design decisions
 

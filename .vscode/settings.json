@@ -7,16 +7,16 @@
   "emmet.showExpandedAbbreviation": "never",
   "typescript.experimental.useTsgo": true,
   "editor.codeActionsOnSave": {
-    "source.fixAll.oxc": "explicit",
+    "source.fixAll.oxc": "explicit"
   },
   "oxc.typeAware": true,
   "search.exclude": {
-    "**/routeTree.gen.ts": true,
+    "**/routeTree.gen.ts": true
   },
   "files.readonlyInclude": {
-    "**/routeTree.gen.ts": true,
+    "**/routeTree.gen.ts": true
   },
   "files.associations": {
-    "*.css": "tailwindcss",
-  },
+    "*.css": "tailwindcss"
+  }
 }

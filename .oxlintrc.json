@@ -2,7 +2,7 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
+    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json"
   ],
   "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
 
@@ -101,18 +101,18 @@
       "error",
       {
         "allowNullableString": true,
-        "allowNullableBoolean": true,
-      },
+        "allowNullableBoolean": true
+      }
     ],
     "typescript/no-confusing-void-expression": [
       "error",
-      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true },
+      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true }
     ],
     "typescript/prefer-nullish-coalescing": [
       "error",
       {
-        "ignorePrimitives": { "string": true, "boolean": true },
-      },
+        "ignorePrimitives": { "string": true, "boolean": true }
+      }
     ],
     "typescript/only-throw-error": [
       "error",
@@ -121,25 +121,25 @@
           {
             "from": "package",
             "name": ["Redirect", "AnyRedirect", "NotFoundError"],
-            "package": "@tanstack/router-core",
-          },
-        ],
-      },
+            "package": "@tanstack/router-core"
+          }
+        ]
+      }
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     // Conflicts with no-non-null-assertion: this rule wants `x!`
     // but we ban `!` assertions project-wide.
-    "typescript/non-nullable-type-assertion-style": "off",
+    "typescript/non-nullable-type-assertion-style": "off"
   },
   "overrides": [
     {
       "files": ["**/scripts/**"],
-      "rules": { "no-console": "off" },
+      "rules": { "no-console": "off" }
     },
     {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
-        "**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "**/__tests__/**/*.{ts,tsx,js,jsx}"
       ],
       "plugins": ["jest", "vitest"],
       "rules": {
@@ -154,8 +154,8 @@
         // Mock functions are often async without await to satisfy interface
         // return types (Promise<T>) without an actual async operation.
         "require-await": "off",
-        "typescript/unbound-method": "off",
-      },
-    },
-  ],
+        "typescript/unbound-method": "off"
+      }
+    }
+  ]
 }

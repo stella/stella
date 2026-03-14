@@ -217,15 +217,15 @@ persistence and a lookup API.
 
 ### File summary
 
-| File | Change |
-|---|---|
-| `apps/web/src/lib/anonymize/pdf-coords.ts` | New: coordinate mapping |
-| `apps/web/src/lib/anonymize/pdf-redact.ts` | New: overlay + content stream surgery |
-| `apps/web/src/lib/anonymize/redaction-map.ts` | New: map persistence + resolution API |
-| `apps/web/src/lib/anonymize/pdf-coords.test.ts` | New: tests |
-| `apps/web/src/lib/anonymize/pdf-redact.test.ts` | New: tests |
-| `apps/web/src/routes/_protected.dev/anonymize.tsx` | Modified: PDF upload, preview, download |
-| `apps/web/package.json` | Add `@libpdf/core` (already in api, add to web) |
+| File                                               | Change                                          |
+| -------------------------------------------------- | ----------------------------------------------- |
+| `apps/web/src/lib/anonymize/pdf-coords.ts`         | New: coordinate mapping                         |
+| `apps/web/src/lib/anonymize/pdf-redact.ts`         | New: overlay + content stream surgery           |
+| `apps/web/src/lib/anonymize/redaction-map.ts`      | New: map persistence + resolution API           |
+| `apps/web/src/lib/anonymize/pdf-coords.test.ts`    | New: tests                                      |
+| `apps/web/src/lib/anonymize/pdf-redact.test.ts`    | New: tests                                      |
+| `apps/web/src/routes/_protected.dev/anonymize.tsx` | Modified: PDF upload, preview, download         |
+| `apps/web/package.json`                            | Add `@libpdf/core` (already in api, add to web) |
 
 No DB schema changes. No backend changes.
 
