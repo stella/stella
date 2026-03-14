@@ -107,7 +107,7 @@ const imageMimeTypes = new Set([
   "image/webp",
 ]);
 
-export type DocumentIconProps = {
+type DocumentIconProps = {
   mimeType: string;
   className?: string;
 };

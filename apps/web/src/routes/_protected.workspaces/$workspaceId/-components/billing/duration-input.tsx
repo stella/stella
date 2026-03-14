@@ -17,7 +17,7 @@ const RE_PLAIN = /^(\d+)$/;
  * Accepts: "1.5" (hours), "1:30" (h:mm), "90m", "1h30m",
  * "1h", or a plain integer (interpreted as minutes).
  */
-export const parseDuration = (raw: string): number | null => {
+const parseDuration = (raw: string): number | null => {
   const s = raw.trim();
   if (s.length === 0) {
     return null;
@@ -52,7 +52,7 @@ export const parseDuration = (raw: string): number | null => {
   return null;
 };
 
-export const snapToIncrement = (minutes: number): number =>
+const snapToIncrement = (minutes: number): number =>
   Math.ceil(minutes / BILLING_INCREMENT) * BILLING_INCREMENT;
 
 export const formatMinutes = (minutes: number): string => {

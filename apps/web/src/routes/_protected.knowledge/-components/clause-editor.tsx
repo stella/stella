@@ -25,7 +25,7 @@ import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
 
 // ── Conversion: ClauseBody → TipTap JSON ────────────
 
-export const clauseBodyToTipTap = (body: ClauseParagraph[]): JSONContent => ({
+const clauseBodyToTipTap = (body: ClauseParagraph[]): JSONContent => ({
   type: "doc",
   content: body
     .filter((p) => !p.isDirective)
@@ -67,7 +67,7 @@ export const clauseBodyToTipTap = (body: ClauseParagraph[]): JSONContent => ({
 
 // ── Conversion: TipTap JSON → ClauseBody ────────────
 
-export const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
+const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
   const content = json.content ?? [];
 
   return content.map((node): ClauseParagraph => {

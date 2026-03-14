@@ -33,7 +33,7 @@ type PropertyHelperProps = {
 // Labels are English-only identifiers for programmatic use
 // (debugging, logging, fallback display). For user-facing UI,
 // use the <PropertyName> component which renders via useLocale().
-export const propertyMap: Record<
+const propertyMap: Record<
   PropertyIconType,
   {
     icon: LucideIcon;

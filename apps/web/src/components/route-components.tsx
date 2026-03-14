@@ -173,7 +173,7 @@ export const DefaultErrorComponent = ({
   );
 };
 
-export const UnauthorizedError = () => {
+const UnauthorizedError = () => {
   const { mutate } = useSignOut();
   const signOut = useEffectEvent(mutate);
 
@@ -192,7 +192,7 @@ type StatusMessageProps = {
   className?: string;
 };
 
-export const StatusMessage = ({
+const StatusMessage = ({
   status,
   title,
   description,

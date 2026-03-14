@@ -8,7 +8,7 @@ type FileOptionsProps = {
   fieldId: string;
 };
 
-export const filesKeys = {
+const filesKeys = {
   byFieldId: (props: FileOptionsProps) => [
     "files",
     props.workspaceId,

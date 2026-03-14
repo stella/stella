@@ -96,8 +96,6 @@ export const Route = createFileRoute("/_protected/workspaces/")({
   ),
 });
 
-export type RouteType = typeof Route;
-
 // -- Types --
 
 type WorkspacesQueryFn = Exclude<

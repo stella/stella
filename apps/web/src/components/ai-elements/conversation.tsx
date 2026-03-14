@@ -9,7 +9,7 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Button } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
-export type ConversationProps = ComponentProps<typeof StickToBottom>;
+type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
@@ -21,7 +21,7 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
   />
 );
 
-export type ConversationContentProps = ComponentProps<
+type ConversationContentProps = ComponentProps<
   typeof StickToBottom.Content
 >;
 
@@ -35,7 +35,7 @@ export const ConversationContent = ({
   />
 );
 
-export type ConversationEmptyStateProps = ComponentProps<"div"> & {
+type ConversationEmptyStateProps = ComponentProps<"div"> & {
   title?: string;
   description?: string;
   icon?: React.ReactNode;
@@ -70,7 +70,7 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
+type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
 export const ConversationScrollButton = ({
   className,
@@ -97,12 +97,12 @@ export const ConversationScrollButton = ({
   );
 };
 
-export type ConversationMessage = {
+type ConversationMessage = {
   role: "user" | "assistant" | "system" | "data" | "tool";
   content: string;
 };
 
-export type ConversationDownloadProps = Omit<
+type ConversationDownloadProps = Omit<
   ComponentProps<typeof Button>,
   "onClick"
 > & {
@@ -117,7 +117,7 @@ const defaultFormatMessage = (message: ConversationMessage): string => {
   return `**${roleLabel}:** ${message.content}`;
 };
 
-export const messagesToMarkdown = (
+const messagesToMarkdown = (
   messages: ConversationMessage[],
   formatMessage: (
     message: ConversationMessage,

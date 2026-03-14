@@ -5,14 +5,14 @@ import type { EntityKind } from "@stella/api/types";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
-export type SearchParams = {
+type SearchParams = {
   query: string;
   workspaceId?: string;
   kinds?: EntityKind[];
   limit?: number;
 };
 
-export const searchKeys = {
+const searchKeys = {
   all: ["search"] as const,
   query: (params: SearchParams) => [...searchKeys.all, params] as const,
 };

@@ -8,7 +8,7 @@ import { withActorTimeout } from "@/lib/rivet";
 import { sessionOptions } from "@/routes/-queries";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-export const viewsKeys = {
+const viewsKeys = {
   all: (workspaceId: string) => ["views", workspaceId],
 };
 

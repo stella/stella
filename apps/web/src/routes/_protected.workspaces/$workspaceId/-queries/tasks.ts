@@ -7,14 +7,12 @@ export const taskKeys = {
   all: (workspaceId: string) => ["tasks", workspaceId] as const,
   detail: (workspaceId: string, taskId: string) =>
     ["tasks", workspaceId, taskId] as const,
-  links: (workspaceId: string, entityId: string) =>
-    ["tasks", workspaceId, entityId, "links"] as const,
 };
 
 const getTaskEndpoint = (workspaceId: string, taskId: string) =>
   api.tasks({ workspaceId })({ taskId });
 
-export type TaskDetailAssignee = {
+type TaskDetailAssignee = {
   user: {
     id: string;
     name: string | null;
@@ -22,7 +20,7 @@ export type TaskDetailAssignee = {
   };
 };
 
-export type TaskDetailChild = {
+type TaskDetailChild = {
   id: string;
   name: string | null;
   status: string | null;
@@ -32,7 +30,7 @@ export type TaskDetailChild = {
   createdAt: Date;
 };
 
-export type TaskDetailLink = {
+type TaskDetailLink = {
   targetEntity: {
     id: string;
     name: string | null;
@@ -40,7 +38,7 @@ export type TaskDetailLink = {
   };
 };
 
-export type TaskDetailLinkReverse = {
+type TaskDetailLinkReverse = {
   sourceEntity: {
     id: string;
     name: string | null;
@@ -48,7 +46,7 @@ export type TaskDetailLinkReverse = {
   };
 };
 
-export type TaskDetail = {
+type TaskDetail = {
   id: string;
   name: string | null;
   kind: string;
@@ -80,18 +78,3 @@ export const taskDetailOptions = (workspaceId: string, taskId: string) =>
     enabled: !!taskId,
   });
 
-export const taskLinksOptions = (workspaceId: string, entityId: string) =>
-  queryOptions({
-    queryKey: taskKeys.links(workspaceId, entityId),
-    queryFn: async ({ signal }) => {
-      const endpoint = getTaskEndpoint(workspaceId, entityId);
-      const response = await endpoint.links.get({
-        fetch: { signal },
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    enabled: !!entityId,
-  });

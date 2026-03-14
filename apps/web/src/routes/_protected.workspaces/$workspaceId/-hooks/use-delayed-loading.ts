@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export type UseDelayedLoadingProps = {
+type UseDelayedLoadingProps = {
   isLoading: boolean;
   timeout: number;
 };

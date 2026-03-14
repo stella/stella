@@ -72,16 +72,6 @@ export const putEntry = async (entry: GazetteerEntry): Promise<void> => {
 };
 
 /**
- * Remove a gazetteer entry by ID.
- */
-export const deleteEntry = async (id: string): Promise<void> => {
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
-  const db = await getDb();
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
-  await db.delete(STORE_NAME, id);
-};
-
-/**
  * Collect all searchable strings (canonical + variants)
  * from gazetteer entries, mapped to their labels.
  */

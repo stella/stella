@@ -4,7 +4,7 @@ import type { PDF, PdfDict, PdfRef, PdfStream } from "@libpdf/core";
  * A redaction region on a specific page for content stream
  * neutralisation. Coordinates are in PDF user space.
  */
-export type RedactionBox = {
+type RedactionBox = {
   x: number;
   y: number;
   width: number;

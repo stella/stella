@@ -62,7 +62,7 @@ export const MetadataRow = ({
 
 // -- Icon helpers --
 
-export const StatusIcon = ({ status }: { status: TaskStatus }) => {
+const StatusIcon = ({ status }: { status: TaskStatus }) => {
   const Icon = STATUS_ICONS[status];
   return <Icon className={cn("size-3.5", STATUS_COLORS[status])} />;
 };

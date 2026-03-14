@@ -5,7 +5,6 @@ import type { RowData } from "@tanstack/table-core";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import type {
-  ViewFilterCondition,
   WorkspaceEntity,
   WorkspaceField,
   WorkspaceProperty,
@@ -14,15 +13,7 @@ import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/
 
 type InternalColId = "select" | "add-property";
 
-const internalColMap: Record<InternalColId, null> = {
-  select: null,
-  "add-property": null,
-};
-
 export const getInternalColId = (col: InternalColId): InternalColId => col;
-
-export const isInternalColId = (id: string): id is InternalColId =>
-  Object.keys(internalColMap).includes(id);
 
 // -- Internal property IDs (metadata columns stored in view config) --
 
@@ -42,11 +33,6 @@ export type InternalPropertyId = `_${InternalProperty}`;
 export const getInternalPropertyId = (
   p: InternalProperty,
 ): InternalPropertyId => `_${p}`;
-
-export const isInternalPropertyId = (id: string): id is InternalPropertyId =>
-  id.startsWith("_") &&
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: guarded by INTERNAL_PROPERTIES.includes
-  INTERNAL_PROPERTIES.includes(id.slice(1) as InternalProperty);
 
 export const getPinningStyles = <T = WorkspaceEntity>(
   column: Column<T>,
@@ -83,50 +69,6 @@ export const getPinningStyles = <T = WorkspaceEntity>(
     width: column.getSize(),
     zIndex: isPinned ? (isSelectColumn ? 3 : 2) : undefined,
   };
-};
-
-export const validateFieldForComputation = (
-  field: WorkspaceField | undefined,
-) => {
-  if (!field) {
-    return true;
-  }
-
-  if (field.content.type === "pending") {
-    return false;
-  }
-
-  if (field.content.type === "file") {
-    return true;
-  }
-
-  if (field.content.type === "error") {
-    return true;
-  }
-
-  if (field.content.type === "unsupported") {
-    return true;
-  }
-
-  if (field.content.type === "multi-select") {
-    return (
-      field.content.value?.every((value) => value.trim().length <= 0) ?? false
-    );
-  }
-
-  if (field.content.type === "date") {
-    return !field.content.value || field.content.value.trim().length <= 0;
-  }
-
-  if (field.content.type === "int") {
-    return false;
-  }
-
-  if (field.content.value === null) {
-    return false;
-  }
-
-  return field.content.value.trim().length <= 0;
 };
 
 declare module "@tanstack/table-core" {
@@ -199,33 +141,6 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
       : "Untitled";
 };
 
-export const getEntityTypeLabel = (entity: WorkspaceEntity): string => {
-  if (entity.kind === "folder") {
-    return "Folder";
-  }
-
-  const fileField = Object.values(entity.fields).find(
-    (f) => f.content.type === "file",
-  );
-
-  if (fileField?.content.type === "file") {
-    const parts = fileField.content.fileName.split(".");
-    if (parts.length > 1) {
-      const ext = parts.at(-1);
-      if (ext) {
-        return `.${ext}`;
-      }
-    }
-
-    const mimeExt = fileField.content.mimeType.split("/").pop();
-    if (mimeExt) {
-      return mimeExt.toUpperCase();
-    }
-  }
-
-  return entity.kind.charAt(0).toUpperCase() + entity.kind.slice(1);
-};
-
 export const getFirstFile = (entity: WorkspaceEntity) => {
   for (const [propertyId, field] of Object.entries(entity.fields)) {
     if (field.content.type === "file") {
@@ -242,82 +157,6 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
   }
 
   return null;
-};
-
-const matchesFilter = (
-  entity: WorkspaceEntity,
-  filter: ViewFilterCondition,
-): boolean => {
-  if (filter.field === "kind") {
-    if (filter.value.length === 0) {
-      return true;
-    }
-    // "document" implies "folder" (part of the same hierarchy)
-    if (filter.value.includes("document") && entity.kind === "folder") {
-      return true;
-    }
-    return filter.value.includes(entity.kind);
-  }
-
-  if (filter.field === "builtin") {
-    const val =
-      filter.builtinField === "status"
-        ? (entity.status ?? "")
-        : filter.builtinField === "priority"
-          ? (entity.priority ?? "")
-          : "";
-    const filterVal = String(filter.value ?? "");
-    switch (filter.op) {
-      case "eq":
-        return val === filterVal;
-      case "neq":
-        return val !== filterVal;
-      case "in": {
-        const arr = Array.isArray(filter.value)
-          ? filter.value
-          : filterVal
-            ? [filterVal]
-            : [];
-        return arr.length === 0 || arr.includes(val);
-      }
-      case "is_empty":
-        return val === "";
-      default:
-        return true;
-    }
-  }
-
-  const fieldValue = getFieldValue(entity.fields[filter.propertyId]);
-
-  const normalizedValue = fieldValue ?? "";
-
-  switch (filter.op) {
-    case "eq":
-      return normalizedValue === (filter.value ?? "");
-    case "neq":
-      return normalizedValue !== (filter.value ?? "");
-    case "contains":
-      return normalizedValue
-        .toLowerCase()
-        .includes(String(filter.value ?? "").toLowerCase());
-    case "is_empty":
-      return normalizedValue === "";
-    default:
-      return true;
-  }
-};
-
-export const applyFilters = (
-  entities: WorkspaceEntity[],
-  filters: ViewFilterCondition[],
-): WorkspaceEntity[] => {
-  if (filters.length === 0) {
-    return entities;
-  }
-
-  return entities.filter((entity) =>
-    filters.every((filter) => matchesFilter(entity, filter)),
-  );
 };
 
 const MINUTE = 60_000;
@@ -385,90 +224,6 @@ export const formatFullTimestamp = (
   });
 };
 
-export const applySorts = (
-  entities: WorkspaceEntity[],
-  sorts: { propertyId: string; desc: boolean }[],
-): WorkspaceEntity[] => {
-  if (sorts.length === 0) {
-    return entities;
-  }
-
-  return [...entities].toSorted((a, b) => {
-    for (const sort of sorts) {
-      const fieldA = a.fields[sort.propertyId];
-      const fieldB = b.fields[sort.propertyId];
-      const dir = sort.desc ? -1 : 1;
-
-      if (fieldA?.content.type === "int" && fieldB?.content.type === "int") {
-        const cmp = (fieldA.content.value - fieldB.content.value) * dir;
-        if (cmp !== 0) {
-          return cmp;
-        }
-        continue;
-      }
-
-      const valueA = getFieldValue(fieldA);
-      const valueB = getFieldValue(fieldB);
-      const cmp = (valueA ?? "").localeCompare(valueB ?? "") * dir;
-
-      if (cmp !== 0) {
-        return cmp;
-      }
-    }
-
-    return 0;
-  });
-};
-
-// -- Entity parsing --
-
-type RawEntity = {
-  entityId: string;
-  kind: WorkspaceEntity["kind"];
-  name: string | null;
-  parentId: string | null;
-  createdAt: string;
-  createdBy: string | null;
-  createdByImage: string | null;
-  updatedAt: string | null;
-  version: number;
-  status: string | null;
-  priority: string | null;
-  dueDate: string | null;
-  sortOrder: string | null;
-  fields: {
-    id: string;
-    propertyId: string;
-    entityId: string;
-    content: WorkspaceField["content"];
-  }[];
-};
-
-export const parseEntities = (entities: RawEntity[]): WorkspaceEntity[] =>
-  entities.map((e) => ({
-    entityId: e.entityId,
-    kind: e.kind,
-    name: e.name,
-    parentId: e.parentId,
-    createdAt: e.createdAt,
-    createdBy: e.createdBy,
-    createdByImage: e.createdByImage,
-    updatedAt: e.updatedAt,
-    version: e.version,
-    status: e.status,
-    priority: e.priority,
-    dueDate: e.dueDate,
-    sortOrder: e.sortOrder,
-    fields: e.fields.reduce<Record<string, WorkspaceField>>((acc, field) => {
-      acc[field.propertyId] = {
-        id: field.id,
-        entityId: e.entityId,
-        content: field.content,
-      };
-      return acc;
-    }, {}),
-  }));
-
 // -- Tree utilities (shared between filesystem and table views) --
 
 export const buildTree = (entities: WorkspaceEntity[]): TableTreeNode[] => {
@@ -526,21 +281,6 @@ export const findNode = (
     node = stack.pop();
   }
   return null;
-};
-
-/** Collect all row IDs from a tree node and its descendants. */
-export const collectDescendantIds = (node: TableTreeNode): string[] => {
-  const ids: string[] = [];
-  const stack = [...node.children];
-  let child = stack.pop();
-  while (child) {
-    ids.push(child.entityId);
-    for (const grandchild of child.children) {
-      stack.push(grandchild);
-    }
-    child = stack.pop();
-  }
-  return ids;
 };
 
 /** Count all descendants (non-recursive, stack-based). */
