@@ -1,16 +1,18 @@
 import tailwindcss from "@tailwindcss/vite";
+import babel from "@rolldown/plugin-babel";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import react from "@vitejs/plugin-react-swc";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   server: {
     port: 3000,
   },
+  resolve: {
+    tsconfigPaths: true,
+  },
   plugins: [
-    tsConfigPaths(),
     devtools(),
     tailwindcss(),
     tanstackRouter({
@@ -18,5 +20,10 @@ export default defineConfig({
       autoCodeSplitting: true,
     }),
     react(),
+    babel({
+      filter: /\.[jt]sx?$/,
+      parserOpts: { plugins: ["typescript", "jsx"] },
+      presets: [reactCompilerPreset()],
+    }),
   ],
 });
