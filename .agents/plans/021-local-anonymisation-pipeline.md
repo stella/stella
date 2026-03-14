@@ -33,7 +33,6 @@ redaction key for authorised de-anonymisation.
   catch free-form names. The pipeline stacks five independent
   detection layers, each contributing Entity spans with
   confidence scores, then merges and deduplicates:
-
   1. **Trigger phrases** — domain-specific prefixes from JSON
      configs (Czech: 21 rules, German: 16 rules). Score: 0.95.
   2. **Regex patterns** — structured formats (IBAN, email,
@@ -62,7 +61,7 @@ redaction key for authorised de-anonymisation.
   review with non-PII detections.
 
 - **Stable, normalised placeholder mapping.** Surface-form
-  variations of the same entity ("Dr.  Müller" vs "Dr. Müller",
+  variations of the same entity ("Dr. Müller" vs "Dr. Müller",
   "+420 123 456 789" vs "+420123456789") map to the same
   placeholder via label-aware normalisation (emails lowercased,
   phones stripped, IBANs uppercased, names collapsed). First
@@ -200,17 +199,17 @@ DOCX upload
 
 ## Test Cases (131 tests, all passing)
 
-| Suite | Tests | Covers |
-|---|---|---|
-| `pipeline.test.ts` | 29 | End-to-end pipeline, merge/dedup, config flags |
-| `regex-patterns.test.ts` | 24 | All regex patterns, edge cases, titled persons |
-| `trigger-phrases.test.ts` | 18 | Czech/German triggers, extraction strategies |
-| `redact.test.ts` | 13 | Placeholder mapping, normalisation, de-anonymisation |
-| `false-positive-filter.test.ts` | 12 | All filter categories |
-| `chunker.test.ts` | 10 | Splitting, offsets, chunk entity merging |
-| `levenshtein.test.ts` | 10 | Edit distance correctness |
-| `coreference.test.ts` | 9 | Defined terms, alias scanning, multilingual |
-| `confidence-boost.test.ts` | 6 | Near-miss promotion, no-op cases |
+| Suite                           | Tests | Covers                                               |
+| ------------------------------- | ----- | ---------------------------------------------------- |
+| `pipeline.test.ts`              | 29    | End-to-end pipeline, merge/dedup, config flags       |
+| `regex-patterns.test.ts`        | 24    | All regex patterns, edge cases, titled persons       |
+| `trigger-phrases.test.ts`       | 18    | Czech/German triggers, extraction strategies         |
+| `redact.test.ts`                | 13    | Placeholder mapping, normalisation, de-anonymisation |
+| `false-positive-filter.test.ts` | 12    | All filter categories                                |
+| `chunker.test.ts`               | 10    | Splitting, offsets, chunk entity merging             |
+| `levenshtein.test.ts`           | 10    | Edit distance correctness                            |
+| `coreference.test.ts`           | 9     | Defined terms, alias scanning, multilingual          |
+| `confidence-boost.test.ts`      | 6     | Near-miss promotion, no-op cases                     |
 
 Snapshot tests cover full pipeline output on Czech and German
 fixture documents.

@@ -30,15 +30,14 @@ redaction runs; the output adapts accordingly.
 
 - **Two built-in operators (reduced from six):**
 
-  | Operator | Output | Reversible |
-  |---|---|---|
-  | `replace` | `[LABEL_N]` stable placeholder | Yes (via redaction key) |
-  | `redact` | customizable string (default `[REDACTED]`) | No |
+  | Operator  | Output                                     | Reversible              |
+  | --------- | ------------------------------------------ | ----------------------- |
+  | `replace` | `[LABEL_N]` stable placeholder             | Yes (via redaction key) |
+  | `redact`  | customizable string (default `[REDACTED]`) | No                      |
 
   Originally planned six operators (mask, hash, generalise, encrypt
   in addition to replace and redact). Dropped four after evaluating
   against the ICP:
-
   - **mask** (`J** N****`): partially guessable from context,
     AI can't meaningfully reference masked text back to the user.
     A compliance/data-science pattern, not useful for the
@@ -152,7 +151,12 @@ redaction runs; the output adapts accordingly.
 
 ```typescript
 export const OPERATOR_TYPES = [
-  "replace", "redact", "mask", "hash", "generalise", "encrypt",
+  "replace",
+  "redact",
+  "mask",
+  "hash",
+  "generalise",
+  "encrypt",
 ] as const;
 
 export type OperatorType = (typeof OPERATOR_TYPES)[number];
@@ -232,6 +236,7 @@ export const redactText = async (
 ```
 
 Internal flow:
+
 1. `buildPlaceholderMap` runs unchanged (placeholder assignment is
    still label+text keyed, operator does not affect naming).
 2. For each non-overlapping entity, look up `operatorConfig[entity.label]`

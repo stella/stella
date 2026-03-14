@@ -126,7 +126,6 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    this comment** — it serves as a persistent review overview.
 
    Instead, parse and address the actionable parts:
-
    - **Confidence Score section**: if it lists specific issues or files
      holding back the score, treat each as a suggestion to accept or
      push back on (same decision guidelines as review threads).
