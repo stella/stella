@@ -38,12 +38,11 @@ type PendingFile = {
   errorMessage?: string;
 };
 
-let fileIdCounter = 0;
-
 export const useChatAttachments = () => {
   const t = useTranslations();
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileIdCounterRef = useRef(0);
   const pendingCountRef = useRef(0);
   pendingCountRef.current = pendingFiles.length;
 
@@ -70,8 +69,8 @@ export const useChatAttachments = () => {
           continue;
         }
 
-        fileIdCounter += 1;
-        const id = `file-${fileIdCounter}`;
+        fileIdCounterRef.current += 1;
+        const id = `file-${fileIdCounterRef.current}`;
         newPending.push({
           id,
           filename: file.name,

@@ -56,7 +56,6 @@
     "@tiptap/extension-text": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/suggestion": "^3.20.0",
-    "@vitejs/plugin-react-swc": "^4.2.3",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "diff-match-patch": "catalog:",
@@ -86,6 +85,8 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@rolldown/plugin-babel": "^0.2.0",
     "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "^4.2.1",
@@ -95,9 +96,10 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "@vitejs/plugin-react": "^6.0.0",
+    "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
     "react-grab": "^0.1.26",
-    "typescript": "catalog:",
-    "vite-tsconfig-paths": "^6.1.1"
+    "typescript": "catalog:"
   }
 }
