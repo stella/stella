@@ -167,6 +167,12 @@ export const MODEL_OPTIONS: readonly ModelOption[] = [
     tokenizer: "onnx-community/gliner_multi-v2.1",
   },
   {
+    id: "pii-edge",
+    label: "PII Edge (fp32, ~170 MB)",
+    url: "https://huggingface.co/knowledgator/gliner-pii-edge-v1.0/resolve/main/onnx/model.onnx",
+    tokenizer: "onnx-community/gliner_multi_pii-v1",
+  },
+  {
     id: "pii-edge-fp16",
     label: "PII Edge (fp16, 91 MB)",
     url: "https://huggingface.co/knowledgator/gliner-pii-edge-v1.0/resolve/main/onnx/model_fp16.onnx",

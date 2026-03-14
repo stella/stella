@@ -1,21 +1,19 @@
-// TODO: FIXME — @huggingface/transformers and onnxruntime-web types resolve as error/any
 /**
  * GLiNER span-level NER model (web-only).
  *
  * Forked from gliner@0.0.19 (MIT license). Stripped to
  * span-level model only, web-only execution, typed, and
  * using onnxruntime-web directly. The tokenizer is loaded
- * via @huggingface/transformers AutoTokenizer.
+ * via @huggingface/tokenizers (pure JS, no ONNX dep).
  *
  * Original: github.com/Ingvarstep/GLiNER.js
  */
-import type { PreTrainedTokenizer } from "@huggingface/transformers";
-import { AutoTokenizer, env } from "@huggingface/transformers";
+import { Tokenizer } from "@huggingface/tokenizers";
 import type { Tensor } from "onnxruntime-web";
 
 import { decodeSpans } from "./decoder";
 import { createOnnxWrapper } from "./onnx-wrapper";
-import { prepareBatch } from "./processor";
+import { prepareBatch, tokenizeText } from "./processor";
 import type {
   EntityResult,
   GlinerConfig,
@@ -27,27 +25,81 @@ export type { EntityResult, ExecutionProvider, GlinerConfig } from "./types";
 
 const DEFAULT_MAX_WIDTH = 12;
 
+const TOKENIZER_CACHE_NAME = "gliner-tokenizers";
+
+/**
+ * Fetch and cache tokenizer JSON files from HuggingFace.
+ * Uses the Cache API so subsequent loads are instant.
+ */
+const fetchWithCache = async (
+  url: string,
+): Promise<Record<string, unknown>> => {
+  // Cache API may be unavailable on non-secure origins
+  // or in some browser/worker contexts. Scope the try/catch
+  // to cache operations only so fetch errors surface
+  // immediately without a redundant retry.
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(TOKENIZER_CACHE_NAME);
+    const cached = await cache.match(url);
+    if (cached) {
+      // SAFETY: tokenizer JSON files are always objects
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      return (await cached.json()) as Record<string, unknown>;
+    }
+  } catch {
+    // Cache API unavailable — fall through to plain fetch
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}: ${response.status}`);
+  }
+  if (cache) {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- quota errors are non-fatal
+    await cache.put(url, response.clone()).catch(() => {});
+  }
+  // SAFETY: tokenizer JSON files are always objects
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+  return (await response.json()) as Record<string, unknown>;
+};
+
+const fetchTokenizerFiles = async (
+  modelId: string,
+): Promise<{
+  tokenizerJson: Record<string, unknown>;
+  tokenizerConfig: Record<string, unknown>;
+}> => {
+  const baseUrl = `https://huggingface.co/${modelId}/resolve/main`;
+  const urls = [
+    `${baseUrl}/tokenizer.json`,
+    `${baseUrl}/tokenizer_config.json`,
+  ];
+
+  const [tokenizerJson, tokenizerConfig] = await Promise.all(
+    urls.map(fetchWithCache),
+  );
+
+  return { tokenizerJson, tokenizerConfig };
+};
+
 export class Gliner {
   private readonly config: GlinerConfig;
   private readonly maxWidth: number;
   private onnx: OnnxWrapper | null = null;
-  // oxlint-disable-next-line typescript-eslint/no-redundant-type-constituents
-  private tokenizer: PreTrainedTokenizer | null = null;
+  private tokenizer: Tokenizer | null = null;
 
   constructor(config: GlinerConfig) {
     this.config = config;
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
-    env.allowLocalModels = false;
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access
-    env.useBrowserCache = false;
     this.maxWidth = config.maxWidth ?? DEFAULT_MAX_WIDTH;
   }
 
   async initialize(): Promise<void> {
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
-    this.tokenizer = await AutoTokenizer.from_pretrained(
+    const { tokenizerJson, tokenizerConfig } = await fetchTokenizerFiles(
       this.config.tokenizerPath,
     );
+
+    this.tokenizer = new Tokenizer(tokenizerJson, tokenizerConfig);
 
     this.onnx = createOnnxWrapper(this.config.onnxSettings);
     await this.onnx.init();
@@ -66,14 +118,51 @@ export class Gliner {
     threshold?: number;
     multiLabel?: boolean;
   }): Promise<EntityResult[][]> {
-    // oxlint-disable-next-line typescript-eslint/strict-boolean-expressions
     if (!this.onnx || !this.tokenizer) {
       throw new Error("Model not initialised. Call initialize() first.");
     }
 
-    const batch = prepareBatch(this.tokenizer, texts, entities, this.maxWidth);
+    // Filter out texts with no word tokens. A text may be
+    // non-empty after trim() but still produce zero words
+    // from Intl.Segmenter (e.g., "... --- !!!", "§", "/:")
+    // because punctuation is not word-like. These produce
+    // empty span tensors that ONNX rejects with
+    // "invalid input 'span_idx'".
+    const validIndices: number[] = [];
+    const validTexts: string[] = [];
+    for (let i = 0; i < texts.length; i++) {
+      const [words] = tokenizeText(texts[i]);
+      if (words.length > 0) {
+        validIndices.push(i);
+        validTexts.push(texts[i]);
+      }
+    }
+
+    // Return empty results for all texts if none are valid
+    if (validTexts.length === 0) {
+      return texts.map(() => []);
+    }
+
+    const batch = prepareBatch(
+      this.tokenizer,
+      validTexts,
+      entities,
+      this.maxWidth,
+    );
 
     const batchSize = batch.batchTokens.length;
+
+    // If all texts tokenize to zero words, return empty.
+    // Check all elements (not just [0]) — mixed batches
+    // where some elements have zero spans are also invalid.
+    const maxSpans =
+      batch.spanIdxs.length > 0
+        ? Math.max(...batch.spanIdxs.map((s) => s.length))
+        : 0;
+    if (batchSize === 0 || maxSpans === 0) {
+      return texts.map(() => []);
+    }
+
     const numTokens = batch.inputsIds[0].length;
     const numSpans = batch.spanIdxs[0].length;
 
@@ -87,30 +176,21 @@ export class Gliner {
       dtype: any = "int64",
     ): Tensor =>
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- flat data for ONNX tensor
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-call
       new ort.Tensor(dtype, data.flat(Infinity), shape);
 
     const feeds = {
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       input_ids: tensor(batch.inputsIds, [batchSize, numTokens]),
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       attention_mask: tensor(batch.attentionMasks, [batchSize, numTokens]),
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       words_mask: tensor(batch.wordsMasks, [batchSize, numTokens]),
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       text_lengths: tensor(
         batch.textLengths.map((l) => [l]),
         [batchSize, 1],
       ),
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       span_idx: tensor(batch.spanIdxs, [batchSize, numSpans, 2]),
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       span_mask: tensor(batch.spanMasks, [batchSize, numSpans], "bool"),
     };
 
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     const results = await this.onnx.run(feeds);
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
     const logits = results["logits"];
 
     const inputLength = Math.max(...batch.textLengths);
@@ -122,20 +202,19 @@ export class Gliner {
       inputLength,
       this.maxWidth,
       numEntities,
-      texts,
+      validTexts,
       batchIds,
       batch.batchWordsStartIdx,
       batch.batchWordsEndIdx,
       batch.idToClass,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- logits.data is Float32Array, accessed by index like number[]
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access, typescript-eslint/no-unsafe-type-assertion
       logits.data as unknown as number[],
       flatNer,
       threshold,
       multiLabel,
     );
 
-    return raw.map((batchResult) =>
+    const validResults = raw.map((batchResult) =>
       batchResult.map(([spanText, start, end, label, score]) => ({
         spanText,
         start,
@@ -144,5 +223,12 @@ export class Gliner {
         score,
       })),
     );
+
+    // Map results back to original text indices
+    const allResults: EntityResult[][] = texts.map(() => []);
+    for (let i = 0; i < validIndices.length; i++) {
+      allResults[validIndices[i]] = validResults[i];
+    }
+    return allResults;
   }
 }

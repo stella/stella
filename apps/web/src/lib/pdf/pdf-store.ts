@@ -1,12 +1,8 @@
 import { LRUCache } from "lru-cache";
-import { getDocument } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-// Side-effect import: loads the worker code on the main thread.
-// pdfjs-dist detects this and uses a "fake worker" (main-thread
-// fallback) instead of spawning a real Web Worker. This avoids
-// Vite's HMR injection issue where `/@vite/client` hangs inside
-// a Worker context. Performance is equivalent for typical PDFs.
-import "pdfjs-dist/build/pdf.worker.mjs";
+// eslint-disable-next-line import/default -- Vite ?url import returns the asset URL as default export
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -14,6 +10,13 @@ import { getStorageKey } from "@/consts";
 import { DEFAULT_PAGE_BUFFER_SIZE } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
 import { getOrderedPages } from "@/lib/pdf/utils";
+
+// In dev, Vite's /@fs/ transform hangs on the 1.2 MB worker
+// file. Use a static copy from public/ instead. Production
+// builds use the content-hashed ?url import.
+GlobalWorkerOptions.workerSrc = import.meta.env.DEV
+  ? "/pdf.worker.min.mjs"
+  : pdfjsWorkerUrl;
 
 export const PDF_WIDTH = 768; // px, screen md
 
@@ -163,6 +166,8 @@ export const usePdfStore = create<State & Actions>()(
         startPageNumber,
         scaleOffset,
       }) => {
+        signal.throwIfAborted();
+
         const state = get();
 
         const pdfs = new Map(state.pdfs);
@@ -334,7 +339,8 @@ export const usePdfStore = create<State & Actions>()(
             existingBuffer.clear();
           }
 
-          // don't commit the state if the abort signal is aborted
+          // Don't commit state if the caller aborted while
+          // we were loading pages.
           signal.throwIfAborted();
 
           set({

@@ -51,7 +51,9 @@ const normalizeEntityText = (label: string, text: string): string => {
  * Placeholder format: [LABEL_N] where LABEL is uppercase
  * and N is a 1-based counter per label.
  */
-const buildPlaceholderMap = (entities: Entity[]): Map<string, string> => {
+export const buildPlaceholderMap = (
+  entities: Entity[],
+): Map<string, string> => {
   const counters = new Map<string, number>();
   const textLabelToPlaceholder = new Map<string, string>();
   const normalizedToPlaceholder = new Map<string, string>();

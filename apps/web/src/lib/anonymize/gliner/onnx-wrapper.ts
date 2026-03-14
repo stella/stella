@@ -11,15 +11,29 @@ import ort_WEBGPU from "onnxruntime-web/webgpu";
 
 import type { OnnxWebSettings, OnnxWrapper } from "./types";
 
-const ONNX_WASM_CDN =
-  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
+/**
+ * Derive the CDN base URL for WASM files from the installed
+ * onnxruntime-web version. In dev mode Vite cannot serve WASM
+ * from node_modules, so we load them from jsdelivr instead.
+ * The version is read from the package at build time via
+ * ort_CPU.env so it stays in sync automatically.
+ */
+const resolveWasmPaths = (): string => {
+  // ort.env.versions?.web gives the runtime version string
+  // in onnxruntime-web >=1.17
+  const version = ort_CPU.env.versions?.web;
+  if (version) {
+    return `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/`;
+  }
+  // Fallback: use the pinned installed version
+  return "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
+};
 
 export const createOnnxWrapper = (settings: OnnxWebSettings): OnnxWrapper => {
   const provider = settings.executionProvider ?? "webgpu";
-  const wasmPaths = settings.wasmPaths ?? ONNX_WASM_CDN;
+  const wasmPaths = settings.wasmPaths ?? resolveWasmPaths();
 
   const ort = provider === "webgpu" ? ort_WEBGPU : ort_CPU;
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access -- onnxruntime-web env types resolve as any in worker context
   ort.env.wasm.wasmPaths = wasmPaths;
 
   // oxlint-disable-next-line typescript-eslint/no-redundant-type-constituents -- InferenceSession resolves to error type in web worker context
@@ -45,7 +59,6 @@ export const createOnnxWrapper = (settings: OnnxWebSettings): OnnxWrapper => {
 
         if (settings.multiThread) {
           const maxPossible = navigator.hardwareConcurrency ?? 0;
-          // oxlint-disable-next-line typescript-eslint/no-unsafe-member-access -- onnxruntime-web env types resolve as any in worker context
           ort.env.wasm.numThreads = Math.min(
             settings.maxThreads ?? maxPossible,
             maxPossible,
