@@ -108,4 +108,6 @@ export const API_RATE_LIMITS = {
   api: { duration: 60_000, max: 100 },
   /** Rivet actors: 500 req/min. */
   rivet: { duration: 60_000, max: 500 },
+  /** File uploads: 500 req/min (separate budget). */
+  upload: { duration: 60_000, max: 500 },
 } as const;

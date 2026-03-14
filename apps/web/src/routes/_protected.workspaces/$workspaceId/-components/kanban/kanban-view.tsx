@@ -9,7 +9,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { usePostHog } from "@posthog/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -257,11 +256,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       }
 
       for (const result of results) {
-        if (!Result.isOk(result)) {
-          continue;
-        }
-
-        const { entityId } = result.value;
+        const { entityId } = result;
         const content = {
           version: 1 as const,
           type: "single-select" as const,

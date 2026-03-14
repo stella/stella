@@ -1048,6 +1048,8 @@ type Messages = {
       "uploading": "Uploading files";
       "uploadingDescription": "Don't close this page until the files are uploaded";
       "uploadingProgress": "{completed, number} of {total, number} uploaded";
+      "rateLimited": "Rate limited; resuming in {seconds, number}s";
+      "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly.";
     };
     "filesystem": {
@@ -1215,6 +1217,7 @@ type Messages = {
         "addDates": "+ Dates";
         "additionalDates": "+{count} dates";
         "createdAt": "Created at";
+        "dueDateTaskOnly": "Due date can only be set for tasks";
         "month": "Month";
         "more": "+{count} more";
         "noDates": "No date property selected";
@@ -1224,7 +1227,6 @@ type Messages = {
         "updatedAt": "Last updated";
         "week": "Week";
         "year": "Year";
-        "dueDateTaskOnly": "Due date can only be set for tasks";
       };
       "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";

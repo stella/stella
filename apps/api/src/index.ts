@@ -113,6 +113,8 @@ const api = new Elysia()
           max: API_RATE_LIMITS.api.max,
           generator: scopedGenerator("api"),
           context: new RedisRateLimitContext(),
+          skip: (req) =>
+            /\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
         }),
       )
       .use(workspacesRoute)
