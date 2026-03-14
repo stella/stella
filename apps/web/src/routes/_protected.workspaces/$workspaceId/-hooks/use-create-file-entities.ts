@@ -1,14 +1,16 @@
+import { useCallback } from "react";
+
 import { usePostHog } from "@posthog/react";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { toastManager } from "@stella/ui/components/toast";
 
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { api } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
+import { UploadQueue } from "@/lib/upload-queue";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   propertiesKeys,
@@ -27,50 +29,56 @@ const formatFailedFiles = (names: string[]): string => {
   return list;
 };
 
-export const uploadFileEntity = async (
+type UploadResult = {
+  entityId: string;
+  fileId: string;
+  fileName: string;
+  renamed: boolean;
+};
+
+/**
+ * Upload a single file via Eden. Throws on failure with the
+ * HTTP status preserved on the error object. Attaches the raw
+ * `Response` so the upload queue can read `Retry-After`.
+ */
+const uploadSingleFile = async (
   file: File,
   workspaceId: string,
   propertyId: string,
-) =>
-  await Result.tryPromise(
+  signal: AbortSignal,
+): Promise<UploadResult> => {
+  const response = await api.entities({ workspaceId }).upload.post(
     {
-      try: async () => {
-        const response = await api.entities({ workspaceId }).upload.post({
-          queryKey: entitiesKeys.all(workspaceId),
-          file,
-          name: file.name,
-          propertyId,
-        });
-
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-
-        return {
-          entityId: response.data.entityId,
-          fileId: response.data.fileId,
-          fileName: response.data.fileName,
-          renamed: response.data.renamed,
-        };
-      },
-      catch: (error) =>
-        error instanceof APIError
-          ? error
-          : new APIError({
-              status: 500,
-              message: "Upload failed",
-            }),
+      queryKey: entitiesKeys.all(workspaceId),
+      file,
+      name: file.name,
+      propertyId,
     },
-    {
-      retry: {
-        times: 3,
-        backoff: "exponential",
-        delayMs: 500,
-      },
-    },
+    { fetch: { signal } },
   );
 
-type UploadResult = Awaited<ReturnType<typeof uploadFileEntity>>;
+  if (response.error) {
+    const error = toAPIError(response.error);
+
+    // Attach the raw Response so the queue can extract
+    // the Retry-After header on 429 responses.
+    if (response.response !== undefined) {
+      Object.defineProperty(error, "response", {
+        value: response.response,
+        enumerable: false,
+      });
+    }
+
+    throw error;
+  }
+
+  return {
+    entityId: response.data.entityId,
+    fileId: response.data.fileId,
+    fileName: response.data.fileName,
+    renamed: response.data.renamed,
+  };
+};
 
 type BatchUploadLabels = {
   uploading: string;
@@ -80,14 +88,9 @@ type BatchUploadLabels = {
   progress: (completed: number, total: number) => string;
   partial: (failed: number, total: number) => string;
   renamed: (count: number) => string;
-};
-
-type BatchUploadOptions = {
-  files: File[];
-  workspaceId: string;
-  propertyId: string;
-  labels: BatchUploadLabels;
-  onError?: (error: Error) => void;
+  rateLimited: (seconds: number) => string;
+  cancel: string;
+  retryFailed: (count: number) => string;
 };
 
 export const useBatchUploadLabels = (): BatchUploadLabels => {
@@ -108,105 +111,152 @@ export const useBatchUploadLabels = (): BatchUploadLabels => {
         total,
       }),
     renamed: (count) =>
-      t("workspaces.files.renamedToAvoidConflicts", { count }),
+      t("workspaces.files.renamedToAvoidConflicts", {
+        count,
+      }),
+    rateLimited: (seconds) => t("workspaces.files.rateLimited", { seconds }),
+    cancel: t("common.cancel"),
+    retryFailed: (count) => t("workspaces.files.retryFailed", { count }),
   };
 };
 
+type BatchUploadOptions = {
+  files: File[];
+  workspaceId: string;
+  propertyId: string;
+  labels: BatchUploadLabels;
+  onError?: (error: Error) => void;
+};
+
 /**
- * Uploads files in batches with progress tracking and toast
- * notifications. Used by both the main upload hook and kanban.
+ * Uploads files using the queue with progress tracking and
+ * toast notifications. Returns a promise that resolves when
+ * the queue finishes.
+ *
+ * Used by both the main upload hook and kanban.
  */
-export const uploadFileEntitiesBatched = async ({
-  files,
-  workspaceId,
-  propertyId,
-  labels,
-  onError,
-}: BatchUploadOptions): Promise<UploadResult[]> => {
+export const uploadFileEntitiesBatched = async (
+  options: BatchUploadOptions,
+): Promise<UploadResult[]> => {
+  const { files, workspaceId, propertyId, labels, onError } = options;
+
   if (files.length === 0) {
     return [];
   }
 
-  const total = files.length;
-  const showProgress = total > 1;
-
-  const toastId = toastManager.add({
-    type: "loading",
-    title: labels.uploading,
-    description: showProgress
-      ? labels.progress(0, total)
-      : labels.uploadingDescription,
-  });
-
-  let uploaded = 0;
-  let renamedCount = 0;
-  const failedFiles: string[] = [];
-  const allResults: UploadResult[] = [];
-
-  for (let i = 0; i < files.length; i += MAX_PARALLEL_FILE_UPLOADS) {
-    const batch = files.slice(i, i + MAX_PARALLEL_FILE_UPLOADS);
-
-    const results = await Promise.all(
-      batch.map(
-        async (file) => await uploadFileEntity(file, workspaceId, propertyId),
-      ),
+  return await new Promise<UploadResult[]>((resolve) => {
+    const queue = new UploadQueue<UploadResult>(
+      async (file, signal) =>
+        await uploadSingleFile(file, workspaceId, propertyId, signal),
+      MAX_PARALLEL_FILE_UPLOADS,
     );
 
-    for (const [idx, result] of results.entries()) {
-      allResults.push(result);
+    const initialTotal = files.length;
+    const showProgress = initialTotal > 1;
 
-      if (Result.isError(result)) {
-        onError?.(result.error);
-        const file = batch[idx];
-        if (file !== undefined) {
-          failedFiles.push(file.name);
-        }
-      } else {
-        uploaded++;
-        if (result.value.renamed) {
-          renamedCount++;
-        }
+    const toastId = toastManager.add({
+      type: "loading",
+      title: labels.uploading,
+      description: showProgress
+        ? labels.progress(0, initialTotal)
+        : labels.uploadingDescription,
+      timeout: 0,
+      actionProps: {
+        children: labels.cancel,
+        onClick: () => queue.cancel(),
+      },
+    });
+
+    queue.on("progress", () => {
+      const { completed, total } = queue.getProgress();
+      if (total > 1) {
+        toastManager.update(toastId, {
+          description: labels.progress(completed, total),
+        });
       }
-    }
+    });
 
-    if (showProgress && uploaded + failedFiles.length < total) {
+    queue.on("rate-limited", ({ retryAfterS }) => {
       toastManager.update(toastId, {
-        description: labels.progress(uploaded, total),
+        description: labels.rateLimited(retryAfterS),
       });
-    }
-  }
-
-  const failedCount = failedFiles.length;
-  const successCount = files.length - failedCount;
-
-  if (failedCount === 0) {
-    toastManager.update(toastId, {
-      type: "success",
-      title: labels.uploadedSuccessfully,
-      description: undefined,
     });
-  } else if (successCount > 0) {
-    toastManager.update(toastId, {
-      type: "warning",
-      title: labels.partial(failedCount, files.length),
-      description: formatFailedFiles(failedFiles),
-    });
-  } else {
-    toastManager.update(toastId, {
-      type: "error",
-      title: labels.uploadFailed,
-      description: formatFailedFiles(failedFiles),
-    });
-  }
 
-  if (renamedCount > 0) {
-    toastManager.add({
-      title: labels.renamed(renamedCount),
-      type: "info",
+    queue.on("resumed", () => {
+      const { completed, total } = queue.getProgress();
+      if (total > 1) {
+        toastManager.update(toastId, {
+          description: labels.progress(completed, total),
+        });
+      }
     });
-  }
 
-  return allResults;
+    queue.on("done", ({ completed, failed, cancelled }) => {
+      const { total } = queue.getProgress();
+
+      const renamedCount = completed.filter((r) => r.renamed).length;
+
+      for (const { error } of failed) {
+        onError?.(error);
+      }
+
+      const failedNames = failed.map((f) => f.file.name);
+      const failedCount = failedNames.length;
+      const successCount = completed.length;
+
+      if (cancelled) {
+        toastManager.update(toastId, {
+          type: successCount > 0 || failedCount > 0 ? "warning" : "info",
+          title: labels.partial(failedCount, total),
+          description:
+            successCount > 0 ? labels.progress(successCount, total) : undefined,
+          timeout: undefined,
+          actionProps: undefined,
+        });
+      } else if (failedCount === 0) {
+        toastManager.update(toastId, {
+          type: "success",
+          title: labels.uploadedSuccessfully,
+          description: undefined,
+          timeout: undefined,
+          actionProps: undefined,
+        });
+      } else if (successCount > 0) {
+        toastManager.update(toastId, {
+          type: "warning",
+          title: labels.partial(failedCount, total),
+          description: formatFailedFiles(failedNames),
+          timeout: 0,
+          actionProps: {
+            children: labels.retryFailed(failedCount),
+            onClick: () => queue.retryFailed(),
+          },
+        });
+      } else {
+        toastManager.update(toastId, {
+          type: "error",
+          title: labels.uploadFailed,
+          description: formatFailedFiles(failedNames),
+          timeout: 0,
+          actionProps: {
+            children: labels.retryFailed(failedCount),
+            onClick: () => queue.retryFailed(),
+          },
+        });
+      }
+
+      if (renamedCount > 0) {
+        toastManager.add({
+          title: labels.renamed(renamedCount),
+          type: "info",
+        });
+      }
+
+      resolve(completed);
+    });
+
+    queue.enqueue(files);
+  });
 };
 
 export const useCreateFileEntities = (workspaceId: string) => {
@@ -244,13 +294,15 @@ export const useCreateFileEntities = (workspaceId: string) => {
     },
   });
 
-  const handleCreateFileEntities = (files: File[]) => {
-    if (mutation.isPending || files.length === 0) {
-      return;
-    }
-
-    mutation.mutate(files);
-  };
+  const handleCreateFileEntities = useCallback(
+    (files: File[]) => {
+      if (mutation.isPending || files.length === 0) {
+        return;
+      }
+      mutation.mutate(files);
+    },
+    [mutation],
+  );
 
   return [mutation.isPending, handleCreateFileEntities] as const;
 };

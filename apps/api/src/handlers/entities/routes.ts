@@ -1,4 +1,5 @@
 import Elysia, { status, t } from "elysia";
+import { rateLimit } from "elysia-rate-limit";
 
 import {
   checkStampBodySchema,
@@ -35,7 +36,8 @@ import {
 import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
-import { LIMITS } from "@/api/lib/limits";
+import { API_RATE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { RedisRateLimitContext, scopedGenerator } from "@/api/lib/rate-limit";
 
 // Eden serializes complex query params (arrays of objects)
 // as JSON strings. Parse and normalize to arrays.
@@ -74,6 +76,17 @@ export const entitiesRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)
+  .use(
+    rateLimit({
+      scoping: "scoped",
+      duration: API_RATE_LIMITS.upload.duration,
+      max: API_RATE_LIMITS.upload.max,
+      generator: scopedGenerator("upload"),
+      context: new RedisRateLimitContext(),
+      skip: (req) =>
+        !/\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
+    }),
+  )
   .guard({
     validateWorkspaceAccess: true,
   })
