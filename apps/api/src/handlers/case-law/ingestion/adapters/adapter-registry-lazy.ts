@@ -20,6 +20,7 @@ export const ADAPTER_MODULES: Record<string, () => Promise<unknown>> = {
   "cz-supreme-admin": async () => await import("./cz-supreme-admin"),
   "sk-courts": async () => await import("./sk-courts"),
   "pl-courts": async () => await import("./pl-courts"),
+  "at-courts": async () => await import("./at-courts"),
   "eu-ecj": async () => await import("./eu-ecj"),
 };
 

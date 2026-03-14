@@ -1,4 +1,5 @@
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import { atCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { czConstitutionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-constitutional";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { czSupremeAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-supreme";
@@ -14,6 +15,7 @@ const ADAPTER_REGISTRY: ReadonlyMap<string, SourceAdapter> = new Map([
   [czSupremeAdminAdapter.key, czSupremeAdminAdapter],
   [skCourtsAdapter.key, skCourtsAdapter],
   [plCourtsAdapter.key, plCourtsAdapter],
+  [atCourtsAdapter.key, atCourtsAdapter],
   [euEcjAdapter.key, euEcjAdapter],
 ]);
 
