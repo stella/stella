@@ -1,4 +1,10 @@
 {
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
+  },
   "mcpServers": {
     "playwright": {
       "command": "npx",

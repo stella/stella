@@ -27,7 +27,9 @@ Stella is an open-source legal workspace. Core DMS features (matters,
 documents, search) are free forever. AI-powered features (review,
 research) are paid by usage.
 
-**Monorepo structure:**
+**Monorepo structure:** see [CODEBASE.md](./CODEBASE.md) for
+the full codebase map (handler domains, route structure,
+stores, shared libs). Summary:
 
 ```
 stella/
@@ -35,8 +37,12 @@ stella/
 │   ├── api/          # Elysia backend (Bun runtime)
 │   └── web/          # Vite + React frontend
 ├── packages/
-│   ├── rivet/        # Rivet config and integration
-│   ├── ui/           # Shared UI components
+│   ├── ui/           # 28 shared Base UI components
+│   ├── rivet/        # RivetKit actor configs
+│   ├── permissions/  # Auth/permission utilities
+│   ├── transactional/# Email templates
+│   ├── scripts/      # i18n CLI tools
+│   ├── skills/       # AI skill prompts + knowledge
 │   └── typescript-config/
 ```
 

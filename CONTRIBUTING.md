@@ -14,6 +14,29 @@ writing code, your help is welcome.
 See the [README](README.md) for the full tech stack and project
 structure.
 
+### Claude Code LSP (experimental)
+
+The project enables the TypeScript LSP plugin for Claude Code
+(`.claude/settings.json`), giving Claude go-to-definition,
+find-references, hover types, and auto-diagnostics. The plugin
+has a known race condition
+([#29858](https://github.com/anthropics/claude-code/issues/29858))
+and may not load reliably. To try it:
+
+1. Install the language server binary:
+   ```bash
+   npm install -g typescript-language-server typescript
+   ```
+2. Add to your `~/.claude/settings.json`:
+   ```json
+   {
+     "env": { "ENABLE_LSP_TOOL": "1" }
+   }
+   ```
+
+If the LSP tool doesn't appear after restart, Claude falls
+back to [CODEBASE.md](CODEBASE.md) for navigation.
+
 ## Development Workflow
 
 1. Create a branch from `main` for your changes.
