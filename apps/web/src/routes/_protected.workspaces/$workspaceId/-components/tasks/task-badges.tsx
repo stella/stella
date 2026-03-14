@@ -5,7 +5,7 @@ import {
   CalendarIcon,
   MinusIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -41,6 +41,7 @@ type TaskBadgesProps = {
 
 export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
   const t = useTranslations("tasks");
+  const locale = useLocale();
 
   if (entity.kind !== "task") {
     return null;
@@ -88,7 +89,8 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         >
           <CalendarIcon className="size-3" />
           <span>
-            {new Date(entity.dueDate).toLocaleDateString(undefined, {
+            {new Date(entity.dueDate).toLocaleDateString(locale, {
+              year: "numeric",
               month: "short",
               day: "numeric",
               timeZone: "UTC",

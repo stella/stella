@@ -262,7 +262,7 @@ const DraggableRow = ({
 
     return (
       <TableRow
-        className={cn(entity.entityId === activeEntityId && "bg-muted/50")}
+        data-active={entity.entityId === activeEntityId || undefined}
         data-state={row.getIsSelected() && "selected"}
         key={row.id}
         ref={rowRef}
@@ -315,12 +315,12 @@ const DraggableRow = ({
 
   return (
     <TableRow
-      className={cn(
-        (entity.entityId === activeEntityId ||
-          entity.entityId === activeTaskId) &&
-          "bg-muted/50",
-        isTask && "cursor-pointer",
-      )}
+      className={cn(isTask && "cursor-pointer")}
+      data-active={
+        entity.entityId === activeEntityId ||
+        entity.entityId === activeTaskId ||
+        undefined
+      }
       data-state={row.getIsSelected() && "selected"}
       key={row.id}
       onClick={

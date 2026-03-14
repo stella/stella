@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { FileTextIcon, PlusIcon, SquareCheckIcon } from "lucide-react";
+import { PlusIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -150,10 +150,6 @@ export const CalendarDayCell = ({
               <PlusIcon className="size-3.5" />
             </MenuTrigger>
             <MenuPopup>
-              <MenuItem onClick={() => onCreate("document")}>
-                <FileTextIcon />
-                {t("workspaces.newDocument")}
-              </MenuItem>
               <MenuItem onClick={() => onCreate("task")}>
                 <SquareCheckIcon />
                 {t("tasks.newTask")}
@@ -201,10 +197,6 @@ export const CalendarDayCell = ({
         >
           <MenuTrigger render={<span className="sr-only" />} />
           <MenuPopup anchor={ctxAnchor ?? undefined}>
-            <MenuItem onClick={() => onCreate("document")}>
-              <FileTextIcon />
-              {t("workspaces.newDocument")}
-            </MenuItem>
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}

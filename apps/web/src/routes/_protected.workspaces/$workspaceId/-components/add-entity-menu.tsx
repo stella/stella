@@ -2,7 +2,6 @@ import { useRef } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
-  FileTextIcon,
   FolderPlusIcon,
   PlusIcon,
   SquareCheckIcon,
@@ -21,7 +20,6 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
-import type { EntityKind } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -74,25 +72,22 @@ export const AddEntityMenu = ({
   const isUploadDisabled = isWorkflowRunning || isUploadPending;
   const isCreationDisabled = isWorkflowRunning || createEntities.isPending;
 
-  const handleCreateEntity = (kind: EntityKind) => {
+  const handleCreateFolder = () => {
     createEntities.mutate(
       {
         workspaceId,
         type: "manual-input",
-        kind,
+        kind: "folder",
         parentId: parentId ?? undefined,
-        name: kind === "folder" ? t("workspaces.newFolder") : undefined,
+        name: t("workspaces.newFolder"),
       },
       {
         onSuccess: (data) => {
           toastManager.add({
-            title:
-              kind === "folder"
-                ? t("success.folderCreated")
-                : t("success.documentCreated"),
+            title: t("success.folderCreated"),
             type: "success",
           });
-          if (kind === "folder" && data?.entityId) {
+          if (data?.entityId) {
             onFolderCreated?.(data.entityId);
           }
         },
@@ -159,13 +154,6 @@ export const AddEntityMenu = ({
           )}
           <MenuItem
             disabled={isCreationDisabled}
-            onClick={() => handleCreateEntity("document")}
-          >
-            <FileTextIcon />
-            {t("workspaces.newDocument")}
-          </MenuItem>
-          <MenuItem
-            disabled={isCreationDisabled}
             onClick={() => {
               handleCreateTask().catch(() => {
                 // Error handled inside handleCreateTask
@@ -175,10 +163,7 @@ export const AddEntityMenu = ({
             <SquareCheckIcon />
             {t("tasks.newTask")}
           </MenuItem>
-          <MenuItem
-            disabled={isCreationDisabled}
-            onClick={() => handleCreateEntity("folder")}
-          >
+          <MenuItem disabled={isCreationDisabled} onClick={handleCreateFolder}>
             <FolderPlusIcon />
             {t("workspaces.newFolder")}
           </MenuItem>

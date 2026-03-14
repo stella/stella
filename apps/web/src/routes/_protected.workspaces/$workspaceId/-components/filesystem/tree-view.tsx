@@ -23,7 +23,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import {
   Breadcrumb,
@@ -1159,11 +1159,14 @@ type ExtraColumnCellProps = {
   entity: WorkspaceEntity;
 };
 
-const formatDateValue = (value: string | Date | null | undefined): string => {
+const formatDateValue = (
+  value: string | Date | null | undefined,
+  locale: string,
+): string => {
   if (value === undefined || value === null) {
     return "";
   }
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -1172,6 +1175,7 @@ const formatDateValue = (value: string | Date | null | undefined): string => {
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
+  const locale = useLocale();
   if (column.type === "metadata") {
     // oxlint-disable-next-line typescript/switch-exhaustiveness-check
     switch (column.id) {
@@ -1192,7 +1196,7 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   // Date fields need explicit formatting; raw Date objects
   // crash React ("Objects are not valid as a React child").
   if (field?.content.type === "date") {
-    const formatted = formatDateValue(field.content.value);
+    const formatted = formatDateValue(field.content.value, locale);
     return (
       <span className="text-muted-foreground truncate text-xs">
         {formatted || "-"}
