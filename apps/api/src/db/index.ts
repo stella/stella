@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
@@ -21,9 +21,6 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 export type TransactionOf<TDatabase extends Database | TestDatabase> =
   Parameters<Parameters<TDatabase["transaction"]>[0]>[0];
-
-// https://github.com/drizzle-team/drizzle-orm/issues/5287
-// const client = new SQL(env.DATABASE_URL);
 
 /**
  * Primary database handle connecting as postgres (table owner).

@@ -87,8 +87,8 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
       );
 
       return {
-        resultCount: result.rows.length,
-        decisions: result.rows.map((row) => ({
+        resultCount: result.length,
+        decisions: result.map((row: Record<string, unknown>) => ({
           decisionId: String(row.id),
           caseNumber: String(row.case_number),
           ecli: toNullableString(row.ecli),

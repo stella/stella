@@ -129,11 +129,12 @@ export const createInvoiceHandler = async ({
           eq(timeEntries.status, BILLING_STATUS.APPROVED),
           eq(timeEntries.billable, true),
         ),
-      );
+      )
+      .returning({ id: timeEntries.id });
 
     // If fewer entries matched, a concurrent request changed
     // them. Throwing rolls back the transaction automatically.
-    const linkedCount = updated.rowCount ?? 0;
+    const linkedCount = updated.length;
     if (linkedCount !== expectedCount) {
       throw new ConcurrentModificationError({
         message: "Time entries modified during invoice creation",

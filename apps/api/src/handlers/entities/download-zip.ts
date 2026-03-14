@@ -48,7 +48,7 @@ const collectDescendantIds = async (
   `),
   );
 
-  return result.rows.map((r) => r.id);
+  return result.map((r) => r.id);
 };
 
 export const downloadZipHandler = async ({

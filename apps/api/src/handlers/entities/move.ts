@@ -151,5 +151,5 @@ const checkIsDescendant = async (
     ) AS found
   `);
 
-  return result.rows.at(0)?.found ?? false;
+  return Boolean(result.at(0)?.found);
 };

@@ -39,29 +39,31 @@ export const batchUpdateHandler = async ({
 
   switch (action) {
     case "approve": {
-      const result = await scopedDb((tx) =>
+      const rows = await scopedDb((tx) =>
         tx
           .update(timeEntries)
           .set({ status: BILLING_STATUS.APPROVED, updatedAt: new Date() })
-          .where(and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT))),
+          .where(and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)))
+          .returning({ id: timeEntries.id }),
       );
-      return { updated: result.rowCount ?? 0 };
+      return { updated: rows.length };
     }
 
     case "revert_to_draft": {
-      const result = await scopedDb((tx) =>
+      const rows = await scopedDb((tx) =>
         tx
           .update(timeEntries)
           .set({ status: BILLING_STATUS.DRAFT, updatedAt: new Date() })
           .where(
             and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
-          ),
+          )
+          .returning({ id: timeEntries.id }),
       );
-      return { updated: result.rowCount ?? 0 };
+      return { updated: rows.length };
     }
 
     case "mark_billable": {
-      const result = await scopedDb((tx) =>
+      const rows = await scopedDb((tx) =>
         tx
           .update(timeEntries)
           .set({ billable: true, updatedAt: new Date() })
@@ -71,13 +73,14 @@ export const batchUpdateHandler = async ({
               ne(timeEntries.status, BILLING_STATUS.BILLED),
               ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
             ),
-          ),
+          )
+          .returning({ id: timeEntries.id }),
       );
-      return { updated: result.rowCount ?? 0 };
+      return { updated: rows.length };
     }
 
     case "mark_non_billable": {
-      const result = await scopedDb((tx) =>
+      const rows = await scopedDb((tx) =>
         tx
           .update(timeEntries)
           .set({ billable: false, updatedAt: new Date() })
@@ -87,9 +90,10 @@ export const batchUpdateHandler = async ({
               ne(timeEntries.status, BILLING_STATUS.BILLED),
               ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
             ),
-          ),
+          )
+          .returning({ id: timeEntries.id }),
       );
-      return { updated: result.rowCount ?? 0 };
+      return { updated: rows.length };
     }
 
     default:

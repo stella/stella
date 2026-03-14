@@ -180,9 +180,10 @@ export const addEntriesHandler = async ({
             eq(timeEntries.billable, true),
             isNull(timeEntries.invoiceId),
           ),
-        );
+        )
+        .returning({ id: timeEntries.id });
 
-      const linkedCount = updated.rowCount ?? 0;
+      const linkedCount = updated.length;
       if (linkedCount !== timeEntryIds.length) {
         throw new ConcurrentModificationError({
           message: "Entries modified concurrently",
@@ -206,9 +207,10 @@ export const addEntriesHandler = async ({
             eq(expenses.billable, true),
             isNull(expenses.invoiceId),
           ),
-        );
+        )
+        .returning({ id: expenses.id });
 
-      const linkedCount = updated.rowCount ?? 0;
+      const linkedCount = updated.length;
       if (linkedCount !== expenseIds.length) {
         throw new ConcurrentModificationError({
           message: "Entries modified concurrently",
