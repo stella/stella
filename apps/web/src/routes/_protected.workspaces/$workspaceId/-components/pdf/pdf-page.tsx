@@ -97,12 +97,21 @@ type PdfPageCanvasProps = {
 /**
  * Heavy inner component: canvas rendering, text layer,
  * citations. Only mounted for pages in/near the viewport.
+ *
+ * Uses double-buffering to eliminate flicker on zoom: the
+ * new scale is rendered to a hidden offscreen canvas, then
+ * swapped in once the render completes. The old canvas
+ * stays visible throughout.
  */
 const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
   const posthog = usePostHog();
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  /** The currently visible (front) canvas. */
+  const frontCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** The scale at which the front canvas was rendered. */
+  const frontScaleRef = useRef<number | null>(null);
 
   const shouldRenderPage = usePdfStore(
     useShallow(
@@ -124,10 +133,14 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
   });
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const container = containerRef.current;
     const textLayerContainer = textLayerRef.current;
 
-    if (canvas === null || textLayerContainer === null || !shouldRenderPage) {
+    if (
+      container === null ||
+      textLayerContainer === null ||
+      !shouldRenderPage
+    ) {
       return;
     }
 
@@ -137,24 +150,44 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
       return;
     }
 
+    // Create a back-buffer canvas for rendering. Once the
+    // render completes, swap it in and remove the old one.
+    const backCanvas = document.createElement("canvas");
+    backCanvas.className =
+      "absolute start-0 top-0 origin-top-left contain-content";
+    // Hide until render is done; use explicit CSS
+    // dimensions so the canvas doesn't stretch (the CSS
+    // transform on the old canvas handles visual scaling).
+    backCanvas.style.visibility = "hidden";
+    backCanvas.style.width = `${viewport.width}px`;
+    backCanvas.style.height = `${viewport.height}px`;
+
     const canvasSize = getCanvasSize(viewport);
+    backCanvas.width = canvasSize.width;
+    backCanvas.height = canvasSize.height;
 
-    canvas.width = canvasSize.width;
-    canvas.height = canvasSize.height;
-
-    const ctx = canvas.getContext("2d");
-
+    const ctx = backCanvas.getContext("2d");
     if (ctx) {
-      // Set default compositing so subpixel anti-aliasing
-      // stays clean under the dark-mode invert+hue-rotate
-      // filter. Without this, leftover blend modes from
-      // prior renders produce magenta text outlines on
-      // Windows (ClearType).
       ctx.globalCompositeOperation = "source-over";
     }
 
+    // Scale the old front canvas with a CSS transform for
+    // instant GPU-accelerated visual feedback while the
+    // back buffer renders at the new scale.
+    const oldFrontCanvas = frontCanvasRef.current;
+    const oldScale = frontScaleRef.current;
+    if (oldFrontCanvas && oldScale !== null && oldScale !== viewport.scale) {
+      const ratio = viewport.scale / oldScale;
+      oldFrontCanvas.style.transformOrigin = "top left";
+      oldFrontCanvas.style.transform = `scale(${ratio})`;
+    }
+
+    // Insert behind the current front canvas so it renders
+    // offscreen while the old content stays visible.
+    container.prepend(backCanvas);
+
     const renderTask = proxy.render({
-      canvas,
+      canvas: backCanvas,
       viewport,
       transform: getCanvasTransform(),
     });
@@ -166,9 +199,24 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
       textContentSource: proxy.streamTextContent(),
     });
 
+    let cancelled = false;
+
     // eslint-disable-next-line typescript/no-floating-promises
     renderTask.promise.then(async () => {
+      if (cancelled) {
+        return;
+      }
+
       try {
+        // Swap: show crisp back canvas, remove old front
+        backCanvas.style.visibility = "visible";
+        const oldFront = frontCanvasRef.current;
+        if (oldFront && oldFront !== backCanvas) {
+          oldFront.remove();
+        }
+        frontCanvasRef.current = backCanvas;
+        frontScaleRef.current = viewport.scale;
+
         textLayerContainer.innerHTML = "";
         await textLayer.render();
 
@@ -185,10 +233,26 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
     });
 
     return () => {
+      cancelled = true;
       renderTask.cancel();
       // eslint-disable-next-line typescript/no-floating-promises
       renderTask.promise.finally(() => proxy.cleanup());
       textLayer.cancel();
+      // If the render was cancelled before completing,
+      // remove the unused back canvas.
+      if (frontCanvasRef.current !== backCanvas) {
+        backCanvas.remove();
+      }
+      // On unmount (LRU eviction), release the front
+      // canvas ref so the detached element can be GC'd.
+      // On zoom re-runs the container is still mounted,
+      // so the ref is kept for CSS-scale feedback.
+      // `container` is captured at effect start; reading
+      // `.isConnected` avoids accessing the ref in cleanup.
+      if (!container.isConnected) {
+        frontCanvasRef.current = null;
+        frontScaleRef.current = null;
+      }
     };
   }, [page, fileId, pageId, advancePageRendering, shouldRenderPage]);
 
@@ -205,9 +269,9 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
 
   return (
     <>
-      <canvas
-        className="absolute start-0 top-0 h-full w-full contain-content"
-        ref={canvasRef}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        ref={containerRef}
       />
       <div
         className="absolute inset-0 leading-none [&>br,span]:absolute [&>br,span]:z-1 [&>br,span]:origin-top-left [&>br,span]:cursor-text [&>br,span]:whitespace-pre [&>br,span]:text-transparent [&>br::selection]:bg-transparent [&>span::selection]:bg-indigo-600/25"
