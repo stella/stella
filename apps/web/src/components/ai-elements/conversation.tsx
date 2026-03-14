@@ -21,9 +21,7 @@ export const Conversation = ({ className, ...props }: ConversationProps) => (
   />
 );
 
-type ConversationContentProps = ComponentProps<
-  typeof StickToBottom.Content
->;
+type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>;
 
 export const ConversationContent = ({
   className,

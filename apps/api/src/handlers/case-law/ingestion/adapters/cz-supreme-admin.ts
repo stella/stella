@@ -1,15 +1,10 @@
-import { Result } from "better-result";
-
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 
 /**
  * Czech Supreme Administrative Court adapter.
@@ -22,7 +17,8 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
  * Cursor format: page number as string (e.g. "1", "2").
  */
 
-const BASE_URL = "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
+const BASE_URL =
+  "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
 const PAGE_SIZE = 40;
 
 type NssoudApiItem = {
@@ -42,7 +38,9 @@ type NssoudApiItem = {
   OdkazNaText?: string;
 };
 
-const parseItem = (item: NssoudApiItem): IngestionResult | null => {
+const parseItem = (
+  item: NssoudApiItem,
+): IngestionResult | null => {
   if (!item.SpisovaZnacka) {
     return null;
   }
@@ -62,8 +60,10 @@ const parseItem = (item: NssoudApiItem): IngestionResult | null => {
     metadata: {
       reportingJudge: item.SoudceZpravodaj,
       areaOfLaw: item.OblastPrava,
-      appliedLegalProvisions: item.AplikovanaZakonnaUstanoveni,
-      appliedEuLaw: item.AplikovanaUniiniPravniPredpis,
+      appliedLegalProvisions:
+        item.AplikovanaZakonnaUstanoveni,
+      appliedEuLaw:
+        item.AplikovanaUniiniPravniPredpis,
       prejudication: item.Prejudikatura,
       legalSentence: item.PravniVeta,
     },
@@ -78,51 +78,42 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 1500,
 
-  async fetchPage(cursor, _config, signal) {
-    return await Result.tryPromise({
-      try: async () => {
-        const page = cursor ? Number.parseInt(cursor, 10) : 1;
+  fetchPage: createPagePaginatedFetch<NssoudApiItem[]>({
+    adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+    pageSize: PAGE_SIZE,
 
-        const response = await fetch(BASE_URL, {
-          method: "POST",
-          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            Page: page,
-            PageSize: PAGE_SIZE,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new AdapterFetchError({
-            message: `CZ Supreme Admin API error: ${response.status}`,
-            adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
-            cursor,
-            httpStatus: response.status,
-          });
-        }
-
-        const json: unknown = await response.json();
-        // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
-        const data: NssoudApiItem[] = Array.isArray(json) ? json : [];
-        const decisions: IngestionResult[] = [];
-
-        for (const item of data) {
-          const parsed = parseItem(item);
-          if (parsed) {
-            decisions.push(parsed);
-          }
-        }
-
-        const nextCursor = data.length >= PAGE_SIZE ? String(page + 1) : null;
-
-        return { decisions, nextCursor };
+    buildRequest: (page) => ({
+      url: BASE_URL,
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          Page: page,
+          PageSize: PAGE_SIZE,
+        }),
       },
-      catch: adapterCatch(ADAPTER_KEYS.CZ_SUPREME_ADMIN, cursor),
-    });
-  },
+    }),
+
+    parseResponse: async (response) => {
+      const json: unknown = await response.json();
+      if (!Array.isArray(json)) {
+        return [];
+      }
+      // SAFETY: Array.isArray guard above confirms array;
+      // items are structurally checked by parseItem.
+      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+      return json as NssoudApiItem[];
+    },
+
+    extractItems: (data) => ({
+      items: data,
+    }),
+
+    // SAFETY: items come from extractItems which returns data (NssoudApiItem[]).
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    parseItem: async (raw) => await Promise.resolve(parseItem(raw as NssoudApiItem)),
+  }),
 };

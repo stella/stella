@@ -1,15 +1,10 @@
-import { Result } from "better-result";
-
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 
 /**
  * Polish Courts adapter (SAOS).
@@ -129,75 +124,40 @@ export const plCourtsAdapter: SourceAdapter = {
   language: "pl",
   minRequestIntervalMs: 1000,
 
-  async fetchPage(cursor, _config, signal) {
-    return await Result.tryPromise({
-      try: async () => {
-        const page = cursor ? Number.parseInt(cursor, 10) : 0;
-        if (Number.isNaN(page)) {
-          throw new AdapterFetchError({
-            message: "SAOS adapter: invalid cursor format",
-            adapterKey: ADAPTER_KEYS.PL_COURTS,
-            cursor,
-          });
-        }
+  fetchPage: createPagePaginatedFetch<SaosResponse>({
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
+    pageSize: PAGE_SIZE,
+    zeroIndexed: true,
 
-        const params = new URLSearchParams({
+    buildRequest: (page) => ({
+      url: `${BASE_URL}?${new URLSearchParams({
           pageSize: String(PAGE_SIZE),
           pageNumber: String(page),
           sortingField: "JUDGMENT_DATE",
           sortingDirection: "DESC",
-        });
-
-        const url = `${BASE_URL}?${params}`;
-
-        const response = await fetch(url, {
-          signal: signal
-            ? AbortSignal.any([
-                signal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-              ])
-            : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-          headers: { Accept: "application/json" },
-        });
-
-        if (!response.ok) {
-          throw new AdapterFetchError({
-            message: `SAOS API error: ${response.status}`,
-            adapterKey: ADAPTER_KEYS.PL_COURTS,
-            cursor,
-            httpStatus: response.status,
-          });
-        }
-
-        const json: unknown = await response.json();
-        // SAFETY: structural check confirms object; all
-        // fields are optional so missing properties
-        // degrade gracefully.
-        const data: SaosResponse =
-          typeof json === "object" && json !== null
-            ? (json as SaosResponse)
-            : {};
-        const items = data.items ?? [];
-        const decisions: IngestionResult[] = [];
-
-        for (const item of items) {
-          const parsed = parseItem(item);
-          if (parsed) {
-            decisions.push(parsed);
-          }
-        }
-
-        const total = data.info?.totalResults;
-        const fetched = page * PAGE_SIZE + items.length;
-        const nextCursor =
-          items.length >= PAGE_SIZE &&
-          (total === null || total === undefined || fetched < total)
-            ? String(page + 1)
-            : null;
-
-        return { decisions, nextCursor };
+        }).toString()}`,
+      init: {
+        headers: { Accept: "application/json" },
       },
-      catch: adapterCatch(ADAPTER_KEYS.PL_COURTS, cursor),
-    });
-  },
+    }),
+
+    parseResponse: async (response) => {
+      const json: unknown = await response.json();
+      // SAFETY: structural check confirms object; all
+      // fields are optional so missing properties
+      // degrade gracefully.
+      return typeof json === "object" && json !== null
+        ? (json as SaosResponse)
+        : {};
+    },
+
+    extractItems: (data) => ({
+      items: data.items ?? [],
+      total: data.info?.totalResults,
+    }),
+
+    // SAFETY: items come from extractItems which returns data.items (SaosItem[]).
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    parseItem: async (raw) => await Promise.resolve(parseItem(raw as SaosItem)),
+  }),
 };

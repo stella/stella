@@ -77,4 +77,3 @@ export const taskDetailOptions = (workspaceId: string, taskId: string) =>
     },
     enabled: !!taskId,
   });
-
