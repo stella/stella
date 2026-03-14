@@ -18,10 +18,7 @@
             "Małgorzata Stanek Sędziowiehanna Rojewska",
             "Wiesława Kuberska"
           ],
-          "keywords": [
-            "dobra osobiste",
-            "zadośćuczynienie"
-          ],
+          "keywords": ["dobra osobiste", "zadośćuczynienie"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "505307ed083be5794a6a89f62b58826c162eb93981bf071b9cf8d830a37d6048"
@@ -37,12 +34,8 @@
         "metadata": {
           "saosId": 227221,
           "courtType": "COMMON",
-          "judges": [
-            "Joanna Becińska"
-          ],
-          "keywords": [
-            "środki karne"
-          ],
+          "judges": ["Joanna Becińska"],
+          "keywords": ["środki karne"],
           "division": "II Wydział Karny"
         },
         "rawHash": "ed717ad8abc389bd8afbda8bcaa52fc1925d308c4eee8a34722040f49d29b3a1"
@@ -58,12 +51,8 @@
         "metadata": {
           "saosId": 542485,
           "courtType": "COMMON",
-          "judges": [
-            "Agnieszka Olejniczak-Kosiara"
-          ],
-          "keywords": [
-            "sprostowanie"
-          ],
+          "judges": ["Agnieszka Olejniczak-Kosiara"],
+          "keywords": ["sprostowanie"],
           "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "1faa38b880461bd179212674698c250ba7e3060115a4dfdb88970f5e3325e366"
@@ -80,9 +69,7 @@
           "saosId": 542540,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "zasiłek chorobowy"
-          ],
+          "keywords": ["zasiłek chorobowy"],
           "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "3851505c31abfbb042d34793401ffd1760fa6cd61594c7d4df1058d15178212a"
@@ -98,9 +85,7 @@
         "metadata": {
           "saosId": 542676,
           "courtType": "COMMON",
-          "judges": [
-            "Katarzyna Stasiów"
-          ],
+          "judges": ["Katarzyna Stasiów"],
           "keywords": [
             "odszkodowanie za niesłuszne skazanie, tymczasowe aresztowanie lub zatrzymanie",
             "zadośćuczynienie"
@@ -121,9 +106,7 @@
           "saosId": 542652,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "kara"
-          ],
+          "keywords": ["kara"],
           "division": "VI Wydział Karny Odwoławczy"
         },
         "rawHash": "af893ed442f8cb5d9e754377dec7eb7cfdf391c2c60cd95d63e0fdc75d7acfbd"
@@ -139,12 +122,8 @@
         "metadata": {
           "saosId": 542675,
           "courtType": "COMMON",
-          "judges": [
-            "Sebastian Ładoś"
-          ],
-          "keywords": [
-            "kradzież"
-          ],
+          "judges": ["Sebastian Ładoś"],
+          "keywords": ["kradzież"],
           "division": "X Wydział Karny"
         },
         "rawHash": "3790ae72dadf706f3b92d3b764df2c03cc94c625a748937663ad859fd714149d"
@@ -160,12 +139,8 @@
         "metadata": {
           "saosId": 542327,
           "courtType": "COMMON",
-          "judges": [
-            "Andrzej Kuryłek"
-          ],
-          "keywords": [
-            "sprzedaż"
-          ],
+          "judges": ["Andrzej Kuryłek"],
+          "keywords": ["sprzedaż"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "d94dd2fef282c8af9f8df77e56661de0376bfe76737104a3b99b9868b697e6d7"
@@ -198,9 +173,7 @@
         "metadata": {
           "saosId": 542580,
           "courtType": "COMMON",
-          "judges": [
-            "Monika Woś-Gajowiak"
-          ],
+          "judges": ["Monika Woś-Gajowiak"],
           "keywords": [],
           "division": "VII Wydział Pracy i Ubezpieczeń Społecznych"
         },
@@ -218,9 +191,7 @@
           "saosId": 542656,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "powództwo o ustalenie"
-          ],
+          "keywords": ["powództwo o ustalenie"],
           "division": "VII Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "84eb575ed04c0207362b4a24fc6f9d2a3b2f52befa8073d74deea878aa967826"
@@ -236,9 +207,7 @@
         "metadata": {
           "saosId": 542390,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -255,9 +224,7 @@
         "metadata": {
           "saosId": 542391,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -274,14 +241,8 @@
         "metadata": {
           "saosId": 542202,
           "courtType": "COMMON",
-          "judges": [
-            "Marzanna Góral",
-            "Marzena Konsek-Bitkowska"
-          ],
-          "keywords": [
-            "postępowanie cywilne",
-            "prawo unii europejskiej"
-          ],
+          "judges": ["Marzanna Góral", "Marzena Konsek-Bitkowska"],
+          "keywords": ["postępowanie cywilne", "prawo unii europejskiej"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "e3f24ccbe88bb46cd333e3e8df61385e4a1876485f67ab62e34454c4a2207a7f"
@@ -297,9 +258,7 @@
         "metadata": {
           "saosId": 542389,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -316,9 +275,7 @@
         "metadata": {
           "saosId": 542388,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -335,12 +292,8 @@
         "metadata": {
           "saosId": 542683,
           "courtType": "COMMON",
-          "judges": [
-            "Anna Lisowska"
-          ],
-          "keywords": [
-            "zachowek"
-          ],
+          "judges": ["Anna Lisowska"],
+          "keywords": ["zachowek"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "c4247a66015aed60a8d77a99d2350dc8759ec60b7f17cd5e8166bc16be49be87"
@@ -356,13 +309,8 @@
         "metadata": {
           "saosId": 542387,
           "courtType": "COMMON",
-          "judges": [
-            "Grzegorz Wójtowicz"
-          ],
-          "keywords": [
-            "obowiązek alimentacyjny",
-            "umorzenie postępowania"
-          ],
+          "judges": ["Grzegorz Wójtowicz"],
+          "keywords": ["obowiązek alimentacyjny", "umorzenie postępowania"],
           "division": "IV Wydział Cywilny Odwoławczy"
         },
         "rawHash": "cc544af9f201cddab0d77a7b2422b9c03c5d4fd119744ade5f89eb1eba45de5e"
@@ -412,12 +360,8 @@
         "metadata": {
           "saosId": 542501,
           "courtType": "COMMON",
-          "judges": [
-            "Magdalena Lisowska"
-          ],
-          "keywords": [
-            "zasiłek chorobowy"
-          ],
+          "judges": ["Magdalena Lisowska"],
+          "keywords": ["zasiłek chorobowy"],
           "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "ab8fcf8219f3635c70b11e528d0966356b47318e4c72ae043de9eb313d9d8dbe"
@@ -433,9 +377,7 @@
         "metadata": {
           "saosId": 542159,
           "courtType": "COMMON",
-          "judges": [
-            "Marcin Polit"
-          ],
+          "judges": ["Marcin Polit"],
           "keywords": [
             "uzgodnienie treści księgi wieczystej z rzeczywistym stanem prawnym"
           ],
@@ -471,12 +413,8 @@
         "metadata": {
           "saosId": 542499,
           "courtType": "COMMON",
-          "judges": [
-            "Anna Przybylska"
-          ],
-          "keywords": [
-            "zasiłek chorobowy"
-          ],
+          "judges": ["Anna Przybylska"],
+          "keywords": ["zasiłek chorobowy"],
           "division": "VIII Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "7ffabe0d699f0f34ae279b968112711013c02ef71e8008051f753b40122d753e"
@@ -492,11 +430,7 @@
         "metadata": {
           "saosId": 542475,
           "courtType": "COMMON",
-          "judges": [
-            "Ewa Połom",
-            "Marek Osowicki",
-            "Sonia Klonowska"
-          ],
+          "judges": ["Ewa Połom", "Marek Osowicki", "Sonia Klonowska"],
           "keywords": [],
           "division": "IV Wydział Pracy"
         },
@@ -513,12 +447,8 @@
         "metadata": {
           "saosId": 542464,
           "courtType": "COMMON",
-          "judges": [
-            "Małgorzata Olejarczyk"
-          ],
-          "keywords": [
-            "przestępstwo przeciwko mieniu"
-          ],
+          "judges": ["Małgorzata Olejarczyk"],
+          "keywords": ["przestępstwo przeciwko mieniu"],
           "division": "II Wydział Karny"
         },
         "rawHash": "28b6ed40fa6d3f68ffefe9fca7a587576334275309b4e232416e3f9ed9eff752"
@@ -534,12 +464,8 @@
         "metadata": {
           "saosId": 542439,
           "courtType": "COMMON",
-          "judges": [
-            "Marcin Polit"
-          ],
-          "keywords": [
-            "zadośćuczynienie za śmierć osoby bliskiej"
-          ],
+          "judges": ["Marcin Polit"],
+          "keywords": ["zadośćuczynienie za śmierć osoby bliskiej"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "aa0840b423c76600ae1e362061f2aff67ecc50974f48bc0eaa31369048ffff21"
@@ -555,12 +481,8 @@
         "metadata": {
           "saosId": 542564,
           "courtType": "COMMON",
-          "judges": [
-            "Paweł Mądry"
-          ],
-          "keywords": [
-            "alimenty"
-          ],
+          "judges": ["Paweł Mądry"],
+          "keywords": ["alimenty"],
           "division": "II Wydział Karny"
         },
         "rawHash": "a82304dca692df74db3a49091d2a5a6c52e254ab16a9b534ce85f1fcd49d3a77"
@@ -576,9 +498,7 @@
         "metadata": {
           "saosId": 542690,
           "courtType": "COMMON",
-          "judges": [
-            "Alina Szostkowska"
-          ],
+          "judges": ["Alina Szostkowska"],
           "keywords": [
             "grzywna",
             "koszty procesu",
@@ -600,12 +520,8 @@
         "metadata": {
           "saosId": 542677,
           "courtType": "COMMON",
-          "judges": [
-            "Marcin Garcia Fernandez"
-          ],
-          "keywords": [
-            "umorzenie postępowania"
-          ],
+          "judges": ["Marcin Garcia Fernandez"],
+          "keywords": ["umorzenie postępowania"],
           "division": "XIV Wydział Cywilny z siedzibą w Pile"
         },
         "rawHash": "515f20ae380a37f1833f68c398d3c1deb6195c716455fb69cacbfc97e79f361a"
@@ -622,9 +538,7 @@
           "saosId": 542138,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "odszkodowanie"
-          ],
+          "keywords": ["odszkodowanie"],
           "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "b048d02f4087f2aeceb4ac43e4a3510c6f7c4867d96519e9045e9ef201ebc069"
@@ -695,9 +609,7 @@
           "saosId": 542191,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "niepełnosprawność"
-          ],
+          "keywords": ["niepełnosprawność"],
           "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "6bd92fad7849d3059ba85cba363ccc5b97e4d2a04007e5416bb2bdbf8befcc3d"
@@ -713,12 +625,8 @@
         "metadata": {
           "saosId": 542160,
           "courtType": "COMMON",
-          "judges": [
-            "Andrzej Kuryłek"
-          ],
-          "keywords": [
-            "sankcja kredytu darmowego"
-          ],
+          "judges": ["Andrzej Kuryłek"],
+          "keywords": ["sankcja kredytu darmowego"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "cb848f8ea0187f1f4ecad234dbf59a405e26797ffb662a2c2d44e766e83dd6b1"
@@ -734,12 +642,8 @@
         "metadata": {
           "saosId": 542559,
           "courtType": "COMMON",
-          "judges": [
-            "Asesor Mateusz Śnieżek"
-          ],
-          "keywords": [
-            "przestępstwo przeciwko mieniu"
-          ],
+          "judges": ["Asesor Mateusz Śnieżek"],
+          "keywords": ["przestępstwo przeciwko mieniu"],
           "division": "II Wydział Karny"
         },
         "rawHash": "86af39ea9372f548ac8e6977011eb705b7ca0e4f63686ac21820c44a94354eab"
@@ -755,12 +659,8 @@
         "metadata": {
           "saosId": 542163,
           "courtType": "COMMON",
-          "judges": [
-            "Marcin Polit"
-          ],
-          "keywords": [
-            "zachowek"
-          ],
+          "judges": ["Marcin Polit"],
+          "keywords": ["zachowek"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "9e68280b7f91d127a015ba5af5a21b1126a9db90a7ce8f521b560a7a96bdd01c"
@@ -776,12 +676,8 @@
         "metadata": {
           "saosId": 542336,
           "courtType": "COMMON",
-          "judges": [
-            "Hubert Wicik"
-          ],
-          "keywords": [
-            "zasiedzenie"
-          ],
+          "judges": ["Hubert Wicik"],
+          "keywords": ["zasiedzenie"],
           "division": "II Wydział Cywilny Odwołaczy"
         },
         "rawHash": "77866fb65feaeda1498fb801ed72d2b51d462fd2b31269ef21c893d68ea11bac"
@@ -797,9 +693,7 @@
         "metadata": {
           "saosId": 542001,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -816,9 +710,7 @@
         "metadata": {
           "saosId": 542000,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -835,9 +727,7 @@
         "metadata": {
           "saosId": 541997,
           "courtType": "COMMON",
-          "judges": [
-            "Maciej Skuczyński"
-          ],
+          "judges": ["Maciej Skuczyński"],
           "keywords": [],
           "division": "IV Wydział Gospodarczy"
         },
@@ -876,10 +766,7 @@
           "saosId": 541732,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "odszkodowanie jednorazowe",
-            "wypadek przy pracy"
-          ],
+          "keywords": ["odszkodowanie jednorazowe", "wypadek przy pracy"],
           "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "870cf09cb64dfbc15fdd00c5d49e6c06f20336a1fbe883218e9443c442210345"
@@ -896,9 +783,7 @@
           "saosId": 541868,
           "courtType": "COMMON",
           "judges": [],
-          "keywords": [
-            "zasiłek chorobowy"
-          ],
+          "keywords": ["zasiłek chorobowy"],
           "division": "IX Wydział Pracy i Ubezpieczeń Społecznych"
         },
         "rawHash": "8b05db501e12c10cb591b9c6c2b431eb305eab53bc1481f2ec562a980606e930"
@@ -914,12 +799,8 @@
         "metadata": {
           "saosId": 542402,
           "courtType": "COMMON",
-          "judges": [
-            "Marcin Garcia Fernandez"
-          ],
-          "keywords": [
-            "kredyt"
-          ],
+          "judges": ["Marcin Garcia Fernandez"],
+          "keywords": ["kredyt"],
           "division": "XIV Wydział Cywilny z siedzibą w Pile"
         },
         "rawHash": "0fbeb791534e1b2edc22ad4be352a34229e8a84d2b2ad138717e3a822fdd8476"
@@ -935,13 +816,8 @@
         "metadata": {
           "saosId": 542314,
           "courtType": "COMMON",
-          "judges": [
-            "Anna Gajewska"
-          ],
-          "keywords": [
-            "najem pojazdu zastępczego",
-            "ubezpieczenie oc"
-          ],
+          "judges": ["Anna Gajewska"],
+          "keywords": ["najem pojazdu zastępczego", "ubezpieczenie oc"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "96af7d2942957bd7406bd91a9f134049d0ba431840fd51d59205fa631e06960d"
@@ -957,12 +833,8 @@
         "metadata": {
           "saosId": 542243,
           "courtType": "COMMON",
-          "judges": [
-            "Andrzej Kuryłek"
-          ],
-          "keywords": [
-            "kredyt indeksowany do waluty obcej"
-          ],
+          "judges": ["Andrzej Kuryłek"],
+          "keywords": ["kredyt indeksowany do waluty obcej"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "8392e51b3a6b720b5c4c89cd3e01302cb26f9d27f5dc87d15280f1a96356bda6"
@@ -978,12 +850,8 @@
         "metadata": {
           "saosId": 542450,
           "courtType": "COMMON",
-          "judges": [
-            "Magdalena Łukaszewicz"
-          ],
-          "keywords": [
-            "odszkodowanie"
-          ],
+          "judges": ["Magdalena Łukaszewicz"],
+          "keywords": ["odszkodowanie"],
           "division": "I Wydział Cywilny"
         },
         "rawHash": "3b514ba7d1bf33ec5b5976535dab01606f5e89ce08e9758a3089326a75bb06d3"

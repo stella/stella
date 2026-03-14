@@ -333,8 +333,7 @@ export const euEcjAdapter: SourceAdapter = {
             }
 
             const langLower = lang.toLowerCase();
-            const raw =
-              `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
+            const raw = `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
 
             decisions.push({
               caseNumber,

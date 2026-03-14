@@ -70,18 +70,13 @@ type SkApiResponse = {
 };
 
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
-const parseSkDate = (
-  raw: string | undefined,
-): string | undefined => {
+const parseSkDate = (raw: string | undefined): string | undefined => {
   if (!raw) {
     return;
   }
   const result = parseCeDate(raw);
   if (!result) {
-    console.warn(
-      "SK Courts adapter: unexpected date format",
-      raw,
-    );
+    console.warn("SK Courts adapter: unexpected date format", raw);
   }
   return result;
 };
@@ -97,19 +92,13 @@ const fetchDetail = async (
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
   const response = await fetch(url, {
     signal: signal
-      ? AbortSignal.any([
-          signal,
-          AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-        ])
+      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
       : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
     headers: { Accept: "application/json" },
   });
 
   if (!response.ok) {
-    console.warn(
-      `SK Courts detail fetch failed: ${response.status}`,
-      guid,
-    );
+    console.warn(`SK Courts detail fetch failed: ${response.status}`, guid);
     return null;
   }
 
@@ -142,9 +131,7 @@ const parseItemWithDetail = async (
     return null;
   }
 
-  const detail = item.guid
-    ? await fetchDetail(item.guid, signal)
-    : null;
+  const detail = item.guid ? await fetchDetail(item.guid, signal) : null;
 
   // Hash only the list-endpoint payload so the
   // change-detection key stays stable regardless of
@@ -159,9 +146,7 @@ const parseItemWithDetail = async (
     language: "sk",
     decisionDate: parseSkDate(item.datumVydania),
     decisionType: item.formaRozhodnutia,
-    sourceUrl: item.guid
-      ? sourceUrlForGuid(item.guid)
-      : undefined,
+    sourceUrl: item.guid ? sourceUrlForGuid(item.guid) : undefined,
     documentUrl: detail?.dokument?.url,
     metadata: {
       guid: item.guid,
@@ -169,8 +154,7 @@ const parseItemWithDetail = async (
       judge: item.sudca?.meno,
       decisionNature: item.povaha?.join(", "),
       subArea: detail?.podOblast,
-      referencedLegislation:
-        detail?.odkazovanePredpisy,
+      referencedLegislation: detail?.odkazovanePredpisy,
     },
     rawHash: hashContent(rawJson),
   };
@@ -190,11 +174,11 @@ export const skCourtsAdapter: SourceAdapter = {
 
     buildRequest: (page) => ({
       url: `${BASE_URL}?${new URLSearchParams({
-          page: String(page),
-          size: String(PAGE_SIZE),
-          sortProperty: "datumVydania",
-          sortDirection: "DESC",
-        }).toString()}`,
+        page: String(page),
+        size: String(PAGE_SIZE),
+        sortProperty: "datumVydania",
+        sortDirection: "DESC",
+      }).toString()}`,
       init: {
         headers: { Accept: "application/json" },
       },

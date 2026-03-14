@@ -36,17 +36,13 @@ const loadAllAdapters = async (): Promise<LoadResult[]> => {
       } else {
         results.push({
           key,
-          importError:
-            "Module loaded but no SourceAdapter export found",
+          importError: "Module loaded but no SourceAdapter export found",
         });
       }
     } catch (error) {
       results.push({
         key,
-        importError:
-          error instanceof Error
-            ? error.message
-            : String(error),
+        importError: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -110,16 +106,13 @@ const checkField = (
 
   for (const d of decisions) {
     const val = d[field];
-    if (
-      val !== undefined &&
-      val !== null &&
-      val !== ""
-    ) {
+    if (val !== undefined && val !== null && val !== "") {
       present++;
       if (examples.length < 3) {
-        const str = typeof val === "string"
-          ? val.slice(0, 80)
-          : JSON.stringify(val).slice(0, 80);
+        const str =
+          typeof val === "string"
+            ? val.slice(0, 80)
+            : JSON.stringify(val).slice(0, 80);
         examples.push(str);
       }
     } else {
@@ -149,9 +142,7 @@ export const checkAdapterHealth = async (
       AbortSignal.timeout(timeoutMs),
     );
 
-    const durationMs = Math.round(
-      performance.now() - start,
-    );
+    const durationMs = Math.round(performance.now() - start);
 
     if (result.isErr()) {
       return {
@@ -167,9 +158,7 @@ export const checkAdapterHealth = async (
     }
 
     const page = result.unwrap();
-    const fields = ALL_CHECKED_FIELDS.map((f) =>
-      checkField(page.decisions, f),
-    );
+    const fields = ALL_CHECKED_FIELDS.map((f) => checkField(page.decisions, f));
 
     // Determine status
     const requiredOk = REQUIRED_FIELDS.every((f) => {
@@ -201,13 +190,8 @@ export const checkAdapterHealth = async (
       decisionCount: 0,
       hasNextCursor: false,
       fields: [],
-      durationMs: Math.round(
-        performance.now() - start,
-      ),
-      error:
-        error instanceof Error
-          ? error.message
-          : String(error),
+      durationMs: Math.round(performance.now() - start),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 };
@@ -234,10 +218,7 @@ export const checkAllAdapters = async (
       continue;
     }
 
-    const result = await checkAdapterHealth(
-      entry.adapter,
-      timeoutMs,
-    );
+    const result = await checkAdapterHealth(entry.adapter, timeoutMs);
     results.push(result);
   }
 
@@ -245,25 +226,14 @@ export const checkAllAdapters = async (
 };
 
 /** Format health results as a human-readable report. */
-export const formatHealthReport = (
-  results: HealthResult[],
-): string => {
-  const lines: string[] = [
-    "=== Adapter Health Report ===",
-    "",
-  ];
+export const formatHealthReport = (results: HealthResult[]): string => {
+  const lines: string[] = ["=== Adapter Health Report ===", ""];
 
   for (const r of results) {
     const icon =
-      r.status === "healthy"
-        ? "OK"
-        : r.status === "degraded"
-          ? "WARN"
-          : "FAIL";
+      r.status === "healthy" ? "OK" : r.status === "degraded" ? "WARN" : "FAIL";
 
-    lines.push(
-      `[${icon}] ${r.key} (${r.name})`,
-    );
+    lines.push(`[${icon}] ${r.key} (${r.name})`);
     lines.push(
       `  Decisions: ${r.decisionCount} | ` +
         `Cursor: ${r.hasNextCursor ? "yes" : "no"} | ` +
@@ -277,12 +247,9 @@ export const formatHealthReport = (
     // Show field coverage
     for (const f of r.fields) {
       if (f.missing > 0) {
-        const pct = Math.round(
-          (f.present / (f.present + f.missing)) * 100,
-        );
+        const pct = Math.round((f.present / (f.present + f.missing)) * 100);
         lines.push(
-          `  ${f.field}: ${pct}% ` +
-            `(${f.present}/${f.present + f.missing})`,
+          `  ${f.field}: ${pct}% (${f.present}/${f.present + f.missing})`,
         );
       }
     }
@@ -290,9 +257,7 @@ export const formatHealthReport = (
     lines.push("");
   }
 
-  const healthy = results.filter(
-    (r) => r.status === "healthy",
-  ).length;
+  const healthy = results.filter((r) => r.status === "healthy").length;
   const total = results.length;
   lines.push(`${healthy}/${total} adapters healthy`);
 

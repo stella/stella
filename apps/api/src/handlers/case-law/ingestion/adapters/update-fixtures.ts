@@ -16,10 +16,7 @@ import {
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 
-const FIXTURES_DIR = new URL(
-  "__fixtures__/",
-  import.meta.url,
-);
+const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 type FixtureRecord = {
   /** Adapter key. */
@@ -75,10 +72,7 @@ const updateAdapter = async (
       },
     };
 
-    const filename = await writeFixture(
-      adapterKey,
-      record,
-    );
+    const filename = await writeFixture(adapterKey, record);
     return { filename, count: page.decisions.length };
   } catch (error) {
     return {
@@ -91,8 +85,7 @@ const updateAdapter = async (
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const adapterFlag = args.indexOf("--adapter");
-  const rawTarget =
-    adapterFlag !== -1 ? args[adapterFlag + 1] : undefined;
+  const rawTarget = adapterFlag !== -1 ? args[adapterFlag + 1] : undefined;
 
   const allKeys = listAdapterKeys();
 
@@ -117,9 +110,7 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  console.log(
-    `Updating fixtures for ${keysToUpdate.length} adapter(s)...\n`,
-  );
+  console.log(`Updating fixtures for ${keysToUpdate.length} adapter(s)...\n`);
 
   let failures = 0;
   for (let i = 0; i < keysToUpdate.length; i++) {
@@ -131,9 +122,7 @@ if (import.meta.main) {
       console.log(`FAILED: ${result.error}`);
       failures++;
     } else {
-      console.log(
-        `OK (${result.count} decisions → ${result.filename})`,
-      );
+      console.log(`OK (${result.count} decisions → ${result.filename})`);
     }
 
     // Rate limit between adapters

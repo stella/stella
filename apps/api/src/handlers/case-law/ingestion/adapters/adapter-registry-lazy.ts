@@ -41,13 +41,9 @@ export const loadAdapterByKey = async (
   const entries = mod as Record<string, unknown>;
   return Object.values(entries).find(
     (v): v is SourceAdapter =>
-      typeof v === "object" &&
-      v !== null &&
-      "key" in v &&
-      "fetchPage" in v,
+      typeof v === "object" && v !== null && "key" in v && "fetchPage" in v,
   );
 };
 
 /** List all registered adapter keys. */
-export const listAdapterKeys = (): string[] =>
-  Object.keys(ADAPTER_MODULES);
+export const listAdapterKeys = (): string[] => Object.keys(ADAPTER_MODULES);

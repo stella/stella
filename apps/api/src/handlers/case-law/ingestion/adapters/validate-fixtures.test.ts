@@ -10,15 +10,12 @@
  * fixtures that no longer parse correctly.
  */
 
-import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
+import { describe, expect, test } from "bun:test";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 
-const FIXTURES_DIR = new URL(
-  "__fixtures__/",
-  import.meta.url,
-);
+const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 type FixtureRecord = {
   adapter: string;
@@ -39,10 +36,9 @@ const loadPageFixtures = async (): Promise<
   }[] = [];
 
   const glob = new Glob("*-page.json");
-  const fixturePath =
-    FIXTURES_DIR.pathname.endsWith("/")
-      ? FIXTURES_DIR.pathname
-      : `${FIXTURES_DIR.pathname}/`;
+  const fixturePath = FIXTURES_DIR.pathname.endsWith("/")
+    ? FIXTURES_DIR.pathname
+    : `${FIXTURES_DIR.pathname}/`;
 
   for await (const filename of glob.scan(fixturePath)) {
     const path = new URL(filename, FIXTURES_DIR);
@@ -66,48 +62,30 @@ const validateDecision = (
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();
   expect(d.court, `${prefix}.court`).toBeTruthy();
-  expect(d.country, `${prefix}.country`).toMatch(
-    /^[A-Z]{2,3}$/,
-  );
-  expect(d.language, `${prefix}.language`).toMatch(
-    /^[a-z]{2}$/,
-  );
-  expect(d.rawHash, `${prefix}.rawHash`).toHaveLength(
-    64,
-  );
-  expect(
-    typeof d.metadata,
-    `${prefix}.metadata type`,
-  ).toBe("object");
+  expect(d.country, `${prefix}.country`).toMatch(/^[A-Z]{2,3}$/);
+  expect(d.language, `${prefix}.language`).toMatch(/^[a-z]{2}$/);
+  expect(d.rawHash, `${prefix}.rawHash`).toHaveLength(64);
+  expect(typeof d.metadata, `${prefix}.metadata type`).toBe("object");
 
   // Date format if present
   if (d.decisionDate) {
-    expect(
-      d.decisionDate,
-      `${prefix}.decisionDate`,
-    ).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.decisionDate, `${prefix}.decisionDate`).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
   }
 
   // ECLI format if present
   if (d.ecli) {
-    expect(d.ecli, `${prefix}.ecli`).toMatch(
-      /^ECLI:/,
-    );
+    expect(d.ecli, `${prefix}.ecli`).toMatch(/^ECLI:/);
   }
 
   // URL format if present
   if (d.sourceUrl) {
-    expect(
-      d.sourceUrl,
-      `${prefix}.sourceUrl`,
-    ).toMatch(/^https?:\/\//);
+    expect(d.sourceUrl, `${prefix}.sourceUrl`).toMatch(/^https?:\/\//);
   }
 
   if (d.documentUrl) {
-    expect(
-      d.documentUrl,
-      `${prefix}.documentUrl`,
-    ).toMatch(/^https?:\/\//);
+    expect(d.documentUrl, `${prefix}.documentUrl`).toMatch(/^https?:\/\//);
   }
 };
 
@@ -122,18 +100,11 @@ describe("fixture validation", () => {
 
     for (const { filename, data } of fixtures) {
       // Fixture metadata
-      expect(
-        data.adapter,
-        `${filename}.adapter`,
-      ).toBeTruthy();
-      expect(
-        data.recordedAt,
-        `${filename}.recordedAt`,
-      ).toMatch(/^\d{4}-\d{2}-\d{2}/);
-      expect(
-        data.page,
-        `${filename}.page`,
-      ).toBeDefined();
+      expect(data.adapter, `${filename}.adapter`).toBeTruthy();
+      expect(data.recordedAt, `${filename}.recordedAt`).toMatch(
+        /^\d{4}-\d{2}-\d{2}/,
+      );
+      expect(data.page, `${filename}.page`).toBeDefined();
       expect(
         Array.isArray(data.page.decisions),
         `${filename}.page.decisions is array`,
@@ -146,21 +117,11 @@ describe("fixture validation", () => {
       ).toBeGreaterThan(0);
 
       // Validate each decision
-      for (
-        let i = 0;
-        i < data.page.decisions.length;
-        i++
-      ) {
-        validateDecision(
-          data.page.decisions[i],
-          i,
-          data.adapter,
-        );
+      for (let i = 0; i < data.page.decisions.length; i++) {
+        validateDecision(data.page.decisions[i], i, data.adapter);
       }
 
-      console.log(
-        `  ${filename}: ${data.page.decisions.length} decisions OK`,
-      );
+      console.log(`  ${filename}: ${data.page.decisions.length} decisions OK`);
     }
   });
 
@@ -176,9 +137,7 @@ describe("fixture validation", () => {
     const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
 
     for (const { filename, data } of fixtures) {
-      const recorded = new Date(
-        data.recordedAt,
-      ).getTime();
+      const recorded = new Date(data.recordedAt).getTime();
       const age = now - recorded;
 
       expect(

@@ -1,0 +1,16 @@
+# Opt-in pre-commit hooks.
+# To activate: bun run hooks:install
+# To deactivate: bun run hooks:uninstall
+#
+# These hooks are NOT auto-installed. Each developer
+# chooses whether to use them.
+
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      run: bun run typecheck
+    lint:
+      run: bun run lint
+    format:
+      run: bun run format:check

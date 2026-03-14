@@ -17,8 +17,7 @@ import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
  * Cursor format: page number as string (e.g. "1", "2").
  */
 
-const BASE_URL =
-  "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
+const BASE_URL = "https://vyhledavac.nssoud.cz/Home/MyResTRowsCont";
 const PAGE_SIZE = 40;
 
 type NssoudApiItem = {
@@ -38,9 +37,7 @@ type NssoudApiItem = {
   OdkazNaText?: string;
 };
 
-const parseItem = (
-  item: NssoudApiItem,
-): IngestionResult | null => {
+const parseItem = (item: NssoudApiItem): IngestionResult | null => {
   if (!item.SpisovaZnacka) {
     return null;
   }
@@ -60,10 +57,8 @@ const parseItem = (
     metadata: {
       reportingJudge: item.SoudceZpravodaj,
       areaOfLaw: item.OblastPrava,
-      appliedLegalProvisions:
-        item.AplikovanaZakonnaUstanoveni,
-      appliedEuLaw:
-        item.AplikovanaUniiniPravniPredpis,
+      appliedLegalProvisions: item.AplikovanaZakonnaUstanoveni,
+      appliedEuLaw: item.AplikovanaUniiniPravniPredpis,
       prejudication: item.Prejudikatura,
       legalSentence: item.PravniVeta,
     },
@@ -113,7 +108,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
     }),
 
     // SAFETY: items come from extractItems which returns data (NssoudApiItem[]).
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    parseItem: async (raw) => await Promise.resolve(parseItem(raw as NssoudApiItem)),
+    parseItem: async (raw) =>
+      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+      await Promise.resolve(parseItem(raw as NssoudApiItem)),
   }),
 };
