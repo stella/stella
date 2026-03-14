@@ -46,13 +46,14 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "saturday"
       time: "09:00"
       timezone: "Europe/Prague"
     # Only accept updates that have been published for at least 3 days
     cooldown:
       default-days: 3
-
+    open-pull-requests-limit: 10
     groups:
       tanstack:
         patterns:
@@ -86,9 +87,6 @@ updates:
       tiptap:
         patterns:
           - "@tiptap/*"
-      aws:
-        patterns:
-          - "@aws-sdk/*"
       drizzle:
         patterns:
           - "drizzle-orm"
@@ -112,9 +110,9 @@ updates:
       ultracite:
         patterns:
           - "ultracite"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch"]
+      misc:
+        patterns:
+          - "*"
     versioning-strategy: increase
     commit-message:
       prefix: "chore"
