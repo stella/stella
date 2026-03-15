@@ -2,6 +2,7 @@ name: Container Image Scan
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "apps/api/Dockerfile"
   push:
@@ -19,6 +20,7 @@ concurrency:
 
 jobs:
   trivy:
+    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read

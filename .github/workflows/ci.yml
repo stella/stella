@@ -2,7 +2,7 @@ name: CI Checks
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   workflow_dispatch:
 
 concurrency:
@@ -11,12 +11,15 @@ concurrency:
 
 jobs:
   trust-check:
-    # Skip irrelevant label events: only the "run-ci" label matters.
-    # Without this gate, adding any label (e.g. priority, triage)
-    # would cancel an in-progress CI run due to cancel-in-progress.
+    # Skip draft PRs (CI runs when marked ready for review via
+    # `reopened`). Also skip irrelevant label events: only the
+    # "run-ci" label matters — without this gate, adding any
+    # label (e.g. priority, triage) would cancel an in-progress
+    # CI run due to cancel-in-progress.
     if: >-
-      github.event.action != 'labeled'
-      || github.event.label.name == 'run-ci'
+      github.event.pull_request.draft != true
+      && (github.event.action != 'labeled'
+          || github.event.label.name == 'run-ci')
     runs-on: ubuntu-latest
     permissions:
       contents: read
