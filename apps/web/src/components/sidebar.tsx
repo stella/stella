@@ -141,6 +141,9 @@ function SidebarProvider({
         )}
         data-slot="sidebar-wrapper"
         style={
+          // SAFETY: CSS custom properties are valid
+          // CSSProperties but not in React's type defs.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,

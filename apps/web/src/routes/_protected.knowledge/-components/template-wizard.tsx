@@ -59,9 +59,14 @@ export type EditableField = {
   options: string[];
 };
 
+const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
+
+const isInputType = (value: string): value is InputType =>
+  INPUT_TYPE_SET.has(value);
+
 const inferInputType = (field: ResolvedField): InputType => {
-  if (field.inputType) {
-    return field.inputType as InputType;
+  if (field.inputType && isInputType(field.inputType)) {
+    return field.inputType;
   }
   if (field.kind === "boolean") {
     return "boolean";
@@ -393,14 +398,11 @@ export const FieldConfigEditor = ({
       <Field>
         <FieldLabel>{t("templates.fieldInputType")}</FieldLabel>
         <Select
-          onValueChange={(val) =>
-            // SAFETY: val from Select with INPUT_TYPES options
-            onUpdate({
-              inputType:
-                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-                val as InputType,
-            })
-          }
+          onValueChange={(val) => {
+            if (val && isInputType(val)) {
+              onUpdate({ inputType: val });
+            }
+          }}
           value={field.inputType}
         >
           <SelectTrigger>

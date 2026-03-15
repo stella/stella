@@ -233,29 +233,23 @@ const buildCondition = ({
   operator,
   value,
 }: BuildConditionArgs): PropertyCondition | null => {
-  if (Array.isArray(value)) {
+  if (Array.isArray(value) && operator === "contains-every") {
     return value.length > 0
       ? {
           version: 1,
           type: "string-array",
-          // SAFETY: operator from property content type
-          operator:
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            operator as StringArrayOperators,
+          operator,
           value,
         }
       : null;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === "string" && operator === "eq") {
     return value.trim().length > 0
       ? {
           version: 1,
           type: "string",
-          // SAFETY: operator from property content type
-          operator:
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            operator as StringOperators,
+          operator,
           value: value.trim(),
         }
       : null;

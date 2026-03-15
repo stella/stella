@@ -175,9 +175,9 @@ const parseRisItem = async (
   signal?: AbortSignal,
 ): Promise<IngestionResult | null> => {
   // SAFETY: items come from extractItems which returns
-  // OgdDocumentReference[].
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  const doc = raw as RisDocumentReference;
+  // OgdDocumentReference[]; all fields are optional so
+  // missing properties degrade gracefully.
+  const doc = raw as RisDocumentReference; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
 
   const meta = doc.Data?.Metadaten;
   const jud = meta?.Judikatur;
@@ -251,9 +251,8 @@ export const atCourtsAdapter: SourceAdapter = {
       // SAFETY: structural check confirms object; all
       // fields are optional so missing properties
       // degrade gracefully.
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
       return typeof json === "object" && json !== null
-        ? (json as RisApiResponse)
+        ? (json as RisApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
         : {};
     },
 

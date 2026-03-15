@@ -99,17 +99,16 @@ export const czSupremeAdminAdapter: SourceAdapter = {
       }
       // SAFETY: Array.isArray guard above confirms array;
       // items are structurally checked by parseItem.
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-      return json as NssoudApiItem[];
+      return json as NssoudApiItem[]; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
     },
 
     extractItems: (data) => ({
       items: data,
     }),
 
-    // SAFETY: items come from extractItems which returns data (NssoudApiItem[]).
+    // SAFETY: items come from extractItems which returns
+    // data (NssoudApiItem[]); all fields are optional.
     parseItem: async (raw) =>
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-      await Promise.resolve(parseItem(raw as NssoudApiItem)),
+      await Promise.resolve(parseItem(raw as NssoudApiItem)), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
   }),
 };

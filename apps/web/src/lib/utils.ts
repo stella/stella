@@ -20,14 +20,16 @@ export const stripUndefined = <T extends Record<string, unknown>>(
 ): {
   [K in keyof T]: Exclude<T[K], undefined>;
 } => {
-  const result = {} as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
   for (const key of Object.keys(obj)) {
     if (obj[key] !== undefined) {
       result[key] = obj[key];
     }
   }
+  // SAFETY: result mirrors input with undefined-valued keys
+  // removed; the mapped return type reflects this invariant.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return result as never;
+  return result as { [K in keyof T]: Exclude<T[K], undefined> };
 };
 
 export const shuffleArray = <T>(originalArray: T[]): T[] => {

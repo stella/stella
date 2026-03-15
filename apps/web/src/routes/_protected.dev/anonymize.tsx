@@ -42,6 +42,11 @@ import type {
   ReviewedEntity,
 } from "@/lib/anonymize/types";
 
+const OPERATOR_TYPE_SET: ReadonlySet<string> = new Set(OPERATOR_TYPES);
+
+const isOperatorType = (value: string): value is OperatorType =>
+  OPERATOR_TYPE_SET.has(value);
+
 export const Route = createFileRoute("/_protected/dev/anonymize")({
   component: AnonymizePage,
 });
@@ -1079,20 +1084,14 @@ function AnonymizePage() {
                         className="rounded border bg-transparent px-1 py-0.5 text-xs"
                         onChange={(e) => {
                           const value = e.target.value;
-                          if (
-                            !OPERATOR_TYPES.includes(
-                              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by includes check
-                              value as OperatorType,
-                            )
-                          ) {
+                          if (!isOperatorType(value)) {
                             return;
                           }
                           setOperatorConfig((prev) => ({
                             ...prev,
                             operators: {
                               ...prev.operators,
-                              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
-                              [label]: value as OperatorType,
+                              [label]: value,
                             },
                           }));
                         }}

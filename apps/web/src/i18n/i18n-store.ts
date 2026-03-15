@@ -51,13 +51,14 @@ export const LANG_ENDONYMS = {
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
+const isSupportedLanguage = (value: string): value is SupportedLanguage =>
+  value in langMessages;
+
 const detectLang = (): SupportedLanguage => {
   for (const candidate of navigator.languages) {
     const prefix = candidate.split("-")[0] ?? candidate;
-    if (prefix in langMessages) {
-      // SAFETY: prefix in langMessages narrows to SupportedLanguage
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return prefix as SupportedLanguage;
+    if (isSupportedLanguage(prefix)) {
+      return prefix;
     }
   }
 

@@ -116,8 +116,9 @@ function MyTodosPage() {
       return [];
     }
 
-    // Filter out tasks without a workspace (shouldn't
-    // happen, but satisfies the type constraint).
+    // SAFETY: Eden-inferred response matches TaskItem shape;
+    // TS can't unify the Eden type with the local alias.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const valid = (tasks as TaskItem[]).filter(
       (task): task is ValidTask => task.workspace !== null,
     );

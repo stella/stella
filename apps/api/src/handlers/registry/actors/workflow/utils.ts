@@ -88,10 +88,7 @@ export const setFieldsContent = async (
       workspaceId,
       propertyId,
       entityVersionId,
-      content: {
-        type: contentType,
-        version: 1 as const,
-      },
+      content: { type: contentType, version: 1 as const },
     }));
 
     if (fieldValues.length > 0) {

@@ -17,7 +17,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
-import type { WorkspaceEntity } from "@/lib/types";
+import type { EntityKind, WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -109,7 +109,7 @@ const StatCard = ({ label, value }: StatCardProps) => (
 type OverviewEntity = {
   entityId: string;
   name: string;
-  kind: string;
+  kind: EntityKind;
   mimeType: string | null;
   fieldId: string | null;
   pdfFileId: string | null;
@@ -163,10 +163,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     }
     return {
       entityId: entity.entityId,
-      // SAFETY: entity.kind from workspace entity
-      kind:
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        entity.kind as WorkspaceEntity["kind"],
+      kind: entity.kind,
       name: entity.name,
       parentId: null,
       createdAt: entity.updatedAt ?? "",
