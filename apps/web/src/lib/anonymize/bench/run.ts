@@ -1,0 +1,154 @@
+/**
+ * Bench run script: reads corpus inputs, runs the full
+ * anonymisation pipeline, and writes baseline JSON files.
+ *
+ * Usage:
+ *   bun apps/web/src/lib/anonymize/bench/run.ts
+ *   bun apps/web/src/lib/anonymize/bench/run.ts --filter ecj
+ */
+/* eslint-disable no-console -- CLI bench script */
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+
+import { runPipeline } from "../pipeline";
+import { DEFAULT_ENTITY_LABELS } from "../types";
+import type { Entity, PipelineConfig } from "../types";
+import { createNerInference } from "./ner";
+
+const CORPUS_DIR = join(import.meta.dirname, "..", "__corpus__");
+const INPUTS_DIR = join(CORPUS_DIR, "inputs");
+const BASELINES_DIR = join(CORPUS_DIR, "baselines");
+
+type BaselineEntry = {
+  start: number;
+  end: number;
+  label: string;
+  text: string;
+  score: number;
+  source: string;
+};
+
+type BaselineFile = {
+  entities: BaselineEntry[];
+  stats: {
+    totalEntities: number;
+    bySource: Record<string, number>;
+    byLabel: Record<string, number>;
+  };
+};
+
+const serializeEntities = (entities: Entity[]): BaselineFile => {
+  const sorted = entities.toSorted((a, b) => a.start - b.start);
+
+  const bySource: Record<string, number> = {};
+  const byLabel: Record<string, number> = {};
+
+  for (const entity of sorted) {
+    bySource[entity.source] = (bySource[entity.source] ?? 0) + 1;
+    byLabel[entity.label] = (byLabel[entity.label] ?? 0) + 1;
+  }
+
+  return {
+    entities: sorted.map((e) => ({
+      start: e.start,
+      end: e.end,
+      label: e.label,
+      text: e.text,
+      score: Math.round(e.score * 1000) / 1000,
+      source: e.source,
+    })),
+    stats: {
+      totalEntities: sorted.length,
+      bySource,
+      byLabel,
+    },
+  };
+};
+
+const main = async () => {
+  if (!existsSync(INPUTS_DIR)) {
+    console.error(
+      "Corpus not found. Run: git submodule init && git submodule update",
+    );
+    process.exit(1);
+  }
+
+  const filterArg = process.argv.indexOf("--filter");
+  const filter = filterArg !== -1 ? process.argv[filterArg + 1] : null;
+
+  const files = readdirSync(INPUTS_DIR).filter(
+    (f) => f.endsWith(".txt") && (!filter || f.includes(filter)),
+  );
+
+  if (files.length === 0) {
+    console.log("No matching input files found.");
+    return;
+  }
+
+  console.log(`Processing ${files.length} file(s)...`);
+
+  const nerInference = createNerInference();
+
+  const config: PipelineConfig = {
+    threshold: 0.65,
+    enableTriggerPhrases: true,
+    enableRegex: true,
+    enableGazetteer: false,
+    enableNer: true,
+    enableConfidenceBoost: true,
+    enableCoreference: true,
+    labels: [...DEFAULT_ENTITY_LABELS],
+    workspaceId: "bench",
+  };
+
+  mkdirSync(BASELINES_DIR, { recursive: true });
+
+  let created = 0;
+  let changed = 0;
+  let unchanged = 0;
+
+  for (const file of files) {
+    const inputPath = join(INPUTS_DIR, file);
+    const baselineName = file.replace(/\.txt$/, ".json");
+    const baselinePath = join(BASELINES_DIR, baselineName);
+
+    const text = readFileSync(inputPath, "utf8");
+    console.log(`  ${file} (${text.length} chars)...`);
+
+    const entities = await runPipeline(text, config, [], nerInference);
+
+    const baseline = serializeEntities(entities);
+    const json = `${JSON.stringify(baseline, null, 2)}\n`;
+
+    if (!existsSync(baselinePath)) {
+      writeFileSync(baselinePath, json, "utf8");
+      created++;
+      console.log(`    created (${baseline.stats.totalEntities} entities)`);
+    } else {
+      const existing = readFileSync(baselinePath, "utf8");
+      if (existing === json) {
+        unchanged++;
+        console.log(`    unchanged`);
+      } else {
+        writeFileSync(baselinePath, json, "utf8");
+        changed++;
+        console.log(`    changed (${baseline.stats.totalEntities} entities)`);
+      }
+    }
+  }
+
+  console.log(
+    `\nDone: ${created} created, ${changed} changed, ${unchanged} unchanged`,
+  );
+};
+
+main().catch((error: unknown) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
+});

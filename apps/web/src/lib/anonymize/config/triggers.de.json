@@ -6,17 +6,17 @@
   },
   {
     "trigger": "geboren am",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "geb.:",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "geb.",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
