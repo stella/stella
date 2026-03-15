@@ -331,7 +331,7 @@ const DetailContent = ({
       <div className="mb-6">
         <h2 className="text-lg font-semibold">{detail.title}</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          {categoryName ?? t("clauses.uncategorized")}
+          {categoryName ?? t("common.uncategorized")}
           {" \u00b7 "}
           {t("clauses.version", {
             version: String(detail.currentVersion),

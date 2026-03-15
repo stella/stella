@@ -40,7 +40,7 @@ export const SHORTCUT_HINT_GROUPS = [
     ],
   },
   {
-    categoryKey: "navigation.shortcutCategories.actions",
+    categoryKey: "common.actions",
     hints: [
       {
         hotkey: HOTKEYS.NEW_MATTER,

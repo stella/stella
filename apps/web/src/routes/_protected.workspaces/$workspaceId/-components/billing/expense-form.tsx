@@ -139,7 +139,7 @@ export const ExpenseForm = ({
         </div>
 
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("billing.expenses.category")}</Label>
+          <Label>{t("common.category")}</Label>
           <form.Field name="category">
             {(field) => (
               <Select
@@ -196,7 +196,7 @@ export const ExpenseForm = ({
           </form.Field>
         </div>
         <div className="flex w-20 flex-col gap-1.5">
-          <Label>{t("billing.rates.currency")}</Label>
+          <Label>{t("common.currency")}</Label>
           <form.Field name="currency">
             {(field) => (
               <Input

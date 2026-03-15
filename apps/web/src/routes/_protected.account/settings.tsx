@@ -72,7 +72,7 @@ function Settings() {
   return (
     <Frame>
       <FrameHeader>
-        <FrameTitle>{t("account.settings.title")}</FrameTitle>
+        <FrameTitle>{t("common.settings")}</FrameTitle>
         <FrameDescription>{t("account.settings.description")}</FrameDescription>
       </FrameHeader>
       <FramePanel>

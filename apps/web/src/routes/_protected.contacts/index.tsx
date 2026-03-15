@@ -115,7 +115,7 @@ function ContactsPage() {
         <div className="flex gap-1">
           <FilterButton
             active={filter === "all"}
-            label={t("contacts.filterAll")}
+            label={t("common.all")}
             onClick={() => setFilter("all")}
           />
           <FilterButton
@@ -136,12 +136,10 @@ function ContactsPage() {
         <TableHeader>
           <TableRow>
             <TableHead className="w-8" />
-            <TableHead>{t("contacts.columns.name")}</TableHead>
-            <TableHead>{t("contacts.columns.email")}</TableHead>
+            <TableHead>{t("common.name")}</TableHead>
+            <TableHead>{t("common.email")}</TableHead>
             <TableHead>{t("contacts.columns.phone")}</TableHead>
-            <TableHead className="text-end">
-              {t("contacts.columns.matters")}
-            </TableHead>
+            <TableHead className="text-end">{t("common.matters")}</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
@@ -375,7 +373,7 @@ const CreateContactDialog = () => {
             <form.Field name="type">
               {(field) => (
                 <Field name={field.name}>
-                  <FieldLabel>{t("contacts.fields.type")}</FieldLabel>
+                  <FieldLabel>{t("common.type")}</FieldLabel>
                   <div className="flex gap-2">
                     <Button
                       onClick={() => {

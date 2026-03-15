@@ -244,7 +244,7 @@ export const SearchDialog = ({
                 key={kind}
                 label={t(KIND_TRANSLATION_KEYS[kind])}
                 onRemove={() => removeKindFilter(kind)}
-                type={t("search.facets.kind")}
+                type={t("common.kind")}
               />
             ))}
           </div>
@@ -269,7 +269,7 @@ export const SearchDialog = ({
                     }
                   }}
                   selected={filters.kinds ?? []}
-                  title={t("search.facets.kind")}
+                  title={t("common.kind")}
                 />
               )}
 
@@ -372,7 +372,7 @@ export const SearchDialog = ({
                       {isFetchingNextPage && (
                         <LoaderIcon className="size-3 animate-spin" />
                       )}
-                      {t("search.loadMore")}
+                      {t("common.loadMore")}
                     </Button>
                   </div>
                 )}

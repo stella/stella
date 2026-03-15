@@ -274,7 +274,7 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="currency"
-                label={t("contacts.fields.currency")}
+                label={t("common.currency")}
                 value={contact.currency}
               />
               <EditableRow
@@ -392,7 +392,7 @@ function ContactDetailPage() {
         {/* Notes */}
         <section className="rounded-lg border p-4 md:col-span-2">
           <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-            {t("contacts.fields.notes")}
+            {t("common.notes")}
           </h2>
           <EditableRow
             contact={contact}

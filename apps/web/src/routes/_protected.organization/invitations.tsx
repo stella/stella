@@ -60,7 +60,7 @@ function Invitations() {
           <TableRow>
             <TableHead>{t("common.email")}</TableHead>
             <TableHead>{t("common.role")}</TableHead>
-            <TableHead>{t("organization.invitations.status")}</TableHead>
+            <TableHead>{t("common.status")}</TableHead>
             <TableHead>{t("organization.invitations.invited")}</TableHead>
             <TableHead>{t("organization.invitations.expires")}</TableHead>
             <TableHead />
