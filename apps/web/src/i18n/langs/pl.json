@@ -442,6 +442,7 @@
     "connectionLost": "Utracono połączenie",
     "connectionLostDescription": "Utracono połączenie z serwerem. Automatyczne ponowne łączenie.",
     "convertTo": "Konwertuj na",
+    "copyLink": "Copy link",
     "createdAt": "Utworzono {date}",
     "currency": "Currency",
     "currentPage": "Bieżąca strona",

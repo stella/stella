@@ -442,6 +442,7 @@
     "connectionLost": "Savienojums zaudēts",
     "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
+    "copyLink": "Copy link",
     "createdAt": "Izveidots {date}",
     "currency": "Currency",
     "currentPage": "Pašreizējā lapa",

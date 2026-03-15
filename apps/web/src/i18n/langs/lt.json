@@ -442,6 +442,7 @@
     "connectionLost": "Ryšys nutrūko",
     "connectionLostDescription": "Praradome ryšį su serveriu. Bandoma automatiškai iš naujo.",
     "convertTo": "Konvertuoti į",
+    "copyLink": "Copy link",
     "createdAt": "Sukurta {date}",
     "currency": "Currency",
     "currentPage": "Dabartinis puslapis",
