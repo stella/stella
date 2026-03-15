@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,
 });
 
-type Section = {
+export type KnowledgeSection = {
   key:
     | "templates"
     | "clauses"
@@ -34,7 +34,7 @@ type Section = {
     | "/knowledge/case-law";
 };
 
-const sections: Section[] = [
+export const knowledgeSections: KnowledgeSection[] = [
   { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
   { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
   { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case-law" },
@@ -50,7 +50,7 @@ function KnowledgeLanding() {
   return (
     <div className="flex flex-1 flex-col p-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sections.map((section) => {
+        {knowledgeSections.map((section) => {
           const Icon = section.icon;
           const title = t(`knowledge.sections.${section.key}.title`);
           const description = t(

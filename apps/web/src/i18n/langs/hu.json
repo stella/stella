@@ -442,6 +442,7 @@
     "connectionLost": "Kapcsolat megszakadt",
     "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
+    "copyLink": "Copy link",
     "createdAt": "Létrehozva: {date}",
     "currency": "Currency",
     "currentPage": "Aktuális oldal",

@@ -21,6 +21,7 @@ import {
   GlobeIcon,
   InboxIcon,
   LayersIcon,
+  LinkIcon,
   Loader2Icon,
   LogOutIcon,
   MailIcon,
@@ -38,6 +39,7 @@ import {
   Settings2Icon,
   SquareIcon,
   SunIcon,
+  TrashIcon,
   UsersIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -111,6 +113,7 @@ import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
@@ -124,9 +127,13 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import {
   useCreateWorkspace,
+  useDeleteWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import {
+  workspacesKeys,
+  workspacesOptions,
+} from "@/routes/_protected.workspaces/-queries";
 
 const isDev = import.meta.env.DEV;
 const WHITESPACE = /\s+/;
@@ -145,7 +152,18 @@ const formatTimer = (seconds: number) => {
   return `${m}:${String(s).padStart(2, "0")}`;
 };
 
-const MatterIcon = ({ id, color }: { id: string; color?: string | null }) => (
+/**
+ * Minimum shape required to identify and render a matter.
+ * Any component or function that represents a matter must
+ * accept this type so `MatterIcon` always has a color.
+ */
+type MatterIdentity = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
+const MatterIcon = ({ id, color }: Pick<MatterIdentity, "id" | "color">) => (
   <LayersIcon
     className="size-4 shrink-0"
     style={{
@@ -277,6 +295,106 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
   );
 };
 
+type ContextAction = {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  variant?: "destructive";
+};
+
+/**
+ * Every nav section declares its context menu via this type.
+ * The required fields make it a compile error to add a nav
+ * item without considering its right-click experience.
+ *
+ * - `primaryAction`: the "+ New X" action (null if the section
+ *    has no creation flow yet)
+ * - `recents`: recent/pinned items shown below the action.
+ *    Empty array = no data available yet, but you acknowledged
+ *    the field exists. When data becomes available, fill it in.
+ */
+type NavContextMenuConfig = {
+  primaryAction: ContextAction | null;
+  recents: ContextAction[];
+};
+
+const NavContextMenu = ({
+  config,
+  children,
+}: {
+  config: NavContextMenuConfig;
+  children: React.ReactNode;
+}): React.ReactNode => {
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+
+  const hasContent = config.primaryAction !== null || config.recents.length > 0;
+
+  if (!hasContent) {
+    return children;
+  }
+
+  return (
+    <div
+      className="contents"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const x = e.clientX;
+        const y = e.clientY;
+        setAnchor({
+          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+        });
+        setOpen(true);
+      }}
+    >
+      {children}
+      <Menu
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            setAnchor(null);
+          }
+        }}
+        open={open}
+      >
+        <MenuTrigger
+          nativeButton={false}
+          render={<span className="sr-only" />}
+        />
+        <MenuPopup anchor={anchor ?? undefined}>
+          {config.primaryAction && (
+            <MenuItem onClick={config.primaryAction.onClick}>
+              {config.primaryAction.icon}
+              {config.primaryAction.label}
+            </MenuItem>
+          )}
+          {config.recents.length > 0 && config.primaryAction && (
+            <MenuSeparator />
+          )}
+          {config.recents.map((item, i) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <MenuItem
+              className={
+                item.variant === "destructive"
+                  ? "text-destructive"
+                  : undefined
+              }
+              key={i}
+              onClick={item.onClick}
+            >
+              {item.icon}
+              {item.label}
+            </MenuItem>
+          ))}
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
+};
+
 const NavBadge = ({ digit }: { digit: number }) => (
   <SidebarMenuBadge>
     <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150">
@@ -300,16 +418,14 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 };
 
 type MatterItemProps = {
-  workspace: {
-    id: string;
-    name: string;
+  workspace: MatterIdentity & {
     reference: string | null;
-    color: string | null;
     client?: { id: string; displayName: string } | null;
     lastActivityAt: Date;
   };
   isPinned?: boolean;
   onTogglePin: (id: string) => void;
+  onDelete: (id: string) => void;
   onReorder?: (draggedId: string, targetId: string) => void;
   navBadge?: number | undefined;
 };
@@ -320,6 +436,7 @@ const MatterItem = ({
   workspace: ws,
   isPinned,
   onTogglePin,
+  onDelete,
   onReorder,
   navBadge,
 }: MatterItemProps) => {
@@ -328,6 +445,9 @@ const MatterItem = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ctxAnchor, setCtxAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
   const updateWorkspace = useUpdateWorkspace();
   const escapedRef = useRef(false);
   const dropRef = useRef<HTMLLIElement>(null);
@@ -443,6 +563,12 @@ const MatterItem = ({
       }
       onContextMenu={(e) => {
         e.preventDefault();
+        e.stopPropagation();
+        const x = e.clientX;
+        const y = e.clientY;
+        setCtxAnchor({
+          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+        });
         setMenuOpen(true);
       }}
       ref={dropRef}
@@ -494,11 +620,42 @@ const MatterItem = ({
               <PinIcon className="size-3.5" />
             )}
           </button>
-          <Menu onOpenChange={setMenuOpen} open={menuOpen}>
+          <Menu
+            onOpenChange={(open) => {
+              setMenuOpen(open);
+              if (!open) {
+                setCtxAnchor(null);
+              }
+            }}
+            open={menuOpen}
+          >
             <MenuTrigger className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100">
               <EllipsisVerticalIcon className="size-4" />
             </MenuTrigger>
-            <MenuPopup align="start" side="right" sideOffset={4}>
+            <MenuPopup
+              align="start"
+              anchor={ctxAnchor ?? undefined}
+              side="right"
+              sideOffset={4}
+            >
+              <div
+                className="max-w-48 border-l-2 px-2 py-1.5"
+                style={{
+                  borderColor: `var(${ws.color || getMatterSwatch(ws.id)})`,
+                }}
+              >
+                <div className="truncate text-xs font-medium">{ws.name}</div>
+                {ws.client && (
+                  <div className="text-muted-foreground truncate text-xs">
+                    {ws.client.displayName}
+                  </div>
+                )}
+              </div>
+              <MenuSeparator />
+              <MenuItem onClick={() => onTogglePin(ws.id)}>
+                {isPinned ? <PinOffIcon /> : <PinIcon />}
+                {isPinned ? t("common.unpin") : t("common.pin")}
+              </MenuItem>
               <MenuItem
                 onClick={() => {
                   setRenameValue(ws.name);
@@ -508,6 +665,30 @@ const MatterItem = ({
                 <PencilIcon />
                 {t("common.rename")}
               </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  const url = new URL(
+                    `/workspaces/${ws.id}`,
+                    window.location.origin,
+                  );
+                  navigator.clipboard
+                    .writeText(url.toString())
+                    .catch(() => {
+                      // Clipboard API may fail if page loses focus
+                    });
+                }}
+              >
+                <LinkIcon />
+                {t("common.copyLink")}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                className="text-destructive"
+                onClick={() => onDelete(ws.id)}
+              >
+                <TrashIcon />
+                {t("common.delete")}
+              </MenuItem>
             </MenuPopup>
           </Menu>
         </div>
@@ -516,10 +697,12 @@ const MatterItem = ({
   );
 };
 
-const CollapsedContextArea = ({
+const SidebarContextArea = ({
   onCreateWorkspace,
+  children,
 }: {
   onCreateWorkspace: () => void;
+  children?: React.ReactNode;
 }) => {
   const t = useTranslations();
   const [ctxOpen, setCtxOpen] = useState(false);
@@ -529,7 +712,7 @@ const CollapsedContextArea = ({
 
   return (
     <div
-      className="flex-1"
+      className="flex min-h-0 flex-1 flex-col"
       onContextMenu={(e) => {
         e.preventDefault();
         const x = e.clientX;
@@ -540,6 +723,7 @@ const CollapsedContextArea = ({
         setCtxOpen(true);
       }}
     >
+      {children}
       <Menu
         onOpenChange={(open) => {
           setCtxOpen(open);
@@ -572,6 +756,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const queryClient = useQueryClient();
   const navigate = routeApi.useNavigate();
   const createWorkspace = useCreateWorkspace();
+  const deleteWorkspace = useDeleteWorkspace();
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme, palette, setPalette } = useTheme();
@@ -617,6 +802,43 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         });
       },
     });
+  };
+
+  const handleDeleteWorkspace = (workspaceId: string) => {
+    if (deleteWorkspace.isPending) {
+      return;
+    }
+
+    const toastId = toastManager.add({
+      title: t("workspaces.deletingWorkspace"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
+
+    deleteWorkspace.mutate(
+      { workspaceId },
+      {
+        // eslint-disable-next-line typescript/no-misused-promises
+        onSuccess: async () => {
+          toastManager.update(toastId, {
+            title: t("success.workspaceDeletedSuccessfully"),
+            type: "success",
+          });
+          await queryClient.invalidateQueries({
+            queryKey: workspacesKeys.all,
+          });
+          if (workspaceMatch?.params.workspaceId === workspaceId) {
+            await navigate({ to: "/workspaces" });
+          }
+        },
+        onError: () => {
+          toastManager.update(toastId, {
+            title: t("errors.failedToDeleteWorkspace"),
+            type: "error",
+          });
+        },
+      },
+    );
   };
 
   useHotkey(HOTKEYS.SEARCH, () => {
@@ -709,10 +931,25 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     }
   }, [isNavKeyHeld, showBadges]);
 
-  type NavTarget = { action: () => void };
+  type NavTarget = {
+    action: () => void;
+    contextMenu: NavContextMenuConfig;
+  };
+
+  const recentMatterAction = (ws: MatterIdentity): ContextAction => ({
+    label: ws.name,
+    icon: <MatterIcon color={ws.color} id={ws.id} />,
+    // eslint-disable-next-line typescript/no-misused-promises
+    onClick: async () =>
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: ws.id },
+      }),
+  });
 
   // Fixed nav items: one entry per sidebar navigation item.
-  // The tuple type ensures every sidebar item has a shortcut.
+  // The tuple type ensures every sidebar item has a shortcut
+  // AND a context menu config (primary action + recents).
   const fixedNavTargets: [
     /* 1: search */ NavTarget,
     /* 2: inbox */ NavTarget,
@@ -721,34 +958,120 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     /* 5: knowledge */ NavTarget,
     /* 6: time tracking */ NavTarget,
   ] = [
-    { action: () => setSearchOpen(true) },
-    { action: comingSoon },
-    // eslint-disable-next-line typescript/no-misused-promises
-    { action: async () => await navigate({ to: "/workspaces" }) },
-    { action: comingSoon },
-    // eslint-disable-next-line typescript/no-misused-promises
-    { action: async () => await navigate({ to: "/knowledge" }) },
+    {
+      action: () => setSearchOpen(true),
+      contextMenu: {
+        primaryAction: {
+          label: t("navigation.search"),
+          icon: <SearchIcon />,
+          onClick: () => setSearchOpen(true),
+        },
+        recents: [], // TODO: search history
+      },
+    },
+    {
+      action: comingSoon,
+      contextMenu: {
+        primaryAction: {
+          label: t("navigation.inbox"),
+          icon: <InboxIcon />,
+          onClick: comingSoon,
+        },
+        recents: [], // TODO: inbox items
+      },
+    },
+    {
+      // eslint-disable-next-line typescript/no-misused-promises
+      action: async () => await navigate({ to: "/workspaces" }),
+      contextMenu: {
+        primaryAction: {
+          label: t("navigation.newMatter"),
+          icon: <PlusIcon />,
+          onClick: handleCreateWorkspace,
+        },
+        recents: recents.slice(0, 3).map(recentMatterAction),
+      },
+    },
+    {
+      action: comingSoon,
+      contextMenu: {
+        primaryAction: {
+          label: t("chat.newChat"),
+          icon: <PlusIcon />,
+          // eslint-disable-next-line typescript/no-misused-promises
+          onClick: async () => await navigate({ to: "/chat" }),
+        },
+        recents: [], // TODO: recent chat threads
+      },
+    },
+    {
+      // eslint-disable-next-line typescript/no-misused-promises
+      action: async () => await navigate({ to: "/knowledge" }),
+      contextMenu: {
+        primaryAction: null,
+        recents: knowledgeSections
+          .filter(
+            (s): s is typeof s & { to: NonNullable<typeof s.to> } =>
+              s.to !== undefined,
+          )
+          .map((s) => {
+            const Icon = s.icon;
+            return {
+              label: t(`knowledge.sections.${s.key}.title`),
+              icon: <Icon />,
+              // eslint-disable-next-line typescript/no-misused-promises
+              onClick: async () => await navigate({ to: s.to }),
+            };
+          }),
+      },
+    },
     {
       // eslint-disable-next-line typescript/no-misused-promises
       action: async () => {
         if (currentWorkspaceId) {
           await navigate({
-            to: `/workspaces/${currentWorkspaceId}/timesheets`,
+            to: "/workspaces/$workspaceId/timesheets",
+            params: { workspaceId: currentWorkspaceId },
           });
         }
       },
+      contextMenu: currentWorkspaceId
+        ? {
+            primaryAction: {
+              label: t("navigation.timeTracking"),
+              icon: <ClockIcon />,
+              // eslint-disable-next-line typescript/no-misused-promises
+              onClick: async () =>
+                await navigate({
+                  to: "/workspaces/$workspaceId/timesheets",
+                  params: { workspaceId: currentWorkspaceId },
+                }),
+            },
+            recents: [], // TODO: recent time entries
+          }
+        : {
+            primaryAction: null,
+            recents: [],
+          },
     },
   ];
 
   const navTargets: NavTarget[] = [
     ...fixedNavTargets,
-    ...pinned.slice(0, 3).map((ws) => ({
-      action: async () =>
-        await navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: ws.id },
-        }),
-    })),
+    ...pinned.slice(0, 3).map(
+      (ws): NavTarget => ({
+        // eslint-disable-next-line typescript/no-misused-promises
+        action: async () =>
+          await navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId: ws.id },
+          }),
+        contextMenu: {
+          primaryAction: null,
+          recents: [],
+        },
+      }),
+    ),
   ];
 
   const navTargetsRef = useRef(navTargets);
@@ -813,209 +1136,221 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         {/* Top navigation */}
         <SidebarGroup>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => setSearchOpen(true)}
-                tooltip={t("navigation.search")}
-              >
-                <SearchIcon />
-                <span>{t("navigation.search")}</span>
-              </SidebarMenuButton>
-              {showNavBadges ? (
-                <NavBadge digit={1} />
-              ) : (
-                <SidebarMenuBadge>
-                  <kbd className="text-muted-foreground text-[0.625rem]">
-                    {formatForDisplay(HOTKEYS.SEARCH)}
-                  </kbd>
-                </SidebarMenuBadge>
-              )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={comingSoon}
-                tooltip={t("navigation.inbox")}
-              >
-                <InboxIcon />
-                <span>{t("navigation.inbox")}</span>
-              </SidebarMenuButton>
-              {showNavBadges ? (
-                <NavBadge digit={2} />
-              ) : (
-                <SidebarMenuBadge>
-                  <span className="bg-muted-foreground/40 size-1.5 rounded-full" />
-                </SidebarMenuBadge>
-              )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={t("common.matters")}>
-                <Link activeProps={{ "data-active": true }} to="/workspaces">
-                  <LayersIcon />
-                  <span>{t("common.matters")}</span>
-                </Link>
-              </SidebarMenuButton>
-              {showNavBadges ? (
-                <NavBadge digit={3} />
-              ) : (
-                <SidebarMenuAction
-                  onClick={handleCreateWorkspace}
-                  showOnHover
-                  title={t("navigation.newMatter")}
-                >
-                  <PlusIcon />
-                </SidebarMenuAction>
-              )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={async () => await navigate({ to: "/chat" })}
-                tooltip={t("navigation.chat")}
-              >
-                <MessageCircleIcon />
-                <span>{t("navigation.chat")}</span>
-              </SidebarMenuButton>
-              {showNavBadges && <NavBadge digit={4} />}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={t("navigation.knowledge")}>
-                <Link activeProps={{ "data-active": true }} to="/knowledge">
-                  <BookOpenIcon />
-                  <span>{t("navigation.knowledge")}</span>
-                </Link>
-              </SidebarMenuButton>
-              {showNavBadges && <NavBadge digit={5} />}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              {currentWorkspaceId ? (
+            <NavContextMenu config={fixedNavTargets[0].contextMenu}>
+              <SidebarMenuItem>
                 <SidebarMenuButton
-                  asChild
-                  tooltip={t("navigation.timeTracking")}
+                  onClick={() => setSearchOpen(true)}
+                  tooltip={t("navigation.search")}
                 >
-                  <Link
-                    params={{
-                      workspaceId: currentWorkspaceId,
-                    }}
-                    to="/workspaces/$workspaceId/timesheets"
+                  <SearchIcon />
+                  <span>{t("navigation.search")}</span>
+                </SidebarMenuButton>
+                {showNavBadges ? (
+                  <NavBadge digit={1} />
+                ) : (
+                  <SidebarMenuBadge>
+                    <kbd className="text-muted-foreground text-[0.625rem]">
+                      {formatForDisplay(HOTKEYS.SEARCH)}
+                    </kbd>
+                  </SidebarMenuBadge>
+                )}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={comingSoon}
+                  tooltip={t("navigation.inbox")}
+                >
+                  <InboxIcon />
+                  <span>{t("navigation.inbox")}</span>
+                </SidebarMenuButton>
+                {showNavBadges ? (
+                  <NavBadge digit={2} />
+                ) : (
+                  <SidebarMenuBadge>
+                    <span className="bg-muted-foreground/40 size-1.5 rounded-full" />
+                  </SidebarMenuBadge>
+                )}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[2].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t("common.matters")}>
+                  <Link activeProps={{ "data-active": true }} to="/workspaces">
+                    <LayersIcon />
+                    <span>{t("common.matters")}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {showNavBadges ? (
+                  <NavBadge digit={3} />
+                ) : (
+                  <SidebarMenuAction
+                    onClick={handleCreateWorkspace}
+                    showOnHover
+                    title={t("navigation.newMatter")}
+                  >
+                    <PlusIcon />
+                  </SidebarMenuAction>
+                )}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[3].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  // eslint-disable-next-line typescript/no-misused-promises
+                  onClick={async () => await navigate({ to: "/chat" })}
+                  tooltip={t("navigation.chat")}
+                >
+                  <MessageCircleIcon />
+                  <span>{t("navigation.chat")}</span>
+                </SidebarMenuButton>
+                {showNavBadges && <NavBadge digit={4} />}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[4].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t("navigation.knowledge")}>
+                  <Link activeProps={{ "data-active": true }} to="/knowledge">
+                    <BookOpenIcon />
+                    <span>{t("navigation.knowledge")}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {showNavBadges && <NavBadge digit={5} />}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[5].contextMenu}>
+              <SidebarMenuItem>
+                {currentWorkspaceId ? (
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={t("navigation.timeTracking")}
+                  >
+                    <Link
+                      params={{
+                        workspaceId: currentWorkspaceId,
+                      }}
+                      to="/workspaces/$workspaceId/timesheets"
+                    >
+                      <ClockIcon />
+                      <span>{t("navigation.timeTracking")}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                ) : (
+                  <SidebarMenuButton
+                    onClick={comingSoon}
+                    tooltip={t("navigation.timeTracking")}
                   >
                     <ClockIcon />
                     <span>{t("navigation.timeTracking")}</span>
-                  </Link>
-                </SidebarMenuButton>
-              ) : (
-                <SidebarMenuButton
-                  onClick={comingSoon}
-                  tooltip={t("navigation.timeTracking")}
-                >
-                  <ClockIcon />
-                  <span>{t("navigation.timeTracking")}</span>
-                </SidebarMenuButton>
-              )}
-              {showNavBadges ? (
-                <NavBadge digit={6} />
-              ) : activeTimer ? (
-                <SidebarMenuBadge>
-                  <span className="flex items-center gap-1.5 text-xs tabular-nums">
-                    <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-                    {formatTimer(timerSeconds)}
-                    <Button
-                      aria-label={t("billing.stopTimer")}
-                      className="text-muted-foreground size-5"
-                      disabled={stopTimer.isPending}
-                      onClick={() => {
-                        if (currentWorkspaceId) {
-                          stopTimer.mutate(
-                            {
-                              workspaceId: currentWorkspaceId,
-                            },
-                            {
-                              onSuccess: () => {
-                                // eslint-disable-next-line typescript/no-floating-promises
-                                queryClient.invalidateQueries({
-                                  queryKey:
-                                    timeEntriesKeys.all(currentWorkspaceId),
-                                });
-                                // eslint-disable-next-line typescript/no-floating-promises
-                                queryClient.invalidateQueries({
-                                  queryKey:
-                                    timeEntriesKeys.activeTimer(
-                                      currentWorkspaceId,
-                                    ),
-                                });
-                              },
-                              onError: () => {
-                                toastManager.add({
-                                  title: t("billing.failedToStopTimer"),
-                                  type: "error",
-                                });
-                              },
-                            },
-                          );
-                        }
-                      }}
-                      size="icon"
-                      variant="ghost"
-                    >
-                      <SquareIcon className="size-3 fill-current" />
-                    </Button>
-                  </span>
-                </SidebarMenuBadge>
-              ) : (
-                currentWorkspaceId && (
+                  </SidebarMenuButton>
+                )}
+                {showNavBadges ? (
+                  <NavBadge digit={6} />
+                ) : activeTimer ? (
                   <SidebarMenuBadge>
-                    <SidebarTimerPopover workspaceId={currentWorkspaceId} />
+                    <span className="flex items-center gap-1.5 text-xs tabular-nums">
+                      <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+                      {formatTimer(timerSeconds)}
+                      <Button
+                        aria-label={t("billing.stopTimer")}
+                        className="text-muted-foreground size-5"
+                        disabled={stopTimer.isPending}
+                        onClick={() => {
+                          if (currentWorkspaceId) {
+                            stopTimer.mutate(
+                              {
+                                workspaceId: currentWorkspaceId,
+                              },
+                              {
+                                onSuccess: () => {
+                                  // eslint-disable-next-line typescript/no-floating-promises
+                                  queryClient.invalidateQueries({
+                                    queryKey:
+                                      timeEntriesKeys.all(currentWorkspaceId),
+                                  });
+                                  // eslint-disable-next-line typescript/no-floating-promises
+                                  queryClient.invalidateQueries({
+                                    queryKey:
+                                      timeEntriesKeys.activeTimer(
+                                        currentWorkspaceId,
+                                      ),
+                                  });
+                                },
+                                onError: () => {
+                                  toastManager.add({
+                                    title: t("billing.failedToStopTimer"),
+                                    type: "error",
+                                  });
+                                },
+                              },
+                            );
+                          }
+                        }}
+                        size="icon"
+                        variant="ghost"
+                      >
+                        <SquareIcon className="size-3 fill-current" />
+                      </Button>
+                    </span>
                   </SidebarMenuBadge>
-                )
-              )}
-            </SidebarMenuItem>
+                ) : (
+                  currentWorkspaceId && (
+                    <SidebarMenuBadge>
+                      <SidebarTimerPopover workspaceId={currentWorkspaceId} />
+                    </SidebarMenuBadge>
+                  )
+                )}
+              </SidebarMenuItem>
+            </NavContextMenu>
           </SidebarMenu>
         </SidebarGroup>
 
         <SidebarSeparator />
 
-        {/* Pinned */}
-        {pinned.length > 0 && (
-          <SidebarGroup className="min-h-0 flex-1">
-            <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
-            <SidebarGroupContent className="overflow-y-auto">
-              <SidebarMenu>
-                {pinned.map((ws, i) => (
-                  <MatterItem
-                    isPinned
-                    key={ws.id}
-                    navBadge={showNavBadges && i < 3 ? 7 + i : undefined}
-                    onReorder={reorderPinned}
-                    onTogglePin={togglePin}
-                    workspace={ws}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {/* Right-click anywhere below to create a new matter */}
+        <SidebarContextArea onCreateWorkspace={handleCreateWorkspace}>
+          {/* Pinned */}
+          {pinned.length > 0 && (
+            <SidebarGroup className="min-h-0 flex-1">
+              <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
+              <SidebarGroupContent className="overflow-y-auto">
+                <SidebarMenu>
+                  {pinned.map((ws, i) => (
+                    <MatterItem
+                      isPinned
+                      key={ws.id}
+                      navBadge={showNavBadges && i < 3 ? 7 + i : undefined}
+                      onDelete={handleDeleteWorkspace}
+                      onReorder={reorderPinned}
+                      onTogglePin={togglePin}
+                      workspace={ws}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
-        {/* Recents — sorted by lastActivityAt */}
-        {recents.length > 0 && (
-          <SidebarGroup className="min-h-0 flex-1">
-            <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>
-            <SidebarGroupContent className="overflow-y-auto">
-              <SidebarMenu>
-                {recents.map((ws) => (
-                  <MatterItem
-                    key={ws.id}
-                    onTogglePin={togglePin}
-                    workspace={ws}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {/* Blank area: right-click to create a new matter */}
-        {isCollapsed && (
-          <CollapsedContextArea onCreateWorkspace={handleCreateWorkspace} />
-        )}
+          {/* Recents — sorted by lastActivityAt */}
+          {recents.length > 0 && (
+            <SidebarGroup className="min-h-0 flex-1">
+              <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>
+              <SidebarGroupContent className="overflow-y-auto">
+                <SidebarMenu>
+                  {recents.map((ws) => (
+                    <MatterItem
+                      key={ws.id}
+                      onDelete={handleDeleteWorkspace}
+                      onTogglePin={togglePin}
+                      workspace={ws}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+        </SidebarContextArea>
       </SidebarContent>
 
       {/* User avatar at bottom */}

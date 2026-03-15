@@ -445,6 +445,7 @@ type Messages = {
     "connectionLost": "Connection lost";
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
+    "copyLink": "Copy link";
     "createdAt": "Created at {date}";
     "currency": "Currency";
     "currentPage": "Current page";

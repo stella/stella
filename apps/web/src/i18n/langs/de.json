@@ -442,6 +442,7 @@
     "connectionLost": "Verbindung verloren",
     "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederholung.",
     "convertTo": "Konvertieren zu",
+    "copyLink": "Copy link",
     "createdAt": "Erstellt am {date}",
     "currency": "Currency",
     "currentPage": "Aktuelle Seite",

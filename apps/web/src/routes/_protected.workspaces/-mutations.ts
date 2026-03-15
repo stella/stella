@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors";
 import { captureError } from "@/lib/posthog/utils";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
@@ -81,7 +81,9 @@ export const useDeleteWorkspace = () => {
   const posthog = usePostHog();
 
   return useMutation({
-    retry: 3,
+    retry: (failureCount, error) =>
+      failureCount < 3 &&
+      (!APIError.is(error) || error.status >= 500),
     mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
       const response = await api.workspaces({ workspaceId }).delete({
         queryKey: workspacesKeys.all,

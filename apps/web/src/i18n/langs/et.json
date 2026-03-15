@@ -442,6 +442,7 @@
     "connectionLost": "Ühendus katkes",
     "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
+    "copyLink": "Copy link",
     "createdAt": "Loodud {date}",
     "currency": "Currency",
     "currentPage": "Praegune lehekülg",

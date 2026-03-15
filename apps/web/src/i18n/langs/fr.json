@@ -442,6 +442,7 @@
     "connectionLost": "Connexion perdue",
     "connectionLostDescription": "La connexion au serveur a été perdue. Nouvelle tentative automatique.",
     "convertTo": "Convertir en",
+    "copyLink": "Copy link",
     "createdAt": "Créé le {date}",
     "currency": "Currency",
     "currentPage": "Page actuelle",

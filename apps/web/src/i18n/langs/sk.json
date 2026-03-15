@@ -442,6 +442,7 @@
     "connectionLost": "Spojenie stratené",
     "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky opakujeme.",
     "convertTo": "Previesť na",
+    "copyLink": "Copy link",
     "createdAt": "Vytvorené {date}",
     "currency": "Currency",
     "currentPage": "Aktuálna stránka",
