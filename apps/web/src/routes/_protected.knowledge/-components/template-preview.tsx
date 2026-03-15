@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { toastManager } from "@stella/ui/components/toast";
-
-import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
 import {
   CONDITIONAL_KINDS,
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import { templatePreviewOptions } from "@/routes/_protected.knowledge/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 // ── Types ────────────────────────────────────────────────
@@ -36,12 +34,6 @@ type StructureError = {
   message: string;
   paragraphIndex: number;
   directive: string;
-};
-
-type PreviewData = {
-  paragraphs: ExtractedParagraph[];
-  charCount: number;
-  structureErrors: StructureError[];
 };
 
 // ── Nesting + block spans ────────────────────────────────
@@ -280,48 +272,10 @@ const SectionDivider = ({ label }: { label: string }) => (
 
 export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const t = useTranslations("templates");
-  const [state, setState] = useState<
-    | { kind: "loading" }
-    | { kind: "ready"; data: PreviewData }
-    | { kind: "error" }
-  >({ kind: "loading" });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      const response = await api.templates({ templateId }).preview.get();
-
-      if (cancelled) {
-        return;
-      }
-
-      if (response.error) {
-        toastManager.add({
-          type: "error",
-          title: t("previewFailed"),
-          description: userErrorMessage(response.error, t("previewFailed")),
-        });
-        setState({ kind: "error" });
-        return;
-      }
-
-      const data = response.data;
-      if (data instanceof Response || !("paragraphs" in data)) {
-        setState({ kind: "error" });
-        return;
-      }
-
-      setState({ kind: "ready", data });
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [templateId, t]);
+  const { data, isLoading, isError } = useQuery(
+    templatePreviewOptions(templateId),
+  );
 
   const setSelectedText = useTemplateAssistantStore((s) => s.setSelectedText);
 
@@ -333,7 +287,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
     }
   }, [setSelectedText]);
 
-  if (state.kind === "loading") {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("discovering")}</p>
@@ -341,7 +295,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
     );
   }
 
-  if (state.kind === "error") {
+  if (isError || !data || data instanceof Response || !("paragraphs" in data)) {
     return (
       <div className="flex items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("previewFailed")}</p>
@@ -349,7 +303,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
     );
   }
 
-  const { paragraphs, structureErrors } = state.data;
+  const { paragraphs, structureErrors } = data;
 
   if (paragraphs.length === 0) {
     return (

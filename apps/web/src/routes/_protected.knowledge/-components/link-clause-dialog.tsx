@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -18,20 +19,12 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import {
+  clauseCategoriesOptions,
+  clausesOptions,
+} from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
-
-type CategoryItem = {
-  id: string;
-  name: string;
-};
-
-type ClauseItem = {
-  id: string;
-  title: string;
-  categoryId: string | null;
-  currentVersion: number;
-};
 
 type LinkClauseDialogProps = {
   open: boolean;
@@ -52,56 +45,29 @@ export const LinkClauseDialog = ({
   onLinked,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [clauses, setClauses] = useState<ClauseItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
   const [slotName, setSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
-  // Load categories and clauses when dialog opens
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  const { data: catData } = useQuery({
+    ...clauseCategoriesOptions(),
+    enabled: open,
+  });
+  const {
+    data: clauseData,
+    isLoading: clausesLoading,
+    isError: clausesError,
+  } = useQuery({
+    ...clausesOptions({ limit: 200 }),
+    enabled: open,
+  });
 
-    const load = async () => {
-      const [catRes, clauseRes] = await Promise.all([
-        api["clause-categories"].get(),
-        api.clauses.get({ query: { limit: 200 } }),
-      ]);
-
-      if (catRes.error) {
-        toastManager.add({
-          type: "error",
-          title: t("clauses.loadFailed"),
-          description: userErrorMessage(
-            catRes.error,
-            t("common.unexpectedError"),
-          ),
-        });
-      } else if (!(catRes.data instanceof Response)) {
-        setCategories(catRes.data.categories);
-      }
-
-      if (clauseRes.error) {
-        toastManager.add({
-          type: "error",
-          title: t("clauses.loadFailed"),
-          description: userErrorMessage(
-            clauseRes.error,
-            t("common.unexpectedError"),
-          ),
-        });
-      } else if (!(clauseRes.data instanceof Response)) {
-        setClauses(clauseRes.data.clauses);
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    load();
-  }, [open, t]);
+  const categories =
+    catData && "categories" in catData ? catData.categories : [];
+  const clauses =
+    clauseData && "clauses" in clauseData ? clauseData.clauses : [];
 
   const filtered = clauses.filter((c) => {
     if (selectedCategory && c.categoryId !== selectedCategory) {
@@ -189,7 +155,17 @@ export const LinkClauseDialog = ({
           </div>
 
           <div className="max-h-64 overflow-y-auto rounded-lg border">
-            {filtered.length === 0 && (
+            {clausesLoading && (
+              <p className="text-muted-foreground p-4 text-center text-sm">
+                {t("clauses.loading")}
+              </p>
+            )}
+            {clausesError && (
+              <p className="text-muted-foreground p-4 text-center text-sm">
+                {t("clauses.loadFailed")}
+              </p>
+            )}
+            {!clausesLoading && !clausesError && filtered.length === 0 && (
               <p className="text-muted-foreground p-4 text-center text-sm">
                 {t("clauses.noResults")}
               </p>

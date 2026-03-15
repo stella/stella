@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -10,6 +11,11 @@ import { userErrorMessage } from "@/lib/errors";
 import { ClauseDetailView } from "@/routes/_protected.knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/_protected.knowledge/-components/clause-list";
+import {
+  clauseCategoriesOptions,
+  clausesOptions,
+  knowledgeKeys,
+} from "@/routes/_protected.knowledge/-queries";
 
 // ── Type extraction ──────────────────────────────────
 
@@ -45,54 +51,100 @@ export const Route = createFileRoute("/_protected/knowledge/clauses")({
 
 function RouteComponent() {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [view, setView] = useState<View>({ kind: "list" });
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [clauses, setClauses] = useState<ClauseItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // ── Fetch categories ───────────────────────────────
+  // Extra clauses from cursor-based pagination.
+  // nextCursor uses three-state: undefined = "not yet loaded
+  // extras" (fall back to initialNextCursor), string = "has more
+  // pages", null = "reached the last page".
+  const [extraClauses, setExtraClauses] = useState<ClauseItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null | undefined>();
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Abort in-flight load-more requests when filters change.
+  const loadMoreAbort = useRef<AbortController | null>(null);
 
-  const fetchCategories = useCallback(async () => {
-    const response = await api["clause-categories"].get();
+  const { data: categoriesData } = useQuery(clauseCategoriesOptions());
+  const {
+    data: clausesData,
+    isLoading,
+    isError,
+  } = useQuery({
+    ...clausesOptions({
+      categoryId: selectedCategory,
+      search: searchQuery,
+    }),
+    // Disable background refetch: the initial page can desync
+    // with manually-loaded extraClauses from cursor pagination.
+    // Manual refresh via handleRefresh is the intended path.
+    refetchOnWindowFocus: false,
+  });
 
-    if (response.error) {
-      toastManager.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+  const categories: CategoryItem[] =
+    categoriesData && "categories" in categoriesData
+      ? categoriesData.categories
+      : [];
+
+  const initialClauses: ClauseItem[] =
+    clausesData && "clauses" in clausesData ? clausesData.clauses : [];
+
+  const initialNextCursor =
+    clausesData && "nextCursor" in clausesData ? clausesData.nextCursor : null;
+
+  // Combine initial query results with cursor-loaded extras
+  const clauses =
+    extraClauses.length > 0
+      ? [...initialClauses, ...extraClauses]
+      : initialClauses;
+
+  const currentNextCursor =
+    nextCursor === undefined ? initialNextCursor : nextCursor;
+
+  // ── Category change ────────────────────────────────
+
+  const handleCategorySelect = useCallback((categoryId: string | null) => {
+    loadMoreAbort.current?.abort();
+    setLoadingMore(false);
+    setSelectedCategory(categoryId);
+    setExtraClauses([]);
+    setNextCursor(undefined);
+  }, []);
+
+  // ── Search ─────────────────────────────────────────
+
+  const handleSearch = useCallback((q: string) => {
+    loadMoreAbort.current?.abort();
+    setLoadingMore(false);
+    setSearchQuery(q);
+    setExtraClauses([]);
+    setNextCursor(undefined);
+  }, []);
+
+  // ── Load more (cursor pagination) ─────────────────
+
+  const handleLoadMore = useCallback(async () => {
+    const cursor = currentNextCursor;
+    if (!cursor) {
       return;
     }
 
-    const { data } = response;
-    if (data instanceof Response) {
-      return;
-    }
+    loadMoreAbort.current?.abort();
+    const controller = new AbortController();
+    loadMoreAbort.current = controller;
 
-    setCategories(data.categories);
-  }, [t]);
+    setLoadingMore(true);
 
-  // ── Fetch clauses ──────────────────────────────────
-
-  const fetchClauses = useCallback(
-    async (cursor?: string) => {
-      setLoading(true);
-
+    try {
       const query: {
         categoryId?: string;
         uncategorized?: boolean;
         q?: string;
-        cursor?: string;
-        limit?: number;
-      } = { limit: 50 };
+        cursor: string;
+        limit: number;
+      } = { cursor, limit: 50 };
 
       if (selectedCategory === "uncategorized") {
         query.uncategorized = true;
@@ -104,15 +156,15 @@ function RouteComponent() {
         query.q = searchQuery;
       }
 
-      if (cursor) {
-        query.cursor = cursor;
-      }
-
       const response = await api.clauses.get({
         query,
+        fetch: { signal: controller.signal },
       });
 
-      setLoading(false);
+      // Discard if aborted (filter changed mid-flight).
+      if (controller.signal.aborted) {
+        return;
+      }
 
       if (response.error) {
         toastManager.add({
@@ -123,106 +175,55 @@ function RouteComponent() {
             t("common.unexpectedError"),
           ),
         });
-        setLoaded(true);
         return;
       }
 
       const { data } = response;
       if (data instanceof Response) {
-        setLoaded(true);
         return;
       }
 
-      if (cursor) {
-        setClauses((prev) => [...prev, ...data.clauses]);
-      } else {
-        setClauses(data.clauses);
-      }
+      setExtraClauses((prev) => [...prev, ...data.clauses]);
       setNextCursor(data.nextCursor);
-      setLoaded(true);
-    },
-    [selectedCategory, searchQuery, t],
-  );
-
-  // ── Initial fetch ──────────────────────────────────
-
-  const initialFetchDone = useRef(false);
-  useEffect(() => {
-    if (initialFetchDone.current) {
-      return;
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoadingMore(false);
+      }
     }
-    initialFetchDone.current = true;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchCategories();
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchClauses();
-  }, [fetchCategories, fetchClauses]);
+  }, [currentNextCursor, selectedCategory, searchQuery, t]);
 
-  // ── Category change ────────────────────────────────
-
-  const handleCategorySelect = useCallback((categoryId: string | null) => {
-    setSelectedCategory(categoryId);
-    setClauses([]);
-    setNextCursor(null);
-    setLoaded(false);
-  }, []);
-
-  // Refetch when selectedCategory changes (after initial)
-  const prevFetchRef = useRef(fetchClauses);
-  useEffect(() => {
-    if (prevFetchRef.current === fetchClauses) {
-      return;
-    }
-    prevFetchRef.current = fetchClauses;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchClauses();
-  }, [fetchClauses]);
-
-  // ── Handlers ───────────────────────────────────────
-
-  const handleLoadMore = useCallback(() => {
-    if (nextCursor) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetchClauses(nextCursor);
-    }
-  }, [nextCursor, fetchClauses]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearchQuery(q);
-    setClauses([]);
-    setNextCursor(null);
-    setLoaded(false);
-  }, []);
+  // ── Refresh ────────────────────────────────────────
 
   const handleRefresh = useCallback(() => {
-    setClauses([]);
-    setNextCursor(null);
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchClauses();
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchCategories();
-  }, [fetchClauses, fetchCategories]);
+    setExtraClauses([]);
+    setNextCursor(undefined);
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.clauses.all,
+      })
+      .catch(() => {
+        /* fire-and-forget */
+      });
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.clauseCategories.all,
+      })
+      .catch(() => {
+        /* fire-and-forget */
+      });
+  }, [queryClient]);
 
-  // ── Render ─────────────────────────────────────────
+  // ── Back to list ───────────────────────────────────
 
   const handleBackToList = useCallback(() => {
     setView({ kind: "list" });
-
     if (searchQuery) {
-      // Clearing the query creates a new fetchClauses ref,
-      // which triggers the prevFetchRef effect to refetch.
       setSearchQuery("");
-      setClauses([]);
-      setNextCursor(null);
-      setLoaded(false);
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetchCategories();
-    } else {
-      // Query already empty; fetchClauses closure is fresh,
-      // so calling handleRefresh is safe (no stale closure).
-      handleRefresh();
     }
-  }, [searchQuery, handleRefresh, fetchCategories]);
+    handleRefresh();
+  }, [searchQuery, handleRefresh]);
+
+  // ── Render ─────────────────────────────────────────
 
   if (view.kind === "detail") {
     return (
@@ -235,10 +236,20 @@ function RouteComponent() {
     );
   }
 
-  if (!loaded) {
+  if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("clauses.loading")}</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("clauses.loadFailed")}
+        </p>
       </div>
     );
   }
@@ -248,11 +259,16 @@ function RouteComponent() {
       <ClauseList
         categories={categories}
         clauses={clauses}
-        loading={loading}
-        nextCursor={nextCursor}
+        loading={loadingMore}
+        nextCursor={currentNextCursor}
         onCategoriesChanged={() => {
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
-          fetchCategories();
+          queryClient
+            .invalidateQueries({
+              queryKey: knowledgeKeys.clauseCategories.all,
+            })
+            .catch(() => {
+              /* fire-and-forget */
+            });
         }}
         onCategorySelect={handleCategorySelect}
         onClauseSelect={(clause) =>
@@ -261,7 +277,11 @@ function RouteComponent() {
             clauseId: clause.id,
           })
         }
-        onLoadMore={handleLoadMore}
+        onLoadMore={() => {
+          handleLoadMore().catch(() => {
+            /* fire-and-forget */
+          });
+        }}
         onNewClause={() => setCreateOpen(true)}
         onRefresh={handleRefresh}
         onSearch={handleSearch}
