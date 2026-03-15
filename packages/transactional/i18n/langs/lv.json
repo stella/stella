@@ -8,6 +8,7 @@
     "subject": "Jūs esat uzaicināts pievienoties {organizationName}"
   },
   "otp": {
+    "changeEmail": "Izmantojiet šo kodu, lai apstiprinātu savu jauno e-pasta adresi.",
     "emailVerification": "Izmantojiet šo kodu, lai apstiprinātu savu e-pasta adresi.",
     "expires": "Šī koda derīguma termiņš ir 5 minūtes.",
     "forgetPassword": "Izmantojiet šo kodu, lai atiestatītu savu paroli.",

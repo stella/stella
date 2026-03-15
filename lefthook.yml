@@ -14,3 +14,5 @@ pre-commit:
       run: bun run lint
     format:
       run: bun run format:check
+    i18n:
+      run: bun run i18n:check

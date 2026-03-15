@@ -17,6 +17,7 @@ const otpTypeKey = {
   "sign-in": "otp.signIn",
   "email-verification": "otp.emailVerification",
   "forget-password": "otp.forgetPassword",
+  "change-email": "otp.changeEmail",
 } as const;
 
 type Props = {
