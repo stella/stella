@@ -207,6 +207,11 @@ const inferChunk = async (
     12, // maxWidth (unused by token model, but required by prepareBatch)
   );
 
+  // Guard: empty text produces 0 words which crashes ONNX reshape
+  if ((batch.textLengths[0] ?? 0) === 0) {
+    return [];
+  }
+
   // Token-level model: 4 inputs only (no span_idx / span_mask)
   const inputIds = new ort.Tensor(
     "int64",

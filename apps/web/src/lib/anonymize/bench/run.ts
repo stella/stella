@@ -14,7 +14,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stella/anonymize";
 import type { Entity, PipelineConfig } from "@stella/anonymize";
@@ -82,9 +82,29 @@ const main = async () => {
   const filterArg = process.argv.indexOf("--filter");
   const filter = filterArg !== -1 ? process.argv[filterArg + 1] : null;
 
-  const files = readdirSync(INPUTS_DIR).filter(
-    (f) => f.endsWith(".txt") && (!filter || f.includes(filter)),
-  );
+  const findTxtFiles = (dir: string): string[] => {
+    const results: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        results.push(...findTxtFiles(full));
+      } else if (entry.name.endsWith(".txt")) {
+        results.push(full);
+      }
+    }
+    return results;
+  };
+
+  const allFiles = findTxtFiles(INPUTS_DIR).map((f) => ({
+    inputPath: f,
+    relativeName: relative(INPUTS_DIR, f),
+  }));
+  const files = allFiles
+    .filter((f) => !filter || f.relativeName.includes(filter))
+    .map((f) => ({
+      ...f,
+      relativeName: f.relativeName.replace(/\.txt$/, ".json"),
+    }));
 
   if (files.length === 0) {
     console.log("No matching input files found.");
@@ -114,12 +134,15 @@ const main = async () => {
   let unchanged = 0;
 
   for (const file of files) {
-    const inputPath = join(INPUTS_DIR, file);
-    const baselineName = file.replace(/\.txt$/, ".json");
-    const baselinePath = join(BASELINES_DIR, baselineName);
+    const baselineDir = join(
+      BASELINES_DIR,
+      dirname(file.relativeName),
+    );
+    mkdirSync(baselineDir, { recursive: true });
+    const baselinePath = join(BASELINES_DIR, file.relativeName);
 
-    const text = readFileSync(inputPath, "utf8");
-    console.log(`  ${file} (${text.length} chars)...`);
+    const text = readFileSync(file.inputPath, "utf8");
+    console.log(`  ${file.relativeName} (${text.length} chars)...`);
 
     const entities = await runPipeline(text, config, [], nerInference);
 
