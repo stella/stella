@@ -51,6 +51,7 @@ export const timeEntriesOptions = (
 
 export const activeTimerOptions = (workspaceId: string) =>
   queryOptions({
+    staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
       const response = await api["time-entries"]({ workspaceId }).get({

@@ -5,7 +5,6 @@ import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-conf
 
 import { api, rivet } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError, toAuthClientError } from "@/lib/errors";
 import { withActorTimeout } from "@/lib/rivet";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
@@ -33,7 +32,6 @@ export const workflowOptions = ({
   organizationId,
 }: WorkflowOptionsProps) =>
   queryOptions({
-    staleTime: STALE_TIME.FIVE.MINUTES,
     queryKey: workspaceKeys.workflow(workspaceId),
     queryFn: async ({ signal }) => {
       const sessionData = await authClient.getSession();
