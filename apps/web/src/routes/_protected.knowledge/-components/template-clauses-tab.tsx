@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
   PlusIcon,
@@ -23,6 +24,10 @@ import { toastManager } from "@stella/ui/components/toast";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
+import {
+  knowledgeKeys,
+  templateClausesOptions,
+} from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
 
@@ -63,48 +68,41 @@ export const TemplateClausesTab = ({
   clauseSlots,
 }: TemplateClausesTabProps) => {
   const t = useTranslations();
-  const [links, setLinks] = useState<LinkedClause[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const queryClient = useQueryClient();
   const [linkOpen, setLinkOpen] = useState(false);
 
-  const fetchLinks = useCallback(async () => {
-    const response = await api.templates({ templateId }).clauses.get();
+  const { data, isLoading, isError } = useQuery(
+    templateClausesOptions(templateId),
+  );
 
-    if (response.error) {
-      toastManager.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+  const links: LinkedClause[] =
+    data && "links" in data && Array.isArray(data.links) ? data.links : [];
+
+  const invalidateLinks = useCallback(() => {
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.templates.clauses(templateId),
+      })
+      .catch(() => {
+        /* fire-and-forget */
       });
-      setLoaded(true);
-      return;
-    }
+  }, [queryClient, templateId]);
 
-    const { data } = response;
-    if (data instanceof Response) {
-      setLoaded(true);
-      return;
-    }
-
-    if ("links" in data && Array.isArray(data.links)) {
-      setLinks(data.links);
-    }
-    setLoaded(true);
-  }, [templateId, t]);
-
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchLinks();
-  }, [fetchLinks]);
-
-  if (!loaded) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
           {t("templates.discovering")}
+        </p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("clauses.loadFailed")}
         </p>
       </div>
     );
@@ -135,8 +133,7 @@ export const TemplateClausesTab = ({
               <LinkedClauseRow
                 key={link.id}
                 link={link}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onChanged={fetchLinks}
+                onChanged={invalidateLinks}
                 templateId={templateId}
               />
             ))}
@@ -146,8 +143,7 @@ export const TemplateClausesTab = ({
 
       <LinkClauseDialog
         availableSlots={clauseSlots}
-        // eslint-disable-next-line typescript/no-misused-promises
-        onLinked={fetchLinks}
+        onLinked={invalidateLinks}
         onOpenChange={setLinkOpen}
         open={linkOpen}
         templateId={templateId}

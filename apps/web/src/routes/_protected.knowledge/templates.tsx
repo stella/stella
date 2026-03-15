@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -35,6 +36,12 @@ import type {
   ResolvedField,
   StructureError,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  knowledgeKeys,
+  templateCategoriesOptions,
+  templateDetailOptions,
+  templatesOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 type ListResponse = Awaited<ReturnType<typeof api.templates.get>>;
@@ -76,95 +83,53 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
   component: RouteComponent,
 });
 
-type CategoryItem = {
-  id: string;
-  name: string;
-  parentId: string | null;
-  description: string | null;
-};
-
 function RouteComponent() {
   const t = useTranslations();
-  const [view, setView] = useState<View>({
-    kind: "list",
-  });
-  const [templates, setTemplates] = useState<TemplateItem[]>([]);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<View>({ kind: "list" });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
-  const [loaded, setLoaded] = useState(false);
 
-  const fetchTemplates = useCallback(
-    async (categoryId?: string | null) => {
-      const query =
-        categoryId === null
-          ? {}
-          : categoryId !== undefined
-            ? { categoryId }
-            : selectedCategoryId
-              ? { categoryId: selectedCategoryId }
-              : {};
+  const {
+    data: templatesData,
+    isLoading: templatesLoading,
+    isError: templatesError,
+  } = useQuery(templatesOptions(selectedCategoryId));
+  const { data: categoriesData } = useQuery(templateCategoriesOptions());
 
-      const response = await api.templates.get({ query });
+  const templates =
+    templatesData && "templates" in templatesData
+      ? templatesData.templates
+      : [];
+  const categories =
+    categoriesData && "categories" in categoriesData
+      ? categoriesData.categories
+      : [];
 
-      if (response.error) {
-        toastManager.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        setLoaded(true);
-        return;
-      }
-
-      const { data } = response;
-      if (data instanceof Response) {
-        toastManager.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-        });
-        setLoaded(true);
-        return;
-      }
-
-      setTemplates(data.templates);
-      setLoaded(true);
-    },
-    [selectedCategoryId, t],
-  );
-
-  const fetchCategories = useCallback(async () => {
-    const response = await api["template-categories"].get();
-    if (response.error || response.data instanceof Response) {
-      return;
-    }
-    setCategories(response.data.categories);
+  const handleCategorySelect = useCallback((id: string | null) => {
+    setSelectedCategoryId(id);
   }, []);
 
-  const handleCategorySelect = useCallback(
-    (id: string | null) => {
-      setSelectedCategoryId(id);
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetchTemplates(id);
-    },
-    [fetchTemplates],
-  );
+  const invalidateTemplates = useCallback(() => {
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.templates.all,
+      })
+      .catch(() => {
+        /* fire-and-forget */
+      });
+  }, [queryClient]);
 
-  const initialFetchDone = useRef(false);
-  useEffect(() => {
-    if (initialFetchDone.current) {
-      return;
-    }
-    initialFetchDone.current = true;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchTemplates();
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchCategories();
-  }, [fetchTemplates, fetchCategories]);
+  const invalidateCategories = useCallback(() => {
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.templateCategories.all,
+      })
+      .catch(() => {
+        /* fire-and-forget */
+      });
+  }, [queryClient]);
 
   if (view.kind === "configure") {
     return (
@@ -174,13 +139,11 @@ function RouteComponent() {
         file={view.file}
         onBack={() => {
           setView({ kind: "list" });
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
-          fetchTemplates();
+          invalidateTemplates();
         }}
         onSaved={() => {
           setView({ kind: "list" });
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
-          fetchTemplates();
+          invalidateTemplates();
         }}
         structureErrors={view.structureErrors}
       />
@@ -192,8 +155,7 @@ function RouteComponent() {
       <TemplateDetail
         onBack={() => {
           setView({ kind: "list" });
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
-          fetchTemplates();
+          invalidateTemplates();
         }}
         onFill={(detail) =>
           setView({
@@ -297,7 +259,7 @@ function RouteComponent() {
     );
   }
 
-  if (!loaded) {
+  if (templatesLoading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -307,14 +269,22 @@ function RouteComponent() {
     );
   }
 
+  if (templatesError) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.loadFailed")}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <TemplateList
       categories={categories}
-      // eslint-disable-next-line typescript/no-misused-promises
-      onCategoriesChanged={fetchCategories}
+      onCategoriesChanged={invalidateCategories}
       onCategorySelect={handleCategorySelect}
-      // eslint-disable-next-line typescript/no-misused-promises
-      onDeleted={async () => await fetchTemplates()}
+      onDeleted={invalidateTemplates}
       onDiscovered={(file, schema) =>
         setView({
           kind: "configure",
@@ -452,17 +422,32 @@ const TemplateDetail = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const queryClient = useQueryClient();
   const setAssistantActive = useTemplateAssistantStore((s) => s.setActive);
 
   useEffect(() => {
     setAssistantActive(true, template.id, template.name);
     return () => setAssistantActive(false);
   }, [template.id, template.name, setAssistantActive]);
-  const [state, setState] = useState<
-    | { kind: "loading" }
-    | { kind: "ready"; detail: DetailData }
-    | { kind: "error" }
-  >({ kind: "loading" });
+
+  const {
+    data: detailData,
+    isLoading,
+    isError,
+  } = useQuery(templateDetailOptions(template.id));
+
+  const detail =
+    detailData &&
+    !(detailData instanceof Response) &&
+    "presignedUrl" in detailData
+      ? detailData
+      : null;
+
+  const state: "loading" | "error" | "ready" = isLoading
+    ? "loading"
+    : isError || !detail
+      ? "error"
+      : "ready";
 
   const [rename, renameDispatch] = useReducer(renameReducer, {
     active: false,
@@ -479,46 +464,6 @@ const TemplateDetail = ({
     expandedPath: null,
     saving: false,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      const response = await api.templates({ templateId: template.id }).get();
-
-      if (cancelled) {
-        return;
-      }
-
-      if (response.error) {
-        toastManager.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        setState({ kind: "error" });
-        return;
-      }
-
-      const detail = response.data;
-      if (detail instanceof Response || !("presignedUrl" in detail)) {
-        setState({ kind: "error" });
-        return;
-      }
-
-      setState({ kind: "ready", detail });
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [template.id, t]);
 
   // Focus input when entering rename mode
   useEffect(() => {
@@ -593,17 +538,17 @@ const TemplateDetail = ({
   );
 
   const handleTestFill = useCallback(() => {
-    if (state.kind !== "ready") {
+    if (state !== "ready" || !detail) {
       return;
     }
-    onFill(state.detail);
-  }, [state, onFill]);
+    onFill(detail);
+  }, [state, detail, onFill]);
 
   const startEditFields = useCallback(() => {
-    if (state.kind !== "ready") {
+    if (state !== "ready" || !detail) {
       return;
     }
-    const manifestFields = state.detail.manifest?.fields ?? [];
+    const manifestFields = detail.manifest?.fields ?? [];
     // Convert manifest fields to ResolvedField shape
     // for buildEditableFields
     const resolved = manifestFields.map((f) => ({
@@ -620,7 +565,7 @@ const TemplateDetail = ({
       type: "start",
       fields: buildEditableFields(resolved),
     });
-  }, [state]);
+  }, [state, detail]);
 
   const cancelEditFields = useCallback(() => {
     fieldEditDispatch({ type: "cancel" });
@@ -634,7 +579,7 @@ const TemplateDetail = ({
   );
 
   const saveFields = useCallback(async () => {
-    if (state.kind !== "ready") {
+    if (state !== "ready" || !detail) {
       return;
     }
 
@@ -652,7 +597,7 @@ const TemplateDetail = ({
             : undefined,
         required: f.required || undefined,
       })),
-      conditions: state.detail.manifest?.conditions ?? [],
+      conditions: detail.manifest?.conditions ?? [],
     };
 
     const response = await api
@@ -672,16 +617,14 @@ const TemplateDetail = ({
       return;
     }
 
-    // Refresh the detail to pick up new manifest
-    const refreshed = await api.templates({ templateId: template.id }).get();
-
-    if (
-      !refreshed.error &&
-      !(refreshed.data instanceof Response) &&
-      "presignedUrl" in refreshed.data
-    ) {
-      setState({ kind: "ready", detail: refreshed.data });
-    }
+    // Invalidate the detail query to pick up new manifest
+    queryClient
+      .invalidateQueries({
+        queryKey: knowledgeKeys.templates.detail(template.id),
+      })
+      .catch(() => {
+        /* fire-and-forget */
+      });
 
     fieldEditDispatch({ type: "saved" });
 
@@ -689,14 +632,10 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });
-  }, [state, fieldEdit.fields, template.id, t]);
+  }, [state, detail, fieldEdit.fields, template.id, t, queryClient]);
 
-  const fields =
-    state.kind === "ready" ? (state.detail.manifest?.fields ?? []) : [];
-  const fieldCount =
-    state.kind === "ready"
-      ? (state.detail.manifest?.fields.length ?? template.fieldCount)
-      : template.fieldCount;
+  const fields = detail?.manifest?.fields ?? [];
+  const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -707,7 +646,7 @@ const TemplateDetail = ({
         </Button>
       </div>
 
-      {state.kind === "loading" && (
+      {state === "loading" && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("templates.discovering")}
@@ -715,7 +654,7 @@ const TemplateDetail = ({
         </div>
       )}
 
-      {state.kind === "error" && (
+      {state === "error" && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("templates.loadFailed")}
@@ -723,7 +662,7 @@ const TemplateDetail = ({
         </div>
       )}
 
-      {state.kind === "ready" && (
+      {state === "ready" && (
         <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
           <div className="mb-6 flex items-start justify-between">
             <div>
@@ -764,7 +703,7 @@ const TemplateDetail = ({
               </p>
             </div>
             <Button
-              disabled={state.kind !== "ready"}
+              disabled={state !== "ready"}
               onClick={handleTestFill}
               size="sm"
               variant="outline"

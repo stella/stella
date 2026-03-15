@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -8,15 +9,9 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { templateVersionsOptions } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
-
-type VersionItem = {
-  id: string;
-  version: number;
-  fieldCount: number;
-  createdAt: Date;
-};
 
 type TemplateVersionsTabProps = {
   templateId: string;
@@ -29,47 +24,15 @@ export const TemplateVersionsTab = ({
 }: TemplateVersionsTabProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [versions, setVersions] = useState<VersionItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchedRef = useRef(false);
+  const {
+    data: versionsData,
+    isLoading,
+    isError,
+  } = useQuery(templateVersionsOptions(templateId));
 
-  useEffect(() => {
-    if (fetchedRef.current) {
-      return;
-    }
-    fetchedRef.current = true;
-
-    const load = async () => {
-      const response = await api.templates({ templateId }).versions.get();
-
-      setLoading(false);
-
-      if (response.error) {
-        toastManager.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      const { data } = response;
-      if (data instanceof Response) {
-        return;
-      }
-
-      if ("versions" in data && Array.isArray(data.versions)) {
-        setVersions(data.versions);
-      }
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    load();
-  }, [templateId, t]);
+  const versions =
+    versionsData && "versions" in versionsData ? versionsData.versions : [];
 
   const handleView = useCallback(
     async (versionId: string) => {
@@ -102,10 +65,22 @@ export const TemplateVersionsTab = ({
     [templateId, t],
   );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("clauses.loading")}</p>
+        <p className="text-muted-foreground text-sm">
+          {t("templates.discovering")}
+        </p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.loadFailed")}
+        </p>
       </div>
     );
   }
