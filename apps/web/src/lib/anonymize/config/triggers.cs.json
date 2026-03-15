@@ -21,27 +21,27 @@
   },
   {
     "trigger": "nar.:",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "narozen dne",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "narozena dne",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "narozen/a dne",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
     "trigger": "dat.nar.",
-    "label": "date of birth",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {

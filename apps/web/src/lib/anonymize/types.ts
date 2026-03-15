@@ -181,7 +181,13 @@ export const MODEL_OPTIONS: readonly ModelOption[] = [
 ];
 
 /**
- * Labels matching gliner_multi_pii-v1 training data.
+ * Canonical entity labels used across the pipeline.
+ * NER models may use different native labels; the bench
+ * NER wrapper maps model output to these canonical names.
+ *
+ * These labels are ephemeral: entities are regenerated on
+ * every pipeline run and never persisted to the database.
+ * Renaming a label here requires no migration.
  */
 export const DEFAULT_ENTITY_LABELS = [
   "person",
@@ -189,7 +195,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "phone number",
   "address",
   "email address",
-  "date of birth",
+  "date",
   "bank account number",
   "iban",
   "tax identification number",
@@ -209,7 +215,7 @@ export const ENTITY_COLORS: Record<string, string> = {
   "phone number": "bg-pink-200 dark:bg-pink-800",
   address: "bg-yellow-200 dark:bg-yellow-800",
   "email address": "bg-orange-200 dark:bg-orange-800",
-  "date of birth": "bg-purple-200 dark:bg-purple-800",
+  date: "bg-purple-200 dark:bg-purple-800",
   "bank account number": "bg-red-200 dark:bg-red-800",
   iban: "bg-red-200 dark:bg-red-800",
   "tax identification number": "bg-teal-200 dark:bg-teal-800",

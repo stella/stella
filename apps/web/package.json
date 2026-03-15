@@ -103,6 +103,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
+    "onnxruntime-node": "^1.24.3",
     "react-grab": "^0.1.26",
     "typescript": "catalog:"
   }

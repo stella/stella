@@ -1,0 +1,47 @@
+[
+  {
+    "trigger": "represented by",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "born on",
+    "label": "date",
+    "strategy": { "type": "n-words", "count": 4 }
+  },
+  {
+    "trigger": "born in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "residing at",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "residing in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "resident of",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "national of",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "living in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "domiciled in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  }
+]

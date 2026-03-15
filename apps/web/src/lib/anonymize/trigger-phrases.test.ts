@@ -21,8 +21,8 @@ describe("detectTriggerPhrases()", () => {
       expect(r[0]?.text).toBe("Václavské nám. 15");
     });
 
-    it("extracts date of birth after nar.:", () => {
-      const r = findLabel("nar.: 15.03.1978, trvale", "date of birth");
+    it("extracts date after nar.:", () => {
+      const r = findLabel("nar.: 15.03.1978, trvale", "date");
       expect(r).toHaveLength(1);
       expect(r[0]?.text).toBe("15.03.1978,");
     });
@@ -65,7 +65,7 @@ describe("detectTriggerPhrases()", () => {
     });
 
     it("extracts date after geboren am", () => {
-      const r = findLabel("geboren am 22.06.1965", "date of birth");
+      const r = findLabel("geboren am 22.06.1965", "date");
       expect(r).toHaveLength(1);
     });
 
