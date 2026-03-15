@@ -195,7 +195,7 @@ const createConverters = (mapping: StyleMapping) => {
           : [new TextRun(item.text)];
 
       const prefix = token.ordered
-        ? `${Number(token.start ?? 1) + i}.\t`
+        ? `${Number(token.start) + i}.\t`
         : "\u2022\t";
 
       paragraphs.push(

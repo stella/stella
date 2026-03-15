@@ -95,8 +95,8 @@ export const readOverviewHandler = async ({
       } else if (c.type === "file" && "fileName" in c) {
         name = c.fileName;
         mimeType = c.mimeType;
-        pdfFileId = c.pdfFileId ?? null;
-        encrypted = c.encrypted ?? false;
+        pdfFileId = c.pdfFileId;
+        encrypted = c.encrypted;
       }
     }
 

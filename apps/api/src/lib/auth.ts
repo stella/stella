@@ -265,7 +265,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
 
       const memberRole = memberRoleResult.value;
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
-      const userId = toSafeId<"user">(user?.id);
+      const userId = toSafeId<"user">(user.id);
 
       posthogIdentify({
         distinctId: userId,
