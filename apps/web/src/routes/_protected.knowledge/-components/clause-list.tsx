@@ -225,7 +225,7 @@ export const ClauseList = ({
                 size="sm"
                 variant="ghost"
               >
-                {t("clauses.loadMore")}
+                {t("common.loadMore")}
               </Button>
             </div>
           )}
@@ -266,7 +266,7 @@ const ClauseRow = ({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{clause.title}</p>
           <p className="text-muted-foreground text-xs">
-            {categoryName ?? t("clauses.uncategorized")}
+            {categoryName ?? t("common.uncategorized")}
             {" \u00b7 "}
             {format.dateTime(new Date(clause.createdAt), {
               dateStyle: "medium",
@@ -321,7 +321,7 @@ const CategorySidebar = ({
           onClick={() => onSelect("uncategorized")}
           type="button"
         >
-          {t("clauses.uncategorized")}
+          {t("common.uncategorized")}
         </button>
 
         {categories.length > 0 && <div className="my-1 border-t" />}

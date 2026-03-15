@@ -295,7 +295,7 @@ const InvoiceDetail = ({
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>
-                  <th className="px-4 py-2 font-medium">{t("billing.date")}</th>
+                  <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
                     {t("billing.narrative")}
                   </th>
@@ -366,9 +366,9 @@ const InvoiceDetail = ({
                   <th className="px-4 py-2 font-medium">
                     {t("billing.matter")}
                   </th>
-                  <th className="px-4 py-2 font-medium">{t("billing.date")}</th>
+                  <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
-                    {t("billing.description")}
+                    {t("common.description")}
                   </th>
                   <th className="px-4 py-2 text-right font-medium">
                     {t("billing.amount")}
@@ -738,7 +738,7 @@ const EditInvoiceForm = ({
       <form.Field name="reference">
         {(field) => (
           <Field name={field.name}>
-            <Label>{t("billing.invoices.reference")}</Label>
+            <Label>{t("common.reference")}</Label>
             <Input
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}

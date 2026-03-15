@@ -57,7 +57,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
   return (
     <div className="space-y-4">
       <h3 className="text-muted-foreground text-xs font-semibold uppercase">
-        {t("caseLaw.viewer.metadata")}
+        {t("common.metadata")}
       </h3>
 
       <dl className="space-y-3">
@@ -65,23 +65,14 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           label={t("caseLaw.columns.court")}
           value={decision.court}
         />
-        <MetadataField
-          label={t("caseLaw.columns.decisionDate")}
-          value={decision.decisionDate}
-        />
+        <MetadataField label={t("common.date")} value={decision.decisionDate} />
         <MetadataField label="ECLI" value={decision.ecli} />
         <MetadataField
           label={t("caseLaw.columns.country")}
           value={decision.country}
         />
-        <MetadataField
-          label={t("caseLaw.viewer.language")}
-          value={decision.language}
-        />
-        <MetadataField
-          label={t("caseLaw.columns.decisionType")}
-          value={decision.decisionType}
-        />
+        <MetadataField label={t("common.language")} value={decision.language} />
+        <MetadataField label={t("common.type")} value={decision.decisionType} />
         <MetadataField
           label={t("caseLaw.viewer.source")}
           value={decision.source.name}

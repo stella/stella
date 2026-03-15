@@ -68,7 +68,7 @@ function CaseLawIndex() {
           >
             {isFetchingNextPage
               ? t("caseLaw.loadingMore")
-              : t("caseLaw.loadMore")}
+              : t("common.loadMore")}
           </Button>
         </div>
       )}

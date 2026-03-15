@@ -153,7 +153,7 @@ const AddFilterButton = ({
           }
         >
           <CircleDotIcon className="size-3.5" />
-          {t("tasks.status")}
+          {t("common.status")}
         </MenuItem>
         <MenuItem
           disabled={hasFilter(filters, "builtin", "priority")}
@@ -293,7 +293,7 @@ const BuiltinFilterChip = ({
 }: BuiltinFilterChipProps) => {
   const t = useTranslations();
   const isStatus = filter.builtinField === "status";
-  const label = isStatus ? t("tasks.status") : t("tasks.priority");
+  const label = isStatus ? t("common.status") : t("tasks.priority");
   const values = isStatus ? STATUS_VALUES : PRIORITY_VALUES;
 
   const resolveLabel = (val: string) =>

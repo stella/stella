@@ -17,6 +17,7 @@ export const HoursByUserTable = ({
   dateTo,
 }: HoursByUserTableProps) => {
   const t = useTranslations("analytics");
+  const tc = useTranslations("common");
   const { data } = useSuspenseQuery(
     hoursByUserOptions(workspaceId, {
       dateFrom,
@@ -36,7 +37,7 @@ export const HoursByUserTable = ({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-start">
-                <th className="pb-2 font-medium">{t("user")}</th>
+                <th className="pb-2 font-medium">{tc("user")}</th>
                 <th className="pb-2 text-right font-medium">
                   {t("totalHours")}
                 </th>

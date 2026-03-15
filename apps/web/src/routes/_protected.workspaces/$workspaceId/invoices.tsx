@@ -110,9 +110,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
               <th className="px-4 py-2 text-right font-medium">
                 {t("billing.invoices.totalAmount")}
               </th>
-              <th className="px-4 py-2 font-medium">
-                {t("billing.invoices.reference")}
-              </th>
+              <th className="px-4 py-2 font-medium">{t("common.reference")}</th>
             </tr>
           </thead>
           <tbody>

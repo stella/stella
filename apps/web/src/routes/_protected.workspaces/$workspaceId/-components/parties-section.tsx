@@ -433,7 +433,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
           </div>
           <div>
             <span className="mb-1.5 block text-sm font-medium">
-              {t("workspaces.parties.role")}
+              {t("common.role")}
             </span>
             <Select
               items={roleItems}
@@ -446,7 +446,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
                     // oxlint-disable-next-line typescript/strict-boolean-expressions: tsgo issue
                     current
                       ? roleItems.find((r) => r.value === current)?.label
-                      : t("workspaces.parties.selectRole")
+                      : t("common.selectARole")
                   }
                 </SelectValue>
               </SelectTrigger>

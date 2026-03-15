@@ -72,7 +72,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         ),
       }),
       columnHelper.accessor("decisionDate", {
-        header: t("caseLaw.columns.decisionDate"),
+        header: t("common.date"),
         cell: (info) => {
           const value = info.getValue();
           if (value === null || value === undefined) {
@@ -85,7 +85,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         },
       }),
       columnHelper.accessor("decisionType", {
-        header: t("caseLaw.columns.decisionType"),
+        header: t("common.type"),
         cell: (info) => info.getValue() ?? "—",
       }),
     ],

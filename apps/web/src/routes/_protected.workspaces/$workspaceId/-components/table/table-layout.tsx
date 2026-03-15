@@ -113,7 +113,7 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
         <MetadataPopover
           column={ctx.header.column}
           icon={CircleDotIcon}
-          label={t("tasks.status")}
+          label={t("common.status")}
           sortHint="text"
         />
       ),

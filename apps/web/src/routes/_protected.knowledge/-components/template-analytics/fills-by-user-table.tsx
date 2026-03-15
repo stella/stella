@@ -13,6 +13,7 @@ export const FillsByUserTable = ({
   dateTo,
 }: FillsByUserTableProps) => {
   const t = useTranslations("templateAnalytics");
+  const tc = useTranslations("common");
   const { data } = useSuspenseQuery(fillsByUserOptions({ dateFrom, dateTo }));
 
   return (
@@ -27,7 +28,7 @@ export const FillsByUserTable = ({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-start">
-                <th className="pb-2 font-medium">{t("user")}</th>
+                <th className="pb-2 font-medium">{tc("user")}</th>
                 <th className="pb-2 text-right font-medium">{t("fills")}</th>
               </tr>
             </thead>

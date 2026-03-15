@@ -261,7 +261,7 @@ const CreateRateTableForm = ({
     >
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("billing.rates.tableName")}</Label>
+          <Label>{t("common.name")}</Label>
           <form.Field name="name">
             {(field) => (
               <Input
@@ -274,7 +274,7 @@ const CreateRateTableForm = ({
           </form.Field>
         </div>
         <div className="flex w-24 flex-col gap-1.5">
-          <Label>{t("billing.rates.currency")}</Label>
+          <Label>{t("common.currency")}</Label>
           <form.Field name="currency">
             {(field) => (
               <Input

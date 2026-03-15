@@ -206,7 +206,7 @@ export const ClauseFormDialog = ({
 
           <div className="grid gap-1.5">
             <label className="text-sm font-medium" htmlFor="clause-description">
-              {t("clauses.description")}
+              {t("common.description")}
             </label>
             <Input
               id="clause-description"
@@ -224,7 +224,7 @@ export const ClauseFormDialog = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <label className="text-sm font-medium" htmlFor="clause-language">
-                {t("clauses.language")}
+                {t("common.language")}
               </label>
               <Input
                 id="clause-language"
@@ -242,7 +242,7 @@ export const ClauseFormDialog = ({
 
             <div className="grid gap-1.5">
               <span className="text-sm font-medium">
-                {t("clauses.selectCategory")}
+                {t("common.category")}
               </span>
               <Select
                 onValueChange={(val) =>
@@ -254,7 +254,7 @@ export const ClauseFormDialog = ({
                 value={form.categoryId || undefined}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t("clauses.uncategorized")} />
+                  <SelectValue placeholder={t("common.uncategorized")} />
                 </SelectTrigger>
                 <SelectPopup>
                   {categories.map((cat) => (
