@@ -133,7 +133,7 @@ const DropOverlay = () => {
 };
 
 type RightPanelChatProps = {
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
@@ -429,7 +429,7 @@ const ChatInputBar = ({
 
 type NewChatProps = {
   onThreadCreated: (threadId: string) => void;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   mentionContext: MentionContext;
 };
 
@@ -536,7 +536,7 @@ const NewChat = ({
 
 type ActiveThreadProps = {
   threadId: string;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   mentionContext: MentionContext;
   onBack: () => void;
   onSwitchThread: (threadId: string) => void;
@@ -588,7 +588,7 @@ const ActiveThread = ({
 
 type ActiveThreadInnerProps = {
   threadId: string;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   mentionContext: MentionContext;
   chat: Chat<ChatMessage>;
   onBack: () => void;
@@ -833,7 +833,7 @@ const ActiveThreadInner = ({
 
 type ThreadListProps = {
   activeThreadId: string;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   onSwitchThread: (threadId: string) => void;
 };
 

@@ -47,12 +47,12 @@ export const entitiesOptions = (input: EntitiesOptionsInput) =>
         .entities({ workspaceId: input.workspaceId })
         .get({
           query: {
-            filters:
-              input.filters.length > 0
-                ? JSON.stringify(input.filters)
-                : undefined,
-            sorts:
-              input.sorts.length > 0 ? JSON.stringify(input.sorts) : undefined,
+            ...(input.filters.length > 0 && {
+              filters: JSON.stringify(input.filters),
+            }),
+            ...(input.sorts.length > 0 && {
+              sorts: JSON.stringify(input.sorts),
+            }),
             page: input.page,
             pageSize: 50,
           },

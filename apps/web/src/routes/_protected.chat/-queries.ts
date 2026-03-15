@@ -30,10 +30,10 @@ export const chatKeys = {
 export const chatThreadOptions = (opts: {
   threadId: string;
   queryClient: QueryClient;
-  workspaceId?: string;
-  getModelId?: () => string | null;
-  userContext?: UserContext;
-  getActiveFile?: () => ActiveFileContext | undefined;
+  workspaceId?: string | undefined;
+  getModelId?: (() => string | null) | undefined;
+  userContext?: UserContext | undefined;
+  getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
 }) =>
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,

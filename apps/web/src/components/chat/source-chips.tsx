@@ -9,7 +9,7 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 type SourceChipsProps = {
   messageId: string;
   parts: UIMessage["parts"];
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 export const SourceChips = ({
@@ -61,7 +61,7 @@ const SourceChip = ({
   workspaceId,
 }: {
   part: SourceDocumentUIPart;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 }) => {
   const handleClick = () => {
     if (!workspaceId) {

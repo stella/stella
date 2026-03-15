@@ -47,8 +47,8 @@ type ExtractedTextResponse = {
   mediaType: string;
   views: {
     simple: string;
-    original?: string;
-    trackedChanges?: string;
+    original?: string | undefined;
+    trackedChanges?: string | undefined;
   };
 };
 

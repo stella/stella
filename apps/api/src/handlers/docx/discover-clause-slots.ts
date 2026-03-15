@@ -16,7 +16,7 @@ import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 
 export type ClauseSlot = {
   name: string;
-  versionModifier?: string;
+  versionModifier?: string | undefined;
   /** The full marker text (e.g., "@clause:NonCompete") used
    *  as the patch key for `fillTemplate`. */
   patchKey: string;

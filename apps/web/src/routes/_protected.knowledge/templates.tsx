@@ -98,11 +98,13 @@ function RouteComponent() {
   const fetchTemplates = useCallback(
     async (categoryId?: string | null) => {
       const query =
-        categoryId !== undefined
-          ? { categoryId: categoryId ?? undefined }
-          : selectedCategoryId
-            ? { categoryId: selectedCategoryId }
-            : {};
+        categoryId === null
+          ? {}
+          : categoryId !== undefined
+            ? { categoryId }
+            : selectedCategoryId
+              ? { categoryId: selectedCategoryId }
+              : {};
 
       const response = await api.templates.get({ query });
 

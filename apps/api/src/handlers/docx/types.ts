@@ -87,11 +87,13 @@ export type EditWithTrackingResult = {
   /** Comment paragraph indices that didn't exist. */
   skippedComments: number[];
   /** OOXML structural violations (non-blocking warnings). */
-  validationViolations?: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
+  validationViolations?:
+    | {
+        rule: string;
+        message: string;
+        element?: string | undefined;
+      }[]
+    | undefined;
 };
 
 export type ParagraphRewrite = {
@@ -105,21 +107,21 @@ export type ParagraphSource = "header" | "body" | "footer";
 export type ExtractedParagraph = {
   index: number;
   text: string;
-  style?: string;
+  style?: string | undefined;
   /** Which part of the document this paragraph came from. */
-  source?: ParagraphSource;
+  source?: ParagraphSource | undefined;
   /** True when all (or majority of) text runs are bold. */
-  bold?: boolean;
+  bold?: boolean | undefined;
   /** Font size in half-points from the first run (24 = 12pt). */
-  fontSize?: number;
+  fontSize?: number | undefined;
   /** Paragraph alignment from `w:jc`. */
-  alignment?: "left" | "center" | "right" | "both";
+  alignment?: "left" | "center" | "right" | "both" | undefined;
   /** True when the paragraph is a block directive. */
-  isDirective?: boolean;
+  isDirective?: boolean | undefined;
   /** Which directive this paragraph represents. */
-  directiveKind?: BlockDirectiveKind;
+  directiveKind?: BlockDirectiveKind | undefined;
   /** The expression inside the directive (empty for `#else`). */
-  directiveExpression?: string;
+  directiveExpression?: string | undefined;
 };
 
 /**
@@ -247,11 +249,11 @@ export type FieldValidation = {
 
 export type FieldMeta = {
   path: string;
-  label?: string;
-  inputType?: InputType;
-  options?: string[];
-  validation?: FieldValidation;
-  required?: boolean;
+  label?: string | undefined;
+  inputType?: InputType | undefined;
+  options?: string[] | undefined;
+  validation?: FieldValidation | undefined;
+  required?: boolean | undefined;
 };
 
 /**
@@ -274,13 +276,13 @@ export type ResolvedField = {
   path: string;
   kind: TemplateFieldKind;
   count: number;
-  label?: string;
-  inputType?: InputType;
-  options?: string[];
-  validation?: FieldValidation;
-  required?: boolean;
-  itemFields?: ResolvedField[];
+  label?: string | undefined;
+  inputType?: InputType | undefined;
+  options?: string[] | undefined;
+  validation?: FieldValidation | undefined;
+  required?: boolean | undefined;
+  itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */
-  visibleWhen?: string;
+  visibleWhen?: string | undefined;
 };

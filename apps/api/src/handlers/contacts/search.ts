@@ -11,7 +11,7 @@ type SearchContactsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   q: string;
-  type?: "person" | "organization";
+  type?: "person" | "organization" | undefined;
 };
 
 export const searchContactsHandler = async ({

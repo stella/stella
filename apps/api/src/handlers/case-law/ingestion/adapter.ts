@@ -5,15 +5,15 @@ import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
-  ecli?: string;
+  ecli?: string | undefined;
   court: string;
   country: string;
   language: string;
-  decisionDate?: string;
-  decisionType?: string;
-  fulltext?: string;
-  sourceUrl?: string;
-  documentUrl?: string;
+  decisionDate?: string | undefined;
+  decisionType?: string | undefined;
+  fulltext?: string | undefined;
+  sourceUrl?: string | undefined;
+  documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
   rawHash: string;
 };
@@ -44,5 +44,5 @@ export type SourceAdapter = {
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
   /** Override per-page timeout (ms). Defaults to ADAPTER_TIMEOUT.PAGE. */
-  pageTimeoutMs?: number;
+  pageTimeoutMs?: number | undefined;
 };

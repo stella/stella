@@ -51,7 +51,7 @@ type SearchFilters = {
 type SearchDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialWorkspaceId?: string;
+  initialWorkspaceId?: string | undefined;
 };
 
 export const SearchDialog = ({
@@ -65,9 +65,11 @@ export const SearchDialog = ({
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [filters, setFilters] = useState<SearchFilters>({
-    workspaceId: initialWorkspaceId,
-  });
+  const [filters, setFilters] = useState<SearchFilters>(() => ({
+    ...(initialWorkspaceId !== undefined && {
+      workspaceId: initialWorkspaceId,
+    }),
+  }));
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
@@ -85,8 +87,10 @@ export const SearchDialog = ({
   } = useInfiniteQuery(
     searchInfiniteOptions({
       query: debouncedQuery,
-      workspaceId: filters.workspaceId,
-      kinds: filters.kinds,
+      ...(filters.workspaceId !== undefined && {
+        workspaceId: filters.workspaceId,
+      }),
+      ...(filters.kinds !== undefined && { kinds: filters.kinds }),
     }),
   );
 
@@ -116,29 +120,34 @@ export const SearchDialog = ({
       const next = current.includes(kind)
         ? current.filter((k) => k !== kind)
         : [...current, kind];
+      const { kinds: _, ...rest } = prev;
       return {
-        ...prev,
-        kinds: next.length > 0 ? next : undefined,
+        ...rest,
+        ...(next.length > 0 && { kinds: next }),
       };
     });
     setSelectedIndex(-1);
   }, []);
 
   const setWorkspaceFilter = useCallback((workspaceId: string | undefined) => {
-    setFilters((prev) => ({
-      ...prev,
-      workspaceId,
-    }));
+    setFilters((prev): SearchFilters => {
+      const { workspaceId: _, ...rest } = prev;
+      if (!workspaceId) {
+        return rest;
+      }
+      return { ...rest, workspaceId };
+    });
     setSelectedIndex(-1);
   }, []);
 
   const removeKindFilter = useCallback((kind: EntityKind) => {
-    setFilters((prev) => {
+    setFilters((prev): SearchFilters => {
       const next = (prev.kinds ?? []).filter((k) => k !== kind);
-      return {
-        ...prev,
-        kinds: next.length > 0 ? next : undefined,
-      };
+      const { kinds: _, ...rest } = prev;
+      if (next.length === 0) {
+        return rest;
+      }
+      return { ...rest, kinds: next };
     });
     setSelectedIndex(-1);
   }, []);
@@ -181,9 +190,9 @@ export const SearchDialog = ({
         setQuery("");
         setDebouncedQuery("");
         setSelectedIndex(-1);
-        setFilters({
-          workspaceId: initialWorkspaceId,
-        });
+        setFilters(
+          initialWorkspaceId ? { workspaceId: initialWorkspaceId } : {},
+        );
       }
     },
     [onOpenChange, initialWorkspaceId],

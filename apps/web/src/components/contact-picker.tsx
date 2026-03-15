@@ -43,7 +43,7 @@ type ContactPickerProps = {
   onSelect: (contact: ContactResult) => void;
   /** Called when the user wants to create a new contact inline. */
   onCreate?: (name: string, type: "person" | "organization") => void;
-  type?: "person" | "organization";
+  type?: "person" | "organization" | undefined;
   placeholder?: string;
   autoFocus?: boolean;
 };
@@ -54,7 +54,7 @@ const searchContacts = async (q: string, type?: "person" | "organization") => {
   }
 
   const response = await api.contacts.search.get({
-    query: { q, type },
+    query: { q, ...(type !== undefined && { type }) },
   });
 
   if (response.error) {

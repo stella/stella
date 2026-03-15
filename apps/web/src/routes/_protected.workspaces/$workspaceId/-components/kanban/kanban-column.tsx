@@ -73,24 +73,22 @@ type KanbanColumnProps = {
   columnValue: string | null;
   entities: WorkspaceEntity[];
   workspaceId: string;
-  color?: string;
-  colorBg?: string;
-  optionColor?: OptionColor;
-  cardFields?: string[];
-  properties?: WorkspaceProperty[];
+  color?: string | undefined;
+  colorBg?: string | undefined;
+  optionColor?: OptionColor | undefined;
+  cardFields?: string[] | undefined;
+  properties?: WorkspaceProperty[] | undefined;
   onDrop: (entityId: string) => void;
-  onFileUpload?: (files: File[]) => void;
-  onChangeColor?: (color: OptionColor) => void;
-  onRenameColumn?: (newName: string) => void;
-  onRenameEntity?: (entityId: string, newName: string) => void;
-  onHideColumn?: () => void;
-  onCreate?: (kind: EntityKind) => void;
-  onDeleteAll?: () => void;
-  onReorderColumn?: (
-    sourceValue: string,
-    targetValue: string,
-    edge: Edge | null,
-  ) => void;
+  onFileUpload?: ((files: File[]) => void) | undefined;
+  onChangeColor?: ((color: OptionColor) => void) | undefined;
+  onRenameColumn?: ((newName: string) => void) | undefined;
+  onRenameEntity?: ((entityId: string, newName: string) => void) | undefined;
+  onHideColumn?: (() => void) | undefined;
+  onCreate?: ((kind: EntityKind) => void) | undefined;
+  onDeleteAll?: (() => void) | undefined;
+  onReorderColumn?:
+    | ((sourceValue: string, targetValue: string, edge: Edge | null) => void)
+    | undefined;
 };
 
 export const KanbanColumn = ({

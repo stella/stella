@@ -23,7 +23,7 @@ export const billingCodesOptions = (
         workspaceId,
       }).get({
         query: {
-          type,
+          ...(type !== undefined && { type }),
           active: true,
         },
         fetch: { signal },

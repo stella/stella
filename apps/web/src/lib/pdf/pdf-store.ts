@@ -22,7 +22,7 @@ export const PDF_WIDTH = 768; // px, screen md
 
 type ScrollTo = {
   pageNumber: number;
-  justificationId?: string;
+  justificationId?: string | undefined;
 };
 
 type PasswordRequest = {
@@ -40,13 +40,13 @@ type State = {
     {
       document: PDFDocumentProxy;
       /** Extra documents from PDF Portfolio attachments. */
-      attachmentDocuments?: PDFDocumentProxy[];
+      attachmentDocuments?: PDFDocumentProxy[] | undefined;
       pageIds: string[];
       /** Maps pageId → banner label for the first page of
        *  each attachment in a PDF Portfolio. */
-      attachmentLabels?: Map<string, string>;
+      attachmentLabels?: Map<string, string> | undefined;
       /** True when the PDF is an XFA form. */
-      isXfa?: boolean;
+      isXfa?: boolean | undefined;
     }
   >;
   pages: Map<

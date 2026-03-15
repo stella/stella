@@ -25,8 +25,9 @@ export const getSyncActorConfig = <T extends OptionsType>(
   const params: SyncActorParams = {
     authToken: options.authToken ?? "",
   };
+  const region = getActorRegion();
   const commonOptions: CommonOptions = {
-    createInRegion: getActorRegion(),
+    ...(region && { createInRegion: region }),
     params,
   };
 

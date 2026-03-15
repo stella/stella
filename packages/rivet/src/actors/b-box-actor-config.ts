@@ -40,8 +40,9 @@ export const getBBoxActorConfig = <T extends OptionsType>(
   const params: BBoxActorParams = {
     authToken: options.authToken ?? "",
   };
+  const region = getActorRegion();
   const commonOptions: CommonOptions = {
-    createInRegion: getActorRegion(),
+    ...(region && { createInRegion: region }),
     params,
   };
 

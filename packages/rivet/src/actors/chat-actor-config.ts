@@ -48,8 +48,9 @@ export const getChatActorConfig = <T extends OptionsType>(
   const params: ChatActorParams = {
     authToken: options.authToken ?? "",
   };
+  const region = getActorRegion();
   const commonOptions: CommonOptions = {
-    createInRegion: getActorRegion(),
+    ...(region && { createInRegion: region }),
     params,
   };
 

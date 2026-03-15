@@ -37,7 +37,7 @@ type CategoryOption = {
 };
 
 type ClauseFormData = {
-  id?: string;
+  id?: string | undefined;
   title: string;
   description: string;
   usageNotes: string;
@@ -140,12 +140,17 @@ export const ClauseFormDialog = ({
         title: t("clauses.clauseUpdated"),
       });
     } else {
+      const description = form.description.trim() || undefined;
+      const usageNotes = form.usageNotes.trim() || undefined;
+      const language = form.language.trim() || undefined;
+      const categoryId = form.categoryId || undefined;
+
       const response = await api.clauses.put({
         title: form.title.trim(),
-        description: form.description.trim() || undefined,
-        usageNotes: form.usageNotes.trim() || undefined,
-        language: form.language.trim() || undefined,
-        categoryId: form.categoryId || undefined,
+        ...(description && { description }),
+        ...(usageNotes && { usageNotes }),
+        ...(language && { language }),
+        ...(categoryId && { categoryId }),
         body,
       });
 

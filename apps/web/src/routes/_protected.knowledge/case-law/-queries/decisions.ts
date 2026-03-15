@@ -41,12 +41,33 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
       const { search, ...listFilters } = filters;
 
       if (search) {
+        const cursor = pageParam ?? undefined;
         const response = await api["case-law"].decisions.search.post(
           {
             query: search,
             limit: DEFAULT_PAGE_SIZE,
-            cursor: pageParam ?? undefined,
-            ...listFilters,
+            ...(cursor !== undefined && { cursor }),
+            ...(listFilters.court !== undefined && {
+              court: listFilters.court,
+            }),
+            ...(listFilters.country !== undefined && {
+              country: listFilters.country,
+            }),
+            ...(listFilters.dateFrom !== undefined && {
+              dateFrom: listFilters.dateFrom,
+            }),
+            ...(listFilters.dateTo !== undefined && {
+              dateTo: listFilters.dateTo,
+            }),
+            ...(listFilters.decisionType !== undefined && {
+              decisionType: listFilters.decisionType,
+            }),
+            ...(listFilters.language !== undefined && {
+              language: listFilters.language,
+            }),
+            ...(listFilters.sourceId !== undefined && {
+              sourceId: listFilters.sourceId,
+            }),
           },
           { fetch: { signal } },
         );
@@ -81,8 +102,28 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
       const response = await api["case-law"].decisions.get({
         query: {
           limit: DEFAULT_PAGE_SIZE,
-          cursor: pageParam ?? undefined,
-          ...listFilters,
+          ...(pageParam !== null && { cursor: pageParam }),
+          ...(listFilters.court !== undefined && {
+            court: listFilters.court,
+          }),
+          ...(listFilters.country !== undefined && {
+            country: listFilters.country,
+          }),
+          ...(listFilters.dateFrom !== undefined && {
+            dateFrom: listFilters.dateFrom,
+          }),
+          ...(listFilters.dateTo !== undefined && {
+            dateTo: listFilters.dateTo,
+          }),
+          ...(listFilters.decisionType !== undefined && {
+            decisionType: listFilters.decisionType,
+          }),
+          ...(listFilters.language !== undefined && {
+            language: listFilters.language,
+          }),
+          ...(listFilters.sourceId !== undefined && {
+            sourceId: listFilters.sourceId,
+          }),
         },
         fetch: { signal },
       });

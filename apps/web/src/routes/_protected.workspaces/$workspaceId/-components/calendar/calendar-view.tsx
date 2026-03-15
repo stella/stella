@@ -73,7 +73,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         const response = await api.tasks({ workspaceId }).put({
           queryKey: entitiesKeys.all(workspaceId),
           name: t("tasks.untitled"),
-          dueDate,
+          ...(dueDate && { dueDate }),
         });
 
         const entityId = response.data?.entityId;

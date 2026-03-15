@@ -15,7 +15,7 @@ import { isElement, W_NS } from "./ooxml";
 export type OoxmlViolation = {
   rule: string;
   message: string;
-  element?: string;
+  element?: string | undefined;
 };
 
 export type OoxmlValidationResult = {

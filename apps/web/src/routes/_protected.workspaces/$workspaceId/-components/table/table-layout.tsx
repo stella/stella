@@ -30,7 +30,10 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type {
+  TableColumnDef,
+  TableTreeNode,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import {
   DueDateCell,
@@ -217,8 +220,10 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
     data: treeData,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getExpandedRowModel: hasFolders ? getExpandedRowModel() : undefined,
-    getSubRows: hasFolders ? (row) => row.children : undefined,
+    ...(hasFolders && {
+      getExpandedRowModel: getExpandedRowModel<TableTreeNode>(),
+      getSubRows: (row: TableTreeNode) => row.children,
+    }),
     manualSorting: true,
     enableSortingRemoval: false,
     enableSubRowSelection: true,

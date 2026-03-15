@@ -13,7 +13,7 @@ const selectColId = getInternalColId("select");
 type BottomRowProps = {
   workspaceId: string;
   table: WorkspaceTable;
-  onFolderCreated?: (entityId: string) => void;
+  onFolderCreated?: ((entityId: string) => void) | undefined;
 };
 
 export const BottomRow = ({

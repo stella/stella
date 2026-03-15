@@ -34,14 +34,14 @@ type VirtualAnchor = {
 
 type AddEntityMenuProps = {
   workspaceId: string;
-  parentId?: string | null;
-  render?: React.ReactElement;
-  onFolderCreated?: (entityId: string) => void;
+  parentId?: string | null | undefined;
+  render?: React.ReactElement | undefined;
+  onFolderCreated?: ((entityId: string) => void) | undefined;
   /** Controlled open state (for context menus). */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
   /** Virtual anchor for positioning (right-click). */
-  anchor?: VirtualAnchor | null;
+  anchor?: VirtualAnchor | null | undefined;
 };
 
 export const AddEntityMenu = ({
@@ -78,7 +78,7 @@ export const AddEntityMenu = ({
         workspaceId,
         type: "manual-input",
         kind: "folder",
-        parentId: parentId ?? undefined,
+        ...(parentId && { parentId }),
         name: t("workspaces.newFolder"),
       },
       {

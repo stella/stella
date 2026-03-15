@@ -136,7 +136,7 @@ type WithOpenEntityButtonProps = {
   entityId: string;
   justificationFieldId: string;
   label: string;
-  mimeType?: string;
+  mimeType?: string | undefined;
   propertyId: string;
   workspaceId: string;
 };

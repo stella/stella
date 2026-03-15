@@ -604,9 +604,9 @@ const getGroupOptions = (property: WorkspaceProperty): GroupOption[] => {
 type EntityGroup = {
   value: string | null;
   label: string;
-  color?: string;
-  colorBg?: string;
-  optionColor?: OptionColor;
+  color?: string | undefined;
+  colorBg?: string | undefined;
+  optionColor?: OptionColor | undefined;
   entities: WorkspaceEntity[];
 };
 

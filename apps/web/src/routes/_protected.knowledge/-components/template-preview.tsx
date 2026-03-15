@@ -22,14 +22,14 @@ type ParagraphSource = "header" | "body" | "footer";
 type ExtractedParagraph = {
   index: number;
   text: string;
-  style?: string;
-  source?: ParagraphSource;
-  bold?: boolean;
-  fontSize?: number;
-  alignment?: "left" | "center" | "right" | "both";
-  isDirective?: boolean;
-  directiveKind?: BlockDirectiveKind;
-  directiveExpression?: string;
+  style?: string | undefined;
+  source?: ParagraphSource | undefined;
+  bold?: boolean | undefined;
+  fontSize?: number | undefined;
+  alignment?: "left" | "center" | "right" | "both" | undefined;
+  isDirective?: boolean | undefined;
+  directiveKind?: BlockDirectiveKind | undefined;
+  directiveExpression?: string | undefined;
 };
 
 type StructureError = {
@@ -190,7 +190,7 @@ const PreviewParagraph = ({
 }: {
   paragraph: ExtractedParagraph;
   depth: number;
-  error?: StructureError;
+  error?: StructureError | undefined;
   activeSpans: BlockSpan[];
 }) => {
   const isHeading = paragraph.style?.startsWith("Heading");

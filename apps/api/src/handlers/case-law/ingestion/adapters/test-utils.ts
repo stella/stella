@@ -60,9 +60,9 @@ type FixtureRoute = {
   /** Fixture filename in __fixtures__/. */
   fixture: string;
   /** Content-Type header (default: inferred from ext). */
-  contentType?: string;
+  contentType?: string | undefined;
   /** HTTP status (default: 200). */
-  status?: number;
+  status?: number | undefined;
 };
 
 const inferContentType = (filename: string): string => {
@@ -156,7 +156,7 @@ export const recordFixture = async (
 ): Promise<string> => {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(30_000),
-    headers,
+    ...(headers && { headers }),
   });
 
   if (!response.ok) {

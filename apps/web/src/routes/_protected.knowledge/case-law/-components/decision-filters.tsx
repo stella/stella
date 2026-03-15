@@ -30,42 +30,43 @@ export const DecisionFilters = ({
 }: DecisionFiltersProps) => {
   const t = useTranslations();
 
+  /** Update a single filter key, omitting it when empty. */
+  const updateFilter = useCallback(
+    <K extends keyof DecisionListFilters>(key: K, value: string | null) => {
+      const { [key]: _, ...rest } = filters;
+      const trimmed = value || undefined;
+      onFiltersChange({
+        ...rest,
+        ...(trimmed && { [key]: trimmed }),
+      });
+    },
+    [filters, onFiltersChange],
+  );
+
   const handleSearchChange = useDebouncedCallback((value: string) => {
-    onFiltersChange({ ...filters, search: value || undefined });
+    updateFilter("search", value);
   }, 300);
 
   const handleCourtSelectChange = useCallback(
     (value: string | null) => {
-      onFiltersChange({
-        ...filters,
-        court: value || undefined,
-      });
+      updateFilter("court", value);
     },
-    [filters, onFiltersChange],
+    [updateFilter],
   );
 
   const handleCourtInputChange = useDebouncedCallback((value: string) => {
-    onFiltersChange({
-      ...filters,
-      court: value || undefined,
-    });
+    updateFilter("court", value);
   }, 300);
 
   const handleCountrySelectChange = useCallback(
     (value: string | null) => {
-      onFiltersChange({
-        ...filters,
-        country: value || undefined,
-      });
+      updateFilter("country", value);
     },
-    [filters, onFiltersChange],
+    [updateFilter],
   );
 
   const handleCountryInputChange = useDebouncedCallback((value: string) => {
-    onFiltersChange({
-      ...filters,
-      country: value || undefined,
-    });
+    updateFilter("country", value);
   }, 300);
 
   const courtBuckets = facets?.court ?? [];
@@ -134,24 +135,14 @@ export const DecisionFilters = ({
 
       <Input
         className="max-w-40"
-        onChange={(e) =>
-          onFiltersChange({
-            ...filters,
-            dateFrom: e.currentTarget.value || undefined,
-          })
-        }
+        onChange={(e) => updateFilter("dateFrom", e.currentTarget.value)}
         placeholder={t("caseLaw.filters.dateFrom")}
         type="date"
         value={filters.dateFrom ?? ""}
       />
       <Input
         className="max-w-40"
-        onChange={(e) =>
-          onFiltersChange({
-            ...filters,
-            dateTo: e.currentTarget.value || undefined,
-          })
-        }
+        onChange={(e) => updateFilter("dateTo", e.currentTarget.value)}
         placeholder={t("caseLaw.filters.dateTo")}
         type="date"
         value={filters.dateTo ?? ""}

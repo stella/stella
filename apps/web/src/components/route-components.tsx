@@ -189,7 +189,7 @@ type StatusMessageProps = {
   title: string;
   description?: string;
   actionButton?: React.ReactNode;
-  className?: string;
+  className?: string | undefined;
 };
 
 const StatusMessage = ({

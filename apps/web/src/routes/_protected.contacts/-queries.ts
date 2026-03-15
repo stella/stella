@@ -5,17 +5,16 @@ import { toAPIError } from "@/lib/errors";
 
 export const contactsKeys = {
   all: ["contacts"],
-  list: (filters?: { type?: "person" | "organization"; q?: string }) => [
-    ...contactsKeys.all,
-    "list",
-    filters,
-  ],
+  list: (filters?: {
+    type?: "person" | "organization" | undefined;
+    q?: string | undefined;
+  }) => [...contactsKeys.all, "list", filters],
   byId: (contactId: string) => [...contactsKeys.all, contactId],
 };
 
 export const contactsOptions = (filters?: {
-  type?: "person" | "organization";
-  q?: string;
+  type?: "person" | "organization" | undefined;
+  q?: string | undefined;
 }) =>
   queryOptions({
     queryKey: contactsKeys.list(filters),
@@ -23,8 +22,10 @@ export const contactsOptions = (filters?: {
       const response = await api.contacts.get({
         query: {
           limit: 50,
-          type: filters?.type,
-          q: filters?.q || undefined,
+          ...(filters?.type !== undefined && {
+            type: filters.type,
+          }),
+          ...(filters?.q !== undefined && { q: filters.q }),
         },
         fetch: { signal },
       });

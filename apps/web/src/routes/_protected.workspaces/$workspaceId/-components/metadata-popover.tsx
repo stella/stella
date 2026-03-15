@@ -19,7 +19,7 @@ type MetadataPopoverProps = {
   column: TableColumn;
   icon: LucideIcon;
   label: string;
-  sortHint?: SortHint;
+  sortHint?: SortHint | undefined;
 };
 
 export const MetadataPopover = ({
