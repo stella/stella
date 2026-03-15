@@ -14,13 +14,10 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
-  BarChart3Icon,
-  BookmarkIcon,
   BookOpenIcon,
   ChevronsUpDownIcon,
   ClockIcon,
   EllipsisVerticalIcon,
-  FileTextIcon,
   GlobeIcon,
   InboxIcon,
   LayersIcon,
@@ -970,63 +967,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </SidebarMenuBadge>
                 )
               )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              {currentWorkspaceId ? (
-                <SidebarMenuButton asChild tooltip={t("navigation.analytics")}>
-                  <Link
-                    params={{
-                      workspaceId: currentWorkspaceId,
-                    }}
-                    to="/workspaces/$workspaceId/analytics"
-                  >
-                    <BarChart3Icon />
-                    <span>{t("navigation.analytics")}</span>
-                  </Link>
-                </SidebarMenuButton>
-              ) : (
-                <SidebarMenuButton
-                  onClick={comingSoon}
-                  tooltip={t("navigation.analytics")}
-                >
-                  <BarChart3Icon />
-                  <span>{t("navigation.analytics")}</span>
-                </SidebarMenuButton>
-              )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              {currentWorkspaceId ? (
-                <SidebarMenuButton asChild tooltip={t("navigation.invoices")}>
-                  <Link
-                    params={{
-                      workspaceId: currentWorkspaceId,
-                    }}
-                    to="/workspaces/$workspaceId/invoices"
-                  >
-                    <FileTextIcon />
-                    <span>{t("navigation.invoices")}</span>
-                  </Link>
-                </SidebarMenuButton>
-              ) : (
-                <SidebarMenuButton
-                  onClick={comingSoon}
-                  tooltip={t("navigation.invoices")}
-                >
-                  <FileTextIcon />
-                  <span>{t("navigation.invoices")}</span>
-                </SidebarMenuButton>
-              )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={t("navigation.caseLaw")}>
-                <Link
-                  activeProps={{ "data-active": true }}
-                  to="/knowledge/case-law"
-                >
-                  <BookmarkIcon />
-                  <span>{t("navigation.caseLaw")}</span>
-                </Link>
-              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
