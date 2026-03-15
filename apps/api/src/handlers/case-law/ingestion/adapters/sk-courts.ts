@@ -108,7 +108,7 @@ const fetchDetail = async (
   }
   // SAFETY: structural check above confirms object; fields
   // are all optional so parseItem handles missing properties.
-  return json as SkDetailItem;
+  return json as SkDetailItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
 };
 
 const sourceUrlForGuid = (guid: string): string => {
@@ -123,9 +123,9 @@ const parseItemWithDetail = async (
   signal?: AbortSignal,
 ): Promise<IngestionResult | null> => {
   // SAFETY: items come from extractItems which returns
-  // data.rozhodnutieList (SkApiItem[]).
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  const item = raw as SkApiItem;
+  // data.rozhodnutieList (SkApiItem[]); all fields are
+  // optional so missing properties degrade gracefully.
+  const item = raw as SkApiItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
 
   if (!item.spisovaZnacka || !item.sud?.nazov) {
     return null;
@@ -190,7 +190,7 @@ export const skCourtsAdapter: SourceAdapter = {
       // fields are optional so missing properties
       // degrade gracefully.
       return typeof json === "object" && json !== null
-        ? (json as SkApiResponse)
+        ? (json as SkApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
         : {};
     },
 
@@ -199,10 +199,9 @@ export const skCourtsAdapter: SourceAdapter = {
       total: data.numFound,
     }),
 
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    parseItem: parseItemWithDetail as (
-      item: unknown,
-      signal?: AbortSignal,
-    ) => Promise<IngestionResult | null>,
+    // SAFETY: parseItemWithDetail accepts unknown as first
+    // arg via the SkApiItem cast inside it; signature
+    // matches PagePaginationOptions["parseItem"].
+    parseItem: parseItemWithDetail,
   }),
 };

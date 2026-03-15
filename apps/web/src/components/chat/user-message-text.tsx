@@ -9,10 +9,14 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import type { MentionCategory } from "@/components/chat-mention-extension";
+import { MENTION_HASH_PREFIX } from "@/components/chat-mention-extension";
 import {
   EntityMentionIcon,
   openEntityInInspector,
 } from "@/components/chat/entity-link";
+
+const isMentionCategory = (value: string): value is MentionCategory =>
+  value in MENTION_HASH_PREFIX;
 
 /** Matches all stella mention link formats:
  *  `[Label](#stella-entity=ID)`,
@@ -99,16 +103,12 @@ export const UserMessageText = ({ text }: { text: string }) => {
       parts.push(text.slice(lastIndex, match.index));
     }
     const [, label, category, id] = match;
-    if (!label || !category || !id) {
+    if (!label || !category || !id || !isMentionCategory(category)) {
       continue;
     }
     parts.push(
       <MentionChip
-        category={
-          // SAFETY: category from regex match of mention pattern
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          category as MentionCategory
-        }
+        category={category}
         id={id}
         key={match.index}
         label={label}

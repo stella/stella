@@ -210,10 +210,10 @@ type ActorState = {
   views: ViewState[];
 };
 
+const defaultActorState: ActorState = { views: [] };
+
 export const viewsActor = actor({
-  state: {
-    views: [] as ViewState[],
-  } satisfies ActorState,
+  state: defaultActorState,
   events: {
     "views-changed": event<{ views: ViewState[] }>(),
     "view-deleted": event<{ viewId: string }>(),
@@ -225,14 +225,16 @@ export const viewsActor = actor({
       return;
     }
 
-    c.state.views = DEFAULT_VIEWS.map((v) => ({
-      version: 1 as const,
-      id: nanoid(),
-      name: v.name,
-      layout: v.layout,
-      position: v.position,
-      createdAt: new Date().toISOString(),
-    }));
+    c.state.views = DEFAULT_VIEWS.map(
+      (v): ViewState => ({
+        version: 1,
+        id: nanoid(),
+        name: v.name,
+        layout: v.layout,
+        position: v.position,
+        createdAt: new Date().toISOString(),
+      }),
+    );
   },
   actions: {
     getViews: (c, input: GetViewsInput): ViewState[] => {

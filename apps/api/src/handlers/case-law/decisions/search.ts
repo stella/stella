@@ -215,7 +215,7 @@ export const searchDecisionsHandler = async (
   `;
 
   type RawRows = Record<string, unknown>[];
-  const emptyRows = Promise.resolve([] as RawRows);
+  const emptyRows: Promise<RawRows> = Promise.resolve([]);
 
   // Skip expensive COUNT(*) and facet queries on paginated
   // requests; these values don't change between pages.

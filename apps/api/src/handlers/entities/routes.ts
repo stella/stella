@@ -47,12 +47,13 @@ const parseJsonQueryParam = <T>(raw: string | undefined): T[] => {
   }
   try {
     const parsed: unknown = JSON.parse(raw);
+    // SAFETY: JSON from Eden-serialized query params; caller
+    // specifies T matching the expected schema. Runtime shape
+    // cannot be checked for arbitrary T.
     if (Array.isArray(parsed)) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      return parsed as T[];
+      return parsed as T[]; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    return [parsed] as T[];
+    return [parsed] as T[]; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
   } catch {
     return [];
   }

@@ -524,20 +524,11 @@ const EditableRow = ({
       return;
     }
 
-    const numericFields = ["defaultHourlyRate", "paymentTermDays"] as const;
-
-    type NumericField = (typeof numericFields)[number];
-
-    const isNumeric = (numericFields as readonly string[]).includes(field);
-
     let payload: Record<string, unknown>;
-    if (isNumeric) {
+    if (field === "defaultHourlyRate" || field === "paymentTermDays") {
       const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
-      // SAFETY: guarded by numericFields.includes(field)
       payload = {
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        [field as NumericField]:
-          parsed !== null && !Number.isNaN(parsed) ? parsed : null,
+        [field]: parsed !== null && !Number.isNaN(parsed) ? parsed : null,
       };
     } else {
       payload = { [field]: trimmed || null };

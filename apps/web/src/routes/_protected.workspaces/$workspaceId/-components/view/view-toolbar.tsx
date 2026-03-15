@@ -52,10 +52,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
       viewId: view.id,
-      // SAFETY: view.layout + changes match ViewLayout shape
-      layout:
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        { ...view.layout, ...changes } as ViewLayout,
+      // SAFETY: callers pass subsets matching the current layout
+      // discriminant; TS can't verify spread preserves a union.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      layout: { ...view.layout, ...changes } as ViewLayout,
     });
   };
 

@@ -28,6 +28,9 @@ import {
   getFirstFile,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
+const isMentionCat = (v: unknown): v is MentionCategory =>
+  typeof v === "string" && v in MENTION_HASH_PREFIX;
+
 /** Serialize TipTap content to plain text with
  *  references as markdown links the model can parse. */
 const serializeToText = (editor: Editor): string => {
@@ -41,11 +44,9 @@ const serializeToText = (editor: Editor): string => {
 
     if (node.type.name === "mention") {
       const { id, label, category = "entity", sourceWorkspaceId } = node.attrs;
-      // SAFETY: category from our mention extension schema
-      const prefix =
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        MENTION_HASH_PREFIX[category as MentionCategory] ??
-        MENTION_HASH_PREFIX.entity;
+      const prefix = isMentionCat(category)
+        ? MENTION_HASH_PREFIX[category]
+        : MENTION_HASH_PREFIX.entity;
       // TODO: FIXME — type node.attrs properly
       // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
       const encodedId =
