@@ -6,6 +6,14 @@
   ],
   "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
 
+  "jsPlugins": [
+    "./.oxlint-plugins/no-raw-colors.ts",
+    "./.oxlint-plugins/no-physical-properties.ts",
+    "./.oxlint-plugins/no-domain-string-literals.ts",
+    "./.oxlint-plugins/no-body-ownership-ids.ts",
+    "./.oxlint-plugins/no-untyped-updates.ts"
+  ],
+
   "rules": {
     // Override ultracite defaults for Stella
     "no-console": "warn",
@@ -91,6 +99,9 @@
     // JSDoc
     "jsdoc/require-param-type": "off",
 
+    // --- Stella custom JS plugins ---
+    "no-domain-string-literals/no-domain-string-literals": "warn",
+
     // Rules without oxlint equivalents (tracked for future):
     // - noSecrets (entropy-based secret detection)
     // - noDuplicateDependencies (package.json lint)
@@ -139,6 +150,69 @@
       "rules": { "no-console": "off" }
     },
     {
+      "files": ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-raw-colors/no-raw-colors": "error",
+        "no-physical-properties/no-physical-properties": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/**/appearance-settings.tsx"],
+      "rules": {
+        // Palette swatch previews use intentional hardcoded colors
+        "no-raw-colors/no-raw-colors": "off"
+      }
+    },
+    {
+      "files": ["packages/ui/src/**/button.tsx"],
+      "rules": {
+        // Destructive variant uses text-white on a colored bg;
+        // there is no semantic token for "filled-destructive text"
+        "no-raw-colors/no-raw-colors": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/**/conversation.tsx",
+        "packages/ui/src/**/toast.tsx",
+        "packages/ui/src/**/tabs.tsx",
+        "apps/web/src/**/_protected.tsx",
+        "apps/web/src/**/kanban-column.tsx",
+        "apps/web/src/**/workspace-table.tsx",
+        "apps/web/src/**/sidebar.tsx",
+        "apps/web/src/**/template-preview.tsx",
+        "apps/web/src/**/page-citation.tsx"
+      ],
+      "rules": {
+        // Physical properties intentional: centering with
+        // translate-x, tab indicators, DOCX/PDF coordinates
+        "no-physical-properties/no-physical-properties": "off"
+      }
+    },
+    {
+      "files": ["apps/api/src/handlers/**/*.ts"],
+      "rules": {
+        "no-body-ownership-ids/no-body-ownership-ids": "error",
+        "no-untyped-updates/no-untyped-updates": "error"
+      }
+    },
+    {
+      "files": ["apps/api/src/handlers/search/search.ts"],
+      "rules": {
+        // Search handler validates body.workspaceId against
+        // the caller's organization before use
+        "no-body-ownership-ids/no-body-ownership-ids": "off"
+      }
+    },
+    {
+      "files": ["apps/api/src/handlers/docx/**/*.ts"],
+      "rules": {
+        // DOCX handlers legitimately use Record<string, unknown>
+        // as generic data containers for template rendering
+        "no-untyped-updates/no-untyped-updates": "off"
+      }
+    },
+    {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}"
@@ -156,7 +230,17 @@
         // Mock functions are often async without await to satisfy interface
         // return types (Promise<T>) without an actual async operation.
         "require-await": "off",
-        "typescript/unbound-method": "off"
+        "typescript/unbound-method": "off",
+        // Tests legitimately compare against domain string literals
+        // (e.g., asserting content-type headers, HTTP methods).
+        "no-domain-string-literals/no-domain-string-literals": "off",
+        // Test mocks use body.workspaceId and Record<string, unknown>
+        "no-body-ownership-ids/no-body-ownership-ids": "off",
+        "no-untyped-updates/no-untyped-updates": "off",
+        // UI tests may assert class names with raw colors or
+        // physical properties in snapshots / a11y checks
+        "no-raw-colors/no-raw-colors": "off",
+        "no-physical-properties/no-physical-properties": "off"
       }
     }
   ]

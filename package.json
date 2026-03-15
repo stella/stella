@@ -15,8 +15,6 @@
     "format": "turbo run format",
     "format:check": "turbo run format -- --check",
     "lint": "turbo run lint",
-    "lint:colors": "scripts/lint-colors.sh",
-    "lint:logical-properties": "scripts/lint-logical-properties.sh",
     "lint:ws": "bunx sherif@latest -r unsync-similar-dependencies",
     "i18n:check": "turbo run i18n:check --",
     "test": "turbo run test",
