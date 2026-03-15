@@ -37,7 +37,7 @@ export const supportedLanguages = Object.keys(
   langMessages,
 ) as SupportedLanguage[];
 
-export const LANG_ENDONYMS: Record<SupportedLanguage, string> = {
+export const LANG_ENDONYMS = {
   en: "English",
   cs: "Čeština",
   de: "Deutsch",
@@ -49,7 +49,7 @@ export const LANG_ENDONYMS: Record<SupportedLanguage, string> = {
   lv: "Latviešu",
   pl: "Polski",
   sk: "Slovenčina",
-};
+} as const satisfies Record<SupportedLanguage, string>;
 
 const detectLang = (): SupportedLanguage => {
   for (const candidate of navigator.languages) {

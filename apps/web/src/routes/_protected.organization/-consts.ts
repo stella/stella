@@ -14,10 +14,10 @@ export const getRoles = (
   { label: t("organization.roles.external"), value: "external" },
 ];
 
-export const rolePriority: Record<Role, number> = {
+export const rolePriority = {
   owner: 0,
   admin: 1,
   member: 2,
   intern: 3,
   external: 4,
-};
+} as const satisfies Record<Role, number>;

@@ -20,10 +20,7 @@ type TransitionAction =
   | "void"
   | "revert_to_draft";
 
-const TRANSITIONS: Record<
-  TransitionAction,
-  { from: InvoiceStatus[]; to: InvoiceStatus }
-> = {
+const TRANSITIONS = {
   finalize: {
     from: [INVOICE_STATUS.DRAFT],
     to: INVOICE_STATUS.FINALIZED,
@@ -44,7 +41,10 @@ const TRANSITIONS: Record<
     from: [INVOICE_STATUS.FINALIZED],
     to: INVOICE_STATUS.DRAFT,
   },
-};
+} as const satisfies Record<
+  TransitionAction,
+  { from: InvoiceStatus[]; to: InvoiceStatus }
+>;
 
 export const transitionInvoiceBodySchema = t.Object({
   action: t.UnionEnum([

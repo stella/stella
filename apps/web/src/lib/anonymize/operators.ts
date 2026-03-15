@@ -18,10 +18,10 @@ const redactOperator: AnonymisationOperator = {
   apply: (_text, _label, _placeholder, redactString) => redactString,
 };
 
-export const OPERATOR_REGISTRY: Record<OperatorType, AnonymisationOperator> = {
+export const OPERATOR_REGISTRY = {
   replace: replaceOperator,
   redact: redactOperator,
-};
+} as const satisfies Record<OperatorType, AnonymisationOperator>;
 
 const DEFAULT_REDACT_STRING = "[REDACTED]";
 

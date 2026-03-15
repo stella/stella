@@ -42,5 +42,5 @@ export const authClient = createAuthClient({
   },
 });
 
-export type Role = typeof authClient.$Infer.Member.role;
+export type Role = keyof typeof roles;
 export type AuthErrorCode = keyof typeof authClient.$ERROR_CODES;

@@ -26,12 +26,12 @@ import { searchInfiniteOptions } from "@/lib/search";
 
 const DEBOUNCE_MS = 300;
 
-const KIND_ICONS: Record<EntityKind, typeof FileTextIcon> = {
+const KIND_ICONS = {
   document: FileTextIcon,
   folder: FolderIcon,
   task: SquareCheckIcon,
   message: MessageSquareIcon,
-};
+} as const satisfies Record<EntityKind, typeof FileTextIcon>;
 
 const KIND_TRANSLATION_KEYS = {
   document: "search.kinds.document",

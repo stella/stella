@@ -49,34 +49,34 @@ export const isTaskStatus = (v: string | null): v is TaskStatus =>
 export const isTaskPriority = (v: string | null): v is TaskPriority =>
   v !== null && (TASK_PRIORITIES as readonly string[]).includes(v);
 
-export const STATUS_ICONS: Record<TaskStatus, typeof CircleIcon> = {
+export const STATUS_ICONS = {
   open: CircleIcon,
   in_progress: CircleDotIcon,
   in_review: CircleDotIcon,
   done: CheckCircle2Icon,
   cancelled: XCircleIcon,
-};
+} as const satisfies Record<TaskStatus, typeof CircleIcon>;
 
-export const STATUS_COLORS: Record<TaskStatus, string> = {
+export const STATUS_COLORS = {
   open: "text-muted-foreground",
   in_progress: "text-blue-500",
   in_review: "text-amber-500",
   done: "text-green-500",
   cancelled: "text-red-400",
-};
+} as const satisfies Record<TaskStatus, string>;
 
-export const PRIORITY_ICONS: Record<TaskPriority, typeof MinusIcon> = {
+export const PRIORITY_ICONS = {
   none: MinusIcon,
   urgent: AlertCircleIcon,
   high: ArrowUpIcon,
   medium: MinusIcon,
   low: ArrowDownIcon,
-};
+} as const satisfies Record<TaskPriority, typeof MinusIcon>;
 
-export const PRIORITY_COLORS: Record<TaskPriority, string> = {
+export const PRIORITY_COLORS = {
   none: "text-muted-foreground",
   urgent: "text-red-500",
   high: "text-orange-500",
   medium: "text-yellow-500",
   low: "text-blue-400",
-};
+} as const satisfies Record<TaskPriority, string>;

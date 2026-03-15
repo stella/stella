@@ -16,11 +16,11 @@ type FillsByPeriodHandlerProps = {
   query: PeriodQuery;
 };
 
-const TRUNC_MAP: Record<(typeof GRANULARITY_VALUES)[number], string> = {
+const TRUNC_MAP = {
   day: "day",
   week: "week",
   month: "month",
-};
+} as const satisfies Record<(typeof GRANULARITY_VALUES)[number], string>;
 
 export const fillsByPeriodHandler = async ({
   scopedDb,
