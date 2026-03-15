@@ -332,7 +332,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           color:
             entity.kind === "task" && entity.status
               ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "#a3a3a3")
-              : (KIND_DOT_COLORS[entity.kind] ?? KIND_DOT_COLORS.document),
+              : (KIND_DOT_COLORS[entity.kind] ??
+                KIND_DOT_COLORS.document ??
+                "#a3a3a3"),
         });
       }
     }
@@ -359,7 +361,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     mode === "year"
       ? String(year)
       : mode === "week"
-        ? `${days[0].date} – ${days[6].date}`
+        ? `${days[0]?.date} – ${days[6]?.date}`
         : monthLabel;
 
   return (

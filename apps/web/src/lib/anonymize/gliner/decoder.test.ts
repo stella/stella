@@ -87,11 +87,11 @@ describe("decodeSpans()", () => {
       false,
     );
     expect(result[0]).toHaveLength(1);
-    expect(result[0][0][0]).toBe("Jan");
-    expect(result[0][0][1]).toBe(0);
-    expect(result[0][0][2]).toBe(3);
-    expect(result[0][0][3]).toBe("person");
-    expect(result[0][0][4]).toBeGreaterThan(0.99);
+    expect(result[0]?.[0]?.[0]).toBe("Jan");
+    expect(result[0]?.[0]?.[1]).toBe(0);
+    expect(result[0]?.[0]?.[2]).toBe(3);
+    expect(result[0]?.[0]?.[3]).toBe("person");
+    expect(result[0]?.[0]?.[4]).toBeGreaterThan(0.99);
   });
 
   it("detects a multi-word entity", () => {
@@ -115,8 +115,8 @@ describe("decodeSpans()", () => {
       false,
     );
     expect(result[0]).toHaveLength(1);
-    expect(result[0][0][0]).toBe("Jan Novák");
-    expect(result[0][0][3]).toBe("person");
+    expect(result[0]?.[0]?.[0]).toBe("Jan Novák");
+    expect(result[0]?.[0]?.[3]).toBe("person");
   });
 
   it("keeps higher-scoring span in flat NER mode", () => {
@@ -142,7 +142,7 @@ describe("decodeSpans()", () => {
     );
     // Greedy search keeps only the higher-scoring span
     expect(result[0]).toHaveLength(1);
-    expect(result[0][0][0]).toBe("Jan Novák");
+    expect(result[0]?.[0]?.[0]).toBe("Jan Novák");
   });
 
   it("allows nested spans in non-flat mode", () => {
@@ -192,7 +192,7 @@ describe("decodeSpans()", () => {
       false,
     );
     expect(result[0]).toHaveLength(2);
-    const labels = result[0].map((s) => s[3]);
+    const labels = (result[0] ?? []).map((s) => s[3]);
     expect(labels).toContain("person");
     expect(labels).toContain("organization");
   });
@@ -313,9 +313,9 @@ describe("decodeSpans()", () => {
     );
     expect(result).toHaveLength(2);
     expect(result[0]).toHaveLength(1);
-    expect(result[0][0][0]).toBe("Jan");
+    expect(result[0]?.[0]?.[0]).toBe("Jan");
     expect(result[1]).toHaveLength(1);
-    expect(result[1][0][0]).toBe("Stella");
+    expect(result[1]?.[0]?.[0]).toBe("Stella");
   });
 
   it("output spans are sorted by start position", () => {
@@ -341,6 +341,6 @@ describe("decodeSpans()", () => {
     );
     expect(result[0]).toHaveLength(2);
     // Should be sorted by start position, not score
-    expect(result[0][0][1]).toBeLessThan(result[0][1][1]);
+    expect(result[0]?.[0]?.[1]).toBeLessThan(result[0]?.[1]?.[1] ?? 0);
   });
 });

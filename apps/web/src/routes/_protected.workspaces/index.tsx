@@ -509,7 +509,8 @@ function RouteComponent() {
               ref={gridRef}
             >
               {groups.map((group) => {
-                const baseIndex = displayed.indexOf(group.workspaces[0]);
+                const firstWs = group.workspaces[0];
+                const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
                 return (
                   <Fragment key={group.clientId ?? "__none__"}>
                     <ClientGroupHeader
@@ -1443,7 +1444,8 @@ const MatterTable = ({
         <tbody>
           {groups
             ? groups.map((group) => {
-                const baseIndex = workspaces.indexOf(group.workspaces[0]);
+                const firstWs = group.workspaces[0];
+                const baseIndex = firstWs ? workspaces.indexOf(firstWs) : 0;
                 return (
                   <Fragment key={group.clientId ?? "__none__"}>
                     <tr className="group/header bg-muted/30 first:border-t-0 [&:not(:first-child)]:border-t-8 [&:not(:first-child)]:border-transparent">

@@ -35,6 +35,9 @@ export const loadAdapterByKey = async (
     return;
   }
   const loader = ADAPTER_MODULES[key];
+  if (!loader) {
+    return;
+  }
   const mod = await loader();
   // SAFETY: dynamic import returns a module object; we
   // narrow via the type guard below.

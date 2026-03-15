@@ -26,16 +26,16 @@ export const levenshtein = (rawA: string, rawB: string): number => {
   }
 
   for (let j = 1; j <= bLen; j++) {
-    let prev = row[0];
+    let prev = row[0] ?? 0;
     row[0] = j;
 
     for (let i = 1; i <= aLen; i++) {
       const cost = shorter[i - 1] === longer[j - 1] ? 0 : 1;
-      const temp = row[i];
-      row[i] = Math.min(row[i] + 1, row[i - 1] + 1, prev + cost);
+      const temp = row[i] ?? 0;
+      row[i] = Math.min((row[i] ?? 0) + 1, (row[i - 1] ?? 0) + 1, prev + cost);
       prev = temp;
     }
   }
 
-  return row[aLen];
+  return row[aLen] ?? 0;
 };

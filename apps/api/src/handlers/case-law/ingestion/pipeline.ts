@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
@@ -109,7 +109,7 @@ const processDecision = async (
       return;
     }
 
-    const [decision] = await tx
+    const [decisionRow] = await tx
       .insert(caseLawDecisions)
       .values({
         sourceId,
@@ -130,17 +130,21 @@ const processDecision = async (
       })
       .returning({ id: caseLawDecisions.id });
 
+    if (!decisionRow) {
+      panic("Failed to insert decision: no row returned");
+    }
+
     if (citations.length > 0) {
       await tx.insert(caseLawCitations).values(
         citations.map((c) => ({
-          citingDecisionId: decision.id,
+          citingDecisionId: decisionRow.id,
           citationText: c.citationText,
           sectionIndex: c.sectionIndex,
         })),
       );
     }
 
-    decisionId = decision.id;
+    decisionId = decisionRow.id;
   });
 
   // Index into search table after transaction commits

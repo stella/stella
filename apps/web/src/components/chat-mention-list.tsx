@@ -321,7 +321,10 @@ export const ChatMentionList = forwardRef<
 
           {!drillDown &&
             groups.map((group) => {
-              const groupStartIndex = activeItems.indexOf(group.items[0]);
+              const firstItem = group.items[0];
+              const groupStartIndex = firstItem
+                ? activeItems.indexOf(firstItem)
+                : -1;
 
               return (
                 <div key={group.category}>

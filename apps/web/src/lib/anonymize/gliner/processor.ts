@@ -44,9 +44,13 @@ const createMappings = (
   const classToId: Record<string, number> = {};
   const idToClass: Record<number, string> = {};
   for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    if (label === undefined) {
+      continue;
+    }
     const id = i + 1;
-    classToId[labels[i]] = id;
-    idToClass[id] = labels[i];
+    classToId[label] = id;
+    idToClass[id] = label;
   }
   return { classToId, idToClass };
 };
@@ -98,17 +102,24 @@ const encodeInputs = (
   const allWordsMasks: number[][] = [];
 
   for (let idx = 0; idx < texts.length; idx++) {
-    const promptLength = promptLengths[idx];
+    const promptLength = promptLengths[idx] ?? 0;
     const words = texts[idx];
+    if (!words) {
+      continue;
+    }
     const wordsMask: number[] = [0];
     const inputIds: number[] = [clsTokenId];
     const attentionMask: number[] = [1];
 
     let wordCounter = 1;
     for (let wordId = 0; wordId < words.length; wordId++) {
+      const word = words[wordId];
+      if (word === undefined) {
+        continue;
+      }
       // encode() returns { ids, tokens, attention_mask }
       // with BOS/EOS; strip them with slice(1, -1)
-      const encoded: Encoding = tokenizer.encode(words[wordId]);
+      const encoded: Encoding = tokenizer.encode(word);
       const wordTokens: number[] = encoded.ids.slice(1, -1);
 
       for (let tokenId = 0; tokenId < wordTokens.length; tokenId++) {
@@ -121,7 +132,7 @@ const encodeInputs = (
         } else {
           wordsMask.push(0);
         }
-        inputIds.push(wordTokens[tokenId]);
+        inputIds.push(wordTokens[tokenId] ?? 0);
       }
     }
 

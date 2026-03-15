@@ -186,6 +186,9 @@ export const generateBatch = async ({
 
     for (const property of inputProperties) {
       const propertyResult = output[property.id];
+      if (!propertyResult) {
+        continue;
+      }
 
       const validated = yield* validateAIOutput({
         aiResult: propertyResult,

@@ -65,8 +65,10 @@ export const parseJustificationXml = ({
             continue;
           }
 
-          const [tagName, _file, pageId] = element.tagName.split("-");
-          const pageNumber = +pageId;
+          const tagParts = element.tagName.split("-");
+          const tagName = tagParts[0];
+          const pageId = tagParts[2];
+          const pageNumber = pageId !== undefined ? +pageId : Number.NaN;
 
           if (!tagName || Number.isNaN(pageNumber)) {
             const previousSibling = element.previousSibling;

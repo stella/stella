@@ -228,6 +228,9 @@ export const redactPdf = async (
     // First bbox gets the text overlay; all get white boxes
     for (let i = 0; i < bboxes.length; i++) {
       const bbox = bboxes[i];
+      if (bbox === undefined) {
+        continue;
+      }
       const list = pageRedactions.get(bbox.pageIndex) ?? [];
       list.push({
         bbox,
@@ -346,7 +349,7 @@ export const redactPdf = async (
           // [CZECH_BIRTH_NUMBER_1] → [CZE_B_N_1]
           const m = displayText.match(/^\[(.+?)(?:_(\d+))?\]$/);
           if (m) {
-            const label = m[1];
+            const label = m[1] ?? "";
             const suffix = m[2] ?? "";
             const parts = label.split("_");
 
@@ -362,7 +365,7 @@ export const redactPdf = async (
               // Try initials: [P1] or [CBN1]
               const initials = parts
                 .filter((p) => p.length > 0)
-                .map((p) => p[0].toUpperCase())
+                .map((p) => (p[0] ?? "").toUpperCase())
                 .join("");
               const shortInit = `[${initials}${suffix}]`;
 

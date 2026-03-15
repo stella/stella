@@ -72,7 +72,11 @@ describe("createIdGenerator", () => {
     const values = Array.from({ length: 5 }, () => gen());
 
     for (let i = 1; i < values.length; i++) {
-      expect(values[i]).toBe(values[i - 1] + 1);
+      const prev = values[i - 1];
+      if (prev === undefined) {
+        continue;
+      }
+      expect(values[i]).toBe(prev + 1);
     }
   });
 

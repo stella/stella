@@ -164,7 +164,8 @@ export const generateBatchMock = async ({
             content: {
               type: "date",
               version: 1,
-              value: faker.date.past().toISOString().split("T")[0],
+              value:
+                faker.date.past().toISOString().split("T")[0] ?? "1970-01-01",
             },
           });
           break;

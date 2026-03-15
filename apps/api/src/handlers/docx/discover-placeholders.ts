@@ -29,6 +29,9 @@ const scanParagraphs = (
     const text = paragraphText(p);
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
       const name = match[1];
+      if (!name) {
+        continue;
+      }
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
   }

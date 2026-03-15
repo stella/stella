@@ -406,7 +406,13 @@ describe("property: run map coverage", () => {
         const xml = WRAP(P(text));
         const doc = slimdom.parseXmlDocument(xml);
         const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+        if (!body) {
+          throw new Error("No w:body");
+        }
         const pEl = body.getElementsByTagNameNS(W_NS, "p")[0];
+        if (!pEl) {
+          throw new Error("No w:p");
+        }
 
         const spans = buildRunMap(pEl);
 
@@ -419,11 +425,16 @@ describe("property: run map coverage", () => {
         expect(spans.length).toBeGreaterThan(0);
 
         // First span starts at 0
-        expect(spans[0].start).toBe(0);
+        expect(spans[0]?.start).toBe(0);
 
         // Spans are contiguous
         for (let i = 1; i < spans.length; i++) {
-          expect(spans[i].start).toBe(spans[i - 1].start + spans[i - 1].length);
+          const cur = spans[i];
+          const prev = spans[i - 1];
+          if (!cur || !prev) {
+            continue;
+          }
+          expect(cur.start).toBe(prev.start + prev.length);
         }
 
         // Total length matches text (length > 0 asserted above)
@@ -1061,6 +1072,9 @@ describe("property: structural isolation", () => {
 
           // Insert after first code point of textA
           const prefix = cpA[0];
+          if (!prefix) {
+            return;
+          }
           const suffix = combined.slice(prefix.length);
           const newText = prefix + insertion + suffix;
 

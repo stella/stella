@@ -114,6 +114,12 @@ export const createInvoiceHandler = async ({
         invoiceNumber: invoices.invoiceNumber,
       });
 
+    if (!created) {
+      throw new ConcurrentModificationError({
+        message: "Failed to create invoice",
+      });
+    }
+
     // Re-verify status inside transaction to prevent races.
     const updated = await tx
       .update(timeEntries)

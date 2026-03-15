@@ -54,7 +54,7 @@ const STARTS_WITH_DIGIT_RE = /^\d/;
 const tokenize = (expr: string): Token[] => {
   const tokens: Token[] = [];
   for (const m of expr.matchAll(TOKEN_RE)) {
-    const raw = m[1];
+    const raw = m[1] ?? m[0];
     if (raw === "and") {
       tokens.push({ type: "and" });
     } else if (raw === "or") {
@@ -209,9 +209,13 @@ type Atom = { negated: boolean; value: boolean };
 const findMatchingParen = (tokens: Token[], start: number): number => {
   let depth = 1;
   for (let j = start + 1; j < tokens.length; j++) {
-    if (tokens[j].type === "lparen") {
+    const tok = tokens[j];
+    if (!tok) {
+      break;
+    }
+    if (tok.type === "lparen") {
       depth++;
-    } else if (tokens[j].type === "rparen") {
+    } else if (tok.type === "rparen") {
       depth--;
       if (depth === 0) {
         return j;
@@ -235,28 +239,37 @@ const evaluateTokens = (
   const atoms: Atom[] = [];
   const connectors: ("and" | "or")[] = [];
 
+  /** Get token at index; returns undefined past end. */
+  const at = (idx: number): Token | undefined => tokens[idx];
+
   let i = 0;
   while (i < tokens.length) {
+    const current = at(i);
+    if (!current) {
+      break;
+    }
+
     // Skip closing parens (handled by recursion)
-    if (tokens[i].type === "rparen") {
+    if (current.type === "rparen") {
       i++;
       continue;
     }
 
     // Eat negation prefix
     let negated = false;
-    while (i < tokens.length && tokens[i].type === "not") {
+    while (at(i)?.type === "not") {
       negated = !negated;
       i++;
     }
 
-    if (i >= tokens.length) {
+    const tok = at(i);
+    if (!tok) {
       atoms.push({ negated: false, value: false });
       break;
     }
 
     // Parenthesized sub-expression
-    if (tokens[i].type === "lparen") {
+    if (tok.type === "lparen") {
       const closeIdx = findMatchingParen(tokens, i);
       const inner = tokens.slice(i + 1, closeIdx);
       const value = evaluateTokens(inner, data, namedConditions, _resolved);
@@ -264,15 +277,15 @@ const evaluateTokens = (
       i = closeIdx + 1;
     } else {
       // Regular atom: value, possibly followed by comparison
-      const left = tokens[i];
+      const left = tok;
       i++;
 
-      const maybeOp = tokens[i];
-      if (i < tokens.length && maybeOp?.type === "op") {
+      const maybeOp = at(i);
+      if (maybeOp?.type === "op") {
         const op = maybeOp.raw;
         i++;
-        if (i < tokens.length) {
-          const right = tokens[i];
+        const right = at(i);
+        if (right) {
           i++;
           const lv = resolveToken(left, data, namedConditions, _resolved);
           const rv = resolveToken(right, data, namedConditions, _resolved);
@@ -293,15 +306,13 @@ const evaluateTokens = (
     }
 
     // Check for and/or connector
-    if (i < tokens.length) {
-      const connector = tokens[i];
-      if (connector.type === "and") {
-        connectors.push("and");
-        i++;
-      } else if (connector.type === "or") {
-        connectors.push("or");
-        i++;
-      }
+    const connector = at(i);
+    if (connector?.type === "and") {
+      connectors.push("and");
+      i++;
+    } else if (connector?.type === "or") {
+      connectors.push("or");
+      i++;
     }
   }
 
@@ -309,9 +320,13 @@ const evaluateTokens = (
 
   // Apply `and` first (higher precedence), then `or`
   const orGroups: boolean[][] = [[]];
-  let currentGroup = orGroups[0];
+  let currentGroup = orGroups[0] ?? [];
   for (let j = 0; j < booleans.length; j++) {
-    currentGroup.push(booleans[j]);
+    const bool = booleans[j];
+    if (bool === undefined) {
+      continue;
+    }
+    currentGroup.push(bool);
     if (j < connectors.length && connectors[j] === "or") {
       const next: boolean[] = [];
       orGroups.push(next);

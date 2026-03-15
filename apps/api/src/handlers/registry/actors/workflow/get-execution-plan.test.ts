@@ -176,8 +176,8 @@ describe("buildLevelBatches", () => {
     const batches = buildLevelBatches(["B", "C"], propertiesById, graph);
 
     expect(batches.length).toBe(1);
-    expect(batches[0].inputs).toEqual(["A"]);
-    expect(batches[0].properties.map((p) => p.id).toSorted()).toEqual([
+    expect(batches[0]?.inputs).toEqual(["A"]);
+    expect(batches[0]?.properties.map((p) => p.id).toSorted()).toEqual([
       "B",
       "C",
     ]);
@@ -293,7 +293,7 @@ describe("getPropertyExecutionPlan", () => {
     const plan = getPropertyExecutionPlan({ properties, dependencies });
 
     expect(plan.length).toBeGreaterThan(0);
-    for (const batch of plan[0]) {
+    for (const batch of plan[0] ?? []) {
       expect(batch.inputs.length).toBeGreaterThan(0);
     }
   });
@@ -311,8 +311,8 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(1);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0][0].inputs).toEqual(["A"]);
-    expect(plan[0][0].properties.map((p) => p.id)).toEqual(["B"]);
+    expect(plan[0]?.[0]?.inputs).toEqual(["A"]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual(["B"]);
   });
 
   test("returns two levels for chain A -> B -> C", () => {
@@ -329,10 +329,10 @@ describe("getPropertyExecutionPlan", () => {
     const plan = getPropertyExecutionPlan({ properties, dependencies });
 
     expect(plan).toHaveLength(2);
-    expect(plan[0][0].inputs).toEqual(["A"]);
-    expect(plan[0][0].properties.map((p) => p.id)).toEqual(["B"]);
-    expect(plan[1][0].inputs).toEqual(["B"]);
-    expect(plan[1][0].properties.map((p) => p.id)).toEqual(["C"]);
+    expect(plan[0]?.[0]?.inputs).toEqual(["A"]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual(["B"]);
+    expect(plan[1]?.[0]?.inputs).toEqual(["B"]);
+    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual(["C"]);
   });
 
   test("groups properties with same dependency signature in diamond structure", () => {
@@ -354,14 +354,14 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(2);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0][0].inputs.toSorted()).toEqual(["A"]);
-    expect(plan[0][0].properties.map((p) => p.id).toSorted()).toEqual([
+    expect(plan[0]?.[0]?.inputs.toSorted()).toEqual(["A"]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id).toSorted()).toEqual([
       "B",
       "C",
     ]);
     expect(plan[1]).toHaveLength(1);
-    expect(plan[1][0].inputs.toSorted()).toEqual(["B", "C"]);
-    expect(plan[1][0].properties.map((p) => p.id)).toEqual(["D"]);
+    expect(plan[1]?.[0]?.inputs.toSorted()).toEqual(["B", "C"]);
+    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual(["D"]);
   });
 
   test("returns empty plan for cycle and self-dependency (same behavior)", () => {

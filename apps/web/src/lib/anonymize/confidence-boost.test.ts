@@ -24,7 +24,7 @@ describe("boostNearMissEntities()", () => {
     const entities = [entity(0, 0.5)];
     const result = boostNearMissEntities(entities, threshold);
     expect(result).toHaveLength(1);
-    expect(result[0].score).toBe(0.5);
+    expect(result[0]?.score).toBe(0.5);
   });
 
   it("drops entities far below threshold", () => {
@@ -66,6 +66,6 @@ describe("boostNearMissEntities()", () => {
   it("does not modify scores of confirmed entities", () => {
     const entities = [entity(100, 1, DETECTION_SOURCES.REGEX)];
     const result = boostNearMissEntities(entities, threshold);
-    expect(result[0].score).toBe(1);
+    expect(result[0]?.score).toBe(1);
   });
 });

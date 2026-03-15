@@ -32,7 +32,14 @@ const WRAP = (body: string) =>
 const firstParagraph = (xml: string): slimdom.Element => {
   const doc = slimdom.parseXmlDocument(xml);
   const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
-  return body.getElementsByTagNameNS(W_NS, "p")[0];
+  if (!body) {
+    throw new Error("No w:body element found");
+  }
+  const p = body.getElementsByTagNameNS(W_NS, "p")[0];
+  if (!p) {
+    throw new Error("No w:p element found");
+  }
+  return p;
 };
 
 /** Extract "accepted" text from paragraphs in edited XML. */

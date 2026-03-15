@@ -19,8 +19,8 @@ describe("extractDefinedTerms()", () => {
     const entity = personEntity(0, 14, "Ing. Jan Novák");
     const terms = extractDefinedTerms(text, [entity]);
     expect(terms).toHaveLength(1);
-    expect(terms[0].alias).toBe("Prodávající");
-    expect(terms[0].label).toBe("person");
+    expect(terms[0]?.alias).toBe("Prodávající");
+    expect(terms[0]?.label).toBe("person");
   });
 
   it("extracts German nachfolgend alias", () => {
@@ -28,7 +28,7 @@ describe("extractDefinedTerms()", () => {
     const entity = personEntity(0, 19, "Dr. Heinrich Müller");
     const terms = extractDefinedTerms(text, [entity]);
     expect(terms).toHaveLength(1);
-    expect(terms[0].alias).toBe("der Vermieter");
+    expect(terms[0]?.alias).toBe("der Vermieter");
   });
 
   it("extracts English hereinafter alias", () => {
@@ -36,7 +36,7 @@ describe("extractDefinedTerms()", () => {
     const entity = personEntity(0, 10, "John Smith");
     const terms = extractDefinedTerms(text, [entity]);
     expect(terms).toHaveLength(1);
-    expect(terms[0].alias).toBe("the Buyer");
+    expect(terms[0]?.alias).toBe("the Buyer");
   });
 
   it("extracts German im Folgenden alias", () => {
@@ -44,7 +44,7 @@ describe("extractDefinedTerms()", () => {
     const entity = personEntity(0, 11, "Müller GmbH");
     const terms = extractDefinedTerms(text, [entity]);
     expect(terms).toHaveLength(1);
-    expect(terms[0].alias).toBe("der Mieter");
+    expect(terms[0]?.alias).toBe("der Mieter");
   });
 
   it("deduplicates identical aliases", () => {
@@ -83,8 +83,8 @@ describe("findCoreferenceSpans()", () => {
     ];
     const spans = findCoreferenceSpans(text, terms);
     expect(spans).toHaveLength(2);
-    expect(spans[0].source).toBe("coreference");
-    expect(spans[0].score).toBe(0.95);
+    expect(spans[0]?.source).toBe("coreference");
+    expect(spans[0]?.score).toBe(0.95);
   });
 
   it("returns correct offsets for each occurrence", () => {
@@ -97,7 +97,7 @@ describe("findCoreferenceSpans()", () => {
       },
     ];
     const spans = findCoreferenceSpans(text, terms);
-    expect(text.slice(spans[0].start, spans[0].end)).toBe("der Vermieter");
-    expect(text.slice(spans[1].start, spans[1].end)).toBe("der Vermieter");
+    expect(text.slice(spans[0]?.start, spans[0]?.end)).toBe("der Vermieter");
+    expect(text.slice(spans[1]?.start, spans[1]?.end)).toBe("der Vermieter");
   });
 });

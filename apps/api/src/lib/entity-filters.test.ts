@@ -177,7 +177,7 @@ describe("applyFilters (in-memory)", () => {
       { id: "f1", field: "kind", op: "in", value: ["task"] },
     ]);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].entityId).toBe("1");
+    expect(filtered[0]?.entityId).toBe("1");
   });
 
   test("kind filter with 'document' includes folders", () => {
@@ -207,7 +207,7 @@ describe("applyFilters (in-memory)", () => {
       },
     ]);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].entityId).toBe("1");
+    expect(filtered[0]?.entityId).toBe("1");
   });
 
   test("property neq filter excludes matching value", () => {
@@ -225,7 +225,7 @@ describe("applyFilters (in-memory)", () => {
       },
     ]);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].entityId).toBe("2");
+    expect(filtered[0]?.entityId).toBe("2");
   });
 
   test("property contains filter is case-insensitive", () => {
@@ -243,7 +243,7 @@ describe("applyFilters (in-memory)", () => {
       },
     ]);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].entityId).toBe("1");
+    expect(filtered[0]?.entityId).toBe("1");
   });
 
   test("property is_empty matches missing fields", () => {
@@ -260,7 +260,7 @@ describe("applyFilters (in-memory)", () => {
       },
     ]);
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].entityId).toBe("2");
+    expect(filtered[0]?.entityId).toBe("2");
   });
 
   test("builtin filters pass through in-memory (always true)", () => {

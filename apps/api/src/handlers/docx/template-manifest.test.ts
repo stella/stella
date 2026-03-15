@@ -176,8 +176,8 @@ describe("readManifest", () => {
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
-    expect(result?.fields[0].label).toBe("");
-    expect(result?.conditions[0].label).toBe("");
+    expect(result?.fields[0]?.label).toBe("");
+    expect(result?.conditions[0]?.label).toBe("");
   });
 
   test("falls back to default version for non-numeric attribute", async () => {
@@ -218,7 +218,7 @@ describe("readManifest", () => {
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
-    expect(result?.fields[0].validation?.pattern).toBe("");
+    expect(result?.fields[0]?.validation?.pattern).toBe("");
   });
 
   test("skips NaN validation lengths", async () => {
@@ -245,7 +245,7 @@ describe("readManifest", () => {
     const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 
     const result = await readManifest(buf);
-    expect(result?.fields[0].validation).toBeUndefined();
+    expect(result?.fields[0]?.validation).toBeUndefined();
   });
 
   test("returns null for non-Stella custom XML", async () => {
@@ -325,7 +325,7 @@ describe("writeManifest", () => {
 
     const result = await readManifest(v2);
     expect(result?.fields).toHaveLength(1);
-    expect(result?.fields[0].path).toBe("newField");
+    expect(result?.fields[0]?.path).toBe("newField");
   });
 
   test("manifest XML contains correct namespace", async () => {
@@ -367,7 +367,7 @@ describe("writeManifest", () => {
     const withManifest = await writeManifest(docx, manifest);
 
     const result = await readManifest(withManifest);
-    expect(result?.fields[0].label).toBe('Label with "quotes" & <brackets>');
+    expect(result?.fields[0]?.label).toBe('Label with "quotes" & <brackets>');
   });
 
   test("handles validation with pattern", async () => {
@@ -388,7 +388,7 @@ describe("writeManifest", () => {
     const withManifest = await writeManifest(docx, manifest);
 
     const result = await readManifest(withManifest);
-    expect(result?.fields[0].validation?.pattern).toBe("^[^@]+@[^@]+$");
+    expect(result?.fields[0]?.validation?.pattern).toBe("^[^@]+@[^@]+$");
   });
 });
 
@@ -499,9 +499,9 @@ describe("mergeManifestWithDiscovery", () => {
   test("returns discovered fields when no manifest", () => {
     const resolved = mergeManifestWithDiscovery(null, baseDiscovery);
     expect(resolved).toHaveLength(4);
-    expect(resolved[0].path).toBe("clientName");
-    expect(resolved[0].kind).toBe("string");
-    expect(resolved[0].count).toBe(2);
+    expect(resolved[0]?.path).toBe("clientName");
+    expect(resolved[0]?.kind).toBe("string");
+    expect(resolved[0]?.count).toBe(2);
   });
 
   test("enriches discovered fields with manifest metadata", () => {
@@ -605,8 +605,8 @@ describe("mergeManifestWithDiscovery", () => {
 
     const resolved = mergeManifestWithDiscovery(null, discovery);
 
-    expect(resolved[0].itemFields).toHaveLength(2);
-    expect(resolved[0].itemFields?.[0].path).toBe("name");
+    expect(resolved[0]?.itemFields).toHaveLength(2);
+    expect(resolved[0]?.itemFields?.[0]?.path).toBe("name");
   });
 
   test("merge preserves empty-string label from manifest", () => {
@@ -801,6 +801,6 @@ describe("round-trip", () => {
 
     const result = await readManifest(v2);
     expect(result?.fields).toHaveLength(1);
-    expect(result?.fields[0].path).toBe("fresh");
+    expect(result?.fields[0]?.path).toBe("fresh");
   });
 });

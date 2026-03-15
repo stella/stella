@@ -321,12 +321,19 @@ const mergeAdjacentBBoxes = (bboxes: PdfBBox[]): PdfBBox[] => {
     return a.x - b.x;
   });
 
-  const merged: PdfBBox[] = [sorted[0]];
+  const first = sorted[0];
+  if (first === undefined) {
+    return [];
+  }
+  const merged: PdfBBox[] = [first];
 
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
     // eslint-disable-next-line unicorn/prefer-at -- mutated in-place below
     const prev = merged[merged.length - 1];
+    if (current === undefined || prev === undefined) {
+      continue;
+    }
 
     const samePage = current.pageIndex === prev.pageIndex;
     const sameLine =

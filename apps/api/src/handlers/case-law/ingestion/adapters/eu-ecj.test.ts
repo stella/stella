@@ -127,6 +127,9 @@ describe("euEcjAdapter.fetchPage", () => {
       // across platforms due to CRLF/LF line ending differences
       // in the HTML fixture.
       const first = page.decisions[0];
+      if (!first) {
+        throw new Error("No decisions");
+      }
       expect({
         ...first,
         rawHash: "[hash]",
@@ -294,6 +297,9 @@ describe("euEcjAdapter.fetchPage", () => {
       throw new TypeError("Expected Ok result");
     }
     const d = result.value.decisions[0];
+    if (!d) {
+      throw new Error("No decisions");
+    }
     expect(d.language).toBe("en");
     expect(d.sourceUrl).toContain("/EN/");
     expect(d.documentUrl).toContain("/EN/");

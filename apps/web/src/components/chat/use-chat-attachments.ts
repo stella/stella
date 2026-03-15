@@ -89,6 +89,9 @@ export const useChatAttachments = () => {
       await Promise.allSettled(
         filesToUpload.map(async (file, i) => {
           const pending = newPending[i];
+          if (!pending) {
+            return;
+          }
 
           const { data, error } = await api.chat["upload-context-file"].post({
             file,

@@ -53,7 +53,7 @@ export const LANG_ENDONYMS: Record<SupportedLanguage, string> = {
 
 const detectLang = (): SupportedLanguage => {
   for (const candidate of navigator.languages) {
-    const prefix = candidate.split("-")[0];
+    const prefix = candidate.split("-")[0] ?? candidate;
     if (prefix in langMessages) {
       // SAFETY: prefix in langMessages narrows to SupportedLanguage
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion

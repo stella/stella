@@ -226,6 +226,9 @@ const findAffectedSpans = (
 
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
+    if (!span) {
+      continue;
+    }
     const spanEnd = span.start + span.length;
     if (startIdx === -1 && spanEnd > charOffset) {
       startIdx = i;
@@ -267,7 +270,11 @@ const applyInsert = (
 
   // Insert at offset 0: before first run
   if (charOffset === 0) {
-    const firstRun = spans[0].run;
+    const firstSpan = spans[0];
+    if (!firstSpan) {
+      return;
+    }
+    const firstRun = firstSpan.run;
     const parent = firstRun.parentNode ?? p;
     parent.insertBefore(makeIns(firstRun), firstRun);
     return;
@@ -342,6 +349,9 @@ const applyDelete = (
   const splitRuns = new Set<slimdom.Element>();
   for (let i = startIdx; i <= endIdx; i++) {
     const span = spans[i];
+    if (!span) {
+      continue;
+    }
     if (splitRuns.has(span.run)) {
       continue;
     }
@@ -355,6 +365,9 @@ const applyDelete = (
 
   for (let i = startIdx; i <= endIdx; i++) {
     const span = spans[i];
+    if (!span) {
+      continue;
+    }
     const spanEnd = span.start + span.length;
     const fullText = span.tNode.textContent ?? "";
 
@@ -419,7 +432,10 @@ const applyDelete = (
   // with only w:rPr remaining).
   const affectedRuns = new Set<slimdom.Element>();
   for (let i = startIdx; i <= endIdx; i++) {
-    affectedRuns.add(spans[i].run);
+    const span = spans[i];
+    if (span) {
+      affectedRuns.add(span.run);
+    }
   }
   for (const run of affectedRuns) {
     if (!run.parentNode) {

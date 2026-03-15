@@ -57,26 +57,32 @@ const parseSearchResults = (html: string): ParseResult => {
   ) {
     rawEntryCount++;
     const block = entryMatch[1];
+    if (!block) {
+      continue;
+    }
 
     const caseNumMatch = block.match(CASE_NUM_PATTERN);
-    if (!caseNumMatch) {
+    if (!caseNumMatch?.[1]) {
       continue;
     }
 
     const caseNumber = caseNumMatch[1].trim();
 
     const dateMatch = block.match(DATE_PATTERN);
-    const decisionDate = dateMatch
-      ? parseCeDate(`${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`)
-      : undefined;
+    const decisionDate =
+      dateMatch?.[1] && dateMatch[2] && dateMatch[3]
+        ? parseCeDate(`${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`)
+        : undefined;
 
     const sentenceMatch = block.match(SENTENCE_PATTERN);
-    const legalSentence = sentenceMatch
+    const legalSentence = sentenceMatch?.[1]
       ? stripHtml(sentenceMatch[1])
       : undefined;
 
     const linkMatch = block.match(LINK_PATTERN);
-    const sourceUrl = linkMatch ? `${BASE_URL}/${linkMatch[1]}` : undefined;
+    const sourceUrl = linkMatch?.[1]
+      ? `${BASE_URL}/${linkMatch[1]}`
+      : undefined;
 
     const raw = `${caseNumber}|${decisionDate}|${legalSentence}`;
 

@@ -63,5 +63,11 @@ export const updateInvoiceHandler = async ({
     });
   }
 
-  return { id: result[0].id };
+  const updated = result[0];
+  if (!updated) {
+    return status(409, {
+      message: "Invoice not found or not in draft status",
+    });
+  }
+  return { id: updated.id };
 };

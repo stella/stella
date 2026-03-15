@@ -39,12 +39,14 @@ export const createMatterLinkHandler = async ({
     return status(404, { message: "Decision not found" });
   }
 
-  const [{ value: linkCount }] = await scopedDb((tx) =>
+  const [linkCountRow] = await scopedDb((tx) =>
     tx
       .select({ value: count() })
       .from(caseLawMatterLinks)
       .where(eq(caseLawMatterLinks.workspaceId, workspaceId)),
   );
+
+  const linkCount = linkCountRow?.value ?? 0;
 
   if (linkCount >= LIMITS.caseLawMatterLinksPerWorkspace) {
     return status(400, {

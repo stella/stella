@@ -22,7 +22,11 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const parseBody = (xml: string): slimdom.Element => {
   const doc = slimdom.parseXmlDocument(xml);
-  return doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  if (!body) {
+    throw new Error("No w:body element found");
+  }
+  return body;
 };
 
 /** Collect all paragraph texts from a body element. */
@@ -371,10 +375,10 @@ describe("scanBlockDirectives", () => {
     const directives = scanBlockDirectives(body);
 
     expect(directives).toHaveLength(4);
-    expect(directives[0].kind).toBe("if");
-    expect(directives[1].kind).toBe("elseif");
-    expect(directives[2].kind).toBe("else");
-    expect(directives[3].kind).toBe("endif");
+    expect(directives[0]?.kind).toBe("if");
+    expect(directives[1]?.kind).toBe("elseif");
+    expect(directives[2]?.kind).toBe("else");
+    expect(directives[3]?.kind).toBe("endif");
   });
 
   test("ignores non-directive paragraphs", () => {
@@ -395,7 +399,7 @@ describe("scanBlockDirectives", () => {
     const directives = scanBlockDirectives(body);
 
     expect(directives).toHaveLength(2);
-    expect(directives[0].expression).toBe("has_guarantor");
+    expect(directives[0]?.expression).toBe("has_guarantor");
   });
 });
 
@@ -411,15 +415,15 @@ describe("parseBlockTree", () => {
 
     expect(errors).toEqual([]);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].kind).toBe("if");
+    expect(blocks[0]?.kind).toBe("if");
 
     // SAFETY: blocks[0].kind === "if" asserted above
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(1);
-    expect(ifBlock.branches[0].condition).toBe("x");
-    expect(ifBlock.branches[0].contentStart).toBe(2);
-    expect(ifBlock.branches[0].contentEnd).toBe(3);
+    expect(ifBlock.branches[0]?.condition).toBe("x");
+    expect(ifBlock.branches[0]?.contentStart).toBe(2);
+    expect(ifBlock.branches[0]?.contentEnd).toBe(3);
   });
 
   test("if/else block", () => {
@@ -435,8 +439,8 @@ describe("parseBlockTree", () => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(2);
-    expect(ifBlock.branches[0].condition).toBe("x");
-    expect(ifBlock.branches[1].condition).toBe(""); // else
+    expect(ifBlock.branches[0]?.condition).toBe("x");
+    expect(ifBlock.branches[1]?.condition).toBe(""); // else
   });
 
   test("if/elseif/else block", () => {
@@ -453,9 +457,9 @@ describe("parseBlockTree", () => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const ifBlock = blocks[0] as (typeof blocks)[0] & { kind: "if" };
     expect(ifBlock.branches).toHaveLength(3);
-    expect(ifBlock.branches[0].condition).toBe("a");
-    expect(ifBlock.branches[1].condition).toBe("b");
-    expect(ifBlock.branches[2].condition).toBe(""); // else
+    expect(ifBlock.branches[0]?.condition).toBe("a");
+    expect(ifBlock.branches[1]?.condition).toBe("b");
+    expect(ifBlock.branches[2]?.condition).toBe(""); // else
   });
 
   test("simple each block", () => {
@@ -475,7 +479,7 @@ describe("parseBlockTree", () => {
 
     expect(errors).toEqual([]);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0].kind).toBe("each");
+    expect(blocks[0]?.kind).toBe("each");
 
     // SAFETY: blocks[0].kind === "each" asserted above
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -492,7 +496,7 @@ describe("parseBlockTree", () => {
     const { errors } = parseBlockTree(directives);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0].message).toContain("Unclosed");
+    expect(errors[0]?.message).toContain("Unclosed");
   });
 
   test("unclosed #each reports error", () => {
@@ -506,7 +510,7 @@ describe("parseBlockTree", () => {
     const { errors } = parseBlockTree(directives);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0].message).toContain("Unclosed");
+    expect(errors[0]?.message).toContain("Unclosed");
   });
 
   test("orphaned /if reports error", () => {
@@ -516,7 +520,7 @@ describe("parseBlockTree", () => {
     const { errors } = parseBlockTree(directives);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0].message).toContain("Orphaned");
+    expect(errors[0]?.message).toContain("Orphaned");
   });
 
   test("mismatched close: /each inside #if", () => {
@@ -1008,6 +1012,6 @@ describe("processBlockDirectives — edge cases", () => {
     });
 
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toContain("Unclosed");
+    expect(errors[0]?.message).toContain("Unclosed");
   });
 });

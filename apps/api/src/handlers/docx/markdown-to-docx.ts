@@ -183,8 +183,7 @@ const createConverters = (mapping: StyleMapping) => {
   const convertList = (token: Tokens.List): Paragraph[] => {
     const paragraphs: Paragraph[] = [];
 
-    for (let i = 0; i < token.items.length; i++) {
-      const item = token.items[i];
+    for (const [i, item] of token.items.entries()) {
       const firstBlock = item.tokens.find(
         (t) => t.type === "text" || t.type === "paragraph",
       );

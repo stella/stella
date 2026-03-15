@@ -97,6 +97,9 @@ const createWorkspaces = createRootHandler(
         })
         .returning({ lastValue: matterCounters.lastValue });
 
+      if (!counter) {
+        throw new Error("Failed to create matter counter");
+      }
       const reference = toReference(pattern, now, counter.lastValue, padding);
 
       await tx.insert(workspaces).values({

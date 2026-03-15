@@ -40,7 +40,7 @@ export const buildPatch = (value: RichPatchValue): IPatch => {
       type: PatchType.PARAGRAPH,
       children:
         value.paragraphs.length === 1
-          ? runsToTextRuns(value.paragraphs[0].runs)
+          ? runsToTextRuns(value.paragraphs[0]?.runs ?? [])
           : [],
     };
   }

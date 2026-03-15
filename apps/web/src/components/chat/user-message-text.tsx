@@ -99,6 +99,9 @@ export const UserMessageText = ({ text }: { text: string }) => {
       parts.push(text.slice(lastIndex, match.index));
     }
     const [, label, category, id] = match;
+    if (!label || !category || !id) {
+      continue;
+    }
     parts.push(
       <MentionChip
         category={

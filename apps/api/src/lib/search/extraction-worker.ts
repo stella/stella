@@ -48,7 +48,7 @@ const extract = async (
 // ── Main ──────────────────────────────────────────────────
 
 try {
-  const mimeType = process.argv[2];
+  const mimeType = process.argv[2] ?? "";
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   const text = await extract(
     fileBytes,

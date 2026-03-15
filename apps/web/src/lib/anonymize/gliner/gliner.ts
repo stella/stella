@@ -76,9 +76,9 @@ const fetchTokenizerFiles = async (
     `${baseUrl}/tokenizer_config.json`,
   ];
 
-  const [tokenizerJson, tokenizerConfig] = await Promise.all(
-    urls.map(fetchWithCache),
-  );
+  const results = await Promise.all(urls.map(fetchWithCache));
+  const tokenizerJson = results[0] ?? {};
+  const tokenizerConfig = results[1] ?? {};
 
   return { tokenizerJson, tokenizerConfig };
 };
@@ -131,10 +131,14 @@ export class Gliner {
     const validIndices: number[] = [];
     const validTexts: string[] = [];
     for (let i = 0; i < texts.length; i++) {
-      const [words] = tokenizeText(texts[i]);
+      const text = texts[i];
+      if (text === undefined) {
+        continue;
+      }
+      const [words] = tokenizeText(text);
       if (words.length > 0) {
         validIndices.push(i);
-        validTexts.push(texts[i]);
+        validTexts.push(text);
       }
     }
 
@@ -163,8 +167,8 @@ export class Gliner {
       return texts.map(() => []);
     }
 
-    const numTokens = batch.inputsIds[0].length;
-    const numSpans = batch.spanIdxs[0].length;
+    const numTokens = batch.inputsIds[0]?.length ?? 0;
+    const numSpans = batch.spanIdxs[0]?.length ?? 0;
 
     const { ort } = this.onnx;
 
@@ -192,6 +196,9 @@ export class Gliner {
 
     const results = await this.onnx.run(feeds);
     const logits = results["logits"];
+    if (!logits) {
+      throw new Error("Model output missing 'logits' tensor");
+    }
 
     const inputLength = Math.max(...batch.textLengths);
     const numEntities = entities.length;
@@ -227,7 +234,12 @@ export class Gliner {
     // Map results back to original text indices
     const allResults: EntityResult[][] = texts.map(() => []);
     for (let i = 0; i < validIndices.length; i++) {
-      allResults[validIndices[i]] = validResults[i];
+      const idx = validIndices[i];
+      const result = validResults[i];
+      if (idx === undefined || result === undefined) {
+        continue;
+      }
+      allResults[idx] = result;
     }
     return allResults;
   }

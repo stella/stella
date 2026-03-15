@@ -97,7 +97,7 @@ function CrossWorkspaceCalendar() {
 
     for (let i = 0; i < activeWorkspaceIds.length; i++) {
       const query = entityQueries[i];
-      const workspaceId = activeWorkspaceIds[i];
+      const workspaceId = activeWorkspaceIds[i] ?? "";
       const workspace = workspaces.find((w) => w.id === workspaceId);
 
       if (!query?.data || !workspace) {
@@ -194,7 +194,7 @@ function CrossWorkspaceCalendar() {
   });
 
   const weekLabel =
-    mode === "week" ? `${days[0].date} – ${days[6].date}` : null;
+    mode === "week" ? `${days[0]?.date} – ${days[6]?.date}` : null;
 
   const monthPickerMonths = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, {

@@ -25,8 +25,13 @@ export const ALL_USER_IDS = [
   "test-user-greta-jones",
 ];
 
-export const pickAuthor = (index: number): string =>
-  ALL_USER_IDS[index % ALL_USER_IDS.length];
+export const pickAuthor = (index: number): string => {
+  const id = ALL_USER_IDS[index % ALL_USER_IDS.length];
+  if (!id) {
+    throw new Error("Empty ALL_USER_IDS");
+  }
+  return id;
+};
 
 // ─── Deterministic ID generator ─────────────────────────
 

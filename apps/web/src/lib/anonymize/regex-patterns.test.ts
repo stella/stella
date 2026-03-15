@@ -13,8 +13,8 @@ describe("detectRegexPii()", () => {
     it("detects standard Czech IBAN", () => {
       const r = entitiesOf("Účet: CZ65 0100 0000 0012 3456 7890");
       expect(r).toHaveLength(1);
-      expect(r[0].label).toBe("iban");
-      expect(r[0].score).toBe(1);
+      expect(r[0]?.label).toBe("iban");
+      expect(r[0]?.score).toBe(1);
     });
 
     it("detects German IBAN without spaces", () => {
@@ -80,7 +80,7 @@ describe("detectRegexPii()", () => {
     it("detects Czech spaced date", () => {
       const r = entitiesOf("dne 1. 3. 2025");
       expect(r.some((e) => e.label === "date")).toBeTruthy();
-      expect(r[0].text).toBe("1. 3. 2025");
+      expect(r[0]?.text).toBe("1. 3. 2025");
     });
 
     it("detects Czech written-out month", () => {
@@ -97,7 +97,7 @@ describe("detectRegexPii()", () => {
   describe("iPv4", () => {
     it("detects valid IPv4", () => {
       const r = entitiesOf("server 192.168.1.1 is down");
-      expect(r[0].label).toBe("ip address");
+      expect(r[0]?.label).toBe("ip address");
     });
   });
 
@@ -138,7 +138,7 @@ describe("detectRegexPii()", () => {
 
     it("scores titled persons at 0.95", () => {
       const r = entitiesOf("Mgr. Pavel Černý");
-      expect(r[0].score).toBe(0.95);
+      expect(r[0]?.score).toBe(0.95);
     });
 
     it("does not match title alone without name", () => {

@@ -33,7 +33,7 @@ describe("createScopedDb", () => {
       tx.select({ id: entities.id }).from(entities),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(ids.entityA1);
+    expect(rows[0]?.id).toBe(ids.entityA1);
   });
 
   test("scoped to wsA1 + wsA2 → both entities", async () => {

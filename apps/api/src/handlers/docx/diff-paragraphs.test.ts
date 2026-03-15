@@ -74,10 +74,12 @@ describe("diffParagraphs", () => {
 
     // "31 March" → "30 June" as a single replace
     expect(edits.length).toBe(1);
-    expect(edits[0].kind).toBe("replace");
-    if (edits[0].kind === "replace") {
-      expect(edits[0].text).toBe("30 June");
-      expect(edits[0].length).toBe("31 March".length);
+    const edit0 = edits[0];
+    expect(edit0).toBeDefined();
+    expect(edit0?.kind).toBe("replace");
+    if (edit0?.kind === "replace") {
+      expect(edit0.text).toBe("30 June");
+      expect(edit0.length).toBe("31 March".length);
     }
   });
 
@@ -93,9 +95,11 @@ describe("diffParagraphs", () => {
     const { edits } = diffParagraphs(extracted, rewrites);
 
     expect(edits.length).toBe(1);
-    expect(edits[0].kind).toBe("delete");
-    if (edits[0].kind === "delete") {
-      expect(edits[0].length).toBeGreaterThan(0);
+    const edit0 = edits[0];
+    expect(edit0).toBeDefined();
+    expect(edit0?.kind).toBe("delete");
+    if (edit0?.kind === "delete") {
+      expect(edit0.length).toBeGreaterThan(0);
     }
   });
 
@@ -111,9 +115,11 @@ describe("diffParagraphs", () => {
     const { edits } = diffParagraphs(extracted, rewrites);
 
     expect(edits.length).toBe(1);
-    expect(edits[0].kind).toBe("insert");
-    if (edits[0].kind === "insert") {
-      expect(edits[0].text).toContain("no litigation");
+    const edit0 = edits[0];
+    expect(edit0).toBeDefined();
+    expect(edit0?.kind).toBe("insert");
+    if (edit0?.kind === "insert") {
+      expect(edit0.text).toContain("no litigation");
     }
   });
 
@@ -173,10 +179,12 @@ describe("diffParagraphs", () => {
     // Semantic cleanup merges "two (2" → "three (3" into
     // a single replace (the " (" equality is too short to keep)
     expect(edits.length).toBe(1);
-    expect(edits[0].kind).toBe("replace");
-    if (edits[0].kind === "replace") {
-      expect(edits[0].text).toContain("three");
-      expect(edits[0].text).toContain("3");
+    const edit0 = edits[0];
+    expect(edit0).toBeDefined();
+    expect(edit0?.kind).toBe("replace");
+    if (edit0?.kind === "replace") {
+      expect(edit0.text).toContain("three");
+      expect(edit0.text).toContain("3");
     }
   });
 

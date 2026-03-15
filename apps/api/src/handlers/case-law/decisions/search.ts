@@ -227,8 +227,19 @@ export const searchDecisionsHandler = async (
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(languageFacetQuery)),
   ];
 
-  const [hitsResult, countResult, courtResult, countryResult, languageResult] =
-    await Promise.all(queries);
+  const [
+    hitsResultRaw,
+    countResultRaw,
+    courtResultRaw,
+    countryResultRaw,
+    languageResultRaw,
+  ] = await Promise.all(queries);
+
+  const hitsResult = hitsResultRaw ?? [];
+  const countResult = countResultRaw ?? [];
+  const courtResult = courtResultRaw ?? [];
+  const countryResult = countryResultRaw ?? [];
+  const languageResult = languageResultRaw ?? [];
 
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;

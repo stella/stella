@@ -189,7 +189,7 @@ describe("template discover", () => {
     const manifest = await readManifest(buf);
     expect(manifest).not.toBeNull();
     expect(manifest?.conditions).toHaveLength(1);
-    expect(manifest?.conditions[0].name).toBe("hasGuarantor");
+    expect(manifest?.conditions[0]?.name).toBe("hasGuarantor");
   });
 
   test("discovers placeholders in headers", async () => {
@@ -229,9 +229,9 @@ describe("template discover", () => {
 
     const discovered = await discoverTemplate(buf);
     expect(discovered.placeholders.length).toBe(1);
-    expect(discovered.placeholders[0].name).toBe("name");
+    expect(discovered.placeholders[0]?.name).toBe("name");
     // Count should be 2 (one in body, one in header)
-    expect(discovered.placeholders[0].count).toBe(2);
+    expect(discovered.placeholders[0]?.count).toBe(2);
   });
 
   test("discovers from multiple headers and footers", async () => {
@@ -391,10 +391,10 @@ describe("template manifest", () => {
     expect(read).not.toBeNull();
     expect(read?.version).toBe(1);
     expect(read?.fields).toHaveLength(1);
-    expect(read?.fields[0].path).toBe("clientName");
-    expect(read?.fields[0].label).toBe("Client Name");
+    expect(read?.fields[0]?.path).toBe("clientName");
+    expect(read?.fields[0]?.label).toBe("Client Name");
     expect(read?.conditions).toHaveLength(1);
-    expect(read?.conditions[0].name).toBe("hasGuarantor");
+    expect(read?.conditions[0]?.name).toBe("hasGuarantor");
   });
 
   test("returns null for DOCX without manifest", async () => {
@@ -464,7 +464,7 @@ describe("template manifest", () => {
     const read = await readManifest(second);
 
     expect(read?.fields).toHaveLength(1);
-    expect(read?.fields[0].path).toBe("newField");
+    expect(read?.fields[0]?.path).toBe("newField");
     expect(read?.conditions).toHaveLength(0);
   });
 });

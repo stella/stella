@@ -113,6 +113,9 @@ export const createRateEntryHandler = async ({
       })
       .returning({ id: rateEntries.id });
 
+    if (!entry) {
+      return status(500, { message: "Failed to create rate entry" });
+    }
     return { id: entry.id };
   });
 };

@@ -211,9 +211,12 @@ const buildConditionMapFromRanges = (
 
   for (let i = 0; i < boundaries.length; i++) {
     const boundary = boundaries[i];
+    if (!boundary) {
+      continue;
+    }
     const nextIdx =
       i + 1 < boundaries.length
-        ? boundaries[i + 1].paragraphIndex
+        ? (boundaries[i + 1]?.paragraphIndex ?? paragraphCount)
         : paragraphCount;
 
     if (boundary.condition === undefined) {
@@ -276,17 +279,21 @@ const analyzeContainer = (
       // Scan content paragraphs for item field references
       const entry = fields.get(block.arrayPath);
       for (let i = block.contentStart; i < block.contentEnd; i++) {
-        if (i >= paragraphs.length) {
+        const para = paragraphs[i];
+        if (!para) {
           break;
         }
         if (directiveIndices.has(i)) {
           continue;
         }
 
-        const text = paragraphText(paragraphs[i]);
+        const text = paragraphText(para);
         const prefix = `${block.arrayPath}.`;
         for (const match of text.matchAll(PLACEHOLDER_RE)) {
           const name = match[1];
+          if (!name) {
+            continue;
+          }
           if (name.startsWith(prefix)) {
             const itemField = name.slice(prefix.length);
             entry?.itemPaths.add(itemField);
@@ -311,6 +318,9 @@ const analyzeContainer = (
 
         for (const m of branch.condition.matchAll(CONDITION_TOKEN_RE)) {
           const raw = m[0];
+          if (!raw) {
+            continue;
+          }
           const ident = m[1];
 
           if (raw === "and" || raw === "or") {
@@ -343,11 +353,18 @@ const analyzeContainer = (
       continue;
     }
 
-    const text = paragraphText(paragraphs[i]);
+    const para = paragraphs[i];
+    if (!para) {
+      continue;
+    }
+    const text = paragraphText(para);
     const paraCondition = conditionMap.get(i);
 
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
       const name = match[1];
+      if (!name) {
+        continue;
+      }
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
       // Track field condition visibility
@@ -374,6 +391,9 @@ const analyzeContainer = (
         // array item field (sellers.name). Check if the
         // root is already registered as an array.
         const root = name.split(".")[0];
+        if (!root) {
+          continue;
+        }
         const rootEntry = fields.get(root);
         if (!rootEntry || rootEntry.kind !== "array") {
           // Register the root as an object

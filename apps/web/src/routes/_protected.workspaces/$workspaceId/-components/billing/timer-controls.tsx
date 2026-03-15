@@ -41,7 +41,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
 
   const { data: activeTimer } = useQuery(activeTimerOptions(workspaceId));
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0] ?? "";
   const { data: resolved } = useQuery(
     resolvedRateOptions(workspaceId, userId, today),
   );

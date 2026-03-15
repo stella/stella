@@ -82,9 +82,10 @@ export const resolveRate = async ({
       .limit(1),
   );
 
-  if (userRate.length > 0) {
+  const userRateRow = userRate[0];
+  if (userRateRow) {
     return {
-      hourlyRate: userRate[0].hourlyRate,
+      hourlyRate: userRateRow.hourlyRate,
       currency: defaultTable.currency,
     };
   }
@@ -107,9 +108,10 @@ export const resolveRate = async ({
       .limit(1),
   );
 
-  if (defaultRate.length > 0) {
+  const defaultRateRow = defaultRate[0];
+  if (defaultRateRow) {
     return {
-      hourlyRate: defaultRate[0].hourlyRate,
+      hourlyRate: defaultRateRow.hourlyRate,
       currency: defaultTable.currency,
     };
   }

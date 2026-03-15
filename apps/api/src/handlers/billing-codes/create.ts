@@ -57,6 +57,9 @@ export const createBillingCodeHandler = async ({
         .returning({ id: billingCodes.id }),
     );
 
+    if (!code) {
+      throw new Error("Failed to create billing code");
+    }
     return { id: code.id };
   } catch (error) {
     if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {

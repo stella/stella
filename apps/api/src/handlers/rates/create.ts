@@ -67,5 +67,8 @@ export const createRateTableHandler = async ({
       })
       .returning({ id: rateTables.id });
 
+    if (!table) {
+      return status(500, { message: "Failed to create rate table" });
+    }
     return { id: table.id };
   });

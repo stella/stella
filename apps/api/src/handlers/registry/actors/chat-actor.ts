@@ -419,7 +419,8 @@ export const chatActor = actor({
       // instead of appending a new one.
       if (message.role === "assistant") {
         const lastIdx = thread.messages.length - 1;
-        if (lastIdx >= 0 && thread.messages[lastIdx].role === "assistant") {
+        const lastMessage = thread.messages[lastIdx];
+        if (lastIdx >= 0 && lastMessage && lastMessage.role === "assistant") {
           thread.messages[lastIdx] = message;
         } else {
           thread.messages.push(message);

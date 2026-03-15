@@ -69,8 +69,12 @@ export const mergeChunkEntities = (
   const allEntities: Entity[] = [];
 
   for (let i = 0; i < chunkResults.length; i++) {
-    const offset = chunkOffsets[i];
-    for (const entity of chunkResults[i]) {
+    const offset = chunkOffsets[i] ?? 0;
+    const entities = chunkResults[i];
+    if (!entities) {
+      continue;
+    }
+    for (const entity of entities) {
       allEntities.push({
         ...entity,
         start: entity.start + offset,

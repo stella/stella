@@ -7,7 +7,7 @@ export const formatHours = (minutes: number): string => {
 
 /** Format an ISO date string as a short label (e.g. "Jan 15"). */
 export const formatPeriodLabel = (period: string): string => {
-  const [y, m, d] = period.split("-").map(Number);
+  const [y = 0, m = 1, d = 1] = period.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   return date.toLocaleDateString(undefined, {
     month: "short",

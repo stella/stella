@@ -191,8 +191,14 @@ export const celexToCaseNumber = (celex: string): string => {
     return celex;
   }
 
-  const year = match[1].slice(2); // "2024" → "24"
-  const caseNum = Number.parseInt(match[3], 10);
+  const yearStr = match[1];
+  const typeStr = match[2];
+  const numStr = match[3];
+  if (!yearStr || !typeStr || !numStr) {
+    return celex;
+  }
+  const year = yearStr.slice(2); // "2024" → "24"
+  const caseNum = Number.parseInt(numStr, 10);
   const CELEX_PREFIX: Record<string, string> = {
     CJ: "C",
     CC: "C",
@@ -201,7 +207,7 @@ export const celexToCaseNumber = (celex: string): string => {
     TO: "T",
     FJ: "F",
   };
-  const prefix = CELEX_PREFIX[match[2]] ?? "C";
+  const prefix = CELEX_PREFIX[typeStr] ?? "C";
 
   return `${prefix}-${caseNum}/${year}`;
 };
@@ -235,7 +241,7 @@ const fetchFulltext = async (
     if (!bodyMatch) {
       // Fallback: extract <body> content
       const fallback = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-      if (!fallback) {
+      if (!fallback?.[1]) {
         return;
       }
       const text = stripHtml(fallback[1])
@@ -245,7 +251,7 @@ const fetchFulltext = async (
       return text.length > 100 ? text : undefined;
     }
 
-    const text = stripHtml(bodyMatch[1])
+    const text = stripHtml(bodyMatch[1] ?? "")
       // eslint-disable-next-line no-control-regex -- strip control chars for PG
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
       .trim();
@@ -264,7 +270,8 @@ const fetchFulltext = async (
 
 // -- Date helpers --
 
-const toIsoDate = (d: Date): string => d.toISOString().split("T")[0];
+const toIsoDate = (d: Date): string =>
+  d.toISOString().split("T")[0] ?? "1970-01-01";
 
 const addDays = (date: string, days: number): string => {
   const d = new Date(`${date}T00:00:00Z`);
