@@ -118,7 +118,11 @@ describe("fixture validation", () => {
 
       // Validate each decision
       for (let i = 0; i < data.page.decisions.length; i++) {
-        validateDecision(data.page.decisions[i], i, data.adapter);
+        const decision = data.page.decisions[i];
+        if (!decision) {
+          continue;
+        }
+        validateDecision(decision, i, data.adapter);
       }
 
       console.log(`  ${filename}: ${data.page.decisions.length} decisions OK`);

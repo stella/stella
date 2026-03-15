@@ -39,7 +39,7 @@ const nameFromReadEntity = (output: Record<string, unknown>): string | null => {
       if (isToolField(field)) {
         const match = field.value.match(FILE_FIELD_RE);
         // oxlint-disable-next-line typescript/strict-boolean-expressions -- match is RegExpMatchArray | null
-        if (match) {
+        if (match?.[1]) {
           return match[1];
         }
       }

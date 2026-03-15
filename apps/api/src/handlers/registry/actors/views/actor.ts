@@ -375,6 +375,9 @@ export const viewsActor = actor({
       }
 
       const target = c.state.views[targetIdx];
+      if (!target) {
+        throw createUserError("invalid-arguments");
+      }
       if (REQUIRED_VIEW_LAYOUTS.includes(target.layout.type)) {
         const sameLayoutCount = c.state.views.filter(
           (v) => v.layout.type === target.layout.type,

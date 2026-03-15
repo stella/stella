@@ -376,6 +376,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         return;
       }
       const [moved] = opts.splice(srcIdx, 1);
+      if (!moved) {
+        return;
+      }
       opts.splice(destIdx, 0, moved);
       updateProperty.mutate({
         workspaceId,

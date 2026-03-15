@@ -104,5 +104,8 @@ export const createExpenseHandler = async ({
       .returning({ id: expenses.id }),
   );
 
+  if (!entry) {
+    return status(500, { message: "Failed to create expense" });
+  }
   return { id: entry.id };
 };

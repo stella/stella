@@ -261,7 +261,7 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
   // Find max pid for new property
   const pidMatches = [...xml.matchAll(PID_RE)];
   const maxPid = pidMatches.reduce(
-    (max, m) => Math.max(max, Number.parseInt(m[1], 10)),
+    (max, m) => Math.max(max, Number.parseInt(m[1] ?? "0", 10)),
     1,
   );
   const prop = [
@@ -474,7 +474,11 @@ const findExistingFooter = (
   // Build a map of relationship ID → target path
   const relMap = new Map<string, string>();
   for (const m of docRels.matchAll(FOOTER_REL_RE)) {
-    relMap.set(m[1], m[2]);
+    const id = m[1];
+    const target = m[2];
+    if (id && target) {
+      relMap.set(id, target);
+    }
   }
 
   if (relMap.size === 0) {
@@ -625,7 +629,9 @@ const findAvailableFooterName = (zip: JSZip): string => {
 };
 
 const findNextBookmarkId = (xml: string): string => {
-  const ids = [...xml.matchAll(WID_RE)].map((m) => Number.parseInt(m[1], 10));
+  const ids = [...xml.matchAll(WID_RE)].map((m) =>
+    Number.parseInt(m[1] ?? "0", 10),
+  );
   const max = ids.length > 0 ? Math.max(...ids) : -1;
   return String(max + 1);
 };
@@ -764,7 +770,10 @@ const extractBookmarkText = (
   // Extract all <w:t> text
   const texts: string[] = [];
   for (const tMatch of region.matchAll(WT_TEXT_RE)) {
-    texts.push(tMatch[1]);
+    const text = tMatch[1];
+    if (text) {
+      texts.push(text);
+    }
   }
 
   const fullText = texts.join("").trim();
@@ -774,7 +783,7 @@ const extractBookmarkText = (
 
   // Parse "2026/001/015.v3  stl:kx8mq2n4p3"
   const stlMatch = STL_CODE_RE.exec(fullText);
-  const verificationCode = stlMatch ? stlMatch[1] : null;
+  const verificationCode = stlMatch?.[1] ?? null;
 
   // Stamp is everything before "stl:"
   const stampPart = fullText.replace(STL_SUFFIX_RE, "").trim();
@@ -792,7 +801,7 @@ const parseCustomProperty = (xml: string, name: string): string | null => {
     `<property[^>]*name="${name}"[^>]*>\\s*<vt:lpwstr>([^<]*)</vt:lpwstr>`,
   );
   const match = re.exec(xml);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 };
 
 // ── XML Utilities ───────────────────────────────────────

@@ -18,10 +18,14 @@ const hasOverlapping = (
   b: number[],
   multiLabel: boolean,
 ): boolean => {
-  if (a[0] === b[0] && a[1] === b[1]) {
+  const a0 = a[0] ?? 0;
+  const a1 = a[1] ?? 0;
+  const b0 = b[0] ?? 0;
+  const b1 = b[1] ?? 0;
+  if (a0 === b0 && a1 === b1) {
     return !multiLabel;
   }
-  return !(a[0] > b[1] || b[0] > a[1]);
+  return !(a0 > b1 || b0 > a1);
 };
 
 /**
@@ -90,22 +94,29 @@ export const decodeSpans = (
     const endToken = startToken + (Math.floor(id / endTokenPadding) % maxWidth);
     const entity = id % numEntities;
 
-    const prob = sigmoid(modelOutput[id]);
+    const prob = sigmoid(modelOutput[id] ?? 0);
+
+    const batchStarts = batchWordsStartIdx[batch];
+    const batchEnds = batchWordsEndIdx[batch];
+    const batchSpans = spans[batch];
+    if (!batchStarts || !batchEnds || !batchSpans) {
+      continue;
+    }
 
     if (
       prob >= threshold &&
-      startToken < batchWordsStartIdx[batch].length &&
-      endToken < batchWordsEndIdx[batch].length
+      startToken < batchStarts.length &&
+      endToken < batchEnds.length
     ) {
-      const globalBatch = batchIds[batch];
-      const startIdx = batchWordsStartIdx[batch][startToken];
-      const endIdx = batchWordsEndIdx[batch][endToken];
-      const spanText = texts[globalBatch].slice(startIdx, endIdx);
-      spans[batch].push([
+      const globalBatch = batchIds[batch] ?? 0;
+      const startIdx = batchStarts[startToken] ?? 0;
+      const endIdx = batchEnds[endToken] ?? 0;
+      const spanText = (texts[globalBatch] ?? "").slice(startIdx, endIdx);
+      batchSpans.push([
         spanText,
         startIdx,
         endIdx,
-        idToClass[entity + 1],
+        idToClass[entity + 1] ?? "",
         prob,
       ]);
     }

@@ -242,7 +242,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0].id).toBe("p1");
+    expect(result.properties[0]?.id).toBe("p1");
   });
 
   test("includes fresh property with error content", () => {
@@ -256,7 +256,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0].id).toBe("p1");
+    expect(result.properties[0]?.id).toBe("p1");
   });
 
   test("includes fresh property with pending content", () => {
@@ -270,7 +270,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0].id).toBe("p1");
+    expect(result.properties[0]?.id).toBe("p1");
   });
 
   test("includes non-fresh property regardless of field content", () => {

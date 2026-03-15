@@ -169,10 +169,16 @@ const neutraliseTextOperators = (
   const lines: string[] = [];
   const eols: string[] = [];
   for (let i = 0; i < parts.length; i += 2) {
-    lines.push(parts[i]);
+    const part = parts[i];
+    if (part !== undefined) {
+      lines.push(part);
+    }
     // The separator follows each line except the last
     if (i + 1 < parts.length) {
-      eols.push(parts[i + 1]);
+      const eol = parts[i + 1];
+      if (eol !== undefined) {
+        eols.push(eol);
+      }
     }
   }
   const result: string[] = [];
@@ -274,9 +280,15 @@ const neutraliseTextOperators = (
   // Rejoin with each line's original ending preserved
   const output: string[] = [];
   for (let i = 0; i < result.length; i++) {
-    output.push(result[i]);
+    const line = result[i];
+    if (line !== undefined) {
+      output.push(line);
+    }
     if (i < eols.length) {
-      output.push(eols[i]);
+      const eol = eols[i];
+      if (eol !== undefined) {
+        output.push(eol);
+      }
     }
   }
   return output.join("");
@@ -368,7 +380,7 @@ const replaceStringContent = (line: string): string => {
         i++;
       }
     } else {
-      result.push(line[i]);
+      result.push(line[i] ?? "");
       i++;
     }
   }

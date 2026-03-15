@@ -44,9 +44,9 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
     }
     const defaults: Record<number, string> = {};
     for (let i = 0; i < input.questions.length; i++) {
-      const def = input.questions[i].default;
-      if (def) {
-        defaults[i] = def;
+      const question = input.questions[i];
+      if (question?.default) {
+        defaults[i] = question.default;
       }
     }
     return defaults;
@@ -61,7 +61,8 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
     setAnswers((prev) => {
       let seeded: Record<number, string> | null = null;
       for (let i = 0; i < input.questions.length; i++) {
-        const def = input.questions[i].default;
+        const question = input.questions[i];
+        const def = question?.default;
         if (def && !(i in prev)) {
           seeded ??= { ...prev };
           seeded[i] = def;

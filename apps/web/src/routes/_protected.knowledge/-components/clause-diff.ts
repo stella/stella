@@ -35,10 +35,12 @@ export const diffClauseBodies = (
     const newP = newBody[i];
 
     if (oldP === undefined) {
-      result.push({
-        status: "added",
-        segments: [{ text: newP.text, type: "added" }],
-      });
+      if (newP !== undefined) {
+        result.push({
+          status: "added",
+          segments: [{ text: newP.text, type: "added" }],
+        });
+      }
       continue;
     }
 

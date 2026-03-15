@@ -113,8 +113,7 @@ if (import.meta.main) {
   console.log(`Updating fixtures for ${keysToUpdate.length} adapter(s)...\n`);
 
   let failures = 0;
-  for (let i = 0; i < keysToUpdate.length; i++) {
-    const key = keysToUpdate[i];
+  for (const [i, key] of keysToUpdate.entries()) {
     process.stdout.write(`  ${key}... `);
     const result = await updateAdapter(key);
 

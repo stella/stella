@@ -2202,8 +2202,7 @@ export async function seedTemplates(
 
   // ── 2. Clauses + clause versions (v1) ──────────────
   let variantCount = 0;
-  for (let i = 0; i < CLAUSES.length; i++) {
-    const c = CLAUSES[i];
+  for (const [i, c] of CLAUSES.entries()) {
     const clauseId = seedId(c.label);
     const versionId = seedId(`${c.label}-v1`);
 
@@ -2236,8 +2235,7 @@ export async function seedTemplates(
 
     // 3. Clause variants
     if (c.variants) {
-      for (let vi = 0; vi < c.variants.length; vi++) {
-        const v = c.variants[vi];
+      for (const [vi, v] of c.variants.entries()) {
         await db
           .insert(clauseVariants)
           .values({
@@ -2271,8 +2269,7 @@ export async function seedTemplates(
   console.log(`    Template categories: ${TEMPLATE_CATS.length}`);
 
   // ── 5. Templates → S3 → template versions (v1) ─────
-  for (let i = 0; i < TEMPLATES.length; i++) {
-    const t = TEMPLATES[i];
+  for (const [i, t] of TEMPLATES.entries()) {
     const templateId = seedId(t.label);
     const versionId = seedId(`${t.label}-v1`);
 

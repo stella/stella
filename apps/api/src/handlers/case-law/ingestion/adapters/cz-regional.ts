@@ -64,9 +64,16 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
 
 /** Advance the cursor by one day. */
 const nextDay = (dateStr: string): string => {
-  const [year, month, day] = dateStr.split("-").map(Number);
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
   const date = new Date(Date.UTC(year, month - 1, day + 1));
-  return date.toISOString().split("T")[0];
+  const iso = date.toISOString().split("T")[0];
+  if (!iso) {
+    throw new Error(`Failed to format date from ${dateStr}`);
+  }
+  return iso;
 };
 
 export const czRegionalAdapter: SourceAdapter = {
@@ -84,7 +91,8 @@ export const czRegionalAdapter: SourceAdapter = {
           cursor ??
           new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             .toISOString()
-            .split("T")[0];
+            .split("T")[0] ??
+          "1970-01-01";
 
         const url = `${BASE_URL}/${date}`;
 
@@ -96,7 +104,8 @@ export const czRegionalAdapter: SourceAdapter = {
         if (!response.ok) {
           // 404 means no data for this date; advance cursor
           if (response.status === 404) {
-            const today = new Date().toISOString().split("T")[0];
+            const today =
+              new Date().toISOString().split("T")[0] ?? "1970-01-01";
             const next = nextDay(date);
 
             return {
@@ -126,7 +135,7 @@ export const czRegionalAdapter: SourceAdapter = {
           }
         }
 
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date().toISOString().split("T")[0] ?? "1970-01-01";
         const next = nextDay(date);
 
         return {

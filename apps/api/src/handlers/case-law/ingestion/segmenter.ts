@@ -91,7 +91,11 @@ export const segmentDecision = (fulltext: string): DecisionSection[] => {
   }[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    if (rawLine === undefined) {
+      continue;
+    }
+    const line = rawLine.trim();
     if (!line) {
       continue;
     }
@@ -120,9 +124,10 @@ export const segmentDecision = (fulltext: string): DecisionSection[] => {
   let sectionIndex = 0;
 
   // Text before first boundary is the header
-  if (boundaries[0].lineIndex > 0) {
+  const firstBoundary = boundaries[0];
+  if (firstBoundary && firstBoundary.lineIndex > 0) {
     const headerText = lines
-      .slice(0, boundaries[0].lineIndex)
+      .slice(0, firstBoundary.lineIndex)
       .join("\n")
       .trim();
 
@@ -139,8 +144,11 @@ export const segmentDecision = (fulltext: string): DecisionSection[] => {
   // Each boundary starts a section that runs until the next
   for (let i = 0; i < boundaries.length; i++) {
     const boundary = boundaries[i];
-    const nextLineIndex =
-      i + 1 < boundaries.length ? boundaries[i + 1].lineIndex : lines.length;
+    if (!boundary) {
+      continue;
+    }
+    const nextBoundary = boundaries[i + 1];
+    const nextLineIndex = nextBoundary ? nextBoundary.lineIndex : lines.length;
 
     const sectionText = lines
       .slice(boundary.lineIndex + 1, nextLineIndex)

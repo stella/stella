@@ -70,7 +70,9 @@ function AnonymizePage() {
   const [showRegex, setShowRegex] = useState(true);
   const [threshold, setThreshold] = useState(0.3);
   const [selectedModel, setSelectedModel] = useState(
-    MODEL_OPTIONS.find((m) => m.id === "pii-edge")?.id ?? MODEL_OPTIONS[0].id,
+    MODEL_OPTIONS.find((m) => m.id === "pii-edge")?.id ??
+      MODEL_OPTIONS[0]?.id ??
+      "",
   );
   const [backend, setBackend] = useState("");
   const [downloadProgress, setDownloadProgress] = useState<{
@@ -121,6 +123,9 @@ function AnonymizePage() {
 
     const model =
       MODEL_OPTIONS.find((m) => m.id === selectedModel) ?? MODEL_OPTIONS[0];
+    if (!model) {
+      return;
+    }
 
     setStatus("loading-model");
     log(`Loading model: ${model.label}`);
@@ -410,7 +415,11 @@ function AnonymizePage() {
     (index: number, decision: ReviewDecision, newLabel?: string) => {
       setEntities((prev) => {
         const updated = [...prev];
-        const entity = { ...updated[index] };
+        const existing = updated[index];
+        if (!existing) {
+          return prev;
+        }
+        const entity = { ...existing };
         entity.decision = decision;
         if (decision === "relabeled" && newLabel) {
           entity.originalLabel = entity.label;

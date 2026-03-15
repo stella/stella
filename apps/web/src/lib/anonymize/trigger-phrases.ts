@@ -180,7 +180,7 @@ export const detectTriggerPhrases = (fullText: string): Entity[] => {
 
       // Word-boundary check: skip if preceded by a letter
       // (e.g., "IČ:" should not match inside "DIČ:")
-      if (idx > 0 && /\p{L}/u.test(lowerText[idx - 1])) {
+      if (idx > 0 && /\p{L}/u.test(lowerText[idx - 1] ?? "")) {
         searchFrom = idx + 1;
         continue;
       }

@@ -776,8 +776,11 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         return;
       }
       if (digit >= 1 && digit <= navTargetsRef.current.length) {
-        e.preventDefault();
-        navTargetsRef.current[digit - 1].action();
+        const navTarget = navTargetsRef.current[digit - 1];
+        if (navTarget) {
+          e.preventDefault();
+          navTarget.action();
+        }
       }
     };
 

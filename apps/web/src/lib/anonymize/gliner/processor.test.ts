@@ -36,7 +36,7 @@ describe("tokenizeText()", () => {
     expect(words.length).toBeGreaterThan(0);
     // Offsets should be valid
     for (let i = 0; i < words.length; i++) {
-      expect(ends[i] - starts[i]).toBe(words[i].length);
+      expect((ends[i] ?? 0) - (starts[i] ?? 0)).toBe(words[i]?.length ?? 0);
     }
   });
 
@@ -63,7 +63,7 @@ describe("tokenizeText()", () => {
     const text = "café résumé";
     const [words, starts, ends] = tokenizeText(text);
     for (let i = 0; i < words.length; i++) {
-      expect(text.slice(starts[i], ends[i])).toBe(words[i]);
+      expect(text.slice(starts[i] ?? 0, ends[i] ?? 0)).toBe(words[i] ?? "");
     }
   });
 
@@ -161,7 +161,7 @@ describe("padArray()", () => {
     const result = padArray(input, 3);
     expect(result[0]).toHaveLength(1);
     // Padding should produce [0, 0] (matching dim=2)
-    expect(result[0][0]).toStrictEqual([0, 0]);
+    expect(result[0]?.[0]).toStrictEqual([0, 0]);
     expect(result[1]).toStrictEqual([[1, 2]]);
   });
 

@@ -32,10 +32,14 @@ export const parseActorKey = <T extends AuthedActorKey = AuthedActorKey>(
   key: string | string[],
 ): T => {
   if (Array.isArray(key)) {
+    const first = key[0];
+    if (!first) {
+      throw new Error("parseActorKey: empty key array");
+    }
     // SAFETY: key is produced by actorKeyFactory via JSON.stringify(data) where data
     // conforms to AuthedActorKey; roundtrip yields the same shape.
     // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    return JSON.parse(key[0]) as T;
+    return JSON.parse(first) as T;
   }
 
   // SAFETY: same as above; key comes from our serialization.

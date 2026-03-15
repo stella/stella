@@ -407,7 +407,7 @@ describe("workspaces table — correct scope", () => {
       tx.select({ id: workspaces.id }).from(workspaces),
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(ids.wsA1);
+    expect(rows[0]?.id).toBe(ids.wsA1);
   });
 
   test("scoped to wsA1 + wsA2 → sees both", async () => {

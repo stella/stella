@@ -31,7 +31,7 @@ const applyPgFtsMigration = async () => {
   `);
 
   const isGenerated =
-    colInfo.length > 0 && colInfo[0].is_generated === "ALWAYS";
+    colInfo.length > 0 && colInfo[0]?.is_generated === "ALWAYS";
 
   if (isGenerated) {
     console.log("Migrating tsv from generated to regular column...");

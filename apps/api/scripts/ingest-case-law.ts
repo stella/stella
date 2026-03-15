@@ -83,9 +83,13 @@ const ensureSource = async (
   return created;
 };
 
-const daysAgoCursor = (n: number) => {
+const daysAgoCursor = (n: number): string => {
   const d = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-  return d.toISOString().split("T")[0];
+  const date = d.toISOString().split("T")[0];
+  if (!date) {
+    throw new Error("Invalid date format");
+  }
+  return date;
 };
 
 const main = async () => {

@@ -62,7 +62,7 @@ const wordDiff = (oldText: string, newText: string): Diff[] => {
     ([op, chars]): Diff => [
       op,
       Array.from(chars)
-        .map((c) => tokenList[c.codePointAt(0) ?? 0])
+        .map((c) => tokenList[c.codePointAt(0) ?? 0] ?? "")
         .join(""),
     ],
   );
@@ -80,7 +80,11 @@ const diffSingleParagraph = (
   let charOffset = 0;
 
   for (let i = 0; i < diffs.length; i++) {
-    const [op, text] = diffs[i];
+    const diff = diffs[i];
+    if (!diff) {
+      continue;
+    }
+    const [op, text] = diff;
 
     if (op === DIFF_EQUAL) {
       charOffset += text.length;

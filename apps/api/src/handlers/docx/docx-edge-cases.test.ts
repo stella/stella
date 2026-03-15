@@ -153,7 +153,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  w:br extract result:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -171,7 +171,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  w:br mid-run extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -184,7 +184,7 @@ describe("extract-text: real OOXML patterns", () => {
     );
     const result = await extractText(buf);
     expect(result.paragraphs).toHaveLength(1);
-    console.log("  w:tab extract:", JSON.stringify(result.paragraphs[0].text));
+    console.log("  w:tab extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
 
   test("w:fldSimple PAGE field", async () => {
@@ -204,7 +204,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  fldSimple extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -224,7 +224,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  complex field extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -242,7 +242,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  bookmark extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -283,7 +283,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  tracked changes extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -301,7 +301,7 @@ describe("extract-text: real OOXML patterns", () => {
     );
     const result = await extractText(buf);
     expect(result.paragraphs).toHaveLength(1);
-    console.log("  sdt extract:", JSON.stringify(result.paragraphs[0].text));
+    console.log("  sdt extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
 
   test("w:sym (special symbol)", async () => {
@@ -314,7 +314,7 @@ describe("extract-text: real OOXML patterns", () => {
     );
     const result = await extractText(buf);
     expect(result.paragraphs).toHaveLength(1);
-    console.log("  sym extract:", JSON.stringify(result.paragraphs[0].text));
+    console.log("  sym extract:", JSON.stringify(result.paragraphs[0]?.text));
   });
 
   test("w:commentRangeStart/End + commentReference", async () => {
@@ -335,7 +335,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  comment extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -353,7 +353,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  hyperlink extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 
@@ -378,7 +378,7 @@ describe("extract-text: real OOXML patterns", () => {
     expect(result.paragraphs).toHaveLength(1);
     console.log(
       "  mixed legal extract:",
-      JSON.stringify(result.paragraphs[0].text),
+      JSON.stringify(result.paragraphs[0]?.text),
     );
   });
 });
@@ -393,6 +393,9 @@ describe("run-map vs extract-text consistency", () => {
     const xml = WRAP(bodyXml);
     const doc = slimdom.parseXmlDocument(xml);
     const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+    if (!body) {
+      throw new Error("No w:body element found");
+    }
 
     // Get all direct-child paragraphs (same as extractText)
     const paragraphs: slimdom.Element[] = [];
@@ -407,6 +410,9 @@ describe("run-map vs extract-text consistency", () => {
 
     for (let i = 0; i < paragraphs.length; i++) {
       const p = paragraphs[i];
+      if (!p) {
+        continue;
+      }
       const spans = buildRunMap(p);
 
       // Concatenate all RunSpan text

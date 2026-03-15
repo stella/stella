@@ -83,8 +83,10 @@ const badgeStyle = {
 } as const;
 
 const MultiPreviewContent = ({ items }: { items: DragPreviewData[] }) => {
-  // SAFETY: caller (renderMultiDragPreview) guards items.length > 1.
   const first = items[0];
+  if (!first) {
+    return null;
+  }
   const count = items.length;
 
   // Stacked cards effect: two offset cards behind the front one.

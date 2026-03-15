@@ -79,7 +79,7 @@ describe("createPagePaginatedFetch", () => {
 
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(3);
-    expect(page.decisions[0].caseNumber).toBe("CASE-1");
+    expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
     expect(page.nextCursor).toBe("2");
   });
 
@@ -138,7 +138,7 @@ describe("createPagePaginatedFetch", () => {
     const result = await fetchPage(null, {});
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(2);
-    expect(page.decisions[0].caseNumber).toBe("CASE-1");
-    expect(page.decisions[1].caseNumber).toBe("CASE-3");
+    expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
+    expect(page.decisions[1]?.caseNumber).toBe("CASE-3");
   });
 });

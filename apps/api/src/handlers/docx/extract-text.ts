@@ -192,8 +192,14 @@ const extractParagraphsFromContainer = (
     const dm = text.match(DIRECTIVE_RE);
     if (dm) {
       entry.isDirective = true;
-      entry.directiveKind = DIRECTIVE_KIND_MAP[dm[1]];
-      entry.directiveExpression = dm[2].trim();
+      const tag = dm[1];
+      const expr = dm[2];
+      if (tag !== undefined) {
+        entry.directiveKind = DIRECTIVE_KIND_MAP[tag];
+      }
+      if (expr !== undefined) {
+        entry.directiveExpression = expr.trim();
+      }
     }
 
     paragraphs.push(entry);

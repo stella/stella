@@ -45,21 +45,22 @@ const parseArgs = (): Args => {
   };
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--text" && args[i + 1]) {
-      result.text = args[i + 1];
+    const next = args[i + 1];
+    if (args[i] === "--text" && next) {
+      result.text = next;
       i++;
-    } else if (args[i] === "--file" && args[i + 1]) {
-      result.file = args[i + 1];
+    } else if (args[i] === "--file" && next) {
+      result.file = next;
       i++;
     } else if (args[i] === "--stdin") {
       result.stdin = true;
-    } else if (args[i] === "--language" && args[i + 1]) {
-      result.language = args[i + 1];
+    } else if (args[i] === "--language" && next) {
+      result.language = next;
       i++;
     } else if (args[i] === "--llm") {
       result.llm = true;
-    } else if (args[i] === "--citation" && args[i + 1]) {
-      result.citation = args[i + 1];
+    } else if (args[i] === "--citation" && next) {
+      result.citation = next;
       i++;
     }
   }
@@ -299,8 +300,8 @@ const main = async () => {
 
   console.log(`\nFound ${matches.length} polarity signal(s):`);
 
-  for (let i = 0; i < matches.length; i++) {
-    printMatch(matches[i], i);
+  for (const [i, match] of matches.entries()) {
+    printMatch(match, i);
   }
 
   // Summary

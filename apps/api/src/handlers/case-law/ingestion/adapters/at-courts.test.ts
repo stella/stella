@@ -21,12 +21,13 @@ describe("at-courts adapter", () => {
     expect(page.nextCursor).not.toBeNull();
 
     const first = page.decisions[0];
-    expect(first.caseNumber).toBeTruthy();
-    expect(first.court).toBeTruthy();
-    expect(first.country).toBe("AUT");
-    expect(first.language).toBe("de");
-    expect(first.rawHash).toBeTruthy();
-    expect(first.sourceUrl).toContain("ris.bka.gv.at");
+    expect(first).toBeDefined();
+    expect(first?.caseNumber).toBeTruthy();
+    expect(first?.court).toBeTruthy();
+    expect(first?.country).toBe("AUT");
+    expect(first?.language).toBe("de");
+    expect(first?.rawHash).toBeTruthy();
+    expect(first?.sourceUrl).toContain("ris.bka.gv.at");
 
     // RIS provides ECLI for most decisions
     const withEcli = page.decisions.find((d) => d.ecli);

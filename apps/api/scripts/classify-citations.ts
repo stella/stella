@@ -53,15 +53,16 @@ const parseArgs = (): Args => {
   };
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--limit" && args[i + 1]) {
-      result.limit = Number.parseInt(args[i + 1], 10);
+    const next = args[i + 1];
+    if (args[i] === "--limit" && next) {
+      result.limit = Number.parseInt(next, 10);
       if (Number.isNaN(result.limit)) {
-        console.error(`Invalid --limit value: "${args[i + 1]}"`);
+        console.error(`Invalid --limit value: "${next}"`);
         process.exit(1);
       }
       i++;
-    } else if (args[i] === "--language" && args[i + 1]) {
-      result.language = args[i + 1];
+    } else if (args[i] === "--language" && next) {
+      result.language = next;
       i++;
     } else if (args[i] === "--seed") {
       result.seed = true;

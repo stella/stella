@@ -168,7 +168,7 @@ const pdfEscape = (s: string): string => {
       }
     } else {
       const winAnsi = WIN_ANSI[cp];
-      if (winAnsi && winAnsi > 0) {
+      if (winAnsi !== undefined && winAnsi > 0) {
         // Encodable in WinAnsi — use octal escape
         out += `\\${winAnsi.toString(8).padStart(3, "0")}`;
       } else {
@@ -234,8 +234,7 @@ const createMockPdf = (title: string, bodyText?: string): Buffer => {
   const contentObjStart = 4; // objects 4, 5, 6, ... are content streams
   const pageObjStart = contentObjStart + pages.length;
 
-  for (let p = 0; p < pages.length; p++) {
-    const lines = pages[p];
+  for (const [p, lines] of pages.entries()) {
     let stream = "";
 
     // Title on first page
@@ -250,8 +249,7 @@ const createMockPdf = (title: string, bodyText?: string): Buffer => {
       stream += `BT /F1 ${FONT_SIZE} Tf ${MARGIN_LEFT} ${TOP_Y} Td `;
     }
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (const [i, line] of lines.entries()) {
       if (i > 0 || p > 0) {
         stream += `0 -${LEADING} Td `;
       }
@@ -3067,8 +3065,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const label = `extra-ws-${mw.reference}`;
     allEntities.push(...buildEntities(wsId, label));
   }
-  for (let ei = 0; ei < allEntities.length; ei++) {
-    const e = allEntities[ei];
+  for (const [ei, e] of allEntities.entries()) {
     await db
       .insert(entities)
       .values({

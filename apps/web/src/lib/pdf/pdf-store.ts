@@ -269,11 +269,16 @@ export const usePdfStore = create<State & Actions>()(
             throw new Error("PDF has no renderable pages");
           }
 
+          const firstPage = pagesResult[0];
+          if (firstPage === undefined) {
+            throw new Error("PDF has no renderable pages");
+          }
+
           // Detect XFA forms (check the first page).
           let isXfa = false;
           if (!isPortfolio) {
             try {
-              const xfaHtml = await pagesResult[0].proxy.getXfa();
+              const xfaHtml = await firstPage.proxy.getXfa();
               isXfa = !!xfaHtml;
             } catch {
               // Not an XFA form.
@@ -289,11 +294,6 @@ export const usePdfStore = create<State & Actions>()(
               attachmentLabels.size > 0 ? attachmentLabels : undefined,
             isXfa,
           });
-
-          const firstPage = pagesResult[0];
-          if (firstPage === undefined) {
-            throw new Error("PDF has no renderable pages");
-          }
           const firstPageViewport = firstPage.proxy.getViewport({ scale: 1 });
           const scale = PDF_WIDTH / firstPageViewport.width;
 
@@ -592,10 +592,16 @@ export const usePdfStore = create<State & Actions>()(
               continue;
             }
             if (idx > 0) {
-              expandedSet.add(allPageIds[idx - 1]);
+              const prev = allPageIds[idx - 1];
+              if (prev !== undefined) {
+                expandedSet.add(prev);
+              }
             }
             if (idx < allPageIds.length - 1) {
-              expandedSet.add(allPageIds[idx + 1]);
+              const next = allPageIds[idx + 1];
+              if (next !== undefined) {
+                expandedSet.add(next);
+              }
             }
           }
         }

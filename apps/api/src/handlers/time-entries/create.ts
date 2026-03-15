@@ -113,6 +113,9 @@ export const createTimeEntryHandler = async ({
       })
       .returning({ id: timeEntries.id });
 
+    if (!entry) {
+      return status(500, { message: "Failed to create time entry" });
+    }
     return { id: entry.id };
   });
 };

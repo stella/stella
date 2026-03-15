@@ -88,6 +88,9 @@ export const createPropertyHandler = async ({
       })
       .returning({ id: properties.id });
 
+    if (!inserted) {
+      return status(500);
+    }
     return { id: inserted.id };
   });
 };

@@ -121,7 +121,7 @@ const resolveVersion = async (
   // :vN — use a specific version number
   const vMatch = modifier?.match(VERSION_NUM_RE);
   if (vMatch) {
-    const version = Number.parseInt(vMatch[1], 10);
+    const version = Number.parseInt(vMatch[1] ?? "0", 10);
     return scopedDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {

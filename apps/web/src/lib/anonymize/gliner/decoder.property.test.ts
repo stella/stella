@@ -78,7 +78,7 @@ describe("decodeSpans properties", () => {
           scenario.multiLabel,
         );
 
-        for (const span of result[0]) {
+        for (const span of result[0] ?? []) {
           expect(span[4]).toBeGreaterThanOrEqual(threshold);
         }
       }),
@@ -112,13 +112,13 @@ describe("decodeSpans properties", () => {
           false, // no multiLabel
         );
 
-        const spans = result[0];
+        const spans = result[0] ?? [];
         for (let i = 0; i < spans.length; i++) {
           for (let j = i + 1; j < spans.length; j++) {
-            const aStart = spans[i][1];
-            const aEnd = spans[i][2];
-            const bStart = spans[j][1];
-            const bEnd = spans[j][2];
+            const aStart = spans[i]?.[1] ?? 0;
+            const aEnd = spans[i]?.[2] ?? 0;
+            const bStart = spans[j]?.[1] ?? 0;
+            const bEnd = spans[j]?.[2] ?? 0;
             // Spans must not overlap
             const overlaps = !(aStart >= bEnd || bStart >= aEnd);
             expect(overlaps).toBeFalsy();
@@ -155,9 +155,9 @@ describe("decodeSpans properties", () => {
           scenario.multiLabel,
         );
 
-        const spans = result[0];
+        const spans = result[0] ?? [];
         for (let i = 1; i < spans.length; i++) {
-          expect(spans[i][1]).toBeGreaterThanOrEqual(spans[i - 1][1]);
+          expect(spans[i]?.[1]).toBeGreaterThanOrEqual(spans[i - 1]?.[1] ?? 0);
         }
       }),
       { numRuns: 200 },
@@ -190,7 +190,7 @@ describe("decodeSpans properties", () => {
           scenario.multiLabel,
         );
 
-        for (const span of result[0]) {
+        for (const span of result[0] ?? []) {
           const [spanText, start, end] = span;
           expect(spanText).toBe(text.slice(start, end));
         }
@@ -226,7 +226,7 @@ describe("decodeSpans properties", () => {
           scenario.multiLabel,
         );
 
-        for (const span of result[0]) {
+        for (const span of result[0] ?? []) {
           expect(validLabels.has(span[3])).toBeTruthy();
         }
       }),

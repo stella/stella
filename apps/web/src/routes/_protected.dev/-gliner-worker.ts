@@ -258,9 +258,10 @@ const handleInference = async (
     const validIndices: number[] = [];
     const validTexts: string[] = [];
     for (let i = 0; i < texts.length; i++) {
-      if (texts[i].trim().length > 0) {
+      const text = texts[i];
+      if (text && text.trim().length > 0) {
         validIndices.push(i);
-        validTexts.push(texts[i]);
+        validTexts.push(text);
       }
     }
 
@@ -294,7 +295,12 @@ const handleInference = async (
     // Map results back to original input indices
     const results: ResultEntry[][] = texts.map(() => []);
     for (let i = 0; i < raw.length; i++) {
-      results[validIndices[i]] = raw[i].map((e) => ({
+      const targetIdx = validIndices[i];
+      const rawEntry = raw[i];
+      if (targetIdx === undefined || !rawEntry) {
+        continue;
+      }
+      results[targetIdx] = rawEntry.map((e) => ({
         start: e.start,
         end: e.end,
         label: e.label,

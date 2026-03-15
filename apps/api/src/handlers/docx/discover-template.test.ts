@@ -157,7 +157,7 @@ describe("discoverTemplate", () => {
     const result = await discoverTemplate(buf);
 
     expect(result.structureErrors.length).toBeGreaterThan(0);
-    expect(result.structureErrors[0].message).toContain("Unclosed");
+    expect(result.structureErrors[0]?.message).toContain("Unclosed");
   });
 
   test("empty template returns empty results", async () => {

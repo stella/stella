@@ -134,7 +134,11 @@ export const transitionInvoiceHandler = async ({
           ),
         );
 
-      return { id: updated[0].id };
+      const voidedInvoice = updated[0];
+      if (!voidedInvoice) {
+        return null;
+      }
+      return { id: voidedInvoice.id };
     });
 
     if (!result) {
@@ -167,5 +171,11 @@ export const transitionInvoiceHandler = async ({
     });
   }
 
-  return { id: result[0].id };
+  const transitioned = result[0];
+  if (!transitioned) {
+    return status(409, {
+      message: `Cannot ${body.action} invoice from its current status`,
+    });
+  }
+  return { id: transitioned.id };
 };

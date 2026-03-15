@@ -98,8 +98,8 @@ describe("getEntityBBoxes()", () => {
     const s = span(10, "Praha 10", 50, 60);
     const result = getEntityBBoxes([s], 10, 18, mockMeasure);
     expect(result).toHaveLength(1);
-    expect(result[0].x).toBe(50);
-    expect(result[0].width).toBe(60);
+    expect(result[0]?.x).toBe(50);
+    expect(result[0]?.width).toBe(60);
   });
 
   it("computes sub-rect for entity in middle of span", () => {
@@ -129,9 +129,9 @@ describe("getEntityBBoxes()", () => {
     const pad = 12 * 0.75; // fontSize * 0.5
 
     // Left edge should be at prefix - padding
-    expect(bbox.x).toBeCloseTo(50 + expectedPrefixWidth - pad, 1);
+    expect(bbox?.x).toBeCloseTo(50 + expectedPrefixWidth - pad, 1);
     // Width should be entity width + 2 * padding
-    expect(bbox.width).toBeCloseTo(expectedEntityWidth + 2 * pad, 1);
+    expect(bbox?.width).toBeCloseTo(expectedEntityWidth + 2 * pad, 1);
   });
 
   it("clamps sub-rect to span boundaries", () => {
@@ -146,7 +146,7 @@ describe("getEntityBBoxes()", () => {
     expect(result).toHaveLength(1);
     // Left edge should be clamped to span.bbox.x (50)
     // since padding would push it before the span start
-    expect(result[0].x).toBe(50);
+    expect(result[0]?.x).toBe(50);
   });
 
   it("handles entity spanning multiple spans", () => {
@@ -160,8 +160,8 @@ describe("getEntityBBoxes()", () => {
     // Should return bboxes for both spans
     expect(result).toHaveLength(2);
     // First span is fully covered → exact bbox
-    expect(result[0].x).toBe(50);
-    expect(result[0].width).toBe(60);
+    expect(result[0]?.x).toBe(50);
+    expect(result[0]?.width).toBe(60);
   });
 
   it("scales measured widths to match PDF metrics", () => {
@@ -190,8 +190,8 @@ describe("getEntityBBoxes()", () => {
       100 + (prefixMeasured + entityMeasured) * scale + pad,
     );
 
-    expect(bbox.x).toBeCloseTo(expectedX, 1);
-    expect(bbox.width).toBeCloseTo(expectedEnd - expectedX, 1);
+    expect(bbox?.x).toBeCloseTo(expectedX, 1);
+    expect(bbox?.width).toBeCloseTo(expectedEnd - expectedX, 1);
   });
 
   it("uses raw scale for sub-TextItem positions in table-layout", () => {
@@ -221,8 +221,8 @@ describe("getEntityBBoxes()", () => {
       100 + (prefixMeasured + entityMeasured) * rawScale + pad,
     );
 
-    expect(bbox.x).toBeCloseTo(expectedX, 1);
-    expect(bbox.width).toBeCloseTo(expectedEnd - expectedX, 1);
+    expect(bbox?.x).toBeCloseTo(expectedX, 1);
+    expect(bbox?.width).toBeCloseTo(expectedEnd - expectedX, 1);
   });
 
   it("shrinks full-TextItem bbox for table-layout PDFs", () => {
@@ -245,10 +245,10 @@ describe("getEntityBBoxes()", () => {
     const pad = 12 * 0.75;
 
     // Should NOT span full pdfWidth (3x)
-    expect(bbox.width).toBeLessThan(pdfWidth);
+    expect(bbox?.width).toBeLessThan(pdfWidth);
     // Should be close to effectiveWidth + pad
-    expect(bbox.width).toBeCloseTo(effectiveWidth + pad, 1);
-    expect(bbox.x).toBe(200);
+    expect(bbox?.width).toBeCloseTo(effectiveWidth + pad, 1);
+    expect(bbox?.x).toBe(200);
   });
 
   it("handles zero-length spans gracefully", () => {
@@ -295,9 +295,9 @@ describe("getEntityBBoxes()", () => {
       const pad = 12 * 0.75;
 
       // bbox should start near the actual prefix end
-      expect(bbox.x).toBeCloseTo(50 + prefixWidth - pad, 1);
+      expect(bbox?.x).toBeCloseTo(50 + prefixWidth - pad, 1);
       // bbox should cover the entity
-      expect(bbox.x + bbox.width).toBeGreaterThanOrEqual(
+      expect((bbox?.x ?? 0) + (bbox?.width ?? 0)).toBeGreaterThanOrEqual(
         50 + prefixWidth + entityWidth,
       );
     });
@@ -322,8 +322,8 @@ describe("getEntityBBoxes()", () => {
       const result = getEntityBBoxes([s], 210, 218, mockMeasure);
       expect(result).toHaveLength(1);
       // Full coverage → exact bbox (no inflation to cap)
-      expect(result[0].x).toBe(212.45);
-      expect(result[0].width).toBeCloseTo(44.16, 1);
+      expect(result[0]?.x).toBe(212.45);
+      expect(result[0]?.width).toBeCloseTo(44.16, 1);
     });
 
     it("dIČ value with CZ prefix", () => {
@@ -332,8 +332,8 @@ describe("getEntityBBoxes()", () => {
       const s = span(224, "CZ25350676", 212.45, 58.08);
       const result = getEntityBBoxes([s], 224, 234, mockMeasure);
       expect(result).toHaveLength(1);
-      expect(result[0].x).toBe(212.45);
-      expect(result[0].width).toBeCloseTo(58.08, 1);
+      expect(result[0]?.x).toBe(212.45);
+      expect(result[0]?.width).toBeCloseTo(58.08, 1);
     });
 
     it("person name as full TextItem", () => {
@@ -349,10 +349,13 @@ describe("getEntityBBoxes()", () => {
       const scale = Math.min(177.81 / measured, 1.5);
       const effective = measured * scale;
       const pad = 12 * 0.75;
-      expect(result[0].x).toBe(212.45);
+      expect(result[0]?.x).toBe(212.45);
       // Width should use effective (not raw 177.81 if
       // scale > 1.5)
-      expect(result[0].width).toBeCloseTo(Math.min(177.81, effective + pad), 1);
+      expect(result[0]?.width).toBeCloseTo(
+        Math.min(177.81, effective + pad),
+        1,
+      );
     });
 
     it("entity in middle of person name span", () => {
@@ -373,9 +376,11 @@ describe("getEntityBBoxes()", () => {
       const rawScale = 177.81 / stringWidth(text);
       const prefixW = stringWidth("Ing. ") * rawScale;
       const pad = 12 * 0.75;
-      expect(bbox.x).toBeCloseTo(212.45 + prefixW - pad, 1);
+      expect(bbox?.x).toBeCloseTo(212.45 + prefixW - pad, 1);
       // Must not extend beyond span
-      expect(bbox.x + bbox.width).toBeLessThanOrEqual(212.45 + 177.81);
+      expect((bbox?.x ?? 0) + (bbox?.width ?? 0)).toBeLessThanOrEqual(
+        212.45 + 177.81,
+      );
     });
 
     it("space-separator TextItem is skipped for entity", () => {
@@ -391,7 +396,7 @@ describe("getEntityBBoxes()", () => {
       );
       // Only the value span should match
       expect(result).toHaveLength(1);
-      expect(result[0].x).toBe(212.45);
+      expect(result[0]?.x).toBe(212.45);
     });
   });
 
@@ -426,9 +431,9 @@ describe("getEntityBBoxes()", () => {
       expect(result).toHaveLength(1);
       const bbox = result[0];
       // Should start at/near the span start (clamped)
-      expect(bbox.x).toBe(182.3);
+      expect(bbox?.x).toBe(182.3);
       // Should NOT extend to the full 104.88 width
-      expect(bbox.width).toBeLessThan(104.88);
+      expect(bbox?.width).toBeLessThan(104.88);
     });
 
     it("extracts DIČ from combined IČO+DIČ TextItem", () => {
@@ -458,7 +463,7 @@ describe("getEntityBBoxes()", () => {
       const prefixW = stringWidth("25823337 ") * rawScale;
       const pad = 11 * 0.75;
       // Should be positioned after the "25823337 " prefix
-      expect(bbox.x).toBeCloseTo(182.3 + prefixW - pad, 1);
+      expect(bbox?.x).toBeCloseTo(182.3 + prefixW - pad, 1);
     });
 
     it("long dense line — entity deep in text", () => {
@@ -506,12 +511,14 @@ describe("getEntityBBoxes()", () => {
       const pad = 11 * 0.75;
 
       // Box must be near the entity position, not at x=67
-      expect(bbox.x).toBeGreaterThan(66.98 + 100);
+      expect(bbox?.x).toBeGreaterThan(66.98 + 100);
       // Box must not extend past the span
-      expect(bbox.x + bbox.width).toBeLessThanOrEqual(66.98 + pdfWidth);
+      expect((bbox?.x ?? 0) + (bbox?.width ?? 0)).toBeLessThanOrEqual(
+        66.98 + pdfWidth,
+      );
       // Box should reasonably cover the entity text
-      expect(bbox.width).toBeGreaterThan(entityW * 0.5);
-      expect(bbox.width).toBeLessThanOrEqual(entityW + 2 * pad + 0.01);
+      expect(bbox?.width).toBeGreaterThan(entityW * 0.5);
+      expect(bbox?.width).toBeLessThanOrEqual(entityW + 2 * pad + 0.01);
     });
 
     it("entity at the very end of a dense line", () => {
@@ -550,9 +557,11 @@ describe("getEntityBBoxes()", () => {
       expect(result).toHaveLength(1);
       const bbox = result[0];
       // Should be positioned far right in the line
-      expect(bbox.x).toBeGreaterThan(66.98 + 200);
+      expect(bbox?.x).toBeGreaterThan(66.98 + 200);
       // Must not extend past span boundary
-      expect(bbox.x + bbox.width).toBeLessThanOrEqual(66.98 + pdfWidth);
+      expect((bbox?.x ?? 0) + (bbox?.width ?? 0)).toBeLessThanOrEqual(
+        66.98 + pdfWidth,
+      );
     });
 
     it("company name at the start of span", () => {
@@ -581,9 +590,9 @@ describe("getEntityBBoxes()", () => {
       expect(result).toHaveLength(1);
       const bbox = result[0];
       // Should be offset from span start by prefix
-      expect(bbox.x).toBeGreaterThan(67.22);
+      expect(bbox?.x).toBeGreaterThan(67.22);
       // But not too far (prefix "1. " is short)
-      expect(bbox.x).toBeLessThan(67.22 + 30);
+      expect(bbox?.x).toBeLessThan(67.22 + 30);
     });
 
     it("address across multiple TextItems", () => {
@@ -631,8 +640,8 @@ describe("getEntityBBoxes()", () => {
       // Should produce two bboxes (one per span)
       expect(result).toHaveLength(2);
       // First bbox in span 1, second in span 2
-      expect(result[0].pageIndex).toBe(0);
-      expect(result[1].pageIndex).toBe(0);
+      expect(result[0]?.pageIndex).toBe(0);
+      expect(result[1]?.pageIndex).toBe(0);
     });
   });
 
@@ -643,7 +652,7 @@ describe("getEntityBBoxes()", () => {
       const result = getEntityBBoxes([s], 2, 3, mockMeasure);
       expect(result).toHaveLength(1);
       // Should produce a reasonable bbox (not zero-width)
-      expect(result[0].width).toBeGreaterThan(0);
+      expect(result[0]?.width).toBeGreaterThan(0);
     });
 
     it("entity at exact end of span", () => {
@@ -653,7 +662,7 @@ describe("getEntityBBoxes()", () => {
       const result = getEntityBBoxes([s], 9, 14, mockMeasure);
       expect(result).toHaveLength(1);
       // Right edge should be clamped to span end
-      expect(result[0].x + result[0].width).toBeLessThanOrEqual(
+      expect((result[0]?.x ?? 0) + (result[0]?.width ?? 0)).toBeLessThanOrEqual(
         100 + stringWidth(text),
       );
     });
@@ -676,8 +685,8 @@ describe("getEntityBBoxes()", () => {
       };
       const result = getEntityBBoxes([s], 0, 5, mockMeasure);
       expect(result).toHaveLength(1);
-      expect(result[0].width).toBeGreaterThan(0);
-      expect(result[0].x).toBeGreaterThanOrEqual(50);
+      expect(result[0]?.width).toBeGreaterThan(0);
+      expect(result[0]?.x).toBeGreaterThanOrEqual(50);
     });
 
     it("span with very large PDF width (scanned PDF OCR)", () => {
@@ -691,8 +700,8 @@ describe("getEntityBBoxes()", () => {
       // Should cap to effective width, not use 10x
       const effectiveWidth = measured * 1.5;
       const pad = 12 * 0.75;
-      expect(result[0].width).toBeLessThan(measured * 5);
-      expect(result[0].width).toBeCloseTo(effectiveWidth + pad, 1);
+      expect(result[0]?.width).toBeLessThan(measured * 5);
+      expect(result[0]?.width).toBeCloseTo(effectiveWidth + pad, 1);
     });
 
     it("multiple entities in same span do not interfere", () => {
@@ -707,10 +716,10 @@ describe("getEntityBBoxes()", () => {
       expect(r1).toHaveLength(1);
       expect(r2).toHaveLength(1);
       // IČO box should be to the left of DIČ box
-      expect(r1[0].x).toBeLessThan(r2[0].x);
+      expect(r1[0]?.x).toBeLessThan(r2[0]?.x ?? 0);
       // They should not overlap (allowing for padding)
-      const r1End = r1[0].x + r1[0].width;
-      const r2Start = r2[0].x;
+      const r1End = (r1[0]?.x ?? 0) + (r1[0]?.width ?? 0);
+      const r2Start = r2[0]?.x ?? 0;
       // With padding they might overlap slightly, but
       // the raw positions should be ordered
       expect(r1End).toBeLessThan(r2Start + 2 * 12 * 0.75);
@@ -761,10 +770,13 @@ describe("getEntityBBoxes()", () => {
       // Should merge into ONE bbox, not 4 separate ones
       expect(result).toHaveLength(1);
       // Should start at the first span's x
-      expect(result[0].x).toBe(355.27);
+      expect(result[0]?.x).toBe(355.27);
       // Should extend to cover the last span
       const lastEnd = 392.71 + 145.92;
-      expect(result[0].x + result[0].width).toBeCloseTo(lastEnd, 0);
+      expect((result[0]?.x ?? 0) + (result[0]?.width ?? 0)).toBeCloseTo(
+        lastEnd,
+        0,
+      );
     });
 
     it("does not merge bboxes on different lines", () => {
@@ -797,10 +809,10 @@ describe("getEntityBBoxes()", () => {
       // Line 1 spans merge into 1; line 2 stays separate
       expect(result).toHaveLength(2);
       // First merged bbox on line 1
-      expect(result[0].y).toBe(718.78);
+      expect(result[0]?.y).toBe(718.78);
       // Second bbox on line 2
-      expect(result[1].y).toBe(707.86);
-      expect(result[1].x).toBe(85.1);
+      expect(result[1]?.y).toBe(707.86);
+      expect(result[1]?.x).toBe(85.1);
     });
 
     it("merges bboxes with small gaps (font kerning)", () => {
@@ -813,7 +825,7 @@ describe("getEntityBBoxes()", () => {
       ];
       const result = getEntityBBoxes(spans, 0, 15, mockMeasure);
       expect(result).toHaveLength(1);
-      expect(result[0].x).toBe(100);
+      expect(result[0]?.x).toBe(100);
     });
 
     it("does not merge bboxes with large gaps", () => {

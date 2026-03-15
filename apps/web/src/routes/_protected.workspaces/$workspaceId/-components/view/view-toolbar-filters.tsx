@@ -257,7 +257,7 @@ const KindFilterChip = ({
             const Icon = KIND_ICONS[kind];
             return (
               <SelectItem key={kind} value={kind}>
-                <Icon className="size-3.5" />
+                {Icon && <Icon className="size-3.5" />}
                 {kindLabels[kind] ?? kind}
               </SelectItem>
             );

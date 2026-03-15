@@ -41,7 +41,11 @@ const getNestedValue = (
     if (typeof current === "string" || !(part in current)) {
       return;
     }
-    current = current[part];
+    const next: string | NestedMessages | undefined = current[part];
+    if (next === undefined) {
+      return;
+    }
+    current = next;
   }
 
   return current;
@@ -86,7 +90,7 @@ const deleteNestedKey = (obj: NestedMessages, keyPath: string): void => {
 
   for (const part of parts.slice(0, -1)) {
     const next = current[part];
-    if (typeof next === "string") {
+    if (next === undefined || typeof next === "string") {
       return;
     }
     parents.push({ obj: current, key: part });
@@ -112,7 +116,12 @@ const deleteNestedKey = (obj: NestedMessages, keyPath: string): void => {
 export const isSorted = (obj: NestedMessages): boolean => {
   const keys = Object.keys(obj);
   for (let i = 1; i < keys.length; i++) {
-    if (keys[i - 1] > keys[i]) {
+    const prev = keys[i - 1];
+    const curr = keys[i];
+    if (prev === undefined || curr === undefined) {
+      continue;
+    }
+    if (prev > curr) {
       return false;
     }
   }
@@ -125,6 +134,9 @@ export const sortKeys = (obj: NestedMessages): NestedMessages => {
 
   for (const key of Object.keys(obj).toSorted()) {
     const value = obj[key];
+    if (value === undefined) {
+      continue;
+    }
     sorted[key] = typeof value === "string" ? value : sortKeys(value);
   }
 

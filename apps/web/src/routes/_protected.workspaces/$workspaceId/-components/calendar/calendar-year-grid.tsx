@@ -80,8 +80,8 @@ export const CalendarYearGrid = ({
           <MiniMonth
             dotsByDate={dotsByDate}
             isCurrent={monthIdx === currentMonth}
-            key={monthLabels[monthIdx]}
-            label={monthLabels[monthIdx]}
+            key={monthLabels[monthIdx] ?? monthIdx}
+            label={monthLabels[monthIdx] ?? ""}
             month={monthIdx}
             onClick={() => onMonthClick(monthIdx)}
             weekdayLabels={weekdayLabels}

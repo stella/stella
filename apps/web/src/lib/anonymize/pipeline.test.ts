@@ -45,15 +45,15 @@ describe("mergeAndDedup()", () => {
     const b = [entity(5, 15, 0.9, DETECTION_SOURCES.NER)];
     const merged = mergeAndDedup(a, b);
     expect(merged).toHaveLength(1);
-    expect(merged[0].score).toBe(0.9);
+    expect(merged[0]?.score).toBe(0.9);
   });
 
   it("sorts output by start offset", () => {
     const a = [entity(20, 30, 1)];
     const b = [entity(5, 10, 0.8)];
     const merged = mergeAndDedup(a, b);
-    expect(merged[0].start).toBe(5);
-    expect(merged[1].start).toBe(20);
+    expect(merged[0]?.start).toBe(5);
+    expect(merged[1]?.start).toBe(20);
   });
 });
 

@@ -74,15 +74,19 @@ export const scanBlockDirectives = (
   const directives: BlockDirective[] = [];
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    const text = paragraphText(paragraphs[i]);
+  for (const [i, p] of paragraphs.entries()) {
+    const text = paragraphText(p);
     const match = text.match(DIRECTIVE_RE);
     if (!match) {
       continue;
     }
 
     const tag = match[1];
-    const expr = match[2].trim();
+    const rawExpr = match[2];
+    if (!tag || rawExpr === undefined) {
+      continue;
+    }
+    const expr = rawExpr.trim();
 
     const kind = KIND_MAP[tag];
     if (kind) {
@@ -119,6 +123,9 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
 
     while (i < directives.length) {
       const d = directives[i];
+      if (!d) {
+        break;
+      }
 
       if (d.kind === "if") {
         const ifBlock = parseIfBlock();
@@ -148,6 +155,9 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
 
   const parseIfBlock = (): IfBlock | null => {
     const opening = directives[i];
+    if (!opening) {
+      return null;
+    }
     const directiveParagraphs = [opening.paragraphIndex];
     const branches: IfBranch[] = [];
 
@@ -159,6 +169,9 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
 
     while (i < directives.length) {
       const d = directives[i];
+      if (!d) {
+        break;
+      }
 
       if (d.kind === "if" || d.kind === "each") {
         // Nested block — skip over it by recursively parsing
@@ -230,6 +243,9 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
 
   const parseEachBlock = (): EachBlock | null => {
     const opening = directives[i];
+    if (!opening) {
+      return null;
+    }
     const directiveParagraphs = [opening.paragraphIndex];
 
     i++; // skip #each
@@ -238,6 +254,9 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
 
     while (i < directives.length) {
       const d = directives[i];
+      if (!d) {
+        break;
+      }
 
       if (d.kind === "if" || d.kind === "each") {
         // Nested block — skip over it
@@ -297,6 +316,10 @@ export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
   // Check for orphaned closing directives
   while (i < directives.length) {
     const d = directives[i];
+    if (!d) {
+      i++;
+      continue;
+    }
     if (
       d.kind === "endif" ||
       d.kind === "endeach" ||
@@ -417,8 +440,8 @@ export const processBlockDirectives = (
       // Process blocks in reverse order to preserve paragraph
       // indices (same pattern as apply-edits.ts)
       const sortedBlocks = [...blocks].toSorted((a, b) => {
-        const aStart = a.directiveParagraphs[0];
-        const bStart = b.directiveParagraphs[0];
+        const aStart = a.directiveParagraphs[0] ?? 0;
+        const bStart = b.directiveParagraphs[0] ?? 0;
         return bStart - aStart;
       });
 
@@ -437,11 +460,14 @@ export const processBlockDirectives = (
     // MAX_PASSES exhausted — report remaining directives
     const remaining = scanBlockDirectives(bodyEl);
     if (remaining.length > 0) {
-      allErrors.push({
-        message: `Template nesting too deep: ${remaining.length} unresolved directive(s) after ${MAX_PASSES} passes`,
-        paragraphIndex: remaining[0].paragraphIndex,
-        directive: "MAX_PASSES exceeded",
-      });
+      const first = remaining[0];
+      if (first) {
+        allErrors.push({
+          message: `Template nesting too deep: ${remaining.length} unresolved directive(s) after ${MAX_PASSES} passes`,
+          paragraphIndex: first.paragraphIndex,
+          directive: "MAX_PASSES exceeded",
+        });
+      }
     }
   };
 
@@ -466,7 +492,7 @@ export const processBlockDirectives = (
     }
 
     // Collect all paragraph indices in this block
-    const firstDirective = block.directiveParagraphs[0];
+    const firstDirective = block.directiveParagraphs[0] ?? 0;
     // directiveParagraphs always has opening + closing entries
     const lastDirective = block.directiveParagraphs.at(-1) ?? 0;
 
@@ -480,24 +506,24 @@ export const processBlockDirectives = (
 
       // Remove from lastDirective down to keepEnd (reverse)
       for (let j = lastDirective; j >= keepEnd; j--) {
-        if (j < paragraphs.length) {
-          const p = paragraphs[j];
+        const p = paragraphs[j];
+        if (p) {
           p.parentNode?.removeChild(p);
         }
       }
 
       // Remove from keepStart-1 down to firstDirective
       for (let j = keepStart - 1; j >= firstDirective; j--) {
-        if (j < paragraphs.length) {
-          const p = paragraphs[j];
+        const p = paragraphs[j];
+        if (p) {
           p.parentNode?.removeChild(p);
         }
       }
     } else {
       // No branch matched — remove all paragraphs in range
       for (let j = lastDirective; j >= firstDirective; j--) {
-        if (j < paragraphs.length) {
-          const p = paragraphs[j];
+        const p = paragraphs[j];
+        if (p) {
           p.parentNode?.removeChild(p);
         }
       }
@@ -521,8 +547,9 @@ export const processBlockDirectives = (
     // Content paragraphs to clone (between opening and closing)
     const contentParagraphs: slimdom.Element[] = [];
     for (let j = block.contentStart; j < block.contentEnd; j++) {
-      if (j < paragraphs.length) {
-        contentParagraphs.push(paragraphs[j]);
+      const p = paragraphs[j];
+      if (p) {
+        contentParagraphs.push(p);
       }
     }
 
@@ -574,6 +601,9 @@ export const processBlockDirectives = (
     const finalParagraphs: slimdom.Element[] = [];
     for (let itemIdx = 0; itemIdx < expandedGroups.length; itemIdx++) {
       const group = expandedGroups[itemIdx];
+      if (!group) {
+        continue;
+      }
       // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
       // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
       const item = items[itemIdx];
@@ -616,7 +646,7 @@ export const processBlockDirectives = (
     // Use the closing directive's nextSibling (guaranteed to
     // be a direct child of bodyEl, unlike getElementsByTagNameNS
     // which returns nested descendants too).
-    const openingIdx = block.directiveParagraphs[0];
+    const openingIdx = block.directiveParagraphs[0] ?? 0;
     const closingP =
       closingIdx < paragraphs.length ? paragraphs[closingIdx] : null;
     const insertionRef = closingP?.nextSibling ?? null;
@@ -624,8 +654,8 @@ export const processBlockDirectives = (
     // Remove original content and directive paragraphs
     // (reverse order to preserve indices)
     for (let j = closingIdx; j >= openingIdx; j--) {
-      if (j < paragraphs.length) {
-        const p = paragraphs[j];
+      const p = paragraphs[j];
+      if (p) {
         p.parentNode?.removeChild(p);
       }
     }
@@ -635,7 +665,7 @@ export const processBlockDirectives = (
       if (insertionRef) {
         bodyEl.insertBefore(p, insertionRef);
       } else {
-        bodyEl.appendChild(p);
+        bodyEl.append(p);
       }
     }
   };

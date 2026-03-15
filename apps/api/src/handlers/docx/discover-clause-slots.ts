@@ -38,6 +38,9 @@ const scanParagraphs = (
     const text = paragraphText(p);
     for (const match of text.matchAll(CLAUSE_SLOT_RE)) {
       const name = match[1];
+      if (!name) {
+        continue;
+      }
       const modifier = match[2] || undefined;
       const patchKey = modifier
         ? `@clause:${name}:${modifier}`

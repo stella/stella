@@ -46,8 +46,8 @@ describe("chunkText()", () => {
     const text = "word ".repeat(400);
     const chunks = chunkText(text);
     if (chunks.length >= 2) {
-      const end1 = chunks[0].slice(-30);
-      const start2 = chunks[1].slice(0, 30);
+      const end1 = chunks[0]?.slice(-30) ?? "";
+      const start2 = chunks[1]?.slice(0, 30) ?? "";
       expect(end1.length > 0 || start2.length > 0).toBeTruthy();
     }
   });
@@ -80,8 +80,8 @@ describe("mergeChunkEntities()", () => {
     const offsets = [0, 100];
     const results: Entity[][] = [[makeEntity(10, 20)], [makeEntity(5, 15)]];
     const merged = mergeChunkEntities(offsets, results);
-    expect(merged[0].start).toBe(10);
-    expect(merged[1].start).toBe(105);
+    expect(merged[0]?.start).toBe(10);
+    expect(merged[1]?.start).toBe(105);
   });
 
   it("deduplicates near-identical entities from overlaps", () => {
@@ -96,7 +96,7 @@ describe("mergeChunkEntities()", () => {
     const merged = mergeChunkEntities(offsets, results);
     const atPosition = merged.filter((e) => e.start >= 44 && e.start <= 47);
     expect(atPosition).toHaveLength(1);
-    expect(atPosition[0].score).toBe(0.9);
+    expect(atPosition[0]?.score).toBe(0.9);
   });
 
   it("keeps entities with different labels at same position", () => {

@@ -70,9 +70,7 @@ const computeLayout = (
   const stack: { idx: number; depth: number; conditional: boolean }[] = [];
   let depth = 0;
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    const p = paragraphs[i];
-
+  for (const [i, p] of paragraphs.entries()) {
     if (!p.isDirective) {
       depths.push(depth);
       continue;
@@ -382,7 +380,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
       {paragraphs.map((p, i) => {
         // Show section divider at the first paragraph of
         // each new source section (only when mixed sources)
-        const prevSource = i > 0 ? paragraphs[i - 1].source : undefined;
+        const prevSource = i > 0 ? paragraphs[i - 1]?.source : undefined;
         const source = p.source;
         const showDivider =
           hasMultipleSections && source !== undefined && source !== prevSource;
@@ -399,7 +397,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
             {showDivider && <SectionDivider label={sectionLabel} />}
             <PreviewParagraph
               activeSpans={activeLines.get(i) ?? []}
-              depth={depths[i]}
+              depth={depths[i] ?? 0}
               error={errorsByIndex.get(p.index)}
               paragraph={p}
             />

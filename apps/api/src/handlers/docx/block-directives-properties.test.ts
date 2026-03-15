@@ -35,7 +35,11 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const parseBody = (xml: string): slimdom.Element => {
   const doc = slimdom.parseXmlDocument(xml);
-  return doc.getElementsByTagNameNS(W_NS, "body")[0];
+  const body = doc.getElementsByTagNameNS(W_NS, "body")[0];
+  if (!body) {
+    throw new Error("No w:body element found");
+  }
+  return body;
 };
 
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
@@ -58,7 +62,9 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
   for (const match of xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/g)) {
-    texts.push(match[1]);
+    if (match[1] !== undefined) {
+      texts.push(match[1]);
+    }
   }
   return texts;
 };

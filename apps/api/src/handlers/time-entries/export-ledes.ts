@@ -111,7 +111,7 @@ export const exportLedesHandler = async ({
 
   const lines = ["LEDES1998B[]", header];
   const now = new Date();
-  const invoiceDate = now.toISOString().split("T")[0].replace(/-/g, "");
+  const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(/-/g, "");
 
   let lineItemNumber = 0;
 

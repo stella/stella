@@ -12,43 +12,43 @@ describe("detectTriggerPhrases()", () => {
     it("extracts address after bytem:", () => {
       const r = findLabel("trvale bytem Lipová 42, Praha 1", "address");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("Lipová 42");
+      expect(r[0]?.text).toBe("Lipová 42");
     });
 
     it("extracts address after sídlem:", () => {
       const r = findLabel("se sídlem: Václavské nám. 15, Praha", "address");
       expect(r.length).toBeGreaterThanOrEqual(1);
-      expect(r[0].text).toBe("Václavské nám. 15");
+      expect(r[0]?.text).toBe("Václavské nám. 15");
     });
 
     it("extracts date of birth after nar.:", () => {
       const r = findLabel("nar.: 15.03.1978, trvale", "date of birth");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("15.03.1978,");
+      expect(r[0]?.text).toBe("15.03.1978,");
     });
 
     it("extracts birth number after r.č.:", () => {
       const r = findLabel("r.č.: 780315/1234", "czech birth number");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("780315/1234");
+      expect(r[0]?.text).toBe("780315/1234");
     });
 
     it("extracts IČO value", () => {
       const r = findLabel("IČO: 12345678", "registration number");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("12345678");
+      expect(r[0]?.text).toBe("12345678");
     });
 
     it("extracts DIČ value", () => {
       const r = findLabel("DIČ: CZ12345678", "tax identification number");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("CZ12345678");
+      expect(r[0]?.text).toBe("CZ12345678");
     });
 
     it("extracts person after zastoupen:", () => {
       const r = findLabel("zastoupen: Jan Novák, jednatel", "person");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("Jan Novák");
+      expect(r[0]?.text).toBe("Jan Novák");
     });
 
     it("extracts account number after č.ú.:", () => {
@@ -61,7 +61,7 @@ describe("detectTriggerPhrases()", () => {
     it("extracts address after wohnhaft in", () => {
       const r = findLabel("wohnhaft in Mozartstraße 18, München", "address");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("Mozartstraße 18");
+      expect(r[0]?.text).toBe("Mozartstraße 18");
     });
 
     it("extracts date after geboren am", () => {
@@ -80,7 +80,7 @@ describe("detectTriggerPhrases()", () => {
     it("extracts person after Geschäftsführer:", () => {
       const r = findLabel("Geschäftsführer: Anna Bauer, vertretend", "person");
       expect(r).toHaveLength(1);
-      expect(r[0].text).toBe("Anna Bauer");
+      expect(r[0]?.text).toBe("Anna Bauer");
     });
 
     it("extracts registration after Handelsregister:", () => {
@@ -96,12 +96,12 @@ describe("detectTriggerPhrases()", () => {
   describe("scoring and source", () => {
     it("assigns score 0.95 to all trigger matches", () => {
       const r = find("IČO: 12345678");
-      expect(r[0].score).toBe(0.95);
+      expect(r[0]?.score).toBe(0.95);
     });
 
     it("sets source to trigger", () => {
       const r = find("IČO: 12345678");
-      expect(r[0].source).toBe("trigger");
+      expect(r[0]?.source).toBe("trigger");
     });
   });
 

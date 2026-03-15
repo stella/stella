@@ -27,7 +27,8 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
     );
 
     if (idx !== -1) {
-      if (entity.score > merged[idx].score) {
+      const existing = merged[idx];
+      if (existing && entity.score > existing.score) {
         merged[idx] = { ...entity };
       }
     } else {

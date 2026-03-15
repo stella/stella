@@ -156,6 +156,9 @@ const buildCommentsXml = (
 
   for (let i = 0; i < comments.length; i++) {
     const comment = comments[i];
+    if (!comment) {
+      continue;
+    }
     const id = commentIds[i];
 
     const commentEl = doc.createElementNS(W_NS, "w:comment");

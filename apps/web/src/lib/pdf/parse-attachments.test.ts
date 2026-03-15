@@ -29,8 +29,8 @@ describe("parseAttachments", () => {
     });
 
     expect(result).toHaveLength(2);
-    expect(result[0].filename).toBe("file1.pdf");
-    expect(result[1].filename).toBe("file2.PDF");
+    expect(result[0]?.filename).toBe("file1.pdf");
+    expect(result[1]?.filename).toBe("file2.PDF");
   });
 
   it("returns empty array when attachments object has no PDF entries", () => {

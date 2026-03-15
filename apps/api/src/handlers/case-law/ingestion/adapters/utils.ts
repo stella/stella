@@ -32,7 +32,7 @@ export const stripHtml = (html: string): string =>
  */
 export const parseCeDate = (dateStr: string): string | undefined => {
   const m = dateStr.trim().match(CE_DATE_PATTERN);
-  if (!m) {
+  if (!m?.[1] || !m[2] || !m[3]) {
     return;
   }
   const day = m[1].padStart(2, "0");

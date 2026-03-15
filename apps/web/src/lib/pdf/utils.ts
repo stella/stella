@@ -16,11 +16,20 @@ export const getOrderedPages = <T>(
   // Current page ±1 render immediately
   const immediatePages: T[] = [];
   if (clamped > 0) {
-    immediatePages.push(pages[clamped - 1]);
+    const prev = pages[clamped - 1];
+    if (prev !== undefined) {
+      immediatePages.push(prev);
+    }
   }
-  immediatePages.push(pages[clamped]);
+  const current = pages[clamped];
+  if (current !== undefined) {
+    immediatePages.push(current);
+  }
   if (clamped < pages.length - 1) {
-    immediatePages.push(pages[clamped + 1]);
+    const next = pages[clamped + 1];
+    if (next !== undefined) {
+      immediatePages.push(next);
+    }
   }
 
   // Build the rest in outward-spiral order
@@ -31,7 +40,10 @@ export const getOrderedPages = <T>(
     const rightIndex = clamped + offset;
 
     if (rightIndex < pages.length) {
-      reordered.push(pages[rightIndex]);
+      const right = pages[rightIndex];
+      if (right !== undefined) {
+        reordered.push(right);
+      }
       if (reordered.length + immediatePages.length === pages.length) {
         break;
       }
@@ -40,7 +52,10 @@ export const getOrderedPages = <T>(
     const leftIndex = clamped - offset;
 
     if (leftIndex >= 0) {
-      reordered.push(pages[leftIndex]);
+      const left = pages[leftIndex];
+      if (left !== undefined) {
+        reordered.push(left);
+      }
     }
 
     offset += 1;

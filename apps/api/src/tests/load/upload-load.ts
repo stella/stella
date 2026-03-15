@@ -180,7 +180,11 @@ const runPool = async <T>(
   const worker = async () => {
     while (index < tasks.length) {
       const taskIndex = index++;
-      results[taskIndex] = await tasks[taskIndex]();
+      const task = tasks[taskIndex];
+      if (!task) {
+        continue;
+      }
+      results[taskIndex] = await task();
     }
   };
 

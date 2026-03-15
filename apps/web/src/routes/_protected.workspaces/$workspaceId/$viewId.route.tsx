@@ -137,15 +137,17 @@ function RouteComponent() {
                 continue;
               }
 
-              if (field.content === null) {
-                Reflect.deleteProperty(
-                  draft.entities[entityIndex].fields,
-                  field.propertyId,
-                );
+              const entity = draft.entities[entityIndex];
+              if (!entity) {
                 continue;
               }
 
-              draft.entities[entityIndex].fields[field.propertyId] = {
+              if (field.content === null) {
+                Reflect.deleteProperty(entity.fields, field.propertyId);
+                continue;
+              }
+
+              entity.fields[field.propertyId] = {
                 id: field.id,
                 entityId: field.entityId,
                 content: field.content,

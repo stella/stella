@@ -57,12 +57,14 @@ export const createContactHandler = async ({
   userId,
   body,
 }: CreateContactHandlerProps) => {
-  const [{ total }] = await scopedDb((tx) =>
+  const [totalRow] = await scopedDb((tx) =>
     tx
       .select({ total: count() })
       .from(contacts)
       .where(eq(contacts.organizationId, organizationId)),
   );
+
+  const total = totalRow?.total ?? 0;
 
   if (total >= LIMITS.contactsCount) {
     return status(400, { message: "Contacts limit reached" });

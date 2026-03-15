@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -97,14 +98,16 @@ export const splitEntryHandler = async ({
   const durations: number[] = [];
   let remaining = original.durationMinutes;
   for (let i = 0; i < body.splits.length; i++) {
+    const currentSplit = body.splits[i];
+    if (!currentSplit) {
+      panic(`Split at index ${i} is unexpectedly undefined`);
+    }
     if (i === body.splits.length - 1) {
       durations.push(Math.max(1, remaining));
     } else {
       const d = Math.max(
         1,
-        Math.round(
-          (original.durationMinutes * body.splits[i].percentage) / 100,
-        ),
+        Math.round((original.durationMinutes * currentSplit.percentage) / 100),
       );
       durations.push(d);
       remaining -= d;
@@ -142,6 +145,9 @@ export const splitEntryHandler = async ({
     for (let i = 0; i < body.splits.length; i++) {
       const split = body.splits[i];
       const durationMinutes = durations[i];
+      if (!split || durationMinutes === undefined) {
+        continue;
+      }
       const billedMinutes = roundToIncrement(durationMinutes);
 
       const [entry] = await tx
@@ -171,7 +177,9 @@ export const splitEntryHandler = async ({
         })
         .returning({ id: timeEntries.id });
 
-      newEntryIds.push(entry.id);
+      if (entry) {
+        newEntryIds.push(entry.id);
+      }
     }
 
     return false;

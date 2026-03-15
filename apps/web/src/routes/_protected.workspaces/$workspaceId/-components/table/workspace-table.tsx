@@ -165,7 +165,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
               onStartEditing={setEditingEntityId}
               onStopEditing={() => setEditingEntityId(null)}
               row={row}
-              rowLabel={rowLabels[index]}
+              rowLabel={rowLabels[index] ?? ""}
               table={table}
             />
           ))}
@@ -258,6 +258,9 @@ const DraggableRow = ({
   if (isFolder && visibleCells.length > 2) {
     const selectCell = visibleCells[0];
     const nameCell = visibleCells[1];
+    if (!selectCell || !nameCell) {
+      return null;
+    }
     const remainingCount = visibleCells.length - 2;
 
     return (
@@ -390,7 +393,10 @@ const SelectRowContent = ({
       const rows = table.getRowModel().rows;
       const patch: Record<string, boolean> = {};
       for (let i = start; i <= end; i++) {
-        patch[rows[i].id] = true;
+        const r = rows[i];
+        if (r) {
+          patch[r.id] = true;
+        }
       }
       table.setRowSelection((prev) => ({
         ...prev,
