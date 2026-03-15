@@ -362,6 +362,11 @@ translation flow and key naming rules in `/conventions-i18n`.
 - When commenting on GitHub (PRs, issues), include
   "CC on behalf of @username" where username is the GitHub handle
   of the person who requested the comment.
+- This repository (inc. PRs, commits, comments) is public.
+  Never include marketing language, internal business context,
+  pricing, competitive analysis, user identities, conversation
+  specifics, or security architecture beyond what the diff
+  shows. Write for the reviewing engineer.
 
 ## Linting and Formatting
 
