@@ -2,24 +2,24 @@
 // Do not edit manually.
 
 type Messages = {
+  "invitation": {
+    "accept": "Accept invitation";
+    "body": "You've been invited to join {organizationName} by {invitedByUsername}. Click below to accept.";
+    "expires": "This invitation will expire in 48 hours.";
+    "heading": "Organization invitation";
+    "ignore": "If you didn't expect this invitation, you can safely ignore this email.";
+    "subject": "You're invited to join {organizationName}";
+  };
   "otp": {
-    "subject": "Stella";
+    "emailVerification": "Use this code to verify your email address.";
+    "expires": "This code expires in 5 minutes.";
+    "forgetPassword": "Use this code to reset your password.";
     "heading": "Your Stella one-time code";
+    "ignore": "If you didn't request this code, you can ignore this email.";
     "preview": "Your one-time code: {otp}";
     "signIn": "Use this code to sign in to your Stella account.";
-    "emailVerification": "Use this code to verify your email address.";
-    "forgetPassword": "Use this code to reset your password.";
-    "expires": "This code expires in 5 minutes.";
-    "ignore": "If you didn't request this code, you can ignore this email.";
-  };
-  "invitation": {
-    "subject": "You're invited to join {organizationName}";
-    "heading": "Organization invitation";
-    "body": "You've been invited to join {organizationName} by {invitedByUsername}. Click below to accept.";
-    "accept": "Accept invitation";
-    "expires": "This invitation will expire in 48 hours.";
-    "ignore": "If you didn't expect this invitation, you can safely ignore this email.";
+    "subject": "Stella";
   };
 };
 
-export default Messages;
+export type { Messages as default };

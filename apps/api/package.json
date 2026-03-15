@@ -36,7 +36,6 @@
     "@stella/template-conditions": "workspace:*",
     "@stella/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",
-    "@tamtamchik/json-deep-sort": "catalog:",
     "ai": "^6.0.104",
     "better-auth": "catalog:",
     "better-result": "catalog:",

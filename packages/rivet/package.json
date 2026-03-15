@@ -16,7 +16,6 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@tamtamchik/json-deep-sort": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

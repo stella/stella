@@ -1,5 +1,4 @@
 import type { ActorOptions, AnyActorRegistry } from "@rivetkit/framework-base";
-import { sort } from "@tamtamchik/json-deep-sort";
 import * as v from "valibot";
 
 import type { OptionsType, VanillaOptions } from "../types";
@@ -49,10 +48,14 @@ export const parseActorKey = <T extends AuthedActorKey = AuthedActorKey>(
 
 export const actorKeyFactory = <T extends AuthedActorKey>() => {
   const createKey = (data: T) => {
-    const json = JSON.stringify(data);
-    const sorted = sort(json, true, true);
-
-    return sorted;
+    const sorted = Object.fromEntries(
+      Object.keys(data)
+        .toSorted()
+        // SAFETY: keys come from Object.keys(data), so they are valid keyof T.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        .map((k) => [k, data[k as keyof T]]),
+    );
+    return JSON.stringify(sorted);
   };
 
   return [createKey, parseActorKey<T>] as const;

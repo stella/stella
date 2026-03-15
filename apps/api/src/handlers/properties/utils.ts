@@ -1,4 +1,3 @@
-import { sort } from "@tamtamchik/json-deep-sort";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 
@@ -9,6 +8,7 @@ import type {
   PropertyContent,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sortDeep } from "@/api/lib/sort-deep";
 import type { PropertyCondition } from "@/api/types";
 
 type PropertyForComparison = {
@@ -28,6 +28,26 @@ type ComparePropertiesForStaleProps = {
   newProperty: PropertyForComparison;
 };
 
+/**
+ * Normalize dependencies to a deterministic order so that
+ * DB queries without ORDER BY don't cause spurious diffs.
+ */
+const normalizeDeps = (prop: PropertyForComparison): PropertyForComparison => {
+  if (prop.tool.type !== "ai-model") {
+    return prop;
+  }
+
+  return {
+    ...prop,
+    tool: {
+      ...prop.tool,
+      dependencies: prop.tool.dependencies.toSorted((a, b) =>
+        a.dependsOnPropertyId.localeCompare(b.dependsOnPropertyId),
+      ),
+    },
+  };
+};
+
 export const comparePropertiesForStale = ({
   oldProperty,
   newProperty,
@@ -40,12 +60,10 @@ export const comparePropertiesForStale = ({
     return true;
   }
 
-  const sortedOldProperty = sort(oldProperty, true, true);
-  const sortedNewProperty = sort(newProperty, true, true);
+  const sortedOld = sortDeep(normalizeDeps(oldProperty));
+  const sortedNew = sortDeep(normalizeDeps(newProperty));
 
-  const isEqual = deepEquals(sortedOldProperty, sortedNewProperty);
-
-  return !isEqual;
+  return !deepEquals(sortedOld, sortedNew);
 };
 
 type ValidatePropertyInputsProps = {
