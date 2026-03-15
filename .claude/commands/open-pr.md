@@ -61,26 +61,41 @@ comments.
    in files changed in this PR before opening it.
    Commit fixes with `fix: address security audit findings`.
 
-6. **Open the PR**:
+6. **Open the PR as draft**:
 
-   Push the branch and create the PR:
+   Push the branch and create the PR as a **draft**:
 
    ```bash
    git push --force-with-lease -u origin HEAD
-   gh pr create --fill
+   gh pr create --fill --draft
    ```
 
    If `--fill` produces a poor title/body, write a proper one
    following Conventional Commits (`feat:`, `fix:`, etc.) with
    a concise summary and test plan.
 
+   This repository is public. Never include marketing language,
+   internal business context, pricing, competitive analysis,
+   user identities, conversation specifics, or security
+   architecture beyond what the diff shows. Write for the
+   reviewing engineer.
+
 7. **Start rabbit round monitoring**:
 
-   Once the PR is open, invoke `/loop 5m /rabbit-round` to
-   process review bot comments every 5 minutes. `/loop` is a
-   built-in Claude Code skill, not a custom command.
+   Once the draft PR is open, invoke `/loop 7m /rabbit-round`
+   to process review bot comments every 7 minutes. `/loop` is
+   a built-in Claude Code skill, not a custom command.
 
    **When to stop:** cancel the cron job (via `CronDelete`)
    after two consecutive checks find nothing to act on (no
    unresolved bot comments, no new review threads, CI green).
    Do not let it run indefinitely.
+
+8. **Mark PR as ready**:
+
+   After the rabbit round monitoring stops (two consecutive
+   clean checks), mark the PR as ready for review:
+
+   ```bash
+   gh pr ready
+   ```
