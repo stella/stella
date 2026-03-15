@@ -1202,7 +1202,7 @@
     "title": "Dossiers",
     "tools": {
       "aiModel": "Modèle IA",
-      "manualInput": "Saisie manuelle"
+      "manualInput": "Manuellement"
     },
     "views": {
       "addFields": "Ajouter des champs",

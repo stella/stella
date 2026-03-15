@@ -1202,7 +1202,7 @@
     "title": "Akten",
     "tools": {
       "aiModel": "KI-Modell",
-      "manualInput": "Manuelle Eingabe"
+      "manualInput": "Manuell"
     },
     "views": {
       "addFields": "Felder hinzufügen",

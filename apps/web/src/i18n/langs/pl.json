@@ -1202,7 +1202,7 @@
     "title": "Sprawy",
     "tools": {
       "aiModel": "Model AI",
-      "manualInput": "Ręczne wprowadzanie"
+      "manualInput": "Ręcznie"
     },
     "views": {
       "addFields": "Dodaj pola",
