@@ -64,6 +64,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { getInitials } from "@/lib/get-initials";
 import { getMatterColor } from "@/lib/matter-colors";
 import { pageTitle } from "@/lib/page-title";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -142,18 +143,6 @@ type WorkspaceGroup = {
 // -- Helpers --
 
 const MAX_VISIBLE_CONTRIBUTORS = 4;
-
-const getInitials = (name: string | null): string => {
-  if (!name) {
-    return "?";
-  }
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-};
 
 // -- Config persistence --
 

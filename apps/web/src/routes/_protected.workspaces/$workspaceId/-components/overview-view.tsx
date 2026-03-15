@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
@@ -6,14 +7,10 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { LayoutDashboardIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stella/ui/components/avatar";
 import { cn } from "@stella/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
@@ -264,22 +261,14 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       {icon}
       <span className="min-w-0 flex-1 truncate text-sm">{entity.name}</span>
       {entity.createdBy && (
-        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs">
-          <Avatar className="size-4 text-[8px]">
-            {entity.createdByImage && (
-              <AvatarImage alt={entity.createdBy} src={entity.createdByImage} />
-            )}
-            <AvatarFallback>
-              {entity.createdBy
-                .split(" ")
-                .map((w) => w.at(0))
-                .join("")
-                .toUpperCase()
-                .slice(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          {entity.createdBy}
-        </span>
+        <PersonMentionLabel
+          avatarClassName="size-4 text-[8px]"
+          className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs"
+          mention={{
+            name: entity.createdBy,
+            image: entity.createdByImage,
+          }}
+        />
       )}
       {entity.updatedAt && (
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
