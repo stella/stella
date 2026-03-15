@@ -19,18 +19,9 @@ export const useAddParty = () => {
   const posthog = usePostHog();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      contactId,
-      role,
-      isPrimary,
-      notes,
-    }: AddPartyVars) => {
+    mutationFn: async ({ workspaceId, ...body }: AddPartyVars) => {
       const response = await api.workspaces({ workspaceId }).contacts.put({
-        contactId,
-        role,
-        isPrimary,
-        notes,
+        ...body,
         queryKey: workspaceContactsKeys.all(workspaceId),
       });
 

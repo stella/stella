@@ -24,10 +24,12 @@ export const searchInfiniteOptions = (params: SearchParams) =>
       const response = await api.search.post(
         {
           query: params.query,
-          workspaceId: params.workspaceId,
-          kinds: params.kinds,
-          cursor: pageParam,
-          limit: params.limit,
+          ...(params.workspaceId !== undefined && {
+            workspaceId: params.workspaceId,
+          }),
+          ...(params.kinds !== undefined && { kinds: params.kinds }),
+          ...(pageParam !== undefined && { cursor: pageParam }),
+          ...(params.limit !== undefined && { limit: params.limit }),
         },
         { fetch: { signal } },
       );

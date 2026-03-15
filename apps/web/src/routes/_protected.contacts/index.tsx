@@ -310,18 +310,22 @@ const CreateContactDialog = () => {
     },
     validators: { onDynamic: createContactSchema },
     onSubmit: async ({ value }) => {
+      const firstName =
+        value.type === "person" ? value.firstName || undefined : undefined;
+      const lastName =
+        value.type === "person" ? value.lastName || undefined : undefined;
+      const organizationName =
+        value.type === "organization"
+          ? value.organizationName || undefined
+          : undefined;
+
       await createContact.mutateAsync({
         id: nanoid(),
         type: value.type,
         displayName: value.displayName,
-        firstName:
-          value.type === "person" ? value.firstName || undefined : undefined,
-        lastName:
-          value.type === "person" ? value.lastName || undefined : undefined,
-        organizationName:
-          value.type === "organization"
-            ? value.organizationName || undefined
-            : undefined,
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(organizationName && { organizationName }),
       });
 
       await queryClient.invalidateQueries({

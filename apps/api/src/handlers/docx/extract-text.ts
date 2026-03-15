@@ -55,8 +55,8 @@ const collectText = (el: slimdom.Element): string => {
 };
 
 type ParagraphProps = {
-  style?: string;
-  alignment?: "left" | "center" | "right" | "both";
+  style?: string | undefined;
+  alignment?: "left" | "center" | "right" | "both" | undefined;
 };
 
 /** Read paragraph properties from `w:pPr`. */
@@ -95,7 +95,11 @@ const readParagraphProps = (p: slimdom.Element): ParagraphProps => {
 const readAttr = (el: slimdom.Element, local: string): string | undefined =>
   el.getAttributeNS(W_NS, local) ?? el.getAttribute(`w:${local}`) ?? undefined;
 
-type RunMetrics = { bold: boolean; fontSize?: number; chars: number };
+type RunMetrics = {
+  bold: boolean;
+  fontSize?: number | undefined;
+  chars: number;
+};
 
 /** Read bold and font size from runs in a paragraph. */
 const readRunMetrics = (p: slimdom.Element): RunMetrics[] => {

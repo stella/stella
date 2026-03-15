@@ -55,14 +55,14 @@ type VirtualAnchor = {
 type RowActionsProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onOpen?: () => void;
-  onRename?: () => void;
-  triggerClassName?: string;
-  anchor?: VirtualAnchor | null;
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  onOpen?: (() => void) | undefined;
+  onRename?: (() => void) | undefined;
+  triggerClassName?: string | undefined;
+  anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
-  selectedEntities?: WorkspaceEntity[];
+  selectedEntities?: WorkspaceEntity[] | undefined;
 };
 
 export const RowActions = ({

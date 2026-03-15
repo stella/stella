@@ -52,8 +52,9 @@ export const getViewsActorConfig = <T extends OptionsType>(
   const params: ViewsActorParams = {
     authToken: options.authToken ?? "",
   };
+  const region = getActorRegion();
   const commonOptions: CommonOptions = {
-    createInRegion: getActorRegion(),
+    ...(region && { createInRegion: region }),
     params,
   };
 

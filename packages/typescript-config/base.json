@@ -29,6 +29,7 @@
     "useUnknownInCatchVariables": true,
     "forceConsistentCasingInFileNames": true,
     "strictNullChecks": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
   }
 }

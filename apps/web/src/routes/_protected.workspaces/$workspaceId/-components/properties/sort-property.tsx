@@ -10,7 +10,7 @@ export type SortHint = "text" | "date" | "number";
 
 type SortPropertyProps = {
   column: Column<TableTreeNode>;
-  sortHint?: SortHint;
+  sortHint?: SortHint | undefined;
 };
 
 const LABELS: Record<SortHint, { asc: string; desc: string }> = {

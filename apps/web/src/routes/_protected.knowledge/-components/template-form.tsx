@@ -196,7 +196,7 @@ const RequiredIndicator = () => (
   <span className="text-destructive-foreground">{REQUIRED_MARKER}</span>
 );
 
-const FieldError = ({ message }: { message?: string }) => {
+const FieldError = ({ message }: { message?: string | undefined }) => {
   if (!message) {
     return null;
   }
@@ -213,8 +213,8 @@ const FieldRenderer = ({
   field: ResolvedField;
   value: unknown;
   onChange: (path: string, value?: unknown) => void;
-  onBlur?: (path: string) => void;
-  error?: string;
+  onBlur?: ((path: string) => void) | undefined;
+  error?: string | undefined;
 }) => {
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
@@ -925,7 +925,7 @@ export const TemplateForm = ({
     | { kind: "loading" }
     | {
         kind: "ready";
-        paragraphs: { text: string; source?: string }[];
+        paragraphs: { text: string; source?: string | undefined }[];
         unmatchedPlaceholders: string[];
         unusedValues: string[];
       };

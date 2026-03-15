@@ -189,6 +189,7 @@ const createConverters = (mapping: StyleMapping) => {
       );
 
       const contentRuns =
+        // eslint-disable-next-line typescript-eslint/strict-boolean-expressions
         firstBlock && "tokens" in firstBlock && firstBlock.tokens
           ? parseInlineTokens(firstBlock.tokens)
           : [new TextRun(item.text)];

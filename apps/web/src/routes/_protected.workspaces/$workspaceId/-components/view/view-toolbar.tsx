@@ -340,7 +340,7 @@ const TASK_DATE_OPTIONS = [
 type CalendarDatePropertyControlProps = {
   properties: WorkspaceProperty[];
   datePropertyId: string;
-  endDatePropertyId?: string;
+  endDatePropertyId?: string | undefined;
   onChange: (datePropertyId: string, endDatePropertyId?: string) => void;
 };
 

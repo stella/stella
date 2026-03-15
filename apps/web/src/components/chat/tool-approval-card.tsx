@@ -58,13 +58,17 @@ const mimeFromName = (name: string): string => {
   }
 };
 
-const getApprovalId = (part: ToolPart): string | null =>
-  "approval" in part &&
-  part.approval &&
-  typeof part.approval === "object" &&
-  "id" in part.approval
-    ? part.approval.id
-    : null;
+const getApprovalId = (part: ToolPart): string | null => {
+  if (
+    "approval" in part &&
+    typeof part.approval === "object" &&
+    part.approval !== null &&
+    "id" in part.approval
+  ) {
+    return part.approval.id;
+  }
+  return null;
+};
 
 type ToolPart = Parameters<typeof getToolName>[0];
 
@@ -103,7 +107,7 @@ const SelectBadge = ({ value, property }: SelectBadgeProps) => {
 
 type UpdateSummaryProps = {
   input: Record<string, unknown>;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
@@ -217,7 +221,7 @@ type ToolApprovalCardProps = {
   onDeny: (id: string) => void;
   onAlwaysAllow: (toolName: string) => void;
   autoApprovedTools: ReadonlySet<string>;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 export const ToolApprovalCard = ({

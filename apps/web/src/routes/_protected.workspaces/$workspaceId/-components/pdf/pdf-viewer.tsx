@@ -277,7 +277,7 @@ const PdfPageWithBanner = ({
   attachmentLabel,
   ...props
 }: {
-  attachmentLabel?: string;
+  attachmentLabel?: string | undefined;
   fileId: string;
   isActive: boolean;
   pageId: string;

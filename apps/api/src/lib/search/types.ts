@@ -15,9 +15,9 @@ export const parseEntityKind = (value: unknown): EntityKind => {
 export type SearchQuery = {
   query: string;
   organizationId: SafeId<"organization">;
-  workspaceId?: string;
-  kinds?: EntityKind[];
-  cursor?: string;
+  workspaceId?: string | undefined;
+  kinds?: EntityKind[] | undefined;
+  cursor?: string | undefined;
   limit: number;
 };
 

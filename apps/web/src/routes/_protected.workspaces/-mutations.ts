@@ -13,7 +13,7 @@ const DEFAULT_WORKSPACE_NAME = "Untitled";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
-  name?: string;
+  name?: string | undefined;
 };
 
 export const useCreateWorkspace = () => {
@@ -57,18 +57,9 @@ export const useUpdateWorkspace = () => {
   const posthog = usePostHog();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      clientId,
-      reference,
-      color,
-    }: UpdateWorkspaceVars) => {
+    mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
       const response = await api.workspaces({ workspaceId }).post({
-        name,
-        clientId,
-        reference,
-        color,
+        ...body,
         queryKey: workspacesKeys.all,
       });
 

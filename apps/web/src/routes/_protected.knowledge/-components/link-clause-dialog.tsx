@@ -38,7 +38,7 @@ type LinkClauseDialogProps = {
   onOpenChange: (open: boolean) => void;
   templateId: string;
   /** Available slot names from the template preview. */
-  availableSlots?: string[];
+  availableSlots?: string[] | undefined;
   onLinked: () => void;
 };
 

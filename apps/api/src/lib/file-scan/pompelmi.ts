@@ -18,15 +18,15 @@ const heuristicsScanner: Scanner = {
   async scan(bytes) {
     const matches = await CommonHeuristicsScanner.scan(bytes);
 
-    return matches.map(
-      (m): Match => ({
+    return matches.map((m): Match => {
+      const severity =
+        (m.severity && HEURISTIC_SEVERITY_MAP[m.severity]) ?? "suspicious";
+      return {
         rule: m.rule,
-        severity: m.severity
-          ? HEURISTIC_SEVERITY_MAP[m.severity]
-          : "suspicious",
-        meta: m.meta,
-      }),
-    );
+        severity,
+        ...(m.meta !== undefined && { meta: m.meta }),
+      };
+    });
   },
 };
 

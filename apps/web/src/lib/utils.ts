@@ -1,3 +1,35 @@
+/**
+ * Strip entries whose value is `undefined` so the result
+ * satisfies `exactOptionalPropertyTypes`. Eden-generated
+ * query types use `prop?: T` (without `| undefined`); this
+ * helper bridges our types (which include `| undefined`)
+ * to Eden's stricter shape.
+ *
+ * At runtime, keys with `undefined` values are deleted so
+ * the object is structurally identical to one where those
+ * keys were never set.
+ */
+// SAFETY: the mapped type below mirrors the input but
+// strips `| undefined` from each value. At runtime every
+// undefined-valued key is physically removed, so the cast
+// is sound. This is the canonical boundary between our
+// internal types (`prop?: T | undefined`) and Eden's
+// inferred types (`prop?: T`).
+export const stripUndefined = <T extends Record<string, unknown>>(
+  obj: T,
+): {
+  [K in keyof T]: Exclude<T[K], undefined>;
+} => {
+  const result = {} as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return result as never;
+};
+
 export const shuffleArray = <T>(originalArray: T[]): T[] => {
   const array = [...originalArray];
 

@@ -66,7 +66,7 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
 /** Extract case number and date from the registry sign. */
 const parseRegistrySign = (
   raw: string,
-): { caseNumber: string; decisionDate?: string } | null => {
+): { caseNumber: string; decisionDate?: string | undefined } | null => {
   // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011"
   const match = raw.match(REGISTRY_SIGN_PATTERN);
   if (!match?.[1] || !match[2]) {

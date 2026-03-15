@@ -2,14 +2,15 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { stripUndefined } from "@/lib/utils";
 
 type DateRange = {
-  dateFrom?: string;
-  dateTo?: string;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
 };
 
 type PeriodParams = DateRange & {
-  granularity?: "day" | "week" | "month";
+  granularity?: "day" | "week" | "month" | undefined;
 };
 
 const analyticsKeys = {
@@ -31,7 +32,7 @@ export const summaryOptions = (workspaceId: string, range: DateRange) =>
     queryKey: analyticsKeys.summary(workspaceId, range),
     queryFn: async ({ signal }) => {
       const response = await api.analytics({ workspaceId }).summary.get({
-        query: range,
+        query: stripUndefined(range),
         fetch: { signal },
       });
       if (response.error) {
@@ -48,7 +49,7 @@ export const hoursByMatterOptions = (workspaceId: string, range: DateRange) =>
       const response = await api
         .analytics({ workspaceId })
         ["hours-by-matter"].get({
-          query: range,
+          query: stripUndefined(range),
           fetch: { signal },
         });
       if (response.error) {
@@ -65,7 +66,7 @@ export const hoursByUserOptions = (workspaceId: string, range: DateRange) =>
       const response = await api
         .analytics({ workspaceId })
         ["hours-by-user"].get({
-          query: range,
+          query: stripUndefined(range),
           fetch: { signal },
         });
       if (response.error) {
@@ -85,7 +86,7 @@ export const hoursByPeriodOptions = (
       const response = await api
         .analytics({ workspaceId })
         ["hours-by-period"].get({
-          query: params,
+          query: stripUndefined(params),
           fetch: { signal },
         });
       if (response.error) {
@@ -105,7 +106,7 @@ export const revenueByPeriodOptions = (
       const response = await api
         .analytics({ workspaceId })
         ["revenue-by-period"].get({
-          query: params,
+          query: stripUndefined(params),
           fetch: { signal },
         });
       if (response.error) {

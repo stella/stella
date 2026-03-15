@@ -300,7 +300,7 @@ const RIGHT_PANEL_MAX_WIDTH = 640;
 type RightPanelProps = {
   open: boolean;
   onToggle: () => void;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {

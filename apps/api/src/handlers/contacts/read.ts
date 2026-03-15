@@ -11,10 +11,10 @@ const MAX_LIMIT = 100;
 type ReadContactsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  limit?: number;
-  cursor?: string;
-  type?: "person" | "organization";
-  q?: string;
+  limit?: number | undefined;
+  cursor?: string | undefined;
+  type?: "person" | "organization" | undefined;
+  q?: string | undefined;
 };
 
 type DecodedCursor = {

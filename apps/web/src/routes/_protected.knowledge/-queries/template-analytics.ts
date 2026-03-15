@@ -2,14 +2,15 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { stripUndefined } from "@/lib/utils";
 
 type DateRange = {
-  dateFrom?: string;
-  dateTo?: string;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
 };
 
 type PeriodParams = DateRange & {
-  granularity?: "day" | "week" | "month";
+  granularity?: "day" | "week" | "month" | undefined;
 };
 
 const templateAnalyticsKeys = {
@@ -29,7 +30,7 @@ export const templateSummaryOptions = (range: DateRange) =>
     queryKey: templateAnalyticsKeys.summary(range),
     queryFn: async ({ signal }) => {
       const response = await api["template-analytics"].summary.get({
-        query: range,
+        query: stripUndefined(range),
         fetch: { signal },
       });
       if (response.error) {
@@ -44,7 +45,7 @@ export const fillsByPeriodOptions = (params: PeriodParams) =>
     queryKey: templateAnalyticsKeys.fillsByPeriod(params),
     queryFn: async ({ signal }) => {
       const response = await api["template-analytics"]["fills-by-period"].get({
-        query: params,
+        query: stripUndefined(params),
         fetch: { signal },
       });
       if (response.error) {
@@ -59,7 +60,7 @@ export const topTemplatesOptions = (range: DateRange) =>
     queryKey: templateAnalyticsKeys.topTemplates(range),
     queryFn: async ({ signal }) => {
       const response = await api["template-analytics"]["top-templates"].get({
-        query: range,
+        query: stripUndefined(range),
         fetch: { signal },
       });
       if (response.error) {
@@ -74,7 +75,7 @@ export const fillsByUserOptions = (range: DateRange) =>
     queryKey: templateAnalyticsKeys.fillsByUser(range),
     queryFn: async ({ signal }) => {
       const response = await api["template-analytics"]["fills-by-user"].get({
-        query: range,
+        query: stripUndefined(range),
         fetch: { signal },
       });
       if (response.error) {

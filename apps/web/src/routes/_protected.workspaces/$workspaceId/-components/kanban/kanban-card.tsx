@@ -36,9 +36,9 @@ import {
 type KanbanCardProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
-  cardFields?: string[];
-  properties?: WorkspaceProperty[];
-  onRename?: (entityId: string, newName: string) => void;
+  cardFields?: string[] | undefined;
+  properties?: WorkspaceProperty[] | undefined;
+  onRename?: ((entityId: string, newName: string) => void) | undefined;
 };
 
 export const KanbanCard = ({

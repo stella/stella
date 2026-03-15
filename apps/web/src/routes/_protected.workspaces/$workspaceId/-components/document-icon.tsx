@@ -3,7 +3,7 @@ import { File, FileImage, FileSpreadsheet, FileText } from "lucide-react";
 import { PDF_MIME_TYPE } from "@/consts";
 
 type DocxIconProps = {
-  className?: string;
+  className?: string | undefined;
 };
 
 const DocxIcon = ({ className }: DocxIconProps) => (
@@ -42,7 +42,7 @@ const DocxIcon = ({ className }: DocxIconProps) => (
 );
 
 type PdfIconProps = {
-  className?: string;
+  className?: string | undefined;
 };
 
 const PdfIcon = ({ className }: PdfIconProps) => (
@@ -109,7 +109,7 @@ const imageMimeTypes = new Set([
 
 type DocumentIconProps = {
   mimeType: string;
-  className?: string;
+  className?: string | undefined;
 };
 
 export function DocumentIcon({ mimeType, className }: DocumentIconProps) {

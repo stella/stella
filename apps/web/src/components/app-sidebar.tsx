@@ -314,7 +314,7 @@ type MatterItemProps = {
   isPinned?: boolean;
   onTogglePin: (id: string) => void;
   onReorder?: (draggedId: string, targetId: string) => void;
-  navBadge?: number;
+  navBadge?: number | undefined;
 };
 
 const MATTER_DRAG_TYPE = "stella/pinned-matter-id";

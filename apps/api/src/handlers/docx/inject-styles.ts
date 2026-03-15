@@ -61,7 +61,7 @@ const loadTemplateParts = async (
 export type InjectStylesOptions = {
   /** BCP-47 language tag (e.g., "en-US", "de-DE", "cs-CZ").
    *  Defaults to "en-US". */
-  lang?: string;
+  lang?: string | undefined;
 };
 
 /**

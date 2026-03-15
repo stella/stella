@@ -26,7 +26,7 @@ export type PagePaginationOptions<TResponse> = {
   /** Adapter key for error context. */
   adapterKey: string;
   /** Whether page numbers are 0-indexed (default: false = 1-indexed). */
-  zeroIndexed?: boolean;
+  zeroIndexed?: boolean | undefined;
   /** Number of items per page (used to detect last page). */
   pageSize: number;
   /**
@@ -43,7 +43,10 @@ export type PagePaginationOptions<TResponse> = {
    * Extract items from the parsed response.
    * Return the items and optional total count.
    */
-  extractItems: (data: TResponse) => { items: unknown[]; total?: number };
+  extractItems: (data: TResponse) => {
+    items: unknown[];
+    total?: number | undefined;
+  };
   /**
    * Transform a single raw item into an IngestionResult.
    * May perform secondary fetches (detail pages, fulltext).

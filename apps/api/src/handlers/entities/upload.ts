@@ -255,7 +255,7 @@ export const uploadEntityHandler = async ({
           encrypted,
           sha256Hex,
           pdfFileId,
-          scanWarnings,
+          ...(scanWarnings !== undefined && { scanWarnings }),
         },
       });
 

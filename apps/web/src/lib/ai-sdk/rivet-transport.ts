@@ -29,8 +29,8 @@ export type ProcessedAttachment =
       mediaType: string;
       views: {
         simple: string;
-        original?: string;
-        trackedChanges?: string;
+        original?: string | undefined;
+        trackedChanges?: string | undefined;
       };
     };
 
@@ -48,11 +48,11 @@ export type ChatStreamConnection = {
     threadId: string;
     chatId: string;
     message: UIMessage;
-    workspaceId?: string;
-    modelId?: string;
-    userContext?: UserContext;
-    attachments?: ProcessedAttachment[];
-    activeFile?: ActiveFileContext;
+    workspaceId?: string | undefined;
+    modelId?: string | undefined;
+    userContext?: UserContext | undefined;
+    attachments?: ProcessedAttachment[] | undefined;
+    activeFile?: ActiveFileContext | undefined;
   }): Promise<{ status: "started" | "busy" }>;
   stop(input: { threadId: string }): Promise<void>;
   getStreamSnapshot(input: {
@@ -97,10 +97,10 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
   constructor(opts: {
     connection: ChatStreamConnection;
     threadId: string;
-    workspaceId?: string;
-    getModelId?: () => string | null;
-    userContext?: UserContext;
-    getActiveFile?: () => ActiveFileContext | undefined;
+    workspaceId?: string | undefined;
+    getModelId?: (() => string | null) | undefined;
+    userContext?: UserContext | undefined;
+    getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   }) {
     this.connection = opts.connection;
     this.threadId = opts.threadId;

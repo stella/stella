@@ -63,8 +63,8 @@ type DeleteS3ObjectsProps = {
 
 export class S3Error extends TaggedError("S3Error")<{
   message: string;
-  code?: string;
-  key?: string;
+  code?: string | undefined;
+  key?: string | undefined;
   cause?: unknown;
 }>() {}
 

@@ -11,7 +11,7 @@ import {
 } from "@stella/ui/components/accordion";
 import { Button } from "@stella/ui/components/button";
 
-import type { EntityField, WorkspaceEntity } from "@/lib/types";
+import type { EntityField } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
@@ -43,12 +43,8 @@ export const EntityFileInfo = ({
       if (currentIndex === -1) {
         return { prevEntity: undefined, nextEntity: undefined };
       }
-      const prevEntity = data.entities[currentIndex - 1] as
-        | WorkspaceEntity
-        | undefined;
-      const nextEntity = data.entities[currentIndex + 1] as
-        | WorkspaceEntity
-        | undefined;
+      const prevEntity = data.entities[currentIndex - 1];
+      const nextEntity = data.entities[currentIndex + 1];
       return { prevEntity, nextEntity };
     },
   });

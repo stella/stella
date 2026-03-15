@@ -10,16 +10,16 @@ export type PdfTab = {
   /** The PDF filename; preserved across justification slot
    *  navigation so the tab header always shows the file name. */
   label: string;
-  mimeType?: string;
+  mimeType?: string | undefined;
   /** The workspace this tab belongs to. Used to prevent
    *  cross-workspace state leaks in the chat panel. */
   workspaceId: string;
   /** When set, the inspector shows the justification for
    *  this field alongside the PDF viewer. */
-  justificationFieldId?: string;
+  justificationFieldId?: string | undefined;
   /** The property column that was clicked (for showing
    *  the active cell highlight in the PDF). */
-  propertyId?: string;
+  propertyId?: string | undefined;
 };
 
 export type TaskTab = {

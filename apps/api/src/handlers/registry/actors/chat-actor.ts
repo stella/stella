@@ -55,7 +55,9 @@ const MAX_TOOL_STEPS = 5;
 const MESSAGE_WINDOW = 20;
 
 const openrouter = createOpenRouter({
-  apiKey: env.OPENROUTER_API_KEY,
+  ...(env.OPENROUTER_API_KEY !== undefined && {
+    apiKey: env.OPENROUTER_API_KEY,
+  }),
 });
 
 const getModel = (modelId?: string) => {

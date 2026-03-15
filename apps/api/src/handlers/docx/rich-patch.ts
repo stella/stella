@@ -20,8 +20,8 @@ const runsToTextRuns = (
     (run) =>
       new TextRun({
         text: run.text,
-        bold: run.bold,
-        italics: run.italic,
+        ...(run.bold !== undefined && { bold: run.bold }),
+        ...(run.italic !== undefined && { italics: run.italic }),
       }),
   );
 

@@ -30,10 +30,12 @@ export const yaraScanner: Scanner = {
           ? meta.verdict
           : undefined;
 
+      const severity =
+        (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
       return {
         rule: m.ruleIdentifier,
-        severity: verdict ? YARA_SEVERITY_MAP[verdict] : "suspicious",
-        meta: isRecord(meta) ? meta : {},
+        severity,
+        ...(isRecord(meta) && { meta }),
       };
     });
   },
