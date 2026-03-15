@@ -19,6 +19,7 @@ import {
 } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { langMessages, useI18nStore } from "@/i18n/i18n-store";
+import { STALE_TIME } from "@/lib/consts";
 import initializePosthog from "@/lib/posthog/client";
 import { routeTree } from "@/routeTree.gen";
 
@@ -40,7 +41,13 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
 };
 
 export function getRouter() {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: STALE_TIME.FIVE.MINUTES,
+      },
+    },
+  });
   const posthog = initializePosthog();
 
   const router = createRouter({
