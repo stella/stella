@@ -13,7 +13,7 @@
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsgo --noEmit",
-    "lint": "oxlint --type-aware",
+    "lint": "bun --bun oxlint --type-aware",
     "format": "oxfmt .",
     "db:push": "bun --bun drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",

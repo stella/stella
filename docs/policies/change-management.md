@@ -56,7 +56,7 @@ includes:
 | Dependency install | `bun ci`                  | Verify lockfile integrity              |
 | i18n sync          | `bun run i18n:check`      | Ensure translation keys are consistent |
 | Lint               | oxlint (ultracite preset) | Code quality and security rules        |
-| Colour lint        | `scripts/lint-colors.sh`  | Enforce semantic colour tokens         |
+| Custom lint rules  | oxlint JS plugins         | Semantic tokens, RTL, ownership IDs    |
 | Format             | Prettier                  | Consistent code formatting             |
 | Type check         | TypeScript strict mode    | Type safety                            |
 | Tests              | Bun test runner           | Functional correctness                 |

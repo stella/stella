@@ -100,15 +100,6 @@ jobs:
       - name: Lint
         run: bun run lint -- ${{ steps.affected.outputs.flag }}
 
-      - name: Lint colors
-        run: bash scripts/lint-colors.sh
-
-      - name: Lint untyped updates
-        run: bash scripts/lint-untyped-updates.sh
-
-      - name: Lint logical CSS properties
-        run: bash scripts/lint-logical-properties.sh
-
       - name: Format
         run: bun run format -- ${{ steps.affected.outputs.flag }}
 
