@@ -11,6 +11,7 @@ See [CLAUDE.md](../CLAUDE.md) for project guidelines.
 .agents/
 ├── plans/           # Implementation plans (001-feature.md, 002-feature.md)
 ├── justifications/  # Decision rationale (why we chose X over Y)
+├── reports/         # QA reports from /click-around (gitignored)
 └── scratch/         # Temporary notes, drafts, work-in-progress
 ```
 
