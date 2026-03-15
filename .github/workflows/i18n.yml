@@ -1,11 +1,7 @@
 name: i18n — translate
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/web/src/i18n/langs/en.json"
-      - "packages/transactional/i18n/langs/en.json"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}

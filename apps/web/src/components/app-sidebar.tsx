@@ -378,9 +378,7 @@ const NavContextMenu = ({
             // eslint-disable-next-line react/no-array-index-key
             <MenuItem
               className={
-                item.variant === "destructive"
-                  ? "text-destructive"
-                  : undefined
+                item.variant === "destructive" ? "text-destructive" : undefined
               }
               key={i}
               onClick={item.onClick}
@@ -671,11 +669,9 @@ const MatterItem = ({
                     `/workspaces/${ws.id}`,
                     window.location.origin,
                   );
-                  navigator.clipboard
-                    .writeText(url.toString())
-                    .catch(() => {
-                      // Clipboard API may fail if page loses focus
-                    });
+                  navigator.clipboard.writeText(url.toString()).catch(() => {
+                    // Clipboard API may fail if page loses focus
+                  });
                 }}
               >
                 <LinkIcon />

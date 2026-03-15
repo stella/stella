@@ -82,8 +82,7 @@ export const useDeleteWorkspace = () => {
 
   return useMutation({
     retry: (failureCount, error) =>
-      failureCount < 3 &&
-      (!APIError.is(error) || error.status >= 500),
+      failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
       const response = await api.workspaces({ workspaceId }).delete({
         queryKey: workspacesKeys.all,
