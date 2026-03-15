@@ -662,10 +662,10 @@ type Messages = {
     "trigger": "Feedback";
   };
   "filters": {
-    "contains": "Contains";
-    "eq": "Is";
-    "is_empty": "Is empty";
-    "neq": "Is not";
+    "contains": "contains";
+    "eq": "is";
+    "is_empty": "is empty";
+    "neq": "is not";
   };
   "knowledge": {
     "sections": {
@@ -1042,14 +1042,14 @@ type Messages = {
       "defaultPropertyName": "Documents";
       "downloadAsZip": "Download as ZIP";
       "maxEntitiesReached": "Max entities count reached";
+      "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";
+      "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}";
       "uploadedSuccessfully": "Files uploaded successfully";
       "uploading": "Uploading files";
       "uploadingDescription": "Don't close this page until the files are uploaded";
       "uploadingProgress": "{completed, number} of {total, number} uploaded";
-      "rateLimited": "Rate limited; resuming in {seconds, number}s";
-      "retryFailed": "Retry {count, plural, one {# file} other {# files}}";
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly.";
     };
     "filesystem": {
@@ -1135,8 +1135,6 @@ type Messages = {
     };
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
-      "aiTask": "AI Task";
-      "detailViewConstruction": "AI workflow detail view is under construction.";
       "evidence": "Evidence";
       "goBack": "Go back";
       "incorrectPassword": "Incorrect password. Please try again.";
@@ -1145,9 +1143,7 @@ type Messages = {
       "passwordLabel": "Enter the PDF password";
       "passwordRequired": "Password required";
       "previousPage": "Previous page";
-      "print": "Print";
       "resetZoom": "Reset zoom";
-      "selectATab": "Select a tab";
       "showOriginal": "Show original pages";
       "toggleSidebar": "Toggle sidebar";
       "unlock": "Unlock";
@@ -1278,4 +1274,4 @@ type Messages = {
   };
 };
 
-export default Messages;
+export type { Messages as default };
