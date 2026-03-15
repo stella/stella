@@ -10,8 +10,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsgo --noEmit",
     "lint": "bun --bun oxlint --type-aware",
-    "format": "oxfmt .",
-    "test": "bun test"
+    "format": "oxfmt ."
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
