@@ -109,6 +109,7 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import type { Role } from "@/lib/auth";
+import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -136,7 +137,6 @@ import {
 } from "@/routes/_protected.workspaces/-queries";
 
 const isDev = import.meta.env.DEV;
-const WHITESPACE = /\s+/;
 const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 // TODO: Persist pinned workspaces on the backend (user
@@ -400,16 +400,6 @@ const NavBadge = ({ digit }: { digit: number }) => (
     </kbd>
   </SidebarMenuBadge>
 );
-
-const getInitials = (name: string) => {
-  const parts = name.trim().split(WHITESPACE);
-  const first = parts.at(0);
-  const second = parts.at(1);
-  if (first && second) {
-    return `${first[0]}${second[0]}`.toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
-};
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   role: Role;

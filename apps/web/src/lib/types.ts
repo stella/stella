@@ -185,6 +185,24 @@ export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {
   createdAt: string;
 };
 
+// ── Inline mention types ─────────────────────────────────
+// Default renders icon/avatar; callers must explicitly
+// opt out via hideIcon / hideAvatar.
+
+export type FileMention = {
+  name: string;
+  mimeType: string;
+  /** Only set when space is extremely constrained. */
+  hideIcon?: boolean;
+};
+
+export type PersonMention = {
+  name: string;
+  image: string | null;
+  /** Only set when space is extremely constrained. */
+  hideAvatar?: boolean;
+};
+
 export type WorkspaceJustification = {
   id: string;
   fieldId: string;
