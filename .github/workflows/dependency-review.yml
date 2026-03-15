@@ -24,6 +24,7 @@ name: Dependency Review
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -33,7 +34,9 @@ jobs:
   dependency-review:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event.repository.visibility == 'public'
+    if: >-
+      github.event.repository.visibility == 'public'
+      && github.event.pull_request.draft != true
 
     steps:
       - name: Checkout
