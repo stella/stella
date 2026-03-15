@@ -15780,6 +15780,7 @@ The following npm packages may be included in this product:
 
  - @rivetkit/on-change@6.0.2-rc.1
  - chalk@5.6.2
+ - escape-string-regexp@4.0.0
  - escape-string-regexp@5.0.0
  - get-east-asian-width@1.5.0
  - get-port@7.1.0
