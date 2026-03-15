@@ -86,6 +86,7 @@
         "@posthog/react": "^1.8.1",
         "@radix-ui/react-slot": "^1.2.4",
         "@rivetkit/react": "catalog:rivet",
+        "@stella/anonymize": "workspace:*",
         "@stella/api": "workspace:*",
         "@stella/permissions": "workspace:*",
         "@stella/rivet": "workspace:*",
@@ -164,6 +165,18 @@
         "elysia": "catalog:",
         "onnxruntime-node": "^1.24.3",
         "react-grab": "^0.1.26",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/anonymize": {
+      "name": "@stella/anonymize",
+      "version": "0.0.0",
+      "dependencies": {
+        "@huggingface/tokenizers": "^0.1.2",
+        "@monyone/aho-corasick": "^1.1.6",
+      },
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
         "typescript": "catalog:",
       },
     },
@@ -1035,6 +1048,8 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
+
+    "@stella/anonymize": ["@stella/anonymize@workspace:packages/anonymize"],
 
     "@stella/api": ["@stella/api@workspace:apps/api"],
 

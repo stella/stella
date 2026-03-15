@@ -1,7 +1,8 @@
-import csTriggers from "./config/triggers.cs.json";
-import deTriggers from "./config/triggers.de.json";
-import { DETECTION_SOURCES } from "./types";
-import type { Entity, TriggerRule } from "./types";
+import csTriggers from "../config/triggers.cs.json";
+import deTriggers from "../config/triggers.de.json";
+import enTriggers from "../config/triggers.en.json";
+import { DETECTION_SOURCES } from "../types";
+import type { Entity, TriggerRule } from "../types";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
@@ -35,15 +36,24 @@ const GERMAN_TRIGGERS: readonly TriggerRule[] = mapConfig(
   deTriggers as readonly TriggerConfigRow[],
 );
 
+/**
+ * English legal trigger phrases loaded from JSON config.
+ */
+const ENGLISH_TRIGGERS: readonly TriggerRule[] = mapConfig(
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- JSON config validated by mapConfig at runtime
+  enTriggers as readonly TriggerConfigRow[],
+);
+
 const ALL_TRIGGERS: readonly TriggerRule[] = [
   ...CZECH_TRIGGERS,
   ...GERMAN_TRIGGERS,
+  ...ENGLISH_TRIGGERS,
 ];
 
 /**
  * Strip surrounding quotation marks, parentheses, and
  * similar punctuation from extracted trigger values.
- * Handles Czech „…", German »…«, and standard quotes.
+ * Handles Czech "...", German >>...<<, and standard quotes.
  */
 const LEADING_PUNCT = /^[„""»«'"()\s]+/;
 const TRAILING_PUNCT = /[""»«'"()\s]+$/;
@@ -179,7 +189,7 @@ export const detectTriggerPhrases = (fullText: string): Entity[] => {
       }
 
       // Word-boundary check: skip if preceded by a letter
-      // (e.g., "IČ:" should not match inside "DIČ:")
+      // (e.g., "IC:" should not match inside "DIC:")
       if (idx > 0 && /\p{L}/u.test(lowerText[idx - 1] ?? "")) {
         searchFrom = idx + 1;
         continue;

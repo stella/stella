@@ -9,7 +9,33 @@ import ort_CPU from "onnxruntime-web";
 import type { InferenceSession } from "onnxruntime-web";
 import ort_WEBGPU from "onnxruntime-web/webgpu";
 
-import type { OnnxWebSettings, OnnxWrapper } from "./types";
+// ── Browser-specific GLiNER types ─────────────────────
+
+export type ExecutionProvider = "cpu" | "wasm" | "webgpu" | "webgl";
+
+export type OnnxWebSettings = {
+  modelPath: string | Uint8Array | ArrayBufferLike;
+  executionProvider?: ExecutionProvider;
+  wasmPaths?: string;
+  multiThread?: boolean;
+  maxThreads?: number;
+  fetchBinary?: boolean;
+};
+
+export type GlinerConfig = {
+  tokenizerPath: string;
+  onnxSettings: OnnxWebSettings;
+  maxWidth?: number;
+};
+
+export type OnnxWrapper = {
+  ort: typeof ort_CPU;
+  init(): Promise<void>;
+  run(
+    feeds: InferenceSession.FeedsType,
+    options?: InferenceSession.RunOptions,
+  ): Promise<InferenceSession.ReturnType>;
+};
 
 /**
  * Derive the CDN base URL for WASM files from the installed

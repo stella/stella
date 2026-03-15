@@ -5,42 +5,38 @@ import { createFileRoute } from "@tanstack/react-router";
 import mammoth from "mammoth";
 import { nanoid } from "nanoid";
 
-import { Button } from "@stella/ui/components/button";
-
 import {
   chunkText,
   computeChunkOffsets,
-  mergeChunkEntities,
-} from "@/lib/anonymize/chunker";
-import { getEntries, putEntry } from "@/lib/anonymize/gazetteer";
-import {
-  DEFAULT_OPERATOR_CONFIG,
-  resolveOperator,
-} from "@/lib/anonymize/operators";
-import type { CharSpan } from "@/lib/anonymize/pdf-coords";
-import { extractPdfText } from "@/lib/anonymize/pdf-coords";
-import { redactPdf } from "@/lib/anonymize/pdf-redact";
-import { runPipeline } from "@/lib/anonymize/pipeline";
-import type { NerInferenceFn } from "@/lib/anonymize/pipeline";
-import { exportRedactionKey, redactText } from "@/lib/anonymize/redact";
-import { saveRedactionMap } from "@/lib/anonymize/redaction-map";
-import { detectRegexPii } from "@/lib/anonymize/regex-patterns";
-import {
   DEFAULT_ENTITY_LABELS,
+  DEFAULT_OPERATOR_CONFIG,
   DETECTION_SOURCES,
-  ENTITY_COLORS,
-  MODEL_OPTIONS,
+  detectRegexPii,
+  exportRedactionKey,
+  mergeChunkEntities,
   OPERATOR_TYPES,
-} from "@/lib/anonymize/types";
+  redactText,
+  resolveOperator,
+  runPipeline,
+} from "@stella/anonymize";
 import type {
   Entity,
   GazetteerEntry,
+  NerInferenceFn,
   OperatorConfig,
   OperatorType,
   PipelineConfig,
   ReviewDecision,
   ReviewedEntity,
-} from "@/lib/anonymize/types";
+} from "@stella/anonymize";
+import { Button } from "@stella/ui/components/button";
+
+import { getEntries, putEntry } from "@/lib/anonymize/gazetteer";
+import type { CharSpan } from "@/lib/anonymize/pdf-coords";
+import { extractPdfText } from "@/lib/anonymize/pdf-coords";
+import { redactPdf } from "@/lib/anonymize/pdf-redact";
+import { saveRedactionMap } from "@/lib/anonymize/redaction-map";
+import { ENTITY_COLORS, MODEL_OPTIONS } from "@/lib/anonymize/ui-constants";
 
 const OPERATOR_TYPE_SET: ReadonlySet<string> = new Set(OPERATOR_TYPES);
 

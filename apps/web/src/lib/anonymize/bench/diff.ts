@@ -12,9 +12,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-import { runPipeline } from "../pipeline";
-import { DEFAULT_ENTITY_LABELS } from "../types";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stella/anonymize";
+import type { Entity, PipelineConfig } from "@stella/anonymize";
+
 import { createNerInference } from "./ner";
 
 const CORPUS_DIR = join(import.meta.dirname, "..", "__corpus__");

@@ -34,7 +34,7 @@ export const tokenizeText = (
   return [words, starts, ends];
 };
 
-/** Build entity label ↔ id mappings. */
+/** Build entity label <-> id mappings. */
 const createMappings = (
   labels: string[],
 ): {

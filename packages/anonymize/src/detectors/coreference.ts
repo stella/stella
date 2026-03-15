@@ -1,5 +1,5 @@
-import { DETECTION_SOURCES } from "./types";
-import type { Entity } from "./types";
+import { DETECTION_SOURCES } from "../types";
+import type { Entity } from "../types";
 
 /**
  * Patterns for extracting defined-term aliases in
@@ -12,22 +12,22 @@ const DEFINITION_PATTERNS: readonly {
   pattern: RegExp;
   language: string;
 }[] = [
-  // Czech: (dále jen „X") or (dále jen 'X') or (dále jen "X")
+  // Czech: (dale jen "X") or (dale jen 'X') or (dale jen "X")
   {
     pattern: /\(dále\s+jen\s+[„"'‚]([^"'""]+)[""']\)/gi,
     language: "cs",
   },
-  // Czech: dále jen „X" without parens
+  // Czech: dale jen "X" without parens
   {
     pattern: /dále\s+jen\s+[„"'‚]([^"'""]+)[""']/gi,
     language: "cs",
   },
-  // German: (nachfolgend „X") or (im Folgenden „X")
+  // German: (nachfolgend "X") or (im Folgenden "X")
   {
     pattern: /\((?:nachfolgend|im\s+Folgenden)\s+[„"'‚]([^"'""]+)[""']\)/gi,
     language: "de",
   },
-  // German: nachfolgend „X" without parens
+  // German: nachfolgend "X" without parens
   {
     pattern: /(?:nachfolgend|im\s+Folgenden)\s+[„"'‚]([^"'""]+)[""']/gi,
     language: "de",
@@ -42,7 +42,7 @@ const DEFINITION_PATTERNS: readonly {
     pattern: /hereinafter\s+(?:referred\s+to\s+as\s+)?["'"']([^"'"']+)["'"']/gi,
     language: "en",
   },
-  // Slovak: (ďalej len „X")
+  // Slovak: (dalej len "X")
   {
     pattern: /\(ďalej\s+len\s+[„"'‚]([^"'""]+)[""']\)/gi,
     language: "sk",
@@ -62,10 +62,10 @@ type DefinedTerm = {
  * Scan for defined-term patterns near known entities.
  *
  * Legal documents universally follow:
- *   "Dr. Heinrich Müller (hereinafter 'the Seller')..."
+ *   "Dr. Heinrich Muller (hereinafter 'the Seller')..."
  *
  * After NER detects the entity, this function scans for
- * definitional patterns within ±200 chars and extracts
+ * definitional patterns within +/-200 chars and extracts
  * the alias. Returns alias + label pairs that can be added
  * to the gazetteer for a full-text re-scan.
  */

@@ -1,9 +1,12 @@
-import { boostNearMissEntities } from "./confidence-boost";
-import { extractDefinedTerms, findCoreferenceSpans } from "./coreference";
-import { filterFalsePositives } from "./false-positive-filter";
-import { scanExact, scanFuzzy } from "./gazetteer";
-import { detectRegexPii } from "./regex-patterns";
-import { detectTriggerPhrases } from "./trigger-phrases";
+import {
+  extractDefinedTerms,
+  findCoreferenceSpans,
+} from "./detectors/coreference";
+import { scanExact, scanFuzzy } from "./detectors/gazetteer";
+import { detectRegexPii } from "./detectors/regex";
+import { detectTriggerPhrases } from "./detectors/triggers";
+import { boostNearMissEntities } from "./filters/confidence-boost";
+import { filterFalsePositives } from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 
 /**

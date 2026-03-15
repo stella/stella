@@ -11,13 +11,12 @@ import { join } from "node:path";
 import {
   chunkText as splitChunks,
   computeChunkOffsets,
+  decodeTokenSpans,
+  DETECTION_SOURCES,
   mergeChunkEntities,
-} from "../chunker";
-import { prepareBatch } from "../gliner/processor";
-import { decodeTokenSpans } from "../gliner/token-decoder";
-import type { NerInferenceFn } from "../pipeline";
-import type { Entity } from "../types";
-import { DETECTION_SOURCES } from "../types";
+  prepareBatch,
+} from "@stella/anonymize";
+import type { Entity, NerInferenceFn } from "@stella/anonymize";
 
 const MODEL_URL =
   "https://huggingface.co/knowledgator/gliner-pii-edge-v1.0/resolve/main/onnx/model.onnx";

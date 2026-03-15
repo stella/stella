@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { decodeSpans } from "./decoder";
+import { decodeSpans } from "@stella/anonymize";
 
 /**
  * Build a flat logits array for the span-level model.

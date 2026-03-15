@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { filterFalsePositives } from "./false-positive-filter";
-import type { Entity } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import { DETECTION_SOURCES, filterFalsePositives } from "@stella/anonymize";
+import type { Entity } from "@stella/anonymize";
 
 const entity = (text: string, label = "person"): Entity => ({
   start: 0,

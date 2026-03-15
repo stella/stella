@@ -1,0 +1,9 @@
+{
+  "extends": "@stella/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "module": "ESNext"
+  },
+  "include": ["."],
+  "exclude": ["node_modules"]
+}

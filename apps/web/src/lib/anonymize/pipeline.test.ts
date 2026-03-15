@@ -2,14 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { extractDefinedTerms, findCoreferenceSpans } from "./coreference";
-import { filterFalsePositives } from "./false-positive-filter";
-import { mergeAndDedup } from "./pipeline";
-import { redactText } from "./redact";
-import { detectRegexPii } from "./regex-patterns";
-import { detectTriggerPhrases } from "./trigger-phrases";
-import type { Entity } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import {
+  DETECTION_SOURCES,
+  detectRegexPii,
+  detectTriggerPhrases,
+  extractDefinedTerms,
+  filterFalsePositives,
+  findCoreferenceSpans,
+  mergeAndDedup,
+  redactText,
+} from "@stella/anonymize";
+import type { Entity } from "@stella/anonymize";
 
 const FIXTURES_DIR = resolve(import.meta.dirname, "__fixtures__");
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { levenshtein } from "./levenshtein";
+import { levenshtein } from "@stella/anonymize";
 
 describe("levenshtein()", () => {
   it("returns 0 for identical strings", () => {

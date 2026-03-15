@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { deanonymise, exportRedactionKey, redactText } from "./redact";
-import type { Entity, OperatorConfig, OperatorType } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import {
+  deanonymise,
+  DETECTION_SOURCES,
+  exportRedactionKey,
+  redactText,
+} from "@stella/anonymize";
+import type { Entity, OperatorConfig, OperatorType } from "@stella/anonymize";
 
 const entity = (
   start: number,

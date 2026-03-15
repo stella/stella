@@ -1,5 +1,5 @@
-import { DETECTION_SOURCES } from "./types";
-import type { Entity } from "./types";
+import { DETECTION_SOURCES } from "../types";
+import type { Entity } from "../types";
 
 type PiiPattern = {
   label: string;
@@ -76,10 +76,10 @@ const POST_NOMINAL = [
  * name.
  *
  * Examples:
- *   "Ing. Jan Novák" -> person
- *   "JUDr. Jarmila Báčová, Ph.D." -> person
+ *   "Ing. Jan Novak" -> person
+ *   "JUDr. Jarmila Bacova, Ph.D." -> person
  *   "prof. MUDr. Karel Valdauf" -> person (stacked titles)
- *   "Dr. med. Heinrich Müller" -> person
+ *   "Dr. med. Heinrich Muller" -> person
  */
 // Character classes for Czech/German diacritics in names
 // biome-ignore lint/security/noSecrets: diacritics char class, not a secret

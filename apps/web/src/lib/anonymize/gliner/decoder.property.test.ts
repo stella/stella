@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
-import { decodeSpans } from "./decoder";
+import { decodeSpans } from "@stella/anonymize";
 
 // ── Property-based tests for decodeSpans ─────────────
 

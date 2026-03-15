@@ -1,12 +1,21 @@
 import type { Color } from "@libpdf/core";
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
 
-import { DEFAULT_OPERATOR_CONFIG, resolveOperator } from "./operators";
+import {
+  buildPlaceholderMap,
+  DEFAULT_OPERATOR_CONFIG,
+  redactText,
+  resolveOperator,
+} from "@stella/anonymize";
+import type {
+  Entity,
+  OperatorConfig,
+  RedactionResult,
+} from "@stella/anonymize";
+
 import { neutralisePageText } from "./pdf-content-stream";
 import type { CharSpan, PdfBBox } from "./pdf-coords";
 import { getEntityBBoxes } from "./pdf-coords";
-import { buildPlaceholderMap, redactText } from "./redact";
-import type { Entity, OperatorConfig, RedactionResult } from "./types";
 
 /** Padding around redaction rectangles in points. */
 const RECT_PADDING = 2;

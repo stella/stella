@@ -27,6 +27,7 @@
     "@posthog/react": "^1.8.1",
     "@radix-ui/react-slot": "^1.2.4",
     "@rivetkit/react": "catalog:rivet",
+    "@stella/anonymize": "workspace:*",
     "@stella/api": "workspace:*",
     "@stella/permissions": "workspace:*",
     "@stella/rivet": "workspace:*",
