@@ -16,9 +16,11 @@
 
     "typescript/no-explicit-any": "error",
     "typescript/no-dynamic-delete": "error",
+    "typescript/no-misused-promises": "error",
     "typescript/consistent-type-definitions": ["error", "type"],
 
     "unicorn/no-useless-undefined": "error",
+    "unicorn/prefer-array-find": "error",
 
     "react/no-forward-ref": "error",
     "react/rules-of-hooks": "error",
