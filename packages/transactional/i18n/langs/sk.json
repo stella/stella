@@ -8,6 +8,7 @@
     "subject": "Boli ste pozvaní do organizácie {organizationName}"
   },
   "otp": {
+    "changeEmail": "Použite tento kód na overenie vašej novej e-mailovej adresy.",
     "emailVerification": "Použite tento kód na overenie vašej e-mailovej adresy.",
     "expires": "Platnosť kódu vyprší o 5 minút.",
     "forgetPassword": "Použite tento kód na obnovenie hesla.",

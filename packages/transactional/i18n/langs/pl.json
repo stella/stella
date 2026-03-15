@@ -8,6 +8,7 @@
     "subject": "Zostałeś zaproszony do organizacji {organizationName}"
   },
   "otp": {
+    "changeEmail": "Użyj tego kodu, aby zweryfikować swój nowy adres e-mail.",
     "emailVerification": "Użyj tego kodu, aby zweryfikować swój adres e-mail.",
     "expires": "Ten kod wygasa za 5 minut.",
     "forgetPassword": "Użyj tego kodu, aby zresetować hasło.",

@@ -11,7 +11,7 @@ const resend = new Resend(env.RESEND_API_KEY);
 type SendOTPEmailProps = {
   email: string;
   otp: string;
-  type: "sign-in" | "email-verification" | "forget-password";
+  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
   lang: SupportedLang;
 };
 

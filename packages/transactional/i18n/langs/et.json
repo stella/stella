@@ -8,6 +8,7 @@
     "subject": "Teid on kutsutud liituma organisatsiooniga {organizationName}"
   },
   "otp": {
+    "changeEmail": "Kasutage seda koodi oma uue e-posti aadressi kinnitamiseks.",
     "emailVerification": "Kasutage seda koodi oma e-posti aadressi kinnitamiseks.",
     "expires": "See kood aegub 5 minuti pärast.",
     "forgetPassword": "Kasutage seda koodi oma parooli lähtestamiseks.",

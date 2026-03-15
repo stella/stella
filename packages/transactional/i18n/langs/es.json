@@ -8,6 +8,7 @@
     "subject": "Ha sido invitado a unirse a {organizationName}"
   },
   "otp": {
+    "changeEmail": "Utilice este código para verificar su nueva dirección de correo electrónico.",
     "emailVerification": "Utilice este código para verificar su dirección de correo electrónico.",
     "expires": "Este código caduca en 5 minutos.",
     "forgetPassword": "Utilice este código para restablecer su contraseña.",

@@ -8,6 +8,7 @@
     "subject": "Meghívást kapott a(z) {organizationName} szervezetbe"
   },
   "otp": {
+    "changeEmail": "Használja ezt a kódot az új e-mail címe megerősítéséhez.",
     "emailVerification": "Használja ezt a kódot az e-mail címe megerősítéséhez.",
     "expires": "Ez a kód 5 perc múlva lejár.",
     "forgetPassword": "Használja ezt a kódot a jelszava visszaállításához.",
