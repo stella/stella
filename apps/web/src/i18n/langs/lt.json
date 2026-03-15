@@ -1202,7 +1202,7 @@
     "title": "Bylos",
     "tools": {
       "aiModel": "AI modelis",
-      "manualInput": "Rankinis įvedimas"
+      "manualInput": "Rankiniu būdu"
     },
     "views": {
       "addFields": "Pridėti laukus",

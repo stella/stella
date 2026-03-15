@@ -1202,7 +1202,7 @@
     "title": "Matters",
     "tools": {
       "aiModel": "AI Model",
-      "manualInput": "Manual Input"
+      "manualInput": "Manually"
     },
     "views": {
       "addFields": "Add fields",

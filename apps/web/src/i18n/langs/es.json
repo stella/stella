@@ -1202,7 +1202,7 @@
     "title": "Asuntos",
     "tools": {
       "aiModel": "Modelo de IA",
-      "manualInput": "Entrada manual"
+      "manualInput": "Manualmente"
     },
     "views": {
       "addFields": "Añadir campos",

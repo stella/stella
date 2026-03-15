@@ -1202,7 +1202,7 @@
     "title": "Toimikud",
     "tools": {
       "aiModel": "Tehisintellekti mudel",
-      "manualInput": "Käsitsi sisestus"
+      "manualInput": "Käsitsi"
     },
     "views": {
       "addFields": "Lisa väljad",

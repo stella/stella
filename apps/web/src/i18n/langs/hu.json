@@ -1202,7 +1202,7 @@
     "title": "Ügyek",
     "tools": {
       "aiModel": "AI modell",
-      "manualInput": "Kézi bevitel"
+      "manualInput": "Kézzel"
     },
     "views": {
       "addFields": "Mezők hozzáadása",

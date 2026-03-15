@@ -1202,7 +1202,7 @@
     "title": "Spisy",
     "tools": {
       "aiModel": "AI model",
-      "manualInput": "Ručný vstup"
+      "manualInput": "Ručne"
     },
     "views": {
       "addFields": "Pridať polia",
