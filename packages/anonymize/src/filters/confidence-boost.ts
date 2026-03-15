@@ -1,4 +1,4 @@
-import type { Entity } from "./types";
+import type { Entity } from "../types";
 
 const NEAR_MISS_BAND = 0.15;
 const BOOST_PER_NEIGHBOUR = 0.05;

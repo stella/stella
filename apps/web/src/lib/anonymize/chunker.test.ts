@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { chunkText, computeChunkOffsets, mergeChunkEntities } from "./chunker";
-import type { Entity } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import {
+  chunkText,
+  computeChunkOffsets,
+  DETECTION_SOURCES,
+  mergeChunkEntities,
+} from "@stella/anonymize";
+import type { Entity } from "@stella/anonymize";
 
 const makeEntity = (
   start: number,

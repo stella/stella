@@ -16,9 +16,9 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { runPipeline } from "../pipeline";
-import { DEFAULT_ENTITY_LABELS } from "../types";
-import type { PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stella/anonymize";
+import type { PipelineConfig } from "@stella/anonymize";
+
 import { createNerInference } from "./ner";
 
 const CORPUS_DIR = join(import.meta.dirname, "..", "__corpus__");

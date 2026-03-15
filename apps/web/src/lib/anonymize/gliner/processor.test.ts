@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { padArray, tokenizeText } from "./processor";
+import { tokenizeText } from "@stella/anonymize";
 
 // ── tokenizeText ─────────────────────────────────────
 
@@ -106,97 +106,5 @@ describe("tokenizeText()", () => {
   ])("does produce words for: %s (%s)", (text) => {
     const [words] = tokenizeText(text);
     expect(words.length).toBeGreaterThan(0);
-  });
-});
-
-// ── padArray ─────────────────────────────────────────
-
-describe("padArray()", () => {
-  it("pads 2D arrays to uniform length", () => {
-    const input = [
-      [1, 2, 3],
-      [4, 5],
-    ];
-    const result = padArray(input);
-    expect(result[0]).toStrictEqual([1, 2, 3]);
-    expect(result[1]).toStrictEqual([4, 5, 0]);
-  });
-
-  it("handles already-uniform arrays", () => {
-    const input = [
-      [1, 2],
-      [3, 4],
-    ];
-    const result = padArray(input);
-    expect(result).toStrictEqual([
-      [1, 2],
-      [3, 4],
-    ]);
-  });
-
-  it("pads 3D arrays to uniform length", () => {
-    const input = [
-      [
-        [1, 2],
-        [3, 4],
-      ],
-      [[5, 6]],
-    ];
-    const result = padArray(input, 3);
-    expect(result[0]).toStrictEqual([
-      [1, 2],
-      [3, 4],
-    ]);
-    expect(result[1]).toStrictEqual([
-      [5, 6],
-      [0, 0],
-    ]);
-  });
-
-  it("handles empty first element in 3D mode", () => {
-    // When first batch element is empty but later ones
-    // have data, finalDim should be inferred from a
-    // non-empty element (not default to 0).
-    const input: number[][][] = [[], [[1, 2]]];
-    const result = padArray(input, 3);
-    expect(result[0]).toHaveLength(1);
-    // Padding should produce [0, 0] (matching dim=2)
-    expect(result[0]?.[0]).toStrictEqual([0, 0]);
-    expect(result[1]).toStrictEqual([[1, 2]]);
-  });
-
-  it("handles empty later element in 3D mode", () => {
-    // Non-empty first, empty second — should pad second
-    const input: number[][][] = [
-      [
-        [1, 2],
-        [3, 4],
-      ],
-      [],
-    ];
-    const result = padArray(input, 3);
-    expect(result[0]).toStrictEqual([
-      [1, 2],
-      [3, 4],
-    ]);
-    // Empty element padded to length 2 with [0, 0] pairs
-    expect(result[1]).toStrictEqual([
-      [0, 0],
-      [0, 0],
-    ]);
-  });
-
-  it("handles all-empty elements in 3D mode", () => {
-    const input: number[][][] = [[], []];
-    const result = padArray(input, 3);
-    // maxLength = 0, nothing to pad
-    expect(result[0]).toStrictEqual([]);
-    expect(result[1]).toStrictEqual([]);
-  });
-
-  it("handles single-element arrays", () => {
-    const input = [[42]];
-    const result = padArray(input);
-    expect(result).toStrictEqual([[42]]);
   });
 });

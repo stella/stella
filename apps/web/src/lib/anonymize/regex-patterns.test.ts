@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { detectRegexPii } from "./regex-patterns";
+import { detectRegexPii } from "@stella/anonymize";
 
 const entitiesOf = (text: string) => detectRegexPii(text);
 

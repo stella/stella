@@ -1,7 +1,7 @@
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 
-import type { OperatorType } from "./types";
+import type { OperatorType } from "@stella/anonymize";
 
 const DB_NAME = "stella-redaction-maps";
 const DB_VERSION = 1;

@@ -1,8 +1,8 @@
-import type { Entity } from "./types";
+import type { Entity } from "../types";
 
 const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
-// Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
-// long digit strings like IČO "12345678" or account numbers
+// Section/clause numbers: "s 3", "3.2.1", "12." but NOT
+// long digit strings like ICO "12345678" or account numbers
 const SECTION_NUMBER_RE = /^(?:§\s*)?\d{1,4}(?:\.\d{1,4})*\.?$/;
 const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 

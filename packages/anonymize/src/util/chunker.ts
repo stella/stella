@@ -1,4 +1,4 @@
-import type { Entity } from "./types";
+import type { Entity } from "../types";
 
 const MAX_CHUNK_CHARS = 1500;
 const OVERLAP_CHARS = 50;

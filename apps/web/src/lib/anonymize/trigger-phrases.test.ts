@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { detectTriggerPhrases } from "./trigger-phrases";
+import { detectTriggerPhrases } from "@stella/anonymize";
 
 const find = (text: string) => detectTriggerPhrases(text);
 

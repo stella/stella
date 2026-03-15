@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { boostNearMissEntities } from "./confidence-boost";
-import type { Entity } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import { boostNearMissEntities, DETECTION_SOURCES } from "@stella/anonymize";
+import type { Entity } from "@stella/anonymize";
 
 const entity = (
   start: number,

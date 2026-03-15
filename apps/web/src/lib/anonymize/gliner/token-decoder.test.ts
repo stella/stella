@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { decodeTokenSpans } from "./token-decoder";
+import { decodeTokenSpans } from "@stella/anonymize";
 
 /**
  * Tests for the token-level BIO decoder used by

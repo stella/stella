@@ -45,7 +45,7 @@ const normalizeEntityText = (label: string, text: string): string => {
 /**
  * Build a stable mapping from entity text to numbered
  * placeholders. Same real-world value always maps to the
- * same placeholder (e.g., "Dr. Müller" and "Dr.  Müller"
+ * same placeholder (e.g., "Dr. Muller" and "Dr.  Muller"
  * both become [PERSON_1]).
  *
  * Placeholder format: [LABEL_N] where LABEL is uppercase

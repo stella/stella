@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { extractDefinedTerms, findCoreferenceSpans } from "./coreference";
-import type { Entity } from "./types";
-import { DETECTION_SOURCES } from "./types";
+import {
+  DETECTION_SOURCES,
+  extractDefinedTerms,
+  findCoreferenceSpans,
+} from "@stella/anonymize";
+import type { Entity } from "@stella/anonymize";
 
 const personEntity = (start: number, end: number, text: string): Entity => ({
   start,
