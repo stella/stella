@@ -12,11 +12,11 @@ import { defineTool } from "./chat-tools";
 
 type ViewsMap = ExtractedTextAttachment["views"];
 
-const VIEW_KEYS: Record<string, keyof ViewsMap> = {
+const VIEW_KEYS = {
   simple: "simple",
   original: "original",
   "tracked-changes": "trackedChanges",
-};
+} as const satisfies Record<string, keyof ViewsMap>;
 
 export const createDocumentViewTools = (
   attachments: ExtractedTextAttachment[],

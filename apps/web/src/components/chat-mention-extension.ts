@@ -31,13 +31,13 @@ export type ChatMentionOption = {
 };
 
 /** Map category to the hash prefix used in serialized links. */
-export const MENTION_HASH_PREFIX: Record<MentionCategory, string> = {
+export const MENTION_HASH_PREFIX = {
   entity: "#stella-entity=",
   workspace: "#stella-workspace=",
   contact: "#stella-contact=",
   template: "#stella-template=",
   clause: "#stella-clause=",
-};
+} as const satisfies Record<MentionCategory, string>;
 
 export const ChatMention = MentionExtension.extend({
   addAttributes() {

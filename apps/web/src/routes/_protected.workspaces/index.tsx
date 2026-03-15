@@ -616,7 +616,7 @@ const MattersToolbar = ({
   const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const [searchFocused, setSearchFocused] = useState(false);
 
-  const sortLabels: Record<MattersSortKey, string> = {
+  const sortLabels = {
     name: t("billing.matter"),
     reference: t("common.reference"),
     entityCount: t("workspaces.overview.totalItems"),
@@ -625,7 +625,7 @@ const MattersToolbar = ({
     }).trim(),
     createdAt: t("common.createdAt", { date: "" }).trim(),
     clientName: t("workspaces.parties.client"),
-  };
+  } as const satisfies Record<MattersSortKey, string>;
 
   const activeClient = clients.find((c) => c.id === config.clientFilter);
 
@@ -931,7 +931,7 @@ type ColumnsToggleProps = {
 const ColumnsToggle = ({ config, onChange }: ColumnsToggleProps) => {
   const t = useTranslations();
 
-  const columnLabels: Record<MattersColumnId, string> = {
+  const columnLabels = {
     client: t("workspaces.parties.client"),
     reference: t("common.reference"),
     entityCount: t("workspaces.overview.totalItems"),
@@ -939,7 +939,7 @@ const ColumnsToggle = ({ config, onChange }: ColumnsToggleProps) => {
       time: "",
     }).trim(),
     createdAt: t("common.createdAt", { date: "" }).trim(),
-  };
+  } as const satisfies Record<MattersColumnId, string>;
 
   const toggle = (id: MattersColumnId) => {
     const current = config.visibleColumns;

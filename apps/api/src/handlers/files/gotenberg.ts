@@ -8,7 +8,7 @@ import { applyFitToPage } from "@/api/handlers/files/xlsx-preprocess";
  * to PDF. Derived from the official documentation:
  * https://gotenberg.dev/docs/convert-with-libreoffice/convert-to-pdf
  */
-const CONVERTIBLE_MIME_TYPES: Record<string, null> = {
+const CONVERTIBLE_MIME_TYPES = {
   // Word processing
   "application/msword": null,
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -41,7 +41,7 @@ const CONVERTIBLE_MIME_TYPES: Record<string, null> = {
   // Web
   "text/html": null,
   "application/xhtml+xml": null,
-};
+} as const satisfies Record<string, null>;
 
 export const isConvertibleMimeType = (mimeType: string): boolean =>
   mimeType in CONVERTIBLE_MIME_TYPES;
