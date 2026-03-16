@@ -6,7 +6,6 @@ import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-conf
 import { api, rivet } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { APIError, toAPIError, toAuthClientError } from "@/lib/errors";
-import { withActorTimeout } from "@/lib/rivet";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 export const workspaceKeys = {
@@ -56,13 +55,12 @@ export const workflowOptions = ({
         workspaceId,
       });
 
-      const rivetActor = rivet.workflow.getOrCreate(
-        ...withActorTimeout(actorConfig, signal),
-      );
+      const handle = rivet.workflow.getOrCreate(actorConfig[0], {
+        ...actorConfig[1],
+        signal,
+      });
 
-      const workflowStatus = await rivetActor.getWorkflowStatus();
-
-      return workflowStatus;
+      return handle.getWorkflowStatus();
     },
   });
 

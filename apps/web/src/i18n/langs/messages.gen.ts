@@ -22,7 +22,6 @@ type Messages = {
       "timezone": "Timezone";
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";
-      "title": "Settings";
     };
   };
   "analytics": {
@@ -43,7 +42,6 @@ type Messages = {
     "thisMonth": "This month";
     "title": "Analytics";
     "totalHours": "Total hours";
-    "user": "User";
     "utilization": "Utilization";
   };
   "appearance": {
@@ -106,11 +104,9 @@ type Messages = {
       "task": "Task";
       "taskCode": "Task code";
     };
-    "date": "Date";
     "day": "Day";
     "decimalHours": "({hours}h)";
     "deleteSelected": "Delete selected";
-    "description": "Description";
     "duration": "Duration";
     "editEntry": "Edit entry";
     "elapsed": "Elapsed";
@@ -124,7 +120,6 @@ type Messages = {
         "printing": "Printing";
         "travel": "Travel";
       };
-      "category": "Category";
       "dateIncurred": "Date incurred";
       "descriptionPlaceholder": "Describe the expense...";
       "invoiceDescription": "Invoice description";
@@ -163,7 +158,6 @@ type Messages = {
       "noEntries": "No entries linked to this invoice";
       "noInvoices": "No invoices yet";
       "paidAt": "Paid at";
-      "reference": "Reference";
       "removeEntries": "Remove entries";
       "revertToDraft": "Revert to draft";
       "send": "Send";
@@ -192,7 +186,6 @@ type Messages = {
     "rates": {
       "addRate": "Add rate";
       "createRateTable": "Create rate table";
-      "currency": "Currency";
       "defaultRate": "Default rate";
       "deleteRateTable": "Delete rate table";
       "editRateTable": "Edit rate table";
@@ -211,7 +204,6 @@ type Messages = {
       "rateTables": "Rate tables";
       "rates": "Rates";
       "setAsDefault": "Set as default";
-      "tableName": "Name";
       "tableNamePlaceholder": "e.g. Standard 2025";
     };
     "revertToDraft": "Revert to draft";
@@ -246,11 +238,9 @@ type Messages = {
   };
   "caseLaw": {
     "columns": {
-      "caseNumber": "Case Number";
+      "caseNumber": "Case number";
       "country": "Country";
       "court": "Court";
-      "decisionDate": "Date";
-      "decisionType": "Type";
     };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
@@ -261,7 +251,6 @@ type Messages = {
       "dateTo": "To";
       "searchPlaceholder": "Search by case number...";
     };
-    "loadMore": "Load more";
     "loading": "Loading...";
     "loadingMore": "Loading more...";
     "sectionTypes": {
@@ -283,9 +272,7 @@ type Messages = {
     "viewer": {
       "citedBy": "Cited by";
       "cites": "Cites";
-      "language": "Language";
       "legalSentence": "Legal sentence";
-      "metadata": "Metadata";
       "sections": "Sections";
       "source": "Source";
       "viewOriginal": "View original";
@@ -370,7 +357,6 @@ type Messages = {
     "deleteCategory": "Delete category";
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
-    "description": "Description";
     "descriptionPlaceholder": "Brief description of the clause";
     "editCategory": "Edit category";
     "editClause": "Edit clause";
@@ -382,7 +368,6 @@ type Messages = {
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
     "importing": "Importing…";
-    "language": "Language";
     "languagePlaceholder": "e.g. en";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
@@ -390,7 +375,6 @@ type Messages = {
     "linked": "Clause linked";
     "linkedClauses": "Linked clauses";
     "loadFailed": "Failed to load clauses";
-    "loadMore": "Load more";
     "loading": "Loading clauses…";
     "noChanges": "No changes";
     "noClauses": "No clauses yet";
@@ -402,7 +386,6 @@ type Messages = {
     "saveFailed": "Failed to save";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
-    "selectCategory": "Category";
     "selectFile": "Select JSON file";
     "selectVariant": "Select variant";
     "selectVersionToCompare": "Select a version to compare with current";
@@ -414,7 +397,6 @@ type Messages = {
     "title": "Clauses";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
-    "uncategorized": "Uncategorized";
     "unlinkClause": "Unlink";
     "unlinkConfirm": "This will remove the clause from this template.";
     "unlinkFailed": "Failed to unlink clause";
@@ -520,9 +502,6 @@ type Messages = {
       "title": "Billing details";
     };
     "columns": {
-      "email": "Email";
-      "matters": "Matters";
-      "name": "Name";
       "phone": "Phone";
       "tags": "Tags";
     };
@@ -547,7 +526,6 @@ type Messages = {
     "fields": {
       "bankAccountBankName": "Bank name";
       "bankAccountBic": "BIC/SWIFT";
-      "bankAccountCurrency": "Currency";
       "bankAccountIban": "IBAN";
       "bankAccountNumber": "Account number";
       "bankAccounts": "Bank accounts";
@@ -559,13 +537,11 @@ type Messages = {
       "billingAddressPostalCode": "Postal code";
       "billingAddressState": "State";
       "color": "Color";
-      "currency": "Currency";
       "defaultHourlyRate": "Default hourly rate";
       "displayName": "Display name";
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "notes": "Notes";
       "organizationName": "Organization name";
       "originatingAttorney": "Originating attorney";
       "paymentTermDays": "Payment terms (days)";
@@ -575,12 +551,9 @@ type Messages = {
       "suffix": "Suffix";
       "tags": "Tags";
       "taxId": "Tax ID";
-      "type": "Type";
     };
-    "filterAll": "All";
     "filterOrganizations": "Organizations";
     "filterPersons": "Persons";
-    "matters": "Matters";
     "mattersAsClient": "Matters as client";
     "newContact": "New contact";
     "noContactsDescription": "Create your first contact to start linking them to matters.";
@@ -729,7 +702,6 @@ type Messages = {
     "searchPlaceholder": "Search across all workspaces...";
     "sessions": "Sessions";
     "shortcutCategories": {
-      "actions": "Actions";
       "navigation": "Navigation";
     };
     "sidebar": "Sidebar";
@@ -751,7 +723,6 @@ type Messages = {
       "noInvitationsFound": "No invitations found";
       "resendInvitation": "Resend invitation";
       "sendInvitation": "Send invitation";
-      "status": "Status";
       "statuses": {
         "accepted": "Accepted";
         "canceled": "Canceled";
@@ -816,7 +787,6 @@ type Messages = {
     "emptyState": "Start typing to search across all matters.";
     "escKey": "ESC";
     "facets": {
-      "kind": "Kind";
       "workspace": "Workspace";
     };
     "filterLabel": "{type}:";
@@ -826,7 +796,6 @@ type Messages = {
       "message": "Message";
       "task": "Task";
     };
-    "loadMore": "Load more";
     "metaSeparator": "{workspace} · {time}";
     "noResults": "No results found for \"{query}\".";
     "placeholder": "Search across all matters...";
@@ -908,7 +877,6 @@ type Messages = {
     "topTemplates": "Most used templates";
     "totalFills": "Total fills";
     "uniqueTemplates": "Templates used";
-    "user": "User";
   };
   "templates": {
     "addItem": "Add item";
@@ -1006,7 +974,6 @@ type Messages = {
   };
   "workspaces": {
     "active": "Active";
-    "all": "All";
     "answer": "Answer:";
     "archiveMatter": "Archive";
     "archived": "Archived";
@@ -1139,9 +1106,7 @@ type Messages = {
       "removeClient": "Remove client";
       "removeParty": "Remove party";
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?";
-      "role": "Role";
       "searchContacts": "Search contacts...";
-      "selectRole": "Select a role";
       "setClient": "Set client";
     };
     "pdf": {
@@ -1205,14 +1170,12 @@ type Messages = {
     "reference": "Reference number";
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
-    "saveAsPdf": "Save as PDF";
     "sections": {
       "documents": "Documents";
       "members": "Members";
       "parties": "Parties";
     };
     "tasksCount": "{count, plural, one {# task} other {# tasks}}";
-    "title": "Matters";
     "tools": {
       "aiModel": "AI Model";
       "manualInput": "Manually";

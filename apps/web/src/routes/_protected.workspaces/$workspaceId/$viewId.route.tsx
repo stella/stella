@@ -4,9 +4,11 @@ import { produce } from "immer";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { DefaultPendingComponent } from "@/components/route-components";
 import type { Actors } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { createEventHandler, eventHandler } from "@/lib/rivet";
@@ -15,8 +17,11 @@ import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
+import {
+  ViewsActorProvider,
+  useSuspenseViewsActor,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/views-actor-provider";
 import {
   entitiesKeys,
   entitiesOptions,
@@ -41,27 +46,60 @@ export const Route = createFileRoute(
 const viewsEvent = createEventHandler<Actors["views"]>();
 
 function RouteComponent() {
+  const workspaceId = Route.useParams({
+    select: (p) => p.workspaceId,
+  });
+  const { authToken, organizationId } = Route.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
+
+  const config = getViewsActorConfig({
+    type: "react",
+    organizationId,
+    authToken,
+    workspaceId,
+  });
+
+  return (
+    <ViewsActorProvider config={config} fallback={<DefaultPendingComponent />}>
+      <ViewsRoute />
+    </ViewsActorProvider>
+  );
+}
+
+function ViewsRoute() {
   const t = useTranslations();
-  const { workspaceId, viewId } = Route.useParams();
+  const { workspaceId, viewId } = Route.useParams({
+    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
+  });
   const page = Route.useSearch({
     select: (s) => s.page ?? 1,
   });
-  const organizationId = Route.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
+  const viewsContext = Route.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
   });
   const queryClient = useQueryClient();
-  const viewsQueryOptions = viewsOptions(workspaceId, queryClient);
+  const viewsActor = useSuspenseViewsActor();
+  const viewsQueryOptions = viewsOptions({
+    key: { workspaceId },
+    context: viewsContext,
+  });
   const { data: activeView } = useSuspenseQuery({
     ...viewsQueryOptions,
     select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
   });
-  const viewsActor = useViewsActor(workspaceId);
   const pruneStaleViews = useTableStore((s) => s.pruneStaleViews);
   const workflowActor = useWorkflowActor(workspaceId);
 
   const workflowQueryKey = workflowOptions({
     workspaceId,
-    organizationId,
+    organizationId: viewsContext.organizationId,
   }).queryKey;
 
   const invalidateQueries = async () =>

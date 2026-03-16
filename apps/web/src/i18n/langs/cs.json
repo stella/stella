@@ -142,6 +142,7 @@
       "confirmDelete": "Tato akce trvale smaže tento koncept faktury a odpojí všechny záznamy. Nelze vrátit zpět.",
       "confirmVoid": "Zrušením faktury se odpojí všechny časové záznamy a výdaje a vrátí se do předchozího stavu.",
       "createInvoice": "Vytvořit fakturu",
+      "delete": "Delete",
       "dueDate": "Datum splatnosti",
       "editInvoice": "Upravit fakturu",
       "finalize": "Finalizovat",
@@ -305,6 +306,7 @@
         "clauses": "Klauzule",
         "contacts": "Kontakty",
         "entities": "V tomto spisu",
+        "matters": "Matters",
         "templates": "Šablony"
       },
       "noResults": "Žádné odpovídající entity"
@@ -447,10 +449,12 @@
     "language": "Jazyk",
     "loadMore": "Načíst další",
     "loading": "Načítám",
+    "logTime": "Zaznamenat čas",
     "matters": "Spisy",
     "metadata": "Metadata",
     "name": "Název",
     "newRow": "Nový řádek",
+    "noResults": "Žádné výsledky",
     "notes": "Poznámky",
     "open": "Otevřít",
     "pin": "Připnout",
@@ -478,9 +482,7 @@
     "unpin": "Odepnout",
     "uploadFiles": "Nahrát soubory",
     "user": "Uživatel",
-    "verify": "Ověřit",
-    "logTime": "Zaznamenat čas",
-    "noResults": "Žádné výsledky"
+    "verify": "Ověřit"
   },
   "contacts": {
     "alsoPartyIn": "Také vystupuje jako strana v {count, plural, one {# dalším spisu} few {# dalších spisech} other {# dalších spisech}}",
@@ -845,6 +847,7 @@
       "none": "Žádná",
       "urgent": "Urgentní"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Zrušený",
       "done": "Hotovo",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Přehled",
+      "edited": "upravil(a)",
       "getStarted": "Začněte nahráním dokumentů nebo vytvořením první složky.",
       "matterDetails": "Podrobnosti spisu",
-      "recentActivity": "Nedávná aktivita",
-      "title": "Přehled",
-      "totalDocuments": "Celkem dokumentů",
-      "totalItems": "Položky",
-      "edited": "upravil(a)",
       "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",
       "nextDeadline": "Další termín",
       "openTasks": "Otevřené úkoly",
+      "recentActivity": "Nedávná aktivita",
       "timeAndTeam": "Čas a tým",
       "timeThisWeek": "Čas tento týden",
+      "title": "Přehled",
+      "totalDocuments": "Celkem dokumentů",
+      "totalItems": "Položky",
       "totalThisWeek": "Celkem tento týden",
       "upcomingTasks": "Nadcházející úkoly"
     },

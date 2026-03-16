@@ -142,6 +142,7 @@
       "confirmDelete": "Ezzel véglegesen törlődik ez a számlatervezet, és az összes tétel kapcsolata megszűnik. Ez a művelet nem vonható vissza.",
       "confirmVoid": "A számla érvénytelenítésével az összes időbejegyzés és kiadás leválik, és visszakerül az előző státuszba.",
       "createInvoice": "Számla létrehozása",
+      "delete": "Delete",
       "dueDate": "Fizetési határidő",
       "editInvoice": "Számla szerkesztése",
       "finalize": "Véglegesítés",
@@ -305,6 +306,7 @@
         "clauses": "Záradékok",
         "contacts": "Névjegyek",
         "entities": "Ebben az ügyben",
+        "matters": "Matters",
         "templates": "Sablonok"
       },
       "noResults": "Nincs találat"
@@ -447,10 +449,12 @@
     "language": "Nyelv",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
+    "logTime": "Idő rögzítése",
     "matters": "Ügyek",
     "metadata": "Metaadatok",
     "name": "Név",
     "newRow": "Új sor",
+    "noResults": "Nincs találat",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "pin": "Rögzítés",
@@ -478,9 +482,7 @@
     "unpin": "Rögzítés feloldása",
     "uploadFiles": "Fájlok feltöltése",
     "user": "Felhasználó",
-    "verify": "Ellenőrzés",
-    "logTime": "Idő rögzítése",
-    "noResults": "Nincs találat"
+    "verify": "Ellenőrzés"
   },
   "contacts": {
     "alsoPartyIn": "Félként is megjelenik {count, plural, one {# másik ügyben} other {# másik ügyben}}",
@@ -845,6 +847,7 @@
       "none": "Nincs",
       "urgent": "Sürgős"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Visszavonva",
       "done": "Kész",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Áttekintés",
+      "edited": "szerkesztette",
       "getStarted": "Kezdje el dokumentumok feltöltésével vagy az első mappa létrehozásával.",
       "matterDetails": "Ügy részletei",
-      "recentActivity": "Legutóbbi tevékenység",
-      "title": "Áttekintés",
-      "totalDocuments": "Összes dokumentum",
-      "totalItems": "Elemek",
-      "edited": "szerkesztette",
       "membersCount": "{count, plural, one {# tag} other {# tag}}",
       "nextDeadline": "Következő határidő",
       "openTasks": "Nyitott feladatok",
+      "recentActivity": "Legutóbbi tevékenység",
       "timeAndTeam": "Idő és csapat",
       "timeThisWeek": "Idő ezen a héten",
+      "title": "Áttekintés",
+      "totalDocuments": "Összes dokumentum",
+      "totalItems": "Elemek",
       "totalThisWeek": "Összesen ezen a héten",
       "upcomingTasks": "Közelgő feladatok"
     },

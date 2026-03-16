@@ -57,7 +57,10 @@ import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { eventHandlerV2 } from "@/lib/rivet";
-import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
+import {
+  ChatActorProvider,
+  useSuspenseChatActor,
+} from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import {
@@ -149,22 +152,28 @@ export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
     [workspaceId],
   );
 
-  return activeThreadId ? (
-    <Suspense>
-      <ActiveThread
-        mentionContext={mentionContext}
-        onBack={() => setActiveThreadId(null)}
-        onSwitchThread={setActiveThreadId}
-        threadId={activeThreadId}
-        workspaceId={workspaceId}
-      />
-    </Suspense>
-  ) : (
-    <NewChat
-      mentionContext={mentionContext}
-      onThreadCreated={setActiveThreadId}
-      workspaceId={workspaceId}
-    />
+  return (
+    <ChatActorProvider>
+      {activeThreadId ? (
+        <Suspense>
+          <ActiveThread
+            mentionContext={mentionContext}
+            onBack={() => setActiveThreadId(null)}
+            onSwitchThread={setActiveThreadId}
+            threadId={activeThreadId}
+            workspaceId={workspaceId}
+          />
+        </Suspense>
+      ) : (
+        <Suspense>
+          <NewChat
+            mentionContext={mentionContext}
+            onThreadCreated={setActiveThreadId}
+            workspaceId={workspaceId}
+          />
+        </Suspense>
+      )}
+    </ChatActorProvider>
   );
 };
 
@@ -464,6 +473,7 @@ const NewChat = ({
 }: NewChatProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const { connection } = useSuspenseChatActor();
   const userContext = useChatUserContext();
   const getActiveFile = useMemo(
     () => makeGetActiveFile(workspaceId),
@@ -504,12 +514,14 @@ const NewChat = ({
             const threadId = nanoid();
             const chat = await queryClient.ensureQueryData(
               chatThreadOptions({
-                threadId,
-                queryClient,
-                workspaceId,
-                getModelId,
-                userContext,
-                getActiveFile,
+                key: { threadId },
+                context: {
+                  connection,
+                  workspaceId,
+                  getModelId,
+                  userContext,
+                  getActiveFile,
+                },
               }),
             );
             const { files, textAttachments } = splitAttachments(drained);
@@ -549,7 +561,7 @@ const ActiveThread = ({
   onBack,
   onSwitchThread,
 }: ActiveThreadProps) => {
-  const queryClient = useQueryClient();
+  const { connection } = useSuspenseChatActor();
   const userContext = useChatUserContext();
   const getActiveFile = useMemo(
     () => makeGetActiveFile(workspaceId),
@@ -557,12 +569,14 @@ const ActiveThread = ({
   );
   const { data: chat, isLoading } = useQuery(
     chatThreadOptions({
-      threadId,
-      queryClient,
-      workspaceId,
-      getModelId,
-      userContext,
-      getActiveFile,
+      key: { threadId },
+      context: {
+        connection,
+        workspaceId,
+        getModelId,
+        userContext,
+        getActiveFile,
+      },
     }),
   );
 
@@ -844,7 +858,7 @@ const ThreadList = ({
 }: ThreadListProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const actor = useChatActor();
+  const actor = useSuspenseChatActor();
   const [expanded, setExpanded] = useState(false);
 
   const { data: threads } = useQuery(
@@ -941,7 +955,7 @@ const ThreadList = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   // eslint-disable-next-line typescript/no-floating-promises
-                  actor.connection?.deleteThread({
+                  actor.connection.deleteThread({
                     threadId: thread.id,
                   });
                 }}

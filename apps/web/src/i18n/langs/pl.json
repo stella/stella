@@ -142,6 +142,7 @@
       "confirmDelete": "Spowoduje to trwałe usunięcie wersji roboczej faktury i odłączenie wszystkich wpisów. Tej operacji nie można cofnąć.",
       "confirmVoid": "Unieważnienie faktury spowoduje odłączenie wszystkich wpisów czasu i wydatków oraz przywrócenie ich do poprzedniego statusu.",
       "createInvoice": "Utwórz fakturę",
+      "delete": "Delete",
       "dueDate": "Termin płatności",
       "editInvoice": "Edytuj fakturę",
       "finalize": "Zatwierdź",
@@ -305,6 +306,7 @@
         "clauses": "Klauzule",
         "contacts": "Kontakty",
         "entities": "W tej sprawie",
+        "matters": "Matters",
         "templates": "Szablony"
       },
       "noResults": "Brak pasujących elementów"
@@ -447,10 +449,12 @@
     "language": "Język",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
+    "logTime": "Zarejestruj czas",
     "matters": "Sprawy",
     "metadata": "Metadane",
     "name": "Nazwa",
     "newRow": "Nowy wiersz",
+    "noResults": "Brak wyników",
     "notes": "Notatki",
     "open": "Otwórz",
     "pin": "Przypnij",
@@ -478,9 +482,7 @@
     "unpin": "Odepnij",
     "uploadFiles": "Prześlij pliki",
     "user": "Użytkownik",
-    "verify": "Zweryfikuj",
-    "logTime": "Zarejestruj czas",
-    "noResults": "Brak wyników"
+    "verify": "Zweryfikuj"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} other {# innych sprawach}}",
@@ -845,6 +847,7 @@
       "none": "Brak",
       "urgent": "Pilne"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Anulowane",
       "done": "Ukończone",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "W skrócie",
+      "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",
       "matterDetails": "Szczegóły sprawy",
-      "recentActivity": "Ostatnia aktywność",
-      "title": "Przegląd",
-      "totalDocuments": "Łącznie dokumentów",
-      "totalItems": "Elementy",
-      "edited": "edytował(a)",
       "membersCount": "{count, plural, one {# członek} few {# członków} other {# członków}}",
       "nextDeadline": "Następny termin",
       "openTasks": "Otwarte zadania",
+      "recentActivity": "Ostatnia aktywność",
       "timeAndTeam": "Czas i zespół",
       "timeThisWeek": "Czas w tym tygodniu",
+      "title": "Przegląd",
+      "totalDocuments": "Łącznie dokumentów",
+      "totalItems": "Elementy",
       "totalThisWeek": "Razem w tym tygodniu",
       "upcomingTasks": "Nadchodzące zadania"
     },

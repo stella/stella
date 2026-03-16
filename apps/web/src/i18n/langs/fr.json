@@ -142,6 +142,7 @@
       "confirmDelete": "Cette action supprimera définitivement ce brouillon de facture et dissociera toutes les entrées. Elle est irréversible.",
       "confirmVoid": "L'annulation de cette facture dissociera toutes les entrées de temps et dépenses, qui retrouveront leur statut antérieur.",
       "createInvoice": "Créer une facture",
+      "delete": "Delete",
       "dueDate": "Date d'échéance",
       "editInvoice": "Modifier la facture",
       "finalize": "Finaliser",
@@ -305,6 +306,7 @@
         "clauses": "Clauses",
         "contacts": "Contacts",
         "entities": "Dans ce dossier",
+        "matters": "Matters",
         "templates": "Modèles"
       },
       "noResults": "No matching entities"
@@ -447,10 +449,12 @@
     "language": "Langue",
     "loadMore": "Charger plus",
     "loading": "Chargement",
+    "logTime": "Saisir le temps",
     "matters": "Dossiers",
     "metadata": "Métadonnées",
     "name": "Nom",
     "newRow": "Nouvelle ligne",
+    "noResults": "Aucun résultat",
     "notes": "Notes",
     "open": "Ouvrir",
     "pin": "Épingler",
@@ -478,9 +482,7 @@
     "unpin": "Désépingler",
     "uploadFiles": "Importer des fichiers",
     "user": "Utilisateur",
-    "verify": "Vérifier",
-    "logTime": "Saisir le temps",
-    "noResults": "Aucun résultat"
+    "verify": "Vérifier"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
@@ -845,6 +847,7 @@
       "none": "Aucune",
       "urgent": "Urgent"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Annulé",
       "done": "Terminé",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "En un coup d'œil",
+      "edited": "a modifié",
       "getStarted": "Commencez en téléversant des documents ou en créant votre premier dossier.",
       "matterDetails": "Détails du dossier",
-      "recentActivity": "Activité récente",
-      "title": "Vue d'ensemble",
-      "totalDocuments": "Total des documents",
-      "totalItems": "Éléments",
-      "edited": "a modifié",
       "membersCount": "{count, plural, one {# membre} other {# membres}}",
       "nextDeadline": "Prochain délai",
       "openTasks": "Tâches ouvertes",
+      "recentActivity": "Activité récente",
       "timeAndTeam": "Temps & Équipe",
       "timeThisWeek": "Temps cette semaine",
+      "title": "Vue d'ensemble",
+      "totalDocuments": "Total des documents",
+      "totalItems": "Éléments",
       "totalThisWeek": "Total cette semaine",
       "upcomingTasks": "Tâches à venir"
     },

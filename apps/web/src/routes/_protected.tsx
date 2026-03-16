@@ -87,6 +87,7 @@ export const Route = createFileRoute("/_protected")({
     }
 
     return {
+      authToken: context.session.token,
       user: {
         id: context.session.userId,
         activeOrganizationId: context.session.activeOrganizationId,
@@ -202,7 +203,7 @@ function ProtectedContent({
     enabled: !!workspaceId,
   });
   const matterColor = workspaceId
-    ? workspace?.color ?? getMatterSwatch(workspaceId)
+    ? (workspace?.color ?? getMatterSwatch(workspaceId))
     : null;
 
   return (
@@ -211,7 +212,9 @@ function ProtectedContent({
         className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
         style={
           matterColor
-            ? { backgroundColor: `color-mix(in srgb, var(${matterColor}) 2%, transparent)` }
+            ? {
+                backgroundColor: `color-mix(in srgb, var(${matterColor}) 2%, transparent)`,
+              }
             : undefined
         }
       >

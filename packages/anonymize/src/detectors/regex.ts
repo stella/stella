@@ -1,7 +1,4 @@
-import {
-  POST_NOMINALS,
-  TITLE_PREFIXES,
-} from "../config/titles";
+import { POST_NOMINALS, TITLE_PREFIXES } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 
@@ -24,15 +21,11 @@ const escapeTitle = (title: string): string =>
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\s+/g, "\\s*");
 
-const TITLE_PREFIX = TITLE_PREFIXES.toSorted(
-  (a, b) => b.length - a.length,
-)
+const TITLE_PREFIX = TITLE_PREFIXES.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
   .join("|");
 
-const POST_NOMINAL = POST_NOMINALS.toSorted(
-  (a, b) => b.length - a.length,
-)
+const POST_NOMINAL = POST_NOMINALS.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
   .join("|");
 
@@ -269,9 +262,7 @@ const buildCompanyIdPatterns = (): PiiPattern[] => {
     // Sort keywords longest-first so longer keywords
     // are tried before shorter prefixes (IČO before IČ).
     const sorted = group.keywords.toSorted((a, b) => b.length - a.length);
-    const keywordAlt = sorted
-      .map(escapeTitle)
-      .join("|");
+    const keywordAlt = sorted.map(escapeTitle).join("|");
     // Separator: colon with optional whitespace, OR required
     // whitespace (handles "IČ:", "IČ :", "IČO:12345678", "IČO 12345678")
     // Value: optional 0-4 letter prefix (country code or
@@ -339,9 +330,7 @@ export const detectRegexPii = (fullText: string): Entity[] => {
       // Find value position from the END of the match (the
       // value is always the trailing capture group, so search
       // backwards to avoid matching inside the keyword)
-      const valueIdx =
-        match.index +
-        match[0].lastIndexOf(value);
+      const valueIdx = match.index + match[0].lastIndexOf(value);
       results.push({
         start: valueIdx,
         end: valueIdx + value.length,

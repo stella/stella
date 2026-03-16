@@ -242,9 +242,22 @@ guidelines, and visual noise rules in `/conventions-ux`.
 - Prefer `useRouteContext` for data already provided by parent
   route loaders (`beforeLoad`) over firing a separate query.
   Extend the route context if needed rather than adding a query.
+- Always use `select` with `useParams`, `useSearch`, and
+  `useRouteContext` to subscribe only to the fields the
+  component needs. Without `select`, the component rerenders
+  on any param/search/context change.
 - Use `useDebouncedCallback` from `use-debounce` instead of
   hand-rolling debounce with `useRef<setTimeout>` + manual
   `clearTimeout`. The library handles cleanup automatically.
+- Query option factories that use `QueryOptionsInput` with a
+  `TContext` must: define a named type alias matching the
+  factory name (e.g., `ViewsOptionsInput` for `viewsOptions`,
+  `ChatThreadOptionsInput` for `chatThreadOptions`),
+  destructure `{ key, context }` in the parameter, and
+  reference `key.*` / `context.*` directly in the body (no
+  further destructuring). This makes it obvious at the call
+  site and inside the function which values drive the cache
+  key vs. which are runtime-only deps.
 
 ### Backend (Elysia)
 

@@ -142,6 +142,7 @@
       "confirmDelete": "This will permanently delete this draft invoice and unlink all entries. This action cannot be undone.",
       "confirmVoid": "Voiding this invoice will unlink all time entries and expenses, reverting them to their previous status.",
       "createInvoice": "Create invoice",
+      "delete": "Delete",
       "dueDate": "Due date",
       "editInvoice": "Edit invoice",
       "finalize": "Finalize",
@@ -305,6 +306,7 @@
         "clauses": "Clauses",
         "contacts": "Contacts",
         "entities": "In this matter",
+        "matters": "Matters",
         "templates": "Templates"
       },
       "noResults": "No results"
@@ -845,6 +847,7 @@
       "none": "None",
       "urgent": "Urgent"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Cancelled",
       "done": "Done",

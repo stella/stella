@@ -7,6 +7,7 @@ import { ChatEditor } from "@/components/mentionable-prompt-input";
 import { GLOBAL_MENTION_CONTEXT } from "@/lib/chat-mention-context";
 import { useDevStore } from "@/lib/dev-store";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
@@ -20,6 +21,7 @@ function ChatIndex() {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { connection } = useSuspenseChatActor();
   const userContext = useChatUserContext();
 
   return (
@@ -39,13 +41,14 @@ function ChatIndex() {
             // eslint-disable-next-line typescript/no-misused-promises
             onSubmit={async (text) => {
               const threadId = nanoid();
-
               const chat = await queryClient.ensureQueryData(
                 chatThreadOptions({
-                  threadId,
-                  queryClient,
-                  userContext,
-                  getModelId,
+                  key: { threadId },
+                  context: {
+                    connection,
+                    userContext,
+                    getModelId,
+                  },
                 }),
               );
 

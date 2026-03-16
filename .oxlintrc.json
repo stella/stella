@@ -9,7 +9,6 @@
   "jsPlugins": [
     "./.oxlint-plugins/no-raw-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
-    "./.oxlint-plugins/no-domain-string-literals.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-untyped-updates.ts"
   ],
@@ -98,9 +97,6 @@
 
     // JSDoc
     "jsdoc/require-param-type": "off",
-
-    // --- Stella custom JS plugins ---
-    "no-domain-string-literals/no-domain-string-literals": "warn",
 
     // Rules without oxlint equivalents (tracked for future):
     // - noSecrets (entropy-based secret detection)
@@ -231,9 +227,6 @@
         // return types (Promise<T>) without an actual async operation.
         "require-await": "off",
         "typescript/unbound-method": "off",
-        // Tests legitimately compare against domain string literals
-        // (e.g., asserting content-type headers, HTTP methods).
-        "no-domain-string-literals/no-domain-string-literals": "off",
         // Test mocks use body.workspaceId and Record<string, unknown>
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-untyped-updates/no-untyped-updates": "off",

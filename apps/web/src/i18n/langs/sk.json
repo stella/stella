@@ -142,6 +142,7 @@
       "confirmDelete": "Týmto natrvalo odstránite tento koncept faktúry a odpojíte všetky záznamy. Túto akciu nie je možné vrátiť späť.",
       "confirmVoid": "Zrušením tejto faktúry sa odpoja všetky časové záznamy a výdavky a vrátia sa do predchádzajúceho stavu.",
       "createInvoice": "Vytvoriť faktúru",
+      "delete": "Delete",
       "dueDate": "Dátum splatnosti",
       "editInvoice": "Upraviť faktúru",
       "finalize": "Finalizovať",
@@ -305,6 +306,7 @@
         "clauses": "Klauzuly",
         "contacts": "Kontakty",
         "entities": "V tomto spise",
+        "matters": "Matters",
         "templates": "Šablóny"
       },
       "noResults": "Žiadne zodpovedajúce entity"
@@ -447,10 +449,12 @@
     "language": "Jazyk",
     "loadMore": "Načítať ďalšie",
     "loading": "Načítavam",
+    "logTime": "Zaznamenať čas",
     "matters": "Spisy",
     "metadata": "Metadáta",
     "name": "Názov",
     "newRow": "Nový riadok",
+    "noResults": "Žiadne výsledky",
     "notes": "Poznámky",
     "open": "Otvoriť",
     "pin": "Pripnúť",
@@ -478,9 +482,7 @@
     "unpin": "Odopnúť",
     "uploadFiles": "Nahrať súbory",
     "user": "Používateľ",
-    "verify": "Overiť",
-    "logTime": "Zaznamenať čas",
-    "noResults": "Žiadne výsledky"
+    "verify": "Overiť"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
@@ -845,6 +847,7 @@
       "none": "Žiadna",
       "urgent": "Urgentná"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Zrušená",
       "done": "Hotovo",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Prehľad",
+      "edited": "upravil(a)",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
-      "recentActivity": "Nedávna aktivita",
-      "title": "Prehľad",
-      "totalDocuments": "Celkom dokumentov",
-      "totalItems": "Položky",
-      "edited": "upravil(a)",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",
       "nextDeadline": "Ďalší termín",
       "openTasks": "Otvorené úlohy",
+      "recentActivity": "Nedávna aktivita",
       "timeAndTeam": "Čas a tím",
       "timeThisWeek": "Čas tento týždeň",
+      "title": "Prehľad",
+      "totalDocuments": "Celkom dokumentov",
+      "totalItems": "Položky",
       "totalThisWeek": "Celkom tento týždeň",
       "upcomingTasks": "Nadchádzajúce úlohy"
     },

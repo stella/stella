@@ -8,7 +8,7 @@ import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 import type { ChatActor } from "@/lib/api";
 import { eventHandlerV2 } from "@/lib/rivet";
-import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
+import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 
 // Type-level helper; no reactive state, safe at module scope.
 const chatEvent = eventHandlerV2<ChatActor>();
@@ -19,7 +19,7 @@ type UseChatSessionOptions = {
 };
 
 export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
-  const actor = useChatActor();
+  const actor = useSuspenseChatActor();
 
   const [autoApprovedTools, setAutoApprovedTools] = useState(
     () => new Set<string>(),
@@ -78,15 +78,13 @@ export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
         return;
       }
       await stop();
-      const latest = await actor.connection?.getMessages({
+      const latest = await actor.connection.getMessages({
         threadId,
       });
-      if (latest) {
-        // SAFETY: messages from the actor are structurally
-        // ChatMessage — narrowing adds typed tool parts.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        setMessages(latest as ChatMessage[]);
-      }
+      // SAFETY: messages from the actor are structurally
+      // ChatMessage — narrowing adds typed tool parts.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      setMessages(latest as ChatMessage[]);
       await chat.resumeStream();
     }),
   );

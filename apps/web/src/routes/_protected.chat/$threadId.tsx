@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 import { PlusIcon, SquareIcon } from "lucide-react";
@@ -29,6 +29,7 @@ import { ChatEditor } from "@/components/mentionable-prompt-input";
 import { GLOBAL_MENTION_CONTEXT } from "@/lib/chat-mention-context";
 import { useDevStore } from "@/lib/dev-store";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
@@ -41,13 +42,20 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
 
 function ThreadRoute() {
   const t = useTranslations();
-  const { threadId } = Route.useParams();
-  const queryClient = useQueryClient();
+  const threadId = Route.useParams({ select: (p) => p.threadId });
+  const { connection } = useSuspenseChatActor();
   const userContext = useChatUserContext();
   const showToolCalls = useDevStore((s) => s.showToolCalls);
 
   const { data: chat } = useSuspenseQuery(
-    chatThreadOptions({ threadId, queryClient, userContext, getModelId }),
+    chatThreadOptions({
+      key: { threadId },
+      context: {
+        connection,
+        userContext,
+        getModelId,
+      },
+    }),
   );
 
   const {

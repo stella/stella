@@ -142,6 +142,7 @@
       "confirmDelete": "Tai visam laikui ištrins šią sąskaitos juodraštį ir atsies visus įrašus. Šio veiksmo negalima atšaukti.",
       "confirmVoid": "Panaikinus šią sąskaitą, bus atsieti visi laiko įrašai ir išlaidos, grąžinant juos į ankstesnę būseną.",
       "createInvoice": "Sukurti sąskaitą",
+      "delete": "Delete",
       "dueDate": "Mokėjimo terminas",
       "editInvoice": "Redaguoti sąskaitą",
       "finalize": "Užbaigti",
@@ -305,6 +306,7 @@
         "clauses": "Sąlygos",
         "contacts": "Kontaktai",
         "entities": "Šioje byloje",
+        "matters": "Matters",
         "templates": "Šablonai"
       },
       "noResults": "No matching entities"
@@ -447,10 +449,12 @@
     "language": "Kalba",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
+    "logTime": "Registruoti laiką",
     "matters": "Bylos",
     "metadata": "Metaduomenys",
     "name": "Pavadinimas",
     "newRow": "Nauja eilutė",
+    "noResults": "Rezultatų nėra",
     "notes": "Pastabos",
     "open": "Atidaryti",
     "pin": "Prisegti",
@@ -478,9 +482,7 @@
     "unpin": "Atsegti",
     "uploadFiles": "Įkelti failus",
     "user": "Naudotojas",
-    "verify": "Patvirtinti",
-    "logTime": "Registruoti laiką",
-    "noResults": "Rezultatų nėra"
+    "verify": "Patvirtinti"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
@@ -845,6 +847,7 @@
       "none": "Nėra",
       "urgent": "Skubu"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Atšaukta",
       "done": "Atlikta",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Apžvalga",
+      "edited": "redagavo",
       "getStarted": "Pradėkite įkeldami dokumentus arba sukurdami pirmąjį aplanką.",
       "matterDetails": "Bylos detalės",
-      "recentActivity": "Naujausia veikla",
-      "title": "Apžvalga",
-      "totalDocuments": "Iš viso dokumentų",
-      "totalItems": "Elementai",
-      "edited": "redagavo",
       "membersCount": "{count, plural, one {# narys} other {# narių}}",
       "nextDeadline": "Kitas terminas",
       "openTasks": "Atviros užduotys",
+      "recentActivity": "Naujausia veikla",
       "timeAndTeam": "Laikas ir komanda",
       "timeThisWeek": "Laikas šią savaitę",
+      "title": "Apžvalga",
+      "totalDocuments": "Iš viso dokumentų",
+      "totalItems": "Elementai",
       "totalThisWeek": "Viso šią savaitę",
       "upcomingTasks": "Artėjančios užduotys"
     },

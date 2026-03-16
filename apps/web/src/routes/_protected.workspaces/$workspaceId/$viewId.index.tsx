@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
@@ -19,9 +19,17 @@ export const Route = createFileRoute(
 function RouteComponent() {
   const { workspaceId, viewId } = Route.useParams();
   const { page = 1 } = viewRoute.useSearch();
-  const queryClient = useQueryClient();
+  const viewsContext = Route.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
   const { data: activeView } = useSuspenseQuery({
-    ...viewsOptions(workspaceId, queryClient),
+    ...viewsOptions({
+      key: { workspaceId },
+      context: viewsContext,
+    }),
     select: (data) => data.find((v) => v.id === viewId) ?? data.at(0),
   });
 

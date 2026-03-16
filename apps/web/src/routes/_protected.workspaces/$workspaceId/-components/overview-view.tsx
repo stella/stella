@@ -1,11 +1,5 @@
 import type * as React from "react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
@@ -14,7 +8,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import {
   CalendarClockIcon,
   CheckCircle2Icon,
@@ -40,18 +34,18 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stella/ui/components/popover";
+import { toastManager } from "@stella/ui/components/toast";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stella/ui/components/tooltip";
-import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
-import { api } from "@/lib/api";
 import { renderDragPreview } from "@/components/drag-preview";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { api } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
 import type { EntityKind, WorkspaceEntity } from "@/lib/types";
@@ -98,9 +92,7 @@ const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 const getLocaleDayLabel = (dayIndex: number, locale: string) => {
   // Jan 5, 2026 is a Monday
   const date = new Date(2026, 0, 5 + dayIndex);
-  return date
-    .toLocaleDateString(locale, { weekday: "narrow" })
-    .toUpperCase();
+  return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
 };
 
 // ── Main component ───────────────────────────────────────
@@ -128,7 +120,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   }, [isUploading, queryClient, workspaceId]);
 
   // Views — find view IDs by layout type for stat card navigation
-  const { data: views } = useQuery(viewsOptions(workspaceId, queryClient));
+  const viewsContext = useRouteContext({
+    from: "/_protected/workspaces/$workspaceId",
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
+  const { data: views } = useQuery(
+    viewsOptions({ key: { workspaceId }, context: viewsContext }),
+  );
   const findViewByType = useCallback(
     (type: string) => views?.find((v) => v.layout.type === type),
     [views],
@@ -166,8 +167,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Tasks from recent entities (kind === "task")
   const tasks = useMemo(
-    () =>
-      data.recentEntities.filter((e) => e.kind === "task"),
+    () => data.recentEntities.filter((e) => e.kind === "task"),
     [data.recentEntities],
   );
 
@@ -181,8 +181,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       }
     };
     document.addEventListener("visibilitychange", onVisible);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   const weekStart = useMemo(getWeekStart, [today]);
@@ -221,17 +220,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const prevWeekHours = useMemo(
     () =>
       prevTimeEntries
-        ? prevTimeEntries.reduce(
-            (sum, e) => sum + e.durationMinutes / 60,
-            0,
-          )
+        ? prevTimeEntries.reduce((sum, e) => sum + e.durationMinutes / 60, 0)
         : null,
     [prevTimeEntries],
   );
 
-  const { data: members } = useQuery(
-    workspaceMembersOptions(workspaceId),
-  );
+  const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
 
   // Build per-user daily heatmap from real time entries
   const teamHeatmap = useMemo(() => {
@@ -239,7 +233,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       return [];
     }
 
-    return members.map((member) => {
+    return members.flatMap((member) => {
+      const { user } = member;
+      if (!user) {
+        return [];
+      }
+
       const daily = Array.from({ length: 7 }, () => 0);
       const dailyEntries: Record<
         number,
@@ -252,13 +251,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         }
         // Parse YYYY-MM-DD as local date (not UTC) to avoid
         // timezone-shifted day attribution for UTC- users.
-        const [y, m, d] = entry.dateWorked.split("-").map(Number);
+        const parts = entry.dateWorked.split("-").map(Number);
+        const y = parts[0] ?? 0;
+        const m = parts[1] ?? 1;
+        const d = parts[2] ?? 1;
         const entryDate = new Date(y, m - 1, d);
         const dayOfWeek = entryDate.getDay();
         // Convert Sunday=0 to index 6, Monday=1 to 0
         const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const hours = entry.durationMinutes / 60;
-        daily[dayIdx] += hours;
+        const current = daily[dayIdx] ?? 0;
+        daily[dayIdx] = current + hours;
 
         const entries = dailyEntries[dayIdx] ?? [];
         entries.push({
@@ -270,8 +273,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
       return {
         userId: member.userId,
-        name: member.user.name ?? member.user.email ?? "—",
-        image: member.user.image,
+        name: user.name ?? user.email ?? "—",
+        image: user.image,
         daily,
         dailyEntries,
       };
@@ -291,7 +294,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const tasksWithDue = useMemo(
     () =>
       tasks
-        .filter((t) => t.dueDate && t.status !== "closed")
+        .filter((task) => task.dueDate !== null && task.status !== "closed")
         .toSorted(
           (a, b) =>
             new Date(a.dueDate ?? 0).getTime() -
@@ -299,7 +302,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         ),
     [tasks],
   );
-
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-6 tabular-nums">
@@ -420,10 +422,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       {task.dueDate && (
                         <>
                           {task.createdBy ? " · " : ""}
-                          {new Date(task.dueDate).toLocaleDateString(
-                            lang,
-                            { month: "short", day: "numeric" },
-                          )}
+                          {new Date(task.dueDate).toLocaleDateString(lang, {
+                            month: "short",
+                            day: "numeric",
+                          })}
                         </>
                       )}
                     </p>
@@ -485,140 +487,133 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   0,
                 );
                 return teamHeatmap.map((member) => {
-                const total = Math.round(
-                  member.daily.reduce((sum, h) => sum + h, 0) * 10,
-                ) / 10;
+                  const total =
+                    Math.round(
+                      member.daily.reduce((sum, h) => sum + h, 0) * 10,
+                    ) / 10;
 
-                return (
-                  <div
-                    className="flex items-center gap-3 px-3 py-2"
-                    key={member.userId}
-                  >
-                    <div className="flex w-20 shrink-0 @lg:w-28 items-center gap-2">
-                      <Avatar className="size-5 text-[0.5rem]">
-                        {member.image && (
-                          <AvatarImage src={member.image} />
-                        )}
-                        <AvatarFallback>
-                          {member.name
-                            .split(" ")
-                            .map((w) => w.at(0))
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="truncate text-xs">
-                        {member.name}
-                      </span>
-                    </div>
-                    <div className="flex flex-1 justify-between">
-                      {member.daily.map((hours, dayIdx) => {
-                        const opacity =
-                          maxDaily > 0 ? hours / maxDaily : 0;
-                        const entries =
-                          member.dailyEntries[dayIdx] ?? [];
+                  return (
+                    <div
+                      className="flex items-center gap-3 px-3 py-2"
+                      key={member.userId}
+                    >
+                      <div className="flex w-20 shrink-0 items-center gap-2 @lg:w-28">
+                        <Avatar className="size-5 text-[0.5rem]">
+                          {member.image && <AvatarImage src={member.image} />}
+                          <AvatarFallback>
+                            {member.name
+                              .split(" ")
+                              .map((w) => w.at(0))
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-xs">{member.name}</span>
+                      </div>
+                      <div className="flex flex-1 justify-between">
+                        {member.daily.map((hours, dayIdx) => {
+                          const opacity = maxDaily > 0 ? hours / maxDaily : 0;
+                          const entries = member.dailyEntries[dayIdx] ?? [];
 
-                        const cell = (
-                          <div
-                            className={cn(
-                              "bg-primary/10 size-5 rounded-sm transition-transform",
-                              hours > 0 &&
-                                "cursor-pointer hover:scale-110",
-                            )}
-                            style={
-                              hours > 0
-                                ? {
-                                    backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
-                                  }
-                                : undefined
-                            }
-                          />
-                        );
+                          const cell = (
+                            <div
+                              className={cn(
+                                "bg-primary/10 size-5 rounded-sm transition-transform",
+                                hours > 0 && "cursor-pointer hover:scale-110",
+                              )}
+                              style={
+                                hours > 0
+                                  ? {
+                                      backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
+                                    }
+                                  : undefined
+                              }
+                            />
+                          );
 
-                        if (hours === 0) {
+                          if (hours === 0) {
+                            return (
+                              <div
+                                className="flex w-7 justify-center"
+                                // eslint-disable-next-line react/no-array-index-key
+                                key={dayIdx}
+                              >
+                                {cell}
+                              </div>
+                            );
+                          }
+
                           return (
                             <div
                               className="flex w-7 justify-center"
                               // eslint-disable-next-line react/no-array-index-key
                               key={dayIdx}
                             >
-                              {cell}
+                              <Popover>
+                                <TooltipRoot>
+                                  <PopoverTrigger
+                                    render={
+                                      <TooltipTrigger
+                                        render={
+                                          <button
+                                            className="cursor-pointer"
+                                            type="button"
+                                          />
+                                        }
+                                      />
+                                    }
+                                  >
+                                    {cell}
+                                  </PopoverTrigger>
+                                  <TooltipPopup>
+                                    {Math.round(hours * 10) / 10}h
+                                  </TooltipPopup>
+                                </TooltipRoot>
+                                <PopoverPopup className="w-56" sideOffset={8}>
+                                  <div className="p-2">
+                                    <p className="text-muted-foreground mb-2 text-xs font-medium">
+                                      {member.name} ·{" "}
+                                      {getLocaleDayLabel(dayIdx, lang)}
+                                      {" · "}
+                                      {Math.round(hours * 10) / 10}h
+                                    </p>
+                                    {entries.length > 0 ? (
+                                      <div className="space-y-1.5">
+                                        {entries.map((entry) => (
+                                          <div
+                                            className="flex items-start justify-between gap-2"
+                                            key={entry.description}
+                                          >
+                                            <span className="text-xs">
+                                              {entry.description}
+                                            </span>
+                                            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                                              {Math.round(entry.hours * 10) /
+                                                10}
+                                              h
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-muted-foreground text-xs">
+                                        {t("common.noResults")}
+                                      </p>
+                                    )}
+                                  </div>
+                                </PopoverPopup>
+                              </Popover>
                             </div>
                           );
-                        }
-
-                        return (
-                          <div
-                            className="flex w-7 justify-center"
-                            // eslint-disable-next-line react/no-array-index-key
-                            key={dayIdx}
-                          >
-                            <Popover>
-                              <TooltipRoot>
-                                <PopoverTrigger
-                                  render={
-                                    <TooltipTrigger
-                                      render={
-                                        <button
-                                          className="cursor-pointer"
-                                          type="button"
-                                        />
-                                      }
-                                    />
-                                  }
-                                >
-                                  {cell}
-                                </PopoverTrigger>
-                                <TooltipPopup>
-                                  {Math.round(hours * 10) / 10}h
-                                </TooltipPopup>
-                              </TooltipRoot>
-                              <PopoverPopup
-                                className="w-56"
-                                sideOffset={8}
-                              >
-                                <div className="p-2">
-                                  <p className="text-muted-foreground mb-2 text-xs font-medium">
-                                    {member.name} ·{" "}
-                                    {getLocaleDayLabel(dayIdx, lang)}
-                                    {" · "}
-                                    {Math.round(hours * 10) / 10}h
-                                  </p>
-                                  {entries.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {entries.map((entry) => (
-                                        <div
-                                          className="flex items-start justify-between gap-2"
-                                          key={entry.description}
-                                        >
-                                          <span className="text-xs">
-                                            {entry.description}
-                                          </span>
-                                          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                            {Math.round(entry.hours * 10) / 10}h
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-muted-foreground text-xs">
-                                      {t("common.noResults")}
-                                    </p>
-                                  )}
-                                </div>
-                              </PopoverPopup>
-                            </Popover>
-                          </div>
-                        );
-                      })}
+                        })}
+                      </div>
+                      <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
+                        {total}h
+                      </span>
                     </div>
-                    <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
-                      {total}h
-                    </span>
-                  </div>
-                );
-              });
+                  );
+                });
               })()}
             </div>
             <div className="border-t px-3 py-2">
@@ -633,25 +628,25 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   {prevWeekHours !== null &&
                     prevWeekHours > 0 &&
                     totalHoursThisWeek !== prevWeekHours && (
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        totalHoursThisWeek > prevWeekHours
-                          ? "text-green-600"
-                          : "text-red-500",
-                      )}
-                    >
-                      {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
-                      {Math.round(
-                        Math.abs(
-                          ((totalHoursThisWeek - prevWeekHours) /
-                            prevWeekHours) *
-                            100,
-                        ),
-                      )}
-                      %
-                    </span>
-                  )}
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          totalHoursThisWeek > prevWeekHours
+                            ? "text-green-600"
+                            : "text-red-500",
+                        )}
+                      >
+                        {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
+                        {Math.round(
+                          Math.abs(
+                            ((totalHoursThisWeek - prevWeekHours) /
+                              prevWeekHours) *
+                              100,
+                          ),
+                        )}
+                        %
+                      </span>
+                    )}
                 </div>
               </div>
               <div className="mt-1.5 flex items-center justify-between">
@@ -734,17 +729,12 @@ type StatCardProps = {
   icon: React.ReactNode;
   label: string;
   value: string;
-  sublabel?: string;
+  sublabel?: string | undefined;
   onClick?: () => void;
 };
 
-const StatCard = ({
-  icon,
-  label,
-  value,
-  sublabel,
-  onClick,
-}: StatCardProps) => (
+const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => (
+  // eslint-disable-next-line jsx-a11y/no-static-element-interactions
   <div
     className={cn(
       "bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3",
@@ -770,9 +760,7 @@ const StatCard = ({
     </div>
     <span className="text-xl font-semibold tabular-nums">{value}</span>
     {sublabel && (
-      <span className="text-muted-foreground truncate text-xs">
-        {sublabel}
-      </span>
+      <span className="text-muted-foreground truncate text-xs">{sublabel}</span>
     )}
   </div>
 );

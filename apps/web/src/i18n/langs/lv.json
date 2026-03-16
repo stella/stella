@@ -142,6 +142,7 @@
       "confirmDelete": "Tas neatgriezeniski dzēsīs šo rēķina melnrakstu un atsaistīs visus ierakstus. Šo darbību nevar atcelt.",
       "confirmVoid": "Anulējot šo rēķinu, tiks atsaistīti visi laika ieraksti un izdevumi, atgriežot tos iepriekšējā statusā.",
       "createInvoice": "Izveidot rēķinu",
+      "delete": "Delete",
       "dueDate": "Apmaksas termiņš",
       "editInvoice": "Rediģēt rēķinu",
       "finalize": "Pabeigt",
@@ -305,6 +306,7 @@
         "clauses": "Klauzulas",
         "contacts": "Kontakti",
         "entities": "Šajā lietā",
+        "matters": "Matters",
         "templates": "Veidnes"
       },
       "noResults": "No matching entities"
@@ -447,10 +449,12 @@
     "language": "Valoda",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
+    "logTime": "Reģistrēt laiku",
     "matters": "Lietas",
     "metadata": "Metadati",
     "name": "Nosaukums",
     "newRow": "Jauna rinda",
+    "noResults": "Nav rezultātu",
     "notes": "Piezīmes",
     "open": "Atvērt",
     "pin": "Piespraust",
@@ -478,9 +482,7 @@
     "unpin": "Atspraust",
     "uploadFiles": "Augšupielādēt failus",
     "user": "Lietotājs",
-    "verify": "Verificēt",
-    "logTime": "Reģistrēt laiku",
-    "noResults": "Nav rezultātu"
+    "verify": "Verificēt"
   },
   "contacts": {
     "alsoPartyIn": "Ir arī puse {count, plural, zero {# citās lietās} one {# citā lietā} other {# citās lietās}}",
@@ -845,6 +847,7 @@
       "none": "Nav",
       "urgent": "Steidzams"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Atcelts",
       "done": "Pabeigts",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Apskats",
+      "edited": "rediģēja",
       "getStarted": "Sāciet, augšupielādējot dokumentus vai izveidojot pirmo mapi.",
       "matterDetails": "Lietas detaļas",
-      "recentActivity": "Pēdējā aktivitāte",
-      "title": "Pārskats",
-      "totalDocuments": "Dokumenti kopā",
-      "totalItems": "Vienumi",
-      "edited": "rediģēja",
       "membersCount": "{count, plural, one {# dalībnieks} other {# dalībnieki}}",
       "nextDeadline": "Nākamais termiņš",
       "openTasks": "Atvērtie uzdevumi",
+      "recentActivity": "Pēdējā aktivitāte",
       "timeAndTeam": "Laiks un komanda",
       "timeThisWeek": "Laiks šonedēļ",
+      "title": "Pārskats",
+      "totalDocuments": "Dokumenti kopā",
+      "totalItems": "Vienumi",
       "totalThisWeek": "Kopā šonedēļ",
       "upcomingTasks": "Gaidāmie uzdevumi"
     },
