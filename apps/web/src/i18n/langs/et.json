@@ -478,7 +478,9 @@
     "unpin": "Eemalda kinnitamine",
     "uploadFiles": "Laadi failid üles",
     "user": "Kasutaja",
-    "verify": "Kinnita"
+    "verify": "Kinnita",
+    "logTime": "Salvesta aeg",
+    "noResults": "Tulemused puuduvad"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Viimane tegevus",
       "title": "Ülevaade",
       "totalDocuments": "Dokumente kokku",
-      "totalItems": "Elemendid"
+      "totalItems": "Elemendid",
+      "edited": "muutis",
+      "membersCount": "{count, plural, one {# liige} other {# liiget}}",
+      "nextDeadline": "Järgmine tähtaeg",
+      "openTasks": "Avatud ülesanded",
+      "timeAndTeam": "Aeg ja meeskond",
+      "timeThisWeek": "Aeg sel nädalal",
+      "totalThisWeek": "Kokku sel nädalal",
+      "upcomingTasks": "Eelseisvad ülesanded"
     },
     "parties": {
       "addParty": "Lisa osapool",

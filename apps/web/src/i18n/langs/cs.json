@@ -478,7 +478,9 @@
     "unpin": "Odepnout",
     "uploadFiles": "Nahrát soubory",
     "user": "Uživatel",
-    "verify": "Ověřit"
+    "verify": "Ověřit",
+    "logTime": "Zaznamenat čas",
+    "noResults": "Žádné výsledky"
   },
   "contacts": {
     "alsoPartyIn": "Také vystupuje jako strana v {count, plural, one {# dalším spisu} few {# dalších spisech} other {# dalších spisech}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Nedávná aktivita",
       "title": "Přehled",
       "totalDocuments": "Celkem dokumentů",
-      "totalItems": "Položky"
+      "totalItems": "Položky",
+      "edited": "upravil(a)",
+      "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",
+      "nextDeadline": "Další termín",
+      "openTasks": "Otevřené úkoly",
+      "timeAndTeam": "Čas a tým",
+      "timeThisWeek": "Čas tento týden",
+      "totalThisWeek": "Celkem tento týden",
+      "upcomingTasks": "Nadcházející úkoly"
     },
     "parties": {
       "addParty": "Přidat stranu",

@@ -478,7 +478,9 @@
     "unpin": "Atspraust",
     "uploadFiles": "Augšupielādēt failus",
     "user": "Lietotājs",
-    "verify": "Verificēt"
+    "verify": "Verificēt",
+    "logTime": "Reģistrēt laiku",
+    "noResults": "Nav rezultātu"
   },
   "contacts": {
     "alsoPartyIn": "Ir arī puse {count, plural, zero {# citās lietās} one {# citā lietā} other {# citās lietās}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Pēdējā aktivitāte",
       "title": "Pārskats",
       "totalDocuments": "Dokumenti kopā",
-      "totalItems": "Vienumi"
+      "totalItems": "Vienumi",
+      "edited": "rediģēja",
+      "membersCount": "{count, plural, one {# dalībnieks} other {# dalībnieki}}",
+      "nextDeadline": "Nākamais termiņš",
+      "openTasks": "Atvērtie uzdevumi",
+      "timeAndTeam": "Laiks un komanda",
+      "timeThisWeek": "Laiks šonedēļ",
+      "totalThisWeek": "Kopā šonedēļ",
+      "upcomingTasks": "Gaidāmie uzdevumi"
     },
     "parties": {
       "addParty": "Pievienot pusi",
@@ -1159,7 +1169,7 @@
       "members": "Dalībnieki",
       "parties": "Puses"
     },
-    "tasksCount": "{count, plural, zero {# uzdevumu} one {# uzdevums} other {# uzdevumi}}",
+    "tasksCount": "{count, plural, one {# uzdevums} other {# uzdevumi}}",
     "tools": {
       "aiModel": "AI modelis",
       "manualInput": "Manuāli"

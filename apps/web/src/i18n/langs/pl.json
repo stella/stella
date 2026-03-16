@@ -478,7 +478,9 @@
     "unpin": "Odepnij",
     "uploadFiles": "Prześlij pliki",
     "user": "Użytkownik",
-    "verify": "Zweryfikuj"
+    "verify": "Zweryfikuj",
+    "logTime": "Zarejestruj czas",
+    "noResults": "Brak wyników"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} other {# innych sprawach}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Ostatnia aktywność",
       "title": "Przegląd",
       "totalDocuments": "Łącznie dokumentów",
-      "totalItems": "Elementy"
+      "totalItems": "Elementy",
+      "edited": "edytował(a)",
+      "membersCount": "{count, plural, one {# członek} few {# członków} other {# członków}}",
+      "nextDeadline": "Następny termin",
+      "openTasks": "Otwarte zadania",
+      "timeAndTeam": "Czas i zespół",
+      "timeThisWeek": "Czas w tym tygodniu",
+      "totalThisWeek": "Razem w tym tygodniu",
+      "upcomingTasks": "Nadchodzące zadania"
     },
     "parties": {
       "addParty": "Dodaj stronę",
@@ -1159,7 +1169,7 @@
       "members": "Członkowie",
       "parties": "Strony"
     },
-    "tasksCount": "{count, plural, one {# zadanie} few {# zadania} many {# zadań} other {# zadania}}",
+    "tasksCount": "{count, plural, one {# zadanie} few {# zadania} other {# zadań}}",
     "tools": {
       "aiModel": "Model AI",
       "manualInput": "Ręcznie"
