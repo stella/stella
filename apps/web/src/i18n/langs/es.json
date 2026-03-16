@@ -478,7 +478,9 @@
     "unpin": "Desfijar",
     "uploadFiles": "Subir archivos",
     "user": "Usuario",
-    "verify": "Verificar"
+    "verify": "Verificar",
+    "logTime": "Registrar tiempo",
+    "noResults": "Sin resultados"
   },
   "contacts": {
     "alsoPartyIn": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Actividad reciente",
       "title": "Resumen",
       "totalDocuments": "Total de documentos",
-      "totalItems": "Elementos"
+      "totalItems": "Elementos",
+      "edited": "editó",
+      "membersCount": "{count, plural, one {# miembro} other {# miembros}}",
+      "nextDeadline": "Próximo plazo",
+      "openTasks": "Tareas abiertas",
+      "timeAndTeam": "Tiempo & Equipo",
+      "timeThisWeek": "Tiempo esta semana",
+      "totalThisWeek": "Total esta semana",
+      "upcomingTasks": "Próximas tareas"
     },
     "parties": {
       "addParty": "Añadir parte",

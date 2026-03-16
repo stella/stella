@@ -1,14 +1,54 @@
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { LayoutDashboardIcon, SquareCheckIcon } from "lucide-react";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  CalendarClockIcon,
+  CheckCircle2Icon,
+  CircleDotIcon,
+  ClockIcon,
+  FolderTreeIcon,
+  LayoutDashboardIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  UploadIcon,
+  UserPlusIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@stella/ui/components/avatar";
+import { Button } from "@stella/ui/components/button";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stella/ui/components/popover";
+import {
+  TooltipPopup,
+  Tooltip as TooltipRoot,
+  TooltipTrigger,
+} from "@stella/ui/components/tooltip";
+import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { api } from "@/lib/api";
 import { renderDragPreview } from "@/components/drag-preview";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -20,17 +60,103 @@ import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+import {
+  overviewOptions,
+  workspacesKeys,
+} from "@/routes/_protected.workspaces/-queries";
 
 type OverviewViewProps = {
   workspaceId: string;
 };
 
+// ── Helpers ───────────────────────────────────────────────
+
+/** Monday of the current ISO week. */
+const getWeekStart = () => {
+  const now = new Date();
+  const day = now.getDay();
+  // Shift Sunday (0) to 7 so Monday is always day 1
+  const diff = (day === 0 ? 7 : day) - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+};
+
+const toISODate = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Get the single-letter day abbreviation for a given
+ * weekday index (0 = Monday) in the user's locale.
+ */
+const getLocaleDayLabel = (dayIndex: number, locale: string) => {
+  // Jan 5, 2026 is a Monday
+  const date = new Date(2026, 0, 5 + dayIndex);
+  return date
+    .toLocaleDateString(locale, { weekday: "narrow" })
+    .toUpperCase();
+};
+
+// ── Main component ───────────────────────────────────────
+
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, handleCreateFileEntities] =
+    useCreateFileEntities(workspaceId);
+  const prevUploading = useRef(false);
+
+  // Invalidate overview when upload completes
+  useEffect(() => {
+    if (prevUploading.current && !isUploading) {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      });
+    }
+    prevUploading.current = isUploading;
+  }, [isUploading, queryClient, workspaceId]);
+
+  // Views — find view IDs by layout type for stat card navigation
+  const { data: views } = useQuery(viewsOptions(workspaceId, queryClient));
+  const findViewByType = useCallback(
+    (type: string) => views?.find((v) => v.layout.type === type),
+    [views],
+  );
+
+  const handleCreateTask = useCallback(async () => {
+    const response = await api.tasks({ workspaceId }).put({
+      queryKey: entitiesKeys.all(workspaceId),
+      name: t("tasks.untitled"),
+    });
+    const entityId = response.data?.entityId;
+    if (response.error || !entityId) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      return;
+    }
+    toastManager.add({
+      title: t("success.taskCreated"),
+      type: "success",
+    });
+    // eslint-disable-next-line typescript/no-floating-promises
+    queryClient.invalidateQueries({
+      queryKey: workspacesKeys.overview(workspaceId),
+    });
+    useInspectorStore.getState().openTask(entityId, "", true);
+  }, [workspaceId, t, queryClient]);
 
   const recentEntities = useMemo(
     () => data.recentEntities.filter((e) => e.kind !== "folder"),
@@ -38,34 +164,549 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const hasActivity = recentEntities.length > 0;
 
+  // Tasks from recent entities (kind === "task")
+  const tasks = useMemo(
+    () =>
+      data.recentEntities.filter((e) => e.kind === "task"),
+    [data.recentEntities],
+  );
+
+  // Re-compute the current date when the user returns to the
+  // tab so the heatmap refreshes across day/week boundaries.
+  const [today, setToday] = useState(() => toISODate(new Date()));
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setToday(toISODate(new Date()));
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  const weekStart = useMemo(getWeekStart, [today]);
+  const weekEnd = useMemo(() => {
+    const end = new Date(weekStart);
+    end.setDate(end.getDate() + 6);
+    return end;
+  }, [weekStart]);
+
+  const { data: timeEntries } = useQuery(
+    timeEntriesOptions(workspaceId, {
+      dateFrom: toISODate(weekStart),
+      dateTo: toISODate(weekEnd),
+    }),
+  );
+
+  // Previous week for trend comparison
+  const prevWeekStart = useMemo(() => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() - 7);
+    return d;
+  }, [weekStart]);
+  const prevWeekEnd = useMemo(() => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() - 1);
+    return d;
+  }, [weekStart]);
+
+  const { data: prevTimeEntries } = useQuery(
+    timeEntriesOptions(workspaceId, {
+      dateFrom: toISODate(prevWeekStart),
+      dateTo: toISODate(prevWeekEnd),
+    }),
+  );
+
+  const prevWeekHours = useMemo(
+    () =>
+      prevTimeEntries
+        ? prevTimeEntries.reduce(
+            (sum, e) => sum + e.durationMinutes / 60,
+            0,
+          )
+        : null,
+    [prevTimeEntries],
+  );
+
+  const { data: members } = useQuery(
+    workspaceMembersOptions(workspaceId),
+  );
+
+  // Build per-user daily heatmap from real time entries
+  const teamHeatmap = useMemo(() => {
+    if (!members || !timeEntries) {
+      return [];
+    }
+
+    return members.map((member) => {
+      const daily = Array.from({ length: 7 }, () => 0);
+      const dailyEntries: Record<
+        number,
+        { description: string; hours: number }[]
+      > = {};
+
+      for (const entry of timeEntries) {
+        if (entry.userId !== member.userId) {
+          continue;
+        }
+        // Parse YYYY-MM-DD as local date (not UTC) to avoid
+        // timezone-shifted day attribution for UTC- users.
+        const [y, m, d] = entry.dateWorked.split("-").map(Number);
+        const entryDate = new Date(y, m - 1, d);
+        const dayOfWeek = entryDate.getDay();
+        // Convert Sunday=0 to index 6, Monday=1 to 0
+        const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const hours = entry.durationMinutes / 60;
+        daily[dayIdx] += hours;
+
+        const entries = dailyEntries[dayIdx] ?? [];
+        entries.push({
+          description: entry.narrative || entry.taskCode || "—",
+          hours,
+        });
+        dailyEntries[dayIdx] = entries;
+      }
+
+      return {
+        userId: member.userId,
+        name: member.user.name ?? member.user.email ?? "—",
+        image: member.user.image,
+        daily,
+        dailyEntries,
+      };
+    });
+  }, [members, timeEntries]);
+
+  const totalHoursThisWeek = useMemo(
+    () =>
+      teamHeatmap.reduce(
+        (sum, m) => sum + m.daily.reduce((s, h) => s + h, 0),
+        0,
+      ),
+    [teamHeatmap],
+  );
+
+  // Tasks with due dates, sorted by nearest deadline first
+  const tasksWithDue = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.dueDate && t.status !== "closed")
+        .toSorted(
+          (a, b) =>
+            new Date(a.dueDate ?? 0).getTime() -
+            new Date(b.dueDate ?? 0).getTime(),
+        ),
+    [tasks],
+  );
+
+
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-      {/* At a glance */}
-      <section>
-        <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-          {t("workspaces.overview.atAGlance")}
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label={t("workspaces.overview.totalDocuments")}
-            value={data.documentCount}
-          />
-          {data.taskCount > 0 && (
-            <StatCard
-              label={t("workspaces.tasksCount", {
-                count: data.taskCount,
-              })}
-              value={data.taskCount}
-            />
+    <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-6 tabular-nums">
+      {/* Stats grid */}
+      <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
+        <StatCard
+          icon={<FolderTreeIcon className="size-4" />}
+          label={t("workspaces.overview.totalDocuments")}
+          onClick={() => {
+            const view = findViewByType("filesystem");
+            if (view) {
+              // eslint-disable-next-line typescript/no-floating-promises
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId: view.id },
+              });
+            }
+          }}
+          value={String(data.documentCount)}
+        />
+        <StatCard
+          icon={<SquareCheckIcon className="size-4" />}
+          label={t("workspaces.tasksCount", { count: data.taskCount })}
+          onClick={() => {
+            const view = findViewByType("kanban");
+            if (view) {
+              // eslint-disable-next-line typescript/no-floating-promises
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId: view.id },
+              });
+            }
+          }}
+          value={`${data.taskCount}`}
+        />
+        <StatCard
+          icon={<CalendarClockIcon className="size-4" />}
+          label={t("workspaces.overview.nextDeadline")}
+          onClick={() => {
+            const view = findViewByType("kanban");
+            if (view) {
+              // eslint-disable-next-line typescript/no-floating-promises
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId: view.id },
+              });
+            }
+          }}
+          sublabel={tasksWithDue.at(0)?.name}
+          value={(() => {
+            const date = tasksWithDue.at(0)?.dueDate;
+            if (!date) {
+              return "—";
+            }
+            return new Date(date).toLocaleDateString(lang, {
+              month: "short",
+              day: "numeric",
+            });
+          })()}
+        />
+        <StatCard
+          icon={<ClockIcon className="size-4" />}
+          label={t("workspaces.overview.timeThisWeek")}
+          onClick={() => {
+            // eslint-disable-next-line typescript/no-floating-promises
+            navigate({
+              to: "/workspaces/$workspaceId/timesheets",
+              params: { workspaceId },
+            });
+          }}
+          value={`${Math.round(totalHoursThisWeek * 10) / 10}h`}
+        />
+      </div>
+
+      {/* Two-column layout: tasks + team */}
+      <div className="grid gap-6 @3xl:grid-cols-2">
+        {/* Upcoming tasks */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-muted-foreground text-sm font-medium">
+              {t("workspaces.overview.upcomingTasks")}
+            </h2>
+            <Button
+              className="h-7 text-xs"
+              // eslint-disable-next-line typescript/no-misused-promises
+              onClick={handleCreateTask}
+              size="sm"
+              variant="ghost"
+            >
+              <PlusIcon className="size-3" />
+              {t("common.add")}
+            </Button>
+          </div>
+          {tasks.length > 0 ? (
+            <div className="divide-y rounded-lg border">
+              {tasks.map((task) => (
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5"
+                  key={task.entityId}
+                >
+                  {task.status === "closed" ? (
+                    <CheckCircle2Icon className="text-muted-foreground size-4 shrink-0" />
+                  ) : (
+                    <CircleDotIcon className="text-primary size-4 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        "truncate text-sm",
+                        task.status === "closed" &&
+                          "text-muted-foreground line-through",
+                      )}
+                    >
+                      {task.name}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {task.createdBy}
+                      {task.dueDate && (
+                        <>
+                          {task.createdBy ? " · " : ""}
+                          {new Date(task.dueDate).toLocaleDateString(
+                            lang,
+                            { month: "short", day: "numeric" },
+                          )}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-muted-foreground rounded-lg border px-3 py-6 text-center text-sm">
+              {t("common.noResults")}
+            </div>
           )}
-        </div>
-      </section>
+        </section>
+
+        {/* Time & Team */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-muted-foreground text-sm font-medium">
+              <ClockIcon className="me-1.5 inline size-3.5" />
+              {t("workspaces.overview.timeAndTeam")}
+            </h2>
+            <Button
+              className="h-7 text-xs"
+              onClick={() => {
+                // eslint-disable-next-line typescript/no-floating-promises
+                navigate({
+                  to: "/workspaces/$workspaceId/timesheets",
+                  params: { workspaceId },
+                });
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <PlusIcon className="size-3" />
+              {t("common.logTime")}
+            </Button>
+          </div>
+          <div className="rounded-lg border">
+            {/* Day labels — i18n via Intl.DateTimeFormat */}
+            <div className="flex items-center gap-3 border-b px-3 py-1.5">
+              <span className="w-20 shrink-0 @lg:w-28" />
+              <div className="flex flex-1 justify-between">
+                {Array.from({ length: 7 }, (_, i) => (
+                  <span
+                    className="text-muted-foreground w-7 text-center text-[0.625rem]"
+                    // eslint-disable-next-line react/no-array-index-key
+                    key={i}
+                  >
+                    {getLocaleDayLabel(i, lang)}
+                  </span>
+                ))}
+              </div>
+              <span className="w-10 shrink-0" />
+            </div>
+            <div className="divide-y">
+              {(() => {
+                const maxDaily = Math.max(
+                  ...teamHeatmap.flatMap((m) => m.daily),
+                  0,
+                );
+                return teamHeatmap.map((member) => {
+                const total = Math.round(
+                  member.daily.reduce((sum, h) => sum + h, 0) * 10,
+                ) / 10;
+
+                return (
+                  <div
+                    className="flex items-center gap-3 px-3 py-2"
+                    key={member.userId}
+                  >
+                    <div className="flex w-20 shrink-0 @lg:w-28 items-center gap-2">
+                      <Avatar className="size-5 text-[0.5rem]">
+                        {member.image && (
+                          <AvatarImage src={member.image} />
+                        )}
+                        <AvatarFallback>
+                          {member.name
+                            .split(" ")
+                            .map((w) => w.at(0))
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="truncate text-xs">
+                        {member.name}
+                      </span>
+                    </div>
+                    <div className="flex flex-1 justify-between">
+                      {member.daily.map((hours, dayIdx) => {
+                        const opacity =
+                          maxDaily > 0 ? hours / maxDaily : 0;
+                        const entries =
+                          member.dailyEntries[dayIdx] ?? [];
+
+                        const cell = (
+                          <div
+                            className={cn(
+                              "bg-primary/10 size-5 rounded-sm transition-transform",
+                              hours > 0 &&
+                                "cursor-pointer hover:scale-110",
+                            )}
+                            style={
+                              hours > 0
+                                ? {
+                                    backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
+
+                        if (hours === 0) {
+                          return (
+                            <div
+                              className="flex w-7 justify-center"
+                              // eslint-disable-next-line react/no-array-index-key
+                              key={dayIdx}
+                            >
+                              {cell}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            className="flex w-7 justify-center"
+                            // eslint-disable-next-line react/no-array-index-key
+                            key={dayIdx}
+                          >
+                            <Popover>
+                              <TooltipRoot>
+                                <PopoverTrigger
+                                  render={
+                                    <TooltipTrigger
+                                      render={
+                                        <button
+                                          className="cursor-pointer"
+                                          type="button"
+                                        />
+                                      }
+                                    />
+                                  }
+                                >
+                                  {cell}
+                                </PopoverTrigger>
+                                <TooltipPopup>
+                                  {Math.round(hours * 10) / 10}h
+                                </TooltipPopup>
+                              </TooltipRoot>
+                              <PopoverPopup
+                                className="w-56"
+                                sideOffset={8}
+                              >
+                                <div className="p-2">
+                                  <p className="text-muted-foreground mb-2 text-xs font-medium">
+                                    {member.name} ·{" "}
+                                    {getLocaleDayLabel(dayIdx, lang)}
+                                    {" · "}
+                                    {Math.round(hours * 10) / 10}h
+                                  </p>
+                                  {entries.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {entries.map((entry) => (
+                                        <div
+                                          className="flex items-start justify-between gap-2"
+                                          key={entry.description}
+                                        >
+                                          <span className="text-xs">
+                                            {entry.description}
+                                          </span>
+                                          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                                            {Math.round(entry.hours * 10) / 10}h
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-muted-foreground text-xs">
+                                      {t("common.noResults")}
+                                    </p>
+                                  )}
+                                </div>
+                              </PopoverPopup>
+                            </Popover>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
+                      {total}h
+                    </span>
+                  </div>
+                );
+              });
+              })()}
+            </div>
+            <div className="border-t px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                  {t("workspaces.overview.totalThisWeek")}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium tabular-nums">
+                    {Math.round(totalHoursThisWeek * 10) / 10}h
+                  </span>
+                  {prevWeekHours !== null &&
+                    prevWeekHours > 0 &&
+                    totalHoursThisWeek !== prevWeekHours && (
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        totalHoursThisWeek > prevWeekHours
+                          ? "text-green-600"
+                          : "text-red-500",
+                      )}
+                    >
+                      {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
+                      {Math.round(
+                        Math.abs(
+                          ((totalHoursThisWeek - prevWeekHours) /
+                            prevWeekHours) *
+                            100,
+                        ),
+                      )}
+                      %
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                  {t("workspaces.overview.membersCount", {
+                    count: teamHeatmap.length,
+                  })}
+                </span>
+                <Button
+                  className="h-auto p-0 text-xs"
+                  onClick={() => {
+                    // eslint-disable-next-line typescript/no-floating-promises
+                    navigate({ to: "/organization/members" });
+                  }}
+                  size="sm"
+                  variant="link"
+                >
+                  <UserPlusIcon className="size-3" />
+                  {t("workspaces.members.addMember")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* Recent activity */}
       <section>
-        <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-          {t("workspaces.overview.recentActivity")}
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-muted-foreground text-sm font-medium">
+            {t("workspaces.overview.recentActivity")}
+          </h2>
+          <Button
+            className="h-7 text-xs"
+            onClick={() => fileInputRef.current?.click()}
+            size="sm"
+            variant="ghost"
+          >
+            <UploadIcon className="size-3" />
+            {t("common.uploadFiles")}
+          </Button>
+          <input
+            className="hidden"
+            multiple
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                handleCreateFileEntities([...files]);
+              }
+              e.target.value = "";
+            }}
+            ref={fileInputRef}
+            type="file"
+          />
+        </div>
         {hasActivity ? (
           <div className="divide-y rounded-lg border">
             {recentEntities.map((entity) => (
@@ -90,14 +731,49 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 };
 
 type StatCardProps = {
+  icon: React.ReactNode;
   label: string;
-  value: number;
+  value: string;
+  sublabel?: string;
+  onClick?: () => void;
 };
 
-const StatCard = ({ label, value }: StatCardProps) => (
-  <div className="bg-card flex flex-col gap-1 rounded-lg border px-4 py-3">
-    <span className="text-2xl font-semibold tabular-nums">{value}</span>
-    <span className="text-muted-foreground text-xs capitalize">{label}</span>
+const StatCard = ({
+  icon,
+  label,
+  value,
+  sublabel,
+  onClick,
+}: StatCardProps) => (
+  <div
+    className={cn(
+      "bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3",
+      onClick && "hover:bg-muted/50 cursor-pointer transition-colors",
+    )}
+    onClick={onClick}
+    onKeyDown={
+      onClick
+        ? (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onClick();
+            }
+          }
+        : undefined
+    }
+    role={onClick ? "button" : undefined}
+    tabIndex={onClick ? 0 : undefined}
+  >
+    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      {icon}
+      {label}
+    </div>
+    <span className="text-xl font-semibold tabular-nums">{value}</span>
+    {sublabel && (
+      <span className="text-muted-foreground truncate text-xs">
+        {sublabel}
+      </span>
+    )}
   </div>
 );
 
@@ -107,6 +783,9 @@ type OverviewEntity = {
   entityId: string;
   name: string;
   kind: EntityKind;
+  status: string | null;
+  priority: string | null;
+  dueDate: string | null;
   mimeType: string | null;
   fieldId: string | null;
   pdfFileId: string | null;
@@ -168,9 +847,9 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       createdByImage: entity.createdByImage,
       updatedAt: entity.updatedAt,
       version: 0,
-      status: null,
-      priority: null,
-      dueDate: null,
+      status: entity.status,
+      priority: entity.priority,
+      dueDate: entity.dueDate,
       sortOrder: null,
       fields,
     };
@@ -256,23 +935,33 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
             })
         : undefined;
 
+  const t = useTranslations();
+  const relTime = entity.updatedAt
+    ? formatRelativeTime(entity.updatedAt, lang)
+    : null;
+
   const content = (
     <>
-      {icon}
-      <span className="min-w-0 flex-1 truncate text-sm">{entity.name}</span>
       {entity.createdBy && (
         <PersonMentionLabel
-          avatarClassName="size-4 text-[8px]"
-          className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs"
+          avatarClassName="size-5 text-[8px]"
+          className="shrink-0"
           mention={{
             name: entity.createdBy,
             image: entity.createdByImage,
           }}
         />
       )}
-      {entity.updatedAt && (
+      <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm">
+        <span className="text-muted-foreground">
+          {t("workspaces.overview.edited")}
+        </span>{" "}
+        {icon}
+        <span className="truncate">{entity.name}</span>
+      </span>
+      {relTime && (
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {formatRelativeTime(entity.updatedAt, lang)}
+          {relTime}
         </span>
       )}
       {/* TODO: fix this */}

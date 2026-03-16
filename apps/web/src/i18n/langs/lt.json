@@ -478,7 +478,9 @@
     "unpin": "Atsegti",
     "uploadFiles": "Įkelti failus",
     "user": "Naudotojas",
-    "verify": "Patvirtinti"
+    "verify": "Patvirtinti",
+    "logTime": "Registruoti laiką",
+    "noResults": "Rezultatų nėra"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Naujausia veikla",
       "title": "Apžvalga",
       "totalDocuments": "Iš viso dokumentų",
-      "totalItems": "Elementai"
+      "totalItems": "Elementai",
+      "edited": "redagavo",
+      "membersCount": "{count, plural, one {# narys} other {# narių}}",
+      "nextDeadline": "Kitas terminas",
+      "openTasks": "Atviros užduotys",
+      "timeAndTeam": "Laikas ir komanda",
+      "timeThisWeek": "Laikas šią savaitę",
+      "totalThisWeek": "Viso šią savaitę",
+      "upcomingTasks": "Artėjančios užduotys"
     },
     "parties": {
       "addParty": "Pridėti šalį",
@@ -1159,7 +1169,7 @@
       "members": "Nariai",
       "parties": "Šalys"
     },
-    "tasksCount": "{count, plural, one {# užduotis} few {# užduotys} many {# užduoties} other {# užduočių}}",
+    "tasksCount": "{count, plural, one {# užduotis} other {# užduočių}}",
     "tools": {
       "aiModel": "AI modelis",
       "manualInput": "Rankiniu būdu"

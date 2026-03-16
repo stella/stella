@@ -470,10 +470,12 @@ type Messages = {
     "language": "Language";
     "loadMore": "Load more";
     "loading": "Loading";
+    "logTime": "Log time";
     "matters": "Matters";
     "metadata": "Metadata";
     "name": "Name";
     "newRow": "New row";
+    "noResults": "No results";
     "notes": "Notes";
     "open": "Open";
     "pin": "Pin";
@@ -1102,12 +1104,20 @@ type Messages = {
     };
     "overview": {
       "atAGlance": "At a glance";
+      "edited": "edited";
       "getStarted": "Get started by uploading documents or creating your first folder.";
       "matterDetails": "Matter details";
+      "membersCount": "{count, plural, one {# member} other {# members}}";
+      "nextDeadline": "Next deadline";
+      "openTasks": "Open tasks";
       "recentActivity": "Recent activity";
+      "timeAndTeam": "Time & Team";
+      "timeThisWeek": "Time this week";
       "title": "Overview";
       "totalDocuments": "Total documents";
       "totalItems": "Items";
+      "totalThisWeek": "Total this week";
+      "upcomingTasks": "Upcoming tasks";
     };
     "parties": {
       "addParty": "Add party";
@@ -1205,7 +1215,7 @@ type Messages = {
     "title": "Matters";
     "tools": {
       "aiModel": "AI Model";
-      "manualInput": "Manual Input";
+      "manualInput": "Manually";
     };
     "views": {
       "addFields": "Add fields";

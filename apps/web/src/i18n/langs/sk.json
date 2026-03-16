@@ -478,7 +478,9 @@
     "unpin": "Odopnúť",
     "uploadFiles": "Nahrať súbory",
     "user": "Používateľ",
-    "verify": "Overiť"
+    "verify": "Overiť",
+    "logTime": "Zaznamenať čas",
+    "noResults": "Žiadne výsledky"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
@@ -1068,7 +1070,15 @@
       "recentActivity": "Nedávna aktivita",
       "title": "Prehľad",
       "totalDocuments": "Celkom dokumentov",
-      "totalItems": "Položky"
+      "totalItems": "Položky",
+      "edited": "upravil(a)",
+      "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",
+      "nextDeadline": "Ďalší termín",
+      "openTasks": "Otvorené úlohy",
+      "timeAndTeam": "Čas a tím",
+      "timeThisWeek": "Čas tento týždeň",
+      "totalThisWeek": "Celkom tento týždeň",
+      "upcomingTasks": "Nadchádzajúce úlohy"
     },
     "parties": {
       "addParty": "Pridať stranu",

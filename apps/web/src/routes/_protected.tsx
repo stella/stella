@@ -8,7 +8,11 @@ import {
 } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -50,7 +54,10 @@ import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
-import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import {
+  workspaceOptions,
+  workspacesKeys,
+} from "@/routes/_protected.workspaces/-queries";
 
 const LazyTemplateAssistantPanel = lazy(
   async () =>
@@ -190,9 +197,24 @@ function ProtectedContent({
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
 
+  const { data: workspace } = useQuery({
+    ...workspaceOptions(workspaceId ?? ""),
+    enabled: !!workspaceId,
+  });
+  const matterColor = workspaceId
+    ? workspace?.color ?? getMatterSwatch(workspaceId)
+    : null;
+
   return (
     <SidebarInset className="flex flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
+      <header
+        className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
+        style={
+          matterColor
+            ? { backgroundColor: `color-mix(in srgb, var(${matterColor}) 2%, transparent)` }
+            : undefined
+        }
+      >
         {isMobile && (
           <>
             <SidebarTrigger className="-ms-1" />

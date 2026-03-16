@@ -254,13 +254,15 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
           }}
           workspaceId={workspaceId}
         />
-        <ViewToolbar view={activeView} workspaceId={workspaceId} />
+        {activeView.layout.type !== "overview" && (
+          <ViewToolbar view={activeView} workspaceId={workspaceId} />
+        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
-        {totalPages > 1 && (
+        {totalPages > 1 && activeView.layout.type !== "overview" && (
           <EntityPagination
             onPageChange={setPage}
             page={page}
