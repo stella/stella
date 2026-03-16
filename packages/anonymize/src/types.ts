@@ -5,6 +5,7 @@
 export const DETECTION_SOURCES = {
   TRIGGER: "trigger",
   REGEX: "regex",
+  LEGAL_FORM: "legal-form",
   GAZETTEER: "gazetteer",
   NER: "ner",
   COREFERENCE: "coreference",
@@ -123,6 +124,7 @@ export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
   enableRegex: boolean;
+  enableNameCorpus: boolean;
   enableGazetteer: boolean;
   enableNer: boolean;
   enableConfidenceBoost: boolean;

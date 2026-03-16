@@ -37,13 +37,20 @@ export {
   resolveOperator,
 } from "./operators";
 
+// ── Config ────────────────────────────────────────
+export { TITLE_PREFIXES, POST_NOMINALS } from "./config/titles";
+
 // ── Detectors ─────────────────────────────────────
 export { detectRegexPii } from "./detectors/regex";
 export { detectTriggerPhrases } from "./detectors/triggers";
+export { detectLegalFormEntities } from "./detectors/legal-forms";
+export { detectNameCorpus } from "./detectors/names";
 export { scanExact, scanFuzzy } from "./detectors/gazetteer";
 export {
   extractDefinedTerms,
   findCoreferenceSpans,
+  generateCzechNameVariants,
+  stripCzechInflection,
 } from "./detectors/coreference";
 
 // ── Filters ───────────────────────────────────────

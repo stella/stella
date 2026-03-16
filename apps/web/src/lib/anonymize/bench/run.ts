@@ -82,6 +82,10 @@ const main = async () => {
   const filterArg = process.argv.indexOf("--filter");
   const filter = filterArg !== -1 ? process.argv[filterArg + 1] : null;
 
+  const modeIdx = process.argv.indexOf("--mode");
+  const mode = modeIdx !== -1 ? process.argv[modeIdx + 1] : "full";
+  const isQuick = mode === "quick";
+
   const findTxtFiles = (dir: string): string[] => {
     const results: string[] = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -111,17 +115,20 @@ const main = async () => {
     return;
   }
 
-  console.log(`Processing ${files.length} file(s)...`);
+  console.log(
+    `Processing ${files.length} file(s) [${isQuick ? "quick" : "full"}]...`,
+  );
 
-  const nerInference = createNerInference();
+  const nerInference = isQuick ? null : createNerInference();
 
   const config: PipelineConfig = {
     threshold: 0.65,
     enableTriggerPhrases: true,
     enableRegex: true,
+    enableNameCorpus: true,
     enableGazetteer: false,
-    enableNer: true,
-    enableConfidenceBoost: true,
+    enableNer: !isQuick,
+    enableConfidenceBoost: !isQuick,
     enableCoreference: true,
     labels: [...DEFAULT_ENTITY_LABELS],
     workspaceId: "bench",

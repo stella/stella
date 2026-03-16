@@ -33,18 +33,6 @@ describe("detectTriggerPhrases()", () => {
       expect(r[0]?.text).toBe("780315/1234");
     });
 
-    it("extracts IČO value", () => {
-      const r = findLabel("IČO: 12345678", "registration number");
-      expect(r).toHaveLength(1);
-      expect(r[0]?.text).toBe("12345678");
-    });
-
-    it("extracts DIČ value", () => {
-      const r = findLabel("DIČ: CZ12345678", "tax identification number");
-      expect(r).toHaveLength(1);
-      expect(r[0]?.text).toBe("CZ12345678");
-    });
-
     it("extracts person after zastoupen:", () => {
       const r = findLabel("zastoupen: Jan Novák, jednatel", "person");
       expect(r).toHaveLength(1);
@@ -69,46 +57,29 @@ describe("detectTriggerPhrases()", () => {
       expect(r).toHaveLength(1);
     });
 
-    it("extracts tax number after Steuernummer:", () => {
-      const r = findLabel(
-        "Steuernummer: 143/241/12345",
-        "tax identification number",
-      );
-      expect(r).toHaveLength(1);
-    });
-
     it("extracts person after Geschäftsführer:", () => {
       const r = findLabel("Geschäftsführer: Anna Bauer, vertretend", "person");
       expect(r).toHaveLength(1);
       expect(r[0]?.text).toBe("Anna Bauer");
     });
-
-    it("extracts registration after Handelsregister:", () => {
-      const r = findLabel(
-        "eingetragen im Handelsregister: HRB 123456\nnächster",
-        "registration number",
-      );
-      expect(r.length).toBeGreaterThanOrEqual(1);
-      expect(r.some((e) => e.text.includes("HRB 123456"))).toBeTruthy();
-    });
   });
 
   describe("scoring and source", () => {
     it("assigns score 0.95 to all trigger matches", () => {
-      const r = find("IČO: 12345678");
+      const r = find("sídlem: Lipová 42, Praha");
       expect(r[0]?.score).toBe(0.95);
     });
 
     it("sets source to trigger", () => {
-      const r = find("IČO: 12345678");
+      const r = find("sídlem: Lipová 42, Praha");
       expect(r[0]?.source).toBe("trigger");
     });
   });
 
   describe("case insensitivity", () => {
     it("matches triggers regardless of case", () => {
-      const lower = find("ičo: 12345678");
-      const upper = find("IČO: 12345678");
+      const lower = find("wohnhaft in Berlin, Deutschland");
+      const upper = find("Wohnhaft in Berlin, Deutschland");
       expect(lower).toHaveLength(upper.length);
     });
   });
@@ -116,19 +87,18 @@ describe("detectTriggerPhrases()", () => {
   describe("multiple triggers in one text", () => {
     it("finds all trigger matches", () => {
       const text = [
-        "IČO: 12345678, DIČ: CZ12345678,",
+        "zastoupen: Jan Novák, jednatel,",
         "sídlem: Lipová 42, Praha",
       ].join("\n");
       const labels = find(text).map((e) => e.label);
-      expect(labels).toContain("registration number");
-      expect(labels).toContain("tax identification number");
+      expect(labels).toContain("person");
       expect(labels).toContain("address");
     });
   });
 
   describe("no false positives on empty values", () => {
     it("skips trigger with no following content", () => {
-      const r = find("IČO:");
+      const r = find("geboren am ");
       expect(r).toHaveLength(0);
     });
   });

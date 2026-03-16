@@ -17,12 +17,16 @@ const personEntity = (start: number, end: number, text: string): Entity => ({
 });
 
 describe("extractDefinedTerms()", () => {
-  it("extracts Czech dále jen alias", () => {
+  it("extracts Czech dále jen alias + declension variants", () => {
     const text = 'Ing. Jan Novák (dále jen „Prodávající") prodává';
     const entity = personEntity(0, 14, "Ing. Jan Novák");
     const terms = extractDefinedTerms(text, [entity]);
-    expect(terms).toHaveLength(1);
-    expect(terms[0]?.alias).toBe("Prodávající");
+    const aliases = terms.map((t) => t.alias);
+    // Definition alias
+    expect(aliases).toContain("Prodávající");
+    // Czech declension variants for "Novák"
+    expect(aliases).toContain("Novákovi");
+    expect(terms.length).toBeGreaterThanOrEqual(2);
     expect(terms[0]?.label).toBe("person");
   });
 
@@ -30,24 +34,29 @@ describe("extractDefinedTerms()", () => {
     const text = 'Dr. Heinrich Müller (nachfolgend „der Vermieter")';
     const entity = personEntity(0, 19, "Dr. Heinrich Müller");
     const terms = extractDefinedTerms(text, [entity]);
-    expect(terms).toHaveLength(1);
-    expect(terms[0]?.alias).toBe("der Vermieter");
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).toContain("der Vermieter");
+    // Also generates Czech declension variants for
+    // multi-word person names
+    expect(terms.length).toBeGreaterThanOrEqual(1);
   });
 
   it("extracts English hereinafter alias", () => {
     const text = 'John Smith (hereinafter "the Buyer") agrees';
     const entity = personEntity(0, 10, "John Smith");
     const terms = extractDefinedTerms(text, [entity]);
-    expect(terms).toHaveLength(1);
-    expect(terms[0]?.alias).toBe("the Buyer");
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).toContain("the Buyer");
+    expect(terms.length).toBeGreaterThanOrEqual(1);
   });
 
   it("extracts German im Folgenden alias", () => {
     const text = 'Müller GmbH (im Folgenden „der Mieter") mietet';
     const entity = personEntity(0, 11, "Müller GmbH");
     const terms = extractDefinedTerms(text, [entity]);
-    expect(terms).toHaveLength(1);
-    expect(terms[0]?.alias).toBe("der Mieter");
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).toContain("der Mieter");
+    expect(terms.length).toBeGreaterThanOrEqual(1);
   });
 
   it("deduplicates identical aliases", () => {
@@ -57,20 +66,31 @@ describe("extractDefinedTerms()", () => {
     const e1 = personEntity(0, 9, "Jan Novák");
     const e2 = personEntity(37, 46, "Jan Novák");
     const terms = extractDefinedTerms(text, [e1, e2]);
-    expect(terms).toHaveLength(1);
+    // 1 alias "Prodávající" + Czech variants (deduplicated across both entities)
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).toContain("Prodávající");
+    // Variants should not be duplicated
+    expect(new Set(aliases).size).toBe(aliases.length);
   });
 
-  it("returns empty for text without definitions", () => {
+  it("returns Czech declension variants for person entities", () => {
     const text = "Pan Novák podepsal smlouvu.";
     const entity = personEntity(4, 9, "Novák");
-    expect(extractDefinedTerms(text, [entity])).toHaveLength(0);
+    const terms = extractDefinedTerms(text, [entity]);
+    // No definition pattern, but Czech declension generates variants
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).toContain("Novákovi");
+    expect(aliases).toContain("Novákem");
   });
 
-  it("ignores very short aliases", () => {
+  it("ignores very short aliases but generates Czech variants", () => {
     const text = 'Jan Novák (dále jen „X")';
     const entity = personEntity(0, 9, "Jan Novák");
     const terms = extractDefinedTerms(text, [entity]);
-    expect(terms).toHaveLength(0);
+    // "X" is too short to be an alias, but Czech variants are generated
+    const aliases = terms.map((t) => t.alias);
+    expect(aliases).not.toContain("X");
+    expect(aliases.length).toBeGreaterThan(0);
   });
 });
 

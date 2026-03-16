@@ -43,5 +43,15 @@
     "trigger": "domiciled in",
     "label": "address",
     "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "registered office at",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "principal place of business",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
   }
 ]

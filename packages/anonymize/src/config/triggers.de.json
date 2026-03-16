@@ -5,37 +5,27 @@
     "strategy": { "type": "to-next-comma" }
   },
   {
-    "trigger": "geboren am",
-    "label": "date",
-    "strategy": { "type": "n-words", "count": 1 }
+    "trigger": "Sitz",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
   },
   {
-    "trigger": "geb.:",
-    "label": "date",
-    "strategy": { "type": "n-words", "count": 1 }
+    "trigger": "ansässig in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
   },
   {
-    "trigger": "geb.",
-    "label": "date",
-    "strategy": { "type": "n-words", "count": 1 }
-  },
-  {
-    "trigger": "Steuernummer:",
-    "label": "tax identification number",
-    "strategy": { "type": "n-words", "count": 1 }
-  },
-  {
-    "trigger": "Steuer-Nr.:",
-    "label": "tax identification number",
-    "strategy": { "type": "n-words", "count": 1 }
-  },
-  {
-    "trigger": "USt-IdNr.:",
-    "label": "tax identification number",
-    "strategy": { "type": "n-words", "count": 1 }
+    "trigger": "geschäftsansässig in",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" }
   },
   {
     "trigger": "vertreten durch",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "handelnd als",
     "label": "person",
     "strategy": { "type": "to-next-comma" }
   },
@@ -50,23 +40,13 @@
     "strategy": { "type": "to-next-comma" }
   },
   {
-    "trigger": "eingetragen im",
-    "label": "registration number",
-    "strategy": { "type": "to-end-of-line" }
-  },
-  {
-    "trigger": "Handelsregister:",
-    "label": "registration number",
-    "strategy": { "type": "to-end-of-line" }
-  },
-  {
-    "trigger": "Gläubiger-ID:",
-    "label": "registration number",
+    "trigger": "geboren am",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
-    "trigger": "Registernummer:",
-    "label": "registration number",
+    "trigger": "Geburtsdatum",
+    "label": "date",
     "strategy": { "type": "n-words", "count": 1 }
   },
   {
@@ -83,5 +63,10 @@
     "trigger": "Kontonummer:",
     "label": "bank account number",
     "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Bankverbindung:",
+    "label": "bank account number",
+    "strategy": { "type": "to-next-comma" }
   }
 ]

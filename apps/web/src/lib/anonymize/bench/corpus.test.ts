@@ -70,6 +70,7 @@ describe.skipIf(!corpusAvailable)("corpus baseline regression", () => {
     threshold: 0.65,
     enableTriggerPhrases: true,
     enableRegex: true,
+    enableNameCorpus: true,
     enableGazetteer: false,
     enableNer: true,
     enableConfidenceBoost: true,

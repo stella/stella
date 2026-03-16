@@ -97,7 +97,7 @@ describe("pipeline integration: Czech purchase agreement", () => {
     expect(texts.some((t) => t.includes("Marie Dvořáková"))).toBeTruthy();
   });
 
-  it("detects IČO and DIČ via triggers", () => {
+  it("detects IČO and DIČ via regex", () => {
     const labels = entities.map((e) => e.label);
     expect(labels).toContain("registration number");
     expect(labels).toContain("tax identification number");
