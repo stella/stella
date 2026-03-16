@@ -1,20 +1,25 @@
 import { Chat } from "@ai-sdk/react";
-import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import type { ActorConn } from "rivetkit/client";
 
 import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
-import { RivetChatTransport } from "@/lib/ai-sdk/rivet-transport";
 import type {
   ActiveFileContext,
   ProcessedAttachment,
   UserContext,
 } from "@/lib/ai-sdk/rivet-transport";
+import { RivetChatTransport } from "@/lib/ai-sdk/rivet-transport";
+import type { ChatActor } from "@/lib/api";
 import { rivet } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
+import type { QueryOptionsInput } from "@/lib/react-query";
 import { sessionOptions } from "@/routes/-queries";
+
+type ChatActorConnection = ActorConn<ChatActor>;
 
 export const chatKeys = {
   all: ["chat"],
@@ -27,47 +32,34 @@ export const chatKeys = {
   ],
 };
 
-export const chatThreadOptions = (opts: {
-  threadId: string;
-  queryClient: QueryClient;
-  workspaceId?: string | undefined;
-  getModelId?: (() => string | null) | undefined;
-  userContext?: UserContext | undefined;
-  getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
-}) =>
+type ChatThreadOptionsInput = QueryOptionsInput<
+  { threadId: string },
+  {
+    connection: ChatActorConnection;
+    workspaceId?: string | undefined;
+    getModelId?: (() => string | null) | undefined;
+    userContext?: UserContext | undefined;
+    getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
+  }
+>;
+
+export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.thread(opts.threadId),
+    queryKey: chatKeys.thread(key.threadId),
     queryFn: async () => {
-      const sessionData =
-        await opts.queryClient.ensureQueryData(sessionOptions);
-
-      if (!sessionData?.session.activeOrganizationId) {
-        throw new Error("No active organization");
-      }
-
-      const actorConfig = getChatActorConfig({
-        type: "vanilla",
-        organizationId: sessionData.session.activeOrganizationId,
-        userId: sessionData.session.userId,
-        authToken: sessionData.session.token,
-      });
-
-      const handle = rivet.chat.getOrCreate(...actorConfig);
-      const connection = handle.connect();
-
-      const initialMessages = await connection.getMessages({
-        threadId: opts.threadId,
+      const initialMessages = await context.connection.getMessages({
+        threadId: key.threadId,
       });
 
       const transport = new RivetChatTransport({
-        connection,
-        threadId: opts.threadId,
-        workspaceId: opts.workspaceId,
-        getModelId: opts.getModelId,
-        userContext: opts.userContext,
-        getActiveFile: opts.getActiveFile,
+        connection: context.connection,
+        threadId: key.threadId,
+        workspaceId: context.workspaceId,
+        getModelId: context.getModelId,
+        userContext: context.userContext,
+        getActiveFile: context.getActiveFile,
       });
 
       // SAFETY: messages from the actor are structurally
@@ -108,9 +100,8 @@ export const chatThreadsOptions = (queryClient: QueryClient) =>
       });
 
       const handle = rivet.chat.getOrCreate(...actorConfig);
-      const connection = handle.connect();
 
-      return connection.getThreads();
+      return handle.getThreads();
     },
   });
 
@@ -137,8 +128,7 @@ export const chatWorkspaceThreadsOptions = (
       });
 
       const handle = rivet.chat.getOrCreate(...actorConfig);
-      const connection = handle.connect();
 
-      return connection.getThreadsByWorkspace({ workspaceId });
+      return handle.getThreadsByWorkspace({ workspaceId });
     },
   });

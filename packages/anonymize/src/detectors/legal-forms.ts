@@ -73,7 +73,7 @@ const buildPattern = (
   const sorted = forms.toSorted((a, b) => b.length - a.length);
   const alt = sorted.map(escapeForRegex).join("|");
 
-  const prefix = `(?:${CAP_WORD})` + `(?:[\\s&,.-]{1,4}(?:${CAP_WORD})){0,4}`;
+  const prefix = `(?:${CAP_WORD})(?:[\\s&,.-]{1,4}(?:${CAP_WORD})){0,4}`;
 
   const separator = requireCapBefore ? `(?:\\s+|,\\s*)` : `\\s+`;
 

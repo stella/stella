@@ -142,6 +142,7 @@
       "confirmDelete": "Dieser Rechnungsentwurf wird endgültig gelöscht und alle verknüpften Einträge werden getrennt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "confirmVoid": "Das Stornieren dieser Rechnung trennt alle Zeiteinträge und Ausgaben und setzt sie auf ihren vorherigen Status zurück.",
       "createInvoice": "Rechnung erstellen",
+      "delete": "Delete",
       "dueDate": "Fälligkeitsdatum",
       "editInvoice": "Rechnung bearbeiten",
       "finalize": "Abschließen",
@@ -305,6 +306,7 @@
         "clauses": "Klauseln",
         "contacts": "Kontakte",
         "entities": "In dieser Akte",
+        "matters": "Matters",
         "templates": "Vorlagen"
       },
       "noResults": "Keine passenden Einträge"
@@ -447,10 +449,12 @@
     "language": "Sprache",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
+    "logTime": "Zeit erfassen",
     "matters": "Akten",
     "metadata": "Metadaten",
     "name": "Name",
     "newRow": "Neue Zeile",
+    "noResults": "Keine Ergebnisse",
     "notes": "Notizen",
     "open": "Öffnen",
     "pin": "Anheften",
@@ -478,9 +482,7 @@
     "unpin": "Lösen",
     "uploadFiles": "Dateien hochladen",
     "user": "Benutzer",
-    "verify": "Bestätigen",
-    "logTime": "Zeit erfassen",
-    "noResults": "Keine Ergebnisse"
+    "verify": "Bestätigen"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",
@@ -845,6 +847,7 @@
       "none": "Keine",
       "urgent": "Dringend"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Abgebrochen",
       "done": "Erledigt",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Auf einen Blick",
+      "edited": "bearbeitet",
       "getStarted": "Laden Sie Dokumente hoch oder erstellen Sie Ihren ersten Ordner.",
       "matterDetails": "Aktendetails",
-      "recentActivity": "Letzte Aktivität",
-      "title": "Übersicht",
-      "totalDocuments": "Dokumente gesamt",
-      "totalItems": "Einträge",
-      "edited": "bearbeitet",
       "membersCount": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
       "nextDeadline": "Nächste Frist",
       "openTasks": "Offene Aufgaben",
+      "recentActivity": "Letzte Aktivität",
       "timeAndTeam": "Zeit & Team",
       "timeThisWeek": "Zeit diese Woche",
+      "title": "Übersicht",
+      "totalDocuments": "Dokumente gesamt",
+      "totalItems": "Einträge",
       "totalThisWeek": "Gesamt diese Woche",
       "upcomingTasks": "Anstehende Aufgaben"
     },

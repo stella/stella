@@ -142,6 +142,7 @@
       "confirmDelete": "Esta acción eliminará definitivamente este borrador de factura y desvinculará todos los registros. No se puede deshacer.",
       "confirmVoid": "Anular esta factura desvinculará todos los registros de tiempo y gastos, devolviendo a su estado anterior.",
       "createInvoice": "Crear factura",
+      "delete": "Delete",
       "dueDate": "Fecha de vencimiento",
       "editInvoice": "Editar factura",
       "finalize": "Finalizar",
@@ -305,6 +306,7 @@
         "clauses": "Cláusulas",
         "contacts": "Contactos",
         "entities": "En este asunto",
+        "matters": "Matters",
         "templates": "Plantillas"
       },
       "noResults": "No matching entities"
@@ -447,10 +449,12 @@
     "language": "Idioma",
     "loadMore": "Cargar más",
     "loading": "Cargando",
+    "logTime": "Registrar tiempo",
     "matters": "Asuntos",
     "metadata": "Metadatos",
     "name": "Nombre",
     "newRow": "Nueva fila",
+    "noResults": "Sin resultados",
     "notes": "Notas",
     "open": "Abrir",
     "pin": "Fijar",
@@ -478,9 +482,7 @@
     "unpin": "Desfijar",
     "uploadFiles": "Subir archivos",
     "user": "Usuario",
-    "verify": "Verificar",
-    "logTime": "Registrar tiempo",
-    "noResults": "Sin resultados"
+    "verify": "Verificar"
   },
   "contacts": {
     "alsoPartyIn": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
@@ -845,6 +847,7 @@
       "none": "Ninguna",
       "urgent": "Urgente"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Cancelada",
       "done": "Hecha",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "De un vistazo",
+      "edited": "editó",
       "getStarted": "Empiece subiendo documentos o creando su primera carpeta.",
       "matterDetails": "Detalles del asunto",
-      "recentActivity": "Actividad reciente",
-      "title": "Resumen",
-      "totalDocuments": "Total de documentos",
-      "totalItems": "Elementos",
-      "edited": "editó",
       "membersCount": "{count, plural, one {# miembro} other {# miembros}}",
       "nextDeadline": "Próximo plazo",
       "openTasks": "Tareas abiertas",
+      "recentActivity": "Actividad reciente",
       "timeAndTeam": "Tiempo & Equipo",
       "timeThisWeek": "Tiempo esta semana",
+      "title": "Resumen",
+      "totalDocuments": "Total de documentos",
+      "totalItems": "Elementos",
       "totalThisWeek": "Total esta semana",
       "upcomingTasks": "Próximas tareas"
     },

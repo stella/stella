@@ -104,12 +104,6 @@ export const viewLayoutSchema = v.variant("type", layoutSchemas);
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
 export type ViewLayoutType = ViewLayout["type"];
 
-export const getViewsInputSchema = v.object({
-  propertyIds: v.array(v.string()),
-});
-
-export type GetViewsInput = v.InferInput<typeof getViewsInputSchema>;
-
 export const createViewInputSchema = v.object({
   id: v.string(),
   name: v.string(),

@@ -1,4 +1,4 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -10,9 +10,17 @@ export const useActiveView = () => {
   const page = viewRoute.useSearch({
     select: (s) => s.page ?? 1,
   });
-  const queryClient = useQueryClient();
+  const viewsContext = viewRoute.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
   const { data: activeView } = useSuspenseQuery({
-    ...viewsOptions(workspaceId, queryClient),
+    ...viewsOptions({
+      key: { workspaceId },
+      context: viewsContext,
+    }),
     select: (data) => data.find((v) => v.id === viewId) ?? data.at(0),
   });
 

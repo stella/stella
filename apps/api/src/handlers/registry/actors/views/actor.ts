@@ -4,14 +4,12 @@ import { actor, event } from "rivetkit";
 import {
   convertViewInputSchema,
   createViewInputSchema,
-  getViewsInputSchema,
   reorderViewsInputSchema,
   updateViewInputSchema,
 } from "@/api/handlers/registry/actors/views/schema";
 import type {
   ConvertViewInput,
   CreateViewInput,
-  GetViewsInput,
   ReorderViewsInput,
   UpdateViewInput,
   ViewLayout,
@@ -20,6 +18,7 @@ import type {
 } from "@/api/handlers/registry/actors/views/schema";
 import {
   createUserError,
+  getScopedDb,
   validateActorInput,
   validateActorSession,
 } from "@/api/handlers/registry/utils";
@@ -42,14 +41,14 @@ const sortedViews = (views: ViewState[]): ViewState[] =>
 
 const cleanStalePropertyIds = (
   layout: ViewLayout,
-  propertyIds: Set<string>,
+  propertyIds: string[],
 ): boolean => {
   let changed = false;
 
   const isInternal = (id: string) => id.startsWith("_");
 
   const cleanedHidden = layout.hiddenProperties.filter(
-    (id) => propertyIds.has(id) || isInternal(id),
+    (id) => propertyIds.includes(id) || isInternal(id),
   );
   if (cleanedHidden.length !== layout.hiddenProperties.length) {
     layout.hiddenProperties = cleanedHidden;
@@ -57,7 +56,7 @@ const cleanStalePropertyIds = (
   }
 
   const cleanedSorts = layout.sorts.filter(
-    (s) => propertyIds.has(s.propertyId) || isInternal(s.propertyId),
+    (s) => propertyIds.includes(s.propertyId) || isInternal(s.propertyId),
   );
   if (cleanedSorts.length !== layout.sorts.length) {
     layout.sorts = cleanedSorts;
@@ -68,7 +67,7 @@ const cleanStalePropertyIds = (
     (f) =>
       f.field === "kind" ||
       f.field === "builtin" ||
-      (f.field === "property" && propertyIds.has(f.propertyId)),
+      (f.field === "property" && propertyIds.includes(f.propertyId)),
   );
   if (cleanedFilters.length !== layout.filters.length) {
     layout.filters = cleanedFilters;
@@ -77,36 +76,34 @@ const cleanStalePropertyIds = (
 
   if (layout.type === "table") {
     const cleanedOrder = layout.columnOrder.filter(
-      (id) => propertyIds.has(id) || isInternal(id),
+      (id) => propertyIds.includes(id) || isInternal(id),
     );
     if (cleanedOrder.length !== layout.columnOrder.length) {
       layout.columnOrder = cleanedOrder;
       changed = true;
     }
 
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- columnPinning array check
-    if (layout.columnPinning) {
-      const cleanedPinning = layout.columnPinning.filter(
-        (id) => propertyIds.has(id) || isInternal(id),
-      );
-      if (cleanedPinning.length !== layout.columnPinning.length) {
-        layout.columnPinning = cleanedPinning;
-        changed = true;
-      }
+    const cleanedPinning = layout.columnPinning.filter(
+      (id) => propertyIds.includes(id) || isInternal(id),
+    );
+
+    if (cleanedPinning.length !== layout.columnPinning.length) {
+      layout.columnPinning = cleanedPinning;
+      changed = true;
     }
   }
 
   if (
     layout.type === "kanban" &&
     layout.groupByPropertyId &&
-    !propertyIds.has(layout.groupByPropertyId)
+    !propertyIds.includes(layout.groupByPropertyId)
   ) {
     layout.groupByPropertyId = undefined;
     changed = true;
   }
 
   if (layout.type === "calendar") {
-    const valid = (id: string) => isInternal(id) || propertyIds.has(id);
+    const valid = (id: string) => isInternal(id) || propertyIds.includes(id);
     if (!valid(layout.datePropertyId)) {
       layout.datePropertyId = "_created-at";
       changed = true;
@@ -125,7 +122,7 @@ const cleanStalePropertyIds = (
   }
 
   if (layout.type === "timeline") {
-    const valid = (id: string) => isInternal(id) || propertyIds.has(id);
+    const valid = (id: string) => isInternal(id) || propertyIds.includes(id);
     if (!valid(layout.startDatePropertyId)) {
       layout.startDatePropertyId = "_created-at";
       changed = true;
@@ -136,7 +133,7 @@ const cleanStalePropertyIds = (
     }
     if (
       layout.groupByPropertyId &&
-      !propertyIds.has(layout.groupByPropertyId)
+      !propertyIds.includes(layout.groupByPropertyId)
     ) {
       layout.groupByPropertyId = undefined;
       changed = true;
@@ -237,14 +234,21 @@ export const viewsActor = actor({
     );
   },
   actions: {
-    getViews: (c, input: GetViewsInput): ViewState[] => {
-      const { propertyIds } = validateActorInput(getViewsInputSchema, input);
+    getViews: async (c): Promise<ViewState[]> => {
+      const scopedDb = getScopedDb(c.conn.state);
+      const properties = await scopedDb((tx) =>
+        tx.query.properties.findMany({
+          where: {
+            workspaceId: { eq: c.conn.state.workspaceId },
+          },
+          columns: { id: true },
+        }),
+      );
 
-      // oxlint-disable-next-line typescript/strict-boolean-expressions -- propertyIds optional
-      if (propertyIds) {
-        for (const view of c.state.views) {
-          cleanStalePropertyIds(view.layout, new Set(propertyIds));
-        }
+      const propertyIds = properties.map((p) => p.id);
+
+      for (const view of c.state.views) {
+        cleanStalePropertyIds(view.layout, propertyIds);
       }
 
       return sortedViews(c.state.views);

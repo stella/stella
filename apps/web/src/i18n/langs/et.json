@@ -142,6 +142,7 @@
       "confirmDelete": "See kustutab selle arvemustandiga jäädavalt ja tühistab kõigi kirjete sidumise. Toimingut ei saa tagasi võtta.",
       "confirmVoid": "Arve tühistamine eemaldab kõik seotud ajakirjed ja kulud ning taastab nende eelmise oleku.",
       "createInvoice": "Loo arve",
+      "delete": "Delete",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
       "finalize": "Lõpeta",
@@ -305,6 +306,7 @@
         "clauses": "Klauslid",
         "contacts": "Kontaktid",
         "entities": "Selles asjas",
+        "matters": "Matters",
         "templates": "Mallid"
       },
       "noResults": "No matching entities"
@@ -447,10 +449,12 @@
     "language": "Keel",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
+    "logTime": "Salvesta aeg",
     "matters": "Asjad",
     "metadata": "Metaandmed",
     "name": "Nimi",
     "newRow": "Uus rida",
+    "noResults": "Tulemused puuduvad",
     "notes": "Märkused",
     "open": "Ava",
     "pin": "Kinnita",
@@ -478,9 +482,7 @@
     "unpin": "Eemalda kinnitamine",
     "uploadFiles": "Laadi failid üles",
     "user": "Kasutaja",
-    "verify": "Kinnita",
-    "logTime": "Salvesta aeg",
-    "noResults": "Tulemused puuduvad"
+    "verify": "Kinnita"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",
@@ -845,6 +847,7 @@
       "none": "Puudub",
       "urgent": "Kiire"
     },
+    "status": "Status",
     "statusValues": {
       "cancelled": "Tühistatud",
       "done": "Valmis",
@@ -1065,18 +1068,18 @@
     },
     "overview": {
       "atAGlance": "Ülevaade",
+      "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",
       "matterDetails": "Asja detailid",
-      "recentActivity": "Viimane tegevus",
-      "title": "Ülevaade",
-      "totalDocuments": "Dokumente kokku",
-      "totalItems": "Elemendid",
-      "edited": "muutis",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",
       "nextDeadline": "Järgmine tähtaeg",
       "openTasks": "Avatud ülesanded",
+      "recentActivity": "Viimane tegevus",
       "timeAndTeam": "Aeg ja meeskond",
       "timeThisWeek": "Aeg sel nädalal",
+      "title": "Ülevaade",
+      "totalDocuments": "Dokumente kokku",
+      "totalItems": "Elemendid",
       "totalThisWeek": "Kokku sel nädalal",
       "upcomingTasks": "Eelseisvad ülesanded"
     },

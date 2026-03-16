@@ -17,7 +17,7 @@ import {
 
 import type { ChatActor } from "@/lib/api";
 import { eventHandlerV2 } from "@/lib/rivet";
-import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
+import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 import {
   chatKeys,
   chatThreadsOptions,
@@ -27,7 +27,7 @@ export const ThreadsSheet = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const actor = useChatActor();
+  const actor = useSuspenseChatActor();
   const [isOpen, setIsOpen] = useState(false);
 
   const threadMatch = useMatch({
@@ -70,7 +70,7 @@ export const ThreadsSheet = () => {
 
   const handleDelete = (threadId: string) => {
     // eslint-disable-next-line typescript/no-floating-promises
-    actor.connection?.deleteThread({ threadId });
+    actor.connection.deleteThread({ threadId });
   };
 
   return (

@@ -7,7 +7,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { useDevStore } from "@/lib/dev-store";
-import { useChatActor } from "@/routes/_protected.chat/-hooks/use-chat-actor";
+import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 
 type SystemPromptMessageProps = {
   threadId: string;
@@ -18,17 +18,17 @@ type SystemPromptMessageProps = {
 export const SystemPromptMessage = ({ threadId }: SystemPromptMessageProps) => {
   const showToolCalls = useDevStore((s) => s.showToolCalls);
   const [expanded, setExpanded] = useState(false);
-  const actor = useChatActor();
+  const actor = useSuspenseChatActor();
 
   const { data: prompt } = useQuery({
     queryKey: ["chat", "system-prompt", threadId],
     queryFn: async () => {
-      const result = await actor.connection?.getSystemPrompt({
+      const result = await actor.connection.getSystemPrompt({
         threadId,
       });
       return result?.prompt ?? null;
     },
-    enabled: showToolCalls && !!actor.connection,
+    enabled: showToolCalls,
   });
 
   if (!showToolCalls || !prompt) {

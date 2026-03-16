@@ -11,6 +11,7 @@ type Messages = {
     "subject": "You're invited to join {organizationName}";
   };
   "otp": {
+    "changeEmail": "Use this code to verify your new email address.";
     "emailVerification": "Use this code to verify your email address.";
     "expires": "This code expires in 5 minutes.";
     "forgetPassword": "Use this code to reset your password.";

@@ -5,6 +5,8 @@
 # These hooks are NOT auto-installed. Each developer
 # chooses whether to use them.
 
+no_auto_install: true
+
 pre-commit:
   parallel: true
   commands:

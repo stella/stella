@@ -1048,22 +1048,38 @@ const MatterCard = ({
   });
 
   const qc = useQueryClient();
+  const viewsContext = Route.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
   const onMouseEnter = useCallback(() => {
     setHovered(true);
     hoverTimer.current = setTimeout(() => setPreviewEnabled(true), HOVER_DELAY);
     // Prefetch workspace data so clicking feels instant
     const id = workspace.id;
     // eslint-disable-next-line typescript/no-floating-promises
-    qc.prefetchQuery(viewsOptions(id, qc));
+    qc.prefetchQuery(
+      viewsOptions({
+        key: { workspaceId: id },
+        context: viewsContext,
+      }),
+    );
     // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(
-      entitiesOptions({ workspaceId: id, filters: [], sorts: [], page: 1 }),
+      entitiesOptions({
+        workspaceId: id,
+        filters: [],
+        sorts: [],
+        page: 1,
+      }),
     );
     // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(propertiesOptions(id));
     // eslint-disable-next-line typescript/no-floating-promises
     qc.prefetchQuery(justificationsOptions(id));
-  }, [qc, workspace.id]);
+  }, [qc, workspace.id, viewsContext]);
 
   const onMouseLeave = useCallback(() => {
     setHovered(false);

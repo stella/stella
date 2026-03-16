@@ -101,9 +101,7 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
   return (
     <div className="flex items-center gap-1.5">
       <PropertyIcon type={type} />
-      <span className="text-muted-foreground text-sm">
-        {labelKeys[type]}
-      </span>
+      <span className="text-muted-foreground text-sm">{labelKeys[type]}</span>
     </div>
   );
 };
