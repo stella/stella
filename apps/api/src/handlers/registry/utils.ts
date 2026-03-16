@@ -46,7 +46,7 @@ export const broadcastEvent = (c: BroadcastCapableContext, event: ActorEvent) =>
 export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
-  scopedDb: ScopedDb;
+  accessibleWorkspaceIds: string[];
 };
 
 export type UserActorConnState = GlobalActorConnState & {
@@ -56,6 +56,13 @@ export type UserActorConnState = GlobalActorConnState & {
 export type ActorConnState = GlobalActorConnState & {
   workspaceId: SafeId<"workspace">;
 };
+
+export const getScopedDb = (connState: GlobalActorConnState): ScopedDb =>
+  createScopedDb(
+    db,
+    connState.accessibleWorkspaceIds,
+    connState.organizationId,
+  );
 
 const validateActorAuth = async (key: string[], params: unknown) => {
   const { authToken } = validateActorInput(authedActorParamsSchema, params);
@@ -91,18 +98,12 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     },
   });
 
-  // Centralised workspace resolution: same logic as authMacro,
-  // so actors and HTTP handlers share one code path.
   const accessibleWorkspaces = await resolveAccessibleWorkspaces(
     userId,
     organizationId,
     memberRole.role,
   );
-  const scopedDb = createScopedDb(
-    db,
-    accessibleWorkspaces.map((w) => w.id),
-    organizationId,
-  );
+  const accessibleWorkspaceIds = accessibleWorkspaces.map((w) => w.id);
 
   return {
     authToken,
@@ -110,7 +111,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     sessionUserId: session.user.id,
     parsedKey,
     accessibleWorkspaces,
-    scopedDb,
+    accessibleWorkspaceIds,
   };
 };
 
@@ -118,20 +119,23 @@ export const validateGlobalActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<GlobalActorConnState> => {
-  const { authToken, organizationId, scopedDb } = await validateActorAuth(
-    key,
-    params,
-  );
+  const { authToken, organizationId, accessibleWorkspaceIds } =
+    await validateActorAuth(key, params);
 
-  return { authToken, organizationId, scopedDb };
+  return { authToken, organizationId, accessibleWorkspaceIds };
 };
 
 export const validateUserActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<UserActorConnState> => {
-  const { authToken, organizationId, sessionUserId, parsedKey, scopedDb } =
-    await validateActorAuth(key, params);
+  const {
+    authToken,
+    organizationId,
+    sessionUserId,
+    parsedKey,
+    accessibleWorkspaceIds,
+  } = await validateActorAuth(key, params);
 
   if (!parsedKey.userId) {
     throw createUserError("invalid-params");
@@ -145,7 +149,7 @@ export const validateUserActorSession = async (
     authToken,
     organizationId,
     userId: parsedKey.userId,
-    scopedDb,
+    accessibleWorkspaceIds,
   };
 };
 
@@ -158,7 +162,7 @@ export const validateActorSession = async (
     organizationId,
     parsedKey,
     accessibleWorkspaces,
-    scopedDb,
+    accessibleWorkspaceIds,
   } = await validateActorAuth(key, params);
 
   if (!parsedKey.workspaceId) {
@@ -177,7 +181,7 @@ export const validateActorSession = async (
     authToken,
     organizationId,
     workspaceId: toSafeId<"workspace">(workspaceId),
-    scopedDb,
+    accessibleWorkspaceIds,
   };
 };
 

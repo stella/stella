@@ -134,10 +134,7 @@ const main = async () => {
   let unchanged = 0;
 
   for (const file of files) {
-    const baselineDir = join(
-      BASELINES_DIR,
-      dirname(file.relativeName),
-    );
+    const baselineDir = join(BASELINES_DIR, dirname(file.relativeName));
     mkdirSync(baselineDir, { recursive: true });
     const baselinePath = join(BASELINES_DIR, file.relativeName);
 

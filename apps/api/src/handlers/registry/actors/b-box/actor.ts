@@ -15,6 +15,7 @@ import { generateBBoxesSchema } from "@/api/handlers/registry/actors/b-box/schem
 import type { GenerateBBoxesSchema } from "@/api/handlers/registry/actors/b-box/schema";
 import {
   broadcastEvent,
+  getScopedDb,
   validateActorInput,
   validateActorSession,
 } from "@/api/handlers/registry/utils";
@@ -37,7 +38,8 @@ export const bBoxActor = actor({
         generateBBoxesSchema,
         input,
       );
-      const { organizationId, workspaceId, authToken, scopedDb } = c.conn.state;
+      const { organizationId, workspaceId, authToken } = c.conn.state;
+      const scopedDb = getScopedDb(c.conn.state);
 
       if (c.state.pendingJustificationIds.has(justificationId)) {
         return { status: "already-running" };

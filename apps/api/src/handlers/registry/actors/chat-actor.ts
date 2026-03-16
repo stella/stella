@@ -40,7 +40,11 @@ import {
   createOrgTools,
   validateWorkspaceIds,
 } from "@/api/handlers/registry/actors/chat-tools";
-import { validateUserActorSession } from "@/api/handlers/registry/utils";
+import {
+  getScopedDb,
+  validateUserActorSession,
+} from "@/api/handlers/registry/utils";
+import type { UserActorConnState } from "@/api/handlers/registry/utils";
 import { CHAT_MODEL } from "@/api/lib/ai-models";
 // eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
 import { toSafeId } from "@/api/lib/branded-types";
@@ -361,14 +365,14 @@ export const chatActor = actor({
   state: {
     threads: new Map<string, ThreadState>(),
   },
+  createConnState: async (c, params) =>
+    await validateUserActorSession(c.key, params),
   events: {
     "thread-created": event<ThreadSummary>(),
     "thread-deleted": event<{ threadId: string }>(),
     "stream-started": event<{ threadId: string; chatId: string }>(),
     "stream-chunk": event<SequencedChunk>(),
   },
-  createConnState: async (c, params) =>
-    await validateUserActorSession(c.key, params),
   vars: {
     stopControllers: new Map<string, AbortController>(),
   },
@@ -398,6 +402,10 @@ export const chatActor = actor({
       } = input;
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
+      // TODO: fix this
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const connState = c.conn.state as UserActorConnState;
+      const connScopedDb = getScopedDb(connState);
 
       if (thread.running) {
         return { status: "busy" as const };
@@ -459,18 +467,6 @@ export const chatActor = actor({
         once: true,
       });
 
-      // SAFETY: createConnState (validateUserActorSession) returns
-      // UserActorConnState which types organizationId, userId, and
-      // scopedDb, but RivetKit erases the type on c.conn.state.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const connState = c.conn.state as {
-        organizationId: SafeId<"organization">;
-        userId: string;
-        scopedDb: ScopedDb;
-      };
-      const orgId = connState.organizationId;
-      const connScopedDb = connState.scopedDb;
-
       backgroundTask(c, async () => {
         try {
           const wsId = thread.metadata.workspaceId;
@@ -501,7 +497,7 @@ export const chatActor = actor({
               tx.query.workspaces.findFirst({
                 where: {
                   id: wsId,
-                  organizationId: { eq: orgId },
+                  organizationId: { eq: connState.organizationId },
                 },
                 columns: { id: true },
               }),
@@ -513,7 +509,7 @@ export const chatActor = actor({
           const allMentionedWsIds = [...thread.metadata.mentionedWorkspaceIds];
           const validatedMentionedIds = await validateWorkspaceIds(
             allMentionedWsIds,
-            orgId,
+            connState.organizationId,
             connScopedDb,
           );
 
@@ -531,9 +527,13 @@ export const chatActor = actor({
 
           // Org tools and case law are always available. Matter
           // tools are added when there are accessible workspaces.
-          const scopedDb = createScopedDb(db, allWorkspaceIds, orgId);
+          const scopedDb = createScopedDb(
+            db,
+            allWorkspaceIds,
+            connState.organizationId,
+          );
           const orgTools = createOrgTools({
-            organizationId: orgId,
+            organizationId: connState.organizationId,
             scopedDb,
           });
           const caseLawTools = createCaseLawTools(scopedDb);
@@ -541,7 +541,7 @@ export const chatActor = actor({
             allWorkspaceIds.length > 0
               ? createMatterTools({
                   allowedWorkspaceIds: allWorkspaceIds,
-                  organizationId: orgId,
+                  organizationId: connState.organizationId,
                   userId: connState.userId,
                   scopedDb,
                 })
@@ -581,14 +581,14 @@ export const chatActor = actor({
             system = await buildSystemPrompt(
               scopedDb,
               validatedWsId,
-              orgId,
+              connState.organizationId,
               ctx,
             );
           } else if (allWorkspaceIds.length > 0) {
             system = await buildMultiContextPrompt(
               scopedDb,
               allWorkspaceIds,
-              orgId,
+              connState.organizationId,
               ctx,
               entityWsMap,
             );
@@ -693,7 +693,11 @@ export const chatActor = actor({
           // use the reader API.
           const outputStream: ReadableStream<UIMessageChunk> =
             uiStream.pipeThrough(
-              createSourceInjectionTransform(validatedWsId, orgId, scopedDb),
+              createSourceInjectionTransform(
+                validatedWsId,
+                connState.organizationId,
+                scopedDb,
+              ),
             );
 
           const reader = outputStream.getReader();
@@ -778,21 +782,14 @@ export const chatActor = actor({
       }
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
-      // SAFETY: createConnState returns UserActorConnState; RivetKit erases type
+      // SAFETY: same as sendMessages — RivetKit erases conn state type
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const connState = c.conn.state as {
-        organizationId: SafeId<"organization">;
-      };
+      const { organizationId } = c.conn.state as UserActorConnState;
       if (rawWsId) {
         const wsId = toSafeId<"workspace">(rawWsId);
-        const promptDb = createScopedDb(db, [wsId], connState.organizationId);
+        const promptDb = createScopedDb(db, [wsId], organizationId);
         return {
-          prompt: await buildSystemPrompt(
-            promptDb,
-            wsId,
-            connState.organizationId,
-            ctx,
-          ),
+          prompt: await buildSystemPrompt(promptDb, wsId, organizationId, ctx),
         };
       }
       return { prompt: buildGlobalPrompt(ctx) };
