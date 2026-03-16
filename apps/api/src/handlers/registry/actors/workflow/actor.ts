@@ -28,6 +28,7 @@ import {
 import {
   broadcastEvent,
   createUserError,
+  getScopedDb,
   validateActorInput,
   validateActorSession,
 } from "@/api/handlers/registry/utils";
@@ -75,7 +76,9 @@ export const workflowActor = actor({
       rawInput: StartWorkflowSchema,
     ): Promise<StartWorkflowReturn> => {
       const input = validateActorInput(startWorkflowSchema, rawInput);
-      const { workspaceId, scopedDb } = c.conn.state;
+      const { workspaceId } = c.conn.state;
+      const scopedDb = getScopedDb(c.conn.state);
+
       if (c.state.isRunning) {
         c.log.warn("Workflow already running");
         return { status: "already-running" };
