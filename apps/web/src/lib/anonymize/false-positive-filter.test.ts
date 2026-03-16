@@ -73,7 +73,18 @@ describe("filterFalsePositives()", () => {
   });
 
   it("does not remove roles when label is not person/org", () => {
-    const r = filterFalsePositives([entity("Employee", "email address")]);
+    // Use regex source — NER entities with "email address" label
+    // are filtered by the structured label validator (no @)
+    const r = filterFalsePositives([
+      {
+        start: 0,
+        end: 8,
+        label: "email address",
+        text: "Employee",
+        score: 0.9,
+        source: DETECTION_SOURCES.REGEX,
+      },
+    ]);
     expect(r).toHaveLength(1);
   });
 

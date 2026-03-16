@@ -285,6 +285,7 @@ function AnonymizePage() {
           threshold,
           enableTriggerPhrases: true,
           enableRegex: true,
+          enableNameCorpus: true,
           enableGazetteer: gazetteerEntries.length > 0,
           enableNer: workerRef.current !== null,
           enableConfidenceBoost: true,

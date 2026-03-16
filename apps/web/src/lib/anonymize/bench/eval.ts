@@ -44,8 +44,14 @@ const GOLD_LABEL_MAP: Record<string, string> = {
   QUANTITY: "registration number",
 };
 
-const normalizeGoldLabel = (label: string): string =>
-  GOLD_LABEL_MAP[label] ?? label.toLowerCase();
+const normalizeGoldLabel = (label: string): string => {
+  const mapped = GOLD_LABEL_MAP[label] ?? label.toLowerCase();
+  // Normalize legacy "date of birth" to "date"
+  if (mapped === "date of birth") {
+    return "date";
+  }
+  return mapped;
+};
 
 /**
  * Check if two spans overlap by at least 50%.
@@ -97,7 +103,9 @@ const main = async () => {
     benchmarkIdx !== -1 ? process.argv[benchmarkIdx + 1] : undefined;
 
   if (!benchmark) {
-    console.error("Usage: --benchmark <name> [--limit <n>]");
+    console.error(
+      "Usage: --benchmark <name> [--limit <n>] [--mode quick|full]",
+    );
     process.exit(1);
   }
 
@@ -105,6 +113,10 @@ const main = async () => {
   const limitRaw =
     limitIdx !== -1 ? Number(process.argv[limitIdx + 1]) : Infinity;
   const limit = Number.isNaN(limitRaw) ? Infinity : limitRaw;
+
+  const modeIdx = process.argv.indexOf("--mode");
+  const mode = modeIdx !== -1 ? process.argv[modeIdx + 1] : "full";
+  const isQuick = mode === "quick";
 
   const evalInputDir = join(CORPUS_DIR, "inputs", "_eval", benchmark);
 
@@ -125,18 +137,19 @@ const main = async () => {
 
   const filesToProcess = goldFiles.slice(0, limit);
   console.log(
-    `Evaluating ${filesToProcess.length} file(s) from ${benchmark}...`,
+    `Evaluating ${filesToProcess.length} file(s) from ${benchmark} [${isQuick ? "quick" : "full"}]...`,
   );
 
-  const nerInference = createNerInference();
+  const nerInference = isQuick ? null : createNerInference();
 
   const config: PipelineConfig = {
     threshold: 0.65,
     enableTriggerPhrases: true,
     enableRegex: true,
+    enableNameCorpus: true,
     enableGazetteer: false,
-    enableNer: true,
-    enableConfidenceBoost: true,
+    enableNer: !isQuick,
+    enableConfidenceBoost: !isQuick,
     enableCoreference: true,
     labels: [...DEFAULT_ENTITY_LABELS],
     workspaceId: "bench-eval",

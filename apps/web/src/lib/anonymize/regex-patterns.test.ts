@@ -147,6 +147,54 @@ describe("detectRegexPii()", () => {
     });
   });
 
+  describe("company ID keyword patterns", () => {
+    it("detects IČO with standard spacing", () => {
+      const r = entitiesOf("IČO: 12345678");
+      expect(r.some((e) => e.label === "registration number")).toBeTruthy();
+      expect(r.find((e) => e.label === "registration number")?.text).toBe(
+        "12345678",
+      );
+    });
+
+    it("detects IČ with variable spacing", () => {
+      const r = entitiesOf("IČ :  12345678");
+      expect(r.some((e) => e.label === "registration number")).toBeTruthy();
+    });
+
+    it("detects IČO without colon", () => {
+      const r = entitiesOf("IČO 12345678");
+      expect(r.some((e) => e.label === "registration number")).toBeTruthy();
+    });
+
+    it("detects IČO with colon and no space", () => {
+      const r = entitiesOf("IČO:12345678");
+      expect(r.some((e) => e.label === "registration number")).toBeTruthy();
+    });
+
+    it("detects DIČ with country prefix", () => {
+      const r = entitiesOf("DIČ: CZ12345678");
+      expect(
+        r.some((e) => e.label === "tax identification number"),
+      ).toBeTruthy();
+      expect(r.find((e) => e.label === "tax identification number")?.text).toBe(
+        "CZ12345678",
+      );
+    });
+
+    it("detects VAT number", () => {
+      const r = entitiesOf("VAT number: DE123456789");
+      expect(
+        r.some((e) => e.label === "tax identification number"),
+      ).toBeTruthy();
+    });
+
+    it("scores company IDs at 0.95", () => {
+      const r = entitiesOf("IČO: 12345678");
+      const match = r.find((e) => e.label === "registration number");
+      expect(match?.score).toBe(0.95);
+    });
+  });
+
   describe("offset correctness", () => {
     it("reports correct start/end positions", () => {
       const text = "kontakt: jan@example.com a dále";

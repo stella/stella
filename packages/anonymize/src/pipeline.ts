@@ -3,6 +3,8 @@ import {
   findCoreferenceSpans,
 } from "./detectors/coreference";
 import { scanExact, scanFuzzy } from "./detectors/gazetteer";
+import { detectLegalFormEntities } from "./detectors/legal-forms";
+import { detectNameCorpus } from "./detectors/names";
 import { detectRegexPii } from "./detectors/regex";
 import { detectTriggerPhrases } from "./detectors/triggers";
 import { boostNearMissEntities } from "./filters/confidence-boost";
@@ -114,6 +116,19 @@ export const runPipeline = async (
     log("regex", `${regexEntities.length} matches`);
   }
 
+  // Step 2b: Legal form detection
+  const legalFormEntities = detectLegalFormEntities(fullText);
+  if (legalFormEntities.length > 0) {
+    log("legal-forms", `${legalFormEntities.length} matches`);
+  }
+
+  // Step 2c: Name corpus
+  let nameCorpusEntities: Entity[] = [];
+  if (config.enableNameCorpus) {
+    nameCorpusEntities = detectNameCorpus(fullText);
+    log("name-corpus", `${nameCorpusEntities.length} matches`);
+  }
+
   // Step 3: Gazetteer
   let gazetteerExact: Entity[] = [];
   let gazetteerFuzzy: Entity[] = [];
@@ -138,6 +153,8 @@ export const runPipeline = async (
   const preBoostEntities = [
     ...triggerEntities,
     ...regexEntities,
+    ...legalFormEntities,
+    ...nameCorpusEntities,
     ...gazetteerExact,
     ...gazetteerFuzzy,
     ...nerEntities,
