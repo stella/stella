@@ -137,42 +137,42 @@ describe("toReference", () => {
   const feb20 = new Date(2026, 1, 20);
 
   test("pads sequence to specified width", () => {
-    expect(toReference("{YYYY}/{SEQ}", feb20, 1, 3)).toBe("2026/001");
-    expect(toReference("{YYYY}/{SEQ}", feb20, 42, 3)).toBe("2026/042");
-    expect(toReference("{YYYY}/{SEQ}", feb20, 1000, 3)).toBe("2026/1000");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: feb20, seq: 1, padding: 3 })).toBe("2026/001");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: feb20, seq: 42, padding: 3 })).toBe("2026/042");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: feb20, seq: 1000, padding: 3 })).toBe("2026/1000");
   });
 
   test("works with bare {SEQ}", () => {
-    expect(toReference("{SEQ}", feb20, 1, 3)).toBe("001");
-    expect(toReference("{SEQ}", feb20, 999, 3)).toBe("999");
+    expect(toReference({ pattern: "{SEQ}", now: feb20, seq: 1, padding: 3 })).toBe("001");
+    expect(toReference({ pattern: "{SEQ}", now: feb20, seq: 999, padding: 3 })).toBe("999");
   });
 
   test("works with literal prefix", () => {
-    expect(toReference("LIT-{SEQ}", feb20, 1, 4)).toBe("LIT-0001");
+    expect(toReference({ pattern: "LIT-{SEQ}", now: feb20, seq: 1, padding: 4 })).toBe("LIT-0001");
   });
 
   test("respects different padding", () => {
-    expect(toReference("{SEQ}", feb20, 1, 1)).toBe("1");
-    expect(toReference("{SEQ}", feb20, 1, 6)).toBe("000001");
+    expect(toReference({ pattern: "{SEQ}", now: feb20, seq: 1, padding: 1 })).toBe("1");
+    expect(toReference({ pattern: "{SEQ}", now: feb20, seq: 1, padding: 6 })).toBe("000001");
   });
 
   test("handles {SEQ} in non-terminal position", () => {
-    expect(toReference("CORP-{SEQ}-{YYYY}", feb20, 1, 3)).toBe("CORP-001-2026");
-    expect(toReference("{SEQ}/{YYYY}", feb20, 1, 3)).toBe("001/2026");
-    expect(toReference("{SEQ}-{YYYY}-{MM}", feb20, 42, 3)).toBe("042-2026-02");
+    expect(toReference({ pattern: "CORP-{SEQ}-{YYYY}", now: feb20, seq: 1, padding: 3 })).toBe("CORP-001-2026");
+    expect(toReference({ pattern: "{SEQ}/{YYYY}", now: feb20, seq: 1, padding: 3 })).toBe("001/2026");
+    expect(toReference({ pattern: "{SEQ}-{YYYY}-{MM}", now: feb20, seq: 42, padding: 3 })).toBe("042-2026-02");
   });
 
   test("padding overflow: seq exceeds padding width", () => {
     // padStart only sets a minimum; larger numbers are not truncated
-    expect(toReference("{SEQ}", feb20, 9999, 3)).toBe("9999");
-    expect(toReference("{YYYY}/{SEQ}", feb20, 100_000, 3)).toBe("2026/100000");
+    expect(toReference({ pattern: "{SEQ}", now: feb20, seq: 9999, padding: 3 })).toBe("9999");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: feb20, seq: 100_000, padding: 3 })).toBe("2026/100000");
   });
 
   test("year rollover changes the rendered reference", () => {
     const dec = new Date(2025, 11, 31);
     const jan = new Date(2026, 0, 1);
     // Same seq but different date yields different reference
-    expect(toReference("{YYYY}/{SEQ}", dec, 1, 3)).toBe("2025/001");
-    expect(toReference("{YYYY}/{SEQ}", jan, 1, 3)).toBe("2026/001");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: dec, seq: 1, padding: 3 })).toBe("2025/001");
+    expect(toReference({ pattern: "{YYYY}/{SEQ}", now: jan, seq: 1, padding: 3 })).toBe("2026/001");
   });
 });

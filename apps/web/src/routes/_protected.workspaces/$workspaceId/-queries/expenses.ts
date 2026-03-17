@@ -26,8 +26,7 @@ type ExpensesFilters = {
 export const expensesKeys = {
   all: (workspaceId: string) => ["expenses", workspaceId],
   list: (workspaceId: string, filters: ExpensesFilters) => [
-    "expenses",
-    workspaceId,
+    ...expensesKeys.all(workspaceId),
     filters,
   ],
 };

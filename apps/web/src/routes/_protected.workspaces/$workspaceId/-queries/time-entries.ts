@@ -21,12 +21,11 @@ type TimeEntriesFilters = {
 export const timeEntriesKeys = {
   all: (workspaceId: string) => ["timeEntries", workspaceId],
   list: (workspaceId: string, filters: TimeEntriesFilters) => [
-    "timeEntries",
-    workspaceId,
+    ...timeEntriesKeys.all(workspaceId),
     filters,
   ],
-  byId: (workspaceId: string, id: string) => ["timeEntries", workspaceId, id],
-  activeTimer: (workspaceId: string) => ["timeEntries", workspaceId, "timer"],
+  byId: (workspaceId: string, id: string) => [...timeEntriesKeys.all(workspaceId), id],
+  activeTimer: (workspaceId: string) => [...timeEntriesKeys.all(workspaceId), "timer"],
 };
 
 export const timeEntriesOptions = (

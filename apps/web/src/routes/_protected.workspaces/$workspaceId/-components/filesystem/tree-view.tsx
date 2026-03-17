@@ -64,7 +64,7 @@ import {
   useMoveEntity,
   useRenameEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
@@ -199,7 +199,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const { filters, sorts, hiddenProperties } = view.layout;
 
   const { data: entityData } = useSuspenseQuery(
-    entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
+    useEntitiesOptions({
+      workspaceId,
+      filters,
+      sorts,
+      page: 1,
+    }),
   );
   const data = entityData.entities;
 

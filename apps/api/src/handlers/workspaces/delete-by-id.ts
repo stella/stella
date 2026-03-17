@@ -20,6 +20,8 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { rivet } from "@/api/handlers/registry";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -45,17 +47,7 @@ const safeDestroy = async (
   }
 };
 
-type DeleteWorkspaceHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  authToken: string;
-};
-
-// The workspace is in the user's workspace_ids when deleting
-// (the route validates workspace access). The route guards
-// this with permissions: { workspace: ['delete'] }.
-export const changeWorkspaceStatus = async (
+const changeWorkspaceStatus = async (
   scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
@@ -87,128 +79,135 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
   return refs;
 };
 
-export const deleteWorkspaceHandler = async ({
-  scopedDb,
-  workspaceId,
-  organizationId,
-  authToken,
-}: DeleteWorkspaceHandlerProps) => {
-  try {
-    // Destroy actors while workspace is still active;
-    // actor connection validation rejects non-active
-    // workspaces.
-    const workflowActorConfig = getWorkflowActorConfig({
-      type: "vanilla",
-      authToken,
-      organizationId,
-      workspaceId,
-    });
+const config = {
+  permissions: { workspace: ["delete"] },
+} satisfies HandlerConfig;
 
-    const bBoxActorConfig = getBBoxActorConfig({
-      type: "vanilla",
-      authToken,
-      organizationId,
-      workspaceId,
-    });
+const deleteWorkspace = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, session }) => {
+    const organizationId = session.activeOrganizationId;
+    const authToken = session.token;
 
-    const viewsActorConfig = getViewsActorConfig({
-      type: "vanilla",
-      authToken,
-      organizationId,
-      workspaceId,
-    });
+    try {
+      // Destroy actors while workspace is still active;
+      // actor connection validation rejects non-active
+      // workspaces.
+      const workflowActorConfig = getWorkflowActorConfig({
+        type: "vanilla",
+        authToken,
+        organizationId,
+        workspaceId,
+      });
 
-    const workflowActor = rivet.workflow.get(...workflowActorConfig);
-    const bBoxActor = rivet.bBox.get(...bBoxActorConfig);
-    const viewsActorHandle = rivet.views.get(...viewsActorConfig);
+      const bBoxActorConfig = getBBoxActorConfig({
+        type: "vanilla",
+        authToken,
+        organizationId,
+        workspaceId,
+      });
 
-    const [workflowDestroy, bBoxDestroy, viewsDestroy] = await Promise.all([
-      safeDestroy(async () => await workflowActor.destroy()),
-      safeDestroy(async () => await bBoxActor.destroy()),
-      safeDestroy(async () => await viewsActorHandle.destroy()),
-    ]);
+      const viewsActorConfig = getViewsActorConfig({
+        type: "vanilla",
+        authToken,
+        organizationId,
+        workspaceId,
+      });
 
-    if (
-      !workflowDestroy.success ||
-      !bBoxDestroy.success ||
-      !viewsDestroy.success
-    ) {
-      // TODO: log this error
-      return status(500);
-    }
+      const workflowActor = rivet.workflow.get(...workflowActorConfig);
+      const bBoxActor = rivet.bBox.get(...bBoxActorConfig);
+      const viewsActorHandle = rivet.views.get(...viewsActorConfig);
 
-    // Seal workspace: no new uploads or actor connections.
-    await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
+      const [workflowDestroy, bBoxDestroy, viewsDestroy] = await Promise.all([
+        safeDestroy(async () => await workflowActor.destroy()),
+        safeDestroy(async () => await bBoxActor.destroy()),
+        safeDestroy(async () => await viewsActorHandle.destroy()),
+      ]);
 
-    // Query file metadata from fields.content JSONB.
-    // Workspace is sealed by status: "deleting", so no
-    // concurrent uploads can insert new files.
-    const fileRefs = await scopedDb(async (tx) => {
-      const workspaceEntityVersionIds = tx
-        .select({ id: entityVersions.id })
-        .from(entityVersions)
-        .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-        .where(eq(entities.workspaceId, workspaceId));
+      if (
+        !workflowDestroy.success ||
+        !bBoxDestroy.success ||
+        !viewsDestroy.success
+      ) {
+        // TODO: log this error
+        return status(500);
+      }
 
-      const fieldRows = await tx
-        .select({ content: fields.content })
-        .from(fields)
-        .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
+      // Seal workspace: no new uploads or actor connections.
+      await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
 
-      return fieldRows.flatMap((row) => extractFileRefs(row.content));
-    });
+      // Query file metadata from fields.content JSONB.
+      // Workspace is sealed by status: "deleting", so no
+      // concurrent uploads can insert new files.
+      const fileRefs = await scopedDb(async (tx) => {
+        const workspaceEntityVersionIds = tx
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+          .where(eq(entities.workspaceId, workspaceId));
 
-    // Delete S3 objects outside any transaction.
-    // On retry, already-deleted S3 objects are no-ops.
-    if (fileRefs.length > 0) {
-      Result.unwrap(
-        await deleteS3Objects({
-          fileRows: fileRefs,
-          organizationId,
-          workspaceId,
-        }),
-      );
-    }
+        const fieldRows = await tx
+          .select({ content: fields.content })
+          .from(fields)
+          .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
 
-    // All S3 objects are gone. Delete DB records in a
-    // single transaction.
-    await scopedDb(async (tx) => {
-      // Delete property dependencies (restrict FK prevents
-      // cascade, so explicit cleanup is needed).
-      const workspacePropertyIds = tx
-        .select({ id: properties.id })
-        .from(properties)
-        .where(eq(properties.workspaceId, workspaceId));
+        return fieldRows.flatMap((row) => extractFileRefs(row.content));
+      });
 
-      await tx
-        .delete(propertyDependencies)
-        .where(
-          inArray(
-            propertyDependencies.dependsOnPropertyId,
-            workspacePropertyIds,
-          ),
+      // Delete S3 objects outside any transaction.
+      // On retry, already-deleted S3 objects are no-ops.
+      if (fileRefs.length > 0) {
+        Result.unwrap(
+          await deleteS3Objects({
+            fileRows: fileRefs,
+            organizationId,
+            workspaceId,
+          }),
         );
+      }
 
-      // Delete entities: cascades to entityVersions →
-      // fields → justifications.
-      await tx.delete(entities).where(eq(entities.workspaceId, workspaceId));
+      // All S3 objects are gone. Delete DB records in a
+      // single transaction.
+      await scopedDb(async (tx) => {
+        // Delete property dependencies (restrict FK prevents
+        // cascade, so explicit cleanup is needed).
+        const workspacePropertyIds = tx
+          .select({ id: properties.id })
+          .from(properties)
+          .where(eq(properties.workspaceId, workspaceId));
 
-      // Clear lastActiveWorkspaceId for members pointing
-      // to this workspace (no FK constraint due to circular
-      // schema dependency).
-      await tx
-        .update(member)
-        .set({ lastActiveWorkspaceId: null })
-        .where(eq(member.lastActiveWorkspaceId, workspaceId));
+        await tx
+          .delete(propertyDependencies)
+          .where(
+            inArray(
+              propertyDependencies.dependsOnPropertyId,
+              workspacePropertyIds,
+            ),
+          );
 
-      // Delete workspace: cascades to properties →
-      // propertyDependencies. Entities already gone.
-      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    });
+        // Delete entities: cascades to entityVersions ->
+        // fields -> justifications.
+        await tx.delete(entities).where(eq(entities.workspaceId, workspaceId));
 
-    return;
-  } catch (error) {
-    await changeWorkspaceStatus(scopedDb, workspaceId, "active");
-    throw error;
-  }
-};
+        // Clear lastActiveWorkspaceId for members pointing
+        // to this workspace (no FK constraint due to
+        // circular schema dependency).
+        await tx
+          .update(member)
+          .set({ lastActiveWorkspaceId: null })
+          .where(eq(member.lastActiveWorkspaceId, workspaceId));
+
+        // Delete workspace: cascades to properties ->
+        // propertyDependencies. Entities already gone.
+        await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+      });
+
+      return;
+    } catch (error) {
+      await changeWorkspaceStatus(scopedDb, workspaceId, "active");
+      throw error;
+    }
+  },
+);
+
+export default deleteWorkspace;

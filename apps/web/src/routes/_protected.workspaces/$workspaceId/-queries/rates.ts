@@ -5,16 +5,14 @@ import { toAPIError } from "@/lib/errors";
 
 export const ratesKeys = {
   all: (workspaceId: string) => ["rates", workspaceId],
-  tables: (workspaceId: string) => ["rates", workspaceId, "tables"],
+  tables: (workspaceId: string) => [...ratesKeys.all(workspaceId), "tables"],
   entries: (workspaceId: string, rateTableId: string) => [
-    "rates",
-    workspaceId,
+    ...ratesKeys.all(workspaceId),
     "entries",
     rateTableId,
   ],
   resolve: (workspaceId: string, userId: string, date: string) => [
-    "rates",
-    workspaceId,
+    ...ratesKeys.all(workspaceId),
     "resolve",
     userId,
     date,

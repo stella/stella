@@ -1,4 +1,7 @@
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
@@ -25,6 +28,7 @@ import {
 import {
   entitiesKeys,
   entitiesOptions,
+  useEntitiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -257,7 +261,12 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
   const { filters, sorts } = activeView.layout;
 
   const { data } = useSuspenseQuery(
-    entitiesOptions({ workspaceId, filters, sorts, page }),
+    useEntitiesOptions({
+      workspaceId,
+      filters,
+      sorts,
+      page,
+    }),
   );
 
   const totalPages = Math.ceil(data.totalCount / data.pageSize);

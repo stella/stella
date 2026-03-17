@@ -74,9 +74,7 @@ describe("sortDeep", () => {
     fc.assert(
       fc.property(jsonArbitrary, (input) => {
         const sorted = sortDeep(input);
-        // deepEqual is order-insensitive for object keys,
-        // so this confirms no values were lost or added
-        expect(sorted).toEqual(input);
+        expect(sorted).toStrictEqual(input);
       }),
     );
   });

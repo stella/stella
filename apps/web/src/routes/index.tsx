@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
       });
     }
 
-    const { data } = await api.workspaces["last-active"].get();
+    const { data } = await api.workspaces.active.get();
     const lastActiveWorkspaceId = data?.lastActiveWorkspaceId;
 
     if (lastActiveWorkspaceId) {

@@ -59,7 +59,6 @@ export const FilterChips = ({
 
   const renderChip = (filter: ViewFilterCondition) => {
     const shared = {
-      key: filter.id,
       onChange: (updated: ViewFilterCondition) =>
         handleChange(filter.id, updated),
       onRemove: () => handleRemove(filter.id),
@@ -67,13 +66,26 @@ export const FilterChips = ({
 
     switch (filter.field) {
       case "kind":
-        return <KindFilterChip filter={filter} {...shared} />;
+        return (
+          <KindFilterChip
+            filter={filter}
+            key={filter.id}
+            {...shared}
+          />
+        );
       case "builtin":
-        return <BuiltinFilterChip filter={filter} {...shared} />;
+        return (
+          <BuiltinFilterChip
+            filter={filter}
+            key={filter.id}
+            {...shared}
+          />
+        );
       case "property":
         return (
           <PropertyFilterChip
             filter={filter}
+            key={filter.id}
             properties={properties}
             {...shared}
           />

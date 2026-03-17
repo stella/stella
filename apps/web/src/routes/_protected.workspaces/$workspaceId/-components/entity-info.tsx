@@ -16,7 +16,7 @@ import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -35,7 +35,7 @@ export const EntityFileInfo = ({
   const field = fields.find((f) => f.content.type === "file");
   const activeView = useActiveView();
   const { data: navData } = useSuspenseQuery({
-    ...entitiesOptions(activeView),
+    ...useEntitiesOptions(activeView),
     select: (data) => {
       const currentIndex = data.entities.findIndex(
         (e) => e.entityId === entityId,
@@ -48,8 +48,12 @@ export const EntityFileInfo = ({
       return { prevEntity, nextEntity };
     },
   });
-  const prevFile = navData.prevEntity ? getFirstFile(navData.prevEntity) : null;
-  const nextFile = navData.nextEntity ? getFirstFile(navData.nextEntity) : null;
+  const prevFile = navData.prevEntity
+    ? getFirstFile(navData.prevEntity)
+    : null;
+  const nextFile = navData.nextEntity
+    ? getFirstFile(navData.nextEntity)
+    : null;
 
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/pdf",

@@ -14,11 +14,10 @@ type InvoicesFilters = {
 export const invoicesKeys = {
   all: (workspaceId: string) => ["invoices", workspaceId],
   list: (workspaceId: string, filters: InvoicesFilters) => [
-    "invoices",
-    workspaceId,
+    ...invoicesKeys.all(workspaceId),
     filters,
   ],
-  byId: (workspaceId: string, id: string) => ["invoices", workspaceId, id],
+  byId: (workspaceId: string, id: string) => [...invoicesKeys.all(workspaceId), id],
 };
 
 export const invoicesOptions = (

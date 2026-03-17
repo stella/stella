@@ -33,35 +33,74 @@ import {
   uploadEntityBodySchema,
   uploadEntityHandler,
 } from "@/api/handlers/entities/upload";
-import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { RedisRateLimitContext, scopedGenerator } from "@/api/lib/rate-limit";
 
-// Eden serializes complex query params (arrays of objects)
-// as JSON strings. Parse and normalize to arrays.
-const parseJsonQueryParam = <T>(raw: string | undefined): T[] => {
-  if (!raw) {
-    return [];
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    // SAFETY: JSON from Eden-serialized query params; caller
-    // specifies T matching the expected schema. Runtime shape
-    // cannot be checked for arbitrary T.
-    if (Array.isArray(parsed)) {
-      return parsed as T[]; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-    }
-    return [parsed] as T[]; // eslint-disable-line @typescript-eslint/no-unsafe-type-assertion
-  } catch {
-    return [];
-  }
-};
+const viewFilterConditionSchema = t.Union([
+  t.Object({
+    id: t.String(),
+    field: t.Literal("kind"),
+    op: t.Literal("in"),
+    value: t.Array(
+      t.Union([
+        t.Literal("document"),
+        t.Literal("folder"),
+        t.Literal("task"),
+        t.Literal("message"),
+      ]),
+    ),
+  }),
+  t.Object({
+    id: t.String(),
+    field: t.Literal("property"),
+    propertyId: t.String({ minLength: 1 }),
+    op: t.Union([
+      t.Literal("eq"),
+      t.Literal("neq"),
+      t.Literal("contains"),
+      t.Literal("is_empty"),
+    ]),
+    value: t.Optional(
+      t.Union([
+        t.String(),
+        t.Array(t.String()),
+        t.Undefined(),
+      ]),
+    ),
+  }),
+  t.Object({
+    id: t.String(),
+    field: t.Literal("builtin"),
+    builtinField: t.Union([
+      t.Literal("status"),
+      t.Literal("priority"),
+    ]),
+    op: t.Union([
+      t.Literal("eq"),
+      t.Literal("neq"),
+      t.Literal("in"),
+      t.Literal("is_empty"),
+    ]),
+    value: t.Optional(
+      t.Union([
+        t.String(),
+        t.Array(t.String()),
+        t.Undefined(),
+      ]),
+    ),
+  }),
+]);
 
-const readEntitiesQuerySchema = t.Object({
-  filters: t.Optional(t.String()),
-  sorts: t.Optional(t.String()),
+const viewSortSchema = t.Object({
+  propertyId: t.String({ minLength: 1 }),
+  desc: t.Boolean(),
+});
+
+const readEntitiesBodySchema = t.Object({
+  filters: t.Optional(t.Array(viewFilterConditionSchema)),
+  sorts: t.Optional(t.Array(viewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
   pageSize: t.Optional(
     t.Integer({
@@ -122,26 +161,21 @@ export const entitiesRoute = new Elysia({
       body: uploadEntityBodySchema,
     },
   )
-  .get(
-    "/",
-    async (ctx) => {
-      const filters = parseJsonQueryParam<ViewFilterCondition>(
-        ctx.query.filters,
-      );
-      const sorts = parseJsonQueryParam<{ propertyId: string; desc: boolean }>(
-        ctx.query.sorts,
-      );
-      return await readEntitiesHandler({
+  .post(
+    "/query",
+    async (ctx) =>
+      await readEntitiesHandler({
         scopedDb: ctx.scopedDb,
         workspaceId: ctx.workspaceId,
-        filters,
-        sorts,
-        page: ctx.query.page ?? 1,
-        pageSize: ctx.query.pageSize ?? LIMITS.entitiesPageSizeDefault,
-      });
-    },
+        filters: ctx.body.filters ?? [],
+        sorts: ctx.body.sorts ?? [],
+        page: ctx.body.page ?? 1,
+        pageSize:
+          ctx.body.pageSize ??
+          LIMITS.entitiesPageSizeDefault,
+      }),
     {
-      query: readEntitiesQuerySchema,
+      body: readEntitiesBodySchema,
     },
   )
   .delete(

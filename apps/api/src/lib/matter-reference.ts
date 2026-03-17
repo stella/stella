@@ -126,12 +126,17 @@ export const toScopeKey = (pattern: string, now: Date): string => {
  * - "CORP-{SEQ}-{YYYY}" -> "CORP-001-2026"
  * - "{SEQ}" -> "001"
  */
-export const toReference = (
-  pattern: string,
-  now: Date,
-  seq: number,
-  padding: number,
-): string => {
+export const toReference = ({
+  pattern,
+  now,
+  seq,
+  padding,
+}: {
+  pattern: string;
+  now: Date;
+  seq: number;
+  padding: number;
+}): string => {
   const yyyy = String(now.getFullYear());
   const yy = yyyy.slice(2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");

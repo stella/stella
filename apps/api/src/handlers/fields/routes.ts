@@ -10,7 +10,7 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   .guard({
     validateWorkspaceAccess: true,
   })
-  .post("/", async (ctx) => await upsertField.handler(ctx), {
+  .post("/", upsertField.handler, {
     body: upsertField.config.body,
     invalidateQuery: true,
   });

@@ -1079,6 +1079,7 @@ describe("workspaces table — wrong scope", () => {
           id: toSafeId<"workspace">("rls_neg_ws_ins"),
           organizationId: ids.orgB,
           name: "Bad Workspace",
+          reference: "REF-BAD",
           status: "active" as const,
         }),
       ),

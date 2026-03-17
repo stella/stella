@@ -1,7 +1,10 @@
+import { useDeferredValue } from "react";
+
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import type { QueryOptionsInput } from "@/lib/react-query";
 import type {
   ViewFilterCondition,
   WorkspaceEntity,
@@ -22,9 +25,9 @@ type EntitiesPageKey = {
 
 export const entitiesKeys = {
   all: (workspaceId: string) => ["entities", workspaceId],
-  page: ({ workspaceId, ...key }: EntitiesPageKey) => [
+  page: ({ workspaceId, filters, sorts, page }: EntitiesPageKey) => [
     ...entitiesKeys.all(workspaceId),
-    key,
+    { filters, sorts, page },
   ],
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
@@ -32,32 +35,23 @@ export const entitiesKeys = {
   ],
 };
 
-type EntitiesOptionsInput = {
-  workspaceId: string;
-  filters: ViewFilterCondition[];
-  sorts: ViewSort[];
-  page: number;
-};
+type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
 
-export const entitiesOptions = (input: EntitiesOptionsInput) =>
+export const entitiesOptions = (key: EntitiesOptionsInput) =>
   queryOptions({
-    queryKey: entitiesKeys.page(input),
+    queryKey: entitiesKeys.page(key),
     queryFn: async ({ signal }) => {
       const response = await api
-        .entities({ workspaceId: input.workspaceId })
-        .get({
-          query: {
-            ...(input.filters.length > 0 && {
-              filters: JSON.stringify(input.filters),
-            }),
-            ...(input.sorts.length > 0 && {
-              sorts: JSON.stringify(input.sorts),
-            }),
-            page: input.page,
+        .entities({ workspaceId: key.workspaceId })
+        .query.post(
+          {
+            filters: key.filters,
+            sorts: key.sorts,
+            page: key.page,
             pageSize: 50,
           },
-          fetch: { signal },
-        });
+          { fetch: { signal } },
+        );
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -82,6 +76,12 @@ export const entitiesOptions = (input: EntitiesOptionsInput) =>
       return { ...rest, entities };
     },
   });
+
+// Defers the key so useSuspenseQuery keeps showing stale
+// data instead of triggering the suspense boundary when
+// filters, sorts, or page change.
+export const useEntitiesOptions = (key: EntitiesOptionsInput) =>
+  entitiesOptions(useDeferredValue(key));
 
 export const entityOptions = (workspaceId: string, entityId: string) =>
   queryOptions({

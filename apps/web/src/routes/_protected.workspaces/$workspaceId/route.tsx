@@ -9,25 +9,65 @@ import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-component
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
-import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import {
+  justificationsOptions,
+  workflowOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import {
+  overviewOptions,
+  workspaceOptions,
+} from "@/routes/_protected.workspaces/-queries";
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
-  beforeLoad: ({ params }) => {
+  loader: async ({ context, params, cause }) => {
     const wsId = params.workspaceId;
+    const qc = context.queryClient;
+    const { authToken, user } = context;
 
-    // Fire-and-forget: track last active workspace for
-    // redirect-on-load.
-    api
-      .workspaces({ workspaceId: wsId })
-      ["last-active"].post()
-      // oxlint-disable-next-line no-empty-function
-      .catch(() => {});
+    const organizationId = user.activeOrganizationId;
+
+    const [workspace, views] = await Promise.all([
+      qc.ensureQueryData(workspaceOptions(wsId)),
+      qc.ensureQueryData(
+        viewsOptions({
+          key: { workspaceId: wsId },
+          context: { organizationId, authToken },
+        }),
+      ),
+      qc.ensureQueryData(
+        workflowOptions({
+          workspaceId: wsId,
+          organizationId,
+        }),
+      ),
+      qc.ensureQueryData(justificationsOptions(wsId)),
+      qc.ensureQueryData(overviewOptions(wsId)),
+      cause === "enter"
+        ? api.workspaces({ workspaceId: wsId }).active.post()
+        : Promise.resolve(),
+    ]);
+
+    const firstView = views.at(0);
+    if (firstView) {
+      await Promise.all([
+        qc.ensureQueryData(
+          entitiesOptions({
+            workspaceId: wsId,
+            filters: firstView.layout.filters,
+            sorts: firstView.layout.sorts,
+            page: 1,
+          }),
+        ),
+        qc.ensureQueryData(propertiesOptions(wsId)),
+      ]);
+    }
+
+    return workspace;
   },
-  loader: async ({ context, params }) =>
-    await context.queryClient.ensureQueryData(
-      workspaceOptions(params.workspaceId),
-    ),
   head: ({ loaderData }) => ({
     meta: [
       {
