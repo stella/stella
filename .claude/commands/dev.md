@@ -17,7 +17,21 @@ blocking ports, missing `.env` files, and opening the browser.
 
    Skip files that already exist in the worktree.
 
-2. **Kill stale processes on ports 3000 and 3001**:
+2. **Verify Docker engine is healthy**:
+
+   The API depends on Postgres, Valkey, and MinIO, all running
+   in Docker. If the engine is down or broken, everything else
+   will silently hang. Check early and fail fast:
+
+   ```bash
+   docker ps >/dev/null 2>&1
+   ```
+
+   If this fails, try to restart Docker Desktop and poll
+   `docker ps` until it succeeds (up to ~2 minutes). If it
+   still fails, stop and tell the user to fix Docker manually.
+
+3. **Kill stale processes on ports 3000 and 3001**:
 
    Other worktrees may leave orphaned processes bound to the
    default ports. Kill all processes on both ports; they will
@@ -27,7 +41,7 @@ blocking ports, missing `.env` files, and opening the browser.
    lsof -t -i :3000 -i :3001 | xargs kill -9 2>/dev/null || true
    ```
 
-3. **Start the API on port 3001**:
+4. **Start the API on port 3001**:
 
    Start the API from the **current worktree** (feature branch).
 
@@ -46,7 +60,7 @@ blocking ports, missing `.env` files, and opening the browser.
    Run this in the background. Wait a few seconds and verify it
    started.
 
-4. **Start the web dev server on port 3000**:
+5. **Start the web dev server on port 3000**:
 
    Always use the default port 3000:
 
@@ -56,14 +70,15 @@ blocking ports, missing `.env` files, and opening the browser.
 
    Run this in the background. Wait for the "ready" message.
 
-5. **Open Chrome** to the running app:
+6. **Open Chrome** to the running app:
 
    Use the Claude-in-Chrome MCP tools to navigate to
    `http://localhost:3000`. If no tab group exists, create one.
 
-6. **Verify** the page loads without errors:
+7. **Verify** the page loads without errors:
 
-   Take a screenshot and check for the "Something went wrong" error.
-   If it appears, check console and network errors, and debug.
+   Take a screenshot and check for the "Something went wrong"
+   error. If it appears, check console and network errors, and
+   debug.
 
-7. **Report** the URL and status to the user.
+8. **Report** the URL and status to the user.
