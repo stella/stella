@@ -73,7 +73,7 @@ can be merged. You will be prompted automatically when you open a
 PR. Signing is a one-time process: post the required comment on
 your first PR and all future contributions are covered.
 
-The CLA grants Stella AI s.r.o. a perpetual license to use your
+The CLA grants stella labs, s.r.o. a perpetual license to use your
 contributions. This is necessary because Stella is dual-licensed
 (AGPL-3.0 and a commercial license).
 
