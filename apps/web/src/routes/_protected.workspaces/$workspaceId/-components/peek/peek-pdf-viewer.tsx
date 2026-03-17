@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import type { CSSProperties } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -107,7 +107,7 @@ export const PeekPdfViewer = ({
     }
     return first.value.viewport.scale;
   });
-  const renderedPages = usePdfStore((s) => s.renderedPages);
+  const renderedPages = usePdfStore(useShallow((s) => s.renderedPages));
   const renderingPageIds = usePdfStore(
     useShallow((s) => s.renderMap.get(fieldId)?.renderingPageIds),
   );
@@ -139,22 +139,18 @@ export const PeekPdfViewer = ({
       {isXfa && (
         <PeekBanner label={t("workspaces.files.xfaFormNotSupported")} />
       )}
-      {pageIds?.map((pageId) => {
-        const label = attachmentLabels?.get(pageId);
-        return (
-          <div key={pageId}>
-            {label && <PeekBanner label={label} />}
-            <PdfPage
-              fileId={fieldId}
-              isActive={
-                renderedPages.has(pageId) ||
-                (renderingPageIds?.includes(pageId) ?? false)
-              }
-              pageId={pageId}
-            />
-          </div>
-        );
-      })}
+      {pageIds?.map((pageId) => (
+        <PeekPageWithBanner
+          attachmentLabel={attachmentLabels?.get(pageId)}
+          fieldId={fieldId}
+          isActive={
+            renderedPages.has(pageId) ||
+            (renderingPageIds?.includes(pageId) ?? false)
+          }
+          key={pageId}
+          pageId={pageId}
+        />
+      ))}
       {isLoading &&
         Array.from({ length: 3 }, (_, i) => (
           <Skeleton
@@ -168,6 +164,24 @@ export const PeekPdfViewer = ({
     </div>
   );
 };
+
+const PeekPageWithBanner = memo(function PeekPageWithBanner({
+  attachmentLabel,
+  fieldId,
+  ...props
+}: {
+  attachmentLabel?: string | undefined;
+  fieldId: string;
+  isActive: boolean;
+  pageId: string;
+}) {
+  return (
+    <>
+      {attachmentLabel && <PeekBanner label={attachmentLabel} />}
+      <PdfPage fileId={fieldId} {...props} />
+    </>
+  );
+});
 
 const PeekBanner = ({ label }: { label: string }) => (
   <div

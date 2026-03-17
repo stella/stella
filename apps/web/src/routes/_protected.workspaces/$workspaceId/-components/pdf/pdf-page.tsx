@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { memo, useEffect, useEffectEvent, useRef } from "react";
 import type { CSSProperties } from "react";
 
 import { usePostHog } from "@posthog/react";
@@ -17,6 +17,7 @@ import {
   TEXT_LAYER_ATTRIBUTE,
 } from "@/lib/pdf/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
+import { markRenderEnd, markRenderStart } from "@/lib/pdf/perf";
 import {
   createEndOfContent,
   getCanvasSize,
@@ -36,7 +37,11 @@ type PdfPageProps = {
  * correctly-sized div so scroll position is stable. Only
  * mounts the heavy inner component when `isActive` is true.
  */
-export const PdfPage = ({ fileId, pageId, isActive }: PdfPageProps) => {
+export const PdfPage = memo(function PdfPage({
+  fileId,
+  pageId,
+  isActive,
+}: PdfPageProps) {
   const page = usePdfStore(useShallow((s) => s.pages.get(fileId)?.get(pageId)));
   const pageNumber = page?.proxy.pageNumber;
 
@@ -79,7 +84,7 @@ export const PdfPage = ({ fileId, pageId, isActive }: PdfPageProps) => {
       )}
     </div>
   );
-};
+});
 
 type PageData = {
   proxy: PDFPageProxy;
@@ -186,6 +191,8 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
     // offscreen while the old content stays visible.
     container.prepend(backCanvas);
 
+    markRenderStart(pageId);
+
     const renderTask = proxy.render({
       canvas: backCanvas,
       viewport,
@@ -208,6 +215,8 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
       }
 
       try {
+        markRenderEnd(pageId);
+
         // Swap: show crisp back canvas, remove old front
         backCanvas.style.visibility = "visible";
         const oldFront = frontCanvasRef.current;
