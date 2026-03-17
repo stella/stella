@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -66,7 +66,7 @@ const PdfViewer = () => {
   // Active pages = rendered (in LRU buffer) + currently rendering.
   // Subscribed once here so individual PdfPage components don't
   // need hot store subscriptions.
-  const renderedPages = usePdfStore((s) => s.renderedPages);
+  const renderedPages = usePdfStore(useShallow((s) => s.renderedPages));
   const renderingPageIds = usePdfStore(
     useShallow((s) => s.renderMap.get(fileSearch.fieldId)?.renderingPageIds),
   );
@@ -273,7 +273,7 @@ const PdfBanner = ({ label }: { label: string }) => (
   </div>
 );
 
-const PdfPageWithBanner = ({
+const PdfPageWithBanner = memo(function PdfPageWithBanner({
   attachmentLabel,
   ...props
 }: {
@@ -281,12 +281,14 @@ const PdfPageWithBanner = ({
   fileId: string;
   isActive: boolean;
   pageId: string;
-}) => (
-  <>
-    {attachmentLabel && <PdfBanner label={attachmentLabel} />}
-    <PdfPage {...props} />
-  </>
-);
+}) {
+  return (
+    <>
+      {attachmentLabel && <PdfBanner label={attachmentLabel} />}
+      <PdfPage {...props} />
+    </>
+  );
+});
 
 const PdfViewerSkeleton = ({ className }: { className: string }) =>
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (

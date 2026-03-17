@@ -13,27 +13,32 @@ export const getOrderedPages = <T>(
 
   const clamped = Math.max(0, Math.min(startIndex, pages.length - 1));
 
-  // Current page ±1 render immediately
+  // Only the current page renders immediately; adjacent
+  // pages go to the front of the sequential queue so they
+  // render next without competing for the GPU/worker.
   const immediatePages: T[] = [];
-  if (clamped > 0) {
-    const prev = pages[clamped - 1];
-    if (prev !== undefined) {
-      immediatePages.push(prev);
-    }
-  }
   const current = pages[clamped];
   if (current !== undefined) {
     immediatePages.push(current);
   }
+
+  // Build the rest in outward-spiral order, starting
+  // with ±1 so adjacent pages are first in the queue.
+  const reordered: T[] = [];
+
+  if (clamped > 0) {
+    const prev = pages[clamped - 1];
+    if (prev !== undefined) {
+      reordered.push(prev);
+    }
+  }
   if (clamped < pages.length - 1) {
     const next = pages[clamped + 1];
     if (next !== undefined) {
-      immediatePages.push(next);
+      reordered.push(next);
     }
   }
 
-  // Build the rest in outward-spiral order
-  const reordered: T[] = [];
   let offset = 2;
 
   while (reordered.length + immediatePages.length < pages.length) {
