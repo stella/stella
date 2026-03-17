@@ -8,6 +8,7 @@ import {
   FileOutputIcon,
   MessageSquareIcon,
   PencilIcon,
+  ScanEyeIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -141,6 +142,21 @@ export const RowActions = ({
     }
   };
 
+  const handleCheckAnonymise = () => {
+    if (!file || isBulk) {
+      return;
+    }
+    // Open the file in the PDF viewer; the user can
+    // then click the anonymise button in the toolbar.
+    useInspectorStore.getState().openPdf({
+      id: file.fieldId,
+      entityId: entity.entityId,
+      label: name,
+      mimeType: file.mimeType,
+      workspaceId,
+    });
+  };
+
   const handleChatAbout = () => {
     const targets = isBulk ? selectedEntities : [entity];
     const mentions = targets.map((e) => {
@@ -245,6 +261,12 @@ export const RowActions = ({
           <MessageSquareIcon />
           {t("chat.chatAbout")}
         </MenuItem>
+        {!isBulk && file && isFileDisplayable(file) && (
+          <MenuItem onClick={handleCheckAnonymise}>
+            <ScanEyeIcon />
+            {t("anonymise.checkAnonymisation")}
+          </MenuItem>
+        )}
         {hasAnyFile && (
           // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={async () => await handleDownload()}>

@@ -41,6 +41,22 @@
     "totalHours": "Összes óra",
     "utilization": "Kihasználtság"
   },
+  "anonymise": {
+    "addEntity": "Entitás hozzáadása",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Írjon be keresendő szavakat…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Hűvös",
     "dark": "Sötét",
@@ -142,7 +158,7 @@
       "confirmDelete": "Ezzel véglegesen törlődik ez a számlatervezet, és az összes tétel kapcsolata megszűnik. Ez a művelet nem vonható vissza.",
       "confirmVoid": "A számla érvénytelenítésével az összes időbejegyzés és kiadás leválik, és visszakerül az előző státuszba.",
       "createInvoice": "Számla létrehozása",
-      "delete": "Delete",
+      "delete": "Törlés",
       "dueDate": "Fizetési határidő",
       "editInvoice": "Számla szerkesztése",
       "finalize": "Véglegesítés",
@@ -306,7 +322,7 @@
         "clauses": "Záradékok",
         "contacts": "Névjegyek",
         "entities": "Ebben az ügyben",
-        "matters": "Matters",
+        "matters": "Ügyek",
         "templates": "Sablonok"
       },
       "noResults": "Nincs találat"
@@ -847,7 +863,7 @@
       "none": "Nincs",
       "urgent": "Sürgős"
     },
-    "status": "Status",
+    "status": "Állapot",
     "statusValues": {
       "cancelled": "Visszavonva",
       "done": "Kész",

@@ -41,6 +41,22 @@
     "totalHours": "Celkové hodiny",
     "utilization": "Využitie"
   },
+  "anonymise": {
+    "addEntity": "Pridať entitu",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Zadajte slová na vyhľadanie…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Studené",
     "dark": "Tmavý",
@@ -142,7 +158,7 @@
       "confirmDelete": "Týmto natrvalo odstránite tento koncept faktúry a odpojíte všetky záznamy. Túto akciu nie je možné vrátiť späť.",
       "confirmVoid": "Zrušením tejto faktúry sa odpoja všetky časové záznamy a výdavky a vrátia sa do predchádzajúceho stavu.",
       "createInvoice": "Vytvoriť faktúru",
-      "delete": "Delete",
+      "delete": "Odstrániť",
       "dueDate": "Dátum splatnosti",
       "editInvoice": "Upraviť faktúru",
       "finalize": "Finalizovať",
@@ -306,7 +322,7 @@
         "clauses": "Klauzuly",
         "contacts": "Kontakty",
         "entities": "V tomto spise",
-        "matters": "Matters",
+        "matters": "Spisy",
         "templates": "Šablóny"
       },
       "noResults": "Žiadne zodpovedajúce entity"
@@ -847,7 +863,7 @@
       "none": "Žiadna",
       "urgent": "Urgentná"
     },
-    "status": "Status",
+    "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušená",
       "done": "Hotovo",

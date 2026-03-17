@@ -41,6 +41,22 @@
     "totalHours": "Heures totales",
     "utilization": "Utilisation"
   },
+  "anonymise": {
+    "addEntity": "Ajouter une entité",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Saisissez des mots à rechercher…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Froid",
     "dark": "Sombre",
@@ -142,7 +158,7 @@
       "confirmDelete": "Cette action supprimera définitivement ce brouillon de facture et dissociera toutes les entrées. Elle est irréversible.",
       "confirmVoid": "L'annulation de cette facture dissociera toutes les entrées de temps et dépenses, qui retrouveront leur statut antérieur.",
       "createInvoice": "Créer une facture",
-      "delete": "Delete",
+      "delete": "Supprimer",
       "dueDate": "Date d'échéance",
       "editInvoice": "Modifier la facture",
       "finalize": "Finaliser",
@@ -306,7 +322,7 @@
         "clauses": "Clauses",
         "contacts": "Contacts",
         "entities": "Dans ce dossier",
-        "matters": "Matters",
+        "matters": "Dossiers",
         "templates": "Modèles"
       },
       "noResults": "No matching entities"
@@ -847,7 +863,7 @@
       "none": "Aucune",
       "urgent": "Urgent"
     },
-    "status": "Status",
+    "status": "Statut",
     "statusValues": {
       "cancelled": "Annulé",
       "done": "Terminé",

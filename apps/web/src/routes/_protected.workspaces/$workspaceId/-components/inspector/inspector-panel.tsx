@@ -14,9 +14,11 @@ import {
   ChevronRightIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  ListIcon,
   MinusIcon,
   PlusIcon,
   PrinterIcon,
+  ScanEyeIcon,
   SparklesIcon,
   SquareCheckIcon,
   XIcon,
@@ -26,6 +28,7 @@ import { useShallow } from "zustand/shallow";
 
 import { Button } from "@stella/ui/components/button";
 import { ScrollArea } from "@stella/ui/components/scroll-area";
+import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -34,6 +37,12 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import {
+  anonymisePdf,
+  clearAnonymisation,
+  useAnonymiseOverlayStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymise-pdf";
+import { AnonymiseSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymise-sidebar";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
@@ -66,6 +75,15 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
   const closeAll = useInspectorStore((s) => s.closeAll);
+  const anonymisedFieldIds = useAnonymiseOverlayStore(
+    useShallow((s) => [...s.overlays.keys()]),
+  );
+  const [anonymisingIds, setAnonymisingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [anonSidebarFieldId, setAnonSidebarFieldId] = useState<string | null>(
+    null,
+  );
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
@@ -169,9 +187,15 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         },
       });
     } finally {
+      // Clear anonymisation data for all open tabs before
+      // closing them to prevent stale store entries.
+      for (const tab of tabs) {
+        clearAnonymisation(tab.id);
+      }
+      setAnonSidebarFieldId(null);
       closeAll();
     }
-  }, [activeTab, navigate, closeAll, workspaceId]);
+  }, [activeTab, navigate, closeAll, tabs, workspaceId]);
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
@@ -268,7 +292,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   active={tab.id === activeId}
                   key={tab.id}
                   onActivate={() => setActive(tab.id)}
-                  onClose={() => closeTab(tab.id)}
+                  onClose={() => {
+                    clearAnonymisation(tab.id);
+                    setAnonSidebarFieldId((prev) =>
+                      prev === tab.id ? null : prev,
+                    );
+                    closeTab(tab.id);
+                  }}
                   tab={tab}
                 />
               ))}
@@ -343,6 +373,73 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 <div className="bg-border mx-1 h-4 w-px" />
 
                 <Tooltip
+                  content={t("anonymise.checkAnonymisation")}
+                  render={
+                    <Button
+                      disabled={anonymisingIds.has(tab.id)}
+                      onClick={() => {
+                        const isAnon = anonymisedFieldIds.includes(tab.id);
+                        if (isAnon) {
+                          clearAnonymisation(tab.id);
+                          setAnonSidebarFieldId((prev) =>
+                            prev === tab.id ? null : prev,
+                          );
+                        } else {
+                          setAnonymisingIds((prev) =>
+                            new Set(prev).add(tab.id),
+                          );
+                          anonymisePdf({
+                            workspaceId,
+                            fieldId: tab.id,
+                            mimeType: tab.mimeType ?? null,
+                          })
+                            .catch(() => {
+                              toastManager.add({
+                                title: t("errors.actionFailed"),
+                                type: "error",
+                              });
+                            })
+                            .finally(() => {
+                              setAnonymisingIds((prev) => {
+                                const next = new Set(prev);
+                                next.delete(tab.id);
+                                return next;
+                              });
+                            });
+                        }
+                      }}
+                      size="icon-xs"
+                      variant={
+                        anonymisedFieldIds.includes(tab.id)
+                          ? "default"
+                          : "ghost"
+                      }
+                    >
+                      <ScanEyeIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+                {anonymisedFieldIds.includes(tab.id) && (
+                  <Tooltip
+                    content={t("anonymise.entities")}
+                    render={
+                      <Button
+                        onClick={() =>
+                          setAnonSidebarFieldId(
+                            anonSidebarFieldId === tab.id ? null : tab.id,
+                          )
+                        }
+                        size="icon-xs"
+                        variant={
+                          anonSidebarFieldId === tab.id ? "default" : "ghost"
+                        }
+                      >
+                        <ListIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                )}
+                <Tooltip
                   content={t("common.print")}
                   render={
                     <Button
@@ -371,7 +468,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   }
                 />
                 <Button
-                  onClick={() => closeTab(tab.id)}
+                  onClick={() => {
+                    clearAnonymisation(tab.id);
+                    setAnonSidebarFieldId((prev) =>
+                      prev === tab.id ? null : prev,
+                    );
+                    closeTab(tab.id);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -402,24 +505,33 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               </Suspense>
             )}
 
-            {/* Scrollable PDF content */}
-            <ScrollArea className="flex-1">
-              <Suspense
-                fallback={
-                  <div className="text-muted-foreground flex h-full items-center justify-center p-12 text-sm">
-                    {t("common.loading")}...
-                  </div>
-                }
-              >
-                <PeekPdfViewer
+            {/* PDF + optional sidebar row */}
+            <div className="flex min-h-0 flex-1">
+              <ScrollArea className="flex-1">
+                <Suspense
+                  fallback={
+                    <div className="text-muted-foreground flex h-full items-center justify-center p-12 text-sm">
+                      {t("common.loading")}...
+                    </div>
+                  }
+                >
+                  <PeekPdfViewer
+                    fieldId={tab.id}
+                    onInitialOffset={(id, offset) => {
+                      scaleOffsets.current.set(id, offset);
+                    }}
+                    workspaceId={workspaceId}
+                  />
+                </Suspense>
+              </ScrollArea>
+
+              {isActive && anonSidebarFieldId === tab.id && (
+                <AnonymiseSidebar
                   fieldId={tab.id}
-                  onInitialOffset={(id, offset) => {
-                    scaleOffsets.current.set(id, offset);
-                  }}
-                  workspaceId={workspaceId}
+                  onClose={() => setAnonSidebarFieldId(null)}
                 />
-              </Suspense>
-            </ScrollArea>
+              )}
+            </div>
           </div>
         );
       })}

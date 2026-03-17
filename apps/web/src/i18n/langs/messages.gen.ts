@@ -44,6 +44,22 @@ type Messages = {
     "totalHours": "Total hours";
     "utilization": "Utilization";
   };
+  "anonymise": {
+    "addEntity": "Add entity";
+    "checkAnonymisation": "Check anonymisation";
+    "confirm": "Confirm";
+    "confirmAll": "Confirm all";
+    "entities": "Entities";
+    "extractingText": "Extracting text…";
+    "noEntitiesFound": "No entities found";
+    "reject": "Reject";
+    "rejectAll": "Reject all";
+    "revise": "Revise anonymisation";
+    "runPipeline": "Run pipeline";
+    "running": "Running…";
+    "searchPlaceholder": "Type word(s) to find…";
+    "title": "Anonymisation review";
+  };
   "appearance": {
     "cool": "Cool";
     "dark": "Dark";

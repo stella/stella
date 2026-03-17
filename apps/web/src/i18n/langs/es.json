@@ -41,6 +41,22 @@
     "totalHours": "Horas totales",
     "utilization": "Utilización"
   },
+  "anonymise": {
+    "addEntity": "Añadir entidad",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Escriba palabras a buscar…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Frío",
     "dark": "Oscuro",
@@ -142,7 +158,7 @@
       "confirmDelete": "Esta acción eliminará definitivamente este borrador de factura y desvinculará todos los registros. No se puede deshacer.",
       "confirmVoid": "Anular esta factura desvinculará todos los registros de tiempo y gastos, devolviendo a su estado anterior.",
       "createInvoice": "Crear factura",
-      "delete": "Delete",
+      "delete": "Eliminar",
       "dueDate": "Fecha de vencimiento",
       "editInvoice": "Editar factura",
       "finalize": "Finalizar",
@@ -306,7 +322,7 @@
         "clauses": "Cláusulas",
         "contacts": "Contactos",
         "entities": "En este asunto",
-        "matters": "Matters",
+        "matters": "Asuntos",
         "templates": "Plantillas"
       },
       "noResults": "No matching entities"
@@ -847,7 +863,7 @@
       "none": "Ninguna",
       "urgent": "Urgente"
     },
-    "status": "Status",
+    "status": "Estado",
     "statusValues": {
       "cancelled": "Cancelada",
       "done": "Hecha",
