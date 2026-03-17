@@ -213,9 +213,22 @@ guidelines, and visual noise rules in `/conventions-ux`.
   over `"key" in obj` checks. Use `in` only when the type is
   not a discriminated union and there is no discriminator to
   check.
+- For functions with multiple numeric (or otherwise
+  interchangeable) params, prefer object args over positional
+  params to avoid silent bugs from swapped arguments.
+- Reuse util types from libraries instead of hand-rolling
+  (e.g., `React.PropsWithChildren<P>` for props with children,
+  `React.ComponentProps<"button">` for HTML element props).
+  Check React, TanStack, and other deps before defining custom
+  equivalents.
 
 ### React
 
+- Put the root/exported component at the top of the file (after
+  imports); helper components and types follow below.
+- Prefer `if` statements over nested ternaries for conditional
+  rendering. Extract complex logic into a small component that
+  returns early with `if` branches instead of chaining ternaries.
 - Zustand with `useShallow()` for multi-slice selectors
 - Skip barrel files (`index.ts`) — import from explicit paths
 - Use coss (Base UI) components — registered as `@coss` in
@@ -249,6 +262,9 @@ guidelines, and visual noise rules in `/conventions-ux`.
 - Use `useDebouncedCallback` from `use-debounce` instead of
   hand-rolling debounce with `useRef<setTimeout>` + manual
   `clearTimeout`. The library handles cleanup automatically.
+- Query option file ordering: key type → key helpers →
+  input type (`QueryOptionsInput`) → option factory →
+  hook (e.g., `useEntitiesOptions`).
 - Query option factories that use `QueryOptionsInput` with a
   `TContext` must: define a named type alias matching the
   factory name (e.g., `ViewsOptionsInput` for `viewsOptions`,
@@ -258,6 +274,19 @@ guidelines, and visual noise rules in `/conventions-ux`.
   further destructuring). This makes it obvious at the call
   site and inside the function which values drive the cache
   key vs. which are runtime-only deps.
+- Define a separate key type (e.g., `EntitiesPageKey`) and
+  use it in both the `QueryOptionsInput` and the key helper.
+  The key helper's parameter type must be the key type, not
+  the full options input, so the key builder only accepts
+  cache-identity fields.
+- Never spread input objects into query keys. Explicitly
+  destructure and reconstruct the key object so extra
+  properties from callers cannot leak into the cache
+  identity and cause spurious refetches.
+- Key helpers must compose by spreading the parent key
+  (e.g., `...entitiesKeys.all(workspaceId)`), never by
+  duplicating the parent's array literal. This ensures
+  changes to the parent key shape propagate automatically.
 
 ### Backend (Elysia)
 
@@ -293,7 +322,9 @@ guidelines, and visual noise rules in `/conventions-ux`.
   system boundaries (external APIs, user-controlled input).
 - Keep `routes.ts` thin: route files should define the route
   structure, attach macros, choose the HTTP method and path,
-  and wire in handlers. Route-only concerns such as
+  and wire in handlers. When the handler accepts ctx directly
+  (e.g. `{ config, handler }` exports), pass `something.handler`
+  directly; no arrow wrapper needed. Route-only concerns such as
   `invalidateQuery` stay in `routes.ts`.
 - Endpoint modules should default-export one `{ config, handler }`
   object. The `config` owns handler-level concerns such as

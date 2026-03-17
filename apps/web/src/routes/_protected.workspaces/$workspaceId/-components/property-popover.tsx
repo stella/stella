@@ -4,7 +4,10 @@ import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
 import { usePostHog } from "@posthog/react";
 import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Result } from "better-result";
 import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -42,7 +45,7 @@ import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
@@ -203,7 +206,9 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const updateProperty = useUpdateProperty();
   const workflowActor = useWorkflowActor(workspaceId);
   const activeView = useActiveView();
-  const { data: entityData } = useSuspenseQuery(entitiesOptions(activeView));
+  const { data: entityData } = useSuspenseQuery(
+    useEntitiesOptions(activeView),
+  );
   const form = useForm({
     defaultValues: getDefaultValues(property),
     validationLogic: revalidateLogic(),
@@ -239,7 +244,8 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             workflowActor.connection
               ?.startWorkflow({
                 workspaceId,
-                entityIdsOrder: entityData.entities.map((e) => e.entityId),
+                entityIdsOrder:
+                  entityData.entities.map((e) => e.entityId),
               })
               .catch((error: unknown) => captureError(posthog, error));
           },

@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -43,7 +48,7 @@ import {
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import {
   entitiesKeys,
-  entitiesOptions,
+  useEntitiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
@@ -157,8 +162,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const { filters, sorts } = view.layout;
 
   const { data: entityData } = useSuspenseQuery(
-    entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
+    useEntitiesOptions({
+      workspaceId,
+      filters,
+      sorts,
+      page: 1,
+    }),
   );
+
   const entities = entityData.entities;
 
   // No group-by selected at all

@@ -27,6 +27,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     };
     session: {
       activeOrganizationId: SafeId<"organization">;
+      token: string;
     };
     scopedDb: ScopedDb;
     memberRole: {

@@ -432,6 +432,7 @@ describe("workspaces table — correct scope", () => {
         id: toSafeId<"workspace">("rls_ws_ins"),
         organizationId: ids.orgA,
         name: "RLS Insert Test",
+        reference: "REF-INS",
         status: "active" as const,
       });
     });

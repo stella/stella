@@ -49,7 +49,7 @@ type UpdateWorkspaceVars = {
   workspaceId: string;
   name?: string;
   clientId?: string | null;
-  reference?: string | null;
+  reference?: string;
   color?: string | null;
 };
 

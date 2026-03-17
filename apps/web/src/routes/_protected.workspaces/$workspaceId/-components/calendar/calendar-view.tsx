@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
@@ -18,7 +23,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import {
   entitiesKeys,
-  entitiesOptions,
+  useEntitiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 import { CalendarDayCell } from "./calendar-day-cell";
@@ -156,7 +161,12 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   // Fetch all entities (calendar doesn't paginate; uses
   // filters from the view)
   const { data: entityData } = useSuspenseQuery(
-    entitiesOptions({ workspaceId, filters, sorts, page: 1 }),
+    useEntitiesOptions({
+      workspaceId,
+      filters,
+      sorts,
+      page: 1,
+    }),
   );
 
   // All date property IDs to show on the calendar

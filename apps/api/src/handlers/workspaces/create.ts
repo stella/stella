@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, count, eq, ilike, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
 
@@ -14,6 +14,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports: freshly-inserted workspace PK for FK usage
 import { toSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
@@ -31,47 +32,43 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-// After inserting the workspace row, we append the new ID to
-// app.workspace_ids so that subsequent inserts into child
-// tables (workspaceMembers, properties) pass RLS checks.
 const createWorkspaces = createRootHandler(
   config,
   async ({ scopedDb, session, user, body }) =>
     await scopedDb(async (tx) => {
       const organizationId = session.activeOrganizationId;
-      const workspacesResult = await tx.query.workspaces.findMany({
-        columns: {
-          name: true,
-        },
-        where: {
-          organizationId: { eq: organizationId },
-          status: "active",
-        },
-      });
 
-      if (workspacesResult.length >= LIMITS.workspacesCount) {
+      const orgFilter = eq(workspaces.organizationId, organizationId);
+
+      const [countResult, duplicatedNames, settings] = await Promise.all([
+        tx.select({ total: count() }).from(workspaces).where(orgFilter),
+        tx
+          .select({ name: workspaces.name })
+          .from(workspaces)
+          .where(
+            and(orgFilter, ilike(workspaces.name, `${escapeLike(body.name)}%`)),
+          ),
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: organizationId } },
+          columns: {
+            matterNumberPattern: true,
+            matterNumberPadding: true,
+          },
+        }),
+      ]);
+
+      const activeCount = countResult.at(0)?.total ?? 0;
+
+      if (activeCount >= LIMITS.workspacesCount) {
         return status(400, {
           message: "Workspaces limit reached",
         });
       }
 
-      const duplicatedNames = workspacesResult.filter((workspace) =>
-        workspace.name.startsWith(body.name),
-      );
-
       const newName =
         duplicatedNames.length > 0
           ? `${body.name} (${duplicatedNames.length})`
           : body.name;
-
-      // Read org settings for matter numbering
-      const settings = await tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: {
-          matterNumberPattern: true,
-          matterNumberPadding: true,
-        },
-      });
 
       const pattern =
         settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
@@ -81,7 +78,7 @@ const createWorkspaces = createRootHandler(
       const scopeKey = toScopeKey(pattern, now);
 
       // Atomic counter increment (upsert)
-      const [counter] = await tx
+      const counter = await tx
         .insert(matterCounters)
         .values({
           id: nanoid(),
@@ -95,16 +92,23 @@ const createWorkspaces = createRootHandler(
             lastValue: sql`${matterCounters.lastValue} + 1`,
           },
         })
-        .returning({ lastValue: matterCounters.lastValue });
+        .returning({ lastValue: matterCounters.lastValue })
+        .then((r) => r.at(0));
 
       if (!counter) {
         throw new Error("Failed to create matter counter");
       }
-      const reference = toReference(pattern, now, counter.lastValue, padding);
+
+      const reference = toReference({
+        pattern,
+        now,
+        seq: counter.lastValue,
+        padding,
+      });
 
       await tx.insert(workspaces).values({
-        organizationId,
         id: body.id,
+        organizationId,
         name: newName,
         reference,
       });
@@ -124,16 +128,16 @@ const createWorkspaces = createRootHandler(
       )`,
       );
 
-      const wsId = toSafeId<"workspace">(body.id);
+      const workspaceId = toSafeId<"workspace">(body.id);
 
       await tx.insert(workspaceMembers).values({
-        workspaceId: wsId,
+        workspaceId,
         userId: user.id,
       });
 
       await tx.insert(properties).values([
         {
-          workspaceId: wsId,
+          workspaceId,
           name: body.filePropertyName,
           content: { type: "file", version: 1 },
           tool: { version: 1, type: "manual-input" },

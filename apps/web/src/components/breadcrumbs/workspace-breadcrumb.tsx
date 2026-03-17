@@ -61,15 +61,14 @@ export const WorkspaceBreadcrumb = ({
     setIsEditingRef(false);
 
     const trimmed = refValue.trim();
-    const current = workspace.reference ?? "";
 
-    if (trimmed === current) {
+    if (!trimmed || trimmed === workspace.reference) {
       return;
     }
 
     updateWorkspace.mutate({
       workspaceId,
-      reference: trimmed || null,
+      reference: trimmed,
     });
   };
 

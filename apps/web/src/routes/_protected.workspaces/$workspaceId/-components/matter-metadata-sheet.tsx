@@ -77,8 +77,7 @@ export const MatterMetadataSheet = ({
 
   const handleSaveReference = () => {
     const trimmed = referenceValue.trim();
-    const current = workspace.reference ?? "";
-    if (trimmed === current) {
+    if (!trimmed || trimmed === workspace.reference) {
       return;
     }
 
@@ -87,7 +86,7 @@ export const MatterMetadataSheet = ({
     updateWorkspace.mutate(
       {
         workspaceId,
-        reference: trimmed || null,
+        reference: trimmed,
       },
       {
         onSuccess: () => {

@@ -274,18 +274,21 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.wsA1,
       organizationId: ids.orgA,
       name: "WS A1",
+      reference: "REF-A1",
       status: "active" as const,
     },
     {
       id: ids.wsA2,
       organizationId: ids.orgA,
       name: "WS A2",
+      reference: "REF-A2",
       status: "active" as const,
     },
     {
       id: ids.wsB1,
       organizationId: ids.orgB,
       name: "WS B1",
+      reference: "REF-B1",
       status: "active" as const,
     },
   ]);

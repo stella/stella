@@ -1,18 +1,15 @@
 import Elysia, { t } from "elysia";
 
 import createWorkspaces from "@/api/handlers/workspaces/create";
-import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
+import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
 import readWorkspaces from "@/api/handlers/workspaces/read";
+import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
-import readLastActiveWorkspace from "@/api/handlers/workspaces/read-last-active";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
-import {
-  updateWorkspaceBodySchema,
-  updateWorkspaceHandler,
-} from "@/api/handlers/workspaces/update-by-id";
-import { updateLastActiveWorkspaceHandler } from "@/api/handlers/workspaces/update-last-active";
+import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
+import updateWorkspace from "@/api/handlers/workspaces/update-by-id";
 import {
   createWorkspaceContactBodySchema,
   createWorkspaceContactHandler,
@@ -41,7 +38,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     body: createWorkspaces.config.body,
     invalidateQuery: true,
   })
-  .get("/last-active", readLastActiveWorkspace.handler)
+  .get("/active", readActiveWorkspace.handler)
   .group(
     "/:workspaceId",
     {
@@ -83,45 +80,14 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               scopedDb: ctx.scopedDb,
             }),
         )
-        .post(
-          "/",
-          async (ctx) =>
-            await updateWorkspaceHandler({
-              workspaceId: ctx.workspaceId,
-              organizationId: ctx.session.activeOrganizationId,
-              body: ctx.body,
-              scopedDb: ctx.scopedDb,
-            }),
-          {
-            permissions: { workspace: ["update"] },
-            body: updateWorkspaceBodySchema,
-            invalidateQuery: true,
-          },
-        )
-        .post(
-          "/last-active",
-          async (ctx) =>
-            await updateLastActiveWorkspaceHandler({
-              scopedDb: ctx.scopedDb,
-              userId: ctx.user.id,
-              organizationId: ctx.session.activeOrganizationId,
-              workspaceId: ctx.workspaceId,
-            }),
-        )
-        .delete(
-          "/",
-          async (ctx) =>
-            await deleteWorkspaceHandler({
-              scopedDb: ctx.scopedDb,
-              workspaceId: ctx.workspaceId,
-              organizationId: ctx.session.activeOrganizationId,
-              authToken: ctx.session.token,
-            }),
-          {
-            permissions: { workspace: ["delete"] },
-            invalidateQuery: true,
-          },
-        )
+        .post("/", updateWorkspace.handler, {
+          body: updateWorkspace.config.body,
+          invalidateQuery: true,
+        })
+        .post("/active", updateActiveWorkspace.handler)
+        .delete("/", deleteWorkspace.handler, {
+          invalidateQuery: true,
+        })
         .get(
           "/contacts",
           async (ctx) =>

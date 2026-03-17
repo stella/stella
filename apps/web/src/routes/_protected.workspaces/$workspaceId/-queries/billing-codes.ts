@@ -6,8 +6,7 @@ import { toAPIError } from "@/lib/errors";
 export const billingCodesKeys = {
   all: (workspaceId: string) => ["billingCodes", workspaceId],
   list: (workspaceId: string, type?: string) => [
-    "billingCodes",
-    workspaceId,
+    ...billingCodesKeys.all(workspaceId),
     type,
   ],
 };

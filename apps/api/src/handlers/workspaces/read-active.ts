@@ -9,7 +9,7 @@ const config = {
   },
 } satisfies HandlerConfig;
 
-const readLastActiveWorkspace = createRootHandler(
+const readActiveWorkspace = createRootHandler(
   config,
   async ({ scopedDb, user, session }) => {
     const result = await scopedDb((tx) =>
@@ -34,4 +34,4 @@ const readLastActiveWorkspace = createRootHandler(
   },
 );
 
-export default readLastActiveWorkspace;
+export default readActiveWorkspace;

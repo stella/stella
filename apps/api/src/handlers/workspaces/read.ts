@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { count, desc, eq, inArray, max } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
@@ -19,10 +19,9 @@ const readWorkspaces = createRootHandler(
   async ({ scopedDb, session }) => {
     const organizationId = session.activeOrganizationId;
     const { result, counts, contributorRows } = await scopedDb(async (tx) => {
-      const workspaceRows = await tx.query.workspaces.findMany({
+      const allRows = await tx.query.workspaces.findMany({
         where: {
           organizationId: { eq: organizationId },
-          status: "active",
         },
         columns: {
           id: true,
@@ -48,19 +47,15 @@ const readWorkspaces = createRootHandler(
         limit: LIMITS.workspacesCount,
       });
 
+      const workspaceRows = allRows.filter((w) => w.status === "active");
+
       const wsIds = workspaceRows.map((w) => toSafeId<"workspace">(w.id));
 
       if (wsIds.length === 0) {
         return {
           result: workspaceRows,
-          counts: [] as { workspaceId: string; count: number }[],
-          contributorRows: [] as {
-            workspaceId: string;
-            userId: string | null;
-            userName: string | null;
-            userImage: string | null;
-            lastActivity: string;
-          }[],
+          counts: [],
+          contributorRows: [],
         };
       }
 
@@ -68,7 +63,7 @@ const readWorkspaces = createRootHandler(
         tx
           .select({
             workspaceId: entities.workspaceId,
-            count: sql<number>`count(*)::int`,
+            count: count(),
           })
           .from(entities)
           .where(inArray(entities.workspaceId, wsIds))
@@ -79,7 +74,7 @@ const readWorkspaces = createRootHandler(
             userId: entities.createdBy,
             userName: user.name,
             userImage: user.image,
-            lastActivity: sql<string>`max(${entities.updatedAt})`,
+            lastActivity: max(entities.updatedAt),
           })
           .from(entities)
           .innerJoin(user, eq(entities.createdBy, user.id))
@@ -90,7 +85,7 @@ const readWorkspaces = createRootHandler(
             user.name,
             user.image,
           )
-          .orderBy(entities.workspaceId, sql`max(${entities.updatedAt}) desc`),
+          .orderBy(entities.workspaceId, desc(max(entities.updatedAt))),
       ]);
 
       return {
@@ -100,7 +95,9 @@ const readWorkspaces = createRootHandler(
       };
     });
 
-    const countMap = new Map(counts.map((c) => [c.workspaceId, c.count]));
+    const countMap = new Map<string, number>(
+      counts.map((c) => [c.workspaceId, c.count]),
+    );
 
     const contributorMap = new Map<string, typeof contributorRows>();
     for (const row of contributorRows) {
@@ -114,13 +111,16 @@ const readWorkspaces = createRootHandler(
       }
     }
 
-    const workspaces = result.map((w) => ({
+    const workspaces = result.map(({ status: _, ...w }) => ({
       ...w,
       entityCount: countMap.get(w.id) ?? 0,
       contributors: contributorMap.get(w.id) ?? [],
     }));
 
-    return { workspaces, workspacesCountLimit: LIMITS.workspacesCount };
+    return {
+      workspaces,
+      workspacesCountLimit: LIMITS.workspacesCount,
+    };
   },
 );
 

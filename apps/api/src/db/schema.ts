@@ -244,7 +244,7 @@ export const workspaces = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
-    reference: p.varchar({ length: 64 }),
+    reference: p.varchar({ length: 64 }).notNull(),
     clientId: p
       .varchar("client_id", { length: 21 })
       .references(() => contacts.id, { onDelete: "set null" }),
@@ -262,15 +262,12 @@ export const workspaces = p.pgTable(
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
     p
-      .uniqueIndex("workspaces_org_reference_uidx")
+      .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
     p
       .index("workspaces_client_id_idx")
       .on(table.clientId)
       .where(isNotNull(table.clientId)),
-    p
-      .index("workspaces_org_last_activity_idx")
-      .on(table.organizationId, table.lastActivityAt),
     p.pgPolicy("workspace_select", {
       for: "select",
       to: stella,

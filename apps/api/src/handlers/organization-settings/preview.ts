@@ -50,12 +50,12 @@ export const previewOrganizationSettingsHandler = async ({
   );
 
   const nextValue = (counter?.lastValue ?? 0) + 1;
-  const preview = toReference(
-    body.matterNumberPattern,
+  const preview = toReference({
+    pattern: body.matterNumberPattern,
     now,
-    nextValue,
-    body.matterNumberPadding,
-  );
+    seq: nextValue,
+    padding: body.matterNumberPadding,
+  });
 
   return { preview, nextValue };
 };

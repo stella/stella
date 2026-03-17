@@ -41,7 +41,7 @@ import {
   StatusCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   getInternalColId,
@@ -65,8 +65,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
   const [expanded, setExpanded] = useState<ExpandedState>(true);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+
   const { data: treeData } = useSuspenseQuery({
-    ...entitiesOptions({
+    ...useEntitiesOptions({
       workspaceId,
       filters: view.layout.filters,
       sorts: view.layout.sorts,
@@ -217,7 +218,7 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
 
   const table = useReactTable({
     columnResizeMode: "onChange",
-    data: treeData,
+    data: treeData ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     ...(hasFolders && {
