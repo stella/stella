@@ -24,6 +24,7 @@ import {
   getCanvasTransform,
 } from "@/lib/pdf/utils";
 import { captureError } from "@/lib/posthog/utils";
+import { PageAnonymisation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymisation";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 type PdfPageProps = {
@@ -291,6 +292,13 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
           }
         }}
         ref={textLayerRef}
+      />
+      <PageAnonymisation
+        fileId={fileId}
+        originalHeight={page.originalHeight}
+        originalWidth={page.originalWidth}
+        pageIndex={page.proxy.pageNumber - 1}
+        scale={page.viewport.scale}
       />
       <PageCitation
         fileId={fileId}

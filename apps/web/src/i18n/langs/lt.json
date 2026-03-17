@@ -41,6 +41,22 @@
     "totalHours": "Iš viso valandų",
     "utilization": "Panaudojimas"
   },
+  "anonymise": {
+    "addEntity": "Pridėti subjektą",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Įveskite žodžius paieškai…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Vėsūs",
     "dark": "Tamsus",
@@ -142,7 +158,7 @@
       "confirmDelete": "Tai visam laikui ištrins šią sąskaitos juodraštį ir atsies visus įrašus. Šio veiksmo negalima atšaukti.",
       "confirmVoid": "Panaikinus šią sąskaitą, bus atsieti visi laiko įrašai ir išlaidos, grąžinant juos į ankstesnę būseną.",
       "createInvoice": "Sukurti sąskaitą",
-      "delete": "Delete",
+      "delete": "Ištrinti",
       "dueDate": "Mokėjimo terminas",
       "editInvoice": "Redaguoti sąskaitą",
       "finalize": "Užbaigti",
@@ -306,7 +322,7 @@
         "clauses": "Sąlygos",
         "contacts": "Kontaktai",
         "entities": "Šioje byloje",
-        "matters": "Matters",
+        "matters": "Bylos",
         "templates": "Šablonai"
       },
       "noResults": "No matching entities"
@@ -847,7 +863,7 @@
       "none": "Nėra",
       "urgent": "Skubu"
     },
-    "status": "Status",
+    "status": "Būsena",
     "statusValues": {
       "cancelled": "Atšaukta",
       "done": "Atlikta",

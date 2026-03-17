@@ -233,52 +233,54 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       return [];
     }
 
-    return members.flatMap((member) => {
-      const { user } = member;
-      if (!user) {
-        return [];
-      }
+    return members
+      .filter(
+        (
+          member,
+        ): member is typeof member & {
+          user: NonNullable<typeof member.user>;
+        } => member.user !== null,
+      )
+      .map((member) => {
+        const daily = Array.from({ length: 7 }, () => 0);
+        const dailyEntries: Record<
+          number,
+          { description: string; hours: number }[]
+        > = {};
 
-      const daily = Array.from({ length: 7 }, () => 0);
-      const dailyEntries: Record<
-        number,
-        { description: string; hours: number }[]
-      > = {};
+        for (const entry of timeEntries) {
+          if (entry.userId !== member.userId) {
+            continue;
+          }
+          // Parse YYYY-MM-DD as local date (not UTC) to avoid
+          // timezone-shifted day attribution for UTC- users.
+          const parts = entry.dateWorked.split("-").map(Number);
+          const y = parts[0] ?? 0;
+          const m = parts[1] ?? 1;
+          const d = parts[2] ?? 1;
+          const entryDate = new Date(y, m - 1, d);
+          const dayOfWeek = entryDate.getDay();
+          // Convert Sunday=0 to index 6, Monday=1 to 0
+          const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          const hours = entry.durationMinutes / 60;
+          daily[dayIdx] = (daily[dayIdx] ?? 0) + hours;
 
-      for (const entry of timeEntries) {
-        if (entry.userId !== member.userId) {
-          continue;
+          const entries = dailyEntries[dayIdx] ?? [];
+          entries.push({
+            description: entry.narrative || entry.taskCode || "—",
+            hours,
+          });
+          dailyEntries[dayIdx] = entries;
         }
-        // Parse YYYY-MM-DD as local date (not UTC) to avoid
-        // timezone-shifted day attribution for UTC- users.
-        const parts = entry.dateWorked.split("-").map(Number);
-        const y = parts[0] ?? 0;
-        const m = parts[1] ?? 1;
-        const d = parts[2] ?? 1;
-        const entryDate = new Date(y, m - 1, d);
-        const dayOfWeek = entryDate.getDay();
-        // Convert Sunday=0 to index 6, Monday=1 to 0
-        const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        const hours = entry.durationMinutes / 60;
-        const current = daily[dayIdx] ?? 0;
-        daily[dayIdx] = current + hours;
 
-        const entries = dailyEntries[dayIdx] ?? [];
-        entries.push({
-          description: entry.narrative || entry.taskCode || "—",
-          hours,
-        });
-        dailyEntries[dayIdx] = entries;
-      }
-
-      return {
-        userId: member.userId,
-        name: user.name ?? user.email ?? "—",
-        image: user.image,
-        daily,
-        dailyEntries,
-      };
-    });
+        return {
+          userId: member.userId,
+          name: member.user.name ?? member.user.email ?? "—",
+          image: member.user.image,
+          daily,
+          dailyEntries,
+        };
+      });
   }, [members, timeEntries]);
 
   const totalHoursThisWeek = useMemo(
@@ -733,37 +735,40 @@ type StatCardProps = {
   onClick?: () => void;
 };
 
-const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => (
-  // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-  <div
-    className={cn(
-      "bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3",
-      onClick && "hover:bg-muted/50 cursor-pointer transition-colors",
-    )}
-    onClick={onClick}
-    onKeyDown={
-      onClick
-        ? (e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onClick();
-            }
-          }
-        : undefined
-    }
-    role={onClick ? "button" : undefined}
-    tabIndex={onClick ? 0 : undefined}
-  >
-    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-      {icon}
-      {label}
+const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
+  const content = (
+    <>
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        {icon}
+        {label}
+      </div>
+      <span className="text-xl font-semibold tabular-nums">{value}</span>
+      {sublabel && (
+        <span className="text-muted-foreground truncate text-xs">
+          {sublabel}
+        </span>
+      )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start transition-colors"
+        onClick={onClick}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3">
+      {content}
     </div>
-    <span className="text-xl font-semibold tabular-nums">{value}</span>
-    {sublabel && (
-      <span className="text-muted-foreground truncate text-xs">{sublabel}</span>
-    )}
-  </div>
-);
+  );
+};
 
 // -- Overview entity row with context menu + actions --
 

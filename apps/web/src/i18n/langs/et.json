@@ -41,6 +41,22 @@
     "totalHours": "Tunnid kokku",
     "utilization": "Kasutusaste"
   },
+  "anonymise": {
+    "addEntity": "Lisa olem",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Sisestage otsitavad sõnad…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Jahe",
     "dark": "Tume",
@@ -142,7 +158,7 @@
       "confirmDelete": "See kustutab selle arvemustandiga jäädavalt ja tühistab kõigi kirjete sidumise. Toimingut ei saa tagasi võtta.",
       "confirmVoid": "Arve tühistamine eemaldab kõik seotud ajakirjed ja kulud ning taastab nende eelmise oleku.",
       "createInvoice": "Loo arve",
-      "delete": "Delete",
+      "delete": "Kustuta",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
       "finalize": "Lõpeta",
@@ -306,7 +322,7 @@
         "clauses": "Klauslid",
         "contacts": "Kontaktid",
         "entities": "Selles asjas",
-        "matters": "Matters",
+        "matters": "Asjad",
         "templates": "Mallid"
       },
       "noResults": "No matching entities"
@@ -847,7 +863,7 @@
       "none": "Puudub",
       "urgent": "Kiire"
     },
-    "status": "Status",
+    "status": "Staatus",
     "statusValues": {
       "cancelled": "Tühistatud",
       "done": "Valmis",

@@ -41,6 +41,22 @@
     "totalHours": "Kopējās stundas",
     "utilization": "Noslogojums"
   },
+  "anonymise": {
+    "addEntity": "Pievienot entītiju",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Ievadiet meklējamos vārdus…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Vēss",
     "dark": "Tumšs",
@@ -142,7 +158,7 @@
       "confirmDelete": "Tas neatgriezeniski dzēsīs šo rēķina melnrakstu un atsaistīs visus ierakstus. Šo darbību nevar atcelt.",
       "confirmVoid": "Anulējot šo rēķinu, tiks atsaistīti visi laika ieraksti un izdevumi, atgriežot tos iepriekšējā statusā.",
       "createInvoice": "Izveidot rēķinu",
-      "delete": "Delete",
+      "delete": "Dzēst",
       "dueDate": "Apmaksas termiņš",
       "editInvoice": "Rediģēt rēķinu",
       "finalize": "Pabeigt",
@@ -306,7 +322,7 @@
         "clauses": "Klauzulas",
         "contacts": "Kontakti",
         "entities": "Šajā lietā",
-        "matters": "Matters",
+        "matters": "Lietas",
         "templates": "Veidnes"
       },
       "noResults": "No matching entities"
@@ -847,7 +863,7 @@
       "none": "Nav",
       "urgent": "Steidzams"
     },
-    "status": "Status",
+    "status": "Statuss",
     "statusValues": {
       "cancelled": "Atcelts",
       "done": "Pabeigts",

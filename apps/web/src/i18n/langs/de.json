@@ -41,6 +41,22 @@
     "totalHours": "Gesamtstunden",
     "utilization": "Auslastung"
   },
+  "anonymise": {
+    "addEntity": "Entität hinzufügen",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Wörter zum Suchen eingeben…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Kühl",
     "dark": "Dunkel",
@@ -142,7 +158,7 @@
       "confirmDelete": "Dieser Rechnungsentwurf wird endgültig gelöscht und alle verknüpften Einträge werden getrennt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "confirmVoid": "Das Stornieren dieser Rechnung trennt alle Zeiteinträge und Ausgaben und setzt sie auf ihren vorherigen Status zurück.",
       "createInvoice": "Rechnung erstellen",
-      "delete": "Delete",
+      "delete": "Löschen",
       "dueDate": "Fälligkeitsdatum",
       "editInvoice": "Rechnung bearbeiten",
       "finalize": "Abschließen",
@@ -306,7 +322,7 @@
         "clauses": "Klauseln",
         "contacts": "Kontakte",
         "entities": "In dieser Akte",
-        "matters": "Matters",
+        "matters": "Angelegenheiten",
         "templates": "Vorlagen"
       },
       "noResults": "Keine passenden Einträge"

@@ -41,6 +41,22 @@
     "totalHours": "Łączne godziny",
     "utilization": "Wykorzystanie"
   },
+  "anonymise": {
+    "addEntity": "Dodaj podmiot",
+    "checkAnonymisation": "Check anonymisation",
+    "confirm": "Confirm",
+    "confirmAll": "Confirm all",
+    "entities": "Entities",
+    "extractingText": "Extracting text…",
+    "noEntitiesFound": "No entities found",
+    "reject": "Reject",
+    "rejectAll": "Reject all",
+    "revise": "Revise anonymisation",
+    "runPipeline": "Run pipeline",
+    "running": "Running…",
+    "searchPlaceholder": "Wpisz słowa do wyszukania…",
+    "title": "Anonymisation review"
+  },
   "appearance": {
     "cool": "Chłodne",
     "dark": "Ciemny",
@@ -142,7 +158,7 @@
       "confirmDelete": "Spowoduje to trwałe usunięcie wersji roboczej faktury i odłączenie wszystkich wpisów. Tej operacji nie można cofnąć.",
       "confirmVoid": "Unieważnienie faktury spowoduje odłączenie wszystkich wpisów czasu i wydatków oraz przywrócenie ich do poprzedniego statusu.",
       "createInvoice": "Utwórz fakturę",
-      "delete": "Delete",
+      "delete": "Usuń",
       "dueDate": "Termin płatności",
       "editInvoice": "Edytuj fakturę",
       "finalize": "Zatwierdź",
@@ -306,7 +322,7 @@
         "clauses": "Klauzule",
         "contacts": "Kontakty",
         "entities": "W tej sprawie",
-        "matters": "Matters",
+        "matters": "Sprawy",
         "templates": "Szablony"
       },
       "noResults": "Brak pasujących elementów"

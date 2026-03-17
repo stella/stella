@@ -41,6 +41,22 @@
     "totalHours": "Celkové hodiny",
     "utilization": "Využití"
   },
+  "anonymise": {
+    "addEntity": "Přidat entitu",
+    "checkAnonymisation": "Zkontrolovat anonymizaci",
+    "confirm": "Potvrdit",
+    "confirmAll": "Potvrdit vše",
+    "entities": "Entity",
+    "extractingText": "Extrakce textu…",
+    "noEntitiesFound": "Žádné entity nenalezeny",
+    "reject": "Zamítnout",
+    "rejectAll": "Zamítnout vše",
+    "revise": "Revidovat anonymizaci",
+    "runPipeline": "Spustit pipeline",
+    "running": "Zpracování…",
+    "searchPlaceholder": "Zadejte slova k vyhledání…",
+    "title": "Kontrola anonymizace"
+  },
   "appearance": {
     "cool": "Studené",
     "dark": "Tmavý",
@@ -142,7 +158,7 @@
       "confirmDelete": "Tato akce trvale smaže tento koncept faktury a odpojí všechny záznamy. Nelze vrátit zpět.",
       "confirmVoid": "Zrušením faktury se odpojí všechny časové záznamy a výdaje a vrátí se do předchozího stavu.",
       "createInvoice": "Vytvořit fakturu",
-      "delete": "Delete",
+      "delete": "Smazat",
       "dueDate": "Datum splatnosti",
       "editInvoice": "Upravit fakturu",
       "finalize": "Finalizovat",
@@ -306,7 +322,7 @@
         "clauses": "Klauzule",
         "contacts": "Kontakty",
         "entities": "V tomto spisu",
-        "matters": "Matters",
+        "matters": "Spisy",
         "templates": "Šablony"
       },
       "noResults": "Žádné odpovídající entity"
@@ -847,7 +863,7 @@
       "none": "Žádná",
       "urgent": "Urgentní"
     },
-    "status": "Status",
+    "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušený",
       "done": "Hotovo",
