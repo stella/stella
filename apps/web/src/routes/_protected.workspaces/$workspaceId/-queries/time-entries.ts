@@ -24,8 +24,14 @@ export const timeEntriesKeys = {
     ...timeEntriesKeys.all(workspaceId),
     filters,
   ],
-  byId: (workspaceId: string, id: string) => [...timeEntriesKeys.all(workspaceId), id],
-  activeTimer: (workspaceId: string) => [...timeEntriesKeys.all(workspaceId), "timer"],
+  byId: (workspaceId: string, id: string) => [
+    ...timeEntriesKeys.all(workspaceId),
+    id,
+  ],
+  activeTimer: (workspaceId: string) => [
+    ...timeEntriesKeys.all(workspaceId),
+    "timer",
+  ],
 };
 
 export const timeEntriesOptions = (

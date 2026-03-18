@@ -17,7 +17,6 @@ import {
   TEXT_LAYER_ATTRIBUTE,
 } from "@/lib/pdf/consts";
 import { usePdfStore } from "@/lib/pdf/pdf-store";
-import { markRenderEnd, markRenderStart } from "@/lib/pdf/perf";
 import {
   createEndOfContent,
   getCanvasSize,
@@ -192,8 +191,6 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
     // offscreen while the old content stays visible.
     container.prepend(backCanvas);
 
-    markRenderStart(pageId);
-
     const renderTask = proxy.render({
       canvas: backCanvas,
       viewport,
@@ -216,8 +213,6 @@ const PdfPageCanvas = ({ fileId, pageId, page }: PdfPageCanvasProps) => {
       }
 
       try {
-        markRenderEnd(pageId);
-
         // Swap: show crisp back canvas, remove old front
         backCanvas.style.visibility = "visible";
         const oldFront = frontCanvasRef.current;

@@ -4,8 +4,8 @@
   "compilerOptions": {
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "target": "ES2023",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "target": "ES2024",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "allowJs": true,
     "resolveJsonModule": true,
     "moduleDetection": "force",

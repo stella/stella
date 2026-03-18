@@ -17,7 +17,10 @@ export const invoicesKeys = {
     ...invoicesKeys.all(workspaceId),
     filters,
   ],
-  byId: (workspaceId: string, id: string) => [...invoicesKeys.all(workspaceId), id],
+  byId: (workspaceId: string, id: string) => [
+    ...invoicesKeys.all(workspaceId),
+    id,
+  ],
 };
 
 export const invoicesOptions = (

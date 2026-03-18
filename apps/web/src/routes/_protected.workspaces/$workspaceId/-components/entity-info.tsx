@@ -48,12 +48,8 @@ export const EntityFileInfo = ({
       return { prevEntity, nextEntity };
     },
   });
-  const prevFile = navData.prevEntity
-    ? getFirstFile(navData.prevEntity)
-    : null;
-  const nextFile = navData.nextEntity
-    ? getFirstFile(navData.nextEntity)
-    : null;
+  const prevFile = navData.prevEntity ? getFirstFile(navData.prevEntity) : null;
+  const nextFile = navData.nextEntity ? getFirstFile(navData.nextEntity) : null;
 
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/pdf",

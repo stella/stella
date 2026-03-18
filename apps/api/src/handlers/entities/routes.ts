@@ -63,20 +63,13 @@ const viewFilterConditionSchema = t.Union([
       t.Literal("is_empty"),
     ]),
     value: t.Optional(
-      t.Union([
-        t.String(),
-        t.Array(t.String()),
-        t.Undefined(),
-      ]),
+      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
     ),
   }),
   t.Object({
     id: t.String(),
     field: t.Literal("builtin"),
-    builtinField: t.Union([
-      t.Literal("status"),
-      t.Literal("priority"),
-    ]),
+    builtinField: t.Union([t.Literal("status"), t.Literal("priority")]),
     op: t.Union([
       t.Literal("eq"),
       t.Literal("neq"),
@@ -84,11 +77,7 @@ const viewFilterConditionSchema = t.Union([
       t.Literal("is_empty"),
     ]),
     value: t.Optional(
-      t.Union([
-        t.String(),
-        t.Array(t.String()),
-        t.Undefined(),
-      ]),
+      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
     ),
   }),
 ]);
@@ -170,9 +159,7 @@ export const entitiesRoute = new Elysia({
         filters: ctx.body.filters ?? [],
         sorts: ctx.body.sorts ?? [],
         page: ctx.body.page ?? 1,
-        pageSize:
-          ctx.body.pageSize ??
-          LIMITS.entitiesPageSizeDefault,
+        pageSize: ctx.body.pageSize ?? LIMITS.entitiesPageSizeDefault,
       }),
     {
       body: readEntitiesBodySchema,
