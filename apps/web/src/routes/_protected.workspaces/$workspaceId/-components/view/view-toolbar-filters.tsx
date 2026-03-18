@@ -66,20 +66,10 @@ export const FilterChips = ({
 
     switch (filter.field) {
       case "kind":
-        return (
-          <KindFilterChip
-            filter={filter}
-            key={filter.id}
-            {...shared}
-          />
-        );
+        return <KindFilterChip filter={filter} key={filter.id} {...shared} />;
       case "builtin":
         return (
-          <BuiltinFilterChip
-            filter={filter}
-            key={filter.id}
-            {...shared}
-          />
+          <BuiltinFilterChip filter={filter} key={filter.id} {...shared} />
         );
       case "property":
         return (

@@ -1,7 +1,7 @@
 {
   "extends": "@stella/typescript-config/base.json",
   "compilerOptions": {
-    "target": "ES2023",
+    "target": "ES2024",
     "lib": ["ESNext"],
     "module": "ESNext",
     "paths": {
