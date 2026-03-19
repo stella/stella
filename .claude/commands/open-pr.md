@@ -91,6 +91,14 @@ comments.
    unresolved bot comments, no new review threads, CI green).
    Do not let it run indefinitely.
 
+   **Pending bots are not clean.** A round where review bot
+   checks are still running or queued (e.g., CodeRabbit,
+   Copilot, Gemini) does **not** count as a clean check.
+   The absence of comments while bots are pending means
+   they haven't responded yet, not that they have nothing
+   to say. Only count a round as clean when all review bot
+   check runs have completed.
+
 8. **Mark PR as ready**:
 
    After the rabbit round monitoring stops (two consecutive

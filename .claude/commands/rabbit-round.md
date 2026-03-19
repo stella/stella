@@ -119,16 +119,27 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    }'
    ```
 
-6. **Process Greptile summary comments**:
+6. **Process Greptile summary comments** (do NOT skip this step):
 
    Greptile posts a single issue comment containing a summary, confidence
    score, and sometimes a "Comments Outside Diff" section. **Never minimize
    this comment** — it serves as a persistent review overview.
 
-   Instead, parse and address the actionable parts:
-   - **Confidence Score section**: if it lists specific issues or files
-     holding back the score, treat each as a suggestion to accept or
-     push back on (same decision guidelines as review threads).
+   **You must read and process the full summary text.** The confidence
+   score section is the most important part: it lists the specific
+   issues and files holding the score back. Each bullet point under
+   the confidence score is a concrete concern that must be addressed
+   (accept or push back) the same way you would a review thread.
+   Do not treat the summary as informational; treat it as a checklist.
+
+   Parse and address:
+   - **Confidence Score section**: read every bullet point. For each
+     concern, read the referenced file and lines, evaluate the claim,
+     and decide accept or push back. Reply to the Greptile summary
+     comment with your response for **each item individually**.
+   - **Important Files Changed table**: if it flags issues in the
+     "Overview" column (not just descriptions), treat each flagged
+     issue as a concern to address.
    - **Comments Outside Diff section** (`<!-- greptile_failed_comments -->`):
      these are code review comments that Greptile couldn't post inline
      because the lines aren't in the PR diff. Treat each as a regular
@@ -165,7 +176,27 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    - Make the code changes for suggestions you agreed with
    - Group related changes logically
 
-10. **Check and fix failing CI**:
+10. **Check review bot status**:
+
+    Before considering this round clean, verify that all review
+    bot checks have completed:
+
+    ```bash
+    gh pr checks $(gh pr view --json number -q '.number') \
+      --json name,state \
+      | jq '[.[] | select(
+          (.name | test("coderabbit|copilot|gemini|greptile|devin"; "i"))
+          and (.state | IN("PENDING","QUEUED","REQUESTED",
+                           "WAITING","IN_PROGRESS"))
+        )]'
+    ```
+
+    If any review bot checks are still in a non-terminal state,
+    this round is **not clean** even if there are zero unresolved
+    comments. Report that bots are still pending and wait for the
+    next round.
+
+11. **Check and fix failing CI**:
 
     ```bash
     # Find the latest CI run for this PR's branch
@@ -181,7 +212,7 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
       lint errors, type errors, test failures
     - Fix the issues in code, don't just suppress them
 
-11. **Check React Doctor diagnostics**:
+12. **Check React Doctor diagnostics**:
 
     The React Doctor CI workflow posts a score comment on the PR.
     Check it and fix real issues.
@@ -209,13 +240,13 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
     - Note which issues are false positives and which are real in
       your commit message
 
-12. **Run quality checks**:
+13. **Run quality checks**:
 
     Run the quality checks for the project (using `ruff format`,
     `ruff check`, `ty` for Python, `bun run lint`, `bun run format`,
     `bun run typecheck` for TypeScript).
 
-13. **Commit and push**:
+14. **Commit and push**:
     - Create a commit with a message like
       `fix: address review comments`
     - Push to the current branch
