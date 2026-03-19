@@ -1,3 +1,0 @@
-[submodule "apps/web/src/lib/anonymize/__corpus__"]
-	path = apps/web/src/lib/anonymize/__corpus__
-	url = https://github.com/stella/anonymisation-fixtures.git
