@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { PropsWithChildren } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -15,9 +16,6 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   ListIcon,
-  MinusIcon,
-  PlusIcon,
-  PrinterIcon,
   ScanEyeIcon,
   SparklesIcon,
   SquareCheckIcon,
@@ -32,9 +30,9 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { PDF_MIME_TYPE } from "@/consts";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { usePdfStore } from "@/lib/pdf/pdf-store";
+import { PDFProvider } from "@/lib/pdf/pdf-context";
+import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import {
@@ -49,7 +47,11 @@ import type {
   PdfTab,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
-import { PeekPdfViewer } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
+import {
+  PeekPdfControls,
+  PeekPdfViewer,
+  PeekSuspenseFallback,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -91,82 +93,33 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const activeTab = tabs.find((tab) => tab.id === activeId);
 
   // -- PDF zoom --
-  const scaleOffsets = useRef(new Map<string, number>());
+  const [scaleOffsets, setScaleOffsets] = useState<Map<string, number>>(
+    () => new Map(),
+  );
 
-  const handleZoom = useCallback(
-    (direction: "in" | "out") => {
-      if (!activeId || activeTab?.type !== "pdf") {
-        return;
-      }
-      const offsets = scaleOffsets.current;
-      const current = offsets.get(activeId) ?? 0;
+  const handleZoom = useCallback((tabId: string, direction: "in" | "out") => {
+    setScaleOffsets((prev) => {
+      const current = prev.get(tabId) ?? 0;
       const delta = direction === "in" ? ZOOM_STEP : -ZOOM_STEP;
       const next = Math.round((current + delta) * 10) / 10;
 
       if (next < MIN_OFFSET || next > MAX_OFFSET) {
-        return;
+        return prev;
       }
 
-      offsets.set(activeId, next);
-      usePdfStore.getState().updateScale({
-        fileId: activeId,
-        scaleOffset: next,
-      });
-    },
-    [activeId, activeTab?.type],
-  );
-
-  const isMounted = useRef(true);
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
+      const updated = new Map(prev);
+      updated.set(tabId, next);
+      return updated;
+    });
   }, []);
 
-  const handlePrint = useCallback(() => {
-    if (!activeId || activeTab?.type !== "pdf") {
-      return;
-    }
-    const store = usePdfStore.getState();
-    const pdf = store.pdfs.get(activeId);
-    if (!pdf) {
-      return;
-    }
-
-    pdf.document
-      .getData()
-      .then((data) => {
-        if (!isMounted.current) {
-          return;
-        }
-        // oxlint-disable-next-line typescript-eslint/no-explicit-any, typescript-eslint/no-unsafe-type-assertion
-        const blob = new Blob([data as any], {
-          type: PDF_MIME_TYPE,
-        });
-        const url = URL.createObjectURL(blob);
-        const frame = document.createElement("iframe");
-        frame.style.display = "none";
-        frame.src = url;
-        document.body.append(frame);
-        frame.addEventListener("load", () => {
-          const cleanup = () => {
-            frame.remove();
-            URL.revokeObjectURL(url);
-          };
-          if (!frame.contentWindow) {
-            cleanup();
-            return;
-          }
-          frame.contentWindow.addEventListener("afterprint", cleanup);
-          frame.contentWindow.print();
-        });
-      })
-      .catch((error: unknown) => {
-        // oxlint-disable-next-line no-console
-        console.error("Print failed:", error);
-      });
-  }, [activeId, activeTab?.type]);
+  const handleResetZoom = useCallback((tabId: string) => {
+    setScaleOffsets((prev) => {
+      const updated = new Map(prev);
+      updated.set(tabId, 0);
+      return updated;
+    });
+  }, []);
 
   const handleOpenFullView = useCallback(async () => {
     if (!activeTab || activeTab.type !== "pdf") {
@@ -255,22 +208,21 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       }
       e.preventDefault();
 
-      const offsets = scaleOffsets.current;
-      const current = offsets.get(activeId) ?? 0;
-      const delta = -e.deltaY * PINCH_ZOOM_SENSITIVITY;
-      const next =
-        Math.round(
-          Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, current + delta)) * 100,
-        ) / 100;
+      setScaleOffsets((prev) => {
+        const current = prev.get(activeId) ?? 0;
+        const delta = -e.deltaY * PINCH_ZOOM_SENSITIVITY;
+        const next =
+          Math.round(
+            Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, current + delta)) * 100,
+          ) / 100;
 
-      if (next === current) {
-        return;
-      }
+        if (next === current) {
+          return prev;
+        }
 
-      offsets.set(activeId, next);
-      usePdfStore.getState().updateScale({
-        fileId: activeId,
-        scaleOffset: next,
+        const updated = new Map(prev);
+        updated.set(activeId, next);
+        return updated;
       });
     };
 
@@ -329,7 +281,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             key={tab.id}
             ref={isActive ? pdfContentRef : undefined}
           >
-            {/* Context bar: filename + zoom/print/fullview */}
+            {/* Context bar: filename + non-PDF actions */}
             <div
               className={cn(
                 "flex shrink-0 items-center justify-between border-b px-3",
@@ -343,35 +295,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               </div>
 
               <div className="flex shrink-0 items-center gap-1 ps-4">
-                <div className="flex items-center rounded-md border p-0.5">
-                  <Tooltip
-                    content={t("workspaces.pdf.zoomOut")}
-                    render={
-                      <Button
-                        onClick={() => handleZoom("out")}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <MinusIcon className="size-3" />
-                      </Button>
-                    }
-                  />
-                  <Tooltip
-                    content={t("workspaces.pdf.zoomIn")}
-                    render={
-                      <Button
-                        onClick={() => handleZoom("in")}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <PlusIcon className="size-3" />
-                      </Button>
-                    }
-                  />
-                </div>
-
-                <div className="bg-border mx-1 h-4 w-px" />
-
                 <Tooltip
                   content={t("anonymise.checkAnonymisation")}
                   render={
@@ -440,18 +363,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   />
                 )}
                 <Tooltip
-                  content={t("common.print")}
-                  render={
-                    <Button
-                      onClick={handlePrint}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <PrinterIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <Tooltip
                   content={t("workspaces.pdf.openFullView")}
                   render={
                     <Button
@@ -483,47 +394,50 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               </div>
             </div>
 
-            {/* Justification bar (when opened from AI cell) */}
-            {tab.justificationFieldId && (
-              <Suspense
-                fallback={
-                  <div
-                    className={cn(
-                      "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                      TOOLBAR_ROW_HEIGHT,
-                    )}
-                  >
-                    {t("common.loading")}...
-                  </div>
-                }
-              >
-                <JustificationBar
-                  activeTab={tab}
-                  fieldId={tab.justificationFieldId}
-                  workspaceId={workspaceId}
-                />
-              </Suspense>
-            )}
-
             {/* PDF + optional sidebar row */}
-            <div className="flex min-h-0 flex-1">
-              <ScrollArea className="flex-1">
-                <Suspense
-                  fallback={
-                    <div className="text-muted-foreground flex h-full items-center justify-center p-12 text-sm">
-                      {t("common.loading")}...
-                    </div>
-                  }
-                >
-                  <PeekPdfViewer
-                    fieldId={tab.id}
-                    onInitialOffset={(id, offset) => {
-                      scaleOffsets.current.set(id, offset);
-                    }}
-                    workspaceId={workspaceId}
-                  />
-                </Suspense>
-              </ScrollArea>
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div className="flex h-full min-h-0 min-w-0 flex-col">
+                  {tab.justificationFieldId && (
+                    <Suspense
+                      fallback={
+                        <div
+                          className={cn(
+                            "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                            TOOLBAR_ROW_HEIGHT,
+                          )}
+                        >
+                          {t("common.loading")}...
+                        </div>
+                      }
+                    >
+                      <JustificationBar
+                        activeTab={tab}
+                        fieldId={tab.justificationFieldId}
+                        workspaceId={workspaceId}
+                      />
+                    </Suspense>
+                  )}
+                  <MeasuredPdfProvider
+                    active={isActive}
+                    fallback={{ suspense: <PeekSuspenseFallback /> }}
+                    initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                  >
+                    <PeekPdfControls
+                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                      onResetZoom={() => handleResetZoom(tab.id)}
+                      onZoomIn={() => handleZoom(tab.id, "in")}
+                      onZoomOut={() => handleZoom(tab.id, "out")}
+                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                    />
+                    <PeekPdfViewer
+                      fieldId={tab.id}
+                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                      workspaceId={workspaceId}
+                    />
+                  </MeasuredPdfProvider>
+                </div>
+              </div>
 
               {isActive && anonSidebarFieldId === tab.id && (
                 <AnonymiseSidebar
@@ -535,6 +449,73 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           </div>
         );
       })}
+    </div>
+  );
+};
+
+type MeasuredPdfProviderProps = PropsWithChildren<{
+  active: boolean;
+  fallback?: PDFPageFallback | undefined;
+  initialScaleOffset: number;
+}>;
+
+const MeasuredPdfProvider = ({
+  active,
+  children,
+  fallback,
+  initialScaleOffset,
+}: MeasuredPdfProviderProps) => {
+  const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!active || initialFitWidth !== undefined) {
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const updateWidth = (width: number) => {
+      if (width > 0) {
+        setInitialFitWidth(width);
+      }
+    };
+
+    updateWidth(container.clientWidth);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+
+      updateWidth(entry.contentRect.width);
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [active, initialFitWidth]);
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col" ref={containerRef}>
+      {initialFitWidth === undefined ? (
+        (fallback?.suspense ?? null)
+      ) : (
+        <PDFProvider
+          fitToWidth={initialFitWidth}
+          initialScaleOffset={initialScaleOffset}
+          startPage={1}
+          fallback={fallback}
+        >
+          {children}
+        </PDFProvider>
+      )}
     </div>
   );
 };
@@ -717,7 +698,7 @@ const VerticalTab = ({
             "text-muted-foreground hover:bg-accent hover:text-foreground",
             TOOLBAR_ROW_HEIGHT,
             active &&
-              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:start-0 before:w-0.5",
+              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5",
           )}
           onAuxClick={(e) => {
             if (e.button === 1) {

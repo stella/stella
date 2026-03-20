@@ -2,19 +2,19 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { BoundingBox } from "@stella/api/types";
 
-import { PDF_WIDTH, usePdfStore } from "@/lib/pdf/pdf-store";
+import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const PAGE_HIGHLIGHT_FILTER_ID = "page-highlight-filter";
 const PAGE_HIGHLIGHT_OPACITY = 0.2;
-// % of the PDF width in px
-const HIGHLIGHT_PADDING = PDF_WIDTH * 0.01;
+// % of the base PDF width in px
+const HIGHLIGHT_PADDING_RATIO = 0.01;
 
 const getBoundingBoxKey = (bBox: BoundingBox) =>
   `${bBox.pageNumber}-${bBox.xMin}-${bBox.yMin}-${bBox.xMax}-${bBox.yMax}`;
 
 type PageCitationProps = {
-  fileId: string;
+  pageId: string;
   pageNumber: number;
   originalWidth: number;
   originalHeight: number;
@@ -22,7 +22,7 @@ type PageCitationProps = {
 };
 
 export const PageCitation = ({
-  fileId,
+  pageId,
   pageNumber,
   originalWidth,
   originalHeight,
@@ -34,8 +34,9 @@ export const PageCitation = ({
   )?.boundingBoxes?.boxes.filter(
     (b) => b.pageNumber === justification?.pageNumber,
   );
-  const consumeScrollTo = usePdfStore((s) => s.consumeScrollTo);
-  const scrollTo = usePdfStore(useShallow((s) => s.scrollTo.get(fileId)));
+  const [scrollTo, setScrollTo] = usePDFStore(
+    useShallow((s) => [s.scrollTo, s.setScrollTo]),
+  );
 
   if (!justification || justification.pageNumber !== pageNumber) {
     return null;
@@ -43,6 +44,7 @@ export const PageCitation = ({
 
   const overlayWidth = originalWidth * scale;
   const overlayHeight = originalHeight * scale;
+  const highlightPadding = originalWidth * HIGHLIGHT_PADDING_RATIO * scale;
 
   const topBoundingBox = boundingBoxes
     ?.toSorted((a, b) => a.yMin - b.yMin)
@@ -82,8 +84,6 @@ export const PageCitation = ({
         const top = yMin * scale;
         const key = getBoundingBoxKey(bBox);
 
-        const highlightPadding = HIGHLIGHT_PADDING * scale;
-
         return (
           <div
             className="rounded-xs bg-indigo-500"
@@ -92,13 +92,13 @@ export const PageCitation = ({
               if (
                 key === topBoundingBoxKey &&
                 scrollTo?.justificationId === justification.id &&
-                scrollTo.pageNumber === pageNumber
+                scrollTo.pageId === pageId
               ) {
                 el?.scrollIntoView({
                   block: "center",
                   inline: "center",
                 });
-                consumeScrollTo(fileId);
+                setScrollTo(null);
               }
             }}
             role="presentation"

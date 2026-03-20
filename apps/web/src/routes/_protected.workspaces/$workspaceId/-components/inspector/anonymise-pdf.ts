@@ -250,9 +250,9 @@ export const anonymisePdf = async ({
   // Extract text + spans
   const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
   if (!GlobalWorkerOptions.workerSrc) {
-    GlobalWorkerOptions.workerSrc = import.meta.env.DEV
-      ? "/pdf.worker.min.mjs"
-      : (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+    GlobalWorkerOptions.workerSrc = (
+      await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
+    ).default;
   }
 
   const pdf = await getDocument({

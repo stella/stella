@@ -8,6 +8,11 @@ type FileOptionsProps = {
   fieldId: string;
 };
 
+export type FileData = {
+  fileId: string;
+  buffer: ArrayBuffer;
+};
+
 const filesKeys = {
   byFieldId: (props: FileOptionsProps) => [
     "files",
@@ -41,8 +46,9 @@ export const fileOptions = (props: FileOptionsProps) =>
         });
       }
 
-      return new File([await file.blob()], response.data.fileName, {
-        type: response.data.mimeType,
-      });
+      return {
+        fileId: response.data.fileId,
+        buffer: await file.arrayBuffer(),
+      } satisfies FileData;
     },
   });

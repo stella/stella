@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import { usePdfStore } from "@/lib/pdf/pdf-store";
-
 export type PdfTab = {
   type: "pdf";
   id: string;
@@ -49,7 +47,7 @@ type Actions = {
 };
 
 export const useInspectorStore = create<State & Actions>()(
-  immer((set, get) => ({
+  immer((set) => ({
     tabs: [],
     activeId: null,
     activationSeq: 0,
@@ -64,16 +62,10 @@ export const useInspectorStore = create<State & Actions>()(
           existing.propertyId = tab.propertyId;
           existing.entityId = tab.entityId;
           existing.workspaceId = tab.workspaceId;
-          // Preserve the original PDF filename; only accept
-          // a new label when the tab does not yet have one
-          // or it was a fallback ID.
           const isFallbackId = existing.label === existing.id;
           if (tab.label && (!existing.label || isFallbackId)) {
             existing.label = tab.label;
           }
-          // Only overwrite mimeType when the caller supplies
-          // one; clearing it on re-open would drop a
-          // previously set value.
           if (tab.mimeType !== undefined) {
             existing.mimeType = tab.mimeType;
           }
@@ -104,9 +96,7 @@ export const useInspectorStore = create<State & Actions>()(
         state.activationSeq += 1;
       }),
 
-    closeTab: (id) => {
-      const tab = get().tabs.find((t) => t.id === id);
-
+    closeTab: (id) =>
       set((state) => {
         const index = state.tabs.findIndex((t) => t.id === id);
         if (index === -1) {
@@ -119,17 +109,7 @@ export const useInspectorStore = create<State & Actions>()(
           const next = state.tabs[Math.min(index, state.tabs.length - 1)];
           state.activeId = next?.id ?? null;
         }
-      });
-
-      if (tab?.type === "pdf") {
-        usePdfStore
-          .getState()
-          .cleanupPdf(id)
-          .catch(() => {
-            /* fire-and-forget cleanup */
-          });
-      }
-    },
+      }),
 
     setActive: (id) =>
       set((state) => {
@@ -137,22 +117,11 @@ export const useInspectorStore = create<State & Actions>()(
         state.activationSeq += 1;
       }),
 
-    closeAll: () => {
-      const tabs = get().tabs;
-      const pdfIds = tabs.filter((t) => t.type === "pdf").map((t) => t.id);
-
+    closeAll: () =>
       set((state) => {
         state.tabs = [];
         state.activeId = null;
-      });
-
-      const pdfStore = usePdfStore.getState();
-      for (const id of pdfIds) {
-        pdfStore.cleanupPdf(id).catch(() => {
-          /* fire-and-forget cleanup */
-        });
-      }
-    },
+      }),
 
     clearTaskNewFlag: (taskId) =>
       set((state) => {

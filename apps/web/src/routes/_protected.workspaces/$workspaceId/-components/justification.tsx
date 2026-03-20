@@ -4,10 +4,11 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import parse, { domToReact, Element } from "html-react-parser";
 import type { DOMNode } from "html-react-parser";
 import { produce } from "immer";
+import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import { usePdfStore } from "@/lib/pdf/pdf-store";
+import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -81,7 +82,9 @@ const Citation = ({
   const createBoundingBoxes = useCreateBBoxes({
     justification,
   });
-  const setScrollTo = usePdfStore((s) => s.setScrollTo);
+  const [pages, setScrollTo] = usePDFStore(
+    useShallow((s) => [s.pages, s.setScrollTo]),
+  );
 
   return (
     <button
@@ -96,11 +99,15 @@ const Citation = ({
         const boundingBoxes = useWorkspaceStore
           .getState()
           .justifications.find((j) => j.id === justification.id)?.boundingBoxes;
+        const pageIds = [...pages.keys()];
+        const pageId = pageIds[pageNumber - 1];
 
-        setScrollTo(fileFieldId, {
-          pageNumber,
-          justificationId: boundingBoxes ? justification.id : undefined,
-        });
+        if (pageId !== undefined) {
+          setScrollTo({
+            pageId,
+            justificationId: boundingBoxes ? justification.id : undefined,
+          });
+        }
         await navigate({
           replace: true,
           search: (prev) =>

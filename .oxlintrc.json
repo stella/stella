@@ -2,7 +2,7 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json"
+    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
   ],
   "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
 
@@ -10,7 +10,7 @@
     "./.oxlint-plugins/no-raw-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
-    "./.oxlint-plugins/no-untyped-updates.ts"
+    "./.oxlint-plugins/no-untyped-updates.ts",
   ],
 
   "rules": {
@@ -33,6 +33,9 @@
     "react/rules-of-hooks": "error",
 
     "import/no-cycle": "error",
+
+    // Allow void as statement (fire-and-forget promises)
+    "no-void": ["error", { "allowAsStatement": true }],
 
     // --- Disabled ultracite defaults ---
     // General JS
@@ -110,18 +113,18 @@
       "error",
       {
         "allowNullableString": true,
-        "allowNullableBoolean": true
-      }
+        "allowNullableBoolean": true,
+      },
     ],
     "typescript/no-confusing-void-expression": [
       "error",
-      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true }
+      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true },
     ],
     "typescript/prefer-nullish-coalescing": [
       "error",
       {
-        "ignorePrimitives": { "string": true, "boolean": true }
-      }
+        "ignorePrimitives": { "string": true, "boolean": true },
+      },
     ],
     "typescript/only-throw-error": [
       "error",
@@ -130,42 +133,42 @@
           {
             "from": "package",
             "name": ["Redirect", "AnyRedirect", "NotFoundError"],
-            "package": "@tanstack/router-core"
-          }
-        ]
-      }
+            "package": "@tanstack/router-core",
+          },
+        ],
+      },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     // Conflicts with no-non-null-assertion: this rule wants `x!`
     // but we ban `!` assertions project-wide.
-    "typescript/non-nullable-type-assertion-style": "off"
+    "typescript/non-nullable-type-assertion-style": "off",
   },
   "overrides": [
     {
       "files": ["**/scripts/**"],
-      "rules": { "no-console": "off" }
+      "rules": { "no-console": "off" },
     },
     {
       "files": ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
       "rules": {
         "no-raw-colors/no-raw-colors": "error",
-        "no-physical-properties/no-physical-properties": "error"
-      }
+        "no-physical-properties/no-physical-properties": "error",
+      },
     },
     {
       "files": ["apps/web/src/**/appearance-settings.tsx"],
       "rules": {
         // Palette swatch previews use intentional hardcoded colors
-        "no-raw-colors/no-raw-colors": "off"
-      }
+        "no-raw-colors/no-raw-colors": "off",
+      },
     },
     {
       "files": ["packages/ui/src/**/button.tsx"],
       "rules": {
         // Destructive variant uses text-white on a colored bg;
         // there is no semantic token for "filled-destructive text"
-        "no-raw-colors/no-raw-colors": "off"
-      }
+        "no-raw-colors/no-raw-colors": "off",
+      },
     },
     {
       "files": [
@@ -177,41 +180,41 @@
         "apps/web/src/**/workspace-table.tsx",
         "apps/web/src/**/sidebar.tsx",
         "apps/web/src/**/template-preview.tsx",
-        "apps/web/src/**/page-citation.tsx"
+        "apps/web/src/**/page-citation.tsx",
       ],
       "rules": {
         // Physical properties intentional: centering with
         // translate-x, tab indicators, DOCX/PDF coordinates
-        "no-physical-properties/no-physical-properties": "off"
-      }
+        "no-physical-properties/no-physical-properties": "off",
+      },
     },
     {
       "files": ["apps/api/src/handlers/**/*.ts"],
       "rules": {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
-        "no-untyped-updates/no-untyped-updates": "error"
-      }
+        "no-untyped-updates/no-untyped-updates": "error",
+      },
     },
     {
       "files": ["apps/api/src/handlers/search/search.ts"],
       "rules": {
         // Search handler validates body.workspaceId against
         // the caller's organization before use
-        "no-body-ownership-ids/no-body-ownership-ids": "off"
-      }
+        "no-body-ownership-ids/no-body-ownership-ids": "off",
+      },
     },
     {
       "files": ["apps/api/src/handlers/docx/**/*.ts"],
       "rules": {
         // DOCX handlers legitimately use Record<string, unknown>
         // as generic data containers for template rendering
-        "no-untyped-updates/no-untyped-updates": "off"
-      }
+        "no-untyped-updates/no-untyped-updates": "off",
+      },
     },
     {
       "files": [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
-        "**/__tests__/**/*.{ts,tsx,js,jsx}"
+        "**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
       "plugins": ["jest", "vitest"],
       "rules": {
@@ -233,8 +236,8 @@
         // UI tests may assert class names with raw colors or
         // physical properties in snapshots / a11y checks
         "no-raw-colors/no-raw-colors": "off",
-        "no-physical-properties/no-physical-properties": "off"
-      }
-    }
-  ]
+        "no-physical-properties/no-physical-properties": "off",
+      },
+    },
+  ],
 }

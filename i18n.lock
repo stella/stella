@@ -926,7 +926,6 @@ checksums:
     workspaces/pdf/nextPage: 04c59fea9331f4d4d314c4d63aa039ca
     workspaces/pdf/openFullView: 22a6d846c1cde0f020c131a5f9c14e4b
     workspaces/pdf/passwordLabel: 47511215da83aeca844f21630712cf89
-    workspaces/pdf/passwordRequired: 5b7eeaae35d4aff68a0e5b63c7e5291e
     workspaces/pdf/previousPage: c8784a20adfc86992142350ed429b1af
     workspaces/pdf/resetZoom: 22c3341a993c7fff03987ed1e90afff3
     workspaces/pdf/showOriginal: a54bd40f1dc9068dfc40d93b918ba293
