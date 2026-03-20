@@ -1133,7 +1133,6 @@ type Messages = {
       "nextPage": "Next page";
       "openFullView": "Open full view";
       "passwordLabel": "Enter the PDF password";
-      "passwordRequired": "Password required";
       "previousPage": "Previous page";
       "resetZoom": "Reset zoom";
       "showOriginal": "Show original pages";

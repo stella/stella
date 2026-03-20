@@ -12,20 +12,19 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Accordion } from "@stella/ui/components/accordion";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
 
-import { usePdfStore } from "@/lib/pdf/pdf-store";
+import { PDFProvider } from "@/lib/pdf/pdf-context";
 import type { EntityField } from "@/lib/types";
 import {
   EntityFileInfo,
   FieldInfo,
   skipFieldFilter,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
-import PdfViewer from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
+import PdfViewer, {
+  PDFSuspenseFallback,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-
-const PDF_CONTAINER_ID = "pdf-viewer-container";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/pdf",
@@ -52,18 +51,6 @@ export const Route = createFileRoute(
   search: {
     middlewares: [retainSearchParams(true)],
   },
-  // eslint-disable-next-line typescript/no-misused-promises
-  onLeave: async () => {
-    const container = document.querySelector(`#${PDF_CONTAINER_ID}`);
-
-    // for whatever reason chrome keeps detached nodes in the DOM
-    // after navigation — manually remove to prevent canvas leaks
-    if (container) {
-      container.innerHTML = "";
-    }
-
-    return await usePdfStore.getState().cleanupPdfs();
-  },
 });
 
 function RouteComponent() {
@@ -71,6 +58,9 @@ function RouteComponent() {
     select: (p) => p.workspaceId,
   });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileSearch = Route.useSearch({
+    select: (s) => s.file,
+  });
   const entitySearch = Route.useSearch({
     select: (s) => s.entity,
   });
@@ -96,29 +86,32 @@ function RouteComponent() {
       className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-x-hidden overflow-y-auto border-t"
       ref={scrollContainerRef}
     >
-      <Group orientation="horizontal">
-        <Panel id={PDF_CONTAINER_ID}>
-          <ScrollArea>
+      <PDFProvider
+        initialScaleOffset={fileSearch.scaleOffset}
+        startPage={fileSearch.pageNumber}
+        fallback={{ suspense: <PDFSuspenseFallback /> }}
+      >
+        <Group orientation="horizontal">
+          <Panel>
             <PdfViewer />
-          </ScrollArea>
-        </Panel>
-
-        <Activity mode={entitySearch.visible ? "visible" : "hidden"}>
-          <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
-            <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
-          </Separator>
-          <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
-            <div className="bg-background h-full overflow-y-auto">
-              <EntityFileInfo
-                entityId={entity.entityId}
-                fields={entity.fields}
-                scrollContainerRef={scrollContainerRef}
-              />
-              <FieldInfoList entity={entity} workspaceId={workspaceId} />
-            </div>
           </Panel>
-        </Activity>
-      </Group>
+          <Activity mode={entitySearch.visible ? "visible" : "hidden"}>
+            <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
+              <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
+            </Separator>
+            <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
+              <div className="bg-background h-full overflow-y-auto">
+                <EntityFileInfo
+                  entityId={entity.entityId}
+                  fields={entity.fields}
+                  scrollContainerRef={scrollContainerRef}
+                />
+                <FieldInfoList entity={entity} workspaceId={workspaceId} />
+              </div>
+            </Panel>
+          </Activity>
+        </Group>
+      </PDFProvider>
     </div>
   );
 }

@@ -8,30 +8,23 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PanelRightIcon,
+  FoldHorizontalIcon,
   SunMoonIcon,
-  XIcon,
+  UnfoldHorizontalIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
 
 import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { usePdfStore } from "@/lib/pdf/pdf-store";
-import { captureScrollPosition } from "@/lib/pdf/utils";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
-
-const getScrollViewport = () =>
-  document.querySelector<HTMLElement>(
-    '#pdf-viewer-container [data-slot="scroll-area-viewport"]',
-  );
 
 export const PdfViewerControls = () => {
   const t = useTranslations();
@@ -53,8 +46,6 @@ export const PdfViewerControls = () => {
   });
 
   // Detect if the current file was converted from an image.
-  // Inverting colors on image-origin PDFs always produces wrong
-  // results, so we hide the dark-mode toggle for them.
   const { data: isImageOrigin } = useSuspenseQuery({
     ...entityOptions(workspaceId, entityId),
     select: (entity) => {
@@ -67,26 +58,43 @@ export const PdfViewerControls = () => {
   });
 
   const { resolvedTheme } = useTheme();
-  const pageIds = usePdfStore(useShallow((s) => s.pdfs.get(fieldId)?.pageIds));
-  const invertPages = usePdfStore((s) => s.invertPages);
-  const toggleInvertPages = usePdfStore((s) => s.toggleInvertPages);
+  const totalPages = useWorkspaceStore((s) => s.pdfPageCount);
+  // TODO: invertPages toggle needs a small persisted store
+  // or to be lifted to the route. For now, dark mode always
+  // inverts (matching the viewer prop).
   const [editingPage, setEditingPage] = useState<number | null>(null);
   const pageInputValue = editingPage ?? currentPage;
-  const setScrollTo = usePdfStore((s) => s.setScrollTo);
-  const updateScale = usePdfStore((s) => s.updateScale);
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/pdf",
   });
 
-  const totalPages = pageIds?.length ?? 0;
-
-  const updatePdfScale = useDebouncedCallback((offset: number) => {
-    updateScale({
-      fileId: fieldId,
-      scaleOffset: Math.round(offset * 10) / 10,
-      currentPageNumber: currentPage,
+  const navigateToScale = (offset: number) => {
+    // eslint-disable-next-line typescript/no-floating-promises
+    navigate({
+      replace: true,
+      search: (prev) =>
+        produce(prev, (s) => {
+          if (s.file === undefined) {
+            return;
+          }
+          s.file.scaleOffset = Math.round(offset * 10) / 10;
+        }),
     });
-  }, 100);
+  };
+
+  const navigateToPage = (pageNumber: number) => {
+    // eslint-disable-next-line typescript/no-floating-promises
+    navigate({
+      replace: true,
+      search: (prev) =>
+        produce(prev, (s) => {
+          if (s.file === undefined) {
+            return;
+          }
+          s.file.pageNumber = pageNumber;
+        }),
+    });
+  };
 
   return (
     <div className="ms-auto flex items-center justify-between">
@@ -113,30 +121,8 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset <= -0.8}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () => {
-              const viewport = getScrollViewport();
-              const restoreScroll = viewport
-                ? captureScrollPosition(viewport)
-                : null;
-
-              await navigate({
-                replace: true,
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (s.file === undefined) {
-                      return;
-                    }
-
-                    s.file.scaleOffset =
-                      Math.round(
-                        (s.file.scaleOffset - SCALE_OFFSET_STEP) * 10,
-                      ) / 10;
-                  }),
-              });
-
-              restoreScroll?.();
-              updatePdfScale(scaleOffset - SCALE_OFFSET_STEP);
+            onClick={() => {
+              navigateToScale(scaleOffset - SCALE_OFFSET_STEP);
             }}
             size="icon"
             variant="ghost"
@@ -150,30 +136,8 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset >= 2}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () => {
-              const viewport = getScrollViewport();
-              const restoreScroll = viewport
-                ? captureScrollPosition(viewport)
-                : null;
-
-              await navigate({
-                replace: true,
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (s.file === undefined) {
-                      return;
-                    }
-
-                    s.file.scaleOffset =
-                      Math.round(
-                        (s.file.scaleOffset + SCALE_OFFSET_STEP) * 10,
-                      ) / 10;
-                  }),
-              });
-
-              restoreScroll?.();
-              updatePdfScale(scaleOffset + SCALE_OFFSET_STEP);
+            onClick={() => {
+              navigateToScale(scaleOffset + SCALE_OFFSET_STEP);
             }}
             size="icon"
             variant="ghost"
@@ -187,34 +151,13 @@ export const PdfViewerControls = () => {
         render={
           <Button
             disabled={scaleOffset === 0}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () => {
-              const viewport = getScrollViewport();
-              const restoreScroll = viewport
-                ? captureScrollPosition(viewport)
-                : null;
-
-              await navigate({
-                replace: true,
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (s.file === undefined) {
-                      return;
-                    }
-
-                    s.file.scaleOffset = 0;
-                  }),
-              });
-
-              restoreScroll?.();
-              updatePdfScale(0);
-            }}
+            onClick={() => navigateToScale(0)}
             size="icon"
             variant="ghost"
           />
         }
       >
-        <XIcon />
+        {scaleOffset > 0 ? <FoldHorizontalIcon /> : <UnfoldHorizontalIcon />}
       </Tooltip>
       <Separator className="mx-1 h-4" orientation="vertical" />
       <Tooltip
@@ -224,9 +167,7 @@ export const PdfViewerControls = () => {
             disabled={currentPage <= 1}
             onClick={() => {
               setEditingPage(null);
-              setScrollTo(fieldId, {
-                pageNumber: currentPage - 1,
-              });
+              navigateToPage(currentPage - 1);
             }}
             size="icon"
             variant="ghost"
@@ -242,9 +183,7 @@ export const PdfViewerControls = () => {
             disabled={currentPage >= totalPages}
             onClick={() => {
               setEditingPage(null);
-              setScrollTo(fieldId, {
-                pageNumber: currentPage + 1,
-              });
+              navigateToPage(currentPage + 1);
             }}
             size="icon"
             variant="ghost"
@@ -265,19 +204,15 @@ export const PdfViewerControls = () => {
               editingPage >= 1 &&
               editingPage <= totalPages
             ) {
-              setScrollTo(fieldId, {
-                pageNumber: editingPage,
-              });
+              navigateToPage(editingPage);
             }
             setEditingPage(null);
           }}
           onChange={(e) => {
             const value = +e.target.value;
-
             if (Number.isNaN(value)) {
               return;
             }
-
             setEditingPage(value);
           }}
           onKeyDown={(e) => {
@@ -295,18 +230,8 @@ export const PdfViewerControls = () => {
         <>
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Tooltip
-            content={
-              invertPages
-                ? t("workspaces.pdf.showOriginal")
-                : t("workspaces.pdf.adjustForDarkMode")
-            }
-            render={
-              <Button
-                onClick={toggleInvertPages}
-                size="icon"
-                variant={invertPages ? "secondary" : "ghost"}
-              />
-            }
+            content={t("workspaces.pdf.adjustForDarkMode")}
+            render={<Button disabled size="icon" variant="ghost" />}
           >
             <SunMoonIcon />
           </Tooltip>

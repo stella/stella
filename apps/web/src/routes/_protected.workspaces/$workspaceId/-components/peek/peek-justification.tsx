@@ -4,10 +4,11 @@ import type { PropsWithChildren } from "react";
 import DOMPurify from "dompurify";
 import parse, { domToReact, Element } from "html-react-parser";
 import type { DOMNode } from "html-react-parser";
+import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import { usePdfStore } from "@/lib/pdf/pdf-store";
+import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -26,22 +27,32 @@ export const PeekJustification = ({
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
-  const createBoundingBoxes = useCreateBBoxes({ justification });
-  const setScrollTo = usePdfStore((s) => s.setScrollTo);
-
-  const handleCitationClick = useCallback(
-    (fieldId: string, pageNumber: number) => {
-      setActiveJustification({ id: justification.id, pageNumber });
-      setScrollTo(fieldId, {
-        pageNumber,
-        justificationId: justification.id,
-      });
-    },
-    [justification.id, setActiveJustification, setScrollTo],
+  const createBoundingBoxes = useCreateBBoxes({
+    justification,
+  });
+  const [pages, setScrollTo] = usePDFStore(
+    useShallow((s) => [s.pages, s.setScrollTo]),
   );
 
-  // Parse once so we can extract the first cited page without a
-  // separate regex scan over the raw HTML string.
+  const handleCitationClick = useCallback(
+    (_fieldId: string, pageNumber: number) => {
+      setActiveJustification({
+        id: justification.id,
+        pageNumber,
+      });
+      const pageIds = [...pages.keys()];
+      const pageId = pageIds[pageNumber - 1];
+      if (pageId !== undefined) {
+        setScrollTo({
+          pageId,
+          justificationId: justification.id,
+        });
+      }
+    },
+    [justification.id, pages, setActiveJustification, setScrollTo],
+  );
+
+  // Parse once so we can extract the first cited page
   const { parsed: nodes, firstPage } = useMemo(() => {
     const safeHtml = DOMPurify.sanitize(justification.htmlContent, {
       ALLOWED_TAGS: ["span", "strong", "em", "b", "i", "u", "p", "br", "cite"],
@@ -79,8 +90,7 @@ export const PeekJustification = ({
           >
             {/* SAFETY: html-react-parser's Element.children is
                 typed as ChildNode[] which is structurally
-                compatible with DOMNode[]; the cast is required
-                because domToReact's signature uses DOMNode[]. */}
+                compatible with DOMNode[] */}
             {/* oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion */}
             {domToReact(node.children as DOMNode[])}
           </PeekCitation>
@@ -101,18 +111,22 @@ export const PeekJustification = ({
         id: justification.id,
         pageNumber: firstPage,
       });
-      setScrollTo(activeFileFieldId, {
-        pageNumber: firstPage,
-        justificationId: justification.id,
-      });
+      const pageIds = [...pages.keys()];
+      const pageId = pageIds[firstPage - 1];
+      if (pageId !== undefined) {
+        setScrollTo({
+          pageId,
+          justificationId: justification.id,
+        });
+      }
     }
   }, [
     justification.id,
     createBoundingBoxes,
     firstPage,
+    pages,
     setActiveJustification,
     setScrollTo,
-    activeFileFieldId,
   ]);
 
   // Clear active justification on unmount.

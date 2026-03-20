@@ -20,6 +20,7 @@ type State = {
   pendingBoundingBoxIds: Set<string>;
   justifications: WorkspaceJustification[];
   activeJustification: ActiveJustification | null;
+  pdfPageCount: number;
   folderState: FolderState;
 };
 
@@ -35,6 +36,7 @@ type Actions = {
     action: "add" | "remove",
   ) => void;
   setActiveJustification: (justification: ActiveJustification | null) => void;
+  setPdfPageCount: (count: number) => void;
   setFolderState: (state: Omit<FolderState, "toggleVersion">) => void;
   toggleAllFolders: () => void;
 };
@@ -44,7 +46,7 @@ export const useWorkspaceStore = create<State & Actions>()(
     pendingBoundingBoxIds: new Set(),
     justifications: [],
     activeJustification: null,
-    hoveredJustificationPageNumber: null,
+    pdfPageCount: 0,
     folderState: {
       allExpanded: false,
       hasFolders: false,
@@ -98,6 +100,7 @@ export const useWorkspaceStore = create<State & Actions>()(
       }),
     setActiveJustification: (justification) =>
       set({ activeJustification: justification }),
+    setPdfPageCount: (count) => set({ pdfPageCount: count }),
     setFolderState: ({ allExpanded, hasFolders }) =>
       set((state) => {
         state.folderState.allExpanded = allExpanded;

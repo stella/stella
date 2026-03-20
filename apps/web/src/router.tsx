@@ -20,6 +20,7 @@ import {
 import { ThemeProvider } from "@/components/theme-provider";
 import { langMessages, useI18nStore } from "@/i18n/i18n-store";
 import { STALE_TIME } from "@/lib/consts";
+import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import initializePosthog from "@/lib/posthog/client";
 import { routeTree } from "@/routeTree.gen";
 
@@ -48,6 +49,7 @@ export function getRouter() {
       },
     },
   });
+  installPDFDocumentCleanup(queryClient);
   const posthog = initializePosthog();
 
   const router = createRouter({

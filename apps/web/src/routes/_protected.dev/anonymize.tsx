@@ -358,13 +358,10 @@ function AnonymizePage() {
           // eagerly when not needed
           const { getDocument, GlobalWorkerOptions } =
             await import("pdfjs-dist");
-          // Configure worker so parsing runs off the main
-          // thread. In dev, use the static copy from public/.
           if (!GlobalWorkerOptions.workerSrc) {
-            GlobalWorkerOptions.workerSrc = import.meta.env.DEV
-              ? "/pdf.worker.min.mjs"
-              : (await import("pdfjs-dist/build/pdf.worker.min.mjs?url"))
-                  .default;
+            GlobalWorkerOptions.workerSrc = (
+              await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
+            ).default;
           }
           // .slice() prevents pdfjs from transferring the
           // underlying ArrayBuffer, which would detach pdfBytes

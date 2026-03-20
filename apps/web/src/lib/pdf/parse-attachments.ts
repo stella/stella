@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-type PdfAttachment = {
+export type PDFAttachment = {
   content: Uint8Array;
   filename: string;
 };
@@ -22,7 +22,7 @@ const pdfAttachmentSchema = v.object({
  */
 export const parseAttachments = (
   attachments?: Record<string, unknown> | null,
-): PdfAttachment[] => {
+): PDFAttachment[] => {
   // eslint-disable-next-line no-eq-null, eqeqeq -- getAttachments() returns null (v5.5) or undefined (older)
   if (attachments == null) {
     return [];

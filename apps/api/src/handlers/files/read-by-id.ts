@@ -76,6 +76,7 @@ export const readFileHandler = async ({
 
   if (purpose === "download") {
     return {
+      fileId: content.id,
       mimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
@@ -98,6 +99,7 @@ export const readFileHandler = async ({
   const displayFileId = content.pdfFileId ?? content.id;
 
   return {
+    fileId: displayFileId,
     mimeType: PDF_MIME_TYPE,
     fileName: content.fileName,
     encrypted: content.encrypted,
