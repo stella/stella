@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -29,6 +30,7 @@ import type {
 } from "@/components/chat-mention-extension";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const CATEGORY_ORDER: MentionCategory[] = [
   "entity",
@@ -145,42 +147,44 @@ export const ChatMentionList = forwardRef<
   const [drillDown, setDrillDown] = useState<DrillDownState | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // // Fetch entities when drilling into a matter
-  // const { data: drillDownItems, isPending: entitiesLoading } = useQuery({
-  //   ...entitiesOptions(activeView),
-  //   select: (data) => {
-  //     if (!drillDown) {
-  //       return [];
-  //     }
+  const drillDownWorkspaceId = drillDown?.workspaceId ?? "";
 
-  //     return data.entities.map((entity) => {
-  //       const fileField = Object.values(entity.fields).find(
-  //         (f) => f.content.type === "file",
-  //       );
-  //       const mimeType =
-  //         fileField?.content.type === "file"
-  //           ? fileField.content.mimeType
-  //           : null;
-  //       const fileName =
-  //         fileField?.content.type === "file"
-  //           ? fileField.content.fileName
-  //           : null;
+  const {
+    data: drillDownItems,
+    isPending: entitiesLoading,
+    isError: entitiesError,
+  } = useQuery({
+    ...entitiesOptions({
+      workspaceId: drillDownWorkspaceId,
+      filters: [],
+      sorts: [],
+      page: 1,
+    }),
+    select: (data) =>
+      data.entities.map((entity): ChatMentionOption => {
+        const fileField = Object.values(entity.fields).find(
+          (f) => f.content.type === "file",
+        );
+        const mimeType =
+          fileField?.content.type === "file"
+            ? fileField.content.mimeType
+            : null;
+        const fileName =
+          fileField?.content.type === "file"
+            ? fileField.content.fileName
+            : null;
 
-  //       return {
-  //         id: entity.entityId,
-  //         label: entity.name ?? fileName ?? entity.entityId,
-  //         category: "entity" as const,
-  //         kind: entity.kind,
-  //         mimeType,
-  //         sourceWorkspaceId: drillDown.workspaceId,
-  //       };
-  //     });
-  //   },
-  //   enabled: !!drillDown,
-  // });
-  // TODO: FIXME — replace with real query when drill-down is implemented
-  const drillDownItems: ChatMentionOption[] = [];
-  const entitiesLoading = false;
+        return {
+          id: entity.entityId,
+          label: entity.name ?? fileName ?? entity.entityId,
+          category: "entity",
+          kind: entity.kind,
+          mimeType,
+          sourceWorkspaceId: drillDownWorkspaceId,
+        };
+      }),
+    enabled: !!drillDown,
+  });
   const activeItems = drillDown ? (drillDownItems ?? []) : items;
   const safeIndex = Math.min(
     selectedIndex,
@@ -300,6 +304,12 @@ export const ChatMentionList = forwardRef<
           {drillDown && entitiesLoading && (
             <div className="flex items-center justify-center p-2">
               <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+            </div>
+          )}
+
+          {drillDown && !entitiesLoading && entitiesError && (
+            <div className="text-destructive flex items-center justify-center p-2 text-center text-sm">
+              {t("chat.mention.loadError")}
             </div>
           )}
 

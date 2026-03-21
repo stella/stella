@@ -325,6 +325,7 @@
         "matters": "Ügyek",
         "templates": "Sablonok"
       },
+      "loadError": "Az entitások betöltése sikertelen",
       "noResults": "Nincs találat"
     },
     "newChat": "Új csevegés",

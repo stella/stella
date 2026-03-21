@@ -328,6 +328,7 @@ type Messages = {
         "matters": "Matters";
         "templates": "Templates";
       };
+      "loadError": "Failed to load entities";
       "noResults": "No results";
     };
     "newChat": "New chat";

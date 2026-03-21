@@ -325,6 +325,7 @@
         "matters": "Dossiers",
         "templates": "Modèles"
       },
+      "loadError": "Échec du chargement des entités",
       "noResults": "No matching entities"
     },
     "newChat": "Nouvelle conversation",

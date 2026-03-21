@@ -325,6 +325,7 @@
         "matters": "Bylos",
         "templates": "Šablonai"
       },
+      "loadError": "Nepavyko įkelti objektų",
       "noResults": "No matching entities"
     },
     "newChat": "Naujas pokalbis",

@@ -325,6 +325,7 @@
         "matters": "Asjad",
         "templates": "Mallid"
       },
+      "loadError": "Üksuste laadimine ebaõnnestus",
       "noResults": "No matching entities"
     },
     "newChat": "Uus vestlus",

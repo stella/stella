@@ -325,6 +325,7 @@
         "matters": "Angelegenheiten",
         "templates": "Vorlagen"
       },
+      "loadError": "Entitäten konnten nicht geladen werden",
       "noResults": "Keine passenden Einträge"
     },
     "newChat": "Neuer Chat",

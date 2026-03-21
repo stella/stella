@@ -1,6 +1,7 @@
 import "./chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -22,7 +23,7 @@ import type {
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
-import type { WorkspaceEntity } from "@/lib/types";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   getEntityName,
   getFirstFile,
@@ -115,8 +116,16 @@ export const ChatEditor = ({
   const categories = mentionContext?.categories ?? [];
   const hasMentions = !!wsId || categories.length > 0;
 
-  // TODO: fix me
-  const allEntities: WorkspaceEntity[] = [];
+  const { data: entitiesData } = useQuery({
+    ...entitiesOptions({
+      workspaceId: wsId ?? "",
+      filters: [],
+      sorts: [],
+      page: 1,
+    }),
+    enabled: !!wsId,
+  });
+  const allEntities = entitiesData?.entities ?? [];
   const mentionProviders = useMentionProviders();
 
   // Build the items list. Updated whenever store or providers
@@ -150,8 +159,8 @@ export const ChatEditor = ({
 
       return items;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- categories is intentionally not memoized; allEntities comes from query data and is stable per render
-    [wsId, categories, mentionProviders],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- categories is intentionally not memoized
+    [wsId, allEntities, categories, mentionProviders],
   );
 
   // Stable ref so the suggestion plugin always calls the
