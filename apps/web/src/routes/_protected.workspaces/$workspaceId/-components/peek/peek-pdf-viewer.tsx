@@ -16,7 +16,6 @@ import { StellaMark } from "@/components/stella-mark";
 import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -80,6 +79,58 @@ export const PeekPdfControls = ({
   scaleOffset: number;
 }) => {
   const t = useTranslations();
+
+  return (
+    <>
+      <Tooltip
+        content={t("workspaces.pdf.zoomOut")}
+        render={
+          <Button
+            disabled={!onZoomOut}
+            onClick={onZoomOut}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <MinusIcon className="size-3" />
+          </Button>
+        }
+      />
+      <Tooltip
+        content={t("workspaces.pdf.zoomIn")}
+        render={
+          <Button
+            disabled={!onZoomIn}
+            onClick={onZoomIn}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3" />
+          </Button>
+        }
+      />
+      <Tooltip
+        content={t("workspaces.pdf.resetZoom")}
+        render={
+          <Button
+            disabled={!canResetZoom || !onResetZoom}
+            onClick={onResetZoom}
+            size="icon-xs"
+            variant="ghost"
+          >
+            {scaleOffset > 0 ? (
+              <FoldHorizontalIcon className="size-3" />
+            ) : (
+              <UnfoldHorizontalIcon className="size-3" />
+            )}
+          </Button>
+        }
+      />
+    </>
+  );
+};
+
+export const PeekPrintButton = () => {
+  const t = useTranslations();
   const pdfDocument = usePDFStore((s) => s.document);
   const [isPrinting, setIsPrinting] = useState(false);
   const isMounted = useRef(true);
@@ -113,7 +164,12 @@ export const PeekPdfControls = ({
       frame.src = url;
       document.body.append(frame);
       frame.addEventListener("load", () => {
+        let cleaned = false;
         const cleanup = () => {
+          if (cleaned) {
+            return;
+          }
+          cleaned = true;
           frame.remove();
           URL.revokeObjectURL(url);
         };
@@ -122,6 +178,9 @@ export const PeekPdfControls = ({
           return;
         }
         frame.contentWindow.addEventListener("afterprint", cleanup);
+        // Fallback: clean up after 5 minutes if afterprint
+        // never fires (defensive; spec guarantees the event).
+        setTimeout(cleanup, 5 * 60 * 1000);
         frame.contentWindow.print();
       });
     } catch (error: unknown) {
@@ -135,76 +194,21 @@ export const PeekPdfControls = ({
   }, [pdfDocument]);
 
   return (
-    <div
-      className="bg-background/95 sticky top-0 z-10 flex shrink-0 items-center justify-end border-b px-2 backdrop-blur-sm"
-      style={{ minHeight: TOOLBAR_ROW_HEIGHT }}
-    >
-      <div className="flex items-center gap-1">
-        <div className="flex items-center rounded-md border p-0.5">
-          <Tooltip
-            content={t("workspaces.pdf.zoomOut")}
-            render={
-              <Button
-                disabled={!onZoomOut}
-                onClick={onZoomOut}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <MinusIcon className="size-3" />
-              </Button>
-            }
-          />
-          <Tooltip
-            content={t("workspaces.pdf.zoomIn")}
-            render={
-              <Button
-                disabled={!onZoomIn}
-                onClick={onZoomIn}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <PlusIcon className="size-3" />
-              </Button>
-            }
-          />
-          <Tooltip
-            content={t("workspaces.pdf.resetZoom")}
-            render={
-              <Button
-                disabled={!canResetZoom || !onResetZoom}
-                onClick={onResetZoom}
-                size="icon-xs"
-                variant="ghost"
-              >
-                {scaleOffset > 0 ? (
-                  <FoldHorizontalIcon className="size-3" />
-                ) : (
-                  <UnfoldHorizontalIcon className="size-3" />
-                )}
-              </Button>
-            }
-          />
-        </div>
-
-        <div className="bg-border mx-1 h-4 w-px" />
-
-        <Tooltip
-          content={t("common.print")}
-          render={
-            <Button
-              disabled={!pdfDocument || isPrinting}
-              onClick={() => {
-                void handlePrint();
-              }}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <PrinterIcon className="size-3.5" />
-            </Button>
-          }
-        />
-      </div>
-    </div>
+    <Tooltip
+      content={t("common.print")}
+      render={
+        <Button
+          disabled={!pdfDocument || isPrinting}
+          onClick={() => {
+            void handlePrint();
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <PrinterIcon className="size-3.5" />
+        </Button>
+      }
+    />
   );
 };
 

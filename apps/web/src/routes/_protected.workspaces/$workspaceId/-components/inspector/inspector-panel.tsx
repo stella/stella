@@ -50,6 +50,7 @@ import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-
 import {
   PeekPdfControls,
   PeekPdfViewer,
+  PeekPrintButton,
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
@@ -59,6 +60,15 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 
 type InspectorPanelProps = {
   workspaceId: string;
+};
+
+/** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
+const stripExtension = (name: string): string => {
+  const dotIndex = name.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return name;
+  }
+  return name.slice(0, dotIndex);
 };
 
 const ZOOM_STEP = 0.2;
@@ -281,148 +291,26 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             key={tab.id}
             ref={isActive ? pdfContentRef : undefined}
           >
-            {/* Context bar: filename + non-PDF actions */}
-            <div
-              className={cn(
-                "flex shrink-0 items-center justify-between border-b px-3",
-                TOOLBAR_ROW_HEIGHT,
-              )}
+            <MeasuredPdfProvider
+              active={isActive}
+              fallback={{ suspense: <PeekSuspenseFallback /> }}
+              initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
             >
-              <div className="flex items-center overflow-hidden">
-                <span className="truncate text-xs font-medium">
-                  {tab.label}
-                </span>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1 ps-4">
-                <Tooltip
-                  content={t("anonymise.checkAnonymisation")}
-                  render={
-                    <Button
-                      disabled={anonymisingIds.has(tab.id)}
-                      onClick={() => {
-                        const isAnon = anonymisedFieldIds.includes(tab.id);
-                        if (isAnon) {
-                          clearAnonymisation(tab.id);
-                          setAnonSidebarFieldId((prev) =>
-                            prev === tab.id ? null : prev,
-                          );
-                        } else {
-                          setAnonymisingIds((prev) =>
-                            new Set(prev).add(tab.id),
-                          );
-                          anonymisePdf({
-                            workspaceId,
-                            fieldId: tab.id,
-                            mimeType: tab.mimeType ?? null,
-                          })
-                            .catch(() => {
-                              toastManager.add({
-                                title: t("errors.actionFailed"),
-                                type: "error",
-                              });
-                            })
-                            .finally(() => {
-                              setAnonymisingIds((prev) => {
-                                const next = new Set(prev);
-                                next.delete(tab.id);
-                                return next;
-                              });
-                            });
-                        }
-                      }}
-                      size="icon-xs"
-                      variant={
-                        anonymisedFieldIds.includes(tab.id)
-                          ? "default"
-                          : "ghost"
-                      }
-                    >
-                      <ScanEyeIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-                {anonymisedFieldIds.includes(tab.id) && (
-                  <Tooltip
-                    content={t("anonymise.entities")}
-                    render={
-                      <Button
-                        onClick={() =>
-                          setAnonSidebarFieldId(
-                            anonSidebarFieldId === tab.id ? null : tab.id,
-                          )
-                        }
-                        size="icon-xs"
-                        variant={
-                          anonSidebarFieldId === tab.id ? "default" : "ghost"
-                        }
-                      >
-                        <ListIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
+              {/* Context bar: filename + controls */}
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-between border-b px-3",
+                  TOOLBAR_ROW_HEIGHT,
                 )}
-                <Tooltip
-                  content={t("workspaces.pdf.openFullView")}
-                  render={
-                    <Button
-                      onClick={() => {
-                        handleOpenFullView().catch(() => {
-                          /* fire-and-forget */
-                        });
-                      }}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <ExternalLinkIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <Button
-                  onClick={() => {
-                    clearAnonymisation(tab.id);
-                    setAnonSidebarFieldId((prev) =>
-                      prev === tab.id ? null : prev,
-                    );
-                    closeTab(tab.id);
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <XIcon className="size-3.5" />
-                </Button>
-              </div>
-            </div>
+              >
+                <div className="flex items-center overflow-hidden">
+                  <span className="truncate text-xs font-medium">
+                    {stripExtension(tab.label)}
+                  </span>
+                </div>
 
-            {/* PDF + optional sidebar row */}
-            <div className="flex min-h-0 min-w-0 flex-1">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <div className="flex h-full min-h-0 min-w-0 flex-col">
-                  {tab.justificationFieldId && (
-                    <Suspense
-                      fallback={
-                        <div
-                          className={cn(
-                            "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                            TOOLBAR_ROW_HEIGHT,
-                          )}
-                        >
-                          {t("common.loading")}...
-                        </div>
-                      }
-                    >
-                      <JustificationBar
-                        activeTab={tab}
-                        fieldId={tab.justificationFieldId}
-                        workspaceId={workspaceId}
-                      />
-                    </Suspense>
-                  )}
-                  <MeasuredPdfProvider
-                    active={isActive}
-                    fallback={{ suspense: <PeekSuspenseFallback /> }}
-                    initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                  >
+                <div className="flex shrink-0 items-center gap-1 ps-4">
+                  <div className="flex items-center rounded-md border p-0.5">
                     <PeekPdfControls
                       canResetZoom={scaleOffsets.get(tab.id) !== 0}
                       onResetZoom={() => handleResetZoom(tab.id)}
@@ -430,22 +318,149 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                       onZoomOut={() => handleZoom(tab.id, "out")}
                       scaleOffset={scaleOffsets.get(tab.id) ?? 0}
                     />
-                    <PeekPdfViewer
-                      fieldId={tab.id}
-                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                      workspaceId={workspaceId}
+                  </div>
+                  <PeekPrintButton />
+                  <Tooltip
+                    content={t("anonymise.checkAnonymisation")}
+                    render={
+                      <Button
+                        disabled={anonymisingIds.has(tab.id)}
+                        onClick={() => {
+                          const isAnon = anonymisedFieldIds.includes(tab.id);
+                          if (isAnon) {
+                            clearAnonymisation(tab.id);
+                            setAnonSidebarFieldId((prev) =>
+                              prev === tab.id ? null : prev,
+                            );
+                          } else {
+                            setAnonymisingIds((prev) =>
+                              new Set(prev).add(tab.id),
+                            );
+                            anonymisePdf({
+                              workspaceId,
+                              fieldId: tab.id,
+                              mimeType: tab.mimeType ?? null,
+                            })
+                              .catch(() => {
+                                toastManager.add({
+                                  title: t("errors.actionFailed"),
+                                  type: "error",
+                                });
+                              })
+                              .finally(() => {
+                                setAnonymisingIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(tab.id);
+                                  return next;
+                                });
+                              });
+                          }
+                        }}
+                        size="icon-xs"
+                        variant={
+                          anonymisedFieldIds.includes(tab.id)
+                            ? "default"
+                            : "ghost"
+                        }
+                      >
+                        <ScanEyeIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  {anonymisedFieldIds.includes(tab.id) && (
+                    <Tooltip
+                      content={t("anonymise.entities")}
+                      render={
+                        <Button
+                          onClick={() =>
+                            setAnonSidebarFieldId(
+                              anonSidebarFieldId === tab.id ? null : tab.id,
+                            )
+                          }
+                          size="icon-xs"
+                          variant={
+                            anonSidebarFieldId === tab.id ? "default" : "ghost"
+                          }
+                        >
+                          <ListIcon className="size-3.5" />
+                        </Button>
+                      }
                     />
-                  </MeasuredPdfProvider>
+                  )}
+                  <Tooltip
+                    content={t("workspaces.pdf.openFullView")}
+                    render={
+                      <Button
+                        onClick={() => {
+                          handleOpenFullView().catch(() => {
+                            /* fire-and-forget */
+                          });
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <ExternalLinkIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <Button
+                    onClick={() => {
+                      clearAnonymisation(tab.id);
+                      setAnonSidebarFieldId((prev) =>
+                        prev === tab.id ? null : prev,
+                      );
+                      closeTab(tab.id);
+                    }}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <XIcon className="size-3.5" />
+                  </Button>
                 </div>
               </div>
 
-              {isActive && anonSidebarFieldId === tab.id && (
-                <AnonymiseSidebar
-                  fieldId={tab.id}
-                  onClose={() => setAnonSidebarFieldId(null)}
-                />
-              )}
-            </div>
+              {/* PDF + optional sidebar row */}
+              <div className="flex min-h-0 min-w-0 flex-1">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="flex h-full min-h-0 min-w-0 flex-col">
+                    {tab.justificationFieldId && (
+                      <Suspense
+                        fallback={
+                          <div
+                            className={cn(
+                              "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                              TOOLBAR_ROW_HEIGHT,
+                            )}
+                          >
+                            {t("common.loading")}...
+                          </div>
+                        }
+                      >
+                        <JustificationBar
+                          activeTab={tab}
+                          fieldId={tab.justificationFieldId}
+                          workspaceId={workspaceId}
+                        />
+                      </Suspense>
+                    )}
+                    <Suspense fallback={<PeekSuspenseFallback />}>
+                      <PeekPdfViewer
+                        fieldId={tab.id}
+                        scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                        workspaceId={workspaceId}
+                      />
+                    </Suspense>
+                  </div>
+                </div>
+
+                {isActive && anonSidebarFieldId === tab.id && (
+                  <AnonymiseSidebar
+                    fieldId={tab.id}
+                    onClose={() => setAnonSidebarFieldId(null)}
+                  />
+                )}
+              </div>
+            </MeasuredPdfProvider>
           </div>
         );
       })}
