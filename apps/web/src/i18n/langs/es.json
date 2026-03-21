@@ -325,6 +325,7 @@
         "matters": "Asuntos",
         "templates": "Plantillas"
       },
+      "loadError": "Error al cargar entidades",
       "noResults": "No matching entities"
     },
     "newChat": "Nueva conversación",

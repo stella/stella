@@ -325,6 +325,7 @@
         "matters": "Lietas",
         "templates": "Veidnes"
       },
+      "loadError": "Neizdevās ielādēt entītijas",
       "noResults": "No matching entities"
     },
     "newChat": "Jauna saruna",

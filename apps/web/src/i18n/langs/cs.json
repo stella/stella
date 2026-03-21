@@ -325,6 +325,7 @@
         "matters": "Spisy",
         "templates": "Šablony"
       },
+      "loadError": "Nepodařilo se načíst entity",
       "noResults": "Žádné odpovídající entity"
     },
     "newChat": "Nový chat",

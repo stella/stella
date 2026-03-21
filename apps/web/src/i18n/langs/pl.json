@@ -325,6 +325,7 @@
         "matters": "Sprawy",
         "templates": "Szablony"
       },
+      "loadError": "Nie udało się załadować encji",
       "noResults": "Brak pasujących elementów"
     },
     "newChat": "Nowy czat",
