@@ -11,7 +11,7 @@ jobs:
   i18n:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+      - uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         id: app-token
         with:
           app-id: ${{ secrets.LINGO_APP_ID }}
@@ -21,7 +21,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
 
-      - uses: lingodotdev/lingo.dev@374e5dddfd80faf6dbf87893095855e0e9249d89 # main (2026-02-19)
+      - uses: lingodotdev/lingo.dev@95e2e284805c9151c2d3691489c0528f97e72e5e # main (2026-02-19)
         with:
           api-key: ${{ secrets.LINGO_DEV_API_KEY }}
           pull-request: true
