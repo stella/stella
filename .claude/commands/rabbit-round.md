@@ -176,7 +176,7 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
    - Make the code changes for suggestions you agreed with
    - Group related changes logically
 
-10. **Check review bot status**:
+10. **Check review bot status and Greptile score**:
 
     Before considering this round clean, verify that all review
     bot checks have completed:
@@ -195,6 +195,30 @@ Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.
     this round is **not clean** even if there are zero unresolved
     comments. Report that bots are still pending and wait for the
     next round.
+
+    **Greptile confidence score gate:** Once Greptile has posted
+    its summary comment, extract and report the confidence score
+    in every round summary:
+
+    ```bash
+    gh api repos/{owner}/{repo}/issues/{pr_number}/comments \
+      --paginate \
+      | jq -r '[.[] | select(.user.login == "greptile-apps[bot]")
+        | .body] | last
+        | if . == null then "N/A"
+          else capture("Confidence Score: (?<score>[0-9])/(?<max>[0-9])")
+            | "\(.score)/\(.max)"
+          end'
+    ```
+
+    If the output is `N/A`, Greptile has not commented yet;
+    treat it as pending and the round is **not clean**.
+
+    A round is **not clean** if the Greptile score is below
+    **4/5**. If the score is below 4, treat the confidence
+    score bullet points as unresolved issues: read each one,
+    accept or push back, implement fixes, and push. The score
+    must reach 4/5 or higher before the round counts as clean.
 
 11. **Check and fix failing CI**:
 
