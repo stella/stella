@@ -24,7 +24,7 @@ export const BottomRow = ({
   const t = useTranslations();
 
   return (
-    <TableRow className="sticky bottom-0 z-10 [&_td]:sticky [&_td]:border-t">
+    <TableRow className="sticky bottom-0 z-10 [&_td]:sticky [&_td]:border-t-2">
       <TableCell
         className="relative z-10 p-0"
         style={{
@@ -52,9 +52,30 @@ export const BottomRow = ({
           left: table.getColumn(selectColId)?.getSize(),
         }}
       >
+        <AddEntityMenu
+          onFolderCreated={onFolderCreated}
+          render={
+            <button
+              className="absolute inset-0 cursor-pointer text-start"
+              type="button"
+            />
+          }
+          workspaceId={workspaceId}
+        />
         {t("common.newRow")}
       </TableCell>
-      <TableCell colSpan={table.getAllColumns().length - 2} />
+      <TableCell
+        className="relative p-0"
+        colSpan={table.getAllColumns().length - 2}
+      >
+        <AddEntityMenu
+          onFolderCreated={onFolderCreated}
+          render={
+            <button className="absolute inset-0 cursor-pointer" type="button" />
+          }
+          workspaceId={workspaceId}
+        />
+      </TableCell>
     </TableRow>
   );
 };
