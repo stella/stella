@@ -1,16 +1,16 @@
 import type { Context, Generator, Options } from "elysia-rate-limit";
 
-import { redis } from "@/api/lib/redis";
+type RateLimitEntry = {
+  count: number;
+  expiresAt: number;
+};
 
-const KEY_PREFIX = "rl:";
-
-const INCREMENT_LUA = await Bun.file(
-  new URL("increment.lua", import.meta.url),
-).text();
+const CLEANUP_INTERVAL_MS = 60_000;
 
 /**
- * Key generator that prefixes the client IP with a scope name,
- * so separate rateLimit instances get independent counters.
+ * Key generator that prefixes the client IP with a scope
+ * name, so separate rateLimit instances get independent
+ * counters.
  */
 export const scopedGenerator =
   (scope: string): Generator =>
@@ -22,49 +22,76 @@ export const scopedGenerator =
     return `${scope}:${address}`;
   };
 
-export class RedisRateLimitContext implements Context {
+/**
+ * In-memory rate limiting. Each process maintains its own
+ * counters; with multiple instances, a client may get up
+ * to N× the configured limit. The hard global limit is
+ * enforced at the network edge.
+ */
+export class InMemoryRateLimitContext implements Context {
   private durationMs = 60_000;
+  private store = new Map<string, RateLimitEntry>();
+  private cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor() {
+    this.cleanupTimer = setInterval(
+      () => this.evictExpired(),
+      CLEANUP_INTERVAL_MS,
+    );
+    this.cleanupTimer.unref();
+  }
 
   init(options: Omit<Options, "context">) {
     this.durationMs = options.duration;
   }
 
-  async increment(key: string) {
-    const redisKey = KEY_PREFIX + key;
-    const ttlSeconds = Math.ceil(this.durationMs / 1000);
+  increment(key: string) {
+    const now = Date.now();
+    const entry = this.store.get(key);
 
-    // SAFETY: Redis EVAL returns [number, number] per INCREMENT_LUA contract
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const [count, ttl] = (await redis.send("EVAL", [
-      INCREMENT_LUA,
-      "1",
-      redisKey,
-      String(ttlSeconds),
-    ])) as [number, number];
-
-    const nextReset = new Date(
-      Date.now() + (ttl > 0 ? ttl * 1000 : this.durationMs),
-    );
-
-    return { count, nextReset };
-  }
-
-  async decrement(key: string) {
-    await redis.decrby(KEY_PREFIX + key, 1);
-  }
-
-  async reset(key?: string) {
-    if (key) {
-      await redis.del(KEY_PREFIX + key);
+    if (entry && entry.expiresAt > now) {
+      entry.count += 1;
+      return {
+        count: entry.count,
+        nextReset: new Date(entry.expiresAt),
+      };
     }
-    // Without a key: all rate limit keys have a TTL from
-    // increment(), so they expire automatically. A SCAN
-    // over the full keyspace would be O(N) and isn't worth
-    // the cost for a process-level reset.
+
+    const expiresAt = now + this.durationMs;
+    this.store.set(key, { count: 1, expiresAt });
+    return {
+      count: 1,
+      nextReset: new Date(expiresAt),
+    };
+  }
+
+  decrement(key: string) {
+    const now = Date.now();
+    const entry = this.store.get(key);
+    if (entry && entry.expiresAt > now && entry.count > 0) {
+      entry.count -= 1;
+    }
+  }
+
+  reset(key?: string) {
+    if (key) {
+      this.store.delete(key);
+    } else {
+      this.store.clear();
+    }
   }
 
   kill() {
-    // Redis client is a shared singleton; Bun closes
-    // the socket on process exit, no cleanup needed.
+    clearInterval(this.cleanupTimer);
+    this.store.clear();
+  }
+
+  private evictExpired() {
+    const now = Date.now();
+    for (const [key, entry] of this.store) {
+      if (entry.expiresAt <= now) {
+        this.store.delete(key);
+      }
+    }
   }
 }

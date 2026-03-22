@@ -37,7 +37,10 @@ import { auth } from "@/api/lib/auth";
 import { httpError } from "@/api/lib/errors/http-error";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { captureError, getPostHog } from "@/api/lib/posthog";
-import { RedisRateLimitContext, scopedGenerator } from "@/api/lib/rate-limit";
+import {
+  InMemoryRateLimitContext,
+  scopedGenerator,
+} from "@/api/lib/rate-limit";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 
 const rivetApp = new Elysia()
@@ -47,7 +50,7 @@ const rivetApp = new Elysia()
       duration: API_RATE_LIMITS.rivet.duration,
       max: API_RATE_LIMITS.rivet.max,
       generator: scopedGenerator("rivet"),
-      context: new RedisRateLimitContext(),
+      context: new InMemoryRateLimitContext(),
     }),
   )
   .all("/api/rivet/*", async (c) => await registry.handler(c.request));
@@ -112,7 +115,7 @@ const api = new Elysia()
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
           generator: scopedGenerator("api"),
-          context: new RedisRateLimitContext(),
+          context: new InMemoryRateLimitContext(),
           skip: (req) =>
             /\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
         }),

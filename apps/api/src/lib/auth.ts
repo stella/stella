@@ -21,7 +21,6 @@ import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { posthogIdentify } from "@/api/lib/posthog";
-import { redis } from "@/api/lib/redis";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -68,24 +67,47 @@ export const auth = betterAuth({
     enabled: true,
     window: AUTH_RATE_LIMITS.global.window,
     max: AUTH_RATE_LIMITS.global.max,
-    customStorage: {
-      async get(key) {
-        const data = await redis.get(key);
-        if (!data) {
-          return null;
+    customStorage: (() => {
+      type Entry = {
+        value: { key: string; count: number; lastRequest: number };
+        expiresAt: number;
+      };
+      const store = new Map<string, Entry>();
+      const ttlMs = AUTH_RATE_LIMIT_MAX_WINDOW * 1000;
+      const cleanup = setInterval(() => {
+        const now = Date.now();
+        for (const [k, e] of store) {
+          if (e.expiresAt <= now) {
+            store.delete(k);
+          }
         }
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-return
-        return JSON.parse(data);
-      },
-      async set(key, value) {
-        await redis.set(
-          key,
-          JSON.stringify(value),
-          "EX",
-          AUTH_RATE_LIMIT_MAX_WINDOW,
-        );
-      },
-    },
+      }, 60_000);
+      cleanup.unref();
+      return {
+        // eslint-disable-next-line require-await -- interface requires Promise
+        async get(key: string) {
+          const entry = store.get(key);
+          if (!entry || entry.expiresAt <= Date.now()) {
+            return null;
+          }
+          return entry.value;
+        },
+        // eslint-disable-next-line require-await -- interface requires Promise
+        async set(
+          key: string,
+          value: {
+            key: string;
+            count: number;
+            lastRequest: number;
+          },
+        ) {
+          store.set(key, {
+            value,
+            expiresAt: Date.now() + ttlMs,
+          });
+        },
+      };
+    })(),
     customRules: {
       "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
       "/sign-up/email": AUTH_RATE_LIMITS.signUp,

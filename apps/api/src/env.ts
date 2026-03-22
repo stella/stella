@@ -3,7 +3,6 @@ import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
 const HTTPS_PROTOCOL = "https:";
-const REDISS_PROTOCOL = "rediss:";
 
 export const env = createEnv({
   server: {
@@ -25,16 +24,6 @@ export const env = createEnv({
     TRANSACTIONAL_EMAIL_FROM: v.string(),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
     PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-    REDIS_URL: v.pipe(
-      v.string(),
-      v.url(),
-      v.check(
-        (url) =>
-          process.env.NODE_ENV !== "production" ||
-          new URL(url).protocol === REDISS_PROTOCOL,
-        "REDIS_URL must use rediss:// (TLS) in production",
-      ),
-    ),
     GOTENBERG_URL: v.pipe(
       v.string(),
       v.url(),
