@@ -1,4 +1,4 @@
-import { Suspense, createContext, useContext, useMemo, useRef } from "react";
+import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
 import type { ActorOptions } from "@rivetkit/framework-base";
@@ -21,18 +21,13 @@ type SuspenseActorReturn<N extends ActorName> = Omit<
   connStatus: "connected";
 };
 
-type ActorContextValue<N extends ActorName> = {
-  actor: UseActorReturn<N>;
-  pendingPromise: Promise<void> | null;
-};
-
 /**
- * Creates a typed actor context provider and suspense hook
- * pair for a specific actor name.
+ * Creates a typed actor context provider and hook pair for
+ * a specific actor name.
  *
- * The provider calls `useActor` with the given config,
- * keeps the connection alive above a built-in Suspense
- * boundary, and only renders children once connected.
+ * The provider calls `useActor` with the given config and
+ * only renders children once connected, showing the fallback
+ * while the connection is pending.
  *
  * Usage:
  * ```ts
@@ -43,7 +38,7 @@ type ActorContextValue<N extends ActorName> = {
  * ```
  */
 export const createActorProvider = <TName extends ActorName>() => {
-  const ActorContext = createContext<ActorContextValue<TName> | null>(null);
+  const ActorContext = createContext<UseActorReturn<TName> | null>(null);
 
   const ActorProvider = ({
     config,
@@ -55,41 +50,19 @@ export const createActorProvider = <TName extends ActorName>() => {
     fallback?: ReactNode;
   }) => {
     const actor = useActor<TName>(config);
-    const resolverRef = useRef<(() => void) | null>(null);
-    const promiseRef = useRef<Promise<void> | null>(null);
 
-    if (!actor.isConnected) {
-      promiseRef.current ??= new Promise<void>((resolve) => {
-        resolverRef.current = resolve;
-      });
-    } else {
-      resolverRef.current?.();
-      resolverRef.current = null;
-      promiseRef.current = null;
-    }
-
-    const value = useMemo(
-      (): ActorContextValue<TName> => ({
-        actor,
-        pendingPromise: promiseRef.current,
-      }),
-      [actor],
-    );
+    const content = actor.isConnected ? children : (fallback ?? null);
 
     return (
-      <ActorContext.Provider value={value}>
-        <Suspense fallback={fallback}>{children}</Suspense>
-      </ActorContext.Provider>
+      <ActorContext.Provider value={actor}>{content}</ActorContext.Provider>
     );
   };
 
   const useSuspenseActor = (): SuspenseActorReturn<TName> => {
-    const ctx = useContext(ActorContext);
-    if (!ctx) {
+    const actor = useContext(ActorContext);
+    if (!actor) {
       throw new Error("useSuspenseActor requires ActorProvider");
     }
-
-    const { actor, pendingPromise } = ctx;
 
     if (actor.isConnected) {
       // SAFETY: connection is non-null; narrow the type.
@@ -101,12 +74,9 @@ export const createActorProvider = <TName extends ActorName>() => {
       throw actor.error;
     }
 
-    if (pendingPromise) {
-      // eslint-disable-next-line typescript/only-throw-error
-      throw pendingPromise;
-    }
-
-    throw new Error("useSuspenseActor: unreachable state");
+    // Children are only rendered when connected, so this
+    // should be unreachable from normal component code.
+    throw new Error("useSuspenseActor: actor not connected");
   };
 
   return { ActorProvider, useSuspenseActor };
