@@ -36,7 +36,10 @@ import {
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { RedisRateLimitContext, scopedGenerator } from "@/api/lib/rate-limit";
+import {
+  InMemoryRateLimitContext,
+  scopedGenerator,
+} from "@/api/lib/rate-limit";
 
 const viewFilterConditionSchema = t.Union([
   t.Object({
@@ -111,7 +114,7 @@ export const entitiesRoute = new Elysia({
       duration: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
       generator: scopedGenerator("upload"),
-      context: new RedisRateLimitContext(),
+      context: new InMemoryRateLimitContext(),
       skip: (req) =>
         !/\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
     }),
