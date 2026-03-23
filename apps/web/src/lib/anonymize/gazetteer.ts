@@ -1,11 +1,10 @@
+import type { GazetteerEntry } from "@stll/anonymize";
 // TODO: FIXME — idb's DBSchema resolves as error type, cascading unsafe-* errors
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 
-import type { GazetteerEntry } from "@stella/anonymize";
-
 // Re-export scan functions from the package
-export { scanExact, scanFuzzy } from "@stella/anonymize";
+export { scanExact, scanFuzzy } from "@stll/anonymize";
 
 const DB_NAME = "stella-gazetteer";
 const DB_VERSION = 1;
