@@ -16,91 +16,73 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 /**
  * Czech Supreme Court adapter.
  *
- * Scrapes decisions from nsoud.cz using position-based
- * pagination (15 items per page). The site returns HTML which
- * we parse to extract decision metadata and fulltext links.
+ * The case law database lives on rozhodnuti.nsoud.cz (Lotus
+ * Notes/Domino). Uses the ReadViewEntries JSON endpoint for
+ * listing decisions, then fetches individual decision pages
+ * for metadata (date, ECLI, legal sentence, keywords, etc.).
  *
- * Cursor format: page number as string (e.g. "0", "15", "30").
+ * Cursor format: position offset as string (e.g. "1", "21").
+ * A null cursor starts from position 1.
  */
 
-const BASE_URL = "https://nsoud.cz/Judikatura/judikatura_ns.nsf";
-const PAGE_SIZE = 15;
+const BASE_URL = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
+const PAGE_SIZE = 20;
 
-// Top-level regex patterns (useTopLevelRegex)
-const ENTRY_PATTERN =
-  /<tr[^>]*class="[^"]*judikatura[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
-const CASE_NUM_PATTERN = /sp\.\s*zn\.\s*([\w\s/]+)/i;
-const DATE_PATTERN = /(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/;
-const SENTENCE_PATTERN = /Právní\s+věta[^:]*:\s*([\s\S]*?)(?=<\/td|$)/i;
-const LINK_PATTERN = /href="([^"]*WebSearch[^"]*)"/i;
-
-/**
- * Parse the nsoud.cz search result HTML page to extract
- * decision entries.
- */
-type ParseResult = {
-  decisions: IngestionResult[];
-  rawEntryCount: number;
+/** Domino ReadViewEntries JSON shape. */
+type DominoViewEntry = {
+  "@position"?: string;
+  "@unid"?: string;
+  entrydata?: {
+    "@name"?: string;
+    text?: { "0"?: string };
+  }[];
 };
 
-const parseSearchResults = (html: string): ParseResult => {
-  const decisions: IngestionResult[] = [];
-  let rawEntryCount = 0;
+type DominoViewResponse = {
+  "@toplevelentries"?: string;
+  viewentry?: DominoViewEntry[];
+};
 
-  // Reset global pattern
-  ENTRY_PATTERN.lastIndex = 0;
+/** Extract a named field from Domino entrydata. */
+const entryField = (
+  entry: DominoViewEntry,
+  name: string,
+): string | undefined => {
+  const field = entry.entrydata?.find((e) => e["@name"] === name);
+  return field?.text?.["0"] || undefined;
+};
 
-  for (
-    let entryMatch = ENTRY_PATTERN.exec(html);
-    entryMatch !== null;
-    entryMatch = ENTRY_PATTERN.exec(html)
-  ) {
-    rawEntryCount++;
-    const block = entryMatch[1];
-    if (!block) {
-      continue;
+/** Metadata label patterns on detail pages. */
+const LABEL_PATTERNS: Record<string, RegExp> = {
+  decisionDate:
+    /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  decisionType:
+    /Typ rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  keywords:
+    /Heslo:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  statutes:
+    /Dotčené předpisy:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  category:
+    /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+  legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/i,
+};
+
+/** Parse metadata from a decision detail page. */
+const parseDetailPage = (html: string): Record<string, string | undefined> => {
+  const result: Record<string, string | undefined> = {};
+
+  for (const [key, pattern] of Object.entries(LABEL_PATTERNS)) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const text = stripHtml(match[1]).trim();
+      if (text) {
+        result[key] = text;
+      }
     }
-
-    const caseNumMatch = block.match(CASE_NUM_PATTERN);
-    if (!caseNumMatch?.[1]) {
-      continue;
-    }
-
-    const caseNumber = caseNumMatch[1].trim();
-
-    const dateMatch = block.match(DATE_PATTERN);
-    const decisionDate =
-      dateMatch?.[1] && dateMatch[2] && dateMatch[3]
-        ? parseCeDate(`${dateMatch[1]}.${dateMatch[2]}.${dateMatch[3]}`)
-        : undefined;
-
-    const sentenceMatch = block.match(SENTENCE_PATTERN);
-    const legalSentence = sentenceMatch?.[1]
-      ? stripHtml(sentenceMatch[1])
-      : undefined;
-
-    const linkMatch = block.match(LINK_PATTERN);
-    const sourceUrl = linkMatch?.[1]
-      ? `${BASE_URL}/${linkMatch[1]}`
-      : undefined;
-
-    const raw = `${caseNumber}|${decisionDate}|${legalSentence}`;
-
-    decisions.push({
-      caseNumber,
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionDate,
-      sourceUrl,
-      metadata: {
-        legalSentence,
-      },
-      rawHash: hashContent(raw),
-    });
   }
 
-  return { decisions, rawEntryCount };
+  return result;
 };
 
 export const czSupremeAdapter: SourceAdapter = {
@@ -113,28 +95,143 @@ export const czSupremeAdapter: SourceAdapter = {
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const start = cursor ? Number.parseInt(cursor, 10) : 0;
+        const start = cursor ? Number.parseInt(cursor, 10) : 1;
 
-        const url = `${BASE_URL}/WebSearch?SearchOrder=4&Start=${start}&Count=${PAGE_SIZE}`;
+        const listUrl =
+          `${BASE_URL}/WebSearch?ReadViewEntries` +
+          `&Count=${PAGE_SIZE}` +
+          `&Start=${start}` +
+          `&OutputFormat=JSON`;
 
-        const response = await fetch(url, {
-          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+        const listResponse = await fetch(listUrl, {
+          signal: signal
+            ? AbortSignal.any([
+                signal,
+                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+              ])
+            : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
         });
 
-        if (!response.ok) {
+        if (!listResponse.ok) {
           throw new AdapterFetchError({
-            message: `CZ Supreme Court error: ${response.status}`,
+            message: `CZ Supreme Court list error: ${listResponse.status}`,
             adapterKey: ADAPTER_KEYS.CZ_SUPREME,
             cursor,
-            httpStatus: response.status,
+            httpStatus: listResponse.status,
           });
         }
 
-        const html = await response.text();
-        const { decisions, rawEntryCount } = parseSearchResults(html);
+        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- Domino JSON API
+        const json = (await listResponse.json()) as DominoViewResponse;
+        const entries = json.viewentry ?? [];
+
+        const decisions: IngestionResult[] = [];
+
+        for (let i = 0; i < entries.length; i++) {
+          // eslint-disable-next-line typescript-eslint/no-non-null-assertion -- bounded by loop
+          const entry = entries[i]!;
+          const unid = entry["@unid"];
+          const caseNumber = entryField(entry, "znacka");
+
+          if (!unid || !caseNumber) {
+            continue;
+          }
+
+          const detailUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
+
+          // Fetch the detail page for metadata
+          try {
+            const detailResponse = await fetch(detailUrl, {
+              signal: signal
+                ? AbortSignal.any([
+                    signal,
+                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                  ])
+                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+            });
+
+            if (detailResponse.ok) {
+              const html = await detailResponse.text();
+              const meta = parseDetailPage(html);
+
+              const raw = `${caseNumber}|${meta.ecli ?? ""}|${meta.decisionDate ?? ""}`;
+
+              decisions.push({
+                caseNumber,
+                ecli: meta.ecli,
+                court: "Nejvyšší soud",
+                country: "CZE",
+                language: "cs",
+                decisionDate: meta.decisionDate
+                  ? parseCeDate(meta.decisionDate)
+                  : undefined,
+                decisionType: meta.decisionType?.toLowerCase(),
+                sourceUrl: detailUrl,
+                documentUrl: detailUrl,
+                metadata: {
+                  legalSentence: meta.legalSentence,
+                  keywords: meta.keywords
+                    ?.split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                  statutes: meta.statutes
+                    ?.split("\n")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                  category: meta.category?.trim(),
+                },
+                rawHash: hashContent(raw),
+              });
+            } else {
+              // eslint-disable-next-line no-console -- adapter diagnostic
+              console.warn(
+                `CZ Supreme: detail fetch for ${unid} returned ${detailResponse.status}`,
+              );
+            }
+          } catch (error) {
+            // Caller cancelled: return partial results
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return {
+                decisions,
+                nextCursor: String(start + i),
+              };
+            }
+            // Timeout: distinguish page-level from per-entry
+            if (
+              error instanceof DOMException &&
+              error.name === "TimeoutError"
+            ) {
+              // Page-level signal fired: return partial results
+              if (signal?.aborted) {
+                return {
+                  decisions,
+                  nextCursor: String(start + i),
+                };
+              }
+              // Per-entry timeout: skip this entry
+              continue;
+            }
+            throw error;
+          }
+
+          // Rate limit between detail fetches (skip for last entry)
+          if (i < entries.length - 1) {
+            await Bun.sleep(500);
+          }
+        }
+
+        const totalEntries = json["@toplevelentries"]
+          ? Number.parseInt(json["@toplevelentries"], 10)
+          : undefined;
 
         const nextCursor =
-          rawEntryCount >= PAGE_SIZE ? String(start + PAGE_SIZE) : null;
+          totalEntries !== undefined
+            ? start + entries.length <= totalEntries
+              ? String(start + entries.length)
+              : null
+            : entries.length >= PAGE_SIZE
+              ? String(start + entries.length)
+              : null;
 
         return { decisions, nextCursor };
       },
