@@ -12,8 +12,8 @@ export const hashContent = (input: string): string => {
 };
 
 /**
- * Strip HTML tags, decode common entities, and collapse
- * excessive newlines.
+ * Strip HTML tags, decode common entities (including numeric
+ * &#xNN; and &#NNNN; forms), and collapse excessive newlines.
  */
 export const stripHtml = (html: string): string =>
   html
@@ -23,6 +23,20 @@ export const stripHtml = (html: string): string =>
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) => {
+      try {
+        return String.fromCodePoint(Number.parseInt(hex, 16));
+      } catch {
+        return match;
+      }
+    })
+    .replace(/&#(\d+);/g, (match, dec: string) => {
+      try {
+        return String.fromCodePoint(Number.parseInt(dec, 10));
+      } catch {
+        return match;
+      }
+    })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
