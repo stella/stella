@@ -41,19 +41,23 @@
     "totalHours": "Celkové hodiny",
     "utilization": "Využití"
   },
-  "anonymise": {
+  "anonymize": {
     "addEntity": "Přidat entitu",
-    "checkAnonymisation": "Zkontrolovat anonymizaci",
+    "checkAnonymization": "Zkontrolovat anonymizaci",
+    "closeAddForm": "Zavřít přidávání entity",
     "confirm": "Potvrdit",
     "confirmAll": "Potvrdit vše",
     "entities": "Entity",
+    "entityType": "Typ entity",
     "extractingText": "Extrakce textu…",
     "noEntitiesFound": "Žádné entity nenalezeny",
     "reject": "Zamítnout",
     "rejectAll": "Zamítnout vše",
+    "removeEntity": "Odebrat entitu",
     "revise": "Revidovat anonymizaci",
     "runPipeline": "Spustit pipeline",
     "running": "Zpracování…",
+    "searchMatches": "Slova k vyhledání v dokumentu",
     "searchPlaceholder": "Zadejte slova k vyhledání…",
     "title": "Kontrola anonymizace"
   },
@@ -1125,6 +1129,8 @@
     },
     "pdf": {
       "adjustForDarkMode": "Přizpůsobit stránky pro tmavý režim",
+      "anonymizeSidebar": "Anonymization",
+      "entitySidebar": "Entity details",
       "evidence": "Důkaz",
       "goBack": "Zpět",
       "incorrectPassword": "Nesprávné heslo. Zkuste to znovu.",

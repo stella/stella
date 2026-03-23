@@ -239,6 +239,10 @@ guidelines, and visual noise rules in `/conventions-ux`.
   form inputs, and keyboard event handlers alongside mouse
   events.
 - Tailwind for styling — stay within configured palette
+- Never construct Tailwind class names dynamically
+  (e.g. `` `bg-${color}-200` ``); Tailwind can't detect
+  them. Use `style` with CSS variables instead
+  (e.g. `` style={{ backgroundColor: `var(--color-${name}-200)` }} ``).
 - `cn()` utility for conditional class names
 - Return minimal data from endpoints and mutations. Backend
   handlers should only return what callers actually need;

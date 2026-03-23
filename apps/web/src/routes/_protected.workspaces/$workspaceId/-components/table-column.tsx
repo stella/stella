@@ -192,11 +192,9 @@ const WithOpenEntityButton = ({
                 scaleOffset: 0,
               },
               justification: undefined,
-              entity: {
-                id: entityId,
-                visible: true,
-                activePropertyId,
-              },
+              entityId,
+              activePropertyId,
+              sidebar: { type: "entity" },
             },
           });
         }}

@@ -41,19 +41,23 @@
     "totalHours": "Kopējās stundas",
     "utilization": "Noslogojums"
   },
-  "anonymise": {
+  "anonymize": {
     "addEntity": "Pievienot entītiju",
-    "checkAnonymisation": "Check anonymisation",
+    "checkAnonymization": "Check anonymisation",
+    "closeAddForm": "Close add form",
     "confirm": "Confirm",
     "confirmAll": "Confirm all",
     "entities": "Entities",
+    "entityType": "Entity type",
     "extractingText": "Extracting text…",
     "noEntitiesFound": "No entities found",
     "reject": "Reject",
     "rejectAll": "Reject all",
+    "removeEntity": "Remove entity",
     "revise": "Revise anonymisation",
     "runPipeline": "Run pipeline",
     "running": "Running…",
+    "searchMatches": "Words to find in the document",
     "searchPlaceholder": "Ievadiet meklējamos vārdus…",
     "title": "Anonymisation review"
   },
@@ -1125,6 +1129,8 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",
+      "anonymizeSidebar": "Anonymization",
+      "entitySidebar": "Entity details",
       "evidence": "Pierādījums",
       "goBack": "Atpakaļ",
       "incorrectPassword": "Nepareiza parole. Lūdzu, mēģiniet vēlreiz.",

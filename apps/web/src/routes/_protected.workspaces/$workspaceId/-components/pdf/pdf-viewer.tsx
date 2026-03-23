@@ -11,7 +11,7 @@ import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { CreatingBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/creating-citations";
-import { PageAnonymisation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymisation";
+import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -26,7 +26,7 @@ const FullscreenPdfViewer = () => {
     select: (s) => s.file,
   });
   const entityId = routeApi.useSearch({
-    select: (s) => s.entity.id,
+    select: (s) => s.entityId,
   });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
 
@@ -99,8 +99,8 @@ const renderPageOverlay = (pageId: string) => <PageOverlays pageId={pageId} />;
 
 const PageOverlays = ({ pageId }: { pageId: string }) => {
   const page = usePDFStore((s) => s.pages.get(pageId));
-  const fieldId = routeApi.useSearch({
-    select: (s) => s.file.fieldId,
+  const showAnonymizeOverlays = routeApi.useSearch({
+    select: (s) => s.sidebar.type === "anonymize",
   });
 
   if (!page) {
@@ -109,13 +109,13 @@ const PageOverlays = ({ pageId }: { pageId: string }) => {
 
   return (
     <>
-      <PageAnonymisation
-        fileId={fieldId}
-        originalHeight={page.originalHeight}
-        originalWidth={page.originalWidth}
-        pageIndex={page.proxy.pageNumber - 1}
-        scale={page.viewport.scale}
-      />
+      {showAnonymizeOverlays ? (
+        <PageAnonymization
+          pageId={pageId}
+          pageIndex={page.proxy.pageNumber - 1}
+          variant="fullscreen"
+        />
+      ) : null}
       <PageCitation
         originalHeight={page.originalHeight}
         originalWidth={page.originalWidth}

@@ -1,4 +1,3 @@
-import type { Color } from "@libpdf/core";
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
 
 import {
@@ -13,9 +12,10 @@ import type {
   RedactionResult,
 } from "@stella/anonymize";
 
-import { neutralisePageText } from "./pdf-content-stream";
-import type { CharSpan, PdfBBox } from "./pdf-coords";
-import { getEntityBBoxes } from "./pdf-coords";
+import { getEntityBBoxes } from "@/lib/anonymize/pdf-bbox";
+import { neutralisePageText } from "@/lib/anonymize/pdf-content-stream";
+import type { CharSpan, PDFBBox } from "@/lib/anonymize/pdf-coords";
+import { getEntityPDFColors } from "@/lib/anonymize/ui-constants";
 
 /** Padding around redaction rectangles in points. */
 const RECT_PADDING = 2;
@@ -26,131 +26,13 @@ const MIN_PLACEHOLDER_SIZE = 4;
 /** Maximum font size for placeholder text (points). */
 const MAX_PLACEHOLDER_SIZE = 10;
 
-// ── Per-label colour palette ───────────────────────────
-
-/**
- * RGB colours for entity labels, matching the Tailwind
- * `-200` shades used in ENTITY_COLORS (types.ts).
- * Fill = -200 (light bg), border = -400 (medium),
- * text = -700 (dark foreground).
- *
- * Values are [r, g, b] in 0-1 range for @libpdf/core.
- */
-type ColorTriple = [number, number, number];
-type LabelPalette = {
-  fill: ColorTriple;
-  border: ColorTriple;
-  text: ColorTriple;
-};
-
-const LABEL_COLORS: Record<string, LabelPalette> = {
-  person: {
-    fill: [0.74, 0.83, 0.95], // blue-200
-    border: [0.38, 0.56, 0.83], // blue-400
-    text: [0.11, 0.29, 0.55], // blue-700
-  },
-  organization: {
-    fill: [0.73, 0.91, 0.78], // green-200
-    border: [0.29, 0.73, 0.4], // green-400
-    text: [0.08, 0.4, 0.15], // green-700
-  },
-  "phone number": {
-    fill: [0.98, 0.76, 0.83], // pink-200
-    border: [0.96, 0.45, 0.58], // pink-400
-    text: [0.74, 0.12, 0.24], // pink-700
-  },
-  address: {
-    fill: [0.99, 0.93, 0.7], // yellow-200
-    border: [0.98, 0.82, 0.2], // yellow-400
-    text: [0.63, 0.49, 0.04], // yellow-700
-  },
-  "email address": {
-    fill: [0.99, 0.84, 0.69], // orange-200
-    border: [0.98, 0.58, 0.24], // orange-400
-    text: [0.77, 0.33, 0.01], // orange-700
-  },
-  date: {
-    fill: [0.91, 0.8, 0.94], // purple-200
-    border: [0.75, 0.52, 0.81], // purple-400
-    text: [0.43, 0.18, 0.52], // purple-700
-  },
-  "bank account number": {
-    fill: [0.99, 0.79, 0.79], // red-200
-    border: [0.97, 0.45, 0.45], // red-400
-    text: [0.72, 0.11, 0.11], // red-700
-  },
-  iban: {
-    fill: [0.99, 0.79, 0.79],
-    border: [0.97, 0.45, 0.45],
-    text: [0.72, 0.11, 0.11],
-  },
-  "tax identification number": {
-    fill: [0.6, 0.92, 0.9], // teal-200
-    border: [0.18, 0.71, 0.67], // teal-400
-    text: [0.05, 0.37, 0.35], // teal-700
-  },
-  "identity card number": {
-    fill: [0.78, 0.78, 0.97], // indigo-200
-    border: [0.5, 0.5, 0.91], // indigo-400
-    text: [0.23, 0.23, 0.6], // indigo-700
-  },
-  "registration number": {
-    fill: [0.65, 0.93, 0.97], // cyan-200
-    border: [0.13, 0.78, 0.85], // cyan-400
-    text: [0.06, 0.41, 0.45], // cyan-700
-  },
-  "credit card number": {
-    fill: [1, 0.79, 0.82], // rose-200
-    border: [0.98, 0.44, 0.52], // rose-400
-    text: [0.74, 0.12, 0.21], // rose-700
-  },
-  "passport number": {
-    fill: [0.87, 0.82, 0.95], // violet-200
-    border: [0.66, 0.55, 0.87], // violet-400
-    text: [0.36, 0.25, 0.6], // violet-700
-  },
-  "czech birth number": {
-    fill: [0.98, 0.76, 0.83],
-    border: [0.96, 0.45, 0.58],
-    text: [0.74, 0.12, 0.24],
-  },
-};
-
-/** Fallback palette for unknown labels; neutral gray. */
-const FALLBACK_PALETTE: LabelPalette = {
-  fill: [0.9, 0.9, 0.9],
-  border: [0.63, 0.63, 0.63],
-  text: [0.25, 0.25, 0.25],
-};
-
-/**
- * Get fill, border, and text colours for a placeholder
- * like `[PERSON_1]`. Looks up the label in LABEL_COLORS
- * (matching the Tailwind classes in ENTITY_COLORS).
- */
-const getEntityColors = (
-  placeholder: string,
-): { fill: Color; border: Color; text: Color } => {
-  const match = placeholder.match(/^\[(.+?)(?:_(\d+))?\]$/);
-  const rawLabel = match?.[1]?.toLowerCase() ?? "";
-  const canonical = rawLabel.replace(/_/g, " ");
-
-  const palette = LABEL_COLORS[canonical] ?? FALLBACK_PALETTE;
-
-  return {
-    fill: rgb(...palette.fill),
-    border: rgb(...palette.border),
-    text: rgb(...palette.text),
-  };
-};
-
 // ── Types ──────────────────────────────────────────────
 
 /**
  * Region to redact on a specific PDF page.
  */
 type PageRedaction = {
-  bbox: PdfBBox;
+  bbox: PDFBBox;
   /** Placeholder text (e.g. "[PERSON_1]"). */
   overlayText: string;
   /** Original entity label for colour coding. */
@@ -214,7 +96,11 @@ export const redactPdf = async (
   const pageRedactions = new Map<number, PageRedaction[]>();
 
   for (const entity of nonOverlapping) {
-    const bboxes = getEntityBBoxes(spans, entity.start, entity.end);
+    const bboxes = getEntityBBoxes({
+      spans,
+      entityStart: entity.start,
+      entityEnd: entity.end,
+    });
     if (bboxes.length === 0) {
       continue;
     }
@@ -301,11 +187,12 @@ export const redactPdf = async (
       const rw = bbox.width + RECT_PADDING * 2;
       const rh = bbox.height + RECT_PADDING * 2;
 
-      // Always derive the colour key from the entity label,
-      // not from overlayText (which may be the redact string
-      // "█████" and wouldn't match the [LABEL_N] pattern).
-      const colorKey = `[${entityLabel.toUpperCase().replace(/\s+/g, "_")}]`;
-      const colors = getEntityColors(colorKey);
+      const palette = getEntityPDFColors(entityLabel);
+      const colors = {
+        fill: rgb(...palette.fill),
+        border: rgb(...palette.border),
+        text: rgb(...palette.text),
+      };
 
       // White underlay hides original text (security)
       page.drawRectangle({

@@ -41,19 +41,23 @@
     "totalHours": "Heures totales",
     "utilization": "Utilisation"
   },
-  "anonymise": {
+  "anonymize": {
     "addEntity": "Ajouter une entité",
-    "checkAnonymisation": "Check anonymisation",
+    "checkAnonymization": "Check anonymisation",
+    "closeAddForm": "Close add form",
     "confirm": "Confirm",
     "confirmAll": "Confirm all",
     "entities": "Entities",
+    "entityType": "Entity type",
     "extractingText": "Extracting text…",
     "noEntitiesFound": "No entities found",
     "reject": "Reject",
     "rejectAll": "Reject all",
+    "removeEntity": "Remove entity",
     "revise": "Revise anonymisation",
     "runPipeline": "Run pipeline",
     "running": "Running…",
+    "searchMatches": "Words to find in the document",
     "searchPlaceholder": "Saisissez des mots à rechercher…",
     "title": "Anonymisation review"
   },
@@ -1125,6 +1129,8 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adapter les pages au mode sombre",
+      "anonymizeSidebar": "Anonymization",
+      "entitySidebar": "Entity details",
       "evidence": "Pièce à conviction",
       "goBack": "Retour",
       "incorrectPassword": "Mot de passe incorrect. Veuillez réessayer.",

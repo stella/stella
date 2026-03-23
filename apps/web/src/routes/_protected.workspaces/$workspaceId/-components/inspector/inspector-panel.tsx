@@ -9,13 +9,12 @@ import {
 import type { PropsWithChildren } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   FileTextIcon,
-  ListIcon,
   ScanEyeIcon,
   SparklesIcon,
   SquareCheckIcon,
@@ -31,16 +30,15 @@ import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { PDFProvider } from "@/lib/pdf/pdf-context";
+import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
+import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import {
-  anonymisePdf,
-  clearAnonymisation,
-  useAnonymiseOverlayStore,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymise-pdf";
-import { AnonymiseSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymise-sidebar";
+  anonymizePdf,
+  clearAnonymization,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
@@ -76,6 +74,42 @@ const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 const PINCH_ZOOM_SENSITIVITY = 0.005;
 
+/** Must render under PDFProvider; uses the same store as peek overlays. */
+const PeekAnonymizeToggleButton = ({
+  fieldId,
+  pipelineRunning,
+  onStartPipeline,
+}: {
+  fieldId: string;
+  pipelineRunning: boolean;
+  onStartPipeline: () => void;
+}) => {
+  const t = useTranslations();
+  const hasAnon = usePDFStore((s) => s.fileAnonymization !== null);
+
+  return (
+    <Tooltip
+      content={t("anonymize.checkAnonymization")}
+      render={
+        <Button
+          disabled={pipelineRunning}
+          onClick={() => {
+            if (hasAnon) {
+              clearAnonymization(fieldId);
+            } else {
+              onStartPipeline();
+            }
+          }}
+          size="icon-xs"
+          variant={hasAnon ? "default" : "ghost"}
+        >
+          <ScanEyeIcon className="size-3.5" />
+        </Button>
+      }
+    />
+  );
+};
+
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const { tabs, activeId } = useInspectorStore(
@@ -87,18 +121,18 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
   const closeAll = useInspectorStore((s) => s.closeAll);
-  const anonymisedFieldIds = useAnonymiseOverlayStore(
-    useShallow((s) => [...s.overlays.keys()]),
-  );
   const [anonymisingIds, setAnonymisingIds] = useState<Set<string>>(
     () => new Set(),
-  );
-  const [anonSidebarFieldId, setAnonSidebarFieldId] = useState<string | null>(
-    null,
   );
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
+
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  const peekPdfViewId = viewMatch?.params.viewId ?? "all";
 
   const activeTab = tabs.find((tab) => tab.id === activeId);
 
@@ -136,29 +170,25 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       return;
     }
     try {
+      const openAnonymizeSidebar =
+        getCachedAnonymization(activeTab.id) !== undefined;
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/pdf",
         params: { workspaceId, viewId: "all" },
         search: {
           file: { fieldId: activeTab.id },
           justification: undefined,
-          entity: {
-            id: activeTab.entityId,
-            visible: true,
-            activePropertyId: activeTab.propertyId ?? "",
+          entityId: activeTab.entityId,
+          activePropertyId: activeTab.propertyId ?? "",
+          sidebar: {
+            type: openAnonymizeSidebar ? "anonymize" : "entity",
           },
         },
       });
     } finally {
-      // Clear anonymisation data for all open tabs before
-      // closing them to prevent stale store entries.
-      for (const tab of tabs) {
-        clearAnonymisation(tab.id);
-      }
-      setAnonSidebarFieldId(null);
       closeAll();
     }
-  }, [activeTab, navigate, closeAll, tabs, workspaceId]);
+  }, [activeTab, navigate, closeAll, workspaceId]);
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
@@ -255,10 +285,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   key={tab.id}
                   onActivate={() => setActive(tab.id)}
                   onClose={() => {
-                    clearAnonymisation(tab.id);
-                    setAnonSidebarFieldId((prev) =>
-                      prev === tab.id ? null : prev,
-                    );
+                    clearAnonymization(tab.id);
                     closeTab(tab.id);
                   }}
                   tab={tab}
@@ -294,6 +321,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             <MeasuredPdfProvider
               active={isActive}
               fallback={{ suspense: <PeekSuspenseFallback /> }}
+              fieldId={tab.id}
               initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
             >
               {/* Context bar: filename + controls */}
@@ -320,73 +348,31 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     />
                   </div>
                   <PeekPrintButton />
-                  <Tooltip
-                    content={t("anonymise.checkAnonymisation")}
-                    render={
-                      <Button
-                        disabled={anonymisingIds.has(tab.id)}
-                        onClick={() => {
-                          const isAnon = anonymisedFieldIds.includes(tab.id);
-                          if (isAnon) {
-                            clearAnonymisation(tab.id);
-                            setAnonSidebarFieldId((prev) =>
-                              prev === tab.id ? null : prev,
-                            );
-                          } else {
-                            setAnonymisingIds((prev) =>
-                              new Set(prev).add(tab.id),
-                            );
-                            anonymisePdf({
-                              workspaceId,
-                              fieldId: tab.id,
-                              mimeType: tab.mimeType ?? null,
-                            })
-                              .catch(() => {
-                                toastManager.add({
-                                  title: t("errors.actionFailed"),
-                                  type: "error",
-                                });
-                              })
-                              .finally(() => {
-                                setAnonymisingIds((prev) => {
-                                  const next = new Set(prev);
-                                  next.delete(tab.id);
-                                  return next;
-                                });
-                              });
-                          }
-                        }}
-                        size="icon-xs"
-                        variant={
-                          anonymisedFieldIds.includes(tab.id)
-                            ? "default"
-                            : "ghost"
-                        }
-                      >
-                        <ScanEyeIcon className="size-3.5" />
-                      </Button>
-                    }
+                  <PeekAnonymizeToggleButton
+                    fieldId={tab.id}
+                    pipelineRunning={anonymisingIds.has(tab.id)}
+                    onStartPipeline={() => {
+                      setAnonymisingIds((prev) => new Set(prev).add(tab.id));
+                      anonymizePdf({
+                        workspaceId,
+                        fieldId: tab.id,
+                        mimeType: tab.mimeType ?? null,
+                      })
+                        .catch(() => {
+                          toastManager.add({
+                            title: t("errors.actionFailed"),
+                            type: "error",
+                          });
+                        })
+                        .finally(() => {
+                          setAnonymisingIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(tab.id);
+                            return next;
+                          });
+                        });
+                    }}
                   />
-                  {anonymisedFieldIds.includes(tab.id) && (
-                    <Tooltip
-                      content={t("anonymise.entities")}
-                      render={
-                        <Button
-                          onClick={() =>
-                            setAnonSidebarFieldId(
-                              anonSidebarFieldId === tab.id ? null : tab.id,
-                            )
-                          }
-                          size="icon-xs"
-                          variant={
-                            anonSidebarFieldId === tab.id ? "default" : "ghost"
-                          }
-                        >
-                          <ListIcon className="size-3.5" />
-                        </Button>
-                      }
-                    />
-                  )}
                   <Tooltip
                     content={t("workspaces.pdf.openFullView")}
                     render={
@@ -405,10 +391,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   />
                   <Button
                     onClick={() => {
-                      clearAnonymisation(tab.id);
-                      setAnonSidebarFieldId((prev) =>
-                        prev === tab.id ? null : prev,
-                      );
+                      clearAnonymization(tab.id);
                       closeTab(tab.id);
                     }}
                     size="icon-xs"
@@ -419,46 +402,38 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 </div>
               </div>
 
-              {/* PDF + optional sidebar row */}
-              <div className="flex min-h-0 min-w-0 flex-1">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <div className="flex h-full min-h-0 min-w-0 flex-col">
-                    {tab.justificationFieldId && (
-                      <Suspense
-                        fallback={
-                          <div
-                            className={cn(
-                              "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                              TOOLBAR_ROW_HEIGHT,
-                            )}
-                          >
-                            {t("common.loading")}...
-                          </div>
-                        }
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {tab.justificationFieldId && (
+                  <Suspense
+                    fallback={
+                      <div
+                        className={cn(
+                          "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                          TOOLBAR_ROW_HEIGHT,
+                        )}
                       >
-                        <JustificationBar
-                          activeTab={tab}
-                          fieldId={tab.justificationFieldId}
-                          workspaceId={workspaceId}
-                        />
-                      </Suspense>
-                    )}
-                    <Suspense fallback={<PeekSuspenseFallback />}>
-                      <PeekPdfViewer
-                        fieldId={tab.id}
-                        scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                        workspaceId={workspaceId}
-                      />
-                    </Suspense>
-                  </div>
-                </div>
-
-                {isActive && anonSidebarFieldId === tab.id && (
-                  <AnonymiseSidebar
-                    fieldId={tab.id}
-                    onClose={() => setAnonSidebarFieldId(null)}
-                  />
+                        {t("common.loading")}...
+                      </div>
+                    }
+                  >
+                    <JustificationBar
+                      activeTab={tab}
+                      fieldId={tab.justificationFieldId}
+                      workspaceId={workspaceId}
+                    />
+                  </Suspense>
                 )}
+                <Suspense fallback={<PeekSuspenseFallback />}>
+                  <PeekPdfViewer
+                    activePropertyId={tab.propertyId ?? ""}
+                    entityId={tab.entityId}
+                    fieldId={tab.id}
+                    onPeekNavigate={closeAll}
+                    scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                    viewId={peekPdfViewId}
+                    workspaceId={workspaceId}
+                  />
+                </Suspense>
               </div>
             </MeasuredPdfProvider>
           </div>
@@ -471,6 +446,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 type MeasuredPdfProviderProps = PropsWithChildren<{
   active: boolean;
   fallback?: PDFPageFallback | undefined;
+  fieldId: string;
   initialScaleOffset: number;
 }>;
 
@@ -478,6 +454,7 @@ const MeasuredPdfProvider = ({
   active,
   children,
   fallback,
+  fieldId,
   initialScaleOffset,
 }: MeasuredPdfProviderProps) => {
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
@@ -523,6 +500,7 @@ const MeasuredPdfProvider = ({
         (fallback?.suspense ?? null)
       ) : (
         <PDFProvider
+          fieldId={fieldId}
           fitToWidth={initialFitWidth}
           initialScaleOffset={initialScaleOffset}
           startPage={1}

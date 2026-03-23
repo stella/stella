@@ -1,8 +1,8 @@
 import {
+  startTransition,
   useEffect,
   useEffectEvent,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -51,7 +51,7 @@ type PDFViewportProps = {
 
 type PDFViewerContentProps = Omit<
   PDFViewportProps,
-  "fallback" | "fileId" | "password"
+  "fallback" | "fileId" | "password" | "buffer"
 > & {
   document: PDFDocument;
 };
@@ -74,13 +74,7 @@ export const PDFViewport = ({
   });
 
   if (Result.isOk(result)) {
-    return (
-      <PDFViewerContent
-        {...contentProps}
-        buffer={buffer}
-        document={result.value}
-      />
-    );
+    return <PDFViewerContent {...contentProps} document={result.value} />;
   }
 
   if (
@@ -102,7 +96,6 @@ export const PDFViewport = ({
 };
 
 const PDFViewerContent = ({
-  buffer,
   document,
   page,
   onPageChanged,
@@ -112,41 +105,24 @@ const PDFViewerContent = ({
   className,
   renderPage,
 }: PDFViewerContentProps) => {
-  const [
-    attachmentLabels,
-    hydratedBuffer,
-    hydratedDocument,
-    scale,
-    pages,
-    setDocument,
-  ] = usePDFStore(
-    useShallow((s) => [
-      s.attachmentLabels,
-      s.buffer,
-      s.document,
-      s.scale,
-      s.pages,
-      s.setDocument,
-    ]),
+  const [attachmentLabels, scale, pages, setDocument] = usePDFStore(
+    useShallow((s) => [s.attachmentLabels, s.scale, s.pages, s.setDocument]),
   );
 
-  const isHydrated = hydratedBuffer === buffer && hydratedDocument === document;
   const effectiveScale = scale + scaleOffset;
-  const pageIds = isHydrated ? pages.keys().toArray() : [];
+  const pageIds = pages.keys().toArray();
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    setDocument({
-      buffer,
-      document,
+  useEffect(() => {
+    startTransition(() => {
+      setDocument(document);
     });
-  }, [buffer, document, setDocument]);
+  }, [document, setDocument]);
 
   useTextSelection(containerRef);
   usePDFFitToWidth({
     containerRef,
-    isHydrated,
   });
   usePDFControlledScaleOffset({
     containerRef,
@@ -168,10 +144,8 @@ const PDFViewerContent = ({
   });
 
   useEffect(() => {
-    if (isHydrated) {
-      onPageCountChangedEvent(pageIds.length);
-    }
-  }, [isHydrated, pageIds.length]);
+    onPageCountChangedEvent(pageIds.length);
+  }, [pageIds.length]);
 
   return (
     <ScrollArea>
@@ -223,7 +197,7 @@ const PDFPasswordPrompt = ({
   const id = useId();
   const t = useTranslations();
   const [value, setValue] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startFormTransition] = useTransition();
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-4 py-6">
@@ -231,7 +205,7 @@ const PDFPasswordPrompt = ({
         className="w-full max-w-sm space-y-3"
         onSubmit={(event) => {
           event.preventDefault();
-          startTransition(() => {
+          startFormTransition(() => {
             onSubmit(value);
           });
         }}

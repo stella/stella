@@ -41,19 +41,23 @@
     "totalHours": "Tunnid kokku",
     "utilization": "Kasutusaste"
   },
-  "anonymise": {
+  "anonymize": {
     "addEntity": "Lisa olem",
-    "checkAnonymisation": "Check anonymisation",
+    "checkAnonymization": "Check anonymisation",
+    "closeAddForm": "Close add form",
     "confirm": "Confirm",
     "confirmAll": "Confirm all",
     "entities": "Entities",
+    "entityType": "Entity type",
     "extractingText": "Extracting text…",
     "noEntitiesFound": "No entities found",
     "reject": "Reject",
     "rejectAll": "Reject all",
+    "removeEntity": "Remove entity",
     "revise": "Revise anonymisation",
     "runPipeline": "Run pipeline",
     "running": "Running…",
+    "searchMatches": "Words to find in the document",
     "searchPlaceholder": "Sisestage otsitavad sõnad…",
     "title": "Anonymisation review"
   },
@@ -1125,6 +1129,8 @@
     },
     "pdf": {
       "adjustForDarkMode": "Kohanda lehekülgi tumedale režiimile",
+      "anonymizeSidebar": "Anonymization",
+      "entitySidebar": "Entity details",
       "evidence": "Tõend",
       "goBack": "Mine tagasi",
       "incorrectPassword": "Vale parool. Proovige uuesti.",

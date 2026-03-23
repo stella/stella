@@ -91,7 +91,8 @@ export const PageCitation = ({
             ref={(el) => {
               if (
                 key === topBoundingBoxKey &&
-                scrollTo?.justificationId === justification.id &&
+                scrollTo?.target?.kind === "justification" &&
+                scrollTo.target.id === justification.id &&
                 scrollTo.pageId === pageId
               ) {
                 el?.scrollIntoView({

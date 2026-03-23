@@ -264,7 +264,7 @@ export const RowActions = ({
         {!isBulk && file && isFileDisplayable(file) && (
           <MenuItem onClick={handleCheckAnonymise}>
             <ScanEyeIcon />
-            {t("anonymise.checkAnonymisation")}
+            {t("anonymize.checkAnonymization")}
           </MenuItem>
         )}
         {hasAnyFile && (

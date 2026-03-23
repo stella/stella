@@ -7,8 +7,9 @@ import {
   ArrowBigLeftDashIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  PanelRightIcon,
   FoldHorizontalIcon,
+  LayoutListIcon,
+  ScanEyeIcon,
   SunMoonIcon,
   UnfoldHorizontalIcon,
   ZoomInIcon,
@@ -39,7 +40,11 @@ export const PdfViewerControls = () => {
 
   const entityId = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.entity.id,
+    select: (s) => s.entityId,
+  });
+  const sidebar = useSearch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: (s) => s.sidebar,
   });
   const { workspaceId } = useParams({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
@@ -239,7 +244,7 @@ export const PdfViewerControls = () => {
       )}
       <Separator className="mx-1 h-4" orientation="vertical" />
       <Tooltip
-        content={t("workspaces.pdf.toggleSidebar")}
+        content={t("workspaces.pdf.entitySidebar")}
         render={
           <Button
             // eslint-disable-next-line typescript/no-misused-promises
@@ -249,16 +254,46 @@ export const PdfViewerControls = () => {
                 to: ".",
                 search: (prev) =>
                   produce(prev, (s) => {
-                    s.entity.visible = !s.entity.visible;
+                    if (s.sidebar.type === "entity") {
+                      s.sidebar = { type: "none" };
+                    } else {
+                      s.sidebar = { type: "entity" };
+                    }
                   }),
               })
             }
             size="icon"
-            variant="ghost"
+            variant={sidebar.type === "entity" ? "default" : "ghost"}
           />
         }
       >
-        <PanelRightIcon />
+        <LayoutListIcon />
+      </Tooltip>
+      <Tooltip
+        content={t("workspaces.pdf.anonymizeSidebar")}
+        render={
+          <Button
+            // eslint-disable-next-line typescript/no-misused-promises
+            onClick={async () =>
+              await navigate({
+                replace: true,
+                to: ".",
+                search: (prev) =>
+                  produce(prev, (s) => {
+                    if (s.sidebar.type === "anonymize") {
+                      s.sidebar = { type: "none" };
+                    } else {
+                      s.sidebar = { type: "anonymize" };
+                    }
+                  }),
+              })
+            }
+            size="icon"
+            variant={sidebar.type === "anonymize" ? "default" : "ghost"}
+          />
+        }
+      >
+        <ScanEyeIcon />
       </Tooltip>
     </div>
   );

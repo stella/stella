@@ -81,7 +81,7 @@ export const EntityFileInfo = ({
                     scaleOffset: 0,
                   };
                   s.justification = undefined;
-                  s.entity.id = prevFile.entityId;
+                  s.entityId = prevFile.entityId;
                   // keep the active property id
                 }),
             });
@@ -111,7 +111,7 @@ export const EntityFileInfo = ({
                     scaleOffset: 0,
                   };
                   s.justification = undefined;
-                  s.entity.id = nextFile.entityId;
+                  s.entityId = nextFile.entityId;
                   // keep the active property id
                 }),
             });
