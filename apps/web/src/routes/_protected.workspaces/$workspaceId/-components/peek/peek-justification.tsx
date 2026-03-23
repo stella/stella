@@ -45,7 +45,7 @@ export const PeekJustification = ({
       if (pageId !== undefined) {
         setScrollTo({
           pageId,
-          justificationId: justification.id,
+          target: { kind: "justification", id: justification.id },
         });
       }
     },
@@ -116,7 +116,7 @@ export const PeekJustification = ({
       if (pageId !== undefined) {
         setScrollTo({
           pageId,
-          justificationId: justification.id,
+          target: { kind: "justification", id: justification.id },
         });
       }
     }

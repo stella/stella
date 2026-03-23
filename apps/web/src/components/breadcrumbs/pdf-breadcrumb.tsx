@@ -11,7 +11,7 @@ export const PdfBreadcrumb = () => {
   const search = useSearch({
     select: (s) => ({
       fieldId: s.file.fieldId,
-      entityId: s.entity.id,
+      entityId: s.entityId,
     }),
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
   });

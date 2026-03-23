@@ -105,7 +105,9 @@ const Citation = ({
         if (pageId !== undefined) {
           setScrollTo({
             pageId,
-            justificationId: boundingBoxes ? justification.id : undefined,
+            target: boundingBoxes
+              ? { kind: "justification", id: justification.id }
+              : undefined,
           });
         }
         await navigate({

@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { describe, expect, it } from "bun:test";
 
-import type { CharSpan, MeasureWidthFn } from "./pdf-coords";
-import { getEntityBBoxes } from "./pdf-coords";
+import type { MeasureWidthFn } from "./pdf-bbox";
+import { getEntityBBoxes } from "./pdf-bbox";
+import type { CharSpan } from "./pdf-coords";
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -90,13 +91,23 @@ const span = (
 describe("getEntityBBoxes()", () => {
   it("returns nothing for non-overlapping entity", () => {
     const spans: CharSpan[] = [span(0, "Hello World", 50, 100)];
-    const result = getEntityBBoxes(spans, 20, 30, mockMeasure);
+    const result = getEntityBBoxes({
+      spans,
+      entityStart: 20,
+      entityEnd: 30,
+      measureWidth: mockMeasure,
+    });
     expect(result).toHaveLength(0);
   });
 
   it("returns exact bbox when entity fully covers span", () => {
     const s = span(10, "Praha 10", 50, 60);
-    const result = getEntityBBoxes([s], 10, 18, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 10,
+      entityEnd: 18,
+      measureWidth: mockMeasure,
+    });
     expect(result).toHaveLength(1);
     expect(result[0]?.x).toBe(50);
     expect(result[0]?.width).toBe(60);
@@ -115,7 +126,12 @@ describe("getEntityBBoxes()", () => {
     const entityStart = text.indexOf(entityText);
     const entityEnd = entityStart + entityText.length;
 
-    const result = getEntityBBoxes([s], entityStart, entityEnd, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart,
+      entityEnd,
+      measureWidth: mockMeasure,
+    });
 
     expect(result).toHaveLength(1);
     const bbox = result[0];
@@ -141,7 +157,12 @@ describe("getEntityBBoxes()", () => {
     const s = span(0, text, 50, pdfWidth);
 
     // Entity covers "Praha 10" (first 8 chars)
-    const result = getEntityBBoxes([s], 0, 8, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 0,
+      entityEnd: 8,
+      measureWidth: mockMeasure,
+    });
 
     expect(result).toHaveLength(1);
     // Left edge should be clamped to span.bbox.x (50)
@@ -155,7 +176,12 @@ describe("getEntityBBoxes()", () => {
     const s2 = span(10, "Bohdalecká 1490/25", 115, 120);
 
     // Entity covers "Praha 10, Bohdalecká"
-    const result = getEntityBBoxes([s1, s2], 0, 20, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s1, s2],
+      entityStart: 0,
+      entityEnd: 20,
+      measureWidth: mockMeasure,
+    });
 
     // Should return bboxes for both spans
     expect(result).toHaveLength(2);
@@ -174,7 +200,12 @@ describe("getEntityBBoxes()", () => {
     const s = span(0, text, 100, pdfWidth);
 
     // Entity covers "03114988" (index 5..13)
-    const result = getEntityBBoxes([s], 5, 13, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 5,
+      entityEnd: 13,
+      measureWidth: mockMeasure,
+    });
 
     expect(result).toHaveLength(1);
     const bbox = result[0];
@@ -204,7 +235,12 @@ describe("getEntityBBoxes()", () => {
     const pdfWidth = measuredWidth * 3;
     const s = span(0, text, 100, pdfWidth);
 
-    const result = getEntityBBoxes([s], 5, 13, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 5,
+      entityEnd: 13,
+      measureWidth: mockMeasure,
+    });
 
     expect(result).toHaveLength(1);
     const bbox = result[0];
@@ -235,7 +271,12 @@ describe("getEntityBBoxes()", () => {
     const pdfWidth = measuredWidth * 3; // inflated
     const s = span(0, text, 200, pdfWidth);
 
-    const result = getEntityBBoxes([s], 0, 8, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 0,
+      entityEnd: 8,
+      measureWidth: mockMeasure,
+    });
 
     expect(result).toHaveLength(1);
     const bbox = result[0];
@@ -266,7 +307,12 @@ describe("getEntityBBoxes()", () => {
         fontSize: 12,
       },
     };
-    const result = getEntityBBoxes([s], 5, 10, mockMeasure);
+    const result = getEntityBBoxes({
+      spans: [s],
+      entityStart: 5,
+      entityEnd: 10,
+      measureWidth: mockMeasure,
+    });
     expect(result).toHaveLength(0);
   });
 
@@ -280,7 +326,12 @@ describe("getEntityBBoxes()", () => {
       const s = span(0, text, 50, pdfWidth);
 
       // Entity "850101/1234" starts at index 5
-      const result = getEntityBBoxes([s], 5, 16, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 5,
+        entityEnd: 16,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -319,7 +370,12 @@ describe("getEntityBBoxes()", () => {
       // x=212.45, preceded by space item[27] w=127.64
       // The entity TextItem has normal width; no inflation
       const s = span(210, "25350676", 212.45, 44.16);
-      const result = getEntityBBoxes([s], 210, 218, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 210,
+        entityEnd: 218,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       // Full coverage → exact bbox (no inflation to cap)
       expect(result[0]?.x).toBe(212.45);
@@ -330,7 +386,12 @@ describe("getEntityBBoxes()", () => {
       // Real data: item[32] str="CZ25350676" w=58.08
       // x=212.45
       const s = span(224, "CZ25350676", 212.45, 58.08);
-      const result = getEntityBBoxes([s], 224, 234, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 224,
+        entityEnd: 234,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       expect(result[0]?.x).toBe(212.45);
       expect(result[0]?.width).toBeCloseTo(58.08, 1);
@@ -342,7 +403,12 @@ describe("getEntityBBoxes()", () => {
       // w=177.81, x=212.45
       const text = "Ing. Luboš Trnavský, ředitel společnosti";
       const s = span(247, text, 212.45, 177.81);
-      const result = getEntityBBoxes([s], 247, 287, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 247,
+        entityEnd: 287,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       // Full coverage; scale = 177.81 / measured
       const measured = stringWidth(text);
@@ -367,7 +433,12 @@ describe("getEntityBBoxes()", () => {
       // "Luboš Trnavský" starts at local index 5
       const entityStart = 247 + 5;
       const entityEnd = 247 + 5 + 14; // "Luboš Trnavský"
-      const result = getEntityBBoxes([s], entityStart, entityEnd, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart,
+        entityEnd,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -388,12 +459,12 @@ describe("getEntityBBoxes()", () => {
       // should never produce a bbox for a value entity
       const spaceSpan = span(209, " ", 84.81, 127.64);
       const valueSpan = span(210, "25350676", 212.45, 44.16);
-      const result = getEntityBBoxes(
-        [spaceSpan, valueSpan],
-        210,
-        218,
-        mockMeasure,
-      );
+      const result = getEntityBBoxes({
+        spans: [spaceSpan, valueSpan],
+        entityStart: 210,
+        entityEnd: 218,
+        measureWidth: mockMeasure,
+      });
       // Only the value span should match
       expect(result).toHaveLength(1);
       expect(result[0]?.x).toBe(212.45);
@@ -426,7 +497,12 @@ describe("getEntityBBoxes()", () => {
       };
 
       // Entity "25823337" is the first 8 chars
-      const result = getEntityBBoxes([s], 308, 316, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 308,
+        entityEnd: 316,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -455,7 +531,12 @@ describe("getEntityBBoxes()", () => {
       };
 
       // "CZ25823337" starts at local index 9
-      const result = getEntityBBoxes([s], 317, 327, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 317,
+        entityEnd: 327,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -497,12 +578,12 @@ describe("getEntityBBoxes()", () => {
       const entityText = "Filip Hachle";
       const localStart = text.indexOf(entityText);
       const localEnd = localStart + entityText.length;
-      const result = getEntityBBoxes(
-        [s],
-        400 + localStart,
-        400 + localEnd,
-        mockMeasure,
-      );
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 400 + localStart,
+        entityEnd: 400 + localEnd,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -547,12 +628,12 @@ describe("getEntityBBoxes()", () => {
       const entityText = "261 319 19";
       const localStart = text.indexOf(entityText);
       const localEnd = localStart + entityText.length;
-      const result = getEntityBBoxes(
-        [s],
-        400 + localStart,
-        400 + localEnd,
-        mockMeasure,
-      );
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 400 + localStart,
+        entityEnd: 400 + localEnd,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -585,7 +666,12 @@ describe("getEntityBBoxes()", () => {
       };
 
       // Entity "TS Bruntál s.r.o." starts after "1. "
-      const result = getEntityBBoxes([s], 3, 20, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 3,
+        entityEnd: 20,
+        measureWidth: mockMeasure,
+      });
 
       expect(result).toHaveLength(1);
       const bbox = result[0];
@@ -635,7 +721,12 @@ describe("getEntityBBoxes()", () => {
 
       // Entity spans the end of s1 and start of s2:
       // "kód 112" + "25823337"
-      const result = getEntityBBoxes([s1, s2], 343, 359, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s1, s2],
+        entityStart: 343,
+        entityEnd: 359,
+        measureWidth: mockMeasure,
+      });
 
       // Should produce two bboxes (one per span)
       expect(result).toHaveLength(2);
@@ -649,7 +740,12 @@ describe("getEntityBBoxes()", () => {
     it("single-character entity", () => {
       const s = span(0, "A B C", 50, 30);
       // Entity is just "B" at index 2
-      const result = getEntityBBoxes([s], 2, 3, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 2,
+        entityEnd: 3,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       // Should produce a reasonable bbox (not zero-width)
       expect(result[0]?.width).toBeGreaterThan(0);
@@ -659,7 +755,12 @@ describe("getEntityBBoxes()", () => {
       const text = "hodnota: 12345";
       const s = span(0, text, 100, stringWidth(text));
       // Entity "12345" is the last 5 chars
-      const result = getEntityBBoxes([s], 9, 14, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 9,
+        entityEnd: 14,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       // Right edge should be clamped to span end
       expect((result[0]?.x ?? 0) + (result[0]?.width ?? 0)).toBeLessThanOrEqual(
@@ -683,7 +784,12 @@ describe("getEntityBBoxes()", () => {
           fontSize: 4,
         },
       };
-      const result = getEntityBBoxes([s], 0, 5, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 0,
+        entityEnd: 5,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       expect(result[0]?.width).toBeGreaterThan(0);
       expect(result[0]?.x).toBeGreaterThanOrEqual(50);
@@ -695,7 +801,12 @@ describe("getEntityBBoxes()", () => {
       const text = "12345678";
       const measured = stringWidth(text);
       const s = span(0, text, 100, measured * 10);
-      const result = getEntityBBoxes([s], 0, 8, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [s],
+        entityStart: 0,
+        entityEnd: 8,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       // Should cap to effective width, not use 10x
       const effectiveWidth = measured * 1.5;
@@ -710,8 +821,18 @@ describe("getEntityBBoxes()", () => {
       const measured = stringWidth(text);
       const s = span(0, text, 182.3, measured);
 
-      const r1 = getEntityBBoxes([s], 0, 8, mockMeasure);
-      const r2 = getEntityBBoxes([s], 9, 19, mockMeasure);
+      const r1 = getEntityBBoxes({
+        spans: [s],
+        entityStart: 0,
+        entityEnd: 8,
+        measureWidth: mockMeasure,
+      });
+      const r2 = getEntityBBoxes({
+        spans: [s],
+        entityStart: 9,
+        entityEnd: 19,
+        measureWidth: mockMeasure,
+      });
 
       expect(r1).toHaveLength(1);
       expect(r2).toHaveLength(1);
@@ -765,7 +886,12 @@ describe("getEntityBBoxes()", () => {
       ];
 
       // Entity covers all 4 spans (563 to 607)
-      const result = getEntityBBoxes(spans, 563, 607, mockMeasure);
+      const result = getEntityBBoxes({
+        spans,
+        entityStart: 563,
+        entityEnd: 607,
+        measureWidth: mockMeasure,
+      });
 
       // Should merge into ONE bbox, not 4 separate ones
       expect(result).toHaveLength(1);
@@ -804,7 +930,12 @@ describe("getEntityBBoxes()", () => {
         },
       };
 
-      const result = getEntityBBoxes([...line1, line2], 563, 633, mockMeasure);
+      const result = getEntityBBoxes({
+        spans: [...line1, line2],
+        entityStart: 563,
+        entityEnd: 633,
+        measureWidth: mockMeasure,
+      });
 
       // Line 1 spans merge into 1; line 2 stays separate
       expect(result).toHaveLength(2);
@@ -823,7 +954,12 @@ describe("getEntityBBoxes()", () => {
         // 1.5pt gap (100+40=140, next starts at 141.5)
         span9(9, "podnik", 141.5, 30),
       ];
-      const result = getEntityBBoxes(spans, 0, 15, mockMeasure);
+      const result = getEntityBBoxes({
+        spans,
+        entityStart: 0,
+        entityEnd: 15,
+        measureWidth: mockMeasure,
+      });
       expect(result).toHaveLength(1);
       expect(result[0]?.x).toBe(100);
     });
@@ -835,7 +971,12 @@ describe("getEntityBBoxes()", () => {
         span9(0, "IČO:", 70, 20),
         span9(5, "25823337", 250, 40),
       ];
-      const result = getEntityBBoxes(spans, 0, 13, mockMeasure);
+      const result = getEntityBBoxes({
+        spans,
+        entityStart: 0,
+        entityEnd: 13,
+        measureWidth: mockMeasure,
+      });
       // Should remain 2 separate bboxes (180pt gap)
       expect(result).toHaveLength(2);
     });

@@ -10,6 +10,21 @@ import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createStore, useStore } from "zustand";
 
 import {
+  allocateEntityOverlayId,
+  deleteCachedAnonymization,
+  getCachedAnonymization,
+  registerAnonymizationStore,
+  setCachedAnonymization,
+} from "@/lib/pdf/anonymization-cache";
+import {
+  getEntitySpans,
+  rebuildFileAnonymization,
+} from "@/lib/pdf/anonymization-helpers";
+import type {
+  EntityOverlay,
+  FileAnonymization,
+} from "@/lib/pdf/anonymization-types";
+import {
   DEFAULT_PAGE_BUFFER_SIZE,
   SCROLL_AREA_VIEWPORT_SELECTOR,
 } from "@/lib/pdf/consts";
@@ -18,7 +33,8 @@ import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
-import { captureScrollPosition } from "@/lib/pdf/utils";
+import type { ScrollAnchor } from "@/lib/pdf/utils";
+import { captureScrollAnchor } from "@/lib/pdf/utils";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -39,13 +55,18 @@ export type RenderedPage = {
 
 export type RenderPageResult = Result<RenderedPage, PDFViewerError>;
 
-type ScrollTo = {
+export type ScrollToTarget =
+  | { kind: "justification"; id: string }
+  | { kind: "anonymizeEntity"; entityId: number };
+
+export type ScrollTo = {
   pageId: string;
-  justificationId?: string | undefined;
+  target?: ScrollToTarget | undefined;
 };
 
 type PDFState = {
-  buffer: ArrayBuffer | null;
+  fieldId: string;
+  fileAnonymization: FileAnonymization | null;
   document: PDFDocument | null;
   pages: Map<string, PageInfo>;
   attachmentLabels: Map<string, string>;
@@ -58,15 +79,10 @@ type PDFState = {
   renderPromises: Map<string, Promise<RenderPageResult>>;
 };
 
-type SetDocumentInput = {
-  buffer: ArrayBuffer;
-  document: PDFDocument;
-};
-
 type PDFActions = {
   setScrollTo: (scrollTo: ScrollTo | null) => void;
   setScaleOffset: (offset: number) => void;
-  setDocument: (input: SetDocumentInput) => void;
+  setDocument: (document: PDFDocument) => void;
   updateVisiblePages: (visiblePageIds: string[]) => void;
   isRenderPromiseStale: (
     pageId: string,
@@ -77,6 +93,11 @@ type PDFActions = {
     containerWidth: number,
     container: HTMLElement,
   ) => void;
+  consumePendingScrollAnchor: () => ScrollAnchor | null;
+  setFileAnonymization: (data: FileAnonymization | null) => void;
+  removeAnonymizationEntity: (entityId: number) => void;
+  relabelAnonymizationEntity: (entityId: number, newLabel: string) => void;
+  addAnonymizationEntityByText: (searchText: string, label: string) => number;
 };
 
 export type PDFStore = PDFState & PDFActions;
@@ -84,12 +105,14 @@ export type PDFStore = PDFState & PDFActions;
 // ── Store factory ──────────────────────────────────
 
 type CreatePDFStoreArgs = {
+  fieldId: string;
   startPage: number;
   scaleOffset: number;
   fitToWidth: number | undefined;
 };
 
 const createPDFStore = ({
+  fieldId,
   startPage,
   scaleOffset,
   fitToWidth,
@@ -100,6 +123,7 @@ const createPDFStore = ({
 
   let renderAbort: AbortController = new AbortController();
   let originalPageWidth: number | null = null;
+  let pendingScrollAnchor: ScrollAnchor | null = null;
 
   const remapPageViewports = (
     pages: Map<string, PageInfo>,
@@ -163,8 +187,12 @@ const createPDFStore = ({
     });
   };
 
+  const initialAnon = getCachedAnonymization(fieldId) ?? null;
+
   const store = createStore<PDFStore>((set, get) => ({
     buffer: null,
+    fieldId,
+    fileAnonymization: initialAnon,
     document: null,
     pages: new Map(),
     attachmentLabels: new Map(),
@@ -177,6 +205,85 @@ const createPDFStore = ({
     renderPromises: new Map(),
 
     setScrollTo: (scrollTo) => set({ scrollTo }),
+
+    setFileAnonymization: (data) => {
+      const fid = get().fieldId;
+      if (data) {
+        setCachedAnonymization(fid, data);
+      } else {
+        deleteCachedAnonymization(fid);
+      }
+      set({ fileAnonymization: data });
+    },
+
+    removeAnonymizationEntity: (entityId) => {
+      const file = get().fileAnonymization;
+      if (!file) {
+        return;
+      }
+      const entities = file.entities.filter((e) => e.id !== entityId);
+      const updated = rebuildFileAnonymization(file, entities);
+      const fid = get().fieldId;
+      setCachedAnonymization(fid, updated);
+      set({ fileAnonymization: updated });
+    },
+
+    relabelAnonymizationEntity: (entityId, newLabel) => {
+      const file = get().fileAnonymization;
+      if (!file) {
+        return;
+      }
+      const entities = file.entities.map((e) =>
+        e.id === entityId ? { ...e, label: newLabel } : e,
+      );
+      const updated = rebuildFileAnonymization(file, entities);
+      const fid = get().fieldId;
+      setCachedAnonymization(fid, updated);
+      set({ fileAnonymization: updated });
+    },
+
+    addAnonymizationEntityByText: (searchText, label) => {
+      const file = get().fileAnonymization;
+      if (!file) {
+        return 0;
+      }
+
+      const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "gi");
+      const newEntities: EntityOverlay[] = [];
+      let match: RegExpExecArray | null;
+
+      while ((match = regex.exec(file.extractedText)) !== null) {
+        const idx = match.index;
+        const matchLen = match[0].length;
+
+        const spans = getEntitySpans({
+          charSpans: file.charSpans,
+          entityStart: idx,
+          entityEnd: idx + matchLen,
+        });
+        if (spans.length > 0) {
+          newEntities.push({
+            id: allocateEntityOverlayId(),
+            label,
+            text: file.extractedText.slice(idx, idx + matchLen),
+            spans,
+          });
+        }
+      }
+
+      if (newEntities.length === 0) {
+        return 0;
+      }
+
+      const entities = [...file.entities, ...newEntities];
+      const updated = rebuildFileAnonymization(file, entities);
+      const fid = get().fieldId;
+      setCachedAnonymization(fid, updated);
+      set({ fileAnonymization: updated });
+
+      return newEntities.length;
+    },
     isRenderPromiseStale: (pageId, renderPromise) =>
       get().renderPromises.get(pageId) !== renderPromise,
     setScaleOffset: (nextScaleOffset) => {
@@ -190,8 +297,8 @@ const createPDFStore = ({
       });
     },
 
-    setDocument: ({ buffer, document }) => {
-      if (get().buffer === buffer && get().document === document) {
+    setDocument: (document) => {
+      if (get().document === document) {
         return;
       }
 
@@ -273,7 +380,6 @@ const createPDFStore = ({
       const startPageId = orderedPageIds.at(startIndex);
 
       set({
-        buffer,
         document,
         pages: pagesAtEffectiveScale,
         attachmentLabels: document.attachmentLabels,
@@ -380,9 +486,10 @@ const createPDFStore = ({
       const scrollViewport = container.closest<HTMLElement>(
         SCROLL_AREA_VIEWPORT_SELECTOR,
       );
-      const restoreScroll = scrollViewport
-        ? captureScrollPosition(scrollViewport)
-        : null;
+
+      if (scrollViewport) {
+        pendingScrollAnchor = captureScrollAnchor(scrollViewport);
+      }
 
       const pagesAtFitToWidthScale = remapPageViewports(
         currentPages,
@@ -393,10 +500,12 @@ const createPDFStore = ({
         scale: fitToWidthScale,
         pages: pagesAtFitToWidthScale,
       });
+    },
 
-      requestAnimationFrame(() => {
-        restoreScroll?.();
-      });
+    consumePendingScrollAnchor: () => {
+      const value = pendingScrollAnchor;
+      pendingScrollAnchor = null;
+      return value;
     },
   }));
 
@@ -405,7 +514,6 @@ const createPDFStore = ({
     lru.clear();
     originalPageWidth = null;
     store.setState({
-      buffer: null,
       document: null,
       attachmentLabels: new Map(),
       renderPromises: new Map(),
@@ -431,6 +539,7 @@ export const usePDFStore = <T,>(selector: (state: PDFStore) => T): T => {
 };
 
 type PDFProviderProps = PropsWithChildren<{
+  fieldId: string;
   startPage: number;
   initialScaleOffset?: number | undefined;
   fitToWidth?: number | undefined;
@@ -438,6 +547,7 @@ type PDFProviderProps = PropsWithChildren<{
 }>;
 
 export const PDFProvider = ({
+  fieldId,
   startPage,
   initialScaleOffset = 0,
   fitToWidth,
@@ -446,11 +556,23 @@ export const PDFProvider = ({
 }: PDFProviderProps) => {
   const [{ store, destroy }] = useState(() =>
     createPDFStore({
+      fieldId,
       startPage,
       scaleOffset: initialScaleOffset,
       fitToWidth,
     }),
   );
+
+  useEffect(() => {
+    const unregister = registerAnonymizationStore(fieldId, store);
+    const cached = getCachedAnonymization(fieldId);
+    if (cached) {
+      store.setState({ fileAnonymization: cached });
+    }
+    return () => {
+      unregister();
+    };
+  }, [fieldId, store]);
 
   // oxlint-disable-next-line eslint-plugin-react-hooks/exhaustive-deps -- mount-only cleanup
   useEffect(() => destroy, []);

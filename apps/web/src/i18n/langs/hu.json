@@ -41,19 +41,23 @@
     "totalHours": "Összes óra",
     "utilization": "Kihasználtság"
   },
-  "anonymise": {
+  "anonymize": {
     "addEntity": "Entitás hozzáadása",
-    "checkAnonymisation": "Check anonymisation",
+    "checkAnonymization": "Check anonymisation",
+    "closeAddForm": "Close add form",
     "confirm": "Confirm",
     "confirmAll": "Confirm all",
     "entities": "Entities",
+    "entityType": "Entity type",
     "extractingText": "Extracting text…",
     "noEntitiesFound": "No entities found",
     "reject": "Reject",
     "rejectAll": "Reject all",
+    "removeEntity": "Remove entity",
     "revise": "Revise anonymisation",
     "runPipeline": "Run pipeline",
     "running": "Running…",
+    "searchMatches": "Words to find in the document",
     "searchPlaceholder": "Írjon be keresendő szavakat…",
     "title": "Anonymisation review"
   },
@@ -1125,6 +1129,8 @@
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
+      "anonymizeSidebar": "Anonymization",
+      "entitySidebar": "Entity details",
       "evidence": "Bizonyíték",
       "goBack": "Vissza",
       "incorrectPassword": "Hibás jelszó. Kérjük, próbálja újra.",

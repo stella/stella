@@ -33,10 +33,10 @@ import { Button } from "@stella/ui/components/button";
 
 import { getEntries, putEntry } from "@/lib/anonymize/gazetteer";
 import type { CharSpan } from "@/lib/anonymize/pdf-coords";
-import { extractPdfText } from "@/lib/anonymize/pdf-coords";
+import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { redactPdf } from "@/lib/anonymize/pdf-redact";
 import { saveRedactionMap } from "@/lib/anonymize/redaction-map";
-import { ENTITY_COLORS, MODEL_OPTIONS } from "@/lib/anonymize/ui-constants";
+import { getEntityColor, MODEL_OPTIONS } from "@/lib/anonymize/ui-constants";
 
 const OPERATOR_TYPE_SET: ReadonlySet<string> = new Set(OPERATOR_TYPES);
 
@@ -367,7 +367,7 @@ function AnonymizePage() {
           // underlying ArrayBuffer, which would detach pdfBytes
           const pdf = await getDocument({ data: bytes.slice() }).promise;
           try {
-            const result = await extractPdfText(pdf);
+            const result = await extractPDFText(pdf);
             extracted = result.text;
             setPdfSpans(result.spans);
             log(
@@ -570,8 +570,6 @@ function AnonymizePage() {
         );
       }
 
-      const colorClass =
-        ENTITY_COLORS[entity.label] ?? "bg-gray-200 dark:bg-gray-700";
       const opacity =
         entity.score >= 0.9
           ? "opacity-100"
@@ -581,8 +579,9 @@ function AnonymizePage() {
 
       parts.push(
         <mark
-          className={`${colorClass} ${opacity} hover:border-foreground/30 cursor-help rounded border border-transparent px-0.5 transition-colors`}
+          className={`${opacity} hover:border-foreground/30 cursor-help rounded border border-transparent px-0.5 transition-colors`}
           key={`e-${entity.start}`}
+          style={{ backgroundColor: getEntityColor(entity.label) }}
           title={`${entity.label} (${(entity.score * 100).toFixed(0)}%) [${entity.source}]`}
         >
           {text.slice(entity.start, entity.end)}
@@ -755,13 +754,12 @@ function AnonymizePage() {
           {allLabels.map((label) => {
             const active = selectedLabels.includes(label);
             const isCustom = customLabels.includes(label);
-            const colorClass =
-              ENTITY_COLORS[label] ?? "bg-gray-200 dark:bg-gray-700";
             return (
               <button
                 className={`rounded-full border px-2.5 py-0.5 text-xs transition-opacity ${
-                  active ? `${colorClass} opacity-100` : "opacity-40"
+                  active ? "opacity-100" : "opacity-40"
                 } ${isCustom ? "border-dashed" : ""}`}
+                style={{ backgroundColor: getEntityColor(label) }}
                 key={label}
                 onClick={() => toggleLabel(label)}
                 onContextMenu={
@@ -1122,15 +1120,14 @@ function AnonymizePage() {
 
             <div className="flex flex-col gap-1">
               {filteredEntities.map((entity) => {
-                const colorClass =
-                  ENTITY_COLORS[entity.label] ?? "bg-gray-200 dark:bg-gray-700";
                 const isRejected = entity.decision === "rejected";
                 return (
                   <div
-                    className={`${colorClass} group relative rounded px-2 py-1.5 text-xs ${
+                    className={`group relative rounded px-2 py-1.5 text-xs ${
                       isRejected ? "line-through opacity-30" : ""
                     }`}
                     key={`${entity.start}-${entity.end}-${entity.label}`}
+                    style={{ backgroundColor: getEntityColor(entity.label) }}
                   >
                     <div className="flex items-center justify-between">
                       <div>

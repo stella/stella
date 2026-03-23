@@ -20,19 +20,28 @@ import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { PageAnonymisation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymisation";
+import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 type PeekPdfViewerProps = {
   workspaceId: string;
+  viewId: string;
   fieldId: string;
+  entityId: string;
+  activePropertyId: string;
   scaleOffset: number;
+  /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
+  onPeekNavigate?: (() => void) | undefined;
 };
 
 export const PeekPdfViewer = ({
   workspaceId,
+  viewId,
   fieldId,
+  entityId,
+  activePropertyId,
   scaleOffset,
+  onPeekNavigate,
 }: PeekPdfViewerProps) => {
   const { resolvedTheme } = useTheme();
 
@@ -41,8 +50,18 @@ export const PeekPdfViewer = ({
   );
 
   const renderPageOverlay = useCallback(
-    (pageId: string) => <PeekPageOverlays fieldId={fieldId} pageId={pageId} />,
-    [fieldId],
+    (pageId: string) => (
+      <PeekPageOverlays
+        activePropertyId={activePropertyId}
+        entityId={entityId}
+        fieldId={fieldId}
+        onPeekNavigate={onPeekNavigate}
+        pageId={pageId}
+        viewId={viewId}
+        workspaceId={workspaceId}
+      />
+    ),
+    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
 
   return (
@@ -213,13 +232,24 @@ export const PeekPrintButton = () => {
 };
 
 const PeekPageOverlays = ({
+  workspaceId,
+  viewId,
   fieldId,
+  entityId,
+  activePropertyId,
+  onPeekNavigate,
   pageId,
 }: {
+  workspaceId: string;
+  viewId: string;
   fieldId: string;
+  entityId: string;
+  activePropertyId: string;
+  onPeekNavigate?: (() => void) | undefined;
   pageId: string;
 }) => {
   const page = usePDFStore((s) => s.pages.get(pageId));
+  const hasAnonymization = usePDFStore((s) => s.fileAnonymization !== null);
 
   if (!page) {
     return null;
@@ -227,12 +257,22 @@ const PeekPageOverlays = ({
 
   return (
     <>
-      <PageAnonymisation
-        fileId={fieldId}
-        originalHeight={page.originalHeight}
-        originalWidth={page.originalWidth}
+      <PageAnonymization
+        onPeekNavigate={onPeekNavigate}
+        pageId={pageId}
         pageIndex={page.proxy.pageNumber - 1}
-        scale={page.viewport.scale}
+        variant="peek"
+        {...(hasAnonymization
+          ? {
+              peekNavigation: {
+                activePropertyId,
+                entityId,
+                fieldId,
+                viewId,
+                workspaceId,
+              },
+            }
+          : {})}
       />
       <PageCitation
         originalHeight={page.originalHeight}

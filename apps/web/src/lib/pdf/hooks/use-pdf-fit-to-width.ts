@@ -4,38 +4,48 @@ import type { RefObject } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/react/shallow";
 
+import { SCROLL_AREA_VIEWPORT_SELECTOR } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
+import { restoreScrollAnchor } from "@/lib/pdf/utils";
 
 type UsePDFFitToWidthArgs = {
   containerRef: RefObject<HTMLDivElement | null>;
-  isHydrated: boolean;
 };
 
-export const usePDFFitToWidth = ({
-  containerRef,
-  isHydrated,
-}: UsePDFFitToWidthArgs) => {
+export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
   const [
     fitToWidth,
-    scale,
     scaleOffset,
     updateContainerWidth,
     rerenderAtScale,
+    consumePendingScrollAnchor,
   ] = usePDFStore(
     useShallow((s) => [
       s.fitToWidth,
-      s.scale,
       s.scaleOffset,
       s.updateContainerWidth,
       s.rerenderAtScale,
+      s.consumePendingScrollAnchor,
     ]),
   );
-
-  const effectiveScale = scale + scaleOffset;
+  const effectiveScale = usePDFStore(
+    useShallow((s) => s.scale + s.scaleOffset),
+  );
   const debouncedRerender = useDebouncedCallback(rerenderAtScale, 150);
 
   useEffect(() => {
-    if (fitToWidth === undefined || scaleOffset !== 0 || !isHydrated) {
+    const anchor = consumePendingScrollAnchor();
+
+    if (anchor) {
+      const scrollViewport = containerRef.current?.closest<HTMLElement>(
+        SCROLL_AREA_VIEWPORT_SELECTOR,
+      );
+      if (scrollViewport) {
+        restoreScrollAnchor(scrollViewport, anchor);
+      }
+    }
+
+    if (fitToWidth === undefined || scaleOffset !== 0) {
       return;
     }
 
@@ -45,7 +55,7 @@ export const usePDFFitToWidth = ({
     }
 
     const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
+      const entry = entries.at(0);
       if (!entry) {
         return;
       }
@@ -67,10 +77,10 @@ export const usePDFFitToWidth = ({
     };
   }, [
     fitToWidth,
-    isHydrated,
     scaleOffset,
     effectiveScale,
     updateContainerWidth,
+    consumePendingScrollAnchor,
     debouncedRerender,
     containerRef,
   ]);

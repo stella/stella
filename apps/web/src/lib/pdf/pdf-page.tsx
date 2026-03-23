@@ -46,7 +46,7 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
       ref={(el) => {
         const shouldScrollToPage =
           scrollTo !== null &&
-          !scrollTo.justificationId &&
+          scrollTo.target === undefined &&
           scrollTo.pageId === pageId;
 
         if (!el || !shouldScrollToPage) {
