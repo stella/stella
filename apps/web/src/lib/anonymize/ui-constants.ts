@@ -1,7 +1,7 @@
 /**
  * UI-specific constants for the anonymisation feature.
  * These are browser/React-only and not part of the
- * `@stella/anonymize` package.
+ * `@stll/anonymize` package.
  */
 
 export type ModelOption = {

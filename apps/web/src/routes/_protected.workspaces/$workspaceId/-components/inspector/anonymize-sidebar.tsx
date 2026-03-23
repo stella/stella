@@ -1,10 +1,10 @@
 import { useId, useState } from "react";
 
+import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { DEFAULT_ENTITY_LABELS } from "@stella/anonymize";
 import { Button } from "@stella/ui/components/button";
 import { Field, FieldError } from "@stella/ui/components/field";
 import { Input } from "@stella/ui/components/input";

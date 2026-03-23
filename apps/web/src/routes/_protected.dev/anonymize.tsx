@@ -1,24 +1,22 @@
 // TODO: FIXME — anonymize feature uses untyped third-party libs (onnxruntime-web, idb, mammoth)
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { createFileRoute } from "@tanstack/react-router";
-import mammoth from "mammoth";
-import { nanoid } from "nanoid";
-
 import {
+  buildUnifiedSearch,
   chunkText,
   computeChunkOffsets,
   DEFAULT_ENTITY_LABELS,
   DEFAULT_OPERATOR_CONFIG,
   DETECTION_SOURCES,
-  detectRegexPii,
   exportRedactionKey,
   mergeChunkEntities,
   OPERATOR_TYPES,
+  processRegexMatches,
   redactText,
   resolveOperator,
   runPipeline,
-} from "@stella/anonymize";
+  runUnifiedSearch,
+} from "@stll/anonymize";
 import type {
   Entity,
   GazetteerEntry,
@@ -28,7 +26,11 @@ import type {
   PipelineConfig,
   ReviewDecision,
   ReviewedEntity,
-} from "@stella/anonymize";
+} from "@stll/anonymize";
+import { createFileRoute } from "@tanstack/react-router";
+import mammoth from "mammoth";
+import { nanoid } from "nanoid";
+
 import { Button } from "@stella/ui/components/button";
 
 import { getEntries, putEntry } from "@/lib/anonymize/gazetteer";
@@ -286,6 +288,7 @@ function AnonymizePage() {
           enableTriggerPhrases: true,
           enableRegex: true,
           enableNameCorpus: true,
+          enableDenyList: false,
           enableGazetteer: gazetteerEntries.length > 0,
           enableNer: workerRef.current !== null,
           enableConfidenceBoost: true,
@@ -318,7 +321,7 @@ function AnonymizePage() {
   // ── Regex-only shortcut ────────────────────────────
 
   const runRegexOnly = useCallback(
-    (inputText: string) => {
+    async (inputText: string) => {
       setText(inputText);
       setRedactedText(null);
       setRedactionKey(null);
@@ -329,10 +332,36 @@ function AnonymizePage() {
       setShowRedactionMap(false);
       setRedactionEntries([]);
       setOperatorConfig({ ...DEFAULT_OPERATOR_CONFIG });
-      const regexResults = detectRegexPii(inputText);
-      setEntities(regexResults);
-      log(`Regex-only: ${regexResults.length} matches`);
-      setStatus("done");
+      try {
+        const regexConfig: PipelineConfig = {
+          threshold: 0,
+          enableTriggerPhrases: false,
+          enableRegex: true,
+          enableNameCorpus: false,
+          enableDenyList: false,
+          enableGazetteer: false,
+          enableNer: false,
+          enableConfidenceBoost: false,
+          enableCoreference: false,
+          labels: [],
+          workspaceId: "dev",
+        };
+        const search = await buildUnifiedSearch(regexConfig);
+        const { regexMatches } = runUnifiedSearch(search, inputText);
+        const regexResults = processRegexMatches(
+          regexMatches,
+          search.slices.regex.start,
+          search.slices.regex.end,
+          search.regexMeta,
+        );
+        setEntities(regexResults);
+        log(`Regex-only: ${regexResults.length} matches`);
+        setStatus("done");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        log(`Regex-only failed: ${message}`);
+        setStatus("idle");
+      }
     },
     [log],
   );
@@ -741,7 +770,7 @@ function AnonymizePage() {
               disabled={pasteText.trim().length === 0}
               onClick={() => {
                 setFileName("");
-                runRegexOnly(pasteText);
+                void runRegexOnly(pasteText);
               }}
             >
               Regex Only

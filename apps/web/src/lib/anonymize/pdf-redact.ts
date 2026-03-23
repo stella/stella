@@ -1,16 +1,11 @@
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
-
 import {
   buildPlaceholderMap,
   DEFAULT_OPERATOR_CONFIG,
   redactText,
   resolveOperator,
-} from "@stella/anonymize";
-import type {
-  Entity,
-  OperatorConfig,
-  RedactionResult,
-} from "@stella/anonymize";
+} from "@stll/anonymize";
+import type { Entity, OperatorConfig, RedactionResult } from "@stll/anonymize";
 
 import { getEntityBBoxes } from "@/lib/anonymize/pdf-bbox";
 import { neutralisePageText } from "@/lib/anonymize/pdf-content-stream";

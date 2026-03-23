@@ -1,5 +1,5 @@
-import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stella/anonymize";
-import type { PipelineConfig } from "@stella/anonymize";
+import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize";
+import type { PipelineConfig } from "@stll/anonymize";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import type { CharSpan } from "@/lib/anonymize/pdf-coords";
@@ -24,6 +24,7 @@ const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   enableTriggerPhrases: true,
   enableRegex: true,
   enableNameCorpus: true,
+  enableDenyList: false,
   enableGazetteer: false,
   enableNer: false,
   enableConfidenceBoost: false,

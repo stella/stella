@@ -9,15 +9,14 @@
  * Original: github.com/Ingvarstep/GLiNER.js
  */
 import { Tokenizer } from "@huggingface/tokenizers";
+import { decodeSpans, prepareBatch, tokenizeText } from "@stll/anonymize";
+import type { EntityResult, RawInferenceResult } from "@stll/anonymize";
 import type { Tensor } from "onnxruntime-web";
-
-import { decodeSpans, prepareBatch, tokenizeText } from "@stella/anonymize";
-import type { EntityResult, RawInferenceResult } from "@stella/anonymize";
 
 import { createOnnxWrapper } from "./onnx-wrapper";
 import type { GlinerConfig, OnnxWrapper } from "./onnx-wrapper";
 
-export type { EntityResult } from "@stella/anonymize";
+export type { EntityResult } from "@stll/anonymize";
 export type { ExecutionProvider, GlinerConfig } from "./onnx-wrapper";
 
 const DEFAULT_MAX_WIDTH = 12;
