@@ -132,12 +132,31 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   };
 };
 
-type CursorState = { date: string; page: number };
+type CursorState = {
+  date: string;
+  page: number;
+  /** Consecutive empty days (for gap-skipping). */
+  emptyDays: number;
+};
 
 const parseCursor = (cursor: string): CursorState => {
+  // Format: "YYYY-MM-DD:page" or "YYYY-MM-DD:page:emptyDays"
+  const parts = cursor.split(":");
+  if (parts.length >= 3) {
+    // New format with emptyDays counter
+    const date = parts.slice(0, -2).join(":");
+    const page = Number.parseInt(parts.at(-2) ?? "0", 10);
+    const emptyDays = Number.parseInt(parts.at(-1) ?? "0", 10);
+    return {
+      date: date || cursor,
+      page: Number.isNaN(page) ? 0 : page,
+      emptyDays: Number.isNaN(emptyDays) ? 0 : emptyDays,
+    };
+  }
+
   const colonIdx = cursor.lastIndexOf(":");
   if (colonIdx === -1) {
-    return { date: cursor, page: 0 };
+    return { date: cursor, page: 0, emptyDays: 0 };
   }
 
   const date = cursor.slice(0, colonIdx);
@@ -146,11 +165,14 @@ const parseCursor = (cursor: string): CursorState => {
   return {
     date,
     page: Number.isNaN(page) ? 0 : page,
+    emptyDays: 0,
   };
 };
 
 const makeCursor = (state: CursorState): string =>
-  `${state.date}:${state.page}`;
+  state.emptyDays > 0
+    ? `${state.date}:${state.page}:${state.emptyDays}`
+    : `${state.date}:${state.page}`;
 
 /** Build the day endpoint URL from a YYYY-MM-DD date. */
 const buildDayUrl = (date: string, page: number): string => {
@@ -162,18 +184,40 @@ const buildDayUrl = (date: string, page: number): string => {
   return `${BASE_URL}/opendata/${year}/${month}/${day}?page=${page}`;
 };
 
-/** Advance a YYYY-MM-DD string by one day. */
-const nextDay = (dateStr: string): string => {
+/** Advance a YYYY-MM-DD string by N days (default 1). */
+const advanceDate = (dateStr: string, days: number = 1): string => {
   const parts = dateStr.split("-").map(Number);
   const year = parts[0] ?? 0;
   const month = parts[1] ?? 1;
   const day = parts[2] ?? 1;
-  const date = new Date(Date.UTC(year, month - 1, day + 1));
+  const date = new Date(Date.UTC(year, month - 1, day + days));
   const iso = date.toISOString().split("T")[0];
   if (!iso) {
     throw new Error(`Failed to format date from ${dateStr}`);
   }
   return iso;
+};
+
+/**
+ * Calculate how many days to skip forward based on
+ * consecutive empty days. Conservative thresholds to
+ * avoid jumping over real data:
+ *
+ *   <30 empty:  1 day  (courts have weekends, holidays,
+ *               recesses — 2+ weeks empty is normal)
+ *   30-89:      7 days (a full month empty is unusual)
+ *   90-179:    14 days (a full quarter empty)
+ *   180+:      30 days (six months empty — likely pre-data era)
+ *
+ * These thresholds are intentionally conservative.
+ * Court systems have long holiday recesses (2-4 weeks)
+ * and some APIs backfill data months after the fact.
+ */
+const gapSkipDays = (consecutiveEmpty: number): number => {
+  if (consecutiveEmpty >= 180) return 30;
+  if (consecutiveEmpty >= 90) return 14;
+  if (consecutiveEmpty >= 30) return 7;
+  return 1;
 };
 
 const todayIso = (): string =>
@@ -195,7 +239,7 @@ export const czRegionalAdapter: SourceAdapter = {
       try: async () => {
         const state: CursorState = cursor
           ? parseCursor(cursor)
-          : { date: defaultDate(), page: 0 };
+          : { date: defaultDate(), page: 0, emptyDays: 0 };
 
         const url = buildDayUrl(state.date, state.page);
 
@@ -205,15 +249,19 @@ export const czRegionalAdapter: SourceAdapter = {
         });
 
         if (!response.ok) {
-          // 404 means no data for this date; advance cursor
+          // 404 means no data for this date; skip forward
           if (response.status === 404) {
             const today = todayIso();
-            const next = nextDay(state.date);
+            const empty = state.emptyDays + 1;
+            const skip = gapSkipDays(empty);
+            const next = advanceDate(state.date, skip);
 
             return {
               decisions: [],
               nextCursor:
-                next <= today ? makeCursor({ date: next, page: 0 }) : null,
+                next <= today
+                  ? makeCursor({ date: next, page: 0, emptyDays: empty })
+                  : null,
             };
           }
 
@@ -265,6 +313,9 @@ export const czRegionalAdapter: SourceAdapter = {
         // a stale or incorrect pageNumber.
         const currentPage = state.page;
 
+        // Found results: reset empty counter
+        const hasResults = decisions.length > 0;
+
         // More pages for this day: advance page (0-indexed)
         if (currentPage + 1 < totalPages) {
           return {
@@ -272,18 +323,23 @@ export const czRegionalAdapter: SourceAdapter = {
             nextCursor: makeCursor({
               date: state.date,
               page: currentPage + 1,
+              emptyDays: 0,
             }),
           };
         }
 
         // Day exhausted: advance to next day
         const today = todayIso();
-        const next = nextDay(state.date);
+        const empty = hasResults ? 0 : state.emptyDays + 1;
+        const skip = hasResults ? 1 : gapSkipDays(empty);
+        const next = advanceDate(state.date, skip);
 
         return {
           decisions,
           nextCursor:
-            next <= today ? makeCursor({ date: next, page: 0 }) : null,
+            next <= today
+              ? makeCursor({ date: next, page: 0, emptyDays: empty })
+              : null,
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),
