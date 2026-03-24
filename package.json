@@ -34,7 +34,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "^0.16.0",
-    "turbo": "^2.8.17",
+    "turbo": "^2.8.20",
     "typescript": "catalog:",
     "ultracite": "catalog:",
     "vite": "catalog:"
