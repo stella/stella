@@ -24,8 +24,8 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
  *    fields (hidden + text inputs for vyhledavaciSekce model)
  * 2. POST /Home/Index  -- submit form with date criteria in
  *    vyhledavaciSekce[1] date fields, returns currParams
- * 3. POST /Home/MyResTRowsCont  -- fetch result rows via AJAX
- *    pagination (all pages, including page 0)
+ * 3. Page 0 results are inline in the search response.
+ *    Pages 1+ use POST /Home/MyResTRowsCont (AJAX pagination)
  *
  * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed.
  * A null cursor starts 30 days ago at page 0.
@@ -196,54 +196,64 @@ type ParsedRow = {
 };
 
 /**
- * Parse HTML table rows from the search results.
- * Each row contains: checkbox, case number, date, type,
- * outcome, and a link to the full text.
+ * Parse result rows from the search response HTML.
+ *
+ * The 2025 redesign renders results as <tbody> blocks
+ * with citation <a title="Citace: ... čj. X"> elements.
  */
 const parseResultRows = (html: string): ParsedRow[] => {
   const rows: ParsedRow[] = [];
 
-  const rowPattern =
-    /<tr[^>]*class=["'][^"']*rslt[^"']*["'][^>]*>([\s\S]*?)<\/tr>/gi;
-  let rowMatch: RegExpExecArray | null;
+  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/gi;
+  let tbodyMatch: RegExpExecArray | null;
 
-  while ((rowMatch = rowPattern.exec(html)) !== null) {
-    const rowHtml = rowMatch[1];
-    if (!rowHtml) {
+  while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
+    const block = tbodyMatch[1];
+    if (!block?.includes("Citace")) {
       continue;
     }
 
-    // Extract all <td> cell contents
-    const cells: string[] = [];
-    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    let cellMatch: RegExpExecArray | null;
-
-    while ((cellMatch = cellPattern.exec(rowHtml)) !== null) {
-      if (cellMatch[1] !== undefined) {
-        cells.push(stripHtml(cellMatch[1]));
-      }
-    }
-
-    // Extract link to document
-    const linkMatch = rowHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/i);
-    const documentUrl = linkMatch?.[1]
-      ? linkMatch[1].startsWith("http")
-        ? linkMatch[1]
-        : `${BASE_URL}${linkMatch[1]}`
-      : undefined;
-
-    // cells[0] = checkbox, [1] = case number,
-    // [2] = date, [3] = type, [4] = outcome
-    const caseNumber = cells[1]?.trim();
+    const citMatch = block.match(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i,
+    );
+    const caseNumber = citMatch?.[1]?.trim();
     if (!caseNumber) {
       continue;
     }
 
+    const detailMatch = block.match(/href="(\/DokumentDetail\/Index\/\d+)"/);
+    const documentUrl = detailMatch?.[1]
+      ? `${BASE_URL}${detailMatch[1]}`
+      : undefined;
+
+    const cells: string[] = [];
+    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = cellPattern.exec(block)) !== null) {
+      if (cellMatch[1]) cells.push(stripHtml(cellMatch[1]).trim());
+    }
+
+    let decisionDate: string | undefined;
+    let decisionType: string | undefined;
+    for (const cell of cells) {
+      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/.test(cell)) {
+        decisionDate = cell;
+      } else if (
+        !decisionType &&
+        cell !== caseNumber &&
+        cell.length > 2 &&
+        cell.length < 50 &&
+        !/^\d+$/.test(cell)
+      ) {
+        decisionType = cell;
+      }
+    }
+
     rows.push({
       caseNumber,
-      decisionDate: cells[2]?.trim() || undefined,
-      decisionType: cells[3]?.trim() || undefined,
-      outcome: cells[4]?.trim() || undefined,
+      decisionDate,
+      decisionType,
+      outcome: undefined,
       documentUrl,
     });
   }
@@ -486,17 +496,20 @@ export const czSupremeAdminAdapter: SourceAdapter = {
           };
         }
 
-        // The 2025+ redesign loads results via AJAX only.
-        // The initial search response contains currParams
-        // but no inline result rows. All pages (including
-        // page 0) must use the pagination endpoint.
-        const html = await fetchResultPage(
-          session,
-          searchResult.currParams,
-          date,
-          page,
-          effectiveSignal,
-        );
+        let html: string;
+
+        if (page === 0) {
+          // Page 0 results are inline in the search response
+          html = searchResult.html;
+        } else {
+          html = await fetchResultPage(
+            session,
+            searchResult.currParams,
+            date,
+            page,
+            effectiveSignal,
+          );
+        }
 
         const rows = parseResultRows(html);
         const decisions: IngestionResult[] = [];
