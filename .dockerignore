@@ -1,4 +1,5 @@
 .git
+.claude
 .turbo
 .cache
 dist
