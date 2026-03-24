@@ -477,10 +477,7 @@ export const czSupremeAdminAdapter: SourceAdapter = {
           effectiveSignal,
         );
 
-        if (
-          !searchResult.currParams ||
-          searchResult.currParams === "[]"
-        ) {
+        if (!searchResult.currParams || searchResult.currParams === "[]") {
           // No results for this date; advance to next day
           const next = nextDay(date);
           return {
