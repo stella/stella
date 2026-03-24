@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "stella",
-      "dependencies": {
-        "@stll/anonymize": "0.3.1",
-      },
       "devDependencies": {
         "@stella/typescript-config": "workspace:^0.0.0",
         "@typescript/native-preview": "^7.0.0-dev.20260314.1",
@@ -93,7 +90,7 @@
         "@stella/rivet": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/ui": "workspace:*",
-        "@stll/anonymize": "^0.3.1",
+        "@stll/anonymize": "^0.3.2",
         "@stll/anonymize-data": "^0.1.0",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/code": "^1.1.0",
@@ -1058,17 +1055,17 @@
 
     "@stll/aho-corasick": ["@stll/aho-corasick@0.3.0", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "0.3.0", "@stll/aho-corasick-darwin-x64": "0.3.0", "@stll/aho-corasick-linux-arm64-gnu": "0.3.0", "@stll/aho-corasick-linux-x64-gnu": "0.3.0", "@stll/aho-corasick-linux-x64-musl": "0.3.0", "@stll/aho-corasick-win32-x64-msvc": "0.3.0" } }, "sha512-qF49ZD5X+emABLffMZ3QTSA6l8W2BEOVNb8JEqdDDCbbKV19XLKnSozzBKIEsCdHMlqbjC6rvsbELs76jv/f/Q=="],
 
-    "@stll/anonymize": ["@stll/anonymize@0.3.1", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.2", "@stll/stdnum": "^0.5.0", "@stll/text-search": "^0.3.1" }, "peerDependencies": { "@stll/anonymize-data": "^0.1.0" }, "optionalPeers": ["@stll/anonymize-data"] }, "sha512-KdDUxaKGGfc/4jLBoZSHs7h14UUdGanW3Ce+t1ANfi8VkHDRjFFM9D7URd1KG73hgKsJcBn4fNAF5XAlbw9tsA=="],
+    "@stll/anonymize": ["@stll/anonymize@0.3.2", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.2", "@stll/stdnum": "^0.5.0", "@stll/text-search": "^0.3.2" }, "peerDependencies": { "@stll/anonymize-data": "^0.1.0" }, "optionalPeers": ["@stll/anonymize-data"] }, "sha512-IwxDoEb0F+fIox1IqYlBSMp+7bbOBxLr2D2/n3ihjhtwMAodsif0RedIaWR03fZ80tcJQDzSa7H63eEB3i+j1w=="],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.1.0", "", {}, "sha512-eu+bDKfaD1p10gCa57Jg765cDamcjZrTKk3/n2eyi8TF/NjBcgIlLyE0FSgjpYHC07TP9gtHo1PxoSGnXYwzOA=="],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@0.2.1", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "0.2.1", "@stll/fuzzy-search-darwin-x64": "0.2.1", "@stll/fuzzy-search-linux-arm64-gnu": "0.2.1", "@stll/fuzzy-search-linux-x64-gnu": "0.2.1" } }, "sha512-NpO0cmdA0rlYyQz3G6uTjwOja7C89C887MNZDrbJT6PAIoQiodebqUndmQEPKsC1bActzBfjQza2SdzgDJ6QYg=="],
 
-    "@stll/regex-set": ["@stll/regex-set@0.5.1", "", { "optionalDependencies": { "@stll/regex-set-darwin-arm64": "0.5.1", "@stll/regex-set-darwin-x64": "0.5.1", "@stll/regex-set-linux-arm64-gnu": "0.5.1", "@stll/regex-set-linux-x64-gnu": "0.5.1" } }, "sha512-EWb5zY24jI45iN2BONCmfud4VbVmm8TQ9arxSo307bLm27J5x5nSUG8riKWir5QCo3yuDz1qGyEwdTizPw+53g=="],
+    "@stll/regex-set": ["@stll/regex-set@0.6.0", "", { "optionalDependencies": { "@stll/regex-set-darwin-arm64": "0.6.0", "@stll/regex-set-darwin-x64": "0.6.0", "@stll/regex-set-linux-arm64-gnu": "0.6.0", "@stll/regex-set-linux-x64-gnu": "0.6.0", "@stll/regex-set-wasm32-wasi": "0.6.0" } }, "sha512-omRYj74C8acF0HAKyJG0JZhlN1JyttVAtBoMB/7OWJBWHT6x8gMv8neXpCSPUFvXV0RoGTUacbxKw9OC2if8uA=="],
 
     "@stll/stdnum": ["@stll/stdnum@0.5.0", "", {}, "sha512-y0OCKMoXbCIdKWlQSOmnyuopiYzQbY2oOSx3X+nYimf8k+A4M8SMEiZRuQXrJJkLuNYF4Uk+uKmvxeBfkqGK3A=="],
 
-    "@stll/text-search": ["@stll/text-search@0.3.1", "", { "dependencies": { "@stll/aho-corasick": "^0.3.0", "@stll/fuzzy-search": "^0.2.0", "@stll/regex-set": "^0.5.0" } }, "sha512-umrMLrJvOSQM4d4d9kHPj32aQIysJl3uD+8h8Y39tw8Fh2o59I9nV3JaD1dknf6mICQTu+Gme8G5si+tzKEiCA=="],
+    "@stll/text-search": ["@stll/text-search@0.3.2", "", { "dependencies": { "@stll/aho-corasick": "^0.3.0", "@stll/fuzzy-search": "^0.2.0", "@stll/regex-set": "^0.6.0" } }, "sha512-WMjZRxskO6CxDAU4OvK4IegEIB5vccGaB61GutV5EauZzeh/PIr0gcxFRqA8YuZMEASQrwh5MM9C1siTRGJ26w=="],
 
     "@streamdown/cjk": ["@streamdown/cjk@1.0.2", "", { "dependencies": { "remark-cjk-friendly": "^1.2.3", "remark-cjk-friendly-gfm-strikethrough": "^1.2.3", "unist-util-visit": "^5.0.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-5OOuZjj2Lnae92Zmg2gA5hloSbcKj25gv+QY4iKbYI+iRsiGWbgmYxmgxNUSO9SR6BKOCy783UHN1HM/QEUpdw=="],
 
