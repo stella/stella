@@ -163,6 +163,9 @@ export const czConstitutionalAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 1000,
+  // Each fetchPage probes up to PAGE_SIZE + MAX_CONSECUTIVE_MISSES
+  // case numbers sequentially (1 req/s). Default 30s is too short.
+  pageTimeoutMs: 180_000,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
