@@ -16,15 +16,16 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 /**
  * Czech Supreme Administrative Court adapter.
  *
- * vyhledavac.nssoud.cz added antiforgery protection and no
- * longer accepts direct JSON POST requests. The adapter now
- * follows the full ASP.NET form submission flow:
+ * vyhledavac.nssoud.cz uses ASP.NET antiforgery protection
+ * with a complex vyhledavaciSekce form model (2025 redesign).
  *
- * 1. GET /  -- extract antiforgery cookie, token, form fields
- * 2. POST /Home/Index  -- date range search to execute query
- * 3. POST /Home/MyResTRowsCont  -- paginate with currParams
- *
- * Results are HTML table rows parsed for case metadata.
+ * Flow:
+ * 1. GET /  -- extract antiforgery cookie, token, ALL form
+ *    fields (hidden + text inputs for vyhledavaciSekce model)
+ * 2. POST /Home/Index  -- submit form with date criteria in
+ *    vyhledavaciSekce[1] date fields, returns currParams
+ * 3. POST /Home/MyResTRowsCont  -- fetch result rows via AJAX
+ *    pagination (all pages, including page 0)
  *
  * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed.
  * A null cursor starts 30 days ago at page 0.
@@ -47,23 +48,40 @@ const extractHiddenField = (html: string, name: string): string | undefined => {
 };
 
 /**
- * Extract all hidden form fields from the page.
- * Uses lookaheads to match type, name, and value attributes
- * regardless of their ordering (ASP.NET emits attributes in
- * varying order: name-type-value, type-name-value, etc.).
+ * Extract all form fields from the page (hidden + text inputs).
+ * The 2025+ redesign moved date criteria from top-level
+ * DatumOd/DatumDo fields into nested vyhledavaciSekce
+ * text inputs. Both hidden and text inputs must be submitted
+ * for the ASP.NET model binder to accept the form.
  */
-const extractHiddenFields = (html: string): Map<string, string> => {
+const extractFormFields = (html: string): Map<string, string> => {
   const fields = new Map<string, string>();
 
-  const pattern =
+  // Hidden inputs (token, FormularCiselnik, etc.)
+  const hiddenPattern =
     /<input\b(?=[^>]*\btype=["']hidden["'])(?=[^>]*\bname=["']([^"']*)["'])(?=[^>]*\bvalue=["']([^"']*)["'])[^>]*>/gi;
   let match: RegExpExecArray | null;
+  while ((match = hiddenPattern.exec(html)) !== null) {
+    if (match[1] !== undefined && match[2] !== undefined) {
+      fields.set(match[1], match[2]);
+    }
+  }
 
-  while ((match = pattern.exec(html)) !== null) {
-    const name = match[1];
-    const value = match[2];
-    if (name !== undefined && value !== undefined) {
-      fields.set(name, value);
+  // Text inputs (date fields in vyhledavaciSekce)
+  const textPattern =
+    /<input[^>]*\btype=["']text["'][^>]*\bname=["']([^"']*)["'][^>]*>/gi;
+  while ((match = textPattern.exec(html)) !== null) {
+    if (match[1] && !fields.has(match[1])) {
+      fields.set(match[1], "");
+    }
+  }
+
+  // Also try reversed order (name before type)
+  const textPattern2 =
+    /<input[^>]*\bname=["']([^"']*)["'][^>]*\btype=["']text["'][^>]*>/gi;
+  while ((match = textPattern2.exec(html)) !== null) {
+    if (match[1] && !fields.has(match[1])) {
+      fields.set(match[1], "");
     }
   }
 
@@ -256,7 +274,7 @@ const rowToResult = (row: ParsedRow): IngestionResult => {
 type SessionState = {
   cookies: string;
   token: string;
-  hiddenFields: Map<string, string>;
+  formFields: Map<string, string>;
 };
 
 /**
@@ -290,7 +308,7 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
     });
   }
 
-  return { cookies, token, hiddenFields: extractHiddenFields(html) };
+  return { cookies, token, formFields: extractFormFields(html) };
 };
 
 /**
@@ -299,6 +317,14 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
  *
  * Returns the results HTML and the currParams for pagination.
  */
+/** Date field paths in the vyhledavaciSekce form model. */
+const DATE_FROM_FIELD =
+  "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
+  ".vyhledavaciPodminkaHodnota[0].HodnotaDatumACasOd";
+const DATE_TO_FIELD =
+  "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
+  ".vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo";
+
 const executeSearch = async (
   session: SessionState,
   date: string,
@@ -308,13 +334,13 @@ const executeSearch = async (
 
   const formData = new URLSearchParams();
 
-  for (const [name, value] of session.hiddenFields) {
+  for (const [name, value] of session.formFields) {
     formData.set(name, value);
   }
 
   formData.set("__RequestVerificationToken", session.token);
-  formData.set("DatumOd", czDate);
-  formData.set("DatumDo", czDate);
+  formData.set(DATE_FROM_FIELD, czDate);
+  formData.set(DATE_TO_FIELD, czDate);
 
   const response = await fetch(`${BASE_URL}/Home/Index`, {
     method: "POST",
@@ -451,35 +477,29 @@ export const czSupremeAdminAdapter: SourceAdapter = {
           effectiveSignal,
         );
 
-        let html: string;
-
-        if (page === 0) {
-          // First page comes from the search response
-          html = searchResult.html;
-        } else if (searchResult.currParams) {
-          // Subsequent pages via pagination endpoint.
-          // The adapter is stateless: each fetchPage call
-          // re-establishes a session and re-executes the
-          // search to obtain fresh currParams. This costs
-          // ~1.5x requests vs caching sessions across calls,
-          // but avoids serializing server-side state into
-          // cursors and keeps the adapter resumable from any
-          // cursor without external dependencies.
-          html = await fetchResultPage(
-            session,
-            searchResult.currParams,
-            date,
-            page,
-            effectiveSignal,
-          );
-        } else {
-          // No currParams = no results; advance day
+        if (
+          !searchResult.currParams ||
+          searchResult.currParams === "[]"
+        ) {
+          // No results for this date; advance to next day
           const next = nextDay(date);
           return {
             decisions: [],
             nextCursor: next <= today ? `${next}:0` : null,
           };
         }
+
+        // The 2025+ redesign loads results via AJAX only.
+        // The initial search response contains currParams
+        // but no inline result rows. All pages (including
+        // page 0) must use the pagination endpoint.
+        const html = await fetchResultPage(
+          session,
+          searchResult.currParams,
+          date,
+          page,
+          effectiveSignal,
+        );
 
         const rows = parseResultRows(html);
         const decisions: IngestionResult[] = [];
