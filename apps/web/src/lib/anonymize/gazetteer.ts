@@ -3,8 +3,6 @@ import type { GazetteerEntry } from "@stll/anonymize";
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 
-// Re-export scan functions from the package
-export { scanExact, scanFuzzy } from "@stll/anonymize";
 
 const DB_NAME = "stella-gazetteer";
 const DB_VERSION = 1;

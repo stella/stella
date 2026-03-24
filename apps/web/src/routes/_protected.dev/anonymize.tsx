@@ -297,13 +297,13 @@ function AnonymizePage() {
           workspaceId: WORKSPACE_ID,
         };
 
-        const result = await runPipeline(
-          inputText,
+        const result = await runPipeline({
+          fullText: inputText,
           config,
           gazetteerEntries,
-          workerRef.current ? nerInference : null,
-          (step, detail) => log(`[${step}] ${detail}`),
-        );
+          nerInference: workerRef.current ? nerInference : null,
+          onProgress: (step, detail) => log(`[${step}] ${detail}`),
+        });
 
         setEntities(result);
         log(`Pipeline complete: ${result.length} entities`);

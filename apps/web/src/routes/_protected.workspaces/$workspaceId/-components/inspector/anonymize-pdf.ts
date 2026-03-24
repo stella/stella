@@ -86,12 +86,11 @@ export const anonymizePdf = async ({
     await pdf.destroy();
   }
 
-  const entities = await runPipeline(
-    text,
-    buildPipelineConfig(workspaceId),
-    [],
-    null,
-  );
+  const entities = await runPipeline({
+    fullText: text,
+    config: buildPipelineConfig(workspaceId),
+    gazetteerEntries: [],
+  });
 
   const overlayEntities: EntityOverlay[] = [];
 
