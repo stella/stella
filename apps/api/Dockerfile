@@ -1,5 +1,5 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.3.9-slim)
-FROM oven/bun:1.3.9-slim@sha256:8ca06c7812d9050ccc4b80799685f395d6a0d051d3b7207dfd120e2b437b1ec9 AS base
+# Pin to digest for supply-chain integrity (oven/bun:1.3.11-slim)
+FROM oven/bun:1.3.11-slim@sha256:478281fdd196871c7e51ba6a820b7803a8ae97042ec86cdbc2e1c6b6626442d9 AS base
 WORKDIR /app
 
 # Prune the monorepo for the API
@@ -21,4 +21,4 @@ COPY --chown=stella:stella --from=pruner /app/out/full/ .
 WORKDIR /app/apps/api
 USER stella
 EXPOSE 3001
-CMD ["bun", "--port", "3001", "src/index.ts"]
+CMD ["bun", "src/index.ts"]

@@ -148,3 +148,5 @@ const api = new Elysia()
   );
 
 export default api;
+
+api.listen(3001);
