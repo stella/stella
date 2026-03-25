@@ -205,15 +205,37 @@ export const runIngestionPipeline = async ({
     const page = pageResult.value;
 
     for (const result of page.decisions) {
-      const outcome = await processDecision(result, source.id, scopedDb);
+      try {
+        const outcome = await processDecision(result, source.id, scopedDb);
 
-      if (outcome.inserted) {
-        inserted++;
-      } else {
+        if (outcome.inserted) {
+          inserted++;
+        } else {
+          skipped++;
+        }
+        if (outcome.searchVectorFailed) {
+          searchVectorFailures++;
+        }
+      } catch (error) {
+        // Log the full error and skip this decision instead of
+        // aborting the page (which would leave the cursor stuck).
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const cause =
+          error instanceof Error && error.cause instanceof Error
+            ? error.cause.message
+            : undefined;
+        console.error(
+          `[${adapter.key}] Failed to process decision ` +
+            `${result.caseNumber}: ${errorMessage}` +
+            (cause ? ` (cause: ${cause})` : ""),
+        );
+        captureError(error, {
+          adapterKey: adapter.key,
+          caseNumber: result.caseNumber,
+          cursor: cursor ?? "",
+        });
         skipped++;
-      }
-      if (outcome.searchVectorFailed) {
-        searchVectorFailures++;
       }
     }
 
