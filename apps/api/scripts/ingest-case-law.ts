@@ -8,7 +8,6 @@
  * runs only that source (e.g. "cz-regional").
  */
 
-import "dotenv/config";
 import { createScopedDb, db } from "@/api/db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";

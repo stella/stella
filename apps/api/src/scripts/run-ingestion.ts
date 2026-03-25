@@ -34,7 +34,7 @@ const LOCK_FILE = "/tmp/ingestion.lock";
 
 const acquireLock = (): boolean => {
   if (existsSync(LOCK_FILE)) {
-    const raw = readFileSync(LOCK_FILE, "utf-8").trim();
+    const raw = readFileSync(LOCK_FILE, "utf8").trim();
     const pid = Number.parseInt(raw, 10);
     if (Number.isNaN(pid) || pid <= 0) {
       // Corrupted lock file; remove and re-acquire
@@ -82,15 +82,20 @@ process.on("SIGINT", () => {
 // The transaction type satisfies ScopedDb's callback parameter
 // because both are Drizzle transaction objects from the same db.
 const scopedDb: ScopedDb = async (fn) =>
-  db.transaction(async (tx) => fn(tx as Parameters<typeof fn>[0]));
+  await db.transaction(async (tx) => await fn(tx));
 
 // ── Cursor recovery ─────────────────────────────────────
 
 /** Coerce a Date or string to YYYY-MM-DD. */
 const toIsoDate = (d: unknown): string | null => {
-  if (!d) return null;
+  if (d === null || d === undefined || d === "") {
+    return null;
+  }
   if (d instanceof Date) {
     return d.toISOString().split("T")[0] ?? null;
+  }
+  if (typeof d !== "string" && typeof d !== "number") {
+    return null;
   }
   const m = String(d).match(/(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
@@ -121,7 +126,9 @@ const deriveCursor = async (
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, sourceId));
 
-  if (!stats || stats.total === 0) return null;
+  if (!stats || stats.total === 0) {
+    return null;
+  }
 
   const total = stats.total;
   const latest = toIsoDate(stats.latestDate);
@@ -189,7 +196,7 @@ const ENABLED_ADAPTERS = [
 
 // ── Main loop ───────────────────────────────────────────
 
-const CYCLE_DELAY_MS = 5_000;
+const CYCLE_DELAY_MS = 5000;
 
 /** Run a single adapter's pipeline cycle. */
 const runAdapter = async (key: string) => {

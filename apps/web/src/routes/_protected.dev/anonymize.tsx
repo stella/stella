@@ -1,4 +1,4 @@
-// TODO: FIXME — anonymize feature uses untyped third-party libs (onnxruntime-web, idb, mammoth)
+// TODO: FIXME — anonymize feature uses untyped third-party libs (onnxruntime-web, idb)
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -28,7 +28,6 @@ import type {
   ReviewedEntity,
 } from "@stll/anonymize";
 import { createFileRoute } from "@tanstack/react-router";
-import mammoth from "mammoth";
 import { nanoid } from "nanoid";
 
 import { Button } from "@stella/ui/components/button";
@@ -411,15 +410,9 @@ function AnonymizePage() {
           setPdfBytes(null);
           setPdfSpans([]);
         } else {
-          const buffer = await file.arrayBuffer();
-          // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
-          const result = await mammoth.extractRawText({
-            arrayBuffer: buffer,
-          });
-          // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
-          extracted = result.value;
-          setPdfBytes(null);
-          setPdfSpans([]);
+          throw new Error(
+            `Unsupported file type: ${lowerName}. Only PDF and TXT are supported.`,
+          );
         }
 
         log(

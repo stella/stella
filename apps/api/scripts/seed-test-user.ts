@@ -18,7 +18,6 @@
  * session expiry without duplicating data.
  */
 
-import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { mkdirSync } from "node:fs";

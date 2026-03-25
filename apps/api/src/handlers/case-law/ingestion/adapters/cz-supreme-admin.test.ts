@@ -54,7 +54,9 @@ const parseResultRows = (html: string): ParsedRow[] => {
     const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellPattern.exec(block)) !== null) {
-      if (cellMatch[1]) cells.push(stripHtml(cellMatch[1]).trim());
+      if (cellMatch[1]) {
+        cells.push(stripHtml(cellMatch[1]).trim());
+      }
     }
 
     let decisionDate: string | undefined;

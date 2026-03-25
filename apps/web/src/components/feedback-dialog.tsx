@@ -1,11 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 
-import { CameraIcon, LoaderIcon, MessageSquarePlusIcon } from "lucide-react";
+import { MessageSquarePlusIcon } from "lucide-react";
 import { usePostHog } from "posthog-js/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
 import {
   Dialog,
   DialogDescription,
@@ -19,10 +18,6 @@ import { Label } from "@stella/ui/components/label";
 import { Textarea } from "@stella/ui/components/textarea";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
-import { captureError } from "@/lib/posthog/utils";
-
-/** Cap screenshot dimensions so base64 stays under PostHog's 1 MB event limit. */
-const MAX_SCREENSHOT_SIDE = 1280;
 
 export const FeedbackDialog = () => {
   const t = useTranslations();
@@ -31,59 +26,18 @@ export const FeedbackDialog = () => {
   const [open, setOpen] = useState(false);
   const [issueDescription, setIssueDescription] = useState("");
   const [suggestedFix, setSuggestedFix] = useState("");
-  const [includeScreenshot, setIncludeScreenshot] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const [screenshotFailed, setScreenshotFailed] = useState(false);
-  const screenshotRef = useRef<string | null>(null);
 
-  const captureScreenshot = useCallback(async () => {
-    const { default: html2canvas } = await import("html2canvas-pro");
-    const ratio = Math.min(
-      MAX_SCREENSHOT_SIDE / window.innerWidth,
-      MAX_SCREENSHOT_SIDE / window.innerHeight,
-      1,
-    );
-    const canvas = await html2canvas(document.body, {
-      scale: window.devicePixelRatio * 0.5 * ratio,
-      logging: false,
-      useCORS: true,
-      removeContainer: true,
-    });
-    return canvas.toDataURL("image/webp", 0.7);
-  }, []);
-
-  const reset = useCallback(() => {
+  const reset = () => {
     setIssueDescription("");
     setSuggestedFix("");
-    setIncludeScreenshot(false);
-    setScreenshotFailed(false);
-    screenshotRef.current = null;
-  }, []);
+  };
 
-  const handleOpen = useCallback(
-    async (nextOpen: boolean) => {
-      if (nextOpen) {
-        setCapturing(true);
-        setScreenshotFailed(false);
-        try {
-          screenshotRef.current = await captureScreenshot();
-          setIncludeScreenshot(true);
-        } catch (error) {
-          captureError(
-            posthog,
-            error instanceof Error ? error : new Error(String(error)),
-          );
-          screenshotRef.current = null;
-          setScreenshotFailed(true);
-        }
-        setCapturing(false);
-      } else {
-        reset();
-      }
-      setOpen(nextOpen);
-    },
-    [captureScreenshot, posthog, reset],
-  );
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
+    }
+    setOpen(nextOpen);
+  };
 
   const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,10 +49,6 @@ export const FeedbackDialog = () => {
       description: issueDescription.trim(),
       suggested_fix: suggestedFix.trim() || undefined,
       route: window.location.pathname,
-      ...(includeScreenshot &&
-        screenshotRef.current && {
-          screenshot: screenshotRef.current,
-        }),
     });
 
     setOpen(false);
@@ -107,22 +57,13 @@ export const FeedbackDialog = () => {
 
   return (
     <SidebarMenuItem>
-      {/* eslint-disable-next-line typescript/no-misused-promises */}
-      <Dialog onOpenChange={handleOpen} open={open}>
+      <Dialog onOpenChange={handleOpenChange} open={open}>
         <DialogTrigger
           render={
-            <SidebarMenuButton
-              disabled={capturing}
-              size="sm"
-              tooltip={t("feedback.trigger")}
-            />
+            <SidebarMenuButton size="sm" tooltip={t("feedback.trigger")} />
           }
         >
-          {capturing ? (
-            <LoaderIcon className="size-4 animate-spin" />
-          ) : (
-            <MessageSquarePlusIcon className="size-4" />
-          )}
+          <MessageSquarePlusIcon className="size-4" />
           <span>{t("feedback.trigger")}</span>
         </DialogTrigger>
         <DialogPopup className="max-w-md">
@@ -152,35 +93,10 @@ export const FeedbackDialog = () => {
                   value={suggestedFix}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={includeScreenshot}
-                    disabled={!screenshotRef.current}
-                    id="feedback-screenshot"
-                    onCheckedChange={(val) => setIncludeScreenshot(val)}
-                  />
-                  <Label className="font-normal" htmlFor="feedback-screenshot">
-                    <CameraIcon className="text-muted-foreground size-3.5" />
-                    {t("feedback.includeScreenshot")}
-                  </Label>
-                </div>
-                {!screenshotFailed && (
-                  <p className="text-muted-foreground text-xs">
-                    {t("feedback.screenshotHint")}
-                  </p>
-                )}
-                {screenshotFailed && (
-                  <span className="text-destructive text-xs">
-                    {t("feedback.screenshotFailed")}
-                  </span>
-                )}
-              </div>
             </div>
             <DialogFooter>
               <Button
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={async () => await handleOpen(false)}
+                onClick={() => handleOpenChange(false)}
                 type="button"
                 variant="outline"
               >

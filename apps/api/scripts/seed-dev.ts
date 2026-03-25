@@ -17,7 +17,6 @@
  *   - Test user seeded (bun run db:seed-test-user)
  */
 
-import "dotenv/config";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/api/db";
