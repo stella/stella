@@ -216,11 +216,18 @@ const parseResultRows = (html: string): ParsedRow[] => {
     }
 
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
+    // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
     const citMatch = block.match(
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^"]+?)(?:-\d+)?"/i,
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^",]+?)(?:-\d+)?[",]/i,
     );
     const caseNumber = citMatch?.[1]?.trim();
-    if (!caseNumber) {
+    if (!caseNumber || caseNumber.length > 100) {
+      // Skip malformed or overly long case numbers
+      if (caseNumber) {
+        console.warn(
+          `NSS: skipping malformed case number (${caseNumber.length} chars): ${caseNumber.slice(0, 50)}`,
+        );
+      }
       continue;
     }
 
