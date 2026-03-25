@@ -106,7 +106,12 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
     metadata: {
       saosId: item.id,
       courtType: item.courtType,
-      judges: item.judges?.map((j) => j.name),
+      courtCode: item.division?.court?.code,
+      judges: item.judges?.map((j) => ({
+        name: j.name,
+        function: j.function,
+        specialRoles: j.specialRoles,
+      })),
       keywords: item.keywords,
       division: item.division?.name,
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {

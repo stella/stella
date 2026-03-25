@@ -301,10 +301,97 @@ const fetchFulltext = async (
   }
 };
 
+type DetailMetadata = {
+  ecli: string | undefined;
+  judge: string | undefined;
+  senate: string | undefined;
+  legalArea: string | undefined;
+  decisionType: string | undefined;
+  outcome: string | undefined;
+  caseType: string | undefined;
+  parties: string | undefined;
+};
+
+/** Extract a div's value text by its ID, skipping the label span. */
+const extractDivText = (html: string, divId: string): string | undefined => {
+  const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "i");
+  const match = html.match(pattern);
+  if (!match?.[1]) return undefined;
+
+  // Structure: <span class="det-textitle">Label:</span>
+  //            <span class="det-textval" title="Value">Value</span>
+  const valPattern = /class="det-textval[^"]*"[^>]*>([\s\S]*?)<\/span>/gi;
+  let valMatch: RegExpExecArray | null;
+  const texts: string[] = [];
+  while ((valMatch = valPattern.exec(match[1])) !== null) {
+    const text = stripHtml(valMatch[1] ?? "").trim();
+    if (text) texts.push(text);
+  }
+  if (texts.length > 0) {
+    return texts.join(", ");
+  }
+
+  return undefined;
+};
+
+/**
+ * Fetch structured metadata from /DokumentDetail/Index/{id}.
+ * Extracts ECLI, judge, legal area, decision type, outcome,
+ * case type, and parties.
+ */
+const EMPTY_DETAIL: DetailMetadata = {
+  ecli: undefined,
+  judge: undefined,
+  senate: undefined,
+  legalArea: undefined,
+  decisionType: undefined,
+  outcome: undefined,
+  caseType: undefined,
+  parties: undefined,
+};
+
+const fetchDetailMetadata = async (
+  documentId: string,
+  session: SessionState,
+  signal: AbortSignal,
+): Promise<DetailMetadata> => {
+  const empty = EMPTY_DETAIL;
+
+  try {
+    const response = await fetch(
+      `${BASE_URL}/DokumentDetail/Index/${documentId}`,
+      {
+        signal,
+        headers: {
+          ...COMMON_HEADERS,
+          Cookie: session.cookies,
+        },
+      },
+    );
+    if (!response.ok) return empty;
+
+    const html = await response.text();
+
+    return {
+      ecli: extractDivText(html, "ecli"),
+      judge: extractDivText(html, "soudcezpravodaj"),
+      senate: extractDivText(html, "soudsenat"),
+      legalArea: extractDivText(html, "oblastupravy"),
+      decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
+      outcome: extractDivText(html, "vyrokrozhodnuti"),
+      caseType: extractDivText(html, "typrizeni"),
+      parties: extractDivText(html, "ucastnicirizeniz"),
+    };
+  } catch {
+    return empty;
+  }
+};
+
 /** Convert a parsed row into an IngestionResult. */
 const rowToResult = (
   row: ParsedRow,
   fulltext: string | undefined,
+  detail: DetailMetadata,
 ): IngestionResult => {
   // Hash must be stable across runs regardless of transient
   // network failures — never include fulltext in the hash.
@@ -312,16 +399,24 @@ const rowToResult = (
 
   return {
     caseNumber: row.caseNumber,
+    ecli: detail.ecli,
     court: "Nejvyšší správní soud",
     country: "CZE",
     language: "cs",
     decisionDate: row.decisionDate ? parseCeDate(row.decisionDate) : undefined,
-    decisionType: row.decisionType?.toLowerCase(),
+    // Prefer structured decisionType from detail page over
+    // the heuristic cell match from the search results table
+    decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),
     fulltext,
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
     metadata: {
-      outcome: row.outcome,
+      judge: detail.judge,
+      senate: detail.senate,
+      legalArea: detail.legalArea,
+      outcome: detail.outcome ?? row.outcome,
+      caseType: detail.caseType,
+      parties: detail.parties,
     },
     rawHash: hashContent(raw),
   };
@@ -606,16 +701,18 @@ export const czSupremeAdminAdapter: SourceAdapter = {
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
-          // Fetch fulltext from /DokumentOriginal/Text/{id}
           let fulltext: string | undefined;
+          let detail: DetailMetadata = EMPTY_DETAIL;
+
           if (row.documentId) {
-            fulltext = await fetchFulltext(
-              row.documentId,
-              session,
-              effectiveSignal,
-            );
+            // Fetch fulltext and detail metadata in parallel
+            [fulltext, detail] = await Promise.all([
+              fetchFulltext(row.documentId, session, effectiveSignal),
+              fetchDetailMetadata(row.documentId, session, effectiveSignal),
+            ]);
           }
-          decisions.push(rowToResult(row, fulltext));
+
+          decisions.push(rowToResult(row, fulltext, detail));
         }
 
         // Determine next cursor
