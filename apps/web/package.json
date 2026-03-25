@@ -31,7 +31,7 @@
     "@stella/rivet": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/ui": "workspace:*",
-    "@stll/anonymize": "^0.3.2",
+    "@stll/anonymize": "^0.3.4",
     "@stll/anonymize-data": "^0.1.0",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/code": "^1.1.0",
