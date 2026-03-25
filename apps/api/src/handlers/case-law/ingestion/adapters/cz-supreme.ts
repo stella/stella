@@ -82,7 +82,9 @@ const extractFulltext = (html: string): string | undefined => {
   const parts = html.match(
     /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/gi,
   );
-  if (!parts || parts.length === 0) return undefined;
+  if (!parts || parts.length === 0) {
+    return undefined;
+  }
 
   let text = stripHtml(parts.join(" ")).trim();
 

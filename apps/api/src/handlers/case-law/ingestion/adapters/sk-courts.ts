@@ -127,7 +127,9 @@ const fetchPdfFulltext = async (
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
         : AbortSignal.timeout(30_000),
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      return undefined;
+    }
 
     const buffer = new Uint8Array(await response.arrayBuffer());
     const result = await extractPdfText(buffer, { mergePages: true });

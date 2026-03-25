@@ -296,7 +296,9 @@ const fetchFulltext = async (
       },
     );
 
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      return undefined;
+    }
 
     const buffer = await response.arrayBuffer();
     // Decode UTF-16LE to string
