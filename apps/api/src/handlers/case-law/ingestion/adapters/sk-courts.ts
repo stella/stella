@@ -1,3 +1,5 @@
+import { extractText as extractPdfText } from "unpdf";
+
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
@@ -111,6 +113,31 @@ const fetchDetail = async (
   return json as SkDetailItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
 };
 
+/**
+ * Fetch a PDF from the SK courts document endpoint and extract
+ * text using unpdf. Returns undefined on any failure.
+ */
+const fetchPdfFulltext = async (
+  documentUrl: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> => {
+  try {
+    const response = await fetch(documentUrl, {
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+        : AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) return undefined;
+
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    const result = await extractPdfText(buffer, { mergePages: true });
+    const text = result.text?.trim();
+    return text && text.length > 100 ? text : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const sourceUrlForGuid = (guid: string): string => {
   const docId = guid.split(":").at(-1);
   return docId
@@ -133,6 +160,11 @@ const parseItemWithDetail = async (
 
   const detail = item.guid ? await fetchDetail(item.guid, signal) : null;
 
+  // Fetch fulltext from the PDF document
+  const fulltext = detail?.dokument?.url
+    ? await fetchPdfFulltext(detail.dokument.url, signal)
+    : undefined;
+
   // Hash only the list-endpoint payload so the
   // change-detection key stays stable regardless of
   // transient detail-fetch failures.
@@ -146,6 +178,7 @@ const parseItemWithDetail = async (
     language: "sk",
     decisionDate: parseSkDate(item.datumVydania),
     decisionType: item.formaRozhodnutia,
+    fulltext,
     sourceUrl: item.guid ? sourceUrlForGuid(item.guid) : undefined,
     documentUrl: detail?.dokument?.url,
     metadata: {
