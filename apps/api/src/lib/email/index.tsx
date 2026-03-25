@@ -1,0 +1,113 @@
+import { render } from "@react-email/render";
+import { panic } from "better-result";
+
+import * as BetterAuthOTP from "@stella/transactional/emails/better-auth-otp";
+import * as OrganizationInvitation from "@stella/transactional/emails/organization-invitation";
+
+import { env } from "@/api/env";
+import type { SupportedLang } from "@/api/lib/locale";
+
+import { createSESTransport } from "./ses";
+import { createSMTPTransport } from "./smtp";
+import type { EmailTransport } from "./transport";
+
+const resolveTransport = (): EmailTransport => {
+  switch (env.EMAIL_PROVIDER) {
+    case "ses":
+      return createSESTransport({
+        region:
+          env.SES_REGION ??
+          panic("SES_REGION required when EMAIL_PROVIDER=ses"),
+        ...(env.SES_ACCESS_KEY_ID && {
+          accessKeyId: env.SES_ACCESS_KEY_ID,
+        }),
+        ...(env.SES_SECRET_ACCESS_KEY && {
+          secretAccessKey: env.SES_SECRET_ACCESS_KEY,
+        }),
+      });
+    case "smtp":
+      return createSMTPTransport({
+        host:
+          env.SMTP_HOST ?? panic("SMTP_HOST required when EMAIL_PROVIDER=smtp"),
+        port:
+          env.SMTP_PORT ?? panic("SMTP_PORT required when EMAIL_PROVIDER=smtp"),
+        ...(env.SMTP_USERNAME && {
+          username: env.SMTP_USERNAME,
+        }),
+        ...(env.SMTP_PASSWORD && {
+          password: env.SMTP_PASSWORD,
+        }),
+        requireTLS: !env.isDev,
+      });
+    default: {
+      const _exhaustive: never = env.EMAIL_PROVIDER;
+      return _exhaustive;
+    }
+  }
+};
+
+let cachedTransport: EmailTransport | undefined;
+
+const getTransport = (): EmailTransport => {
+  cachedTransport ??= resolveTransport();
+  return cachedTransport;
+};
+
+type SendOTPEmailProps = {
+  email: string;
+  otp: string;
+  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+  lang: SupportedLang;
+};
+
+export const sendOTPEmail = async ({
+  email,
+  otp,
+  type,
+  lang,
+}: SendOTPEmailProps) => {
+  const html = await render(
+    <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />,
+  );
+
+  await getTransport().send({
+    from: env.TRANSACTIONAL_EMAIL_FROM,
+    to: email,
+    subject: BetterAuthOTP.subject(lang),
+    html,
+  });
+};
+
+type SendOrganizationInvitationProps = {
+  email: string;
+  inviteLink: string;
+  invitedByUsername: string;
+  organizationName: string;
+  lang: SupportedLang;
+};
+
+export const sendOrganizationInvitation = async ({
+  email,
+  inviteLink,
+  invitedByUsername,
+  organizationName,
+  lang,
+}: SendOrganizationInvitationProps) => {
+  const html = await render(
+    <OrganizationInvitation.Email
+      invitedByUsername={invitedByUsername}
+      inviteLink={inviteLink}
+      lang={lang}
+      organizationName={organizationName}
+    />,
+  );
+
+  await getTransport().send({
+    from: env.TRANSACTIONAL_EMAIL_FROM,
+    to: email,
+    subject: OrganizationInvitation.subject(lang, {
+      organizationName,
+    }),
+    html,
+  });
+};

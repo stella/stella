@@ -33,14 +33,18 @@ const fetchCzSupremeFulltext = async (
     const response = await fetch(sourceUrl, {
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      return undefined;
+    }
 
     const html = await response.text();
 
     const parts = html.match(
       /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/gi,
     );
-    if (!parts || parts.length === 0) return undefined;
+    if (!parts || parts.length === 0) {
+      return undefined;
+    }
 
     let text = stripHtml(parts.join(" ")).trim();
 
@@ -70,14 +74,18 @@ const fetchCzSupremeAdminFulltext = async (
 ): Promise<string | undefined> => {
   // Extract document ID from URL like .../DokumentDetail/Index/744029
   const idMatch = documentUrl.match(/\/(\d+)$/);
-  if (!idMatch?.[1]) return undefined;
+  if (!idMatch?.[1]) {
+    return undefined;
+  }
 
   try {
     const response = await fetch(
       `https://vyhledavac.nssoud.cz/DokumentOriginal/Text/${idMatch[1]}`,
       { signal: AbortSignal.timeout(15_000) },
     );
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+      return undefined;
+    }
 
     const buffer = await response.arrayBuffer();
     const text = new TextDecoder("utf-16le").decode(buffer);
@@ -126,7 +134,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
   }
 
   // Count missing
-  const [{ count }] = await db
+  const result = await db
     .select({ count: sql<number>`count(*)` })
     .from(caseLawDecisions)
     .where(
@@ -134,8 +142,11 @@ const backfillAdapter = async (config: BackfillConfig) => {
           AND ${caseLawDecisions.fulltext} IS NULL`,
     );
 
+  const count = result.at(0)?.count ?? 0;
   console.log(`[${config.adapterKey}] ${count} decisions missing fulltext`);
-  if (count === 0) return;
+  if (count === 0) {
+    return;
+  }
 
   let processed = 0;
   let filled = 0;
@@ -156,7 +167,9 @@ const backfillAdapter = async (config: BackfillConfig) => {
       )
       .limit(BATCH_SIZE);
 
-    if (batch.length === 0) break;
+    if (batch.length === 0) {
+      break;
+    }
 
     for (const row of batch) {
       const url =
