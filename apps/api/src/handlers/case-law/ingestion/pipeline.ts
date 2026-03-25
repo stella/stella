@@ -225,10 +225,9 @@ export const runIngestionPipeline = async ({
           error instanceof Error && error.cause instanceof Error
             ? error.cause.message
             : undefined;
+        // eslint-disable-next-line no-console -- adapter diagnostic
         console.error(
-          `[${adapter.key}] Failed to process decision ` +
-            `${result.caseNumber}: ${errorMessage}` +
-            (cause ? ` (cause: ${cause})` : ""),
+          `[${adapter.key}] Failed to process decision ${result.caseNumber}: ${errorMessage}${cause ? ` (cause: ${cause})` : ""}`,
         );
         captureError(error, {
           adapterKey: adapter.key,

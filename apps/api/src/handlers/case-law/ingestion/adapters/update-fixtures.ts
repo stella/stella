@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI script */
 /**
  * Update adapter test fixtures from live APIs.
  *

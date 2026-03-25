@@ -224,6 +224,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
     if (!caseNumber || caseNumber.length > 100) {
       // Skip malformed or overly long case numbers
       if (caseNumber) {
+        // eslint-disable-next-line no-console -- adapter diagnostic
         console.warn(
           `NSS: skipping malformed case number (${caseNumber.length} chars): ${caseNumber.slice(0, 50)}`,
         );
@@ -328,7 +329,9 @@ type DetailMetadata = {
 const extractDivText = (html: string, divId: string): string | undefined => {
   const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "i");
   const match = html.match(pattern);
-  if (!match?.[1]) return undefined;
+  if (!match?.[1]) {
+    return undefined;
+  }
 
   // Structure: <span class="det-textitle">Label:</span>
   //            <span class="det-textval" title="Value">Value</span>
@@ -337,7 +340,9 @@ const extractDivText = (html: string, divId: string): string | undefined => {
   const texts: string[] = [];
   while ((valMatch = valPattern.exec(match[1])) !== null) {
     const text = stripHtml(valMatch[1] ?? "").trim();
-    if (text) texts.push(text);
+    if (text) {
+      texts.push(text);
+    }
   }
   if (texts.length > 0) {
     return texts.join(", ");
@@ -380,7 +385,9 @@ const fetchDetailMetadata = async (
         },
       },
     );
-    if (!response.ok) return empty;
+    if (!response.ok) {
+      return empty;
+    }
 
     const html = await response.text();
 

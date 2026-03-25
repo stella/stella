@@ -137,6 +137,7 @@ const fetchFulltext = async (
     });
 
     if (!response.ok) {
+      // eslint-disable-next-line no-console -- adapter diagnostic
       console.warn(
         "AT Courts: fulltext fetch failed",
         response.status,

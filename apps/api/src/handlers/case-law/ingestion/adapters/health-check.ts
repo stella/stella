@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- CLI script */
 /**
  * Adapter health checks.
  *
