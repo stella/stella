@@ -502,6 +502,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 500,
   pageTimeoutMs: 60_000,
+  // Each page = 1 day = 2-3 HTTP requests (~3s). 20 pages ≈ 1 min.
+  maxSyncPages: 20,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({

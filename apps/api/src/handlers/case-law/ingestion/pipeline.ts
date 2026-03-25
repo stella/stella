@@ -184,7 +184,9 @@ export const runIngestionPipeline = async ({
   let searchVectorFailures = 0;
   let pagesProcessed = 0;
 
-  while (pagesProcessed < MAX_SYNC_PAGES) {
+  const maxPages = adapter.maxSyncPages ?? MAX_SYNC_PAGES;
+
+  while (pagesProcessed < maxPages) {
     const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
     const pageResult = await adapter.fetchPage(
       cursor,
