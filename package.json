@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:^0.0.0",
-    "@typescript/native-preview": "^7.0.0-dev.20260314.1",
+    "@typescript/native-preview": "7.0.0-dev.20260314.1",
     "i18n-unused": "^0.19.0",
     "lefthook": "^2.1.4",
     "oxfmt": "catalog:",
@@ -42,24 +42,24 @@
   "packageManager": "bun@1.3.10",
   "catalog": {
     "@base-ui/react": "1.3.0",
-    "@t3-oss/env-core": "0.13.10",
-    "@types/bun": "1.3.9",
+    "@t3-oss/env-core": "0.13.11",
+    "@types/bun": "1.3.11",
     "@types/diff-match-patch": "1.0.36",
-    "better-auth": "1.5.5",
+    "better-auth": "1.5.6",
     "better-result": "2.7.0",
     "diff-match-patch": "1.0.5",
-    "@libpdf/core": "0.3.3",
+    "@libpdf/core": "0.3.4",
     "elysia": "1.4.28",
-    "lucide-react": "0.575.0",
-    "nanoid": "5.1.6",
-    "tailwindcss": "4.2.1",
-    "oxfmt": "0.37.0",
+    "lucide-react": "1.6.0",
+    "nanoid": "5.1.7",
+    "tailwindcss": "4.2.2",
+    "oxfmt": "0.42.0",
     "oxlint": "1.55.0",
     "typescript": "5.9.3",
-    "ultracite": "7.3.1",
+    "ultracite": "7.3.2",
     "use-intl": "4.8.3",
     "valibot": "1.2.0",
-    "vite": "8.0.0"
+    "vite": "8.0.2"
   },
   "catalogs": {
     "react19": {
