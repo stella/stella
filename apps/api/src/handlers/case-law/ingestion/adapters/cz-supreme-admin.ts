@@ -213,8 +213,9 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
+    // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     const citMatch = block.match(
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i,
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^"]+?)(?:-\d+)?"/i,
     );
     const caseNumber = citMatch?.[1]?.trim();
     if (!caseNumber) {
@@ -287,14 +288,33 @@ type SessionState = {
   formFields: Map<string, string>;
 };
 
+/** Common headers for all requests to the NSS website. */
+const COMMON_HEADERS = {
+  "User-Agent": "Stella/1.0 (legal research; +https://stll.app)",
+} as const;
+
 /**
- * Establish a session: GET the homepage to extract the
- * antiforgery cookie, token, and hidden form fields.
+ * Session cache. The NSS website uses ASP.NET antiforgery
+ * tokens that are valid for the duration of the session cookie
+ * (typically 20-30 minutes). Creating a new session per
+ * fetchPage call triggers rate limiting after ~10-20 requests.
+ *
+ * We cache the session and reuse it across calls. If a search
+ * returns an unexpected result (e.g., redirect to login), we
+ * invalidate and retry with a fresh session.
  */
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+let cachedSession: {
+  state: SessionState;
+  createdAt: number;
+} | null = null;
+
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   const response = await fetch(BASE_URL, {
     signal,
     redirect: "follow",
+    headers: COMMON_HEADERS,
   });
 
   if (!response.ok) {
@@ -319,6 +339,25 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   }
 
   return { cookies, token, formFields: extractFormFields(html) };
+};
+
+/**
+ * Get or create a session. Reuses the cached session if it
+ * is still within TTL, otherwise creates a fresh one.
+ */
+const getSession = async (signal: AbortSignal): Promise<SessionState> => {
+  if (cachedSession && Date.now() - cachedSession.createdAt < SESSION_TTL_MS) {
+    return cachedSession.state;
+  }
+
+  const state = await initSession(signal);
+  cachedSession = { state, createdAt: Date.now() };
+  return state;
+};
+
+/** Invalidate the cached session (e.g., after a failed request). */
+const invalidateSession = () => {
+  cachedSession = null;
 };
 
 /**
@@ -356,6 +395,7 @@ const executeSearch = async (
     method: "POST",
     signal,
     headers: {
+      ...COMMON_HEADERS,
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: session.cookies,
       Referer: BASE_URL,
@@ -365,6 +405,7 @@ const executeSearch = async (
   });
 
   if (!response.ok) {
+    invalidateSession();
     throw new AdapterFetchError({
       message: `NSS search failed: ${response.status}`,
       adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
@@ -406,6 +447,7 @@ const fetchResultPage = async (
     method: "POST",
     signal,
     headers: {
+      ...COMMON_HEADERS,
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: session.cookies,
       Referer: `${BASE_URL}/Home/Index`,
@@ -415,6 +457,7 @@ const fetchResultPage = async (
   });
 
   if (!response.ok) {
+    invalidateSession();
     throw new AdapterFetchError({
       message: `NSS pagination failed: ${response.status}`,
       adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
@@ -455,7 +498,7 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   name: "Czech Supreme Administrative Court",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 2000,
+  minRequestIntervalMs: 500,
   pageTimeoutMs: 60_000,
 
   async fetchPage(cursor, _config, signal) {
@@ -477,8 +520,8 @@ export const czSupremeAdminAdapter: SourceAdapter = {
           return { decisions: [], nextCursor: null };
         }
 
-        // 1. Establish session
-        const session = await initSession(effectiveSignal);
+        // 1. Get or reuse session
+        const session = await getSession(effectiveSignal);
 
         // 2. Execute search for this date
         const searchResult = await executeSearch(
