@@ -68,6 +68,42 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
   legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/i,
 };
 
+/** Body text markers. */
+const BODY_START_MARKERS = [
+  "Nejvyšší soud rozhodl",
+  "Nejvyšší soud České republiky",
+  "Nejvyšší soud projednal",
+];
+const BODY_END_MARKER = "Citace rozhodnutí";
+
+/** Extract decision fulltext from the detail page body. */
+const extractFulltext = (html: string): string | undefined => {
+  // Decision text is in <font face="Times New Roman"> tags
+  const parts = html.match(
+    /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/gi,
+  );
+  if (!parts || parts.length === 0) return undefined;
+
+  let text = stripHtml(parts.join(" ")).trim();
+
+  // Trim metadata prefix — body starts at the decision header
+  for (const marker of BODY_START_MARKERS) {
+    const pos = text.indexOf(marker);
+    if (pos > 0) {
+      text = text.slice(pos);
+      break;
+    }
+  }
+
+  // Trim footer
+  const endPos = text.indexOf(BODY_END_MARKER);
+  if (endPos > 0) {
+    text = text.slice(0, endPos).trim();
+  }
+
+  return text.length > 100 ? text : undefined;
+};
+
 /** Parse metadata from a decision detail page. */
 const parseDetailPage = (html: string): Record<string, string | undefined> => {
   const result: Record<string, string | undefined> = {};
@@ -81,6 +117,8 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
       }
     }
   }
+
+  result.fulltext = extractFulltext(html);
 
   return result;
 };
@@ -169,6 +207,7 @@ export const czSupremeAdapter: SourceAdapter = {
                   ? parseCeDate(meta.decisionDate)
                   : undefined,
                 decisionType: meta.decisionType?.toLowerCase(),
+                fulltext: meta.fulltext,
                 sourceUrl: detailUrl,
                 documentUrl: detailUrl,
                 metadata: {

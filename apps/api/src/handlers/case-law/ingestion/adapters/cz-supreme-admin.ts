@@ -193,6 +193,8 @@ type ParsedRow = {
   decisionType: string | undefined;
   outcome: string | undefined;
   documentUrl: string | undefined;
+  /** Numeric document ID for fetching fulltext via /DokumentOriginal/Text/{id}. */
+  documentId: string | undefined;
 };
 
 /**
@@ -222,9 +224,10 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const detailMatch = block.match(/href="(\/DokumentDetail\/Index\/\d+)"/);
-    const documentUrl = detailMatch?.[1]
-      ? `${BASE_URL}${detailMatch[1]}`
+    const detailMatch = block.match(/href="\/DokumentDetail\/Index\/(\d+)"/);
+    const documentId = detailMatch?.[1];
+    const documentUrl = documentId
+      ? `${BASE_URL}/DokumentDetail/Index/${documentId}`
       : undefined;
 
     const cells: string[] = [];
@@ -258,14 +261,53 @@ const parseResultRows = (html: string): ParsedRow[] => {
       decisionType,
       outcome: undefined,
       documentUrl,
+      documentId,
     });
   }
 
   return rows;
 };
 
+/**
+ * Fetch the fulltext of a decision via /DokumentOriginal/Text/{id}.
+ * The response is UTF-16LE HTML with <br/> line breaks.
+ */
+const fetchFulltext = async (
+  documentId: string,
+  session: SessionState,
+  signal: AbortSignal,
+): Promise<string | undefined> => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
+      {
+        signal,
+        headers: {
+          ...COMMON_HEADERS,
+          Cookie: session.cookies,
+        },
+      },
+    );
+
+    if (!response.ok) return undefined;
+
+    const buffer = await response.arrayBuffer();
+    // Decode UTF-16LE to string
+    const text = new TextDecoder("utf-16le").decode(buffer);
+    const body = stripHtml(text);
+    return body.length > 100 ? body : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** Convert a parsed row into an IngestionResult. */
-const rowToResult = (row: ParsedRow): IngestionResult => {
+const rowToResult = (
+  row: ParsedRow,
+  fulltext: string | undefined,
+): IngestionResult => {
+  // Hash must be stable across runs regardless of transient
+  // network failures — never include fulltext in the hash.
   const raw = `${row.caseNumber}|${row.decisionDate ?? ""}|${row.decisionType ?? ""}`;
 
   return {
@@ -275,6 +317,7 @@ const rowToResult = (row: ParsedRow): IngestionResult => {
     language: "cs",
     decisionDate: row.decisionDate ? parseCeDate(row.decisionDate) : undefined,
     decisionType: row.decisionType?.toLowerCase(),
+    fulltext,
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
     metadata: {
@@ -501,17 +544,18 @@ export const czSupremeAdminAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 500,
-  pageTimeoutMs: 60_000,
-  // Each page = 1 day = 2-3 HTTP requests (~3s). 20 pages ≈ 1 min.
+  // Each page = 1 day = session + search + fulltext per decision.
+  // With ~20 decisions/day and fulltext fetches, ~30s/page.
+  pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        // Use the full page timeout (60s) rather than
-        // ADAPTER_TIMEOUT.LIST (15s) because each fetchPage
-        // makes 2-3 sequential HTTP requests.
-        const timeoutSignal = AbortSignal.timeout(60_000);
+        // Use the full page timeout (matches pageTimeoutMs)
+        // because each fetchPage makes session + search +
+        // fulltext fetches per decision.
+        const timeoutSignal = AbortSignal.timeout(120_000);
         const effectiveSignal = signal
           ? AbortSignal.any([signal, timeoutSignal])
           : timeoutSignal;
@@ -562,7 +606,16 @@ export const czSupremeAdminAdapter: SourceAdapter = {
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
-          decisions.push(rowToResult(row));
+          // Fetch fulltext from /DokumentOriginal/Text/{id}
+          let fulltext: string | undefined;
+          if (row.documentId) {
+            fulltext = await fetchFulltext(
+              row.documentId,
+              session,
+              effectiveSignal,
+            );
+          }
+          decisions.push(rowToResult(row, fulltext));
         }
 
         // Determine next cursor
