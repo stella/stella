@@ -60,10 +60,20 @@ const api = new Elysia()
   .use(rivetApp)
   .use(
     cors({
-      origin: env.FRONTEND_URL,
+      origin: (() => {
+        const origins: (string | RegExp)[] = [env.FRONTEND_URL];
+        if (env.isDev) {
+          origins.push(/^chrome-extension:\/\//);
+        }
+        if (env.EXTENSION_ORIGIN) {
+          origins.push(env.EXTENSION_ORIGIN);
+        }
+        return origins;
+      })(),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
       allowedHeaders: ["Content-Type", "Authorization"],
+      exposeHeaders: ["set-auth-token"],
     }),
   )
   .onError(({ error, set, code, request }) => {
@@ -97,12 +107,13 @@ const api = new Elysia()
   .onAfterHandle(async ({ set }) => {
     delete set.headers["X-Powered-By"];
 
-    const posthog = getPostHog();
-
-    await posthog.flush().catch((error: unknown) => {
-      // eslint-disable-next-line no-console
-      console.error("Error flushing posthog", error);
-    });
+    if (!env.isDev) {
+      const posthog = getPostHog();
+      await posthog.flush().catch((error: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error("Error flushing posthog", error);
+      });
+    }
   })
   .use(verifyRoute)
   .mount(auth.handler)

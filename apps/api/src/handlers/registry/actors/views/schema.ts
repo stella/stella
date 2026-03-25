@@ -1,6 +1,12 @@
 import * as v from "valibot";
 
-const entityKindValues = ["document", "folder", "task", "message"] as const;
+const entityKindValues = [
+  "document",
+  "folder",
+  "task",
+  "message",
+  "link",
+] as const;
 
 const builtinFieldValues = ["status", "priority"] as const;
 

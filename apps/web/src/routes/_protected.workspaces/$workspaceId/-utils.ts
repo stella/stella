@@ -106,6 +106,8 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.currency
         ? `${field.content.value} ${field.content.currency}`
         : String(field.content.value);
+    case "clip":
+      return field.content.url;
     case "error":
     case "pending":
     case "unsupported":

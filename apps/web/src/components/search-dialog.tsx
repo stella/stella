@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   FileTextIcon,
   FolderIcon,
+  LinkIcon,
   LoaderIcon,
   MessageSquareIcon,
   SearchIcon,
@@ -31,6 +32,7 @@ const KIND_ICONS = {
   folder: FolderIcon,
   task: SquareCheckIcon,
   message: MessageSquareIcon,
+  link: LinkIcon,
 } as const satisfies Record<EntityKind, typeof FileTextIcon>;
 
 const KIND_TRANSLATION_KEYS = {
@@ -38,6 +40,7 @@ const KIND_TRANSLATION_KEYS = {
   folder: "search.kinds.folder",
   task: "search.kinds.task",
   message: "search.kinds.message",
+  link: "search.kinds.link",
 } as const satisfies Record<EntityKind, `search.kinds.${EntityKind}`>;
 
 const isEntityKind = (value: string): value is EntityKind =>

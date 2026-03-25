@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokument",
       "folder": "Kaust",
+      "link": "Link",
       "message": "Sõnum",
       "task": "Ülesanne"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Lisage vähemalt üks sisestusomadus, kasutades \"@\"",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",
+      "clip": "Clip",
       "conditionSeparator": "JA",
       "conditions": "Tingimused ({count})",
       "createOption": "Loo \"{option}\"",

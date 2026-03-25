@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Document",
       "folder": "Dossier",
+      "link": "Link",
       "message": "Message",
       "task": "Tâche"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Ajoutez au moins une propriété d'entrée avec « @ »",
       "addPromptForBetterResults": "Ajoutez un prompt pour de meilleurs résultats",
+      "clip": "Clip",
       "conditionSeparator": "ET",
       "conditions": "Conditions ({count})",
       "createOption": "Créer « {option} »",

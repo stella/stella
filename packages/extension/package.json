@@ -1,0 +1,28 @@
+{
+  "name": "@stella/extension",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "prepare": "wxt prepare",
+    "typecheck": "wxt prepare && tsgo --noEmit"
+  },
+  "dependencies": {
+    "@stella/ui": "workspace:*",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/chrome": "^0.0.304",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "@wxt-dev/module-react": "^1.2.2",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "wxt": "^0.20.20"
+  }
+}

@@ -39,6 +39,7 @@ export const entityKindSchema = t.UnionEnum([
   "folder",
   "task",
   "message",
+  "link",
 ]);
 export type EntityKind = Static<typeof entityKindSchema>;
 
@@ -156,6 +157,15 @@ export const fieldContentSchema = t.Union([
     type: t.Literal("int"),
     value: t.Integer(),
     currency: t.Nullable(t.String({ minLength: 3, maxLength: 3 })),
+  }),
+  t.Object({
+    version: v1,
+    type: t.Literal("clip"),
+    url: t.String({ maxLength: 2048 }),
+    snippet: t.Optional(t.String({ maxLength: 10_000 })),
+    citation: t.Optional(t.String({ maxLength: 1000 })),
+    jurisdiction: t.Optional(t.String({ maxLength: 128 })),
+    sourceType: t.Optional(t.String({ maxLength: 64 })),
   }),
 ]);
 

@@ -135,6 +135,7 @@ const getFieldContentAsString = (content?: FieldContent) => {
     case "pending":
     case "unsupported":
     case "file":
+    case "clip":
       return null;
     default:
       return null;

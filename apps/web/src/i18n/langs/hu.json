@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokumentum",
       "folder": "Mappa",
+      "link": "Link",
       "message": "Üzenet",
       "task": "Feladat"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",
+      "clip": "Clip",
       "conditionSeparator": "ÉS",
       "conditions": "Feltételek ({count})",
       "createOption": "\"{option}\" létrehozása",

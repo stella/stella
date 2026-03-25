@@ -7,6 +7,7 @@ import {
   FileIcon,
   FileQuestionIcon,
   HashIcon,
+  LinkIcon,
   ListChecksIcon,
   TextIcon,
 } from "lucide-react";
@@ -72,6 +73,10 @@ const propertyMap: Record<
     icon: HashIcon,
     label: "Number",
   },
+  clip: {
+    icon: LinkIcon,
+    label: "Clip",
+  },
 };
 
 export const PropertyIcon = ({ type, className }: PropertyHelperProps) => {
@@ -96,6 +101,7 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
     unsupported: t("workspaces.properties.unsupported"),
     date: t("workspaces.properties.date"),
     int: t("workspaces.properties.int"),
+    clip: t("workspaces.properties.clip"),
   };
 
   return (

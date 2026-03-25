@@ -61,6 +61,15 @@ export type WorkflowActorEvent =
               value: number;
               currency: string | null;
             }
+          | {
+              version: 1;
+              type: "clip";
+              url: string;
+              snippet?: string;
+              citation?: string;
+              jurisdiction?: string;
+              sourceType?: string;
+            }
           | null;
       }[];
     };

@@ -122,6 +122,7 @@ type Messages = {
       "manageCodes": "Manage codes";
       "noCodesYet": "No billing codes yet";
       "task": "Task";
+      "link": "Link";
       "taskCode": "Task code";
     };
     "day": "Day";
@@ -813,6 +814,7 @@ type Messages = {
       "folder": "Folder";
       "message": "Message";
       "task": "Task";
+      "link": "Link";
     };
     "metaSeparator": "{workspace} · {time}";
     "noResults": "No results found for \"{query}\".";
@@ -1169,6 +1171,7 @@ type Messages = {
       "file": "File";
       "ifNoMatchFound": "If no match found";
       "int": "Integer";
+      "clip": "Clip";
       "keepEmpty": "Keep Empty";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
