@@ -3,7 +3,6 @@ import type { GazetteerEntry } from "@stll/anonymize";
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 
-
 const DB_NAME = "stella-gazetteer";
 const DB_VERSION = 1;
 const STORE_NAME = "entries";

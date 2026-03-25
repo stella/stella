@@ -214,9 +214,15 @@ const advanceDate = (dateStr: string, days: number = 1): string => {
  * and some APIs backfill data months after the fact.
  */
 const gapSkipDays = (consecutiveEmpty: number): number => {
-  if (consecutiveEmpty >= 180) return 30;
-  if (consecutiveEmpty >= 90) return 14;
-  if (consecutiveEmpty >= 30) return 7;
+  if (consecutiveEmpty >= 180) {
+    return 30;
+  }
+  if (consecutiveEmpty >= 90) {
+    return 14;
+  }
+  if (consecutiveEmpty >= 30) {
+    return 7;
+  }
   return 1;
 };
 

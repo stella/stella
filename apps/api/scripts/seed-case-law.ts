@@ -14,7 +14,6 @@
  *   bun apps/api/scripts/seed-case-law.ts
  */
 
-import "dotenv/config";
 import { createScopedDb, db } from "@/api/db";
 import {
   caseLawCitations,

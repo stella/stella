@@ -142,7 +142,7 @@ const fetchFulltext = async (
         response.status,
         htmlUrl,
       );
-      return;
+      return undefined;
     }
 
     const html = await response.text();

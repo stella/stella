@@ -19,7 +19,6 @@
  *                      (default: classify all seed-rule matches)
  */
 
-import "dotenv/config";
 import { isValidPolarity } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";

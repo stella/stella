@@ -17,7 +17,6 @@
  * Idempotent: only processes citations with NULL polarity.
  */
 
-import "dotenv/config";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { createScopedDb, db } from "@/api/db";

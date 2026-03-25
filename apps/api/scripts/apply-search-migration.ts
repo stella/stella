@@ -16,7 +16,6 @@
  * Idempotent: safe to run multiple times (IF NOT EXISTS).
  */
 
-import "dotenv/config";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/api/db";

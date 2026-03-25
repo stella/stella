@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 

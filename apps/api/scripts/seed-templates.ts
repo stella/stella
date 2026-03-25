@@ -17,7 +17,6 @@
  *   - Test user seeded (bun run db:seed-test-user)
  */
 
-import "dotenv/config";
 import JSZip from "jszip";
 
 import { db } from "@/api/db";
