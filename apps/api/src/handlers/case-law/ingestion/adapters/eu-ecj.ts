@@ -167,6 +167,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
+    // eslint-disable-next-line no-console -- adapter diagnostic
     console.warn(
       `[eu-ecj] SPARQL response hit LIMIT ${SPARQL_LIMIT}` +
         ` for date ${dateFrom}; some decisions may be missing`,
@@ -259,6 +260,7 @@ const fetchFulltext = async (
   } catch (error) {
     // AbortErrors are expected (timeout, page cancellation)
     if (!(error instanceof DOMException)) {
+      // eslint-disable-next-line no-console -- adapter diagnostic
       console.error(
         `[eu-ecj] fulltext fetch failed for ${celex}/${lang}:`,
         error,

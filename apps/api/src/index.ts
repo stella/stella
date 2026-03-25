@@ -17,6 +17,7 @@ import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
+import { healthRoute } from "@/api/handlers/health/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -104,10 +105,10 @@ const api = new Elysia()
     set.status = 500;
     return httpError("Internal server error");
   })
-  .onAfterHandle(async ({ set }) => {
+  .onAfterHandle(async ({ set, path }) => {
     delete set.headers["X-Powered-By"];
 
-    if (!env.isDev) {
+    if (!env.isDev && path !== "/health") {
       const posthog = getPostHog();
       await posthog.flush().catch((error: unknown) => {
         // eslint-disable-next-line no-console
@@ -115,6 +116,7 @@ const api = new Elysia()
       });
     }
   })
+  .use(healthRoute)
   .use(verifyRoute)
   .mount(auth.handler)
   .group("/v1", (app) =>

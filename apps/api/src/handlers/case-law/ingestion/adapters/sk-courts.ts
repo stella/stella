@@ -78,6 +78,7 @@ const parseSkDate = (raw: string | undefined): string | undefined => {
   }
   const result = parseCeDate(raw);
   if (!result) {
+    // eslint-disable-next-line no-console -- adapter diagnostic
     console.warn("SK Courts adapter: unexpected date format", raw);
   }
   return result;
@@ -100,6 +101,7 @@ const fetchDetail = async (
   });
 
   if (!response.ok) {
+    // eslint-disable-next-line no-console -- adapter diagnostic
     console.warn(`SK Courts detail fetch failed: ${response.status}`, guid);
     return null;
   }
