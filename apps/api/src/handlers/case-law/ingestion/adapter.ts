@@ -45,4 +45,11 @@ export type SourceAdapter = {
   minRequestIntervalMs: number;
   /** Override per-page timeout (ms). Defaults to ADAPTER_TIMEOUT.PAGE. */
   pageTimeoutMs?: number | undefined;
+  /**
+   * Max pages per pipeline cycle. Shorter cycles persist cursors
+   * more often, reducing lost work on interruptions. Defaults
+   * to MAX_SYNC_PAGES (100). Slow adapters (sequential probing)
+   * should set this lower (e.g., 10).
+   */
+  maxSyncPages?: number | undefined;
 };

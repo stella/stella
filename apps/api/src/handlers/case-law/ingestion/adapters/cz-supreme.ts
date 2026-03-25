@@ -91,6 +91,9 @@ export const czSupremeAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 500,
+  // Each page fetches 20 decisions + detail pages. ~30s/page.
+  // 20 pages ≈ 10 min. Persist cursor often.
+  maxSyncPages: 20,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({

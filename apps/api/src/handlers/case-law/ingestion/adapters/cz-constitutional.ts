@@ -164,8 +164,11 @@ export const czConstitutionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 300,
   // Each fetchPage probes up to PAGE_SIZE + MAX_CONSECUTIVE_MISSES
-  // case numbers sequentially (1 req/s). Default 30s is too short.
+  // case numbers sequentially. Default 30s is too short.
   pageTimeoutMs: 180_000,
+  // Short cycles: each page takes ~36s (120 probes × 300ms).
+  // 10 pages ≈ 6 min, persists cursor frequently.
+  maxSyncPages: 10,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
