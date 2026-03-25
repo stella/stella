@@ -185,9 +185,13 @@ const parseItemWithDetail = async (
       guid: item.guid,
       identifikacneCislo: item.identifikacneCislo,
       judge: item.sudca?.meno,
+      judgeRegistreGuid: item.sudca?.registreGuid,
+      courtRegistreGuid: item.sud?.registreGuid,
       decisionNature: item.povaha?.join(", "),
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,
+      documentName: detail?.dokument?.name,
+      documentExtension: detail?.dokument?.fileExtension,
     },
     rawHash: hashContent(rawJson),
   };
