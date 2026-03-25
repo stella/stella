@@ -46,7 +46,11 @@ const validateTimezoneId = (timezoneId: unknown): void => {
 };
 
 export const auth = betterAuth({
-  trustedOrigins: [env.FRONTEND_URL],
+  trustedOrigins: [
+    env.FRONTEND_URL,
+    ...(env.isDev ? ["chrome-extension://*"] : []),
+    ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+  ],
   user: {
     additionalFields: {
       timezoneId: {

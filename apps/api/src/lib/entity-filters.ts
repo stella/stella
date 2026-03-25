@@ -49,6 +49,7 @@ const getFieldValue = (content: FieldContent | undefined): string => {
     case "error":
     case "pending":
     case "unsupported":
+    case "clip":
       return "";
     default:
       return "";

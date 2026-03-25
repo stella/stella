@@ -6,7 +6,12 @@ const SUFFIX = " | stella";
 /** Build a page title from an i18n key, e.g. "Matters | stella". */
 export const pageTitle = (i18nKey: TranslationKey) => {
   const t = getTranslator();
-  return `${t(i18nKey)}${SUFFIX}`;
+  // TranslationKey and use-intl's NamespacedMessageKeys are
+  // derived from the same Messages object but flatten with
+  // different algorithms; TS cannot verify assignability at
+  // ~1075 union members.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return `${t(i18nKey as Parameters<typeof t>[0])}${SUFFIX}`;
 };
 
 /**

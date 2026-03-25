@@ -35,6 +35,7 @@ const extractFieldText = (content: FieldContent): string => {
     case "error":
     case "pending":
     case "unsupported":
+    case "clip":
       return "";
     default: {
       const _exhaustive: never = content;

@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokument",
       "folder": "Ordner",
+      "link": "Link",
       "message": "Nachricht",
       "task": "Aufgabe"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Fügen Sie mindestens eine Eingabeeigenschaft mit \"@\" hinzu",
       "addPromptForBetterResults": "Fügen Sie einen Prompt für bessere Ergebnisse hinzu",
+      "clip": "Clip",
       "conditionSeparator": "UND",
       "conditions": "Bedingungen ({count})",
       "createOption": "\"{option}\" erstellen",

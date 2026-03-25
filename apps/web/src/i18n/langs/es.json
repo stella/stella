@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Documento",
       "folder": "Carpeta",
+      "link": "Link",
       "message": "Mensaje",
       "task": "Tarea"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Añada al menos una propiedad de entrada usando \"@\"",
       "addPromptForBetterResults": "Añada una instrucción para mejores resultados",
+      "clip": "Clip",
       "conditionSeparator": "Y",
       "conditions": "Condiciones ({count})",
       "createOption": "Crear \"{option}\"",

@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokuments",
       "folder": "Mape",
+      "link": "Link",
       "message": "Ziņa",
       "task": "Uzdevums"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",
+      "clip": "Clip",
       "conditionSeparator": "UN",
       "conditions": "Nosacījumi ({count})",
       "createOption": "Izveidot \"{option}\"",

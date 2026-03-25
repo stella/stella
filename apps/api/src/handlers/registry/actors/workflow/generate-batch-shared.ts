@@ -19,7 +19,10 @@ import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 // Types shared between mock and real AI implementations
 export type FieldContentForAI = Exclude<
   FieldContent,
-  { type: "error" } | { type: "pending" } | { type: "unsupported" }
+  | { type: "error" }
+  | { type: "pending" }
+  | { type: "unsupported" }
+  | { type: "clip" }
 >;
 
 export type AIResult = {
@@ -183,6 +186,7 @@ export const prepareBatchInput = (
       content.type === "error" ||
       content.type === "pending" ||
       content.type === "unsupported" ||
+      content.type === "clip" ||
       isFieldContentEmpty(content)
     ) {
       skippedPropertyIds.push(field.propertyId);

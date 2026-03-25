@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokument",
       "folder": "Priečinok",
+      "link": "Link",
       "message": "Správa",
       "task": "Úloha"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Pridajte aspoň jednu vstupnú vlastnosť pomocou \"@\"",
       "addPromptForBetterResults": "Pridajte prompt pre lepšie výsledky",
+      "clip": "Clip",
       "conditionSeparator": "A",
       "conditions": "Podmienky ({count})",
       "createOption": "Vytvoriť \"{option}\"",

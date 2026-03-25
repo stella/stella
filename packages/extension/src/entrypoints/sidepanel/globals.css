@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@import "@stella/ui/globals.css";
+
+@source "./**/*.{ts,tsx}";

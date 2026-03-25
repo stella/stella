@@ -30,6 +30,15 @@ import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
+/** Metadata stored on link entities created by the web clipper. */
+export type LinkMetadata = {
+  url: string;
+  snippet?: string;
+  citation?: string;
+  jurisdiction?: string;
+  sourceType?: string;
+};
+
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
@@ -68,6 +77,7 @@ export const entityKindEnum = p.pgEnum("entity_kind", [
   "folder",
   "task",
   "message",
+  "link",
 ]);
 
 export const taskAssigneeRoleEnum = p.pgEnum("task_assignee_role", [
@@ -455,6 +465,8 @@ export const entities = p.pgTable(
     priority: p.varchar({ length: 16 }),
     dueDate: p.date("due_date", { mode: "string" }),
     sortOrder: p.varchar("sort_order", { length: 64 }),
+    /** Structured metadata for non-document entity kinds (e.g. links). */
+    metadata: p.jsonb().$type<LinkMetadata | null>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
   },

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stella</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap"
+    />
+    <script>
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        document.documentElement.classList.add("dark");
+      }
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+        document.documentElement.classList.toggle("dark", e.matches);
+      });
+    </script>
+  </head>
+  <body class="font-[Geist,sans-serif] text-sm leading-relaxed text-foreground bg-background">
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

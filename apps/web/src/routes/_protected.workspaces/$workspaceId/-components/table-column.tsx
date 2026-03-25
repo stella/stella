@@ -64,7 +64,9 @@ const PropertyCell = ({
 
     // Only show edit button for editable content types
     const editableContent =
-      fieldContent?.type === "error" || fieldContent?.type === "unsupported"
+      fieldContent?.type === "error" ||
+      fieldContent?.type === "unsupported" ||
+      fieldContent?.type === "clip"
         ? undefined
         : fieldContent;
 

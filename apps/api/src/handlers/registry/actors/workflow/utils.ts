@@ -125,7 +125,8 @@ export const evaluateCondition = (
     fieldContent.type === "error" ||
     fieldContent.type === "pending" ||
     fieldContent.type === "unsupported" ||
-    fieldContent.type === "file"
+    fieldContent.type === "file" ||
+    fieldContent.type === "clip"
   ) {
     return false;
   }

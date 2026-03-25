@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokument",
       "folder": "Složka",
+      "link": "Link",
       "message": "Zpráva",
       "task": "Task"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Přidejte alespoň jednu vstupní vlastnost pomocí \"@\"",
       "addPromptForBetterResults": "Přidejte prompt pro lepší výsledky",
+      "clip": "Clip",
       "conditionSeparator": "A",
       "conditions": "Podmínky ({count})",
       "createOption": "Vytvořit \"{option}\"",

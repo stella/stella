@@ -39,6 +39,7 @@ export const env = createEnv({
     CONTENT_ENCRYPTION_KEY: v.optional(
       v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/i)),
     ),
+    EXTENSION_ORIGIN: v.optional(v.string()),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,

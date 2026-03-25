@@ -145,6 +145,15 @@ export type WorkspaceFieldContent =
       version: 1;
       value: number;
       currency: string | null;
+    }
+  | {
+      type: "clip";
+      version: 1;
+      url: string;
+      snippet?: string;
+      citation?: string;
+      jurisdiction?: string;
+      sourceType?: string;
     };
 
 export type WorkspaceField = {

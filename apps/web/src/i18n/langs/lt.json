@@ -808,6 +808,7 @@
     "kinds": {
       "document": "Dokumentas",
       "folder": "Aplankas",
+      "link": "Link",
       "message": "Žinutė",
       "task": "Užduotis"
     },
@@ -1145,6 +1146,7 @@
     "properties": {
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",
+      "clip": "Clip",
       "conditionSeparator": "IR",
       "conditions": "Sąlygos ({count})",
       "createOption": "Sukurti \"{option}\"",

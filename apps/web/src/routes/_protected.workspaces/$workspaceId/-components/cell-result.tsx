@@ -104,6 +104,12 @@ export const CellResult = ({ field, property }: CellResultProps) => {
     );
   }
 
+  if (type === "clip") {
+    return (
+      <div className="text-muted-foreground truncate">{field.content.url}</div>
+    );
+  }
+
   return <div className="whitespace-break-spaces">{field.content.value}</div>;
 };
 

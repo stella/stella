@@ -5,6 +5,7 @@ import {
   checkStampBodySchema,
   checkStampHandler,
 } from "@/api/handlers/entities/check-stamp";
+import clipEndpoint from "@/api/handlers/entities/clip";
 import {
   createEntitiesHandler,
   createEntityBodySchema,
@@ -52,6 +53,7 @@ const viewFilterConditionSchema = t.Union([
         t.Literal("folder"),
         t.Literal("task"),
         t.Literal("message"),
+        t.Literal("link"),
       ]),
     ),
   }),
@@ -153,6 +155,10 @@ export const entitiesRoute = new Elysia({
       body: uploadEntityBodySchema,
     },
   )
+  .post("/clip", clipEndpoint.handler, {
+    ...clipEndpoint.config,
+    invalidateQuery: true,
+  })
   .post(
     "/query",
     async (ctx) =>

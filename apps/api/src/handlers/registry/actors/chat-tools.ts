@@ -102,6 +102,7 @@ const formatFieldValue = (content: FieldContent): string => {
     case "error":
       return "(error)";
     case "unsupported":
+    case "clip":
       return "(unsupported)";
     default:
       return "";
