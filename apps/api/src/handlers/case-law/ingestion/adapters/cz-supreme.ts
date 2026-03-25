@@ -90,7 +90,7 @@ export const czSupremeAdapter: SourceAdapter = {
   name: "Czech Supreme Court",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 2000,
+  minRequestIntervalMs: 500,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
@@ -216,7 +216,7 @@ export const czSupremeAdapter: SourceAdapter = {
 
           // Rate limit between detail fetches (skip for last entry)
           if (i < entries.length - 1) {
-            await Bun.sleep(500);
+            await Bun.sleep(200);
           }
         }
 

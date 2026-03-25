@@ -162,7 +162,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
   name: "Czech Constitutional Court",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 1000,
+  minRequestIntervalMs: 300,
   // Each fetchPage probes up to PAGE_SIZE + MAX_CONSECUTIVE_MISSES
   // case numbers sequentially (1 req/s). Default 30s is too short.
   pageTimeoutMs: 180_000,
@@ -224,7 +224,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
             ) {
               // Per-request timeout: treat as a miss
               consecutiveMisses++;
-              await Bun.sleep(1000);
+              await Bun.sleep(300);
               state.number++;
               if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
                 if (state.year <= FIRST_YEAR) {
@@ -244,8 +244,8 @@ export const czConstitutionalAdapter: SourceAdapter = {
             throw error;
           }
 
-          // Rate limit: 1 req/s to avoid overwhelming NALUS
-          await Bun.sleep(1000);
+          // Rate limit between requests to NALUS
+          await Bun.sleep(300);
 
           state.number++;
 

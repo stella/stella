@@ -165,7 +165,7 @@ export const skCourtsAdapter: SourceAdapter = {
   name: "Slovak Courts",
   country: "SVK",
   language: "sk",
-  minRequestIntervalMs: 2000,
+  minRequestIntervalMs: 300,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,

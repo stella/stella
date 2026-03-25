@@ -122,7 +122,7 @@ export const plCourtsAdapter: SourceAdapter = {
   name: "Polish Courts (SAOS)",
   country: "POL",
   language: "pl",
-  minRequestIntervalMs: 1000,
+  minRequestIntervalMs: 200,
 
   fetchPage: createPagePaginatedFetch<SaosResponse>({
     adapterKey: ADAPTER_KEYS.PL_COURTS,

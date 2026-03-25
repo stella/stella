@@ -232,7 +232,7 @@ export const czRegionalAdapter: SourceAdapter = {
   name: "Czech Regional Courts",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 1000,
+  minRequestIntervalMs: 200,
 
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
