@@ -53,12 +53,20 @@ export const env = createEnv({
     GOTENBERG_URL: v.pipe(
       v.string(),
       v.url(),
-      v.check(
-        (url) =>
+      v.check((url) => {
+        const parsed = new URL(url);
+        // Localhost sidecar (ECS Fargate) is always HTTP
+        if (
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1"
+        ) {
+          return true;
+        }
+        return (
           process.env.NODE_ENV !== "production" ||
-          new URL(url).protocol === HTTPS_PROTOCOL,
-        "GOTENBERG_URL must use HTTPS in production",
-      ),
+          parsed.protocol === HTTPS_PROTOCOL
+        );
+      }, "GOTENBERG_URL must use HTTPS in production (except localhost)"),
     ),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
