@@ -14,6 +14,7 @@ import type { ActorEvent } from "@stella/rivet/types";
 import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
+import { identify } from "@/api/lib/analytics";
 import {
   getSessionAndMemberRole,
   resolveAccessibleWorkspaces,
@@ -21,7 +22,6 @@ import {
 // oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { posthogIdentify } from "@/api/lib/posthog";
 
 export const createUserError = (
   errorCode: UserErrorCode,
@@ -91,7 +91,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   const organizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(session.user.id);
 
-  posthogIdentify({
+  identify({
     distinctId: userId,
     properties: {
       active_organization_id: organizationId,

@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import type { PartyRole } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import { workspaceContactsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-contacts";
 
@@ -16,7 +15,7 @@ type AddPartyVars = {
 };
 
 export const useAddParty = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: AddPartyVars) => {
@@ -32,7 +31,7 @@ export const useAddParty = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -43,7 +42,7 @@ type RemovePartyVars = {
 };
 
 export const useRemoveParty = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({
@@ -62,7 +61,7 @@ export const useRemoveParty = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

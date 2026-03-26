@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { invalidateQueryAction } from "@/api/handlers/registry/actions";
+import { captureError } from "@/api/lib/analytics";
 import { authMacro } from "@/api/lib/auth";
-import { captureError } from "@/api/lib/posthog";
 
 const queryKeySchema = t.Array(t.String({ minLength: 1 }), { minItems: 1 });
 

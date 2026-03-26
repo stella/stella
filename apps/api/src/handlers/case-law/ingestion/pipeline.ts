@@ -19,7 +19,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
-import { captureError } from "@/api/lib/posthog";
+import { captureError } from "@/api/lib/analytics";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;

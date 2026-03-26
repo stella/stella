@@ -10,9 +10,9 @@
 import { Result } from "better-result";
 import { resolve } from "node:path";
 
+import { captureError } from "@/api/lib/analytics";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 import { spawnWorker } from "@/api/lib/subprocess";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 

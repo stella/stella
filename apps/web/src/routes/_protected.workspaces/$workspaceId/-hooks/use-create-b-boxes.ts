@@ -1,10 +1,9 @@
 import { useCallback } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
 
-import { captureError } from "@/lib/posthog/utils";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { eventHandler } from "@/lib/rivet";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useBBoxActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-b-box-actor";
@@ -18,7 +17,7 @@ type UseCreateBBoxesProps = {
 const createBBoxesMutationKey = "create-bounding-boxes";
 
 export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",
     select: (s) => s.workspaceId,
@@ -67,7 +66,7 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
       setPendingBoundingBoxId(justification.id, "remove");
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 

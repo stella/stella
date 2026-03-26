@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -29,7 +28,7 @@ type CreateEntitiesVars =
     };
 
 export const useCreateEntities = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     retry: 3,
@@ -46,7 +45,7 @@ export const useCreateEntities = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -57,7 +56,7 @@ type DeleteEntitiesVars = {
 };
 
 export const useDeleteEntities = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -79,7 +78,7 @@ export const useDeleteEntities = () => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -91,7 +90,7 @@ type MoveEntityVars = {
 };
 
 export const useMoveEntity = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityId, parentId }: MoveEntityVars) => {
@@ -108,7 +107,7 @@ export const useMoveEntity = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -120,7 +119,7 @@ type RenameEntityVars = {
 };
 
 export const useRenameEntity = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityId, name }: RenameEntityVars) => {
@@ -137,7 +136,7 @@ export const useRenameEntity = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -150,7 +149,7 @@ type UpsertFieldVars = {
 };
 
 export const useUpsertField = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({
@@ -174,7 +173,7 @@ export const useUpsertField = () => {
     },
 
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

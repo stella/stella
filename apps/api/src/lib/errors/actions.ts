@@ -3,9 +3,9 @@ import type { ActionContextOf } from "rivetkit";
 
 import { env } from "@/api/env";
 import type { ActorsUnion } from "@/api/handlers/registry";
+import { getAnalytics } from "@/api/lib/analytics";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { getPostHog } from "@/api/lib/posthog";
 
 export type CaptureActorErrorProps = {
   c: ActionContextOf<ActorsUnion>;
@@ -25,7 +25,7 @@ export const captureActorError = ({
   const safeMetadata = {
     ...metadata,
     actorName: c.name,
-    actorKey: c.key,
+    actorKey: c.key.join(":"),
     actorId: c.actorId,
     requestId,
     errorTag: tag,
@@ -48,10 +48,10 @@ export const captureActorError = ({
     c.log.error({ _tag: tag, ...safeMetadata });
   }
 
-  // Send only the structural tag + safe IDs to PostHog.
+  // Send only the structural tag + safe IDs to analytics.
   // capture() is synchronous (queues internally); no await needed.
-  const posthog = getPostHog();
-  posthog.capture({
+  const analytics = getAnalytics();
+  analytics.capture({
     distinctId: "server",
     event: "$exception",
     properties: {

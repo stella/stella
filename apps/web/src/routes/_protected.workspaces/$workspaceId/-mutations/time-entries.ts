@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 type CreateTimeEntryVars = {
@@ -21,7 +20,7 @@ type CreateTimeEntryVars = {
 };
 
 export const useCreateTimeEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateTimeEntryVars) => {
@@ -37,7 +36,7 @@ export const useCreateTimeEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -60,7 +59,7 @@ type UpdateTimeEntryVars = {
 };
 
 export const useUpdateTimeEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
@@ -76,7 +75,7 @@ export const useUpdateTimeEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -87,7 +86,7 @@ type DeleteTimeEntryVars = {
 };
 
 export const useDeleteTimeEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
@@ -103,7 +102,7 @@ export const useDeleteTimeEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -118,7 +117,7 @@ type StartTimerVars = {
 };
 
 export const useStartTimer = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: StartTimerVars) => {
@@ -136,7 +135,7 @@ export const useStartTimer = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -146,7 +145,7 @@ type StopTimerVars = {
 };
 
 export const useStopTimer = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId }: StopTimerVars) => {
@@ -163,7 +162,7 @@ export const useStopTimer = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -175,7 +174,7 @@ type BatchUpdateVars = {
 };
 
 export const useBatchUpdateTimeEntries = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
@@ -193,7 +192,7 @@ export const useBatchUpdateTimeEntries = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -204,7 +203,7 @@ type BatchDeleteVars = {
 };
 
 export const useBatchDeleteTimeEntries = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
@@ -222,7 +221,7 @@ export const useBatchDeleteTimeEntries = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -234,7 +233,7 @@ type SplitTimeEntryVars = {
 };
 
 export const useSplitTimeEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
@@ -252,7 +251,7 @@ export const useSplitTimeEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

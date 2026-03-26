@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import {
   useMutation,
@@ -49,11 +48,11 @@ import {
 } from "@stella/ui/components/select";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
-import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
 import {
@@ -138,7 +137,7 @@ function MembersLayout() {
 const SettingsDialog = () => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(organizationOptions);
 
@@ -156,7 +155,7 @@ const SettingsDialog = () => {
           });
 
         if (slugCheckError) {
-          captureError(posthog, toAuthClientError(slugCheckError));
+          analytics.captureError(toAuthClientError(slugCheckError));
           toastManager.add({
             title: slugCheckError.message ?? t("errors.actionFailed"),
             type: "error",
@@ -177,7 +176,7 @@ const SettingsDialog = () => {
       });
 
       if (result.error) {
-        captureError(posthog, toAuthClientError(result.error));
+        analytics.captureError(toAuthClientError(result.error));
         toastManager.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
@@ -294,7 +293,7 @@ const PADDING_OPTIONS = [2, 3, 4, 5, 6] as const;
 
 const MatterNumberingSection = () => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery(organizationSettingsOptions);
 
@@ -359,7 +358,7 @@ const MatterNumberingSection = () => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
       toastManager.add({
         title: t("errors.actionFailed"),
         type: "error",
@@ -506,7 +505,7 @@ const defaultValues: v.InferInput<typeof inviteSchema> = {
 const InviteDialog = () => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const { data: currentUserRole } = useSuspenseQuery(roleOptions);
 
@@ -522,7 +521,7 @@ const InviteDialog = () => {
       });
 
       if (result.error) {
-        captureError(posthog, toAuthClientError(result.error));
+        analytics.captureError(toAuthClientError(result.error));
         toastManager.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",

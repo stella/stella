@@ -34,10 +34,10 @@ import {
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { captureError, getAnalytics } from "@/api/lib/analytics";
 import { auth } from "@/api/lib/auth";
 import { httpError } from "@/api/lib/errors/http-error";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { captureError, getPostHog } from "@/api/lib/posthog";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -109,10 +109,10 @@ const api = new Elysia()
     delete set.headers["X-Powered-By"];
 
     if (!env.isDev && path !== "/health") {
-      const posthog = getPostHog();
-      await posthog.flush().catch((error: unknown) => {
+      const analytics = getAnalytics();
+      await analytics.flush().catch((error: unknown) => {
         // eslint-disable-next-line no-console
-        console.error("Error flushing posthog", error);
+        console.error("Error flushing analytics", error);
       });
     }
   })

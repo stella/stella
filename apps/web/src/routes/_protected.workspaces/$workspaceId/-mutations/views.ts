@@ -1,7 +1,6 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
-import { captureError } from "@/lib/posthog/utils";
+import { useAnalytics } from "@/lib/analytics/provider";
 import type { ViewLayout, ViewLayoutType } from "@/lib/types";
 import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
 
@@ -12,14 +11,14 @@ type CreateViewVars = {
 };
 
 export const useCreateView = (workspaceId: string) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
     mutationFn: async (body: CreateViewVars) =>
       await actor.handle?.createView(body),
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -31,14 +30,14 @@ type UpdateViewVars = {
 };
 
 export const useUpdateView = (workspaceId: string) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
     mutationFn: async (body: UpdateViewVars) =>
       await actor.handle?.updateView(body),
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -49,14 +48,14 @@ type ConvertViewVars = {
 };
 
 export const useConvertView = (workspaceId: string) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
     mutationFn: async ({ viewId, targetType }: ConvertViewVars) =>
       await actor.handle?.convertView({ viewId, targetType }),
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -66,14 +65,14 @@ type ReorderViewsVars = {
 };
 
 export const useReorderViews = (workspaceId: string) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
     mutationFn: async ({ viewIds }: ReorderViewsVars) =>
       await actor.handle?.reorderViews({ viewIds }),
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -83,14 +82,14 @@ type DeleteViewVars = {
 };
 
 export const useDeleteView = (workspaceId: string) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const actor = useViewsActor(workspaceId);
 
   return useMutation({
     mutationFn: async ({ viewId }: DeleteViewVars) =>
       await actor.handle?.deleteView({ viewId }),
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

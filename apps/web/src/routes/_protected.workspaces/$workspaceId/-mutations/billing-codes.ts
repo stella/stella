@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { billingCodesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
 
 type CreateBillingCodeVars = {
@@ -16,7 +15,7 @@ type CreateBillingCodeVars = {
 };
 
 export const useCreateBillingCode = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateBillingCodeVars) => {
@@ -34,7 +33,7 @@ export const useCreateBillingCode = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -49,7 +48,7 @@ type UpdateBillingCodeVars = {
 };
 
 export const useUpdateBillingCode = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateBillingCodeVars) => {
@@ -67,7 +66,7 @@ export const useUpdateBillingCode = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -78,7 +77,7 @@ type DeleteBillingCodeVars = {
 };
 
 export const useDeleteBillingCode = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteBillingCodeVars) => {
@@ -96,7 +95,7 @@ export const useDeleteBillingCode = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

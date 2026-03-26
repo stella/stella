@@ -1,10 +1,9 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // Hardcoded in English: these are persisted in the DB and shared
@@ -17,7 +16,7 @@ type CreateWorkspaceVars = {
 };
 
 export const useCreateWorkspace = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -40,7 +39,7 @@ export const useCreateWorkspace = () => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -54,7 +53,7 @@ type UpdateWorkspaceVars = {
 };
 
 export const useUpdateWorkspace = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
@@ -68,7 +67,7 @@ export const useUpdateWorkspace = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -78,7 +77,7 @@ type DeleteWorkspaceVars = {
 };
 
 export const useDeleteWorkspace = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     retry: (failureCount, error) =>
@@ -93,7 +92,7 @@ export const useDeleteWorkspace = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

@@ -1,4 +1,3 @@
-import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -21,9 +20,9 @@ import { Skeleton } from "@stella/ui/components/skeleton";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
 import { toFormErrors } from "@/lib/schema";
 import {
@@ -91,7 +90,7 @@ type OrganizationListProps = {
 const OrganizationList = ({ organizations }: OrganizationListProps) => {
   const t = useTranslations();
   const { redirectTo } = Route.useSearch();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
 
@@ -113,7 +112,7 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
       await navigate({ to: redirectTo, replace: true });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 
@@ -151,7 +150,7 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
 const CreateOrganizationForm = () => {
   const t = useTranslations();
   const { redirectTo } = Route.useSearch();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
 
@@ -167,7 +166,7 @@ const CreateOrganizationForm = () => {
         });
 
       if (slugCheckError) {
-        captureError(posthog, toAuthClientError(slugCheckError));
+        analytics.captureError(toAuthClientError(slugCheckError));
         toastManager.add({
           title: slugCheckError.message ?? t("errors.actionFailed"),
           type: "error",
@@ -190,7 +189,7 @@ const CreateOrganizationForm = () => {
       );
 
       if (createError) {
-        captureError(posthog, toAuthClientError(createError));
+        analytics.captureError(toAuthClientError(createError));
         toastManager.add({
           title: createError.message ?? t("errors.actionFailed"),
           type: "error",
@@ -205,7 +204,7 @@ const CreateOrganizationForm = () => {
       );
 
       if (setActiveError) {
-        captureError(posthog, toAuthClientError(setActiveError));
+        analytics.captureError(toAuthClientError(setActiveError));
         toastManager.add({
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",

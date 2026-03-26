@@ -26,7 +26,7 @@ import {
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
-import { captureError } from "@/api/lib/posthog";
+import { captureError } from "@/api/lib/analytics";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 

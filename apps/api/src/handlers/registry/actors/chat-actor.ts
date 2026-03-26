@@ -46,10 +46,10 @@ import {
 } from "@/api/handlers/registry/utils";
 import type { UserActorConnState } from "@/api/handlers/registry/utils";
 import { CHAT_MODEL } from "@/api/lib/ai-models";
+import { captureError } from "@/api/lib/analytics";
 // eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { captureError } from "@/api/lib/posthog";
 
 const DEFAULT_MODEL = CHAT_MODEL;
 const MAX_TOOL_STEPS = 5;

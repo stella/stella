@@ -3,8 +3,8 @@ import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 
 type DeleteTemplateProps = {

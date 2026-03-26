@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -22,9 +21,9 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 
 export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
   beforeLoad: ({ context, location }) => {
@@ -61,7 +60,7 @@ export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
 function AcceptInvitation() {
   const { invitationId } = Route.useParams();
   const { invitation } = Route.useLoaderData();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
   const [isDeclined, setIsDeclined] = useState(false);
@@ -99,7 +98,7 @@ function AcceptInvitation() {
       await navigate({ to: "/workspaces", replace: true });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 
@@ -121,7 +120,7 @@ function AcceptInvitation() {
     },
 
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 
