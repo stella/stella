@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import {
   useMutation,
   useQueryClient,
@@ -32,10 +31,10 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { useI18nStore } from "@/i18n/i18n-store";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { parseUserAgent } from "@/lib/parse-user-agent";
-import { captureError } from "@/lib/posthog/utils";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { sessionOptions } from "@/routes/-queries";
 import {
@@ -134,7 +133,7 @@ type RevokeSessionButtonProps = {
 
 const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   const revokeSession = useMutation({
@@ -162,7 +161,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 
@@ -180,7 +179,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
 const RevokeAllDialog = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const [isOpen, setIsOpen] = useState(false);
 
   const revokeOtherSessions = useMutation({
@@ -208,7 +207,7 @@ const RevokeAllDialog = () => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
     onSettled: () => {
       setIsOpen(false);

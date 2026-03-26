@@ -1,17 +1,16 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { toastManager } from "@stella/ui/components/toast";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { organizationKeys } from "@/routes/_protected.organization/-queries";
 
 export const useRemoveMember = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const t = useTranslations();
 
@@ -40,7 +39,7 @@ export const useRemoveMember = () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -53,7 +52,7 @@ type InviteMemberVars = {
 
 export const useInviteMember = () => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -79,14 +78,14 @@ export const useInviteMember = () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
 
 export const useCancelInvitation = () => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -114,7 +113,7 @@ export const useCancelInvitation = () => {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

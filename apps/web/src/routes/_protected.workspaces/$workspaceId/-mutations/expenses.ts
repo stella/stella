@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { expensesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
 
 type ExpenseCategory =
@@ -29,7 +28,7 @@ type CreateExpenseVars = {
 };
 
 export const useCreateExpense = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateExpenseVars) => {
@@ -45,7 +44,7 @@ export const useCreateExpense = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -66,7 +65,7 @@ type UpdateExpenseVars = {
 };
 
 export const useUpdateExpense = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateExpenseVars) => {
@@ -82,7 +81,7 @@ export const useUpdateExpense = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -93,7 +92,7 @@ type DeleteExpenseVars = {
 };
 
 export const useDeleteExpense = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteExpenseVars) => {
@@ -109,7 +108,7 @@ export const useDeleteExpense = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

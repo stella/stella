@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -22,9 +21,9 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { redirectToSchema } from "@/lib/redirect";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
@@ -50,7 +49,7 @@ export const Route = createFileRoute("/auth/otp")({
 function OTP() {
   const t = useTranslations();
   const { email, redirectTo } = Route.useSearch();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const [otp, setOtp] = useState("");
   const invalidateSession = useInvalidateSession();
@@ -93,7 +92,7 @@ function OTP() {
           }
         })
         .catch((error: unknown) => {
-          captureError(posthog, error);
+          analytics.captureError(error);
         });
 
       await invalidateSession.mutateAsync();
@@ -104,7 +103,7 @@ function OTP() {
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 

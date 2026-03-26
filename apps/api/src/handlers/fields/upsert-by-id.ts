@@ -3,10 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { entities, fields } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
-import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const config = {

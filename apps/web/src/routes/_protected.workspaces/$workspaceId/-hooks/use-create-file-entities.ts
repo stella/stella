@@ -1,15 +1,14 @@
 import { useCallback } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { toastManager } from "@stella/ui/components/toast";
 
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { UploadQueue } from "@/lib/upload-queue";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
@@ -263,7 +262,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   const mutation = useMutation({
     mutationFn: async (files: File[]) => {
@@ -286,11 +285,11 @@ export const useCreateFileEntities = (workspaceId: string) => {
         workspaceId,
         propertyId,
         labels,
-        onError: (error) => captureError(posthog, error),
+        onError: (error) => analytics.captureError(error),
       });
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 

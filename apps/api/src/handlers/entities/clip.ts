@@ -4,11 +4,11 @@ import { nanoid } from "nanoid";
 
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const clipBodySchema = t.Object({

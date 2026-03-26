@@ -1,6 +1,5 @@
 import type { PropsWithChildren } from "react";
 
-import { PostHogProvider } from "@posthog/react";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
@@ -19,9 +18,9 @@ import {
 } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { langMessages, useI18nStore } from "@/i18n/i18n-store";
+import { AnalyticsProvider } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import initializePosthog from "@/lib/posthog/client";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -50,7 +49,6 @@ export function getRouter() {
     },
   });
   installPDFDocumentCleanup(queryClient);
-  const posthog = initializePosthog();
 
   const router = createRouter({
     routeTree,
@@ -62,7 +60,7 @@ export function getRouter() {
     defaultPendingComponent: DefaultPendingComponent,
     defaultPendingMs: 0,
     Wrap: ({ children }) => (
-      <PostHogProvider client={posthog}>
+      <AnalyticsProvider>
         <I18nProvider>
           <HotkeysProvider>
             <ThemeProvider>
@@ -72,7 +70,7 @@ export function getRouter() {
             </ThemeProvider>
           </HotkeysProvider>
         </I18nProvider>
-      </PostHogProvider>
+      </AnalyticsProvider>
     ),
   });
 

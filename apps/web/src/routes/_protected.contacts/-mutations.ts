@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 
 type BankAccount = {
   iban?: string;
@@ -46,7 +45,7 @@ type CreateContactVars = {
 };
 
 export const useCreateContact = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async (vars: CreateContactVars) => {
@@ -59,7 +58,7 @@ export const useCreateContact = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -88,7 +87,7 @@ type UpdateContactVars = {
 };
 
 export const useUpdateContact = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ contactId, ...body }: UpdateContactVars) => {
@@ -101,7 +100,7 @@ export const useUpdateContact = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -111,7 +110,7 @@ type DeleteContactVars = {
 };
 
 export const useDeleteContact = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ contactId }: DeleteContactVars) => {
@@ -122,7 +121,7 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { revalidateLogic, useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
@@ -22,7 +21,7 @@ import { Form } from "@stella/ui/components/form";
 import { Input } from "@stella/ui/components/input";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { captureError } from "@/lib/posthog/utils";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
@@ -134,7 +133,7 @@ export const EditFieldDialog = ({
   className,
 }: EditFieldDialogProps) => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const [isOpen, setIsOpen] = useState(false);
   const isWorkflowRunning = useIsWorkflowRunning();
   const upsertField = useUpsertField();
@@ -168,7 +167,7 @@ export const EditFieldDialog = ({
                 entityIds: [entityId],
                 entityIdsOrder: [],
               })
-              .catch((error: unknown) => captureError(posthog, error));
+              .catch((error: unknown) => analytics.captureError(error));
           },
           onSettled: () => {
             setIsOpen(false);

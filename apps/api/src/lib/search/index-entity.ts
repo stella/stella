@@ -4,8 +4,8 @@ import { sql } from "drizzle-orm";
 import { db } from "@/api/db";
 import type { searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { captureError } from "@/api/lib/posthog";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;

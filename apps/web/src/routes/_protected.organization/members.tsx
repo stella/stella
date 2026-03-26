@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
@@ -47,10 +46,10 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
 import {
@@ -167,7 +166,7 @@ type UpdateRoleDialogProps = {
 };
 const UpdateRoleDialog = ({ memberId, email, role }: UpdateRoleDialogProps) => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const { data: currentUserRole } = useSuspenseQuery(roleOptions);
@@ -184,7 +183,7 @@ const UpdateRoleDialog = ({ memberId, email, role }: UpdateRoleDialogProps) => {
       });
 
       if (result.error) {
-        captureError(posthog, toAuthClientError(result.error));
+        analytics.captureError(toAuthClientError(result.error));
         toastManager.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",

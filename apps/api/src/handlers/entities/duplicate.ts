@@ -6,12 +6,12 @@ import { nanoid } from "nanoid";
 import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 export const duplicateEntityBodySchema = t.Object({

@@ -14,13 +14,13 @@ import { createScopedDb, db } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { identify } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { posthogIdentify } from "@/api/lib/posthog";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -293,7 +293,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
       const userId = toSafeId<"user">(user.id);
 
-      posthogIdentify({
+      identify({
         distinctId: userId,
         properties: {
           active_organization_id: activeOrganizationId,

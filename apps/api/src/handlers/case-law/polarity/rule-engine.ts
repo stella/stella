@@ -19,8 +19,8 @@ import {
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import { captureError } from "@/api/lib/analytics";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 
 type CompiledRule = {
   id: string;

@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { ratesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
 
 // --- Rate Tables ---
@@ -16,7 +15,7 @@ type CreateRateTableVars = {
 };
 
 export const useCreateRateTable = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateRateTableVars) => {
@@ -32,7 +31,7 @@ export const useCreateRateTable = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -46,7 +45,7 @@ type UpdateRateTableVars = {
 };
 
 export const useUpdateRateTable = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateRateTableVars) => {
@@ -62,7 +61,7 @@ export const useUpdateRateTable = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -73,7 +72,7 @@ type DeleteRateTableVars = {
 };
 
 export const useDeleteRateTable = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteRateTableVars) => {
@@ -89,7 +88,7 @@ export const useDeleteRateTable = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -106,7 +105,7 @@ type CreateRateEntryVars = {
 };
 
 export const useCreateRateEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({
@@ -128,7 +127,7 @@ export const useCreateRateEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -140,7 +139,7 @@ type DeleteRateEntryVars = {
 };
 
 export const useDeleteRateEntry = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({
@@ -162,7 +161,7 @@ export const useDeleteRateEntry = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

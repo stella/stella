@@ -5,8 +5,8 @@ import JSZip from "jszip";
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { captureError } from "@/api/lib/posthog";
 import { s3 } from "@/api/lib/s3";
 
 type DownloadZipHandlerProps = {

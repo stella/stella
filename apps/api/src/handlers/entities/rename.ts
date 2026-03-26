@@ -4,10 +4,10 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const renameEntityBodySchema = t.Object({

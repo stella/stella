@@ -1,4 +1,3 @@
-import { usePostHog } from "@posthog/react";
 import { useForm, useStore } from "@tanstack/react-form";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -17,10 +16,10 @@ import {
 import { Input } from "@stella/ui/components/input";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
-import { captureError } from "@/lib/posthog/utils";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
 import { toFormErrors } from "@/lib/schema";
 
@@ -51,7 +50,7 @@ const formSchema = v.object({
 
 function LoginOrSignup() {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const { redirectTo } = Route.useSearch();
 
@@ -67,7 +66,7 @@ function LoginOrSignup() {
       });
 
       if (error) {
-        captureError(posthog, toAuthClientError(error));
+        analytics.captureError(toAuthClientError(error));
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
           toastManager.add({
             title: error.message ?? t("errors.actionFailed"),

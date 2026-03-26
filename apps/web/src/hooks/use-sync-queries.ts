@@ -1,20 +1,19 @@
 import { useEffect } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 
 import { getSyncActorConfig } from "@stella/rivet/actors/sync-actor-config";
 import type { SyncActorEvent } from "@stella/rivet/actors/sync-actor-config";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { useActor } from "@/lib/api";
-import { captureError } from "@/lib/posthog/utils";
 import { sessionOptions } from "@/routes/-queries";
 
 const invalidateEvent: SyncActorEvent["name"] = "invalidate-query";
 
 export const useSyncQueries = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const { data } = useSuspenseQuery(sessionOptions);
 
   const organizationId = useRouteContext({
@@ -34,9 +33,9 @@ export const useSyncQueries = () => {
 
   useEffect(() => {
     if (actor.error) {
-      captureError(posthog, actor.error);
+      analytics.captureError(actor.error);
     }
-  }, [actor.error, posthog]);
+  }, [actor.error, analytics]);
 
   actor.useEvent(invalidateEvent, (queryKey: SyncActorEvent["data"]) => {
     // eslint-disable-next-line typescript/no-floating-promises

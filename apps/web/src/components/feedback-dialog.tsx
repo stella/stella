@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { MessageSquarePlusIcon } from "lucide-react";
-import { usePostHog } from "posthog-js/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -18,10 +17,11 @@ import { Label } from "@stella/ui/components/label";
 import { Textarea } from "@stella/ui/components/textarea";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
+import { useAnalytics } from "@/lib/analytics/provider";
 
 export const FeedbackDialog = () => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   const [open, setOpen] = useState(false);
   const [issueDescription, setIssueDescription] = useState("");
@@ -45,7 +45,7 @@ export const FeedbackDialog = () => {
       return;
     }
 
-    posthog.capture("feedback_submitted", {
+    analytics.capture("feedback_submitted", {
       description: issueDescription.trim(),
       suggested_fix: suggestedFix.trim() || undefined,
       route: window.location.pathname,

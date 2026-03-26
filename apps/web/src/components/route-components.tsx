@@ -6,7 +6,6 @@ import {
   useTransition,
 } from "react";
 
-import { usePostHog } from "@posthog/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
@@ -18,8 +17,8 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { StellaMark } from "@/components/stella-mark";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -53,7 +52,7 @@ export const DefaultErrorComponent = ({
   reset,
   className,
 }: DefaultErrorComponentProps) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const showUnauthorizedError =
@@ -72,7 +71,7 @@ export const DefaultErrorComponent = ({
             query.state.status === "error",
         })
         .catch((refetchError: unknown) => {
-          captureError(posthog, refetchError);
+          analytics.captureError(refetchError);
         });
 
       setIsAutoRetrying(false);
@@ -83,7 +82,7 @@ export const DefaultErrorComponent = ({
       // The counter resets when a non-network error occurs
       // or when recovery succeeds (component unmounts).
     });
-  }, [queryClient, posthog, reset]);
+  }, [queryClient, analytics, reset]);
 
   // Reset the retry counter when the component unmounts
   // (successful recovery) or when the error is no longer
@@ -102,16 +101,16 @@ export const DefaultErrorComponent = ({
       return;
     }
 
-    captureError(posthog, error);
-  }, [error, posthog, showUnauthorizedError, networkError]);
+    analytics.captureError(error);
+  }, [error, analytics, showUnauthorizedError, networkError]);
 
   // Capture network errors only once retries are exhausted,
-  // avoiding inflated PostHog counts during transient outages.
+  // avoiding inflated error counts during transient outages.
   useEffect(() => {
     if (networkError && networkRetryCount >= AUTO_RETRY_LIMIT) {
-      captureError(posthog, error);
+      analytics.captureError(error);
     }
-  }, [networkError, error, posthog]);
+  }, [networkError, error, analytics]);
 
   // Auto-retry on transient network errors.
   useEffect(() => {

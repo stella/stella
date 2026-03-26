@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
-import { usePostHog } from "@posthog/react";
 import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -18,7 +17,7 @@ import { Popover, PopoverPopup } from "@stella/ui/components/popover";
 import { Separator } from "@stella/ui/components/separator";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { captureError } from "@/lib/posthog/utils";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { toFormErrors } from "@/lib/schema";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
@@ -195,7 +194,7 @@ type PropertyPopoverProps = {
 
 export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
   const { workspaceId, id, name, content } = property;
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -241,7 +240,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
                 workspaceId,
                 entityIdsOrder: entityData.entities.map((e) => e.entityId),
               })
-              .catch((error: unknown) => captureError(posthog, error));
+              .catch((error: unknown) => analytics.captureError(error));
           },
           onError: () => {
             toastManager.add({

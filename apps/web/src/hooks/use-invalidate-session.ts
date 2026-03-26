@@ -1,14 +1,13 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 
-import { captureError } from "@/lib/posthog/utils";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { rootKeys } from "@/routes/-queries";
 
 export const useInvalidateSession = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async () => {
@@ -19,7 +18,7 @@ export const useInvalidateSession = () => {
       await router.invalidate();
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

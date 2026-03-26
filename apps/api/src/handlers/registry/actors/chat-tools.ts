@@ -9,13 +9,13 @@ import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import { captureError } from "@/api/lib/analytics";
 // eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
-import { captureError } from "@/api/lib/posthog";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

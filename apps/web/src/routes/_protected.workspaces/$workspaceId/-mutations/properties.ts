@@ -1,11 +1,10 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
 import type { PropertyContentType } from "@stella/api/types";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import type { WorkspaceProperty } from "@/lib/types";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -15,7 +14,7 @@ type CreatePropertyVars = {
 };
 
 export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ name, contentType }: CreatePropertyVars) => {
@@ -30,7 +29,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -44,7 +43,7 @@ type UpdatePropertyVars = {
 };
 
 export const useUpdateProperty = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({
@@ -69,7 +68,7 @@ export const useUpdateProperty = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -80,7 +79,7 @@ type DeletePropertyVars = {
 };
 
 export const useDeleteProperty = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, propertyId }: DeletePropertyVars) => {
@@ -96,7 +95,7 @@ export const useDeleteProperty = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };

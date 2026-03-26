@@ -1,9 +1,8 @@
-import { usePostHog } from "@posthog/react";
 import { useMutation } from "@tanstack/react-query";
 
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { captureError } from "@/lib/posthog/utils";
 import { workspaceMembersKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 
 type AddMemberVars = {
@@ -12,7 +11,7 @@ type AddMemberVars = {
 };
 
 export const useAddWorkspaceMember = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
@@ -28,7 +27,7 @@ export const useAddWorkspaceMember = () => {
       return response.data;
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
@@ -39,7 +38,7 @@ type RemoveMemberVars = {
 };
 
 export const useRemoveWorkspaceMember = () => {
-  const posthog = usePostHog();
+  const analytics = useAnalytics();
 
   return useMutation({
     mutationFn: async ({ workspaceId, userId }: RemoveMemberVars) => {
@@ -55,7 +54,7 @@ export const useRemoveWorkspaceMember = () => {
       }
     },
     onError: (error) => {
-      captureError(posthog, error);
+      analytics.captureError(error);
     },
   });
 };
