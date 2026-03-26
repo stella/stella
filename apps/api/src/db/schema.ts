@@ -1432,7 +1432,7 @@ export const caseLawCitations = p.pgTable(
       .where(isNull(t.polarity)),
     p.check(
       "citations_polarity_values",
-      sql`${t.polarity} IN ('positive','neutral','negative','unknown')`,
+      sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
     ),
   ],
 );
@@ -1462,7 +1462,7 @@ export const caseLawPolarityRules = p.pgTable(
       .on(t.pattern, t.language),
     p.check(
       "polarity_rules_polarity_values",
-      sql`${t.polarity} IN ('positive','neutral','negative','unknown')`,
+      sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
     ),
     p.check(
       "polarity_rules_source_values",
