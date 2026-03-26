@@ -57,6 +57,7 @@ describe("phraseToPattern", () => {
 describe("isValidPolarity", () => {
   test("accepts valid polarities", () => {
     expect(isValidPolarity("positive")).toBe(true);
+    expect(isValidPolarity("supportive")).toBe(true);
     expect(isValidPolarity("neutral")).toBe(true);
     expect(isValidPolarity("negative")).toBe(true);
     expect(isValidPolarity("unknown")).toBe(true);
@@ -75,6 +76,10 @@ describe("POLARITY_WEIGHT", () => {
 
   test("negative has zero weight", () => {
     expect(POLARITY_WEIGHT.negative).toBe(0);
+  });
+
+  test("supportive has 0.8 weight", () => {
+    expect(POLARITY_WEIGHT.supportive).toBe(0.8);
   });
 
   test("neutral and unknown have half weight", () => {
@@ -134,15 +139,15 @@ describe("seed rules", () => {
     }
   });
 
-  test("Czech neutral rules match expected phrases", () => {
-    const neutralRules = SEED_RULES.filter(
-      (r) => r.language === "cs" && r.polarity === "neutral",
+  test("Czech supportive rules match expected phrases", () => {
+    const supportiveRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "supportive",
     );
 
     const testCases = ["srov. rozhodnutí", "viz nález"];
 
     for (const text of testCases) {
-      const matched = neutralRules.some((r) =>
+      const matched = supportiveRules.some((r) =>
         new RegExp(r.pattern, "iu").test(text),
       );
       expect(matched).toBe(true);

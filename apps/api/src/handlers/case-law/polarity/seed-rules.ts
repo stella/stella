@@ -26,13 +26,13 @@ export const SEED_RULES: SeedRule[] = [
   { pattern: "v\\s+intencích", polarity: "positive", language: "cs" },
   { pattern: "respektuje\\s+závěr", polarity: "positive", language: "cs" },
 
-  // -- Czech: neutral --------------------------------------------
-  { pattern: "srov\\.", polarity: "neutral", language: "cs" },
-  { pattern: "\\bviz\\b", polarity: "neutral", language: "cs" },
-  { pattern: "obdobně", polarity: "neutral", language: "cs" },
-  { pattern: "přiměřeně", polarity: "neutral", language: "cs" },
-  { pattern: "k\\s+tomu\\s+blíže", polarity: "neutral", language: "cs" },
-  { pattern: "shodně\\s+též", polarity: "neutral", language: "cs" },
+  // -- Czech: supportive (implicit reliance) --------------------
+  { pattern: "srov\\.", polarity: "supportive", language: "cs" },
+  { pattern: "\\bviz\\b", polarity: "supportive", language: "cs" },
+  { pattern: "obdobně", polarity: "supportive", language: "cs" },
+  { pattern: "přiměřeně", polarity: "supportive", language: "cs" },
+  { pattern: "k\\s+tomu\\s+blíže", polarity: "supportive", language: "cs" },
+  { pattern: "shodně\\s+též", polarity: "supportive", language: "cs" },
 
   // -- Czech: negative -------------------------------------------
   { pattern: "na\\s+rozdíl\\s+od", polarity: "negative", language: "cs" },
@@ -54,10 +54,10 @@ export const SEED_RULES: SeedRule[] = [
   { pattern: "ako\\s+konštatoval", polarity: "positive", language: "sk" },
   { pattern: "potvrdzuje\\s+záver", polarity: "positive", language: "sk" },
 
-  // -- Slovak: neutral -------------------------------------------
-  { pattern: "porov\\.", polarity: "neutral", language: "sk" },
-  { pattern: "pozri", polarity: "neutral", language: "sk" },
-  { pattern: "obdobne", polarity: "neutral", language: "sk" },
+  // -- Slovak: supportive (implicit reliance) -------------------
+  { pattern: "porov\\.", polarity: "supportive", language: "sk" },
+  { pattern: "pozri", polarity: "supportive", language: "sk" },
+  { pattern: "obdobne", polarity: "supportive", language: "sk" },
 
   // -- Slovak: negative ------------------------------------------
   { pattern: "na\\s+rozdiel\\s+od", polarity: "negative", language: "sk" },

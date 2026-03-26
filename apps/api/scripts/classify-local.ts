@@ -165,6 +165,7 @@ const classifyCitationContext = (
 
 const POLARITY_COLORS: Record<Polarity, string> = {
   positive: "\u001b[32m", // green
+  supportive: "\u001b[36m", // cyan
   neutral: "\u001b[33m", // yellow
   negative: "\u001b[31m", // red
   unknown: "\u001b[90m", // gray
