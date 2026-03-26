@@ -57,7 +57,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
       if (typeof v === "string") {
         out[k] = v.replaceAll("\x00", "");
       } else if (Array.isArray(v)) {
-        out[k] = v.map((item) =>
+        out[k] = v.map((item: unknown) =>
           typeof item === "string" ? item.replaceAll("\x00", "") : item,
         );
       } else {

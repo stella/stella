@@ -358,7 +358,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                         fieldId: tab.id,
                         mimeType: tab.mimeType ?? null,
                       })
-                        .catch(() => {
+                        .catch((error: unknown) => {
+                          // eslint-disable-next-line no-console
+                          console.error("[anonymize]", error);
                           toastManager.add({
                             title: t("errors.actionFailed"),
                             type: "error",

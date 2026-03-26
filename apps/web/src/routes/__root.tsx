@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import {
@@ -31,12 +31,13 @@ export const Route = createRootRouteWithContext<{
     meta: [{ title: "stella" }],
   }),
   beforeLoad: async ({ context }) => {
-    const sessionData =
-      await context.queryClient.ensureQueryData(sessionOptions);
+    const sessionData = await context.queryClient
+      .ensureQueryData(sessionOptions)
+      .catch(() => null);
 
     return {
-      session: sessionData?.session,
-      user: sessionData?.user,
+      session: sessionData?.session ?? null,
+      user: sessionData?.user ?? null,
     };
   },
   pendingComponent: () => <DefaultPendingComponent className="h-screen" />,
@@ -103,7 +104,7 @@ function DevRoot() {
 }
 
 function RootComponent() {
-  useSuspenseQuery(sessionOptions);
+  useQuery(sessionOptions);
 
   return (
     <>
