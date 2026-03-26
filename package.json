@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
+  "resolutions": {
+    "@emnapi/core": "1.9.1",
+    "@emnapi/runtime": "1.9.1"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
