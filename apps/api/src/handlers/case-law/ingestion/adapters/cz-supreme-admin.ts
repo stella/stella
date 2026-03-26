@@ -302,11 +302,8 @@ const fetchFulltext = async (
     }
 
     const buffer = await response.arrayBuffer();
-    // Decode UTF-16LE to string, strip null bytes
-    // (Postgres rejects \x00 in text columns)
-    const text = new TextDecoder("utf-16le")
-      .decode(buffer)
-      .replaceAll("\x00", "");
+    // Decode UTF-16LE to string (null bytes stripped by pipeline)
+    const text = new TextDecoder("utf-16le").decode(buffer);
     const body = stripHtml(text);
     return body.length > 100 ? body : undefined;
   } catch {

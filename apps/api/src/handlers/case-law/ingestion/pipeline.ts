@@ -36,14 +36,57 @@ type ProcessResult = {
 };
 
 /**
+ * Sanitize text fields before DB insertion.
+ * Postgres rejects null bytes (\x00) in text columns.
+ * Applied once in the pipeline so individual adapters
+ * don't need to handle this.
+ */
+const sanitizeResult = (r: IngestionResult): IngestionResult => {
+  const strip = (s: string | undefined): string | undefined =>
+    s?.replaceAll("\x00", "");
+
+  // Recursively strip null bytes from metadata values
+  const sanitizeMetadata = (
+    obj: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "string") {
+        out[k] = v.replaceAll("\x00", "");
+      } else if (Array.isArray(v)) {
+        out[k] = v.map((item) =>
+          typeof item === "string" ? item.replaceAll("\x00", "") : item,
+        );
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  };
+
+  return {
+    ...r,
+    caseNumber: r.caseNumber.replaceAll("\x00", ""),
+    fulltext: strip(r.fulltext),
+    ecli: strip(r.ecli),
+    decisionType: strip(r.decisionType),
+    sourceUrl: strip(r.sourceUrl),
+    documentUrl: strip(r.documentUrl),
+    metadata: sanitizeMetadata(r.metadata),
+  };
+};
+
+/**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
 const processDecision = async (
-  result: IngestionResult,
+  input: IngestionResult,
   sourceId: string,
   scopedDb: ScopedDb,
 ): Promise<ProcessResult> => {
+  const result = sanitizeResult(input);
+
   const existing = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: {
