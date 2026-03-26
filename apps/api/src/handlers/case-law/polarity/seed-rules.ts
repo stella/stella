@@ -33,6 +33,27 @@ export const SEED_RULES: SeedRule[] = [
   { pattern: "přiměřeně", polarity: "supportive", language: "cs" },
   { pattern: "k\\s+tomu\\s+blíže", polarity: "supportive", language: "cs" },
   { pattern: "shodně\\s+též", polarity: "supportive", language: "cs" },
+  { pattern: "srovnej", polarity: "supportive", language: "cs" },
+  { pattern: "judikoval", polarity: "supportive", language: "cs" },
+  { pattern: "odpovídá\\s+závěr", polarity: "supportive", language: "cs" },
+  { pattern: "připomíná", polarity: "supportive", language: "cs" },
+  { pattern: "lze\\s+odkázat", polarity: "supportive", language: "cs" },
+  { pattern: "má\\s+oporu\\s+v", polarity: "supportive", language: "cs" },
+  { pattern: "přiléhavě", polarity: "supportive", language: "cs" },
+  { pattern: "v\\s+judikatuře", polarity: "supportive", language: "cs" },
+  { pattern: "z\\s+judikatury", polarity: "supportive", language: "cs" },
+
+  // -- Czech: neutral (procedural chain) -------------------------
+  {
+    pattern: "proti\\s+(rozsudku|usnesení|rozhodnutí)",
+    polarity: "neutral",
+    language: "cs",
+  },
+  {
+    pattern: "veden[éoá]?\\s+(u|pod)",
+    polarity: "neutral",
+    language: "cs",
+  },
 
   // -- Czech: negative -------------------------------------------
   { pattern: "na\\s+rozdíl\\s+od", polarity: "negative", language: "cs" },

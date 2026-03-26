@@ -144,10 +144,39 @@ describe("seed rules", () => {
       (r) => r.language === "cs" && r.polarity === "supportive",
     );
 
-    const testCases = ["srov. rozhodnutí", "viz nález"];
+    const testCases = [
+      "srov. rozhodnutí",
+      "viz nález",
+      "srovnej usnesení",
+      "Nejvyšší soud judikoval",
+      "lze odkázat na precedenční",
+      "má oporu v rozhodovací činnosti",
+      "přiléhavě odkázal na usnesení",
+      "v judikatuře Nejvyššího soudu",
+    ];
 
     for (const text of testCases) {
       const matched = supportiveRules.some((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect(matched).toBe(true);
+    }
+  });
+
+  test("Czech neutral rules match procedural phrases", () => {
+    const neutralRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "neutral",
+    );
+
+    const testCases = [
+      "proti rozsudku Krajského soudu",
+      "proti usnesení Nejvyššího soudu",
+      "vedené u Okresního soudu",
+      "vedeno pod sp. zn.",
+    ];
+
+    for (const text of testCases) {
+      const matched = neutralRules.some((r) =>
         new RegExp(r.pattern, "iu").test(text),
       );
       expect(matched).toBe(true);
