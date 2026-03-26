@@ -36,13 +36,65 @@ const CITATION_PATTERNS: RegExp[] = [
   /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/g,
 
   // Generic: "rozsudek č.j. 5 As 123/2020"
-  /[čc]\.\s*j\.\s*\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4}/g,
+  /[čc]\.\s*j\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/g,
 
   PL_PREFIXED_PATTERN,
 
   // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20"
   /\b[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d{1,6}\/\d{2,4}\b/g,
 ];
+
+/** Strip known prefixes to get the bare case number. */
+const stripPrefix = (text: string): string => {
+  const trimmed = text.trim();
+
+  // Czech: "sp. zn. 21 Cdo 1234/2020"
+  const spZn = trimmed.match(/^sp\.\s*zn\.\s*(.+)/i);
+  if (spZn?.[1]) {
+    return spZn[1].trim();
+  }
+
+  // Czech: "č. j. 5 As 123/2020" or "č.j. 5 As 123/2020"
+  const cj = trimmed.match(/^[čc]\.\s*j\.\s*(.+)/i);
+  if (cj?.[1]) {
+    return cj[1].trim();
+  }
+
+  // Polish: "sygn. akt II CSK 123/20"
+  const sygn = trimmed.match(/^sygn\.\s*(?:akt\s+)?(.+)/i);
+  if (sygn?.[1]) {
+    return sygn[1].trim();
+  }
+
+  return trimmed;
+};
+
+type DecisionIdentity = {
+  caseNumber: string;
+  ecli?: string | null;
+};
+
+/**
+ * Check whether a citation text refers to the same decision
+ * that contains it (self-citation).
+ */
+export const isSelfCitation = (
+  citationText: string,
+  decision: DecisionIdentity,
+): boolean => {
+  const trimmed = citationText.trim();
+
+  // ECLI exact match
+  if (decision.ecli && trimmed === decision.ecli) {
+    return true;
+  }
+
+  // Compare bare case numbers (case-insensitive)
+  const bareCitation = stripPrefix(trimmed).toLowerCase();
+  const bareSelf = decision.caseNumber.toLowerCase().trim();
+
+  return bareCitation === bareSelf;
+};
 
 /**
  * Extract citation references from decision text.

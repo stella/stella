@@ -13,7 +13,10 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
-import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  extractCitations,
+  isSelfCitation,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/posthog";
@@ -106,6 +109,12 @@ const processDecision = async (
 
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),
+  ).filter(
+    (c) =>
+      !isSelfCitation(c.citationText, {
+        caseNumber: result.caseNumber,
+        ecli: result.ecli ?? null,
+      }),
   );
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
