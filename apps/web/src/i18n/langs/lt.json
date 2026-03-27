@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
+    "continueWithEmail": "Tęsti",
     "createFirstOrganization": "Sukurkite savo pirmąją organizaciją",
     "createOrganization": "Sukurti organizaciją",
     "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "enterTheCode": "Įveskite kodą",
+    "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {
       "declined": "Kvietimas atmestas",
       "declinedDescription": "Atmetėte šį kvietimą. Galite saugiai uždaryti šį puslapį.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
-    "signInToStella": "Prisijunkite prie Stella",
+    "signInWithEmail": "Prisijungti el. paštu",
     "signOut": "Atsijungti",
     "slugLabel": "Šliužas",
     "slugPlaceholder": "mano-organizacija",
+    "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su AI pagalba.",
     "weSentCodeTo": "Išsiuntėme kodą adresu {email}"
   },
   "billing": {

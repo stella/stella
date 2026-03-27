@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
+    "continueWithEmail": "Kontynuuj",
     "createFirstOrganization": "Utwórz swoją pierwszą organizację, aby rozpocząć",
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
     "emailPlaceholder": "ty@example.com",
     "enterTheCode": "Wprowadź kod",
+    "headline": "Jasność w każdej sprawie.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
-    "signInToStella": "Zaloguj się do Stella",
+    "signInWithEmail": "Zaloguj się e-mailem",
     "signOut": "Wyloguj się",
     "slugLabel": "Slug",
     "slugPlaceholder": "moja-organizacja",
+    "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
     "weSentCodeTo": "Wysłaliśmy kod na adres {email}"
   },
   "billing": {

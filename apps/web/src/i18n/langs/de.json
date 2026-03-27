@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
+    "continueWithEmail": "Weiter",
     "createFirstOrganization": "Erstellen Sie Ihre erste Organisation",
     "createOrganization": "Organisation erstellen",
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "you@example.com",
     "enterTheCode": "Code eingeben",
+    "headline": "Klarheit für jeden Fall.",
     "invitation": {
       "declined": "Einladung abgelehnt",
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
-    "signInToStella": "Bei Stella anmelden",
+    "signInWithEmail": "Mit E-Mail anmelden",
     "signOut": "Abmelden",
     "slugLabel": "Slug",
     "slugPlaceholder": "meine-organisation",
+    "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "weSentCodeTo": "Wir haben einen Code an {email} gesendet"
   },
   "billing": {

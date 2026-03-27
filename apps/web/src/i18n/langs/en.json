@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Choose which organization to work in",
+    "continueWithEmail": "Continue",
     "createFirstOrganization": "Create your first organization to get started",
     "createOrganization": "Create an organization",
     "createOrganizationButton": "Create organization",
     "emailPlaceholder": "you@example.com",
     "enterTheCode": "Enter the code",
+    "headline": "Clarity for every case.",
     "invitation": {
       "declined": "Invitation declined",
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Select an organization",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
-    "signInToStella": "Sign in to Stella",
+    "signInWithEmail": "Sign in with e-mail",
     "signOut": "Sign Out",
     "slugLabel": "Slug",
     "slugPlaceholder": "my-organization",
+    "subtitle": "Documents, case law, and review under control. Powered by AI.",
     "weSentCodeTo": "We sent a code to {email}"
   },
   "billing": {

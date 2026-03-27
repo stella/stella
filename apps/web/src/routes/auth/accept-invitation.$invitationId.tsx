@@ -129,41 +129,39 @@ function AcceptInvitation() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>{t("auth.invitation.title")}</FrameTitle>
-          <FrameDescription>
-            {t("auth.invitation.description", {
-              organizationName: invitation.organizationName,
-              inviterEmail: invitation.inviterEmail,
-              role: invitation.role,
-            })}
-          </FrameDescription>
-        </FrameHeader>
-        <FramePanel className="flex flex-col gap-2">
-          <Button
-            className="w-full"
-            disabled={rejectInvitation.isPending}
-            loading={acceptInvitation.isPending}
-            onClick={() => acceptInvitation.mutate()}
-            type="button"
-          >
-            {t("common.accept")}
-          </Button>
-          <Button
-            className="w-full"
-            disabled={acceptInvitation.isPending}
-            loading={rejectInvitation.isPending}
-            onClick={() => rejectInvitation.mutate()}
-            type="button"
-            variant="outline"
-          >
-            {t("common.decline")}
-          </Button>
-        </FramePanel>
-      </Frame>
-    </div>
+    <Frame className="w-full max-w-sm">
+      <FrameHeader>
+        <FrameTitle>{t("auth.invitation.title")}</FrameTitle>
+        <FrameDescription>
+          {t("auth.invitation.description", {
+            organizationName: invitation.organizationName,
+            inviterEmail: invitation.inviterEmail,
+            role: invitation.role,
+          })}
+        </FrameDescription>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-2">
+        <Button
+          className="w-full"
+          disabled={rejectInvitation.isPending}
+          loading={acceptInvitation.isPending}
+          onClick={() => acceptInvitation.mutate()}
+          type="button"
+        >
+          {t("common.accept")}
+        </Button>
+        <Button
+          className="w-full"
+          disabled={acceptInvitation.isPending}
+          loading={rejectInvitation.isPending}
+          onClick={() => rejectInvitation.mutate()}
+          type="button"
+          variant="outline"
+        >
+          {t("common.decline")}
+        </Button>
+      </FramePanel>
+    </Frame>
   );
 }
 
@@ -171,23 +169,21 @@ const DeclinedState = () => {
   const t = useTranslations();
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>{t("auth.invitation.declined")}</FrameTitle>
-        </FrameHeader>
-        <FramePanel className="flex flex-col gap-4">
-          <FrameDescription>
-            {t("auth.invitation.declinedDescription")}
-          </FrameDescription>
-          <Link
-            className={cn(buttonVariants({ variant: "default" }), "w-full")}
-            to="/workspaces"
-          >
-            {t("auth.invitation.goToWorkspaces")}
-          </Link>
-        </FramePanel>
-      </Frame>
-    </div>
+    <Frame className="w-full max-w-sm">
+      <FrameHeader>
+        <FrameTitle>{t("auth.invitation.declined")}</FrameTitle>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-4">
+        <FrameDescription>
+          {t("auth.invitation.declinedDescription")}
+        </FrameDescription>
+        <Link
+          className={cn(buttonVariants({ variant: "default" }), "w-full")}
+          to="/workspaces"
+        >
+          {t("auth.invitation.goToWorkspaces")}
+        </Link>
+      </FramePanel>
+    </Frame>
   );
 };

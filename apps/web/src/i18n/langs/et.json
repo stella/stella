@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
+    "continueWithEmail": "Jätka",
     "createFirstOrganization": "Alustamiseks looge oma esimene organisatsioon",
     "createOrganization": "Loo organisatsioon",
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "enterTheCode": "Sisestage kood",
+    "headline": "Selgus igas asjas.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
-    "signInToStella": "Logi sisse Stellasse",
+    "signInWithEmail": "Logi sisse e-postiga",
     "signOut": "Logi välja",
     "slugLabel": "Lühitunnus",
     "slugPlaceholder": "minu-organisatsioon",
+    "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "weSentCodeTo": "Saatsime koodi aadressile {email}"
   },
   "billing": {

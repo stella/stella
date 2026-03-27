@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
+    "continueWithEmail": "Tovább",
     "createFirstOrganization": "Hozza létre első szervezetét a kezdéshez",
     "createOrganization": "Szervezet létrehozása",
     "createOrganizationButton": "Szervezet létrehozása",
     "emailPlaceholder": "te@example.com",
     "enterTheCode": "Adja meg a kódot",
+    "headline": "Tisztán látás minden ügyben.",
     "invitation": {
       "declined": "Meghívó elutasítva",
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
-    "signInToStella": "Jelentkezzen be a Stellába",
+    "signInWithEmail": "Bejelentkezés e-mailben",
     "signOut": "Kijelentkezés",
     "slugLabel": "Azonosító (slug)",
     "slugPlaceholder": "szervezetem",
+    "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
     "weSentCodeTo": "Kódot küldtünk a következő címre: {email}"
   },
   "billing": {

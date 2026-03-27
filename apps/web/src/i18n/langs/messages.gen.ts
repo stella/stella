@@ -79,11 +79,13 @@ type Messages = {
   };
   "auth": {
     "chooseOrganization": "Choose which organization to work in";
+    "continueWithEmail": "Continue";
     "createFirstOrganization": "Create your first organization to get started";
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "enterTheCode": "Enter the code";
+    "headline": "Clarity for every case.";
     "invitation": {
       "declined": "Invitation declined";
       "declinedDescription": "You have declined this invitation. You can safely close this page.";
@@ -97,10 +99,11 @@ type Messages = {
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
-    "signInToStella": "Sign in to Stella";
+    "signInWithEmail": "Sign in with e-mail";
     "signOut": "Sign Out";
     "slugLabel": "Slug";
     "slugPlaceholder": "my-organization";
+    "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "weSentCodeTo": "We sent a code to {email}";
   };
   "billing": {
@@ -122,7 +125,6 @@ type Messages = {
       "manageCodes": "Manage codes";
       "noCodesYet": "No billing codes yet";
       "task": "Task";
-      "link": "Link";
       "taskCode": "Task code";
     };
     "day": "Day";
@@ -812,9 +814,9 @@ type Messages = {
     "kinds": {
       "document": "Document";
       "folder": "Folder";
+      "link": "Link";
       "message": "Message";
       "task": "Task";
-      "link": "Link";
     };
     "metaSeparator": "{workspace} · {time}";
     "noResults": "No results found for \"{query}\".";
@@ -1150,6 +1152,7 @@ type Messages = {
     "properties": {
       "addInputProperty": "Add at least one input property using \"@\"";
       "addPromptForBetterResults": "Add a prompt for better results";
+      "clip": "Clip";
       "conditionSeparator": "AND";
       "conditions": "Conditions ({count})";
       "createOption": "Create \"{option}\"";
@@ -1171,7 +1174,6 @@ type Messages = {
       "file": "File";
       "ifNoMatchFound": "If no match found";
       "int": "Integer";
-      "clip": "Clip";
       "keepEmpty": "Keep Empty";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
