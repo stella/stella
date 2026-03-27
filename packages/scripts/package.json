@@ -12,6 +12,7 @@
     "test": "bun test",
     "typecheck": "tsgo --noEmit",
     "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
     "format": "oxfmt ."
   },
   "devDependencies": {

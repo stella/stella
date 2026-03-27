@@ -13,8 +13,11 @@ pre-commit:
     typecheck:
       run: bun run typecheck
     lint:
-      run: bun run lint
+      run: bun run lint:fix
+      stage_fixed: true
     format:
-      run: bun run format:check
+      run: bun run format
+      stage_fixed: true
     i18n:
-      run: bun run i18n:check
+      run: bun run i18n:sync
+      stage_fixed: true

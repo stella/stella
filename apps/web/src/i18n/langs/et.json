@@ -1103,7 +1103,8 @@
       "totalDocuments": "Dokumente kokku",
       "totalItems": "Elemendid",
       "totalThisWeek": "Kokku sel nädalal",
-      "upcomingTasks": "Eelseisvad ülesanded"
+      "upcomingTasks": "Eelseisvad ülesanded",
+      "uploaded": "laadis üles"
     },
     "parties": {
       "addParty": "Lisa osapool",

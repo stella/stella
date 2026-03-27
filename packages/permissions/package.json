@@ -10,6 +10,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsgo --noEmit",
     "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
     "format": "oxfmt ."
   },
   "dependencies": {

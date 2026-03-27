@@ -1103,7 +1103,8 @@
       "totalDocuments": "Összes dokumentum",
       "totalItems": "Elemek",
       "totalThisWeek": "Összesen ezen a héten",
-      "upcomingTasks": "Közelgő feladatok"
+      "upcomingTasks": "Közelgő feladatok",
+      "uploaded": "feltöltötte"
     },
     "parties": {
       "addParty": "Fél hozzáadása",

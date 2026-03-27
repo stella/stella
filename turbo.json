@@ -25,6 +25,10 @@
     "lint": {
       "dependsOn": ["transit"]
     },
+    "lint:fix": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
     "format": {
       "dependsOn": ["transit"]
     },

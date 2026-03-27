@@ -1103,7 +1103,8 @@
       "totalDocuments": "Dokumente gesamt",
       "totalItems": "Einträge",
       "totalThisWeek": "Gesamt diese Woche",
-      "upcomingTasks": "Anstehende Aufgaben"
+      "upcomingTasks": "Anstehende Aufgaben",
+      "uploaded": "hochgeladen"
     },
     "parties": {
       "addParty": "Partei hinzufügen",

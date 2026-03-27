@@ -1103,7 +1103,8 @@
       "totalDocuments": "Total de documentos",
       "totalItems": "Elementos",
       "totalThisWeek": "Total esta semana",
-      "upcomingTasks": "Próximas tareas"
+      "upcomingTasks": "Próximas tareas",
+      "uploaded": "subió"
     },
     "parties": {
       "addParty": "Añadir parte",

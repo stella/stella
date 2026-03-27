@@ -1103,7 +1103,8 @@
       "totalDocuments": "Total documents",
       "totalItems": "Items",
       "totalThisWeek": "Total this week",
-      "upcomingTasks": "Upcoming tasks"
+      "upcomingTasks": "Upcoming tasks",
+      "uploaded": "uploaded"
     },
     "parties": {
       "addParty": "Add party",

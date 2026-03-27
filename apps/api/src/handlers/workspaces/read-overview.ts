@@ -36,6 +36,7 @@ export const readOverviewHandler = async ({
             priority: true,
             dueDate: true,
             createdBy: true,
+            createdAt: true,
             updatedAt: true,
           },
           with: {
@@ -49,7 +50,7 @@ export const readOverviewHandler = async ({
               },
             },
             createdByUser: {
-              columns: { name: true, image: true },
+              columns: { name: true, email: true, image: true },
             },
           },
           orderBy: { updatedAt: "desc" },
@@ -103,6 +104,9 @@ export const readOverviewHandler = async ({
       }
     }
 
+    const u = e.createdByUser;
+    const displayName = u ? u.name || u.email : null;
+
     return {
       entityId: e.id,
       name,
@@ -114,9 +118,10 @@ export const readOverviewHandler = async ({
       fieldId,
       pdfFileId,
       encrypted,
+      createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt?.toISOString() ?? null,
-      createdBy: e.createdByUser?.name ?? null,
-      createdByImage: e.createdByUser?.image ?? null,
+      createdBy: displayName,
+      createdByImage: u?.image ?? null,
     };
   });
 
