@@ -48,8 +48,7 @@ type CalendarEntity = {
   workspaceColor: string | null;
 };
 
-// SAFETY: index 0 is `_created-at`, the default date dimension
-const DATE_PROPERTY = INTERNAL_DATE_IDS[0];
+const [DATE_PROPERTY] = INTERNAL_DATE_IDS;
 
 function CrossWorkspaceCalendar() {
   const t = useTranslations();

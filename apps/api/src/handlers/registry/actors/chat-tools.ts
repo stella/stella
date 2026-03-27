@@ -52,16 +52,14 @@ export const defineTool = <INPUT, OUTPUT>({
         return await execute(args, options);
       } catch (error) {
         captureError(error, { toolName: name });
-        // SAFETY: the outer `as Tool<INPUT, OUTPUT | { error: string }>`
-        // widens the execute return type; this narrower return is sound
-        // within that widened context.
+        // SAFETY: single-hop cast; error branch returns { error }
+        // which is part of the declared Tool return union.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return { error: "Tool execution failed" } as unknown as OUTPUT;
+        return { error: "Tool execution failed" } as OUTPUT;
       }
     },
-    // SAFETY: the execute wrapper widens the return type to
-    // include { error: string }; the cast aligns tool()'s
-    // inferred OUTPUT with the actual wrapped return type.
+    // SAFETY: AI SDK `tool()` infers OUTPUT from execute;
+    // cast widens to include the error branch we added.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   } as Tool<INPUT, OUTPUT | { error: string }>);
 

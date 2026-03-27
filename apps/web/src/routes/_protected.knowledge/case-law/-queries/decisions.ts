@@ -92,9 +92,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             headline: h.headline,
             createdAt: new Date(h.createdAt),
           })),
-          // SAFETY: Eden infers a compatible shape but TS can't
-          // unify it with our hand-defined SearchFacets type.
-          facets: response.data.facets as SearchFacets,
+          facets: response.data.facets,
           nextCursor: response.data.nextCursor,
         };
       }
@@ -132,9 +130,8 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         throw toAPIError(response.error);
       }
 
-      // SAFETY: List branch has no facets; null is a valid
-      // SearchFacets value.
-      return { ...response.data, facets: null as SearchFacets };
+      const facets: SearchFacets = null;
+      return { ...response.data, facets };
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,

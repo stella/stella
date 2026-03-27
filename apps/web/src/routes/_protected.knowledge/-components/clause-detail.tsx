@@ -68,6 +68,25 @@ type ClauseParagraph = {
   directiveExpression?: string;
 };
 
+/** Narrows JSONB `unknown` to ClauseParagraph[].
+ *  Validates the first element only (sample check);
+ *  sufficient for trusted API data. */
+const isClauseParagraphs = (value: unknown): value is ClauseParagraph[] => {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  if (value.length === 0) {
+    return true;
+  }
+  const first: unknown = value[0];
+  return (
+    typeof first === "object" &&
+    first !== null &&
+    "text" in first &&
+    typeof first.text === "string"
+  );
+};
+
 type VariantItem = {
   id: string;
   label: string;
@@ -488,14 +507,7 @@ const VariantRow = ({
     onChanged();
   }, [clauseId, variant.id, t, onChanged]);
 
-  // SAFETY: variant.body is ClauseParagraph[] stored as
-  // JSONB; Eden types it as `unknown`. We narrow with
-  // Array.isArray and render only the `text` field which
-  // is always present per schema.
-  const body: { text: string; style?: string }[] = Array.isArray(variant.body)
-    ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      (variant.body as { text: string; style?: string }[])
-    : [];
+  const body = isClauseParagraphs(variant.body) ? variant.body : [];
 
   return (
     <li className="px-4 py-3">
@@ -707,9 +719,7 @@ const HistoryTab = ({
         return;
       }
 
-      // SAFETY: body is ClauseParagraph[] stored as JSONB
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const oldBody = data.body as unknown as ClauseParagraph[];
+      const oldBody = isClauseParagraphs(data.body) ? data.body : [];
       const diff = diffClauseBodies(oldBody, currentBody);
       setDiffResult(diff);
     },
