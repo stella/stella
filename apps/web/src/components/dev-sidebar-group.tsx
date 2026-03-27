@@ -1,11 +1,9 @@
 import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   DatabaseIcon,
   RotateCcwIcon,
-  ScanEyeIcon,
   Trash2Icon,
   WrenchIcon,
 } from "lucide-react";
@@ -220,11 +218,6 @@ export const DevSidebarGroup = () => {
             ))}
           </MenuRadioGroup>
         </MenuGroup>
-        <MenuSeparator />
-        <MenuItem render={<Link to="/dev/anonymize" />}>
-          <ScanEyeIcon />
-          Anonymise
-        </MenuItem>
         <MenuSeparator />
         {/* eslint-disable-next-line typescript/no-misused-promises */}
         <MenuItem disabled={seeding} onClick={handleSeed}>
