@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import { useIsMutating, useMutation } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
@@ -70,13 +70,18 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
     },
   });
 
+  // Use a ref so the callback identity is stable — avoids
+  // re-triggering effects that depend on this function.
+  const pendingRef = useRef(pendingMutationsCount);
+  pendingRef.current = pendingMutationsCount;
+
   return useCallback(() => {
-    if (pendingMutationsCount > 0) {
+    if (pendingRef.current > 0) {
       return;
     }
 
     mutation.mutate();
-  }, [pendingMutationsCount, mutation]);
+  }, [mutation.mutate]);
 };
 
 export const useIsCreatingBBoxes = () => {

@@ -1,10 +1,5 @@
 import type { PropsWithChildren } from "react";
 
-import { useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -155,11 +150,7 @@ const WithOpenEntityButton = ({
   workspaceId,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
-  const navigate = useNavigate();
-  const t = useTranslations();
   const openPdf = useInspectorStore((s) => s.openPdf);
-
-  const activePropertyId = propertyId;
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
@@ -178,32 +169,6 @@ const WithOpenEntityButton = ({
       }
     >
       {children}
-      <Button
-        className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
-        // eslint-disable-next-line typescript/no-misused-promises
-        onClick={async (e) => {
-          e.stopPropagation();
-
-          await navigate({
-            to: "/workspaces/$workspaceId/$viewId/pdf",
-            params: { workspaceId, viewId: "all" },
-            search: {
-              file: {
-                fieldId,
-                pageNumber: 1,
-                scaleOffset: 0,
-              },
-              justification: undefined,
-              entityId,
-              activePropertyId,
-              sidebar: { type: "entity" },
-            },
-          });
-        }}
-        size="xs"
-      >
-        {t("common.open")}
-      </Button>
     </div>
   );
 };

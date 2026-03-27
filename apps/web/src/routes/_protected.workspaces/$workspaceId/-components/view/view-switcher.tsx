@@ -392,7 +392,7 @@ const ViewTab = ({
       ref={containerRef}
     >
       <TabsTab
-        className={cn(isActive && "pe-6.5")}
+        className="pe-6.5"
         onClick={onSelect}
         onDoubleClick={(e) => {
           if (!canUpdateView) {

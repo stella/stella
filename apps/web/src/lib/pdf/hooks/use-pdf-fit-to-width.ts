@@ -54,6 +54,15 @@ export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
       return;
     }
 
+    // Observe the ScrollArea viewport (the visible area),
+    // not the content container. The content container's
+    // width is determined by the PDF pages themselves,
+    // creating a circular dependency.
+    const viewport = container.closest<HTMLElement>(
+      SCROLL_AREA_VIEWPORT_SELECTOR,
+    );
+    const observeTarget = viewport ?? container;
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries.at(0);
       if (!entry) {
@@ -69,7 +78,7 @@ export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
       debouncedRerender(effectiveScale);
     });
 
-    observer.observe(container);
+    observer.observe(observeTarget);
 
     return () => {
       observer.disconnect();

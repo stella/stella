@@ -56,7 +56,7 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
         setScrollTo(null);
       }}
       {...{ [PAGE_ID_ATTRIBUTE]: pageId }}
-      className="relative mx-auto border-transparent"
+      className="relative mx-auto max-w-full border-transparent"
       style={
         {
           "--total-scale-factor": "var(--scale-factor)",
@@ -119,7 +119,7 @@ const PDFPageContent = ({ pageId, renderPromise }: PDFPageContentProps) => {
             }
           };
         }}
-        className="size-full overflow-hidden"
+        className="size-full overflow-hidden [&_canvas]:h-auto [&_canvas]:max-w-full"
       />
       <div
         ref={(el) => {
