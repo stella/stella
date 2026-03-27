@@ -57,30 +57,24 @@ function Organization() {
 
   if (isPending) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <Frame className="w-full max-w-sm">
-          <FrameHeader>
-            <Skeleton className="h-5 w-48" />
-            <Skeleton className="mt-2 h-4 w-64" />
-          </FrameHeader>
-          <FramePanel className="flex flex-col gap-2">
-            <Skeleton className="h-16 w-full rounded-lg" />
-            <Skeleton className="h-16 w-full rounded-lg" />
-          </FramePanel>
-        </Frame>
-      </div>
+      <Frame className="w-full max-w-sm">
+        <FrameHeader>
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </FrameHeader>
+        <FramePanel className="flex flex-col gap-2">
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </FramePanel>
+      </Frame>
     );
   }
 
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      {hasOrgs ? (
-        <OrganizationList organizations={organizations} />
-      ) : (
-        <CreateOrganizationForm />
-      )}
-    </div>
-  );
+  if (hasOrgs) {
+    return <OrganizationList organizations={organizations} />;
+  }
+
+  return <CreateOrganizationForm />;
 }
 
 type OrganizationListProps = {

@@ -6,13 +6,6 @@ import * as v from "valibot";
 import { Button } from "@stella/ui/components/button";
 import { Field, FieldError } from "@stella/ui/components/field";
 import { Form } from "@stella/ui/components/form";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stella/ui/components/frame";
 import { Input } from "@stella/ui/components/input";
 import { toastManager } from "@stella/ui/components/toast";
 
@@ -86,50 +79,48 @@ function LoginOrSignup() {
   const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>{t("auth.signInToStella")}</FrameTitle>
-          {isAcceptInvitationRedirect(redirectTo) && (
-            <FrameDescription>
-              {t("auth.signInBeforeInvitation")}
-            </FrameDescription>
+    <div className="flex w-full max-w-sm flex-col gap-8">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-foreground text-2xl font-medium tracking-tight">
+          {t("auth.signInWithEmail")}
+        </h2>
+        {isAcceptInvitationRedirect(redirectTo) && (
+          <p className="text-muted-foreground text-sm">
+            {t("auth.signInBeforeInvitation")}
+          </p>
+        )}
+      </div>
+      <Form
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          // eslint-disable-next-line typescript/no-floating-promises
+          form.handleSubmit();
+        }}
+      >
+        <form.Field name="email">
+          {(field) => (
+            <Field name={field.name}>
+              <Input
+                autoFocus
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                type="email"
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
           )}
-        </FrameHeader>
-        <FramePanel>
-          <Form
-            errors={formErrors}
-            onSubmit={(e) => {
-              e.preventDefault();
-              // eslint-disable-next-line typescript/no-floating-promises
-              form.handleSubmit();
-            }}
-          >
-            <form.Field name="email">
-              {(field) => (
-                <Field name={field.name}>
-                  <Input
-                    autoFocus
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder={t("auth.emailPlaceholder")}
-                    type="email"
-                    value={field.state.value}
-                  />
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-            <form.Subscribe selector={(s) => s.isSubmitting}>
-              {(isSubmitting) => (
-                <Button className="w-full" loading={isSubmitting} type="submit">
-                  {t("auth.signIn")}
-                </Button>
-              )}
-            </form.Subscribe>
-          </Form>
-        </FramePanel>
-      </Frame>
+        </form.Field>
+        <form.Subscribe selector={(s) => s.isSubmitting}>
+          {(isSubmitting) => (
+            <Button className="w-full" loading={isSubmitting} type="submit">
+              {t("auth.continueWithEmail")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </Form>
     </div>
   );
 }

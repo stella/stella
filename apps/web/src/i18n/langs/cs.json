@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Vyberte organizaci, ve které chcete pracovat",
+    "continueWithEmail": "Pokračovat",
     "createFirstOrganization": "Vytvořte svou první organizaci",
     "createOrganization": "Vytvořit organizaci",
     "createOrganizationButton": "Vytvořit organizaci",
     "emailPlaceholder": "you@example.com",
     "enterTheCode": "Zadejte kód",
+    "headline": "Jasno v každém případě.",
     "invitation": {
       "declined": "Pozvánka odmítnuta",
       "declinedDescription": "Odmítli jste tuto pozvánku. Můžete tuto stránku zavřít.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
-    "signInToStella": "Přihlaste se do Stelly",
+    "signInWithEmail": "Přihlásit se e-mailem",
     "signOut": "Odhlásit se",
     "slugLabel": "Slug",
     "slugPlaceholder": "moje-organizace",
+    "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "weSentCodeTo": "Odeslali jsme kód na {email}"
   },
   "billing": {

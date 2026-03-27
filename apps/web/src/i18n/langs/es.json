@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
+    "continueWithEmail": "Continuar",
     "createFirstOrganization": "Cree su primera organización para comenzar",
     "createOrganization": "Crear una organización",
     "createOrganizationButton": "Crear organización",
     "emailPlaceholder": "usted@example.com",
     "enterTheCode": "Introduzca el código",
+    "headline": "Claridad en cada caso.",
     "invitation": {
       "declined": "Invitación rechazada",
       "declinedDescription": "Ha rechazado esta invitación. Puede cerrar esta página.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
-    "signInToStella": "Inicia sesión en Stella",
+    "signInWithEmail": "Iniciar sesión con e-mail",
     "signOut": "Cerrar sesión",
     "slugLabel": "Slug",
     "slugPlaceholder": "mi-organizacion",
+    "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
     "weSentCodeTo": "Hemos enviado un código a {email}"
   },
   "billing": {

@@ -76,11 +76,13 @@
   },
   "auth": {
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
+    "continueWithEmail": "Turpināt",
     "createFirstOrganization": "Izveidojiet savu pirmo organizāciju, lai sāktu darbu",
     "createOrganization": "Izveidot organizāciju",
     "createOrganizationButton": "Izveidot organizāciju",
     "emailPlaceholder": "jus@example.com",
     "enterTheCode": "Ievadiet kodu",
+    "headline": "Skaidrība ikvienā lietā.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
@@ -94,10 +96,11 @@
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
-    "signInToStella": "Piesakieties Stella",
+    "signInWithEmail": "Pieslēgties ar e-pastu",
     "signOut": "Atslēgties",
     "slugLabel": "Slug",
     "slugPlaceholder": "mana-organizacija",
+    "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
     "weSentCodeTo": "Mēs nosūtījām kodu uz {email}"
   },
   "billing": {

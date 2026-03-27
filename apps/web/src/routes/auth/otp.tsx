@@ -108,36 +108,32 @@ function OTP() {
   });
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>{t("auth.enterTheCode")}</FrameTitle>
-          <FrameDescription>
-            {t("auth.weSentCodeTo", { email })}
-          </FrameDescription>
-        </FrameHeader>
-        <FramePanel>
-          <div className="flex flex-col items-center gap-2 px-5 pb-4">
-            <InputOTP autoFocus maxLength={6} onChange={setOtp} value={otp}>
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
-          <Button
-            className="w-full"
-            loading={verifyOtp.isPending}
-            onClick={() => verifyOtp.mutate({ email, otp })}
-          >
-            {t("common.verify")}
-          </Button>
-        </FramePanel>
-      </Frame>
-    </div>
+    <Frame className="w-full max-w-sm">
+      <FrameHeader>
+        <FrameTitle>{t("auth.enterTheCode")}</FrameTitle>
+        <FrameDescription>{t("auth.weSentCodeTo", { email })}</FrameDescription>
+      </FrameHeader>
+      <FramePanel>
+        <div className="flex flex-col items-center gap-2 px-5 pb-4">
+          <InputOTP autoFocus maxLength={6} onChange={setOtp} value={otp}>
+            <InputOTPGroup>
+              <InputOTPSlot index={0} />
+              <InputOTPSlot index={1} />
+              <InputOTPSlot index={2} />
+              <InputOTPSlot index={3} />
+              <InputOTPSlot index={4} />
+              <InputOTPSlot index={5} />
+            </InputOTPGroup>
+          </InputOTP>
+        </div>
+        <Button
+          className="w-full"
+          loading={verifyOtp.isPending}
+          onClick={() => verifyOtp.mutate({ email, otp })}
+        >
+          {t("common.verify")}
+        </Button>
+      </FramePanel>
+    </Frame>
   );
 }
