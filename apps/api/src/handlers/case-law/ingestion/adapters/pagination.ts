@@ -84,6 +84,10 @@ export type PagePaginationOptions<TResponse> = {
  * };
  * ```
  */
+/** Max retries for transient 5xx errors before skipping. */
+const SERVER_ERROR_RETRIES = 2;
+const SERVER_ERROR_RETRY_DELAY_MS = 5_000;
+
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
 ) => {
@@ -108,17 +112,51 @@ export const createPagePaginatedFetch = <TResponse>(
 
         const { url, init } = opts.buildRequest(page);
 
-        const response = await fetch(url, {
-          ...init,
-          signal: signal
-            ? AbortSignal.any([
-                signal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-              ])
-            : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-        });
+        // Retry on 5xx up to SERVER_ERROR_RETRIES times
+        let response: Response | undefined;
+        for (let attempt = 0; attempt <= SERVER_ERROR_RETRIES; attempt++) {
+          response = await fetch(url, {
+            ...init,
+            signal: signal
+              ? AbortSignal.any([
+                  signal,
+                  AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
+                ])
+              : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
+          });
+
+          if (response.ok || response.status < 500) break;
+
+          if (attempt < SERVER_ERROR_RETRIES) {
+            console.warn(
+              `${opts.adapterKey}: page ${page} returned ${response.status}, ` +
+                `retry ${attempt + 1}/${SERVER_ERROR_RETRIES}`,
+            );
+            await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
+          }
+        }
+
+        if (!response) {
+          throw new AdapterFetchError({
+            message: `${opts.adapterKey}: no response`,
+            adapterKey: opts.adapterKey,
+            cursor,
+          });
+        }
 
         if (!response.ok) {
+          // 5xx after all retries: skip this page and advance
+          if (response.status >= 500) {
+            console.error(
+              `${opts.adapterKey}: page ${page} returned ${response.status} ` +
+                `after ${SERVER_ERROR_RETRIES} retries, skipping`,
+            );
+            return {
+              decisions: [],
+              nextCursor: String(page + 1),
+            };
+          }
+
           throw new AdapterFetchError({
             message: `${opts.adapterKey}: HTTP ${response.status}`,
             adapterKey: opts.adapterKey,
