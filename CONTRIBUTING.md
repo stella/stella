@@ -48,6 +48,46 @@ back to [CODEBASE.md](CODEBASE.md) for navigation.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 
+## AI Commands
+
+Stella uses a layered AI command setup:
+
+```text
+.ai/shared/              # shared AI repo submodule
+.ai/local-skills/        # Stella-specific Codex-style skill source
+.claude/commands/        # generated flat command files
+.agents/skills/          # generated Codex-style skills
+```
+
+Do not hand-edit `.claude/commands/` or `.agents/skills/`;
+they are generated from the shared and local sources.
+
+The sync layout is:
+
+```text
+.ai/local-skills/<skill>/SKILL.md
+.claude/commands/<skill>.md
+.agents/skills/<skill>/SKILL.md
+```
+
+To refresh them:
+
+```bash
+git submodule update --init
+bun run sync-ai
+```
+
+To expose the generated agent skills in Codex's `/` picker:
+
+```bash
+bun run link-codex
+```
+
+This links `.agents/skills/<skill>/SKILL.md` into
+`${CODEX_HOME:-$HOME/.codex}/skills` using a safe default
+prefix (`stella-`). Set `CODEX_SKILL_PREFIX=""` if you want
+unprefixed global names.
+
 ## Conventions
 
 - **Commits**: use [Conventional Commits](https://www.conventionalcommits.org/)

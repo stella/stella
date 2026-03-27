@@ -1,0 +1,3 @@
+[submodule ".ai/shared"]
+	path = .ai/shared
+	url = https://github.com/stella/ai-shared.git
