@@ -1,11 +1,16 @@
 /**
- * Run the case law ingestion pipeline for configured sources.
+ * Continuous case law ingestion daemon.
+ *
+ * Loops through all configured court adapters, runs one
+ * pipeline cycle per source, sleeps, and repeats. Cursors
+ * are persisted in RDS after each cycle; safe to restart
+ * at any time.
  *
  * Usage:
  *   bun apps/api/scripts/ingest-case-law.ts [adapter-key]
  *
- * Without arguments, runs all sources. With an adapter key,
- * runs only that source (e.g. "cz-regional").
+ * Without arguments, runs all sources in a continuous loop.
+ * With an adapter key, runs only that source once and exits.
  */
 
 import { createScopedDb, db } from "@/api/db";
@@ -19,6 +24,8 @@ type SourceDef = {
   name: string;
 };
 
+// AT_COURTS excluded: adapter exists but has not been
+// validated in production yet.
 const SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
@@ -91,9 +98,9 @@ const daysAgoCursor = (n: number): string => {
   return date;
 };
 
-const main = async () => {
-  const filterKey = process.argv[2];
+const filterKey = process.argv[2];
 
+const main = async () => {
   const toRun = filterKey
     ? SOURCES.filter((s) => s.adapterKey === filterKey)
     : SOURCES;
@@ -106,36 +113,67 @@ const main = async () => {
     process.exit(1);
   }
 
-  for (const { adapterKey, name } of toRun) {
-    const initialCursor =
-      adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
+  const results = await Promise.allSettled(
+    toRun.map(async ({ adapterKey, name }) => {
+      const initialCursor =
+        adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
-    const source = await ensureSource(adapterKey, name, initialCursor);
+      const source = await ensureSource(adapterKey, name, initialCursor);
 
-    console.log(
-      `\nIngesting: ${name} (cursor: ${source.syncCursor ?? "start"})`,
-    );
+      console.log(
+        `\nIngesting: ${name} (cursor: ${source.syncCursor ?? "start"})`,
+      );
 
-    // SAFETY: CLI script operates on global case law data (no tenant).
-    const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
-    const result = await runIngestionPipeline({
-      source,
-      scopedDb,
-    });
+      // SAFETY: CLI script operates on global case law
+      // data (no tenant).
+      const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
+      const result = await runIngestionPipeline({
+        source,
+        scopedDb,
+      });
 
-    console.log(
-      `  Inserted: ${result.inserted}, ` +
-        `Skipped: ${result.skipped}, ` +
-        `Search failures: ${result.searchVectorFailures}`,
-    );
-    console.log(`  Next cursor: ${result.nextCursor ?? "done"}`);
+      console.log(
+        `  Inserted: ${result.inserted}, ` +
+          `Skipped: ${result.skipped}, ` +
+          `Search failures: ${result.searchVectorFailures}`,
+      );
+      console.log(`  Next cursor: ${result.nextCursor ?? "done"}`);
+    }),
+  );
+
+  const failures = results.filter(
+    (r): r is PromiseRejectedResult => r.status === "rejected",
+  );
+
+  for (const { reason } of failures) {
+    console.error("Adapter error:", reason);
   }
 
-  console.log("\nDone.");
-  process.exit(0);
+  console.log("\nCycle complete.");
+
+  if (failures.length > 0) {
+    throw new Error(`${failures.length} adapter(s) failed`);
+  }
 };
 
-main().catch((error: unknown) => {
-  console.error("Ingestion failed:", error);
-  process.exit(1);
-});
+const CYCLE_DELAY_MS = 5000;
+
+// Single adapter: run once and exit (useful for debugging).
+if (filterKey) {
+  await main().catch((error: unknown) => {
+    console.error("Ingestion failed:", error);
+    process.exit(1);
+  });
+  process.exit(0);
+}
+
+// All adapters: continuous daemon loop.
+console.log("Ingestion daemon started.");
+while (true) {
+  try {
+    await main();
+  } catch (error: unknown) {
+    console.error("Cycle error:", error);
+  }
+  await Bun.sleep(CYCLE_DELAY_MS);
+}
