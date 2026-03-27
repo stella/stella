@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 
 import { RouterProvider } from "@tanstack/react-router";
 
+import "@/fonts.css";
 import "@stella/ui/globals.css";
 import { getRouter } from "@/router";
 
