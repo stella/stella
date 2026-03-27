@@ -1107,6 +1107,7 @@ type Messages = {
       "totalItems": "Items";
       "totalThisWeek": "Total this week";
       "upcomingTasks": "Upcoming tasks";
+      "uploaded": "uploaded";
     };
     "parties": {
       "addParty": "Add party";

@@ -1103,7 +1103,8 @@
       "totalDocuments": "Dokumenti kopā",
       "totalItems": "Vienumi",
       "totalThisWeek": "Kopā šonedēļ",
-      "upcomingTasks": "Gaidāmie uzdevumi"
+      "upcomingTasks": "Gaidāmie uzdevumi",
+      "uploaded": "augšupielādēja"
     },
     "parties": {
       "addParty": "Pievienot pusi",

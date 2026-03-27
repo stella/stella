@@ -10,6 +10,7 @@
     "typegen": "i18n-typegen src/i18n/langs",
     "typecheck": "tsgo --noEmit",
     "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
     "format": "oxfmt .",
     "i18n:check": "i18n-check src/i18n/langs",
     "test": "bun test"

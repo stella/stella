@@ -104,21 +104,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, handleCreateFileEntities] =
-    useCreateFileEntities(workspaceId);
-  const prevUploading = useRef(false);
-
-  // Invalidate overview when upload completes
-  useEffect(() => {
-    if (prevUploading.current && !isUploading) {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
-        queryKey: workspacesKeys.overview(workspaceId),
-      });
-    }
-    prevUploading.current = isUploading;
-  }, [isUploading, queryClient, workspaceId]);
-
+  const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
   const viewsContext = useRouteContext({
     from: "/_protected/workspaces/$workspaceId",
@@ -783,6 +769,7 @@ type OverviewEntity = {
   fieldId: string | null;
   pdfFileId: string | null;
   encrypted: boolean;
+  createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
   updatedAt: string | null;
@@ -835,7 +822,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       kind: entity.kind,
       name: entity.name,
       parentId: null,
-      createdAt: entity.updatedAt ?? "",
+      createdAt: entity.createdAt,
       createdBy: entity.createdBy,
       createdByImage: entity.createdByImage,
       updatedAt: entity.updatedAt,
@@ -929,13 +916,30 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         : undefined;
 
   const t = useTranslations();
-  const relTime = entity.updatedAt
-    ? formatRelativeTime(entity.updatedAt, lang)
-    : null;
+  const relTime = formatRelativeTime(
+    entity.updatedAt ?? entity.createdAt,
+    lang,
+  );
+
+  /** Entities whose updatedAt is within this window of createdAt
+   *  are considered "just uploaded" rather than "edited". */
+  const UPLOAD_THRESHOLD_MS = 5000;
+
+  const isNewUpload =
+    entity.mimeType !== null &&
+    (!entity.updatedAt ||
+      Math.abs(
+        new Date(entity.createdAt).getTime() -
+          new Date(entity.updatedAt).getTime(),
+      ) < UPLOAD_THRESHOLD_MS);
+
+  const activityLabel = isNewUpload
+    ? t("workspaces.overview.uploaded")
+    : t("workspaces.overview.edited");
 
   const content = (
     <>
-      {entity.createdBy && (
+      {entity.createdBy !== null && (
         <PersonMentionLabel
           avatarClassName="size-5 text-[8px]"
           className="shrink-0"
@@ -946,10 +950,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         />
       )}
       <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm">
-        <span className="text-muted-foreground">
-          {t("workspaces.overview.edited")}
-        </span>{" "}
-        {icon}
+        <span className="text-muted-foreground">{activityLabel}</span> {icon}
         <span className="truncate">{entity.name}</span>
       </span>
       {relTime && (

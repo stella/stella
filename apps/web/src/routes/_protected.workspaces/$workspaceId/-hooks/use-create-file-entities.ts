@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { toastManager } from "@stella/ui/components/toast";
@@ -15,6 +19,7 @@ import {
   propertiesKeys,
   propertiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_DISPLAYED_FAILURES = 5;
 
@@ -261,6 +266,7 @@ export const uploadFileEntitiesBatched = async (
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
+  const queryClient = useQueryClient();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
 
@@ -290,6 +296,14 @@ export const useCreateFileEntities = (workspaceId: string) => {
     },
     onError: (error) => {
       analytics.captureError(error);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      });
     },
   });
 

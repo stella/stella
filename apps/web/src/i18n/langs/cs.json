@@ -1103,7 +1103,8 @@
       "totalDocuments": "Celkem dokumentů",
       "totalItems": "Položky",
       "totalThisWeek": "Celkem tento týden",
-      "upcomingTasks": "Nadcházející úkoly"
+      "upcomingTasks": "Nadcházející úkoly",
+      "uploaded": "nahrál(a)"
     },
     "parties": {
       "addParty": "Přidat stranu",

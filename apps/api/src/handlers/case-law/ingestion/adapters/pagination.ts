@@ -86,7 +86,7 @@ export type PagePaginationOptions<TResponse> = {
  */
 /** Max retries for transient 5xx errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
-const SERVER_ERROR_RETRY_DELAY_MS = 5_000;
+const SERVER_ERROR_RETRY_DELAY_MS = 5000;
 
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
@@ -125,7 +125,9 @@ export const createPagePaginatedFetch = <TResponse>(
               : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
           });
 
-          if (response.ok || response.status < 500) break;
+          if (response.ok || response.status < 500) {
+            break;
+          }
 
           if (attempt < SERVER_ERROR_RETRIES) {
             console.warn(

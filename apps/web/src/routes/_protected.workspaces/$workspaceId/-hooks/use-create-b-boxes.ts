@@ -81,6 +81,7 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
     }
 
     mutation.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mutation.mutate]);
 };
 
