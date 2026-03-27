@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { useShallow } from "zustand/react/shallow";
 
 import type { BoundingBox } from "@stella/api/types";
@@ -37,6 +39,13 @@ export const PageCitation = ({
   const [scrollTo, setScrollTo] = usePDFStore(
     useShallow((s) => [s.scrollTo, s.setScrollTo]),
   );
+  const scrolledRef = useRef<string | null>(null);
+
+  // Reset when the scroll target is consumed so the same
+  // justification can be scrolled to again on re-click.
+  if (scrollTo === null) {
+    scrolledRef.current = null;
+  }
 
   if (!justification || justification.pageNumber !== pageNumber) {
     return null;
@@ -93,8 +102,10 @@ export const PageCitation = ({
                 key === topBoundingBoxKey &&
                 scrollTo?.target?.kind === "justification" &&
                 scrollTo.target.id === justification.id &&
-                scrollTo.pageId === pageId
+                scrollTo.pageId === pageId &&
+                scrolledRef.current !== justification.id
               ) {
+                scrolledRef.current = justification.id;
                 el?.scrollIntoView({
                   block: "center",
                   inline: "center",

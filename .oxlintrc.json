@@ -23,7 +23,12 @@
 
     "typescript/no-explicit-any": "error",
     "typescript/no-dynamic-delete": "error",
-    "typescript/no-misused-promises": "error",
+    // JSX handlers (onClick, etc.) are typed void; async work is
+    // intentionally fire-and-forget. Other checksVoidReturn sites stay on.
+    "typescript/no-misused-promises": [
+      "error",
+      { "checksVoidReturn": { "attributes": false } }
+    ],
     "typescript/consistent-type-definitions": ["error", "type"],
 
     "unicorn/no-useless-undefined": "error",

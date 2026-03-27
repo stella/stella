@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import { posthog } from "posthog-js";
 
 import type { Analytics } from "@/lib/analytics/types";
@@ -42,6 +43,9 @@ export const createPostHogAnalytics = (
   const analytics: Analytics = {
     capture: (event, properties) => posthog.capture(event, properties),
     captureError: (error) => {
+      if (error instanceof CancelledError) {
+        return;
+      }
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
         console.error(error);
