@@ -21,3 +21,7 @@ export const myTasksOptions = queryOptions({
     return response.data;
   },
 });
+
+/** Derived from the Eden response type. */
+type QueryFn = NonNullable<(typeof myTasksOptions)["queryFn"]>;
+export type TaskItem = NonNullable<Awaited<ReturnType<QueryFn>>>[number];

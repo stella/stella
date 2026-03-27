@@ -38,6 +38,10 @@ const SIDEBAR_LS_NAME = "sidebar_state";
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
+
+/** React.CSSProperties extended with CSS custom properties. */
+type CSSWithVars = React.CSSProperties & Record<`--${string}`, string>;
+
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
   open: boolean;
@@ -141,14 +145,13 @@ function SidebarProvider({
         )}
         data-slot="sidebar-wrapper"
         style={
-          // SAFETY: CSS custom properties are valid
-          // CSSProperties but not in React's type defs.
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // SAFETY: CSS custom properties are valid but
+          // not in React's CSSProperties type defs.
           {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
-          } as React.CSSProperties
+          } as CSSWithVars
         }
         {...props}
       >
@@ -198,11 +201,10 @@ function Sidebar({
           data-slot="sidebar"
           side={side}
           style={
-            // SAFETY: CSS custom properties are valid CSSProperties
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            // SAFETY: CSS custom properties need CSSWithVars.
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
+            } as CSSWithVars
           }
         >
           <SheetHeader className="sr-only">
@@ -638,11 +640,10 @@ function SidebarMenuSkeleton({
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
         style={
-          // SAFETY: CSS custom properties are valid CSSProperties
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // SAFETY: CSS custom properties need CSSWithVars.
           {
             "--skeleton-width": width,
-          } as React.CSSProperties
+          } as CSSWithVars
         }
       />
     </div>

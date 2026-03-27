@@ -25,6 +25,7 @@ import { cn } from "@stella/ui/lib/utils";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
+import type { TaskItem } from "@/routes/_protected.todos/-queries";
 import { myTasksOptions } from "@/routes/_protected.todos/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -63,22 +64,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: "text-blue-400",
 };
 
-type TaskItem = {
-  id: string;
-  name: string | null;
-  status: string | null;
-  priority: string | null;
-  dueDate: string | null;
-  workspaceId: string;
-  createdAt: Date | string;
-  workspace: {
-    id: string;
-    name: string;
-  } | null;
-};
-
 type ValidTask = TaskItem & {
-  workspace: { id: string; name: string };
+  workspace: NonNullable<TaskItem["workspace"]>;
 };
 
 type GroupedTasks = {
@@ -116,10 +103,7 @@ function MyTodosPage() {
       return [];
     }
 
-    // SAFETY: Eden-inferred response matches TaskItem shape;
-    // TS can't unify the Eden type with the local alias.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const valid = (tasks as TaskItem[]).filter(
+    const valid = tasks.filter(
       (task): task is ValidTask => task.workspace !== null,
     );
 
