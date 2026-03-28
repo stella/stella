@@ -4,8 +4,9 @@
  * the message includes extracted-text attachments.
  */
 
+import { valibotSchema } from "@ai-sdk/valibot";
 import type { ToolSet } from "ai";
-import { z } from "zod";
+import * as v from "valibot";
 
 import type { ExtractedTextAttachment } from "./chat-attachment-types";
 import { defineTool } from "./chat-tools";
@@ -25,10 +26,12 @@ export const createDocumentViewTools = (
     name: "displayDocument",
     // oxfmt-ignore
     description: `Display an uploaded document to the user in a specific view. Use 'simple' for clean accepted text, 'original' for the pre-edit version, 'tracked-changes' for the full redline with annotations. Available files: ${attachments.map((a) => a.filename).join(", ")}`,
-    inputSchema: z.object({
-      view: z.enum(["simple", "original", "tracked-changes"]),
-      filename: z.string(),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        view: v.picklist(["simple", "original", "tracked-changes"]),
+        filename: v.string(),
+      }),
+    ),
     execute: ({ view, filename }) => {
       const att = attachments.find((a) => a.filename === filename);
       if (!att) {

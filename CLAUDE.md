@@ -68,7 +68,7 @@ fetch the relevant docs first using `list_doc_sources` and
 `fetch_docs` tools.
 
 **Covered libraries:** Elysia, Drizzle, TanStack (Router, Query,
-Form, Table), React, Valibot, Zod, TipTap, Bun, better-auth,
+Form, Table), React, Valibot, TipTap, Bun, better-auth,
 PostHog, Zustand, Oxlint.
 
 **Not covered (no `llms.txt`):** Tailwind CSS, oxfmt.
@@ -94,8 +94,7 @@ For these, use `WebFetch` or `WebSearch` directly.
 | Auth                | better-auth                          |
 | Storage             | S3                                   |
 | AI                  | Vercel AI SDK + Google Generative AI |
-| Validation (API)    | Zod                                  |
-| Validation (Web)    | Valibot                              |
+| Validation          | Valibot                              |
 | Analytics           | PostHog                              |
 | Linting             | oxlint (ultracite preset)            |
 | Formatting          | oxfmt                                |
