@@ -1,5 +1,6 @@
+import { valibotSchema } from "@ai-sdk/valibot";
 import { sql } from "drizzle-orm";
-import { z } from "zod";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -25,28 +26,41 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
       "decisions with excerpts. Use this when the user " +
       "asks about case law, court decisions, legal " +
       "precedents, or judicial rulings.",
-    inputSchema: z.object({
-      query: z
-        .string()
-        .min(1)
-        .max(LIMITS.searchQueryMaxLength)
-        .describe("Search query (keywords or phrases)"),
-      country: z
-        .string()
-        .length(2)
-        .toUpperCase()
-        .optional()
-        .describe("ISO 3166-1 alpha-2 country code (e.g. CZ, SK)"),
-      court: z.string().max(512).optional().describe("Court name to filter by"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(20)
-        .optional()
-        .default(10)
-        .describe("Max results to return"),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        query: v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.searchQueryMaxLength),
+          v.description("Search query (keywords or phrases)"),
+        ),
+        country: v.optional(
+          v.pipe(
+            v.string(),
+            v.length(2),
+            v.toUpperCase(),
+            v.description("ISO 3166-1 alpha-2 country code (e.g. CZ, SK)"),
+          ),
+        ),
+        court: v.optional(
+          v.pipe(
+            v.string(),
+            v.maxLength(512),
+            v.description("Court name to filter by"),
+          ),
+        ),
+        limit: v.optional(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(20),
+            v.description("Max results to return"),
+          ),
+          10,
+        ),
+      }),
+    ),
     execute: async ({ query, country, court, limit }) => {
       const tsQuery = sql`plainto_tsquery('simple', ${query})`;
 

@@ -15,7 +15,10 @@ import {
 import { sessionOptions } from "@/routes/-queries";
 
 const isDev = import.meta.env.DEV;
-const DevRoot = isDev ? lazy( async () => import("@/components/dev-root")) : null;
+const DevRoot = isDev
+  ? // eslint-disable-next-line require-await -- lazy() requires async import
+    lazy(async () => import("@/components/dev-root"))
+  : null;
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;

@@ -1,8 +1,9 @@
+import { valibotSchema } from "@ai-sdk/valibot";
 import type { Tool, ToolExecutionOptions } from "ai";
 // eslint-disable-next-line no-restricted-imports -- defineTool wraps tool() internally
 import { tool } from "ai";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
@@ -121,16 +122,15 @@ type MatterToolsContext = {
 
 const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
   const allowedSet: ReadonlySet<string> = new Set(allowedIds);
-  return z
-    .string()
-    .describe(
+  return v.pipe(
+    v.string(),
+    v.description(
       "The workspace/matter ID to operate on. " +
         `Allowed values: ${allowedIds.join(", ")}`,
-    )
-    .refine((id) => allowedSet.has(id), {
-      message: "Workspace not in the allowed set",
-    })
-    .transform((id) => toSafeId<"workspace">(id));
+    ),
+    v.check((id) => allowedSet.has(id), "Workspace not in the allowed set"),
+    v.transform((id) => toSafeId<"workspace">(id)),
+  );
 };
 
 export const createMatterTools = ({
@@ -148,21 +148,26 @@ export const createMatterTools = ({
         "Search for documents and files within a matter " +
         "using full-text search. Returns matching entity " +
         "names with highlighted excerpts.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        query: z
-          .string()
-          .max(LIMITS.searchQueryMaxLength)
-          .describe("Search query (keywords or phrases)"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(20)
-          .optional()
-          .default(10)
-          .describe("Max results to return"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          query: v.pipe(
+            v.string(),
+            v.maxLength(LIMITS.searchQueryMaxLength),
+            v.description("Search query (keywords or phrases)"),
+          ),
+          limit: v.optional(
+            v.pipe(
+              v.number(),
+              v.integer(),
+              v.minValue(1),
+              v.maxValue(20),
+              v.description("Max results to return"),
+            ),
+            10,
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.search({
@@ -189,25 +194,33 @@ export const createMatterTools = ({
         "List documents, files, tasks, and folders in a " +
         "matter. Returns names, types, dates, and custom " +
         "property values (metadata columns).",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        kind: z
-          .enum(["document", "folder", "task", "message"])
-          .optional()
-          .describe("Filter by entity type"),
-        parentId: z
-          .string()
-          .optional()
-          .describe("List contents of a specific folder"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(100)
-          .optional()
-          .default(50)
-          .describe("Max entities to return"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          kind: v.optional(
+            v.pipe(
+              v.picklist(["document", "folder", "task", "message"]),
+              v.description("Filter by entity type"),
+            ),
+          ),
+          parentId: v.optional(
+            v.pipe(
+              v.string(),
+              v.description("List contents of a specific folder"),
+            ),
+          ),
+          limit: v.optional(
+            v.pipe(
+              v.number(),
+              v.integer(),
+              v.minValue(1),
+              v.maxValue(100),
+              v.description("Max entities to return"),
+            ),
+            50,
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, kind, parentId, limit }) => {
         const [ents, properties] = await Promise.all([
           scopedDb((tx) =>
@@ -277,10 +290,12 @@ export const createMatterTools = ({
       description:
         "Get detailed information about a specific entity " +
         "including all its property values (metadata).",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        entityId: z.string().describe("The entity ID to read"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          entityId: v.pipe(v.string(), v.description("The entity ID to read")),
+        }),
+      ),
       execute: async ({ workspaceId, entityId }) => {
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
@@ -353,10 +368,15 @@ export const createMatterTools = ({
         "Read the extracted text content of a document. Use " +
         "this to read actual file contents, not just metadata. " +
         "Returns up to 8000 characters of extracted text.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        entityId: z.string().describe("The entity ID whose content to read"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          entityId: v.pipe(
+            v.string(),
+            v.description("The entity ID whose content to read"),
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, entityId }) => {
         const row = await scopedDb((tx) =>
           tx.query.extractedContent.findFirst({
@@ -417,28 +437,44 @@ export const createMatterTools = ({
         "a number. For multi-select: pass an array of " +
         "strings.",
       needsApproval: true,
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        entityId: z.string().describe("The entity ID to update"),
-        propertyId: z.string().describe("The property ID (from readEntity)"),
-        value: z
-          .union([z.string(), z.number(), z.array(z.string()), z.null()])
-          .describe("New value for the field"),
-        entityName: z
-          .string()
-          .optional()
-          .describe("Entity name (for display in approval)"),
-        propertyName: z
-          .string()
-          .optional()
-          .describe("Property name (for display in approval)"),
-        oldValue: z
-          .string()
-          .optional()
-          .describe(
-            "Current value before the change (for display in approval)",
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          entityId: v.pipe(
+            v.string(),
+            v.description("The entity ID to update"),
           ),
-      }),
+          propertyId: v.pipe(
+            v.string(),
+            v.description("The property ID (from readEntity)"),
+          ),
+          value: v.pipe(
+            v.union([v.string(), v.number(), v.array(v.string()), v.null_()]),
+            v.description("New value for the field"),
+          ),
+          entityName: v.optional(
+            v.pipe(
+              v.string(),
+              v.description("Entity name (for display in approval)"),
+            ),
+          ),
+          propertyName: v.optional(
+            v.pipe(
+              v.string(),
+              v.description("Property name (for display in approval)"),
+            ),
+          ),
+          oldValue: v.optional(
+            v.pipe(
+              v.string(),
+              v.description(
+                "Current value before the change " +
+                  "(for display in approval)",
+              ),
+            ),
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, entityId, propertyId, value }) => {
         const property = await scopedDb((tx) =>
           tx.query.properties.findFirst({
@@ -641,14 +677,20 @@ export const createMatterTools = ({
         "markdown; it is converted to a styled DOCX file " +
         "and stored in the matter.",
       needsApproval: true,
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        name: z
-          .string()
-          .max(256)
-          .describe("Document file name (without .docx extension)"),
-        markdown: z.string().describe("Document content as markdown"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          name: v.pipe(
+            v.string(),
+            v.maxLength(256),
+            v.description("Document file name (without .docx extension)"),
+          ),
+          markdown: v.pipe(
+            v.string(),
+            v.description("Document content as markdown"),
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, name, markdown }) => {
         const buffer = await markdownToDocx(markdown);
         const fileName = `${name}.docx`;
@@ -683,21 +725,26 @@ export const createMatterTools = ({
         "with document name and entity ID. Use this to find " +
         "specific clauses, terms, or information across " +
         "all documents without reading each one individually.",
-      inputSchema: z.object({
-        workspaceId: wsSchema,
-        query: z
-          .string()
-          .max(LIMITS.searchQueryMaxLength)
-          .describe("Text or keywords to search for"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(20)
-          .optional()
-          .default(5)
-          .describe("Max results (default: 5)"),
-      }),
+      inputSchema: valibotSchema(
+        v.object({
+          workspaceId: wsSchema,
+          query: v.pipe(
+            v.string(),
+            v.maxLength(LIMITS.searchQueryMaxLength),
+            v.description("Text or keywords to search for"),
+          ),
+          limit: v.optional(
+            v.pipe(
+              v.number(),
+              v.integer(),
+              v.minValue(1),
+              v.maxValue(20),
+              v.description("Max results (default: 5)"),
+            ),
+            5,
+          ),
+        }),
+      ),
       execute: async ({ workspaceId, query, limit }) => {
         const provider = getSearchProvider();
         const result = await provider.searchContent({
@@ -744,20 +791,25 @@ export const createOrgTools = ({
       "Search for documents across ALL matters in the " +
       "organization. Only use this when the user explicitly " +
       "asks to search outside the current matter.",
-    inputSchema: z.object({
-      query: z
-        .string()
-        .max(LIMITS.searchQueryMaxLength)
-        .describe("Search query (keywords or phrases)"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(20)
-        .optional()
-        .default(10)
-        .describe("Max results to return"),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        query: v.pipe(
+          v.string(),
+          v.maxLength(LIMITS.searchQueryMaxLength),
+          v.description("Search query (keywords or phrases)"),
+        ),
+        limit: v.optional(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(20),
+            v.description("Max results to return"),
+          ),
+          10,
+        ),
+      }),
+    ),
     execute: async ({ query, limit }) => {
       const provider = getSearchProvider();
       const result = await provider.search({
@@ -785,9 +837,14 @@ export const createOrgTools = ({
       "Read the extracted text content of a document from " +
       "any matter. Use after searchAcrossMatters finds a " +
       "document outside the current matter.",
-    inputSchema: z.object({
-      entityId: z.string().describe("The entity ID whose content to read"),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        entityId: v.pipe(
+          v.string(),
+          v.description("The entity ID whose content to read"),
+        ),
+      }),
+    ),
     execute: async ({ entityId }) => {
       // extracted_content has RLS; use scopedDb which has
       // all the user's workspace IDs.
@@ -839,9 +896,11 @@ export const createOrgTools = ({
   readContact: defineTool({
     name: "readContact",
     description: "Get details about a contact (person or organization).",
-    inputSchema: z.object({
-      contactId: z.string().describe("The contact ID to read"),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        contactId: v.pipe(v.string(), v.description("The contact ID to read")),
+      }),
+    ),
     execute: async ({ contactId }) => {
       const contact = await scopedDb((tx) =>
         tx.query.contacts.findFirst({
@@ -882,10 +941,17 @@ export const createOrgTools = ({
   listTemplates: defineTool({
     name: "listTemplates",
     description: "List available document templates.",
-    inputSchema: z.object({
-      query: z.string().optional().describe("Filter by name (substring match)"),
-      limit: z.number().int().min(1).max(50).optional().default(20),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        query: v.optional(
+          v.pipe(v.string(), v.description("Filter by name (substring match)")),
+        ),
+        limit: v.optional(
+          v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50)),
+          20,
+        ),
+      }),
+    ),
     execute: async ({ query, limit }) => {
       const templates = await scopedDb((tx) =>
         tx.query.templates.findMany({
@@ -916,9 +982,11 @@ export const createOrgTools = ({
   readClause: defineTool({
     name: "readClause",
     description: "Read a legal clause including its full text body.",
-    inputSchema: z.object({
-      clauseId: z.string().describe("The clause ID to read"),
-    }),
+    inputSchema: valibotSchema(
+      v.object({
+        clauseId: v.pipe(v.string(), v.description("The clause ID to read")),
+      }),
+    ),
     execute: async ({ clauseId }) => {
       const clause = await scopedDb((tx) =>
         tx.query.clauses.findFirst({
@@ -962,35 +1030,47 @@ export const createOrgTools = ({
       "The UI renders the questions automatically. Once " +
       "the user answers, synthesize their input into a " +
       "plan and execute it.",
-    inputSchema: z.object({
-      analysis: z
-        .string()
-        .describe(
-          "Brief analysis of the task and what you " +
-            "already know from context",
+    inputSchema: valibotSchema(
+      v.object({
+        analysis: v.pipe(
+          v.string(),
+          v.description(
+            "Brief analysis of the task and what you " +
+              "already know from context",
+          ),
         ),
-      questions: z
-        .array(
-          z.object({
-            question: z.string(),
-            reason: z.string().describe("Why this matters for the task"),
-            options: z
-              .array(z.string())
-              .optional()
-              .describe(
-                "Suggested options (A/B/C style). The " +
-                  "user can also write their own answer.",
+        questions: v.pipe(
+          v.array(
+            v.object({
+              question: v.string(),
+              reason: v.pipe(
+                v.string(),
+                v.description("Why this matters for the task"),
               ),
-            default: z
-              .string()
-              .optional()
-              .describe("Preselected option or default value"),
-          }),
-        )
-        .min(1)
-        .max(10)
-        .describe("Clarifying questions to ask"),
-    }),
+              options: v.optional(
+                v.pipe(
+                  v.array(v.string()),
+                  v.description(
+                    "Suggested options (A/B/C style). " +
+                      "The user can also write their " +
+                      "own answer.",
+                  ),
+                ),
+              ),
+              default: v.optional(
+                v.pipe(
+                  v.string(),
+                  v.description("Preselected option or default value"),
+                ),
+              ),
+            }),
+          ),
+          v.minLength(1),
+          v.maxLength(10),
+          v.description("Clarifying questions to ask"),
+        ),
+      }),
+    ),
     execute: ({ analysis, questions }) => ({
       status: "awaiting_response",
       analysis,
