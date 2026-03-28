@@ -26,6 +26,7 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspac
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import { LIMITS } from "@/api/lib/limits";
 
 export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
@@ -66,13 +67,22 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
               authToken: ctx.session.token,
             }),
         )
-        .get(
-          "/justifications",
+        .post(
+          "/justifications/query",
           async (ctx) =>
             await readJustificationsHandler({
               workspaceId: ctx.workspaceId,
               scopedDb: ctx.scopedDb,
+              entityIds: ctx.body.entityIds,
             }),
+          {
+            body: t.Object({
+              entityIds: t.Array(tNanoid, {
+                minItems: 1,
+                maxItems: LIMITS.entitiesPageSizeMax,
+              }),
+            }),
+          },
         )
         .get(
           "/overview",

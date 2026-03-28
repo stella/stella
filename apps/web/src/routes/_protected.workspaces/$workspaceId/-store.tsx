@@ -26,6 +26,7 @@ type State = {
 
 type Actions = {
   syncJustifications: (justifications: WorkspaceJustification[]) => void;
+  clearJustifications: () => void;
   getJustifications: (justificationIds: string[]) => WorkspaceJustification[];
   setJustificationBoundingBoxes: (
     justificationId: string,
@@ -55,6 +56,13 @@ export const useWorkspaceStore = create<State & Actions>()(
 
     syncJustifications: (justifications) =>
       set((state) => {
+        const justificationsById = new Map(
+          state.justifications.map((justification) => [
+            justification.id,
+            justification,
+          ]),
+        );
+
         for (const justification of justifications) {
           if (
             state.pendingBoundingBoxIds.has(justification.id) &&
@@ -62,10 +70,13 @@ export const useWorkspaceStore = create<State & Actions>()(
           ) {
             state.pendingBoundingBoxIds.delete(justification.id);
           }
+
+          justificationsById.set(justification.id, justification);
         }
 
-        state.justifications = justifications;
+        state.justifications = [...justificationsById.values()];
       }),
+    clearJustifications: () => set({ justifications: [] }),
     getJustifications: (justificationIds) => {
       const store = get();
       const map = new Map(store.justifications.map((j) => [j.id, j]));

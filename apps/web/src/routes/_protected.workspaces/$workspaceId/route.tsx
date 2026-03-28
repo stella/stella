@@ -8,7 +8,6 @@ import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -16,6 +15,7 @@ import {
   justificationsOptions,
   workflowOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   overviewOptions,
   workspaceOptions,
@@ -44,7 +44,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
           organizationId,
         }),
       ),
-      qc.ensureQueryData(justificationsOptions(wsId)),
       qc.ensureQueryData(overviewOptions(wsId)),
       cause === "enter"
         ? api.workspaces({ workspaceId: wsId }).active.post()
@@ -53,16 +52,27 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
     const firstView = views.at(0);
     if (firstView) {
+      const firstPageEntities = await qc.ensureQueryData(
+        entitiesOptions({
+          workspaceId: wsId,
+          filters: firstView.layout.filters,
+          sorts: firstView.layout.sorts,
+          page: 1,
+        }),
+      );
+
       await Promise.all([
-        qc.ensureQueryData(
-          entitiesOptions({
-            workspaceId: wsId,
-            filters: firstView.layout.filters,
-            sorts: firstView.layout.sorts,
-            page: 1,
-          }),
-        ),
         qc.ensureQueryData(propertiesOptions(wsId)),
+        firstPageEntities.entities.length > 0
+          ? qc.ensureQueryData(
+              justificationsOptions({
+                workspaceId: wsId,
+                entityIds: firstPageEntities.entities
+                  .map((entity) => entity.entityId)
+                  .toSorted(),
+              }),
+            )
+          : Promise.resolve(),
       ]);
     }
 
@@ -80,8 +90,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 });
 
 function RouteComponent() {
-  useSyncTable();
-
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
@@ -93,6 +101,7 @@ function RouteComponent() {
   useEffect(
     () => () => {
       useInspectorStore.getState().closeAll();
+      useWorkspaceStore.getState().clearJustifications();
     },
     [workspaceId],
   );

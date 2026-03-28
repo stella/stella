@@ -6,7 +6,13 @@ import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-conf
 import { api, rivet } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { APIError, toAPIError, toAuthClientError } from "@/lib/errors";
+import type { QueryOptionsInput } from "@/lib/react-query";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+
+type JustificationsKey = {
+  workspaceId: string;
+  entityIds: string[];
+};
 
 export const workspaceKeys = {
   workflow: (workspaceId: string) => [
@@ -18,6 +24,10 @@ export const workspaceKeys = {
     ...workspacesKeys.all,
     workspaceId,
     "justifications",
+  ],
+  justificationsByEntities: ({ workspaceId, entityIds }: JustificationsKey) => [
+    ...workspaceKeys.justifications(workspaceId),
+    { entityIds },
   ],
 };
 
@@ -85,13 +95,21 @@ export const useIsWorkflowRunning = () => {
   return data ?? false;
 };
 
-export const justificationsOptions = (workspaceId: string) =>
+type JustificationsOptionsInput = QueryOptionsInput<JustificationsKey>;
+
+export const justificationsOptions = ({
+  workspaceId,
+  entityIds,
+}: JustificationsOptionsInput) =>
   queryOptions({
-    queryKey: workspaceKeys.justifications(workspaceId),
+    queryKey: workspaceKeys.justificationsByEntities({
+      workspaceId,
+      entityIds,
+    }),
     queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId })
-        .justifications.get({ fetch: { signal } });
+        .justifications.query.post({ entityIds }, { fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);
