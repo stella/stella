@@ -18,8 +18,7 @@ jobs:
     if: |
       (
         github.event_name == 'pull_request_target' &&
-        github.event.pull_request.user.login != 'dependabot[bot]' &&
-        github.event.pull_request.user.login != 'stella-lingo[bot]'
+        github.event.pull_request.user.login != 'dependabot[bot]'
       ) || (
         github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
@@ -30,6 +29,6 @@ jobs:
       )
     uses: stella/.github/.github/workflows/cla.yml@main
     with:
-      allowlist: dependabot[bot],renovate[bot],github-actions[bot],stella-lingo[bot]
+      allowlist: dependabot[bot],renovate[bot],github-actions[bot]
     secrets:
       CLA_APP_PRIVATE_KEY: ${{ secrets.CLA_APP_PRIVATE_KEY }}
