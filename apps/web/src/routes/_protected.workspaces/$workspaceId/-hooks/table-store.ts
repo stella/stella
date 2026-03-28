@@ -22,9 +22,9 @@ type PersistedState = {
   columnSizing: Map<string, ColumnSizingState>;
 };
 
-const StorageSchema = v.object({
-  state: v.object({
-    columnSizing: v.object({
+const StorageSchema = v.strictObject({
+  state: v.strictObject({
+    columnSizing: v.strictObject({
       [MAP_TAG]: v.array(
         v.tuple([v.string(), v.record(v.string(), v.number())]),
       ),
@@ -32,6 +32,7 @@ const StorageSchema = v.object({
   }),
   version: v.optional(v.number(), 0),
 });
+const parseStorage = v.safeParser(StorageSchema);
 
 const parsePersistedStorage = (
   json: string,
@@ -42,7 +43,7 @@ const parsePersistedStorage = (
   } catch {
     return null;
   }
-  const result = v.safeParse(StorageSchema, parsed);
+  const result = parseStorage(parsed);
   if (!result.success) {
     return null;
   }

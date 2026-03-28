@@ -53,7 +53,11 @@ import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
-import { toFormErrors } from "@/lib/schema";
+import {
+  emailSchema,
+  optionalSearchStringSchema,
+  toFormErrors,
+} from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
 import {
   getRoles,
@@ -73,8 +77,8 @@ import {
   getOrganizationSchema,
 } from "@/routes/_protected.organization/-utils";
 
-const searchSchema = v.object({
-  q: v.optional(v.string()),
+const searchSchema = v.strictObject({
+  q: optionalSearchStringSchema(),
 });
 
 export const Route = createFileRoute("/_protected/organization")({
@@ -148,10 +152,15 @@ const SettingsDialog = () => {
     },
     validators: { onDynamic: getOrganizationSchema() },
     onSubmit: async ({ value, formApi }) => {
-      if (value.slug !== data.slug) {
+      const parseResult = v.safeParse(getOrganizationSchema(), value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
+      if (parsedValue.slug !== data.slug) {
         const { data: slugCheckData, error: slugCheckError } =
           await authClient.organization.checkSlug({
-            slug: value.slug,
+            slug: parsedValue.slug,
           });
 
         if (slugCheckError) {
@@ -172,7 +181,7 @@ const SettingsDialog = () => {
       }
 
       const result = await authClient.organization.update({
-        data: { name: value.name, slug: value.slug },
+        data: { name: parsedValue.name, slug: parsedValue.slug },
       });
 
       if (result.error) {
@@ -492,8 +501,8 @@ const MatterNumberingSection = () => {
   );
 };
 
-const inviteSchema = v.object({
-  email: v.pipe(v.string(), v.email()),
+const inviteSchema = v.strictObject({
+  email: emailSchema(),
   role: v.picklist(["owner", "admin", "member"]),
 });
 
@@ -515,9 +524,14 @@ const InviteDialog = () => {
     defaultValues,
     validators: { onDynamic: inviteSchema },
     onSubmit: async ({ value }) => {
+      const parseResult = v.safeParse(inviteSchema, value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
       const result = await authClient.organization.inviteMember({
-        email: value.email,
-        role: value.role,
+        email: parsedValue.email,
+        role: parsedValue.role,
       });
 
       if (result.error) {

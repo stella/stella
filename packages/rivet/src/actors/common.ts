@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import type { OptionsType, VanillaOptions } from "../types";
 
-export const authedActorParamsSchema = v.object({
+export const authedActorParamsSchema = v.strictObject({
   authToken: v.string(),
 });
 

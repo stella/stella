@@ -29,17 +29,19 @@ import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-quer
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const sidebarSchema = v.variant("type", [
-  v.object({ type: v.literal("none") }),
-  v.object({ type: v.literal("entity") }),
-  v.object({ type: v.literal("anonymize") }),
+  v.strictObject({ type: v.literal("none") }),
+  v.strictObject({ type: v.literal("entity") }),
+  v.strictObject({ type: v.literal("anonymize") }),
 ]);
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/pdf",
 )({
   component: RouteComponent,
+  // v.object: validateSearch receives the full URL search params
+  // including params from parent routes; strictObject would reject them.
   validateSearch: v.object({
-    file: v.object({
+    file: v.strictObject({
       fieldId: v.string(),
       pageNumber: v.optional(v.number(), 1),
       scaleOffset: v.optional(v.number(), 0),
@@ -48,13 +50,13 @@ export const Route = createFileRoute(
     activePropertyId: v.string(),
     sidebar: sidebarSchema,
     justification: v.optional(
-      v.object({
+      v.strictObject({
         id: v.string(),
         pageNumber: v.number(),
       }),
     ),
     anonymizeScroll: v.optional(
-      v.object({
+      v.strictObject({
         entityId: v.number(),
       }),
     ),

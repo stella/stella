@@ -11,20 +11,20 @@ const entityKindValues = [
 const builtinFieldValues = ["status", "priority"] as const;
 
 export const viewFilterConditionSchema = v.union([
-  v.object({
+  v.strictObject({
     id: v.string(),
     field: v.literal("kind"),
     op: v.literal("in"),
     value: v.array(v.picklist(entityKindValues)),
   }),
-  v.object({
+  v.strictObject({
     id: v.string(),
     field: v.literal("property"),
     propertyId: v.pipe(v.string(), v.minLength(1)),
     op: v.picklist(["eq", "neq", "contains", "is_empty"]),
     value: v.optional(v.union([v.string(), v.array(v.string())])),
   }),
-  v.object({
+  v.strictObject({
     id: v.string(),
     field: v.literal("builtin"),
     builtinField: v.picklist(builtinFieldValues),
@@ -37,7 +37,7 @@ export type ViewFilterCondition = v.InferOutput<
   typeof viewFilterConditionSchema
 >;
 
-export const viewSortSchema = v.object({
+export const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   desc: v.boolean(),
 });
@@ -52,30 +52,30 @@ export type ViewLayoutBase = v.InferOutput<
   v.ObjectSchema<typeof baseLayoutSchema, "">
 >;
 
-const overviewLayoutSchema = v.object({
+const overviewLayoutSchema = v.strictObject({
   type: v.literal("overview"),
   ...baseLayoutSchema,
 });
 
-const tableLayoutSchema = v.object({
+const tableLayoutSchema = v.strictObject({
   type: v.literal("table"),
   columnOrder: v.array(v.string()),
   columnPinning: v.array(v.string()),
   ...baseLayoutSchema,
 });
 
-const filesystemLayoutSchema = v.object({
+const filesystemLayoutSchema = v.strictObject({
   type: v.literal("filesystem"),
   ...baseLayoutSchema,
 });
 
-const kanbanLayoutSchema = v.object({
+const kanbanLayoutSchema = v.strictObject({
   type: v.literal("kanban"),
   ...baseLayoutSchema,
   groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
-const calendarLayoutSchema = v.object({
+const calendarLayoutSchema = v.strictObject({
   type: v.literal("calendar"),
   ...baseLayoutSchema,
   datePropertyId: v.pipe(v.string(), v.minLength(1)),
@@ -86,7 +86,7 @@ const calendarLayoutSchema = v.object({
   mode: v.picklist(["month", "week", "year"]),
 });
 
-const timelineLayoutSchema = v.object({
+const timelineLayoutSchema = v.strictObject({
   type: v.literal("timeline"),
   ...baseLayoutSchema,
   startDatePropertyId: v.pipe(v.string(), v.minLength(1)),
@@ -110,7 +110,7 @@ export const viewLayoutSchema = v.variant("type", layoutSchemas);
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
 export type ViewLayoutType = ViewLayout["type"];
 
-export const createViewInputSchema = v.object({
+export const createViewInputSchema = v.strictObject({
   id: v.string(),
   name: v.string(),
   layout: viewLayoutSchema,
@@ -118,7 +118,7 @@ export const createViewInputSchema = v.object({
 
 export type CreateViewInput = v.InferInput<typeof createViewInputSchema>;
 
-export const updateViewInputSchema = v.object({
+export const updateViewInputSchema = v.strictObject({
   viewId: v.string(),
   name: v.optional(v.string()),
   layout: v.optional(viewLayoutSchema),
@@ -135,14 +135,14 @@ export const viewLayoutTypeSchema = v.picklist([
   "timeline",
 ]);
 
-export const convertViewInputSchema = v.object({
+export const convertViewInputSchema = v.strictObject({
   viewId: v.string(),
   targetType: viewLayoutTypeSchema,
 });
 
 export type ConvertViewInput = v.InferInput<typeof convertViewInputSchema>;
 
-export const reorderViewsInputSchema = v.object({
+export const reorderViewsInputSchema = v.strictObject({
   viewIds: v.array(v.string()),
 });
 

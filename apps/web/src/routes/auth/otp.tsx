@@ -25,10 +25,11 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { redirectToSchema } from "@/lib/redirect";
+import { emailSchema } from "@/lib/schema";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
-const searchSchema = v.object({
-  email: v.pipe(v.string(), v.email()),
+const searchSchema = v.strictObject({
+  email: emailSchema(),
   redirectTo: redirectToSchema,
 });
 

@@ -310,6 +310,21 @@ guidelines, and visual noise rules in `/conventions-ux`.
   fetch(url, { signal: AbortSignal.timeout(10_000) });
   ```
 - Validate inputs at the boundary with Valibot or Elysia schemas
+- Prefer one obvious validation split:
+  use Elysia `t` for HTTP route contracts, Valibot for web and
+  general runtime validation, and Zod only when a dependency
+  explicitly requires it
+- For Valibot objects at untrusted boundaries, prefer
+  `v.strictObject()` over `v.object()` unless stripping unknown
+  keys is intentionally desired
+- Prefer deriving related Valibot schemas with `v.pick()`,
+  `v.omit()`, and `v.partial()` instead of rewriting sibling
+  schemas by hand
+- For cross-field form rules, prefer `v.partialCheck()` plus
+  `v.forward()` so the issue lands on the relevant field
+- Put normalization inside the Valibot schema (`v.trim()`,
+  `v.toLowerCase()`, etc.), then use `v.InferInput` for raw form
+  values and `v.InferOutput` after parsing/normalization
 - Before writing manual validation, check if the schema/type
   system already provides a declarative constraint (e.g.,
   `t.File({ maxSize })`, `t.String({ maxLength })`). Prefer

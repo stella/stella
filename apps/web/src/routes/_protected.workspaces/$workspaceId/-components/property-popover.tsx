@@ -18,7 +18,7 @@ import { Separator } from "@stella/ui/components/separator";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { toFormErrors } from "@/lib/schema";
+import { requiredTrimmedStringSchema, toFormErrors } from "@/lib/schema";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
 import { PropertyTextInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
@@ -46,21 +46,21 @@ import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 const getVString = (t: Translator) =>
-  v.pipe(v.string(), v.nonEmpty(t("common.required")));
+  requiredTrimmedStringSchema(t("common.required"));
 
 const getDependencyCondition = (t: Translator) => {
   const vStr = getVString(t);
   return v.intersect([
-    v.object({
+    v.strictObject({
       version: v.literal(1),
     }),
     v.variant("type", [
-      v.object({
+      v.strictObject({
         type: v.literal("string"),
         operator: v.picklist(["eq"]),
         value: vStr,
       }),
-      v.object({
+      v.strictObject({
         type: v.literal("string-array"),
         operator: v.picklist(["contains-every"]),
         value: v.pipe(v.array(vStr), v.nonEmpty()),
@@ -71,13 +71,13 @@ const getDependencyCondition = (t: Translator) => {
 
 const getAiModelTool = (t: Translator) => {
   const vStr = getVString(t);
-  return v.object({
+  return v.strictObject({
     version: v.literal(1),
     type: v.literal("ai-model"),
     prompt: vStr,
     dependencies: v.pipe(
       v.array(
-        v.object({
+        v.strictObject({
           dependsOnPropertyId: vStr,
           condition: v.nullable(getDependencyCondition(t)),
         }),
@@ -87,7 +87,7 @@ const getAiModelTool = (t: Translator) => {
   });
 };
 
-const manualInputTool = v.object({
+const manualInputTool = v.strictObject({
   version: v.literal(1),
   type: v.literal("manual-input"),
 });
@@ -95,27 +95,27 @@ const manualInputTool = v.object({
 const getPropertyFormSchema = (t: Translator) => {
   const vStr = getVString(t);
   return v.intersect([
-    v.object({
+    v.strictObject({
       version: v.literal(1),
     }),
     v.variant("type", [
-      v.object({
+      v.strictObject({
         type: v.literal("file"),
         tool: manualInputTool,
         name: vStr,
       }),
-      v.object({
+      v.strictObject({
         type: v.literal("text"),
         tool: v.union([getAiModelTool(t), manualInputTool]),
         name: vStr,
       }),
-      v.object({
+      v.strictObject({
         type: v.picklist(["single-select", "multi-select"]),
         tool: v.union([getAiModelTool(t), manualInputTool]),
         name: vStr,
         options: v.pipe(
           v.array(
-            v.object({
+            v.strictObject({
               color: v.custom<OptionColor>((data) => typeof data === "string"),
               value: v.string(),
             }),
@@ -124,12 +124,12 @@ const getPropertyFormSchema = (t: Translator) => {
         ),
         fallback: v.nullable(v.string()),
       }),
-      v.object({
+      v.strictObject({
         type: v.literal("date"),
         tool: v.union([getAiModelTool(t), manualInputTool]),
         name: vStr,
       }),
-      v.object({
+      v.strictObject({
         type: v.literal("int"),
         tool: v.union([getAiModelTool(t), manualInputTool]),
         name: vStr,

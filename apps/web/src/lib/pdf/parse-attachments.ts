@@ -5,13 +5,15 @@ export type PDFAttachment = {
   filename: string;
 };
 
-const pdfAttachmentSchema = v.object({
+const pdfAttachmentSchema = v.strictObject({
   content: v.instance(Uint8Array),
   filename: v.pipe(
     v.string(),
+    v.trim(),
     v.check((s) => s.toLowerCase().endsWith(".pdf")),
   ),
 });
+const parsePdfAttachment = v.safeParser(pdfAttachmentSchema);
 
 /**
  * Extracts PDF file attachments from the result of
@@ -29,7 +31,7 @@ export const parseAttachments = (
   }
 
   return Object.values(attachments).flatMap((entry) => {
-    const result = v.safeParse(pdfAttachmentSchema, entry);
+    const result = parsePdfAttachment(entry);
     return result.success ? [result.output] : [];
   });
 };

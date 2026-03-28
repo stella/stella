@@ -1,6 +1,21 @@
 import type { AnyFieldMeta } from "@tanstack/react-form";
+import * as v from "valibot";
 
 type FormErrors = Record<string, string | string[]>;
+
+const toUndefinedIfEmpty = (value: string) =>
+  value.length > 0 ? value : undefined;
+
+export const trimmedStringSchema = () => v.pipe(v.string(), v.trim());
+
+export const requiredTrimmedStringSchema = (message: string) =>
+  v.pipe(v.string(), v.trim(), v.nonEmpty(message));
+
+export const emailSchema = () =>
+  v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
+
+export const optionalSearchStringSchema = () =>
+  v.optional(v.pipe(v.string(), v.trim(), v.transform(toUndefinedIfEmpty)));
 
 const fieldErrorsToString = (errors: unknown[]): string | null => {
   if (errors.length === 0) {
