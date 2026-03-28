@@ -1,25 +1,21 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
 
-import { TanStackDevtools } from "@tanstack/react-devtools";
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import {
   createRootRouteWithContext,
   HeadContent,
   Outlet,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { useShallow } from "zustand/react/shallow";
 
 import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { useDevStore } from "@/lib/dev-store";
 import { sessionOptions } from "@/routes/-queries";
 
 const isDev = import.meta.env.DEV;
+const DevRoot = isDev ? lazy(() async  => import("@/components/dev-root")) : null;
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -46,63 +42,6 @@ export const Route = createRootRouteWithContext<{
   ),
 });
 
-function DevRoot() {
-  const [tanstackDevtools, sourceInspector, rivetDevtools] = useDevStore(
-    useShallow((s) => [s.tanstackDevtools, s.sourceInspector, s.rivetDevtools]),
-  );
-
-  const [element, setElement] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const el = document.querySelector<HTMLElement>("rivetkit-devtools");
-    if (el) {
-      setElement(el);
-      return;
-    }
-
-    const observer = new MutationObserver((_, obs) => {
-      const found = document.querySelector<HTMLElement>("rivetkit-devtools");
-      if (found) {
-        setElement(found);
-        obs.disconnect();
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (element) {
-      element.style.display = rivetDevtools ? "" : "none";
-    }
-  }, [element, rivetDevtools]);
-
-  return tanstackDevtools ? (
-    <TanStackDevtools
-      config={{
-        inspectHotkey: sourceInspector ? ["Shift", "CtrlOrMeta"] : [],
-      }}
-      plugins={[
-        {
-          name: "React Query",
-          render: <ReactQueryDevtoolsPanel />,
-        },
-        {
-          name: "TanStack Router",
-          render: <TanStackRouterDevtoolsPanel />,
-        },
-      ]}
-    />
-  ) : null;
-}
-
 function RootComponent() {
   useQuery(sessionOptions);
 
@@ -111,7 +50,11 @@ function RootComponent() {
       <HeadContent />
       <div className="flex h-screen w-full flex-col">
         <Outlet />
-        {isDev && <DevRoot />}
+        {DevRoot ? (
+          <Suspense fallback={null}>
+            <DevRoot />
+          </Suspense>
+        ) : null}
       </div>
     </>
   );
