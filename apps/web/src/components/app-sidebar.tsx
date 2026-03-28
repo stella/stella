@@ -133,7 +133,7 @@ import {
 } from "@/routes/_protected.workspaces/-mutations";
 import {
   workspacesKeys,
-  workspacesOptions,
+  workspacesNavigationOptions,
 } from "@/routes/_protected.workspaces/-queries";
 
 const isDev = import.meta.env.DEV;
@@ -761,7 +761,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   useEffect(() => {
     initPinned(user.id);
   }, [initPinned, user.id]);
-  const { data: workspacesData } = useQuery(workspacesOptions);
+  const { data: workspacesData } = useQuery(workspacesNavigationOptions);
   const workspaces = workspacesData?.workspaces;
   const { data: organization } = useQuery(organizationOptions);
 
