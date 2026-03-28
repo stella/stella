@@ -37,7 +37,13 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureError, getAnalytics } from "@/api/lib/analytics";
 import { auth } from "@/api/lib/auth";
 import { httpError } from "@/api/lib/errors/http-error";
+import { errorTag } from "@/api/lib/errors/utils";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  getRequestContext,
+  initRequestContext,
+} from "@/api/lib/observability/request-context";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -56,8 +62,87 @@ const rivetApp = new Elysia()
   )
   .all("/api/rivet/*", async (c) => await registry.handler(c.request));
 
+const HEALTH_PATH = "/health";
+const SESSION_ID_HEADER = "x-posthog-session-id";
+const SESSION_ID_MAX_LENGTH = 64;
+const SESSION_ID_PATTERN = /^[\w-]+$/;
+
+const getRequestPath = (request: Request): string =>
+  new URL(request.url).pathname;
+
+const shouldLogRequest = (path: string): boolean => path !== HEALTH_PATH;
+
+const getRouteName = ({
+  path,
+  route,
+}: {
+  path: string;
+  route: string | undefined;
+}): string => route ?? path;
+
+const buildRequestLogAttributes = ({
+  durationMs,
+  errorType,
+  path,
+  request,
+  route,
+  statusCode,
+  reqCtx,
+  elysiaCode,
+}: {
+  durationMs: number;
+  errorType?: string;
+  path: string;
+  request: Request;
+  route?: string;
+  statusCode: number;
+  reqCtx?: ReturnType<typeof getRequestContext>;
+  elysiaCode?: string;
+}) => {
+  const attributes: Record<string, string | number | boolean> = {
+    "http.method": request.method,
+    "http.route": getRouteName({ path, route }),
+    "http.status_code": statusCode,
+    "request.duration_ms": Math.round(durationMs),
+  };
+
+  if (elysiaCode) {
+    attributes["http.elysia_code"] = elysiaCode;
+  }
+
+  if (errorType) {
+    attributes["error.type"] = errorType;
+  }
+
+  if (reqCtx?.posthogDistinctId) {
+    attributes.posthogDistinctId = reqCtx.posthogDistinctId;
+  }
+
+  if (reqCtx?.sessionId) {
+    attributes.sessionId = reqCtx.sessionId;
+  }
+
+  if (reqCtx?.organizationId) {
+    attributes["enduser.organization_id"] = reqCtx.organizationId;
+  }
+
+  return attributes;
+};
+
 const api = new Elysia()
-  .onRequest((ctx) => setSecurityHeaders(ctx.set))
+  .onRequest(({ request, set }) => {
+    setSecurityHeaders(set);
+
+    const rawSessionId = request.headers.get(SESSION_ID_HEADER);
+    const sessionId =
+      rawSessionId &&
+      rawSessionId.length <= SESSION_ID_MAX_LENGTH &&
+      SESSION_ID_PATTERN.test(rawSessionId)
+        ? rawSessionId
+        : undefined;
+
+    initRequestContext(request, sessionId);
+  })
   .use(rivetApp)
   .use(
     cors({
@@ -73,42 +158,91 @@ const api = new Elysia()
       })(),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "Authorization", SESSION_ID_HEADER],
       exposeHeaders: ["set-auth-token"],
     }),
   )
-  .onError(({ error, set, code, request }) => {
+  .onError(({ error, set, code, request, route }) => {
     delete set.headers["X-Powered-By"];
 
-    const url = new URL(request.url);
+    const path = getRequestPath(request);
+    const reqCtx = getRequestContext(request);
+    const statusCode =
+      code === "VALIDATION"
+        ? 422
+        : code === "NOT_FOUND"
+          ? 404
+          : code === "PARSE"
+            ? 400
+            : 500;
+
+    if (shouldLogRequest(path)) {
+      const attributes = buildRequestLogAttributes({
+        durationMs: reqCtx ? performance.now() - reqCtx.startTime : 0,
+        errorType: errorTag(error),
+        path,
+        request,
+        route,
+        statusCode,
+        reqCtx,
+        elysiaCode: String(code),
+      });
+
+      if (statusCode >= 500) {
+        logger.error("request.failed", attributes);
+      } else {
+        logger.warn("request.failed", attributes);
+      }
+    }
+
     captureError(error, {
       method: request.method,
-      path: url.pathname,
+      path,
       elysiaCode: String(code),
     });
 
     // Return a sanitized response for unhandled errors.
     // Elysia's default would serialize error.message, which
     // may contain DB internals, file names, or document content.
+    set.status = statusCode;
     if (code === "VALIDATION") {
-      set.status = 422;
       return httpError("Invalid request");
     }
     if (code === "NOT_FOUND") {
-      set.status = 404;
       return httpError("Not found");
     }
     if (code === "PARSE") {
-      set.status = 400;
       return httpError("Malformed request");
     }
-    set.status = 500;
     return httpError("Internal server error");
   })
-  .onAfterHandle(async ({ set, path }) => {
+  .onAfterHandle(async ({ request, route, set }) => {
     delete set.headers["X-Powered-By"];
 
-    if (!env.isDev && path !== "/health") {
+    const path = getRequestPath(request);
+    const reqCtx = getRequestContext(request);
+
+    if (shouldLogRequest(path) && reqCtx) {
+      const statusCode = typeof set.status === "number" ? set.status : 200;
+      const attributes = buildRequestLogAttributes({
+        durationMs: performance.now() - reqCtx.startTime,
+        path,
+        request,
+        route,
+        statusCode,
+        reqCtx,
+      });
+
+      if (statusCode >= 500) {
+        logger.error("request.completed", attributes);
+      } else if (statusCode >= 400) {
+        logger.warn("request.completed", attributes);
+      } else {
+        logger.info("request.completed", attributes);
+      }
+    }
+
+    if (!env.isDev && shouldLogRequest(path)) {
       const analytics = getAnalytics();
       await analytics.flush().catch((error: unknown) => {
         // eslint-disable-next-line no-console
