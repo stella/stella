@@ -149,7 +149,7 @@ export const createMatterTools = ({
         "using full-text search. Returns matching entity " +
         "names with highlighted excerpts.",
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           query: v.pipe(
             v.string(),
@@ -195,7 +195,7 @@ export const createMatterTools = ({
         "matter. Returns names, types, dates, and custom " +
         "property values (metadata columns).",
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           kind: v.optional(
             v.pipe(
@@ -291,7 +291,7 @@ export const createMatterTools = ({
         "Get detailed information about a specific entity " +
         "including all its property values (metadata).",
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           entityId: v.pipe(v.string(), v.description("The entity ID to read")),
         }),
@@ -369,7 +369,7 @@ export const createMatterTools = ({
         "this to read actual file contents, not just metadata. " +
         "Returns up to 8000 characters of extracted text.",
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           entityId: v.pipe(
             v.string(),
@@ -438,7 +438,7 @@ export const createMatterTools = ({
         "strings.",
       needsApproval: true,
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           entityId: v.pipe(
             v.string(),
@@ -678,7 +678,7 @@ export const createMatterTools = ({
         "and stored in the matter.",
       needsApproval: true,
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           name: v.pipe(
             v.string(),
@@ -726,7 +726,7 @@ export const createMatterTools = ({
         "specific clauses, terms, or information across " +
         "all documents without reading each one individually.",
       inputSchema: valibotSchema(
-        v.object({
+        v.strictObject({
           workspaceId: wsSchema,
           query: v.pipe(
             v.string(),
@@ -792,7 +792,7 @@ export const createOrgTools = ({
       "organization. Only use this when the user explicitly " +
       "asks to search outside the current matter.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         query: v.pipe(
           v.string(),
           v.maxLength(LIMITS.searchQueryMaxLength),
@@ -838,7 +838,7 @@ export const createOrgTools = ({
       "any matter. Use after searchAcrossMatters finds a " +
       "document outside the current matter.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         entityId: v.pipe(
           v.string(),
           v.description("The entity ID whose content to read"),
@@ -897,7 +897,7 @@ export const createOrgTools = ({
     name: "readContact",
     description: "Get details about a contact (person or organization).",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         contactId: v.pipe(v.string(), v.description("The contact ID to read")),
       }),
     ),
@@ -942,7 +942,7 @@ export const createOrgTools = ({
     name: "listTemplates",
     description: "List available document templates.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         query: v.optional(
           v.pipe(v.string(), v.description("Filter by name (substring match)")),
         ),
@@ -983,7 +983,7 @@ export const createOrgTools = ({
     name: "readClause",
     description: "Read a legal clause including its full text body.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         clauseId: v.pipe(v.string(), v.description("The clause ID to read")),
       }),
     ),
@@ -1031,7 +1031,7 @@ export const createOrgTools = ({
       "the user answers, synthesize their input into a " +
       "plan and execute it.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         analysis: v.pipe(
           v.string(),
           v.description(
@@ -1041,7 +1041,7 @@ export const createOrgTools = ({
         ),
         questions: v.pipe(
           v.array(
-            v.object({
+            v.strictObject({
               question: v.string(),
               reason: v.pipe(
                 v.string(),

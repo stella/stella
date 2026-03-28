@@ -120,7 +120,7 @@ export const buildBatchSchema = (
 
     switch (content.type) {
       case "text": {
-        schemaShape[property.id] = v.object({
+        schemaShape[property.id] = v.strictObject({
           answer: v.pipe(
             v.string(),
             v.description(context.text.description),
@@ -133,7 +133,7 @@ export const buildBatchSchema = (
       case "single-select": {
         const options = content.options.map((opt) => opt.value);
         if (options.length > 0) {
-          schemaShape[property.id] = v.object({
+          schemaShape[property.id] = v.strictObject({
             answer: v.pipe(
               v.fallback(v.nullable(v.picklist(options)), null),
               v.description(context.singleSelect.description),
@@ -147,7 +147,7 @@ export const buildBatchSchema = (
       case "multi-select": {
         const options = content.options.map((opt) => opt.value);
         if (options.length > 0) {
-          schemaShape[property.id] = v.object({
+          schemaShape[property.id] = v.strictObject({
             answer: v.pipe(
               v.fallback(
                 v.nullable(v.pipe(v.array(v.picklist(options)), v.nonEmpty())),
@@ -162,7 +162,7 @@ export const buildBatchSchema = (
         break;
       }
       case "date": {
-        schemaShape[property.id] = v.object({
+        schemaShape[property.id] = v.strictObject({
           answer: v.pipe(
             v.nullable(v.pipe(v.string(), v.isoDate())),
             v.description(context.date.description),
@@ -173,8 +173,8 @@ export const buildBatchSchema = (
         break;
       }
       case "int": {
-        schemaShape[property.id] = v.object({
-          answer: v.object({
+        schemaShape[property.id] = v.strictObject({
+          answer: v.strictObject({
             amount: v.pipe(
               v.number(),
               v.integer(),
@@ -198,7 +198,7 @@ export const buildBatchSchema = (
     }
   }
 
-  return v.object(schemaShape);
+  return v.strictObject(schemaShape);
 };
 
 // --------------- User message templates ---------------

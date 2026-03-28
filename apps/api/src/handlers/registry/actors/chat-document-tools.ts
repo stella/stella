@@ -27,7 +27,7 @@ export const createDocumentViewTools = (
     // oxfmt-ignore
     description: `Display an uploaded document to the user in a specific view. Use 'simple' for clean accepted text, 'original' for the pre-edit version, 'tracked-changes' for the full redline with annotations. Available files: ${attachments.map((a) => a.filename).join(", ")}`,
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         view: v.picklist(["simple", "original", "tracked-changes"]),
         filename: v.string(),
       }),

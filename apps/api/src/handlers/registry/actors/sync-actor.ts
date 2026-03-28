@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/registry/utils";
 
 const invalidateQuerySchema = v.array(v.string());
+const parseInvalidateQuery = v.safeParser(invalidateQuerySchema);
 
 type InvalidateQueryArgs = v.InferOutput<typeof invalidateQuerySchema>;
 
@@ -17,7 +18,7 @@ export const syncActor = actor({
     await validateGlobalActorSession(c.key, params),
   actions: {
     invalidateQuery: (c, args: InvalidateQueryArgs) => {
-      const queryKey = v.safeParse(invalidateQuerySchema, args);
+      const queryKey = parseInvalidateQuery(args);
 
       if (!queryKey.success) {
         throw createUserError("invalid-arguments", {

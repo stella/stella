@@ -12,6 +12,7 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import type { Actors } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { createEventHandler, eventHandler } from "@/lib/rivet";
+import { optionalSearchStringSchema } from "@/lib/schema";
 import type { WorkspaceView } from "@/lib/types";
 import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-pagination";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
@@ -33,8 +34,10 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
+// v.object: validateSearch receives the full URL search params
+// including params from child routes; strictObject would reject them.
 const searchSchema = v.object({
-  folder: v.optional(v.string()),
+  folder: optionalSearchStringSchema(),
   page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
 

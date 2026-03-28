@@ -39,23 +39,23 @@ export type EditableFieldContent = Extract<
 >;
 
 const fieldFormSchema = v.variant("type", [
-  v.object({
+  v.strictObject({
     type: v.literal("text"),
     value: v.string(),
   }),
-  v.object({
+  v.strictObject({
     type: v.literal("single-select"),
     value: v.nullable(v.string()),
   }),
-  v.object({
+  v.strictObject({
     type: v.literal("multi-select"),
     value: v.pipe(v.array(v.pipe(v.string(), v.nonEmpty()))),
   }),
-  v.object({
+  v.strictObject({
     type: v.literal("date"),
     value: v.nullable(v.pipe(v.string(), v.isoDate("Must be YYYY-MM-DD"))),
   }),
-  v.object({
+  v.strictObject({
     type: v.literal("int"),
     value: v.pipe(v.number(), v.integer()),
     currency: v.nullable(

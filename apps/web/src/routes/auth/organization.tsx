@@ -30,7 +30,7 @@ import {
   getOrganizationSchema,
 } from "@/routes/_protected.organization/-utils";
 
-const searchSchema = v.object({
+const searchSchema = v.strictObject({
   redirectTo: redirectToSchema,
 });
 
@@ -154,9 +154,14 @@ const CreateOrganizationForm = () => {
       onDynamic: getOrganizationSchema(),
     },
     onSubmit: async ({ value, formApi }) => {
+      const parseResult = v.safeParse(getOrganizationSchema(), value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
       const { data: slugCheckData, error: slugCheckError } =
         await authClient.organization.checkSlug({
-          slug: value.slug,
+          slug: parsedValue.slug,
         });
 
       if (slugCheckError) {
@@ -177,8 +182,8 @@ const CreateOrganizationForm = () => {
 
       const { data, error: createError } = await authClient.organization.create(
         {
-          name: value.name,
-          slug: value.slug,
+          name: parsedValue.name,
+          slug: parsedValue.slug,
         },
       );
 

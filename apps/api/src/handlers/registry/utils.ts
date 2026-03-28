@@ -189,7 +189,7 @@ export const validateActorInput = <T>(
   schema: v.GenericSchema<T>,
   input: unknown,
 ) => {
-  const result = v.safeParse(schema, input);
+  const result = v.safeParser(schema)(input);
 
   if (!result.success) {
     throw createUserError("invalid-arguments", {

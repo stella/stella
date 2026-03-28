@@ -17,9 +17,9 @@ type StorageShape = {
   version: number;
 };
 
-const StorageSchema = v.object({
-  state: v.object({
-    columnSizing: v.object({
+const StorageSchema = v.strictObject({
+  state: v.strictObject({
+    columnSizing: v.strictObject({
       [MAP_TAG]: v.array(
         v.tuple([v.string(), v.record(v.string(), v.number())]),
       ),

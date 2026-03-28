@@ -155,7 +155,7 @@ function Members() {
   );
 }
 
-const updateRoleSchema = v.object({
+const updateRoleSchema = v.strictObject({
   role: v.picklist(["owner", "admin", "member"]),
 });
 
@@ -177,9 +177,14 @@ const UpdateRoleDialog = ({ memberId, email, role }: UpdateRoleDialogProps) => {
     defaultValues: { role },
     validators: { onDynamic: updateRoleSchema },
     onSubmit: async ({ value }) => {
+      const parseResult = v.safeParse(updateRoleSchema, value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
       const result = await authClient.organization.updateMemberRole({
         memberId,
-        role: value.role,
+        role: parsedValue.role,
       });
 
       if (result.error) {

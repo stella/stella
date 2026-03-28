@@ -41,7 +41,11 @@ import { toastManager } from "@stella/ui/components/toast";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { toFormErrors } from "@/lib/schema";
+import {
+  requiredTrimmedStringSchema,
+  toFormErrors,
+  trimmedStringSchema,
+} from "@/lib/schema";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 import {
@@ -608,13 +612,16 @@ const ConfirmAction = ({
   );
 };
 
-const editInvoiceSchema = v.object({
-  invoiceNumber: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-  invoiceDate: v.pipe(v.string(), v.minLength(1)),
-  dueDate: v.string(),
-  reference: v.string(),
-  currency: v.pipe(v.string(), v.minLength(3), v.maxLength(3)),
-  notes: v.string(),
+const editInvoiceSchema = v.strictObject({
+  invoiceNumber: v.pipe(
+    requiredTrimmedStringSchema("Required"),
+    v.maxLength(64),
+  ),
+  invoiceDate: v.pipe(v.string(), v.isoDate()),
+  dueDate: v.union([v.literal(""), v.pipe(v.string(), v.isoDate())]),
+  reference: trimmedStringSchema(),
+  currency: v.pipe(trimmedStringSchema(), v.toUpperCase(), v.length(3)),
+  notes: trimmedStringSchema(),
 });
 
 const EditInvoiceForm = ({
@@ -654,15 +661,20 @@ const EditInvoiceForm = ({
       onDynamic: editInvoiceSchema,
     },
     onSubmit: async ({ value }) => {
+      const parseResult = v.safeParse(editInvoiceSchema, value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
       const response = await api
         .invoices({ workspaceId })({ invoiceId })
         .patch({
-          invoiceNumber: value.invoiceNumber,
-          invoiceDate: value.invoiceDate,
-          dueDate: value.dueDate || null,
-          reference: value.reference || null,
-          currency: value.currency,
-          notes: value.notes || null,
+          invoiceNumber: parsedValue.invoiceNumber,
+          invoiceDate: parsedValue.invoiceDate,
+          dueDate: parsedValue.dueDate || null,
+          reference: parsedValue.reference || null,
+          currency: parsedValue.currency,
+          notes: parsedValue.notes || null,
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {

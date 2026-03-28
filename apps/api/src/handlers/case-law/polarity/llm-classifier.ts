@@ -43,7 +43,7 @@ regex rules for future classification.
 
 If the context is ambiguous, classify as "neutral".`;
 
-const classificationSchema = v.object({
+const classificationSchema = v.strictObject({
   polarity: v.picklist(["positive", "neutral", "negative"]),
   keyPhrase: v.pipe(v.string(), v.minLength(2), v.maxLength(100)),
   confidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),

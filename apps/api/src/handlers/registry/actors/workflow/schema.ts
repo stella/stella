@@ -24,7 +24,7 @@ export const defaultWorkflowState = (): WorkflowState => ({
   pendingBatches: new Map(),
 });
 
-export const startWorkflowSchema = v.object({
+export const startWorkflowSchema = v.strictObject({
   workspaceId: v.string(),
   entityIdsOrder: v.optional(v.pipe(v.array(v.string()), v.nonEmpty())),
   entityIds: v.optional(v.pipe(v.array(v.string()), v.nonEmpty())),
@@ -36,13 +36,13 @@ export type StartWorkflowReturn = {
   status: "started" | "already-running" | "failed";
 };
 
-const processBatchSchema = v.object({
+const processBatchSchema = v.strictObject({
   batchId: v.string(),
   level: v.number(),
   entityId: v.string(),
 });
 
-const advanceQueueSchema = v.object({
+const advanceQueueSchema = v.strictObject({
   batchId: v.string(),
   entityId: v.string(),
 });

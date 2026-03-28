@@ -284,19 +284,37 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   );
 };
 
-const createContactSchema = v.object({
-  type: v.picklist(["person", "organization"]),
-  displayName: v.pipe(v.string(), v.minLength(1)),
-  firstName: v.string(),
-  lastName: v.string(),
-  organizationName: v.string(),
-});
+const trimmedString = v.pipe(v.string(), v.trim());
+
+const requiredTrimmedString = (message: string) =>
+  v.pipe(v.string(), v.trim(), v.nonEmpty(message));
+
+const createContactSchema = (requiredMessage: string) =>
+  v.pipe(
+    v.strictObject({
+      type: v.picklist(["person", "organization"]),
+      displayName: requiredTrimmedString(requiredMessage),
+      firstName: trimmedString,
+      lastName: trimmedString,
+      organizationName: trimmedString,
+    }),
+    v.forward(
+      v.partialCheck(
+        [["type"], ["organizationName"]],
+        ({ type, organizationName }) =>
+          type !== "organization" || organizationName.length > 0,
+        requiredMessage,
+      ),
+      ["organizationName"],
+    ),
+  );
 
 const CreateContactDialog = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const createContact = useCreateContact();
+  const schema = createContactSchema(t("common.required"));
 
   const form = useForm({
     defaultValues: {
@@ -306,21 +324,30 @@ const CreateContactDialog = () => {
       lastName: "",
       organizationName: "",
     },
-    validators: { onDynamic: createContactSchema },
+    validators: { onDynamic: schema },
     onSubmit: async ({ value }) => {
+      const result = v.safeParse(schema, value);
+      if (!result.success) {
+        return;
+      }
+      const parsedValue = result.output;
       const firstName =
-        value.type === "person" ? value.firstName || undefined : undefined;
+        parsedValue.type === "person"
+          ? parsedValue.firstName || undefined
+          : undefined;
       const lastName =
-        value.type === "person" ? value.lastName || undefined : undefined;
+        parsedValue.type === "person"
+          ? parsedValue.lastName || undefined
+          : undefined;
       const organizationName =
-        value.type === "organization"
-          ? value.organizationName || undefined
+        parsedValue.type === "organization"
+          ? parsedValue.organizationName || undefined
           : undefined;
 
       await createContact.mutateAsync({
         id: nanoid(),
-        type: value.type,
-        displayName: value.displayName,
+        type: parsedValue.type,
+        displayName: parsedValue.displayName,
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),
         ...(organizationName && { organizationName }),

@@ -27,7 +27,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
       "asks about case law, court decisions, legal " +
       "precedents, or judicial rulings.",
     inputSchema: valibotSchema(
-      v.object({
+      v.strictObject({
         query: v.pipe(
           v.string(),
           v.minLength(1),

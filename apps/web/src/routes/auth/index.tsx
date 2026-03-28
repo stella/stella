@@ -14,9 +14,9 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
-import { toFormErrors } from "@/lib/schema";
+import { emailSchema, toFormErrors } from "@/lib/schema";
 
-const searchSchema = v.object({
+const searchSchema = v.strictObject({
   redirectTo: redirectToSchema,
 });
 
@@ -37,8 +37,8 @@ export const Route = createFileRoute("/auth/")({
   component: LoginOrSignup,
 });
 
-const formSchema = v.object({
-  email: v.pipe(v.string(), v.email()),
+const formSchema = v.strictObject({
+  email: emailSchema(),
 });
 
 function LoginOrSignup() {
@@ -53,8 +53,13 @@ function LoginOrSignup() {
       onDynamic: formSchema,
     },
     onSubmit: async ({ value }) => {
+      const parseResult = v.safeParse(formSchema, value);
+      if (!parseResult.success) {
+        return;
+      }
+      const parsedValue = parseResult.output;
       const { error } = await authClient.emailOtp.sendVerificationOtp({
-        email: value.email,
+        email: parsedValue.email,
         type: "sign-in",
       });
 
@@ -71,7 +76,7 @@ function LoginOrSignup() {
 
       await navigate({
         to: "/auth/otp",
-        search: { email: value.email, redirectTo },
+        search: { email: parsedValue.email, redirectTo },
       });
     },
   });
