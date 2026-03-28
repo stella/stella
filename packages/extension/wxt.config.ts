@@ -1,3 +1,5 @@
+// @ts-nocheck – wxt's recursive Vite plugin types cause
+// TS2321 (excessive stack depth) with TypeScript 6.0.
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
