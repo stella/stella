@@ -21,6 +21,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { enrichRequestContext } from "@/api/lib/observability/request-context";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -298,6 +299,11 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         properties: {
           active_organization_id: activeOrganizationId,
         },
+      });
+
+      enrichRequestContext(request, {
+        posthogDistinctId: userId,
+        organizationId: activeOrganizationId,
       });
 
       const accessibleWorkspaces = await resolveAccessibleWorkspaces(
