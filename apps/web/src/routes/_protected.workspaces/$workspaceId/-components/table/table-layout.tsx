@@ -1,12 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-  getCoreRowModel,
-  getExpandedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import type { ExpandedState } from "@tanstack/react-table";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import {
   ArrowUpIcon,
   CalendarIcon,
@@ -30,10 +25,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import type {
-  TableColumnDef,
-  TableTreeNode,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import {
   DueDateCell,
@@ -62,8 +54,6 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
   const t = useTranslations();
   const tableState = useTableState({ workspaceId, view });
 
-  const [expanded, setExpanded] = useState<ExpandedState>(true);
-
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
   const { data: treeData } = useSuspenseQuery({
@@ -73,10 +63,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
       sorts: view.layout.sorts,
       page,
     }),
-    select: (data) => toTableEntities(data.entities),
+    select: (data) =>
+      toTableEntities(data.entities.filter((e) => e.kind !== "folder")),
   });
-
-  const hasFolders = treeData.some((e) => e.kind === "folder");
 
   const columns = useMemo(() => {
     const columnDefs: TableColumnDef[] = [
@@ -88,8 +77,8 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
             <Checkbox
               checked={props.table.getIsAllRowsSelected()}
               indeterminate={props.table.getIsSomeRowsSelected()}
-              onCheckedChange={(_, e) =>
-                props.table.getToggleAllRowsSelectedHandler()(e.event)
+              onCheckedChange={(checked) =>
+                props.table.toggleAllRowsSelected(checked)
               }
             />
           </div>
@@ -221,19 +210,11 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
     data: treeData ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
-    ...(hasFolders && {
-      getExpandedRowModel: getExpandedRowModel<TableTreeNode>(),
-      getSubRows: (row: TableTreeNode) => row.children,
-    }),
     manualSorting: true,
     enableSortingRemoval: false,
     enableSubRowSelection: true,
     getRowId: (row) => row.entityId,
-    state: {
-      ...tableState.state,
-      expanded,
-    },
-    onExpandedChange: setExpanded,
+    state: tableState.state,
     ...tableState.listeners,
   });
 

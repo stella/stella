@@ -16,8 +16,7 @@ pre-commit:
       run: bun run lint:fix
       stage_fixed: true
     format:
-      run: bun run format
-      stage_fixed: true
+      run: bun run format:check
     i18n:
       run: bun run i18n:sync
       stage_fixed: true
