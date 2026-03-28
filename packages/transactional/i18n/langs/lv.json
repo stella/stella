@@ -12,10 +12,10 @@
     "emailVerification": "Izmantojiet šo kodu, lai apstiprinātu savu e-pasta adresi.",
     "expires": "Šī koda derīguma termiņš ir 5 minūtes.",
     "forgetPassword": "Izmantojiet šo kodu, lai atiestatītu savu paroli.",
-    "heading": "Jūsu Stella vienreizējais kods",
+    "heading": "Jūsu stella vienreizējais kods",
     "ignore": "Ja neesat pieprasījis šo kodu, varat ignorēt šo e-pastu.",
     "preview": "Jūsu vienreizējais kods: {otp}",
-    "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam Stella kontam.",
-    "subject": "Stella"
+    "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
+    "subject": "stella"
   }
 }

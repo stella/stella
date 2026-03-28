@@ -12,10 +12,10 @@
     "emailVerification": "Használja ezt a kódot az e-mail címe megerősítéséhez.",
     "expires": "Ez a kód 5 perc múlva lejár.",
     "forgetPassword": "Használja ezt a kódot a jelszava visszaállításához.",
-    "heading": "Az Ön Stella egyszer használatos kódja",
+    "heading": "Az Ön stella egyszer használatos kódja",
     "ignore": "Ha nem Ön kérte ezt a kódot, figyelmen kívül hagyhatja ezt az e-mailt.",
     "preview": "Az Ön egyszer használatos kódja: {otp}",
-    "signIn": "Használja ezt a kódot a Stella fiókjába való bejelentkezéshez.",
-    "subject": "Stella"
+    "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
+    "subject": "stella"
   }
 }
