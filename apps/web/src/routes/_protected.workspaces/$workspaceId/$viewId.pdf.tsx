@@ -24,6 +24,7 @@ import { AnonymizeSidebar } from "@/routes/_protected.workspaces/$workspaceId/-c
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
+import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
@@ -119,6 +120,7 @@ function RouteComponent() {
   const entityId = Route.useSearch({
     select: (s) => s.entityId,
   });
+  useSyncJustifications([entityId]);
   const sidebar = Route.useSearch({
     select: (s) => s.sidebar,
   });

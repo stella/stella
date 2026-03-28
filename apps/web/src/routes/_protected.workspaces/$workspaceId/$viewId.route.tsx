@@ -17,6 +17,7 @@ import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
 import {
   ViewsActorProvider,
@@ -94,6 +95,12 @@ function ViewsRoute() {
   const { data: activeView } = useSuspenseQuery({
     ...viewsQueryOptions,
     select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
+  });
+  useSyncTable({
+    workspaceId,
+    filters: activeView?.layout.filters ?? [],
+    sorts: activeView?.layout.sorts ?? [],
+    page,
   });
   const pruneStaleViews = useTableStore((s) => s.pruneStaleViews);
   const workflowActor = useWorkflowActor(workspaceId);

@@ -1,68 +1,63 @@
-import { panic } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
-import type { BoundingBoxes } from "@/api/db/schema-validators";
+import {
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 type ReadJustificationsHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
+  entityIds: string[];
 };
 
-type JustificationResponse = {
-  id: string;
-  fieldId: string;
-  htmlVersion: number;
-  htmlContent: string;
-  boundingBoxes: BoundingBoxes | null;
-  fileFieldIds: string[];
-};
-
-// TODO DAMIAN: please add it to the general pagination issue,
-// it is inconsistent across repo + here the issue is that
-// findMany loads ALL entities in a workspace with nested
-// relations (currentVersion → fields → justifications) and
-// no limit. A workspace with 10k entities loads everything
-// into memory.
 export const readJustificationsHandler = async ({
   scopedDb,
   workspaceId,
+  entityIds,
 }: ReadJustificationsHandlerProps) => {
-  const result = await scopedDb((tx) =>
-    tx.query.entities.findMany({
-      where: { workspaceId: { eq: workspaceId } },
-      columns: {},
-      with: {
-        currentVersion: {
-          columns: {},
-          with: {
-            fields: {
-              columns: {},
-              with: {
-                justification: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-  );
-
-  const justificationList: JustificationResponse[] = [];
-
-  for (const entity of result) {
-    if (!entity.currentVersion) {
-      panic("Entity has no currentVersion");
-    }
-
-    for (const field of entity.currentVersion.fields) {
-      if (!field.justification) {
-        continue;
-      }
-
-      justificationList.push(field.justification);
-    }
+  // Defensive depth: the route schema enforces minItems/maxItems,
+  // so these branches are unreachable via the API route.
+  if (entityIds.length === 0) {
+    return [];
   }
 
-  return justificationList;
+  if (entityIds.length > LIMITS.entitiesPageSizeMax) {
+    throw new Error("Justifications query exceeded max entity batch size");
+  }
+
+  const uniqueEntityIds = [...new Set(entityIds)];
+
+  return await scopedDb((tx) =>
+    tx
+      .select({
+        id: justifications.id,
+        fieldId: justifications.fieldId,
+        htmlVersion: justifications.htmlVersion,
+        htmlContent: justifications.htmlContent,
+        boundingBoxes: justifications.boundingBoxes,
+        fileFieldIds: justifications.fileFieldIds,
+      })
+      .from(justifications)
+      .innerJoin(fields, eq(justifications.fieldId, fields.id))
+      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+      .innerJoin(
+        entities,
+        and(
+          eq(entityVersions.id, entities.currentVersionId),
+          eq(entities.workspaceId, workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(justifications.workspaceId, workspaceId),
+          inArray(entityVersions.entityId, uniqueEntityIds),
+        ),
+      ),
+  );
 };
