@@ -176,6 +176,89 @@ type SidebarTimerPopoverProps = {
   workspaceId: string;
 };
 
+type SidebarTimerBadgeProps = {
+  workspaceId: string;
+};
+
+const SidebarTimerBadge = ({ workspaceId }: SidebarTimerBadgeProps) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const stopTimer = useStopTimer();
+  const { data: activeTimer } = useQuery({
+    ...activeTimerOptions(workspaceId),
+  });
+  const [timerSeconds, setTimerSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!activeTimer?.timerStartedAt) {
+      setTimerSeconds(0);
+      return;
+    }
+
+    const startMs = new Date(activeTimer.timerStartedAt).getTime();
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startMs) / 1000);
+      setTimerSeconds(elapsed);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeTimer?.timerStartedAt]);
+
+  if (activeTimer) {
+    return (
+      <SidebarMenuBadge>
+        <span className="flex items-center gap-1.5 text-xs tabular-nums">
+          <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+          {formatTimer(timerSeconds)}
+          <Button
+            aria-label={t("billing.stopTimer")}
+            className="text-muted-foreground size-5"
+            disabled={stopTimer.isPending}
+            onClick={() => {
+              stopTimer.mutate(
+                {
+                  workspaceId,
+                },
+                {
+                  onSuccess: () => {
+                    // eslint-disable-next-line typescript/no-floating-promises
+                    queryClient.invalidateQueries({
+                      queryKey: timeEntriesKeys.all(workspaceId),
+                    });
+                    // eslint-disable-next-line typescript/no-floating-promises
+                    queryClient.invalidateQueries({
+                      queryKey: timeEntriesKeys.activeTimer(workspaceId),
+                    });
+                  },
+                  onError: () => {
+                    toastManager.add({
+                      title: t("billing.failedToStopTimer"),
+                      type: "error",
+                    });
+                  },
+                },
+              );
+            }}
+            size="icon"
+            variant="ghost"
+          >
+            <SquareIcon className="size-3 fill-current" />
+          </Button>
+        </span>
+      </SidebarMenuBadge>
+    );
+  }
+
+  return (
+    <SidebarMenuBadge>
+      <SidebarTimerPopover workspaceId={workspaceId} />
+    </SidebarMenuBadge>
+  );
+};
+
 const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -844,30 +927,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     }
   });
 
-  const { data: activeTimer } = useQuery({
-    ...activeTimerOptions(currentWorkspaceId ?? ""),
-    enabled: !!currentWorkspaceId,
-  });
-
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const stopTimer = useStopTimer();
-
-  // Client-side timer tick
-  useEffect(() => {
-    if (!activeTimer?.timerStartedAt) {
-      setTimerSeconds(0);
-      return;
-    }
-    const startMs = new Date(activeTimer.timerStartedAt).getTime();
-    const tick = () => {
-      const elapsed = Math.floor((Date.now() - startMs) / 1000);
-      setTimerSeconds(elapsed);
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [activeTimer?.timerStartedAt]);
-
   const pinned = useMemo(() => {
     if (!workspaces) {
       return [];
@@ -1233,60 +1292,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 )}
                 {showNavBadges ? (
                   <NavBadge digit={6} />
-                ) : activeTimer ? (
-                  <SidebarMenuBadge>
-                    <span className="flex items-center gap-1.5 text-xs tabular-nums">
-                      <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-                      {formatTimer(timerSeconds)}
-                      <Button
-                        aria-label={t("billing.stopTimer")}
-                        className="text-muted-foreground size-5"
-                        disabled={stopTimer.isPending}
-                        onClick={() => {
-                          if (currentWorkspaceId) {
-                            stopTimer.mutate(
-                              {
-                                workspaceId: currentWorkspaceId,
-                              },
-                              {
-                                onSuccess: () => {
-                                  // eslint-disable-next-line typescript/no-floating-promises
-                                  queryClient.invalidateQueries({
-                                    queryKey:
-                                      timeEntriesKeys.all(currentWorkspaceId),
-                                  });
-                                  // eslint-disable-next-line typescript/no-floating-promises
-                                  queryClient.invalidateQueries({
-                                    queryKey:
-                                      timeEntriesKeys.activeTimer(
-                                        currentWorkspaceId,
-                                      ),
-                                  });
-                                },
-                                onError: () => {
-                                  toastManager.add({
-                                    title: t("billing.failedToStopTimer"),
-                                    type: "error",
-                                  });
-                                },
-                              },
-                            );
-                          }
-                        }}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <SquareIcon className="size-3 fill-current" />
-                      </Button>
-                    </span>
-                  </SidebarMenuBadge>
-                ) : (
-                  currentWorkspaceId && (
-                    <SidebarMenuBadge>
-                      <SidebarTimerPopover workspaceId={currentWorkspaceId} />
-                    </SidebarMenuBadge>
-                  )
-                )}
+                ) : currentWorkspaceId ? (
+                  <SidebarTimerBadge workspaceId={currentWorkspaceId} />
+                ) : null}
               </SidebarMenuItem>
             </NavContextMenu>
           </SidebarMenu>
