@@ -6,6 +6,7 @@ import readWorkspaces from "@/api/handlers/workspaces/read";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
+import readWorkspaceNavigation from "@/api/handlers/workspaces/read-navigation";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
@@ -34,6 +35,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     validateAuth: true,
   })
   .get("/", readWorkspaces.handler)
+  .get("/navigation", readWorkspaceNavigation.handler)
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,
     invalidateQuery: true,
