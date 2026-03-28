@@ -6,7 +6,7 @@ import {
   useTransition,
 } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { RefreshCcwIcon } from "lucide-react";
@@ -55,6 +55,7 @@ export const DefaultErrorComponent = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
+  const isCancelledError = error instanceof CancelledError;
   const showUnauthorizedError =
     isUnauthorizedError(error) || isMemberError(error);
   const networkError = isNetworkError(error);
@@ -97,12 +98,12 @@ export const DefaultErrorComponent = ({
   }, [networkError]);
 
   useEffect(() => {
-    if (showUnauthorizedError || networkError) {
+    if (showUnauthorizedError || networkError || isCancelledError) {
       return;
     }
 
     analytics.captureError(error);
-  }, [error, analytics, showUnauthorizedError, networkError]);
+  }, [error, analytics, showUnauthorizedError, networkError, isCancelledError]);
 
   // Capture network errors only once retries are exhausted,
   // avoiding inflated error counts during transient outages.
@@ -124,7 +125,22 @@ export const DefaultErrorComponent = ({
     return () => clearTimeout(timer);
   }, [networkError, retryErroredQueries]);
 
+  // CancelledError is benign — React Query throws it when a
+  // suspense query unmounts during route transitions. Defer
+  // the reset so React can re-render without the error.
+  useEffect(() => {
+    if (!isCancelledError) {
+      return;
+    }
+    const id = requestAnimationFrame(() => reset());
+    return () => cancelAnimationFrame(id);
+  }, [isCancelledError, reset]);
+
   const t = useTranslations();
+
+  if (isCancelledError) {
+    return <DefaultPendingComponent className={className} />;
+  }
 
   if (showUnauthorizedError) {
     return <UnauthorizedError />;
@@ -223,7 +239,7 @@ const StatusMessage = ({
 );
 
 type DefaultPendingComponentProps = {
-  className?: string;
+  className?: string | undefined;
 };
 
 export const DefaultPendingComponent = ({

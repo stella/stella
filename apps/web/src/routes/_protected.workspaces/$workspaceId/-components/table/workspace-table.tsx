@@ -266,7 +266,7 @@ const DraggableRow = ({
     return (
       <TableRow
         data-active={entity.entityId === activeEntityId || undefined}
-        data-state={row.getIsSelected() && "selected"}
+        data-state={row.getIsSelected() ? "selected" : undefined}
         key={row.id}
         ref={rowRef}
       >
@@ -324,7 +324,7 @@ const DraggableRow = ({
         entity.entityId === activeTaskId ||
         undefined
       }
-      data-state={row.getIsSelected() && "selected"}
+      data-state={row.getIsSelected() ? "selected" : undefined}
       key={row.id}
       onClick={
         isTask

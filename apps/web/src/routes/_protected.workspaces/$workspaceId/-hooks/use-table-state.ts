@@ -16,6 +16,7 @@ import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hook
 import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
+const EMPTY_ROW_SELECTION: RowSelectionState = {};
 const selectColId = getInternalColId("select");
 const COLUMN_SIZING_DEBOUNCE_MS = 100;
 
@@ -113,7 +114,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const rowSelection = useTableStore(
-    useShallow((s) => s.rowSelection.get(viewId) ?? {}),
+    (s) => s.rowSelection[viewId] ?? EMPTY_ROW_SELECTION,
   );
   const storeSetRowSelection = useTableStore((s) => s.setRowSelection);
 

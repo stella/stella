@@ -5,21 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="/favicon.ico" />
-    <script type="module">
-      import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "/src/consts.ts";
-
-      document.documentElement.classList.toggle(
-        "dark",
-        localStorage[THEME_STORAGE_KEY] === "dark" ||
-          (localStorage[THEME_STORAGE_KEY] !== "light" &&
-            matchMedia("(prefers-color-scheme: dark)").matches),
-      );
-
-      const palette = localStorage.getItem(PALETTE_STORAGE_KEY) || "neutral";
-
-      if (palette !== "neutral") {
-        document.documentElement.classList.add(`palette-${palette}`);
-      }
+    <!-- Inline blocking script to apply dark mode before first
+         paint. Must NOT be type="module" (deferred) to prevent
+         a white flash. Storage keys duplicated from consts.ts. -->
+    <script>
+      (function () {
+        var t = "stella-ui-theme";
+        var p = "stella-ui-palette";
+        var d =
+          localStorage[t] === "dark" ||
+          (localStorage[t] !== "light" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        var el = document.documentElement;
+        if (d) {
+          el.classList.add("dark");
+          el.style.colorScheme = "dark";
+          el.style.backgroundColor = "#0c0c0d";
+        }
+        var pal = localStorage.getItem(p) || "neutral";
+        if (pal !== "neutral") el.classList.add("palette-" + pal);
+      })();
     </script>
     <script type="module">
       import { getStorageKey } from "/src/consts.ts";

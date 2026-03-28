@@ -38,7 +38,7 @@ const DeleteEntitiesButton = ({
   viewId,
 }: DeleteEntitiesButtonProps) => {
   const t = useTranslations();
-  const rowSelection = useTableStore((s) => s.rowSelection.get(viewId)) ?? {};
+  const rowSelection = useTableStore((s) => s.rowSelection[viewId]) ?? {};
   const setRowSelection = useTableStore((s) => s.setRowSelection);
   const isWorkflowRunning = useIsWorkflowRunning();
   const deleteEntities = useDeleteEntities();

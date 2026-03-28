@@ -67,7 +67,7 @@ export const workflowOptions = ({
 export const useIsWorkflowRunning = () => {
   const organizationId = useRouteContext({
     from: "/_protected/workspaces/$workspaceId",
-    select: (ctx) => ctx.user.activeOrganizationId,
+    select: (ctx) => ctx.user?.activeOrganizationId,
   });
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",

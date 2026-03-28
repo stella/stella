@@ -73,7 +73,7 @@ type TableStore = {
     viewId: string,
     updater: Updater<ColumnSizingState>,
   ) => void;
-  rowSelection: Map<string, RowSelectionState>;
+  rowSelection: Record<string, RowSelectionState>;
   setRowSelection: (
     viewId: string,
     updater: Updater<RowSelectionState>,
@@ -85,7 +85,7 @@ export const useTableStore = create<TableStore>()(
   persist(
     immer((set) => ({
       columnSizing: new Map<string, ColumnSizingState>(),
-      rowSelection: new Map<string, RowSelectionState>(),
+      rowSelection: {} as Record<string, RowSelectionState>,
 
       setColumnSizing: (viewId, updater) => {
         set((state) => {
@@ -97,9 +97,9 @@ export const useTableStore = create<TableStore>()(
 
       setRowSelection: (viewId, updater) => {
         set((state) => {
-          const prev = state.rowSelection.get(viewId) ?? {};
+          const prev = state.rowSelection[viewId] ?? {};
           const next = typeof updater === "function" ? updater(prev) : updater;
-          state.rowSelection.set(viewId, next);
+          state.rowSelection[viewId] = next;
         });
       },
 
@@ -111,11 +111,13 @@ export const useTableStore = create<TableStore>()(
               state.columnSizing.delete(viewId);
             }
           }
-          for (const viewId of state.rowSelection.keys()) {
-            if (!active.has(viewId)) {
-              state.rowSelection.delete(viewId);
+          const pruned: Record<string, RowSelectionState> = {};
+          for (const [vid, sel] of Object.entries(state.rowSelection)) {
+            if (active.has(vid)) {
+              pruned[vid] = sel;
             }
           }
+          state.rowSelection = pruned;
         });
       },
     })),

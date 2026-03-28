@@ -30,6 +30,7 @@ type PeekPdfViewerProps = {
   entityId: string;
   activePropertyId: string;
   scaleOffset: number;
+  mimeType?: string | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
 };
@@ -41,9 +42,12 @@ export const PeekPdfViewer = ({
   entityId,
   activePropertyId,
   scaleOffset,
+  mimeType,
   onPeekNavigate,
 }: PeekPdfViewerProps) => {
   const { resolvedTheme } = useTheme();
+  const isImageOrigin = mimeType?.startsWith("image/") ?? false;
+  const invertColors = resolvedTheme === "dark" && !isImageOrigin;
 
   const { data: file } = useSuspenseQuery(
     fileOptions({ workspaceId, fieldId }),
@@ -69,7 +73,7 @@ export const PeekPdfViewer = ({
       buffer={file.buffer}
       className="bg-muted relative space-y-2 px-2 pt-2"
       fileId={file.fileId}
-      invertColors={resolvedTheme === "dark"}
+      invertColors={invertColors}
       scaleOffset={scaleOffset}
       renderPage={(props) => (
         <PDFPage {...props} renderOverlay={renderPageOverlay} />

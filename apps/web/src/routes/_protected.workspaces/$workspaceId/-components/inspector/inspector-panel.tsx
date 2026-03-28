@@ -35,6 +35,7 @@ import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   anonymizePdf,
   clearAnonymization,
@@ -52,6 +53,7 @@ import {
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
+import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -164,6 +166,53 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       return updated;
     });
   }, []);
+
+  // -- Inline rename --
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const renameEntity = useRenameEntity();
+
+  const startRename = useCallback((tab: PdfTab) => {
+    const dotIndex = tab.label.lastIndexOf(".");
+    setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
+    setEditingTabId(tab.id);
+  }, []);
+
+  const commitRename = useCallback(
+    (tab: PdfTab) => {
+      const trimmed = editValue.trim();
+      if (!trimmed) {
+        setEditingTabId(null);
+        return;
+      }
+
+      const dotIndex = tab.label.lastIndexOf(".");
+      const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
+      const newName = trimmed + ext;
+
+      setEditingTabId(null);
+
+      if (newName === tab.label) {
+        return;
+      }
+
+      const previousLabel = tab.label;
+      useInspectorStore.getState().updateLabel(tab.id, newName);
+      renameEntity.mutate(
+        { workspaceId, entityId: tab.entityId, name: newName },
+        {
+          onError: () => {
+            useInspectorStore.getState().updateLabel(tab.id, previousLabel);
+            toastManager.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+    },
+    [editValue, workspaceId, renameEntity, t],
+  );
 
   const handleOpenFullView = useCallback(async () => {
     if (!activeTab || activeTab.type !== "pdf") {
@@ -332,9 +381,22 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 )}
               >
                 <div className="flex items-center overflow-hidden">
-                  <span className="truncate text-xs font-medium">
-                    {stripExtension(tab.label)}
-                  </span>
+                  {editingTabId === tab.id ? (
+                    <InlineEdit
+                      inputClassName="w-40 text-xs"
+                      onCancel={() => setEditingTabId(null)}
+                      onChange={setEditValue}
+                      onCommit={() => commitRename(tab)}
+                      value={editValue}
+                    />
+                  ) : (
+                    <span
+                      className="truncate text-xs font-medium"
+                      onDoubleClick={() => startRename(tab)}
+                    >
+                      {stripExtension(tab.label)}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 ps-4">
@@ -430,6 +492,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     activePropertyId={tab.propertyId ?? ""}
                     entityId={tab.entityId}
                     fieldId={tab.id}
+                    mimeType={tab.mimeType ?? undefined}
                     onPeekNavigate={closeAll}
                     scaleOffset={scaleOffsets.get(tab.id) ?? 0}
                     viewId={peekPdfViewId}

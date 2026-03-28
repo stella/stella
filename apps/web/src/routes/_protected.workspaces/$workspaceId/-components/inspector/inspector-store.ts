@@ -44,6 +44,7 @@ type Actions = {
   setActive: (id: string) => void;
   closeAll: () => void;
   clearTaskNewFlag: (taskId: string) => void;
+  updateLabel: (tabId: string, label: string) => void;
 };
 
 export const useInspectorStore = create<State & Actions>()(
@@ -128,6 +129,14 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === taskId);
         if (tab?.type === "task") {
           tab.isNew = false;
+        }
+      }),
+
+    updateLabel: (tabId, label) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab) {
+          tab.label = label;
         }
       }),
   })),
