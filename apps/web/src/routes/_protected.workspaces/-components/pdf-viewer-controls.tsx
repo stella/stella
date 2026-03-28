@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
@@ -22,7 +22,7 @@ import { Separator } from "@stella/ui/components/separator";
 
 import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
@@ -38,10 +38,6 @@ export const PdfViewerControls = () => {
     select: (s) => s.file,
   });
 
-  const entityId = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.entityId,
-  });
   const sidebar = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.sidebar,
@@ -50,16 +46,9 @@ export const PdfViewerControls = () => {
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
   });
 
-  // Detect if the current file was converted from an image.
-  const { data: isImageOrigin } = useSuspenseQuery({
-    ...entityOptions(workspaceId, entityId),
-    select: (entity) => {
-      const field = entity.fields.find((f) => f.id === fieldId);
-      if (!field || field.content.type !== "file") {
-        return false;
-      }
-      return field.content.mimeType.startsWith("image/");
-    },
+  const { data: isImageOrigin } = useQuery({
+    ...fileOptions({ workspaceId, fieldId }),
+    select: (file) => file.originalMimeType.startsWith("image/"),
   });
 
   const { resolvedTheme } = useTheme();

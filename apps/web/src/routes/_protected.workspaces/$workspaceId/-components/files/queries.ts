@@ -2,24 +2,26 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
+import type { QueryOptionsInput } from "@/lib/react-query";
 
-type FileOptionsProps = {
+type FileByFieldIdKey = {
   workspaceId: string;
   fieldId: string;
 };
 
 export type FileData = {
   fileId: string;
+  fileName: string;
+  mimeType: string;
+  originalMimeType: string;
   buffer: ArrayBuffer;
 };
 
 const filesKeys = {
-  byFieldId: (props: FileOptionsProps) => [
-    "files",
-    props.workspaceId,
-    props.fieldId,
-  ],
+  byFieldId: (key: FileByFieldIdKey) => ["files", key.workspaceId, key.fieldId],
 };
+
+type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
 
 export const fileOptions = (props: FileOptionsProps) =>
   queryOptions({
@@ -48,6 +50,9 @@ export const fileOptions = (props: FileOptionsProps) =>
 
       return {
         fileId: response.data.fileId,
+        fileName: response.data.fileName,
+        mimeType: response.data.mimeType,
+        originalMimeType: response.data.originalMimeType,
         buffer: await file.arrayBuffer(),
       } satisfies FileData;
     },

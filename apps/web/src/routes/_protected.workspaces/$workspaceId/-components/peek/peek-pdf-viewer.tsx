@@ -16,6 +16,7 @@ import { StellaMark } from "@/components/stella-mark";
 import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -154,6 +155,7 @@ export const PeekPdfControls = ({
 
 export const PeekPrintButton = () => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const pdfDocument = usePDFStore((s) => s.document);
   const [isPrinting, setIsPrinting] = useState(false);
   const isMounted = useRef(true);
@@ -207,14 +209,13 @@ export const PeekPrintButton = () => {
         frame.contentWindow.print();
       });
     } catch (error: unknown) {
-      // oxlint-disable-next-line no-console
-      console.error("Print failed:", error);
+      analytics.captureError(error);
     } finally {
       if (isMounted.current) {
         setIsPrinting(false);
       }
     }
-  }, [pdfDocument]);
+  }, [analytics, pdfDocument]);
 
   return (
     <Tooltip

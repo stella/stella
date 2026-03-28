@@ -1,37 +1,26 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 export const PdfBreadcrumb = () => {
-  const { workspaceId } = useParams({
+  const workspaceId = useParams({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: (params) => params.workspaceId,
+  });
+  const fieldId = useSearch({
+    select: (search) => search.file.fieldId,
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
   });
-  const search = useSearch({
-    select: (s) => ({
-      fieldId: s.file.fieldId,
-      entityId: s.entityId,
-    }),
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-  });
-  const { data: filename } = useSuspenseQuery({
-    ...entityOptions(workspaceId, search.entityId),
-    select: (entity) => {
-      const fileField = Object.values(entity.fields).find(
-        (field) => field.id === search.fieldId,
-      );
-
-      if (fileField?.content.type !== "file") {
-        return null;
-      }
-      return fileField.content.fileName;
-    },
+  const { data: fileName } = useQuery({
+    ...fileOptions({ workspaceId, fieldId }),
+    select: (file) => file.fileName,
   });
 
   return (
     <BreadcrumbLink to="/workspaces/$workspaceId/$viewId/pdf">
-      {filename ?? search.fieldId}
+      {fileName ?? fieldId}
     </BreadcrumbLink>
   );
 };
