@@ -12,10 +12,10 @@
     "emailVerification": "Utilice este código para verificar su dirección de correo electrónico.",
     "expires": "Este código caduca en 5 minutos.",
     "forgetPassword": "Utilice este código para restablecer su contraseña.",
-    "heading": "Su código de un solo uso de Stella",
+    "heading": "Su código de un solo uso de stella",
     "ignore": "Si no ha solicitado este código, puede ignorar este correo electrónico.",
     "preview": "Su código de un solo uso: {otp}",
-    "signIn": "Utilice este código para iniciar sesión en su cuenta de Stella.",
-    "subject": "Stella"
+    "signIn": "Utilice este código para iniciar sesión en su cuenta de stella.",
+    "subject": "stella"
   }
 }

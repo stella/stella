@@ -12,10 +12,10 @@
     "emailVerification": "Utilisez ce code pour vérifier votre adresse e-mail.",
     "expires": "Ce code expire dans 5 minutes.",
     "forgetPassword": "Utilisez ce code pour réinitialiser votre mot de passe.",
-    "heading": "Votre code à usage unique Stella",
+    "heading": "Votre code à usage unique stella",
     "ignore": "Si vous n'avez pas demandé ce code, vous pouvez ignorer cet e-mail.",
     "preview": "Votre code à usage unique : {otp}",
-    "signIn": "Utilisez ce code pour vous connecter à votre compte Stella.",
-    "subject": "Stella"
+    "signIn": "Utilisez ce code pour vous connecter à votre compte stella.",
+    "subject": "stella"
   }
 }

@@ -12,10 +12,10 @@
     "emailVerification": "Naudokite šį kodą el. pašto adreso patvirtinimui.",
     "expires": "Šio kodo galiojimas baigiasi po 5 minučių.",
     "forgetPassword": "Naudokite šį kodą slaptažodžio atkūrimui.",
-    "heading": "Jūsų vienkartinis Stella kodas",
+    "heading": "Jūsų vienkartinis stella kodas",
     "ignore": "Jei neprašėte šio kodo, galite nepaisyti šio el. laiško.",
     "preview": "Jūsų vienkartinis kodas: {otp}",
-    "signIn": "Naudokite šį kodą prisijungimui prie savo Stella paskyros.",
-    "subject": "Stella"
+    "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
+    "subject": "stella"
   }
 }

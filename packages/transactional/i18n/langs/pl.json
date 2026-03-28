@@ -12,10 +12,10 @@
     "emailVerification": "Użyj tego kodu, aby zweryfikować swój adres e-mail.",
     "expires": "Ten kod wygasa za 5 minut.",
     "forgetPassword": "Użyj tego kodu, aby zresetować hasło.",
-    "heading": "Twój jednorazowy kod Stella",
+    "heading": "Twój jednorazowy kod stella",
     "ignore": "Jeśli nie prosiłeś o ten kod, możesz zignorować tę wiadomość.",
     "preview": "Twój jednorazowy kod: {otp}",
-    "signIn": "Użyj tego kodu, aby zalogować się na swoje konto Stella.",
-    "subject": "Stella"
+    "signIn": "Użyj tego kodu, aby zalogować się na swoje konto stella.",
+    "subject": "stella"
   }
 }

@@ -12,10 +12,10 @@
     "emailVerification": "Použite tento kód na overenie vašej e-mailovej adresy.",
     "expires": "Platnosť kódu vyprší o 5 minút.",
     "forgetPassword": "Použite tento kód na obnovenie hesla.",
-    "heading": "Váš jednorazový kód Stella",
+    "heading": "Váš jednorazový kód stella",
     "ignore": "Ak ste o tento kód nežiadali, tento e-mail môžete ignorovať.",
     "preview": "Váš jednorazový kód: {otp}",
-    "signIn": "Použite tento kód na prihlásenie do svojho účtu Stella.",
-    "subject": "Stella"
+    "signIn": "Použite tento kód na prihlásenie do svojho účtu stella.",
+    "subject": "stella"
   }
 }

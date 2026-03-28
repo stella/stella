@@ -12,10 +12,10 @@
     "emailVerification": "Verwenden Sie diesen Code, um Ihre E-Mail-Adresse zu bestätigen.",
     "expires": "Dieser Code läuft in 5 Minuten ab.",
     "forgetPassword": "Verwenden Sie diesen Code, um Ihr Passwort zurückzusetzen.",
-    "heading": "Ihr Stella-Einmalcode",
+    "heading": "Ihr stella-Einmalcode",
     "ignore": "Wenn Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.",
     "preview": "Ihr Einmalcode: {otp}",
-    "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem Stella-Konto anzumelden.",
-    "subject": "Stella"
+    "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem stella-Konto anzumelden.",
+    "subject": "stella"
   }
 }

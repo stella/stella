@@ -12,10 +12,10 @@
     "emailVerification": "Use this code to verify your email address.",
     "expires": "This code expires in 5 minutes.",
     "forgetPassword": "Use this code to reset your password.",
-    "heading": "Your Stella one-time code",
+    "heading": "Your stella one-time code",
     "ignore": "If you didn't request this code, you can ignore this email.",
     "preview": "Your one-time code: {otp}",
-    "signIn": "Use this code to sign in to your Stella account.",
-    "subject": "Stella"
+    "signIn": "Use this code to sign in to your stella account.",
+    "subject": "stella"
   }
 }
