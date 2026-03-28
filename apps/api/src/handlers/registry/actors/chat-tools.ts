@@ -45,6 +45,9 @@ export const defineTool = <INPUT, OUTPUT>({
     options?: ToolExecutionOptions,
   ) => OUTPUT | Promise<OUTPUT>;
 }): Tool<INPUT, OUTPUT | { error: string }> =>
+  // SAFETY: AI SDK `tool()` infers OUTPUT from execute;
+  // cast widens to include the error branch we added.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   tool({
     ...rest,
     execute: async (args: INPUT, options: ToolExecutionOptions) => {
@@ -54,13 +57,10 @@ export const defineTool = <INPUT, OUTPUT>({
         captureError(error, { toolName: name });
         // SAFETY: single-hop cast; error branch returns { error }
         // which is part of the declared Tool return union.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
         return { error: "Tool execution failed" } as OUTPUT;
       }
     },
-    // SAFETY: AI SDK `tool()` infers OUTPUT from execute;
-    // cast widens to include the error branch we added.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   } as Tool<INPUT, OUTPUT | { error: string }>);
 
 /** Summarize a field value into a human-readable string. */
