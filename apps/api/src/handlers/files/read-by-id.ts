@@ -78,6 +78,7 @@ export const readFileHandler = async ({
     return {
       fileId: content.id,
       mimeType: content.mimeType,
+      originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
       presignedUrl: presignDownloadUrl(fileKey, {
@@ -101,6 +102,7 @@ export const readFileHandler = async ({
   return {
     fileId: displayFileId,
     mimeType: PDF_MIME_TYPE,
+    originalMimeType: content.mimeType,
     fileName: content.fileName,
     encrypted: content.encrypted,
     presignedUrl: s3.presign(
