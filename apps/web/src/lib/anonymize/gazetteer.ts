@@ -1,4 +1,4 @@
-import type { GazetteerEntry } from "@stll/anonymize";
+import type { GazetteerEntry } from "@stll/anonymize-wasm";
 // TODO: FIXME — idb's DBSchema resolves as error type, cascading unsafe-* errors
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";

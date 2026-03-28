@@ -1,5 +1,5 @@
-import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize";
-import type { PipelineConfig } from "@stll/anonymize";
+import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize-wasm";
+import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import type { CharSpan } from "@/lib/anonymize/pdf-coords";

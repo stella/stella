@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 
-import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize";
+import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize-wasm";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";

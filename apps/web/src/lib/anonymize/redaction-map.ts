@@ -1,4 +1,4 @@
-import type { OperatorType } from "@stll/anonymize";
+import type { OperatorType } from "@stll/anonymize-wasm";
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 

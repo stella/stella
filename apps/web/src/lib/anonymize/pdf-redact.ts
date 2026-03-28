@@ -4,8 +4,12 @@ import {
   DEFAULT_OPERATOR_CONFIG,
   redactText,
   resolveOperator,
-} from "@stll/anonymize";
-import type { Entity, OperatorConfig, RedactionResult } from "@stll/anonymize";
+} from "@stll/anonymize-wasm";
+import type {
+  Entity,
+  OperatorConfig,
+  RedactionResult,
+} from "@stll/anonymize-wasm";
 
 import { getEntityBBoxes } from "@/lib/anonymize/pdf-bbox";
 import { neutralisePageText } from "@/lib/anonymize/pdf-content-stream";
