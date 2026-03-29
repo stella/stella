@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawSearchDocuments } from "@/api/db/schema";
+import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 
 import type { DecisionSection } from "./types";
 
@@ -10,8 +11,8 @@ const sectionsToPlainText = (sections: DecisionSection[] | null): string =>
 
 /**
  * Upsert a decision into the `case_law_search_documents` table,
- * computing the tsvector with the 'simple' config (language-
- * agnostic, since decisions span CZ/SK and more).
+ * computing the tsvector with the language-appropriate regconfig
+ * from the `case_law_fts_configs` table.
  *
  * Mirrors the pattern from `lib/search/index-entity.ts` but
  * operates on the global (no tenant column) search table.
@@ -28,6 +29,7 @@ export const indexDecision = async (
         caseNumber: true,
         ecli: true,
         court: true,
+        language: true,
         fulltext: true,
         sections: true,
       },
@@ -55,27 +57,39 @@ export const indexDecision = async (
     .filter(Boolean)
     .join(" ");
 
+  const fts = await resolveFtsConfig(decision.language);
+
+  // Build the tsvector expression with optional unaccent.
+  // Always use 'simple' regconfig for indexing to match the
+  // 'simple' regconfig used in search queries. The FTS config
+  // table currently only controls unaccent behavior. Full
+  // language-aware stemming requires updating all search paths
+  // (chat tool + API endpoint) in sync.
+  const textExpr = fts.useUnaccent
+    ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
+    : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
+
+  const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
+
   await scopedDb((tx) =>
     tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
-      language, updated_at, tsv
+      language, regconfig, updated_at, tsv
     ) VALUES (
       ${decision.id},
       ${title},
       ${searchableText},
-      'simple',
+      ${decision.language},
+      ${"simple"},
       now(),
-      to_tsvector(
-        'simple',
-        unaccent(coalesce(${title}, '') || ' ' ||
-        coalesce(${searchableText}, ''))
-      )
+      ${tsvExpr}
     )
     ON CONFLICT (decision_id) DO UPDATE SET
       title = EXCLUDED.title,
       searchable_text = EXCLUDED.searchable_text,
       language = EXCLUDED.language,
+      regconfig = EXCLUDED.regconfig,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
   `),

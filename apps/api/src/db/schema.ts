@@ -1506,6 +1506,31 @@ export const caseLawMatterLinks = p.pgTable(
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
 
+export const caseLawCourtWeights = p.pgTable(
+  "case_law_court_weights",
+  {
+    id: pNanoid.primaryKey(),
+    country: p.varchar({ length: 3 }).notNull(),
+    courtPattern: p.varchar("court_pattern", { length: 512 }).notNull(),
+    tier: p.integer().notNull(),
+    tierLabel: p.varchar("tier_label", { length: 64 }).notNull(),
+    weight: p.doublePrecision().notNull(),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_court_weights_country_pattern_idx")
+      .on(t.country, t.courtPattern),
+    p.index("case_law_court_weights_country_idx").on(t.country),
+  ],
+);
+
+export const caseLawFtsConfigs = p.pgTable("case_law_fts_configs", {
+  language: p.varchar({ length: 8 }).primaryKey(),
+  regconfig: p.varchar({ length: 64 }).notNull(),
+  useUnaccent: p.boolean("use_unaccent").notNull().default(true),
+});
+
 export const caseLawSearchDocuments = p.pgTable(
   "case_law_search_documents",
   {
@@ -1518,6 +1543,7 @@ export const caseLawSearchDocuments = p.pgTable(
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
+    regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   // tsv column + GIN index added via apply-search-migration.ts
@@ -1566,6 +1592,8 @@ export const relations = defineRelations(
     caseLawDecisions,
     caseLawCitations,
     caseLawPolarityRules,
+    caseLawCourtWeights,
+    caseLawFtsConfigs,
     caseLawMatterLinks,
     caseLawSearchDocuments,
   },
@@ -2027,6 +2055,8 @@ export const relations = defineRelations(
       }),
     },
     caseLawPolarityRules: {},
+    caseLawCourtWeights: {},
+    caseLawFtsConfigs: {},
     caseLawMatterLinks: {
       decision: r.one.caseLawDecisions({
         from: r.caseLawMatterLinks.decisionId,

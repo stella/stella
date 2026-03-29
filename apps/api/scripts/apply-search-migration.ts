@@ -117,21 +117,31 @@ const applyCaseLawSearchMigration = async () => {
       ON case_law_search_documents USING gin (tsv)
   `);
 
-  // One-time backfill: re-index all existing rows with unaccent()
-  // so their tsvectors match the new accent-stripped query path.
-  // New rows are indexed via indexDecision() which already uses
-  // unaccent(). This UPDATE is expensive on large tables; after
-  // the first deployment it is a no-op in effect but still runs.
-  console.log("Backfilling case_law tsv with unaccent...");
+  // Backfill: re-index existing rows with unaccent based on
+  // the fts configs table. Always uses 'simple' regconfig to
+  // match the search query path (plainto_tsquery('simple', ...)).
+  console.log("Backfilling case_law tsv with unaccent config...");
 
   await db.execute(sql`
-    UPDATE case_law_search_documents
-    SET tsv = to_tsvector(
-      'simple',
-      unaccent(coalesce(title, '') || ' ' ||
-      coalesce(searchable_text, ''))
-    )
-    WHERE title IS NOT NULL OR searchable_text IS NOT NULL
+    UPDATE case_law_search_documents sd
+    SET
+      regconfig = 'simple',
+      tsv = to_tsvector(
+        'simple',
+        CASE WHEN COALESCE(fc.use_unaccent, true)
+          THEN unaccent(
+            coalesce(sd.title, '') || ' ' ||
+            coalesce(sd.searchable_text, ''))
+          ELSE
+            coalesce(sd.title, '') || ' ' ||
+            coalesce(sd.searchable_text, '')
+        END
+      )
+    FROM case_law_decisions d
+    LEFT JOIN case_law_fts_configs fc
+      ON fc.language = d.language
+    WHERE d.id = sd.decision_id
+      AND (sd.title IS NOT NULL OR sd.searchable_text IS NOT NULL)
   `);
 
   console.log("Case law search migration applied.");
