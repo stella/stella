@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -193,7 +193,7 @@ const advanceDate = (dateStr: string, days: number = 1): string => {
   const date = new Date(Date.UTC(year, month - 1, day + days));
   const iso = date.toISOString().split("T")[0];
   if (!iso) {
-    throw new Error(`Failed to format date from ${dateStr}`);
+    panic(`Failed to format date from ${dateStr}`);
   }
   return iso;
 };

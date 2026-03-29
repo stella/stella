@@ -5,7 +5,7 @@ import { env } from "@/api/env";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { getAnalytics } from "@/api/lib/analytics";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorTag, logDevError } from "@/api/lib/errors/utils";
 
 export type CaptureActorErrorProps = {
   c: ActionContextOf<ActorsUnion>;
@@ -31,10 +31,7 @@ export const captureActorError = ({
     errorTag: tag,
   };
 
-  if (env.isDev) {
-    // eslint-disable-next-line no-console
-    console.error(error);
-  }
+  logDevError(error);
 
   // Structured log with tag only; never log .message, .cause,
   // or .stack (may contain privileged document content).

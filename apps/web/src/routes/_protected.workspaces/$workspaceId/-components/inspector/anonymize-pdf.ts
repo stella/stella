@@ -5,6 +5,7 @@ import { PDF_MIME_TYPE } from "@/consts";
 import type { CharSpan } from "@/lib/anonymize/pdf-coords";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { api } from "@/lib/api";
+import { ClientOperationError } from "@/lib/errors";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
@@ -55,12 +56,19 @@ export const anonymizePdf = async ({
     });
 
   if (response.error) {
-    throw new Error("Failed to get file URL");
+    throw new ClientOperationError({
+      action: "anonymizePdf",
+      message: "Failed to get file URL",
+      cause: response.error,
+    });
   }
 
   const s3Response = await fetch(response.data.presignedUrl);
   if (!s3Response.ok) {
-    throw new Error("Failed to fetch file from storage");
+    throw new ClientOperationError({
+      action: "anonymizePdf",
+      message: "Failed to fetch file from storage",
+    });
   }
 
   const buffer = await s3Response.arrayBuffer();

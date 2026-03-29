@@ -2,6 +2,7 @@ import { CancelledError } from "@tanstack/react-query";
 import { posthog } from "posthog-js";
 
 import type { Analytics } from "@/lib/analytics/types";
+import { logDevError } from "@/lib/errors/utils";
 
 /**
  * Initialize PostHog and return an Analytics adapter.
@@ -46,10 +47,7 @@ export const createPostHogAnalytics = (
       if (error instanceof CancelledError) {
         return;
       }
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.error(error);
-      }
+      logDevError(error);
       posthog.captureException(error);
     },
   };

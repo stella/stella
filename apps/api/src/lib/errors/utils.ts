@@ -1,5 +1,7 @@
 import { isTaggedError } from "better-result";
 
+import { env } from "@/api/env";
+
 /**
  * Extract a safe, structural error identifier for observability.
  *
@@ -16,4 +18,11 @@ export const errorTag = (error: unknown): string => {
     return error.constructor.name;
   }
   return "UnknownError";
+};
+
+export const logDevError = (error: unknown) => {
+  if (env.isDev) {
+    // eslint-disable-next-line no-console
+    console.error(error);
+  }
 };

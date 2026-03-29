@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
@@ -31,6 +31,10 @@ type CreateEntityFromBufferInput = {
 type CreateEntityFromBufferResult =
   | { success: true; entityId: string; fileName: string }
   | { success: false; error: string };
+
+class EntityLimitError extends TaggedError("EntityLimitError")<{
+  message: string;
+}>() {}
 
 /**
  * Create a new entity from a raw file buffer. Handles S3
@@ -106,12 +110,16 @@ export const createEntityFromBuffer = async ({
     }
 
     await scopedDb(async (tx) => {
-      const count = await tx.$count(
+      // The authoritative limit check must stay in the same
+      // transaction as the insert to avoid TOCTOU races.
+      const entityCount = await tx.$count(
         entities,
         eq(entities.workspaceId, workspaceId),
       );
-      if (count >= LIMITS.entitiesCount) {
-        throw new Error("Entity limit reached");
+      if (entityCount >= LIMITS.entitiesCount) {
+        throw new EntityLimitError({
+          message: "Entities limit reached",
+        });
       }
 
       const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -161,6 +169,11 @@ export const createEntityFromBuffer = async ({
     });
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await s3.delete(k)));
+
+    if (EntityLimitError.is(error)) {
+      return { success: false, error: error.message };
+    }
+
     throw error;
   }
 

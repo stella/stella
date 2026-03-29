@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
 import type { ActorOptions } from "@rivetkit/framework-base";
+import { panic } from "better-result";
 
 import type { Registry } from "@stella/api/types";
 
@@ -61,7 +62,7 @@ export const createActorProvider = <TName extends ActorName>() => {
   const useSuspenseActor = (): SuspenseActorReturn<TName> => {
     const actor = useContext(ActorContext);
     if (!actor) {
-      throw new Error("useSuspenseActor requires ActorProvider");
+      panic("useSuspenseActor requires ActorProvider");
     }
 
     if (actor.isConnected) {
@@ -76,7 +77,7 @@ export const createActorProvider = <TName extends ActorName>() => {
 
     // Children are only rendered when connected, so this
     // should be unreachable from normal component code.
-    throw new Error("useSuspenseActor: actor not connected");
+    panic("useSuspenseActor: actor not connected");
   };
 
   return { ActorProvider, useSuspenseActor };

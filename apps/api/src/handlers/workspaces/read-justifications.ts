@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
@@ -28,7 +29,7 @@ export const readJustificationsHandler = async ({
   }
 
   if (entityIds.length > LIMITS.entitiesPageSizeMax) {
-    throw new Error("Justifications query exceeded max entity batch size");
+    panic("Justifications query exceeded max entity batch size");
   }
 
   const uniqueEntityIds = [...new Set(entityIds)];

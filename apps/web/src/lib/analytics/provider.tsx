@@ -1,4 +1,4 @@
-import { createContext, use, useRef } from "react";
+import { createContext, use, useLayoutEffect, useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import { PostHogProvider } from "@posthog/react";
@@ -9,8 +9,10 @@ import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
 
 const AnalyticsContext = createContext<Analytics>(noopAnalytics);
+let globalAnalytics: Analytics = noopAnalytics;
 
 export const useAnalytics = () => use(AnalyticsContext);
+export const getAnalytics = () => globalAnalytics;
 
 /**
  * Wraps the app with the configured analytics provider.
@@ -31,6 +33,16 @@ export const AnalyticsProvider = ({ children }: PropsWithChildren) => {
       ? createPostHogAnalytics(env.VITE_POSTHOG_KEY, env.VITE_POSTHOG_HOST)
       : { analytics: noopAnalytics, client: null };
   const value = valueRef.current;
+
+  useLayoutEffect(() => {
+    globalAnalytics = value.analytics;
+
+    return () => {
+      if (globalAnalytics === value.analytics) {
+        globalAnalytics = noopAnalytics;
+      }
+    };
+  }, [value.analytics]);
 
   if (value.client) {
     return (

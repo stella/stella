@@ -6,9 +6,10 @@ import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 
 export const downloadZipParamsSchema = t.Object({
@@ -173,7 +174,9 @@ export const downloadZipHandler = async ({
 
   if (errors.length > 0) {
     captureError(
-      new Error(`${errors.length} file(s) failed to fetch from S3`),
+      new TelemetryError({
+        message: `${errors.length} file(s) failed to fetch from S3`,
+      }),
       { fileIds: errors.join(","), entityId },
     );
   }

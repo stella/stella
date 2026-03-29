@@ -237,8 +237,10 @@ const api = new Elysia()
     if (!env.isDev && shouldLogRequest(path)) {
       const analytics = getAnalytics();
       await analytics.flush().catch((error: unknown) => {
-        // eslint-disable-next-line no-console
-        console.error("Error flushing analytics", error);
+        logger.error("analytics.flush.failed", {
+          "error.type": errorTag(error),
+          "http.route": getRouteName({ path, route }),
+        });
       });
     }
   })

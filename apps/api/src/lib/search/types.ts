@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { entityKindEnum } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -7,7 +9,7 @@ export const parseEntityKind = (value: unknown): EntityKind => {
   const s = String(value);
   const match = entityKindEnum.enumValues.find((v) => v === s);
   if (!match) {
-    throw new Error(`Invalid entity kind: ${s}`);
+    panic(`Invalid entity kind: ${s}`);
   }
   return match;
 };

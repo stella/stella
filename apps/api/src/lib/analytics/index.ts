@@ -2,7 +2,7 @@ import { env } from "@/api/env";
 import { noopAnalytics } from "@/api/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/api/lib/analytics/posthog";
 import type { Analytics } from "@/api/lib/analytics/types";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorTag, logDevError } from "@/api/lib/errors/utils";
 
 let analytics: Analytics | null = null;
 
@@ -48,10 +48,7 @@ export const captureError = (
 ) => {
   const tag = errorTag(error);
 
-  if (env.isDev) {
-    // eslint-disable-next-line no-console
-    console.error(error);
-  }
+  logDevError(error);
 
   getAnalytics().capture({
     distinctId: "server",

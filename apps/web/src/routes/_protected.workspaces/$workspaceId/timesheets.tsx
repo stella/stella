@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { ClientOperationError } from "@/lib/errors";
 import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
 import { RateManagementDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog";
 import { TimesheetDayView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view";
@@ -121,7 +122,11 @@ function TimesheetsPage() {
         workspaceId,
       }).export.csv.get({ query });
       if (response.error) {
-        throw new Error("Export failed");
+        throw new ClientOperationError({
+          action: "exportTimeEntriesCsv",
+          message: "Export failed",
+          cause: response.error,
+        });
       }
       // SAFETY: CSV endpoint returns plain text string
       downloadBlob(response.data, `timesheet-${dateFrom}.csv`);
@@ -130,7 +135,11 @@ function TimesheetsPage() {
         workspaceId,
       }).export.ledes.get({ query });
       if (response.error) {
-        throw new Error("Export failed");
+        throw new ClientOperationError({
+          action: "exportTimeEntriesLedes",
+          message: "Export failed",
+          cause: response.error,
+        });
       }
       // SAFETY: LEDES endpoint returns plain text string
       downloadBlob(response.data, `timesheet-${dateFrom}.ledes`);
@@ -139,7 +148,11 @@ function TimesheetsPage() {
         workspaceId,
       }).export.pdf.get({ query });
       if (response.error) {
-        throw new Error("Export failed");
+        throw new ClientOperationError({
+          action: "exportTimeEntriesPdf",
+          message: "Export failed",
+          cause: response.error,
+        });
       }
       // SAFETY: PDF endpoint returns binary; Eden types it
       // as unknown but the response body is an ArrayBuffer

@@ -36,6 +36,7 @@ import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { api } from "@/lib/api";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
+import { ClientOperationError } from "@/lib/errors";
 import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -358,7 +359,10 @@ const downloadEntityAsZip = async (
       { credentials: "include" },
     );
     if (!response.ok) {
-      throw new Error("Failed to download ZIP");
+      throw new ClientOperationError({
+        action: "downloadEntityAsZip",
+        message: "Failed to download ZIP",
+      });
     }
     return await response.blob();
   });
@@ -394,7 +398,10 @@ const downloadSingleFile = async (
   const blobResult = await Result.tryPromise(async () => {
     const s3Response = await fetch(response.data.presignedUrl);
     if (!s3Response.ok) {
-      throw new Error("Failed to fetch file from storage");
+      throw new ClientOperationError({
+        action: "downloadSingleFile",
+        message: "Failed to fetch file from storage",
+      });
     }
     return await s3Response.blob();
   });

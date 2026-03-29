@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { captureError } from "@/api/lib/analytics";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 type CompiledRule = {
@@ -93,9 +94,12 @@ export const loadRules = async (
     }
 
     if (!isValidPolarity(row.polarity)) {
-      captureError(new Error("Invalid polarity value in rule"), {
-        ruleId: row.id,
-      });
+      captureError(
+        new TelemetryError({
+          message: "Invalid polarity value in rule",
+        }),
+        { ruleId: row.id },
+      );
       continue;
     }
 

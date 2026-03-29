@@ -13,6 +13,21 @@ export class ParseXmlError extends TaggedError("ParseXmlError")<{
   cause: unknown;
 }>() {}
 
+export class ConfigurationError extends TaggedError("ConfigurationError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class TelemetryError extends TaggedError("TelemetryError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class HealthCheckError extends TaggedError("HealthCheckError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
 export class WorkflowValidationError extends TaggedError(
   "WorkflowValidationError",

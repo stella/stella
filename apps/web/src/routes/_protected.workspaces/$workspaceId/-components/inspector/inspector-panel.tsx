@@ -29,7 +29,9 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { ClientTelemetryError } from "@/lib/errors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -113,6 +115,7 @@ const PeekAnonymizeToggleButton = ({
 };
 
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
+  const analytics = useAnalytics();
   const t = useTranslations();
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
@@ -421,8 +424,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                         mimeType: tab.mimeType ?? null,
                       })
                         .catch((error: unknown) => {
-                          // eslint-disable-next-line no-console
-                          console.error("[anonymize]", error);
+                          analytics.captureError(
+                            new ClientTelemetryError({
+                              area: "anonymize-pdf",
+                              message: "Anonymization failed",
+                              cause: error,
+                            }),
+                          );
                           toastManager.add({
                             title: t("errors.actionFailed"),
                             type: "error",
@@ -756,7 +764,7 @@ const VerticalTab = ({
             "text-muted-foreground hover:bg-accent hover:text-foreground",
             TOOLBAR_ROW_HEIGHT,
             active &&
-              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5",
+              "bg-background text-foreground before:bg-primary before:inset-s-0 before:absolute before:inset-y-0 before:w-0.5",
           )}
           onAuxClick={(e) => {
             if (e.button === 1) {

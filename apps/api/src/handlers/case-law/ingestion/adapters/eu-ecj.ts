@@ -10,7 +10,11 @@ import {
   hashContent,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { captureError } from "@/api/lib/analytics";
+import {
+  AdapterFetchError,
+  TelemetryError,
+} from "@/api/lib/errors/tagged-errors";
 
 /**
  * European Court of Justice (CJEU) adapter.
@@ -260,10 +264,11 @@ const fetchFulltext = async (
   } catch (error) {
     // AbortErrors are expected (timeout, page cancellation)
     if (!(error instanceof DOMException)) {
-      // eslint-disable-next-line no-console -- adapter diagnostic
-      console.error(
-        `[eu-ecj] fulltext fetch failed for ${celex}/${lang}:`,
-        error,
+      captureError(
+        new TelemetryError({
+          message: `[eu-ecj] fulltext fetch failed for ${celex}/${lang}`,
+          cause: error,
+        }),
       );
     }
     return;

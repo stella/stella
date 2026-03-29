@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
@@ -50,7 +51,7 @@ const createBillingCode = createHandler(
       );
 
       if (!code) {
-        throw new Error("Failed to create billing code");
+        panic("Failed to create billing code");
       }
       return { id: code.id };
     } catch (error) {
