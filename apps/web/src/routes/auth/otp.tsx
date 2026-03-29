@@ -116,7 +116,15 @@ function OTP() {
       </FrameHeader>
       <FramePanel>
         <div className="flex flex-col items-center gap-2 px-5 pb-4">
-          <InputOTP autoFocus maxLength={6} onChange={setOtp} value={otp}>
+          <InputOTP
+            autoFocus
+            maxLength={6}
+            onChange={setOtp}
+            onComplete={(code) =>
+              verifyOtp.mutate({ email, otp: code })
+            }
+            value={otp}
+          >
             <InputOTPGroup>
               <InputOTPSlot index={0} />
               <InputOTPSlot index={1} />
