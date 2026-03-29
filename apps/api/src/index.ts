@@ -50,17 +50,10 @@ import {
 } from "@/api/lib/rate-limit";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 
-const rivetApp = new Elysia()
-  .use(
-    rateLimit({
-      scoping: "scoped",
-      duration: API_RATE_LIMITS.rivet.duration,
-      max: API_RATE_LIMITS.rivet.max,
-      generator: scopedGenerator("rivet"),
-      context: new InMemoryRateLimitContext(),
-    }),
-  )
-  .all("/api/rivet/*", async (c) => await registry.handler(c.request));
+// RivetKit manager runs on port 6420 with basePath /api/rivet.
+// In production, ALB routes /api/rivet/* to port 6420 directly.
+// In dev, the frontend connects to localhost:6420/api/rivet.
+registry.startRunner();
 
 const HEALTH_PATH = "/health";
 const SESSION_ID_HEADER = "x-posthog-session-id";
@@ -143,7 +136,6 @@ const api = new Elysia()
 
     initRequestContext(request, sessionId);
   })
-  .use(rivetApp)
   .use(
     cors({
       origin: (() => {
