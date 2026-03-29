@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 import { LayersIcon } from "lucide-react";
@@ -38,8 +38,17 @@ export const WorkspaceBreadcrumb = ({
   const [refValue, setRefValue] = useState("");
   const [isEditingRef, setIsEditingRef] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
   const updateWorkspace = useUpdateWorkspace();
+
+  if (!workspace) {
+    return (
+      <BreadcrumbLink to="/workspaces/$workspaceId">
+        {workspaceId}
+      </BreadcrumbLink>
+    );
+  }
+
   const displayName = workspace.name ?? workspaceId;
 
   const handleSaveProjectName = () => {
