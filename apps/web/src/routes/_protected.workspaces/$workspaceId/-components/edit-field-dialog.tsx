@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -110,7 +111,7 @@ const getDefaultValues = (
     };
   }
 
-  throw new Error("Invalid field content type");
+  panic("Invalid field content type");
 };
 
 type EditFieldDialogProps = {

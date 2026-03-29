@@ -49,8 +49,9 @@ if (loggerProvider) {
     process.once(signal, () => {
       void shutdownLoggerProvider()
         .catch((error: unknown) => {
-          // eslint-disable-next-line no-console
-          console.error("[otel-logs] shutdown failed", error);
+          const errorType =
+            error instanceof Error ? error.constructor.name : "UnknownError";
+          process.stderr.write(`[otel-logs] shutdown failed (${errorType})\n`);
           process.exitCode = 1;
         })
         .finally(() => process.exit());

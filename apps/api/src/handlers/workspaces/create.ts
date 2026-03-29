@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, count, eq, ilike, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import { nanoid } from "nanoid";
@@ -96,7 +97,7 @@ const createWorkspaces = createRootHandler(
         .then((r) => r.at(0));
 
       if (!counter) {
-        throw new Error("Failed to create matter counter");
+        panic("Failed to create matter counter");
       }
 
       const reference = toReference({

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
@@ -53,7 +54,7 @@ const bytea = customType<{ data: Buffer }>({
       const hex = value.startsWith("\\x") ? value.slice(2) : value;
       return Buffer.from(hex, "hex");
     }
-    throw new Error(`Unexpected bytea driver value: ${typeof value}`);
+    panic(`Unexpected bytea driver value: ${typeof value}`);
   },
 });
 

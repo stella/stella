@@ -1,4 +1,5 @@
 import type { ActorOptions, AnyActorRegistry } from "@rivetkit/framework-base";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { OptionsType, VanillaOptions } from "../types";
@@ -33,7 +34,7 @@ export const parseActorKey = <T extends AuthedActorKey = AuthedActorKey>(
   if (Array.isArray(key)) {
     const first = key[0];
     if (!first) {
-      throw new Error("parseActorKey: empty key array");
+      panic("parseActorKey: empty key array");
     }
     // SAFETY: key is produced by actorKeyFactory via JSON.stringify(data) where data
     // conforms to AuthedActorKey; roundtrip yields the same shape.

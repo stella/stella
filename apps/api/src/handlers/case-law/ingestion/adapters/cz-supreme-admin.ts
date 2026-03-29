@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
@@ -176,7 +176,7 @@ const nextDay = (dateStr: string): string => {
   date.setUTCDate(date.getUTCDate() + 1);
   const iso = date.toISOString().split("T")[0];
   if (!iso) {
-    throw new Error(`Failed to format date from ${dateStr}`);
+    panic(`Failed to format date from ${dateStr}`);
   }
   return iso;
 };

@@ -1,6 +1,9 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
+import { getAnalytics } from "@/lib/analytics/provider";
+import { ClientTelemetryError } from "@/lib/errors";
+
 type PDFErrorBoundaryProps = {
   fallback: ReactNode;
   children: ReactNode;
@@ -24,8 +27,13 @@ export class PDFErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo) {
-    // eslint-disable-next-line no-console
-    console.error("[PDF] Error:", error, info);
+    getAnalytics().captureError(
+      new ClientTelemetryError({
+        area: "pdf-viewer",
+        message: `[PDF] ${error.message}`,
+        cause: error,
+      }),
+    );
   }
 
   // oxlint-disable-next-line typescript-eslint/promise-function-async

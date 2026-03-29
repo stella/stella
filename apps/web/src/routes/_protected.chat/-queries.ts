@@ -2,6 +2,7 @@ import { Chat } from "@ai-sdk/react";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import { panic } from "better-result";
 import type { ActorConn } from "rivetkit/client";
 
 import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
@@ -89,7 +90,7 @@ export const chatThreadsOptions = (queryClient: QueryClient) =>
       const sessionData = await queryClient.ensureQueryData(sessionOptions);
 
       if (!sessionData?.session.activeOrganizationId) {
-        throw new Error("No active organization");
+        panic("No active organization");
       }
 
       const actorConfig = getChatActorConfig({
@@ -117,7 +118,7 @@ export const chatWorkspaceThreadsOptions = (
       const sessionData = await queryClient.ensureQueryData(sessionOptions);
 
       if (!sessionData?.session.activeOrganizationId) {
-        throw new Error("No active organization");
+        panic("No active organization");
       }
 
       const actorConfig = getChatActorConfig({

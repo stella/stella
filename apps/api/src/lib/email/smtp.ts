@@ -1,6 +1,7 @@
 import { createTransport } from "nodemailer";
 
 import type { EmailTransport } from "@/api/lib/email/transport";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 export type SMTPTransportConfig = {
   host: string;
@@ -23,9 +24,10 @@ export const createSMTPTransport = (
     (config.username && !config.password) ||
     (!config.username && config.password)
   ) {
-    throw new Error(
-      "Both SMTP_USERNAME and SMTP_PASSWORD must be set (or both omitted)",
-    );
+    throw new ConfigurationError({
+      message:
+        "Both SMTP_USERNAME and SMTP_PASSWORD must be set (or both omitted)",
+    });
   }
 
   const hasAuth = config.username && config.password;

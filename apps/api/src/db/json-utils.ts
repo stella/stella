@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { fields, properties } from "@/api/db/schema";
@@ -39,11 +40,11 @@ export const jsonField =
   ) =>
   <TKey extends ColumnDataKeys<TColumn, TVersion>>(key: TKey) => {
     if (typeof key !== "string") {
-      throw new TypeError("JSON field key literal must be a string");
+      panic("JSON field key literal must be a string");
     }
 
     if (column.dataType !== "object json") {
-      throw new Error("Column must be a JSON column");
+      panic("Column must be a JSON column");
     }
 
     return sql<
@@ -58,7 +59,7 @@ export const jsonLiteral = <
   value: KeysOfUnion<TData, TVersion>,
 ) => {
   if (typeof value !== "string") {
-    throw new TypeError("JSON field value literal must be a string");
+    panic("JSON field value literal must be a string");
   }
 
   return sql.raw(`'${value}'`);
@@ -74,5 +75,5 @@ export const jsonValueLiteral = <
     return sql.raw(`'${value}'`);
   }
 
-  throw new Error("JSON field value literal must be a string or number");
+  panic("JSON field value literal must be a string or number");
 };

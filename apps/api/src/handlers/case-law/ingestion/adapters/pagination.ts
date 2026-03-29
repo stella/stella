@@ -15,6 +15,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -149,9 +150,16 @@ export const createPagePaginatedFetch = <TResponse>(
         if (!response.ok) {
           // 5xx after all retries: skip this page and advance
           if (response.status >= 500) {
-            console.error(
-              `${opts.adapterKey}: page ${page} returned ${response.status} ` +
-                `after ${SERVER_ERROR_RETRIES} retries, skipping`,
+            captureError(
+              new AdapterFetchError({
+                message:
+                  `${opts.adapterKey}: page ${page} returned ` +
+                  `${response.status} after ${SERVER_ERROR_RETRIES} ` +
+                  "retries, skipping",
+                adapterKey: opts.adapterKey,
+                cursor,
+                httpStatus: response.status,
+              }),
             );
             return {
               decisions: [],

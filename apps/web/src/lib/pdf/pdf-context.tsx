@@ -1,6 +1,7 @@
 import { createContext, Suspense, use, useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 
+import { panic } from "better-result";
 import type { Result } from "better-result";
 import { LRUCache } from "lru-cache";
 import { GlobalWorkerOptions } from "pdfjs-dist";
@@ -533,7 +534,7 @@ const PDFStoreContext = createContext<PDFStoreApi | null>(null);
 export const usePDFStore = <T,>(selector: (state: PDFStore) => T): T => {
   const store = use(PDFStoreContext);
   if (!store) {
-    throw new Error("usePDFStore must be used within PDFProvider");
+    panic("usePDFStore must be used within PDFProvider");
   }
   return useStore(store, selector);
 };

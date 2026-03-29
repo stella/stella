@@ -13,6 +13,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
+
 import { isElement } from "./ooxml";
 import type {
   DiscoveredField,
@@ -362,11 +364,12 @@ export const writeManifest = async (
   if (existing) {
     const xml = await existing.async("string");
     if (!xml.includes(MANIFEST_NS)) {
-      throw new Error(
-        "Cannot write manifest: " +
+      throw new WorkflowValidationError({
+        message:
+          "Cannot write manifest: " +
           `${CUSTOM_XML_ITEM_PATH} contains ` +
           "non-Stella custom XML",
-      );
+      });
     }
   }
 

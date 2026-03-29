@@ -1,3 +1,5 @@
+import { transformUnknownError } from "@/lib/errors/utils";
+
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR_MIN = 500;
 const DEFAULT_RETRY_AFTER_S = 60;
@@ -307,7 +309,7 @@ export class UploadQueue<T> {
       // 4xx (not 429) or exhausted retries: permanent failure
       this.failed.push({
         file,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: transformUnknownError(error),
       });
       this.emitProgress();
       this.pump();

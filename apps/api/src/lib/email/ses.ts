@@ -1,6 +1,7 @@
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
 import type { EmailTransport } from "@/api/lib/email/transport";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 export type SESTransportConfig = {
   region: string;
@@ -19,9 +20,10 @@ export const createSESTransport = (
     (config.accessKeyId && !config.secretAccessKey) ||
     (!config.accessKeyId && config.secretAccessKey)
   ) {
-    throw new Error(
-      "Both SES_ACCESS_KEY_ID and SES_SECRET_ACCESS_KEY must be set (or both omitted)",
-    );
+    throw new ConfigurationError({
+      message:
+        "Both SES_ACCESS_KEY_ID and SES_SECRET_ACCESS_KEY must be set (or both omitted)",
+    });
   }
 
   const client = new SESv2Client({

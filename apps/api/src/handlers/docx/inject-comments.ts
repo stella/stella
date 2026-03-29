@@ -9,6 +9,8 @@
 
 import * as slimdom from "slimdom";
 
+import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+
 import { isElement, W_NS } from "./ooxml";
 import { buildRunMap } from "./run-map";
 import type { RunSpan } from "./run-map";
@@ -139,7 +141,10 @@ const buildCommentsXml = (
     doc = slimdom.parseXmlDocument(existingXml);
     const root = doc.documentElement;
     if (!root) {
-      throw new Error("Malformed comments.xml: no root element");
+      throw new ParseXmlError({
+        message: "Malformed comments.xml: no root element",
+        cause: existingXml,
+      });
     }
     commentsEl = root;
   } else {

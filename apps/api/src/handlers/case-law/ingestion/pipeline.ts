@@ -20,6 +20,8 @@ import {
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
+import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
@@ -227,7 +229,7 @@ export const runIngestionPipeline = async ({
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
-    throw new Error(`Unknown adapter: ${source.adapterKey}`);
+    panic(`Unknown adapter: ${source.adapterKey}`);
   }
 
   let cursor = source.syncCursor;
@@ -269,18 +271,12 @@ export const runIngestionPipeline = async ({
           searchVectorFailures++;
         }
       } catch (error) {
-        // Log the full error and skip this decision instead of
-        // aborting the page (which would leave the cursor stuck).
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        const cause =
-          error instanceof Error && error.cause instanceof Error
-            ? error.cause.message
-            : undefined;
-        // eslint-disable-next-line no-console -- adapter diagnostic
-        console.error(
-          `[${adapter.key}] Failed to process decision ${result.caseNumber}: ${errorMessage}${cause ? ` (cause: ${cause})` : ""}`,
-        );
+        logger.error("case_law.ingestion.decision_failed", {
+          adapterKey: adapter.key,
+          caseNumber: result.caseNumber,
+          cursor: cursor ?? "",
+          "error.type": errorTag(error),
+        });
         captureError(error, {
           adapterKey: adapter.key,
           caseNumber: result.caseNumber,

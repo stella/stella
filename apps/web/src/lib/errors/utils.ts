@@ -1,16 +1,31 @@
+import { ClientUnknownError } from "@/lib/errors";
+
 export const transformUnknownError = (error: unknown) => {
   if (error instanceof Error) {
     return error;
   }
 
   if (error === undefined || error === null) {
-    return;
+    return new ClientUnknownError({
+      message: "Unknown error (null or undefined)",
+    });
   }
 
   if (typeof error === "object") {
-    return new Error(JSON.stringify(error));
+    return new ClientUnknownError({
+      message: JSON.stringify(error),
+    });
   }
 
   // oxlint-disable-next-line typescript/no-base-to-string
-  return new Error(String(error));
+  return new ClientUnknownError({
+    message: String(error),
+  });
+};
+
+export const logDevError = (error: unknown) => {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.error(error);
+  }
 };

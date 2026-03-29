@@ -1,4 +1,5 @@
 import type { CharSpan, PDFBBox } from "@/lib/anonymize/pdf-coords";
+import { ClientCapabilityError } from "@/lib/errors";
 
 export type MeasureWidthFn = (cssFont: string, text: string) => number;
 
@@ -10,7 +11,10 @@ const getOrCreateCtx = (): OffscreenCanvasRenderingContext2D => {
   }
   const ctx = new OffscreenCanvas(1, 1).getContext("2d");
   if (!ctx) {
-    throw new Error("OffscreenCanvas 2d context unavailable");
+    throw new ClientCapabilityError({
+      capability: "OffscreenCanvas2D",
+      message: "OffscreenCanvas 2d context unavailable",
+    });
   }
   measureCtx = ctx;
   return ctx;

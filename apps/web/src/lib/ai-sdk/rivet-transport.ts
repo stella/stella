@@ -4,6 +4,7 @@ import type {
   UIMessage,
   UIMessageChunk,
 } from "ai";
+import { panic } from "better-result";
 import type { EventUnsubscribe } from "rivetkit/client";
 
 import type {
@@ -12,6 +13,8 @@ import type {
 } from "@stella/rivet/actors/chat-actor-config";
 
 export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { ClientTelemetryError } from "@/lib/errors";
 
 export type SequencedChunk = BaseSequencedChunk<UIMessageChunk>;
 
@@ -142,8 +145,13 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
 
       return false;
     } catch (error) {
-      // eslint-disable-next-line no-console -- stream errors must be logged
-      console.error("Failed to enqueue stream chunk", error);
+      getAnalytics().captureError(
+        new ClientTelemetryError({
+          area: "chat-stream",
+          message: "Failed to enqueue stream chunk",
+          cause: error,
+        }),
+      );
       unsubscribe();
       return true;
     }
@@ -156,7 +164,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
   }: SendMessagesOptions): Promise<ReadableStream<UIMessageChunk>> => {
     const lastMessage = messages.at(-1);
     if (!lastMessage) {
-      throw new Error("No messages to send");
+      panic("No messages to send");
     }
 
     this.lastSeq = -1;
@@ -177,8 +185,13 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
             try {
               controller.close();
             } catch (error) {
-              // eslint-disable-next-line no-console
-              console.error("Failed to close stream controller", error);
+              getAnalytics().captureError(
+                new ClientTelemetryError({
+                  area: "chat-stream",
+                  message: "Failed to close stream controller",
+                  cause: error,
+                }),
+              );
             }
             unsubscribe();
             await this.connection.stop({ threadId: this.threadId });

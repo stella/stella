@@ -95,7 +95,10 @@ export const editWithTracking = async (
       // 1. Read document.xml
       const docEntry = zip.file("word/document.xml");
       if (!docEntry) {
-        throw new Error("Invalid DOCX: missing word/document.xml");
+        throw new DocxEditError({
+          message: "Invalid DOCX: missing word/document.xml",
+          cause: null,
+        });
       }
       let documentXml = await docEntry.async("string");
 
@@ -211,8 +214,10 @@ export const editWithTracking = async (
       };
     },
     catch: (error) =>
-      new DocxEditError({
-        message: "Failed to apply tracked changes to DOCX",
-        cause: error,
-      }),
+      DocxEditError.is(error)
+        ? error
+        : new DocxEditError({
+            message: "Failed to apply tracked changes to DOCX",
+            cause: error,
+          }),
   });

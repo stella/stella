@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
@@ -36,7 +37,7 @@ export const allocateDocSequence = async (
 
   const counter = rows.at(0);
   if (!counter) {
-    throw new Error("Document counter upsert returned no rows");
+    panic("Document counter upsert returned no rows");
   }
 
   return counter.lastValue;

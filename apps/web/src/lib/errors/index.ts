@@ -8,6 +8,30 @@ export class APIError extends TaggedError("ApiError")<{
   message: string;
 }>() {}
 
+export class ClientOperationError extends TaggedError("ClientOperationError")<{
+  action: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class ClientCapabilityError extends TaggedError(
+  "ClientCapabilityError",
+)<{
+  capability: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class ClientTelemetryError extends TaggedError("ClientTelemetryError")<{
+  area: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
+  message: string;
+}>() {}
+
 type ToAPIErrorProps = {
   status: number;
   value:

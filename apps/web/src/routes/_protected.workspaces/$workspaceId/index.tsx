@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { sessionOptions } from "@/routes/-queries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
     const session = await qc.ensureQueryData(sessionOptions);
 
     if (!session?.session.activeOrganizationId) {
-      throw new Error("No active organization");
+      panic("No active organization");
     }
 
     const views = await qc.ensureQueryData(
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
 
     const firstView = views[0];
     if (!firstView) {
-      throw new Error("Workspace has no views");
+      panic("Workspace has no views");
     }
 
     throw redirect({

@@ -11,6 +11,7 @@
 import { hkdf } from "node:crypto";
 
 import { env } from "@/api/env";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 const AES_KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -119,9 +120,9 @@ export const decryptContent = async (
   const masterKey = getMasterKey();
 
   if (!masterKey) {
-    throw new Error(
-      "Content was encrypted but CONTENT_ENCRYPTION_KEY is not set",
-    );
+    throw new ConfigurationError({
+      message: "Content was encrypted but CONTENT_ENCRYPTION_KEY is not set",
+    });
   }
 
   const orgKey = await deriveOrgKey(masterKey, organizationId);
