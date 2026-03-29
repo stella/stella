@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["**/*.gen.*", "**/*.min.*", "sbom.cdx.json", "**/.cache/**", "**/.oxlintrc.json"],
+  "ignorePatterns": ["**/*.gen.*", "**/*.min.*", "sbom.cdx.json", "**/.cache/**", "**/.oxlintrc.json", "**/dist/**", "**/.react-email/**"],
   "printWidth": 80,
   "sortImports": {
     "customGroups": [
