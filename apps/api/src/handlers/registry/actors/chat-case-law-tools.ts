@@ -40,7 +40,6 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
             v.string(),
             v.minLength(2),
             v.maxLength(3),
-            v.toUpperCase(),
             v.description(
               "ISO country code " + "(alpha-3, e.g. CZE, SVK, POL, AUT)",
             ),
@@ -101,7 +100,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
     ),
     execute: async ({
       query,
-      country,
+      country: rawCountry,
       court,
       minTier,
       dateFrom,
@@ -109,6 +108,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
       sortBy,
       limit,
     }) => {
+      const country = rawCountry?.toUpperCase();
       const tsQuery = sql`plainto_tsquery('simple', ${query})`;
 
       const courtFilter = court
@@ -382,7 +382,6 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
             v.string(),
             v.minLength(2),
             v.maxLength(3),
-            v.toUpperCase(),
             v.description(
               "ISO country code to filter by " +
                 "(alpha-3, e.g. CZE, SVK, POL, AUT, EU)",
@@ -391,7 +390,8 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
         ),
       }),
     ),
-    execute: async ({ country }) => {
+    execute: async ({ country: rawCountry }) => {
+      const country = rawCountry?.toUpperCase();
       const weightMap = await loadCourtWeights();
 
       const jurisdictions: {
