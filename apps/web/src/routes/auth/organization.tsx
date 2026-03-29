@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -109,6 +111,19 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
       analytics.captureError(error);
     },
   });
+
+  // Auto-select when there's only one organization
+  const autoSelected = useRef(false);
+  useEffect(() => {
+    if (
+      organizations.length === 1 &&
+      !autoSelected.current &&
+      !selectOrganization.isPending
+    ) {
+      autoSelected.current = true;
+      selectOrganization.mutate(organizations[0]!.id);
+    }
+  }, [organizations, selectOrganization]);
 
   return (
     <Frame className="w-full max-w-sm">
