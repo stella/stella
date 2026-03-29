@@ -10,49 +10,86 @@
  * dominating search results.
  */
 
-// -- Court hierarchy tiers -------------------------------------------
+import type {
+  CourtWeightEntry,
+  CourtWeightMap,
+} from "@/api/handlers/case-law/court-weights";
+
+// -- Legacy fallback tiers -----------------------------------------------
 
 /**
- * Court tier weights in general. Higher = more authoritative.
- *
- * Tier 4: Constitutional courts
- * Tier 3: Supreme courts
- * Tier 2: High/regional courts
- * Tier 1: District courts
+ * Hardcoded fallback used when the database table has not
+ * been seeded yet. Prefer `loadCourtWeights()` in production.
  */
-const COURT_TIERS = [
-  { weight: 4, patterns: [/ústavní soud/i, /ústavný súd/i] },
+const LEGACY_COURT_TIERS: CourtWeightEntry[] = [
+  {
+    weight: 4,
+    tier: 4,
+    tierLabel: "constitutional",
+    pattern: /ústavní soud|ústavný súd/i,
+  },
   {
     weight: 3,
-    patterns: [/nejvyšší/i, /najvyšší/i],
+    tier: 3,
+    tierLabel: "supreme",
+    pattern: /nejvyšší|najvyšší/i,
   },
   {
     weight: 2,
-    patterns: [
-      /vrchní soud/i,
-      /krajský soud/i,
-      /městský soud/i,
-      /krajský súd/i,
-    ],
+    tier: 2,
+    tierLabel: "regional",
+    pattern: /vrchní soud|krajský soud|městský soud|krajský súd/i,
   },
-] as const;
+];
 
 const DEFAULT_WEIGHT = 1;
 
+// -- Court weight lookup -------------------------------------------------
+
 /**
  * Return the authority weight for a court name.
- * Matches against known patterns; defaults to 1.
+ *
+ * When `weightMap` is provided, uses the database-driven
+ * weights. Otherwise falls back to the legacy hardcoded list.
  */
-export const courtWeight = (court: string): number => {
-  for (const tier of COURT_TIERS) {
-    if (tier.patterns.some((p) => p.test(court))) {
+export const courtWeight = (
+  court: string,
+  weightMap?: CourtWeightMap,
+  country?: string,
+): number => {
+  if (weightMap) {
+    // Check country-specific entries first.
+    if (country) {
+      const entries = weightMap.get(country);
+      if (entries) {
+        for (const e of entries) {
+          if (e.pattern.test(court)) {
+            return e.weight;
+          }
+        }
+      }
+    }
+    // Fallback: check all countries.
+    for (const entries of weightMap.values()) {
+      for (const e of entries) {
+        if (e.pattern.test(court)) {
+          return e.weight;
+        }
+      }
+    }
+    return DEFAULT_WEIGHT;
+  }
+
+  // Legacy path (no map loaded).
+  for (const tier of LEGACY_COURT_TIERS) {
+    if (tier.pattern.test(court)) {
       return tier.weight;
     }
   }
   return DEFAULT_WEIGHT;
 };
 
-// -- Recency decay ---------------------------------------------------
+// -- Recency decay -------------------------------------------------------
 
 /**
  * Decay factor for a citation based on how old the *citing*
@@ -80,7 +117,7 @@ export const recencyFactor = (
   return 1 / (1 + Math.max(yearsAgo, 0));
 };
 
-// -- Combined score --------------------------------------------------
+// -- Combined score ------------------------------------------------------
 
 export type CitationInput = {
   citingCourt: string;
@@ -96,10 +133,12 @@ export type CitationInput = {
 export const weightedCitationSum = (
   citations: CitationInput[],
   now: Date = new Date(),
+  weightMap?: CourtWeightMap,
 ): number => {
   let sum = 0;
   for (const c of citations) {
-    sum += courtWeight(c.citingCourt) * recencyFactor(c.citingDate, now);
+    sum +=
+      courtWeight(c.citingCourt, weightMap) * recencyFactor(c.citingDate, now);
   }
   return sum;
 };
@@ -116,12 +155,13 @@ export const citationScore = (
   citations: CitationInput[],
   decisionDate: Date | string | null,
   now: Date = new Date(),
+  weightMap?: CourtWeightMap,
 ): number => {
   if (citations.length === 0) {
     return 0;
   }
 
-  const wSum = weightedCitationSum(citations, now);
+  const wSum = weightedCitationSum(citations, now, weightMap);
 
   let yearsOld = 1;
   if (decisionDate !== undefined && decisionDate !== null) {
@@ -136,22 +176,26 @@ export const citationScore = (
   return Math.log(1 + wSum / yearsOld);
 };
 
-// -- SQL fragments ---------------------------------------------------
+// -- SQL fragments -------------------------------------------------------
 
 /**
  * Build a SQL CASE expression for court weights.
- * Used in the search query to mirror courtWeight() in SQL.
+ *
+ * When `entries` is provided, generates from database-driven
+ * weights. Otherwise uses the legacy hardcoded list.
  */
-export const courtWeightSql = (courtColumn: string): string => {
-  const cases = COURT_TIERS.map((tier) => {
-    const conditions = tier.patterns
-      .map((p) => {
-        const src = p.source.replace(/'/g, "''");
-        return `${courtColumn} ~* '${src}'`;
-      })
-      .join(" OR ");
-    return `WHEN ${conditions} THEN ${tier.weight}`;
-  }).join("\n      ");
+export const courtWeightSql = (
+  courtColumn: string,
+  entries?: CourtWeightEntry[],
+): string => {
+  const source = entries ?? LEGACY_COURT_TIERS;
+
+  const cases = source
+    .map((e) => {
+      const src = e.pattern.source.replace(/'/g, "''");
+      return `WHEN ${courtColumn} ~* '${src}' THEN ${e.weight}`;
+    })
+    .join("\n      ");
 
   return `CASE ${cases}\n      ELSE ${DEFAULT_WEIGHT} END`;
 };

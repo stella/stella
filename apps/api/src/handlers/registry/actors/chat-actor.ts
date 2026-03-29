@@ -52,7 +52,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const DEFAULT_MODEL = CHAT_MODEL;
-const MAX_TOOL_STEPS = 5;
+const MAX_TOOL_STEPS = 8;
 /** User turns to keep in the sliding window. Tools are always
  *  available, so we use a larger window to accommodate
  *  tool-call + tool-result message pairs. */
@@ -168,6 +168,22 @@ const buildUserContextBlock = (userContext: UserContext | null): string => {
 
 // -- Shared prompt building blocks --
 
+const CASE_LAW_STRATEGY = [
+  "",
+  "CASE LAW RESEARCH STRATEGY:",
+  "When researching legal questions using case law tools:",
+  "1. Start with the highest courts (minTier: 3 or 4) in the relevant jurisdiction.",
+  "2. Read promising results with readDecision to verify relevance before citing.",
+  "3. Refine your search using legal terminology found in the results.",
+  "4. Follow citations with getDecisionCitations to find related authorities.",
+  "5. Only expand to lower courts (minTier: 1 or 2) if insufficient results at higher tiers.",
+  "6. Use getCourtHierarchy if unsure about available jurisdictions or court levels.",
+  "",
+  "When citing decisions, always include: court name, " +
+    "case number, decision date, and a brief summary " +
+    "of the relevant holding.",
+];
+
 const CORE_RULES = [
   "You are AI within a legal workspace product called Stella. " +
     "You retrieve documents, draft text, and answer questions " +
@@ -204,7 +220,13 @@ const buildPrompt = (
   contextLines: string[],
   userContext: UserContext | null,
 ): string =>
-  [...CORE_RULES, "", ...contextLines, buildUserContextBlock(userContext)]
+  [
+    ...CORE_RULES,
+    ...CASE_LAW_STRATEGY,
+    "",
+    ...contextLines,
+    buildUserContextBlock(userContext),
+  ]
     .filter(Boolean)
     .join("\n");
 
