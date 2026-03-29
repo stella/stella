@@ -4,6 +4,8 @@ import { t } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -54,3 +56,20 @@ export const listTemplatesHandler = async ({
     templatesCountLimit: LIMITS.templatesCount,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  query: listTemplatesQuerySchema,
+} satisfies HandlerConfig;
+
+const listTemplates = createRootHandler(
+  config,
+  async ({ scopedDb, session, query }) =>
+    await listTemplatesHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      query,
+    }),
+);
+
+export default listTemplates;

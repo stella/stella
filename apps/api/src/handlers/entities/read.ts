@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, count, eq, inArray } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
@@ -7,10 +8,75 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   buildFilterConditions,
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
+import { LIMITS } from "@/api/lib/limits";
+
+const viewFilterConditionSchema = t.Union([
+  t.Object({
+    id: t.String(),
+    field: t.Literal("kind"),
+    op: t.Literal("in"),
+    value: t.Array(
+      t.Union([
+        t.Literal("document"),
+        t.Literal("folder"),
+        t.Literal("task"),
+        t.Literal("message"),
+        t.Literal("link"),
+      ]),
+    ),
+  }),
+  t.Object({
+    id: t.String(),
+    field: t.Literal("property"),
+    propertyId: t.String({ minLength: 1 }),
+    op: t.Union([
+      t.Literal("eq"),
+      t.Literal("neq"),
+      t.Literal("contains"),
+      t.Literal("is_empty"),
+    ]),
+    value: t.Optional(
+      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
+    ),
+  }),
+  t.Object({
+    id: t.String(),
+    field: t.Literal("builtin"),
+    builtinField: t.Union([t.Literal("status"), t.Literal("priority")]),
+    op: t.Union([
+      t.Literal("eq"),
+      t.Literal("neq"),
+      t.Literal("in"),
+      t.Literal("is_empty"),
+    ]),
+    value: t.Optional(
+      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
+    ),
+  }),
+]);
+
+const viewSortSchema = t.Object({
+  propertyId: t.String({ minLength: 1 }),
+  desc: t.Boolean(),
+});
+
+export const readEntitiesBodySchema = t.Object({
+  filters: t.Optional(t.Array(viewFilterConditionSchema)),
+  sorts: t.Optional(t.Array(viewSortSchema)),
+  page: t.Optional(t.Integer({ minimum: 1 })),
+  pageSize: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.entitiesPageSizeMax,
+    }),
+  ),
+});
 
 type ViewSort = {
   propertyId: string;
@@ -204,3 +270,23 @@ export const readEntitiesHandler = async ({
     pageSize,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  body: readEntitiesBodySchema,
+} satisfies HandlerConfig;
+
+const readEntities = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, body }) =>
+    await readEntitiesHandler({
+      scopedDb,
+      workspaceId,
+      filters: body.filters ?? [],
+      sorts: body.sorts ?? [],
+      page: body.page ?? 1,
+      pageSize: body.pageSize ?? LIMITS.entitiesPageSizeDefault,
+    }),
+);
+
+export default readEntities;

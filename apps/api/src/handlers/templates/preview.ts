@@ -1,11 +1,18 @@
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
+
+export const previewTemplateParamsSchema = t.Object({
+  templateId: tNanoid,
+});
 
 type PreviewTemplateProps = {
   scopedDb: ScopedDb;
@@ -64,3 +71,20 @@ export const previewTemplateHandler = async ({
     clauseSlots: slotNames,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  params: previewTemplateParamsSchema,
+} satisfies HandlerConfig;
+
+const previewTemplate = createRootHandler(
+  config,
+  async ({ scopedDb, session, params }) =>
+    await previewTemplateHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      templateId: params.templateId,
+    }),
+);
+
+export default previewTemplate;

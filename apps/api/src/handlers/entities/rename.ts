@@ -7,6 +7,8 @@ import type { ScopedDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -91,3 +93,20 @@ export const renameEntityHandler = async ({
 
   return { entityId: body.entityId };
 };
+
+const config = {
+  permissions: { entity: ["update"] },
+  body: renameEntityBodySchema,
+} satisfies HandlerConfig;
+
+const renameEntity = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, body }) =>
+    await renameEntityHandler({
+      scopedDb,
+      workspaceId,
+      body,
+    }),
+);
+
+export default renameEntity;

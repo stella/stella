@@ -7,6 +7,8 @@ import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -172,3 +174,23 @@ export const fillHandler = async ({
     headers,
   });
 };
+
+const config = {
+  permissions: { template: ["create"] },
+  body: fillBodySchema,
+  query: fillQuerySchema,
+} satisfies HandlerConfig;
+
+const fillTemplateHandler = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, body, query }) =>
+    await fillHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      body,
+      query,
+    }),
+);
+
+export default fillTemplateHandler;

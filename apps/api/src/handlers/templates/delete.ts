@@ -1,11 +1,18 @@
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
+
+export const deleteTemplateParamsSchema = t.Object({
+  templateId: tNanoid,
+});
 
 type DeleteTemplateProps = {
   scopedDb: ScopedDb;
@@ -60,3 +67,20 @@ export const deleteTemplateHandler = async ({
 
   return;
 };
+
+const config = {
+  permissions: { template: ["delete"] },
+  params: deleteTemplateParamsSchema,
+} satisfies HandlerConfig;
+
+const deleteTemplate = createRootHandler(
+  config,
+  async ({ scopedDb, session, params }) =>
+    await deleteTemplateHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      templateId: params.templateId,
+    }),
+);
+
+export default deleteTemplate;

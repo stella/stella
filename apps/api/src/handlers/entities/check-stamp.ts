@@ -5,6 +5,8 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
@@ -120,6 +122,23 @@ const lookupByVerificationCode = async (
     versionNumber: row.versionNumber,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  body: checkStampBodySchema,
+} satisfies HandlerConfig;
+
+const checkStamp = createHandler(
+  config,
+  async ({ scopedDb, session, body }) =>
+    await checkStampHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      body,
+    }),
+);
+
+export default checkStamp;
 
 const lookupByStamp = async (
   scopedDb: ScopedDb,

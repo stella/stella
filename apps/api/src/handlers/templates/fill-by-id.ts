@@ -10,7 +10,10 @@ import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
@@ -24,6 +27,10 @@ export const fillByIdBodySchema = t.Object({
 
 export const fillByIdQuerySchema = t.Object({
   format: t.Optional(t.UnionEnum(["docx", "pdf"])),
+});
+
+export const fillByIdParamsSchema = t.Object({
+  templateId: tNanoid,
 });
 
 const PDF_MIME_TYPE = "application/pdf";
@@ -175,3 +182,25 @@ export const fillByIdHandler = async ({
     headers,
   });
 };
+
+const config = {
+  permissions: { template: ["create"] },
+  params: fillByIdParamsSchema,
+  body: fillByIdBodySchema,
+  query: fillByIdQuerySchema,
+} satisfies HandlerConfig;
+
+const fillTemplateById = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, params, body, query }) =>
+    await fillByIdHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      templateId: params.templateId,
+      body,
+      query,
+    }),
+);
+
+export default fillTemplateById;

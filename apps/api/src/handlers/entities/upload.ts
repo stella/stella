@@ -15,6 +15,8 @@ import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -282,3 +284,22 @@ export const uploadEntityHandler = async ({
     throw error;
   }
 };
+
+const config = {
+  permissions: { entity: ["create"] },
+  body: uploadEntityBodySchema,
+} satisfies HandlerConfig;
+
+const uploadEntity = createHandler(
+  config,
+  async ({ scopedDb, session, workspaceId, user, body }) =>
+    await uploadEntityHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default uploadEntity;

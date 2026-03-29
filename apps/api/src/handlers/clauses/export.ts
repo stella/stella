@@ -4,6 +4,8 @@ import { t } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 import type {
@@ -115,3 +117,20 @@ export const exportHandler = async ({
     },
   });
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  query: exportQuerySchema,
+} satisfies HandlerConfig;
+
+const exportClauses = createRootHandler(
+  config,
+  async ({ scopedDb, session, query }) =>
+    await exportHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      query,
+    }),
+);
+
+export default exportClauses;

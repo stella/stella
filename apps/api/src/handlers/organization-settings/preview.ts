@@ -4,6 +4,8 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   toReference,
   toScopeKey,
@@ -59,3 +61,20 @@ export const previewOrganizationSettingsHandler = async ({
 
   return { preview, nextValue };
 };
+
+const config = {
+  permissions: { organizationSettings: ["update"] },
+  body: previewOrganizationSettingsBodySchema,
+} satisfies HandlerConfig;
+
+const previewOrganizationSettings = createRootHandler(
+  config,
+  async ({ scopedDb, session, body }) =>
+    await previewOrganizationSettingsHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      body,
+    }),
+);
+
+export default previewOrganizationSettings;

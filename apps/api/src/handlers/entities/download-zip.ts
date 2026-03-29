@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 import JSZip from "jszip";
 
 import type { ScopedDb } from "@/api/db";
@@ -7,7 +7,13 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { s3 } from "@/api/lib/s3";
+
+export const downloadZipParamsSchema = t.Object({
+  entityId: t.String(),
+});
 
 type DownloadZipHandlerProps = {
   scopedDb: ScopedDb;
@@ -185,3 +191,21 @@ export const downloadZipHandler = async ({
     },
   });
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  params: downloadZipParamsSchema,
+} satisfies HandlerConfig;
+
+const downloadZip = createHandler(
+  config,
+  async ({ scopedDb, session, workspaceId, params }) =>
+    await downloadZipHandler({
+      scopedDb,
+      entityId: params.entityId,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+    }),
+);
+
+export default downloadZip;
