@@ -6,6 +6,8 @@ import {
   readManifest,
 } from "@/api/handlers/docx/template-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -43,3 +45,19 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
     structureErrors: discovered.structureErrors,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  body: discoverBodySchema,
+} satisfies HandlerConfig;
+
+const discoverTemplateHandler = createRootHandler(
+  config,
+  async ({ session, body }) =>
+    await discoverHandler({
+      organizationId: session.activeOrganizationId,
+      body,
+    }),
+);
+
+export default discoverTemplateHandler;

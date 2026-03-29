@@ -8,6 +8,8 @@ import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -247,3 +249,21 @@ export const duplicateEntityHandler = async ({
 
   return result;
 };
+
+const config = {
+  permissions: { entity: ["create"] },
+  body: duplicateEntityBodySchema,
+} satisfies HandlerConfig;
+
+const duplicateEntity = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, user, body }) =>
+    await duplicateEntityHandler({
+      scopedDb,
+      workspaceId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default duplicateEntity;

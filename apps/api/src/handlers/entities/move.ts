@@ -5,6 +5,8 @@ import type { Static } from "elysia";
 import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 export const moveEntityBodySchema = t.Object({
@@ -153,3 +155,20 @@ const checkIsDescendant = async (
 
   return Boolean(result.at(0)?.found);
 };
+
+const config = {
+  permissions: { entity: ["update"] },
+  body: moveEntityBodySchema,
+} satisfies HandlerConfig;
+
+const moveEntity = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, body }) =>
+    await moveEntityHandler({
+      scopedDb,
+      workspaceId,
+      body,
+    }),
+);
+
+export default moveEntity;

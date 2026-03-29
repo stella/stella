@@ -1,7 +1,13 @@
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+
+export const readEntityByIdParamsSchema = t.Object({
+  entityId: t.String(),
+});
 
 type ReadEntityByIdHandlerProps = {
   scopedDb: ScopedDb;
@@ -60,3 +66,20 @@ export const readEntityByIdHandler = async ({
     fields,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  params: readEntityByIdParamsSchema,
+} satisfies HandlerConfig;
+
+const readEntityById = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, params }) =>
+    await readEntityByIdHandler({
+      scopedDb,
+      workspaceId,
+      entityId: params.entityId,
+    }),
+);
+
+export default readEntityById;

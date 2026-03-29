@@ -8,6 +8,8 @@ import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -24,6 +26,10 @@ export const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tNanoid)),
   manifest: t.Optional(t.String()),
+});
+
+export const updateTemplateParamsSchema = t.Object({
+  templateId: tNanoid,
 });
 
 type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
@@ -219,3 +225,23 @@ export const updateTemplateHandler = async ({
 
   return updated;
 };
+
+const config = {
+  permissions: { template: ["update"] },
+  params: updateTemplateParamsSchema,
+  body: updateTemplateBodySchema,
+} satisfies HandlerConfig;
+
+const updateTemplate = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, params, body }) =>
+    await updateTemplateHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      templateId: params.templateId,
+      body,
+    }),
+);
+
+export default updateTemplate;

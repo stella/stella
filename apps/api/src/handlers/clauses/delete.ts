@@ -1,9 +1,16 @@
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
+
+export const deleteClauseParamsSchema = t.Object({
+  clauseId: tNanoid,
+});
 
 type DeleteClauseProps = {
   scopedDb: ScopedDb;
@@ -50,3 +57,20 @@ export const deleteClauseHandler = async ({
 
   return;
 };
+
+const config = {
+  permissions: { clause: ["delete"] },
+  params: deleteClauseParamsSchema,
+} satisfies HandlerConfig;
+
+const deleteClause = createRootHandler(
+  config,
+  async ({ scopedDb, session, params }) =>
+    await deleteClauseHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      clauseId: params.clauseId,
+    }),
+);
+
+export default deleteClause;

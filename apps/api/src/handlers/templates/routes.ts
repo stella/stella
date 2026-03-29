@@ -1,63 +1,27 @@
-import Elysia, { t } from "elysia";
+import Elysia from "elysia";
 
-import {
-  linkClauseBodySchema,
-  linkClauseHandler,
-  listTemplateClausesHandler,
-  syncClauseHandler,
-  unlinkClauseHandler,
-} from "@/api/handlers/clauses/template-links";
-import {
-  createTemplateCategoryBodySchema,
-  createTemplateCategoryHandler,
-  deleteTemplateCategoryHandler,
-  listTemplateCategoriesHandler,
-  updateTemplateCategoryBodySchema,
-  updateTemplateCategoryHandler,
-} from "@/api/handlers/templates/categories";
-import {
-  createTemplateBodySchema,
-  createTemplateHandler,
-} from "@/api/handlers/templates/create";
-import { deleteTemplateHandler } from "@/api/handlers/templates/delete";
-import {
-  discoverBodySchema,
-  discoverHandler,
-} from "@/api/handlers/templates/discover";
-import {
-  fillBodySchema,
-  fillHandler,
-  fillQuerySchema,
-} from "@/api/handlers/templates/fill";
-import {
-  fillByIdBodySchema,
-  fillByIdHandler,
-  fillByIdQuerySchema,
-} from "@/api/handlers/templates/fill-by-id";
-import {
-  fillPreviewBodySchema,
-  fillPreviewHandler,
-} from "@/api/handlers/templates/fill-preview";
-import { getTemplateHandler } from "@/api/handlers/templates/get";
-import {
-  listTemplatesHandler,
-  listTemplatesQuerySchema,
-} from "@/api/handlers/templates/list";
-import {
-  manifestBodySchema,
-  manifestHandler,
-} from "@/api/handlers/templates/manifest";
-import { previewTemplateHandler } from "@/api/handlers/templates/preview";
-import {
-  updateTemplateBodySchema,
-  updateTemplateHandler,
-} from "@/api/handlers/templates/update";
-import {
-  getTemplateVersionHandler,
-  listTemplateVersionsHandler,
-} from "@/api/handlers/templates/versions";
+import createTemplateCategory from "@/api/handlers/templates/categories-create";
+import deleteTemplateCategory from "@/api/handlers/templates/categories-delete";
+import listTemplateCategories from "@/api/handlers/templates/categories-list";
+import updateTemplateCategory from "@/api/handlers/templates/categories-update";
+import linkTemplateClause from "@/api/handlers/templates/clauses-link";
+import listTemplateClauses from "@/api/handlers/templates/clauses-list";
+import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
+import unlinkTemplateClause from "@/api/handlers/templates/clauses-unlink";
+import createTemplate from "@/api/handlers/templates/create";
+import deleteTemplate from "@/api/handlers/templates/delete";
+import discoverTemplate from "@/api/handlers/templates/discover";
+import fillTemplateById from "@/api/handlers/templates/fill-by-id";
+import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
+import fillTemplate from "@/api/handlers/templates/fill";
+import getTemplate from "@/api/handlers/templates/get";
+import listTemplates from "@/api/handlers/templates/list";
+import manifestTemplate from "@/api/handlers/templates/manifest";
+import previewTemplate from "@/api/handlers/templates/preview";
+import updateTemplate from "@/api/handlers/templates/update";
+import getTemplateVersion from "@/api/handlers/templates/versions-get";
+import listTemplateVersions from "@/api/handlers/templates/versions-list";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { tNanoid } from "@/api/lib/custom-schema";
 
 export const templatesRoute = new Elysia({
   prefix: "/templates",
@@ -68,233 +32,64 @@ export const templatesRoute = new Elysia({
     validateAuth: true,
   })
   // ── Existing transient endpoints ───────────────────
-  .post(
-    "/discover",
-    async (ctx) =>
-      await discoverHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        body: ctx.body,
-      }),
-    { body: discoverBodySchema },
-  )
-  .post(
-    "/fill",
-    async (ctx) =>
-      await fillHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        body: ctx.body,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["create"] },
-      body: fillBodySchema,
-      query: fillQuerySchema,
-    },
-  )
-  .post(
-    "/manifest",
-    async (ctx) =>
-      await manifestHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        body: ctx.body,
-      }),
-    { body: manifestBodySchema },
-  )
+  .post("/discover", discoverTemplate.handler, {
+    body: discoverTemplate.config.body,
+  })
+  .post("/fill", fillTemplate.handler, {
+    body: fillTemplate.config.body,
+    query: fillTemplate.config.query,
+  })
+  .post("/manifest", manifestTemplate.handler, {
+    body: manifestTemplate.config.body,
+  })
   // ── CRUD endpoints ─────────────────────────────────
-  .get(
-    "/",
-    async (ctx) =>
-      await listTemplatesHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    { query: listTemplatesQuerySchema },
-  )
-  .put(
-    "/",
-    async (ctx) =>
-      await createTemplateHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["create"] },
-      body: createTemplateBodySchema,
-    },
-  )
-  .get(
-    "/:templateId/preview",
-    async (ctx) =>
-      await previewTemplateHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        scopedDb: ctx.scopedDb,
-      }),
-    { params: t.Object({ templateId: tNanoid }) },
-  )
-  .post(
-    "/:templateId/fill-preview",
-    async (ctx) =>
-      await fillPreviewHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        body: ctx.body,
-      }),
-    {
-      params: t.Object({ templateId: tNanoid }),
-      body: fillPreviewBodySchema,
-    },
-  )
-  .post(
-    "/:templateId/fill",
-    async (ctx) =>
-      await fillByIdHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        templateId: ctx.params.templateId,
-        body: ctx.body,
-        query: ctx.query,
-      }),
-    {
-      permissions: { template: ["create"] },
-      params: t.Object({ templateId: tNanoid }),
-      body: fillByIdBodySchema,
-      query: fillByIdQuerySchema,
-    },
-  )
-  .get(
-    "/:templateId",
-    async (ctx) =>
-      await getTemplateHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        scopedDb: ctx.scopedDb,
-      }),
-    { params: t.Object({ templateId: tNanoid }) },
-  )
-  .post(
-    "/:templateId",
-    async (ctx) =>
-      await updateTemplateHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        templateId: ctx.params.templateId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["update"] },
-      params: t.Object({ templateId: tNanoid }),
-      body: updateTemplateBodySchema,
-    },
-  )
-  .delete(
-    "/:templateId",
-    async (ctx) =>
-      await deleteTemplateHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["delete"] },
-      params: t.Object({ templateId: tNanoid }),
-    },
-  )
+  .get("/", listTemplates.handler, { query: listTemplates.config.query })
+  .put("/", createTemplate.handler, {
+    body: createTemplate.config.body,
+  })
+  .get("/:templateId/preview", previewTemplate.handler, {
+    params: previewTemplate.config.params,
+  })
+  .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
+    params: fillTemplatePreview.config.params,
+    body: fillTemplatePreview.config.body,
+  })
+  .post("/:templateId/fill", fillTemplateById.handler, {
+    params: fillTemplateById.config.params,
+    body: fillTemplateById.config.body,
+    query: fillTemplateById.config.query,
+  })
+  .get("/:templateId", getTemplate.handler, {
+    params: getTemplate.config.params,
+  })
+  .post("/:templateId", updateTemplate.handler, {
+    params: updateTemplate.config.params,
+    body: updateTemplate.config.body,
+  })
+  .delete("/:templateId", deleteTemplate.handler, {
+    params: deleteTemplate.config.params,
+  })
   // ── Versions ──────────────────────────────────────
-  .get(
-    "/:templateId/versions",
-    async (ctx) =>
-      await listTemplateVersionsHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        scopedDb: ctx.scopedDb,
-      }),
-    { params: t.Object({ templateId: tNanoid }) },
-  )
-  .get(
-    "/:templateId/versions/:versionId",
-    async (ctx) =>
-      await getTemplateVersionHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        versionId: ctx.params.versionId,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      params: t.Object({
-        templateId: tNanoid,
-        versionId: tNanoid,
-      }),
-    },
-  )
+  .get("/:templateId/versions", listTemplateVersions.handler, {
+    params: listTemplateVersions.config.params,
+  })
+  .get("/:templateId/versions/:versionId", getTemplateVersion.handler, {
+    params: getTemplateVersion.config.params,
+  })
   // ── Clause linking ──────────────────────────────────
-  .get(
-    "/:templateId/clauses",
-    async (ctx) =>
-      await listTemplateClausesHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-      }),
-    { params: t.Object({ templateId: tNanoid }) },
-  )
-  .put(
-    "/:templateId/clauses",
-    async (ctx) =>
-      await linkClauseHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        body: ctx.body,
-      }),
-    {
-      permissions: { template: ["update"] },
-      params: t.Object({ templateId: tNanoid }),
-      body: linkClauseBodySchema,
-    },
-  )
-  .delete(
-    "/:templateId/clauses/:linkId",
-    async (ctx) =>
-      await unlinkClauseHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        linkId: ctx.params.linkId,
-      }),
-    {
-      permissions: { template: ["update"] },
-      params: t.Object({
-        templateId: tNanoid,
-        linkId: tNanoid,
-      }),
-    },
-  )
-  .post(
-    "/:templateId/clauses/:linkId/sync",
-    async (ctx) =>
-      await syncClauseHandler({
-        scopedDb: ctx.scopedDb,
-        organizationId: ctx.session.activeOrganizationId,
-        templateId: ctx.params.templateId,
-        linkId: ctx.params.linkId,
-      }),
-    {
-      permissions: { template: ["update"] },
-      params: t.Object({
-        templateId: tNanoid,
-        linkId: tNanoid,
-      }),
-    },
-  );
+  .get("/:templateId/clauses", listTemplateClauses.handler, {
+    params: listTemplateClauses.config.params,
+  })
+  .put("/:templateId/clauses", linkTemplateClause.handler, {
+    params: linkTemplateClause.config.params,
+    body: linkTemplateClause.config.body,
+  })
+  .delete("/:templateId/clauses/:linkId", unlinkTemplateClause.handler, {
+    params: unlinkTemplateClause.config.params,
+  })
+  .post("/:templateId/clauses/:linkId/sync", syncTemplateClause.handler, {
+    params: syncTemplateClause.config.params,
+  });
 
 // ── Template Categories ────────────────────────────
 
@@ -302,53 +97,16 @@ export const templateCategoriesRoute = new Elysia({
   prefix: "/template-categories",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get(
-    "/",
-    async (ctx) =>
-      await listTemplateCategoriesHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        scopedDb: ctx.scopedDb,
-      }),
-  )
-  .put(
-    "/",
-    async (ctx) =>
-      await createTemplateCategoryHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["create"] },
-      body: createTemplateCategoryBodySchema,
-    },
-  )
-  .post(
-    "/:categoryId",
-    async (ctx) =>
-      await updateTemplateCategoryHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        categoryId: ctx.params.categoryId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["update"] },
-      params: t.Object({ categoryId: tNanoid }),
-      body: updateTemplateCategoryBodySchema,
-    },
-  )
-  .delete(
-    "/:categoryId",
-    async (ctx) =>
-      await deleteTemplateCategoryHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        categoryId: ctx.params.categoryId,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { template: ["delete"] },
-      params: t.Object({ categoryId: tNanoid }),
-    },
-  );
+  .get("/", listTemplateCategories.handler)
+  .put("/", createTemplateCategory.handler, {
+    body: createTemplateCategory.config.body,
+  })
+  .post("/:categoryId", updateTemplateCategory.handler, {
+    params: updateTemplateCategory.config.params,
+    body: updateTemplateCategory.config.body,
+  })
+  .delete("/:categoryId", deleteTemplateCategory.handler, {
+    params: deleteTemplateCategory.config.params,
+  });

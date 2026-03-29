@@ -1,8 +1,15 @@
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
+
+export const getTemplateParamsSchema = t.Object({
+  templateId: tNanoid,
+});
 
 type GetTemplateProps = {
   scopedDb: ScopedDb;
@@ -51,3 +58,20 @@ export const getTemplateHandler = async ({
     presignedUrl,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  params: getTemplateParamsSchema,
+} satisfies HandlerConfig;
+
+const getTemplate = createRootHandler(
+  config,
+  async ({ scopedDb, session, params }) =>
+    await getTemplateHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      templateId: params.templateId,
+    }),
+);
+
+export default getTemplate;

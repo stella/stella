@@ -5,6 +5,8 @@ import { nanoid } from "nanoid";
 import type { ScopedDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 
 import { isClauseExportPayload } from "./import-export-schema";
@@ -183,3 +185,21 @@ export const importHandler = async ({
 
   return { created: result.count, skipped, errors: [] };
 };
+
+const config = {
+  permissions: { clause: ["create"] },
+  body: importBodySchema,
+} satisfies HandlerConfig;
+
+const importClauses = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, body }) =>
+    await importHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default importClauses;

@@ -9,6 +9,8 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -110,3 +112,21 @@ export const deleteEntitiesHandler = async ({
 
   return;
 };
+
+const config = {
+  permissions: { entity: ["delete"] },
+  body: deleteEntitiesBodySchema,
+} satisfies HandlerConfig;
+
+const deleteEntities = createHandler(
+  config,
+  async ({ scopedDb, session, workspaceId, body }) =>
+    await deleteEntitiesHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      body,
+    }),
+);
+
+export default deleteEntities;

@@ -29,21 +29,23 @@ const createHandlerContext = ({
 }: {
   body: Parameters<typeof createTaskHandler>[0]["body"];
   scopedDb: Parameters<typeof createTaskHandler>[0]["scopedDb"];
-}): Parameters<typeof createTaskHandler>[0] => ({
-  workspaceId,
-  user: {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-    id: userId as SafeId<"user">,
-  },
-  session: {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-    activeOrganizationId: "org_test123" as SafeId<"organization">,
-    token: "token",
-  },
-  memberRole: { role: "owner" },
-  body,
-  scopedDb,
-});
+}): Parameters<typeof createTaskHandler>[0] =>
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only exercises the handler-owned fields accessed before/inside scopedDb
+  ({
+    workspaceId,
+    user: {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
+      id: userId as SafeId<"user">,
+    },
+    session: {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
+      activeOrganizationId: "org_test123" as SafeId<"organization">,
+      token: "token",
+    },
+    memberRole: { role: "owner" },
+    body,
+    scopedDb,
+  }) as Parameters<typeof createTaskHandler>[0];
 
 describe("createTaskHandler validation", () => {
   test("invalid status returns 400 before DB call", async () => {

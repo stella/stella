@@ -6,6 +6,8 @@ import { nanoid } from "nanoid";
 import type { ScopedDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -22,6 +24,10 @@ export const updateClauseBodySchema = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   metadata: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),
+});
+
+export const updateClauseParamsSchema = t.Object({
+  clauseId: tNanoid,
 });
 
 type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
@@ -176,3 +182,22 @@ export const updateClauseHandler = async ({
 
   return updated;
 };
+
+const config = {
+  permissions: { clause: ["update"] },
+  params: updateClauseParamsSchema,
+  body: updateClauseBodySchema,
+} satisfies HandlerConfig;
+
+const updateClause = createRootHandler(
+  config,
+  async ({ scopedDb, session, params, body }) =>
+    await updateClauseHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      clauseId: params.clauseId,
+      body,
+    }),
+);
+
+export default updateClause;

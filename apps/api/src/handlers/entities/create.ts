@@ -9,6 +9,8 @@ import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
@@ -149,3 +151,21 @@ export const createEntitiesHandler = async ({
 
   return txResult;
 };
+
+const config = {
+  permissions: { entity: ["create"] },
+  body: createEntityBodySchema,
+} satisfies HandlerConfig;
+
+const createEntities = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, user, body }) =>
+    await createEntitiesHandler({
+      scopedDb,
+      workspaceId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default createEntities;

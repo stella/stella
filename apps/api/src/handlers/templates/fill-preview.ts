@@ -9,12 +9,19 @@ import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import type { TemplateData } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
 
 import { containsNull } from "./fill";
 
 export const fillPreviewBodySchema = t.Object({
   values: t.String(),
+});
+
+export const fillPreviewParamsSchema = t.Object({
+  templateId: tNanoid,
 });
 
 type FillPreviewProps = {
@@ -96,3 +103,22 @@ export const fillPreviewHandler = async ({
     structureErrors: result.structureErrors,
   };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  params: fillPreviewParamsSchema,
+  body: fillPreviewBodySchema,
+} satisfies HandlerConfig;
+
+const fillTemplatePreview = createRootHandler(
+  config,
+  async ({ scopedDb, session, params, body }) =>
+    await fillPreviewHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      templateId: params.templateId,
+      body,
+    }),
+);
+
+export default fillTemplatePreview;

@@ -5,6 +5,8 @@ import { nanoid } from "nanoid";
 import type { ScopedDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -126,3 +128,21 @@ export const createClauseHandler = async ({
 
   return inserted;
 };
+
+const config = {
+  permissions: { clause: ["create"] },
+  body: createClauseBodySchema,
+} satisfies HandlerConfig;
+
+const createClause = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, body }) =>
+    await createClauseHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default createClause;

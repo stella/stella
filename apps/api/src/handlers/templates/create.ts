@@ -12,6 +12,8 @@ import {
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
@@ -213,3 +215,21 @@ export const createTemplateHandler = async ({
 
   return inserted;
 };
+
+const config = {
+  permissions: { template: ["create"] },
+  body: createTemplateBodySchema,
+} satisfies HandlerConfig;
+
+const createTemplate = createRootHandler(
+  config,
+  async ({ scopedDb, session, user, body }) =>
+    await createTemplateHandler({
+      scopedDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      body,
+    }),
+);
+
+export default createTemplate;
