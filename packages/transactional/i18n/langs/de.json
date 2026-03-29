@@ -16,6 +16,6 @@
     "ignore": "Wenn Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.",
     "preview": "Ihr Einmalcode: {otp}",
     "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem stella-Konto anzumelden.",
-    "subject": "stella"
+    "subject": "{otp} ist Ihr stella-Bestätigungscode"
   }
 }

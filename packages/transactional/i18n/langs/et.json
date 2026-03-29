@@ -16,6 +16,6 @@
     "ignore": "Kui te ei taotlenud seda koodi, võite selle e-kirja eirata.",
     "preview": "Teie ühekordne kood: {otp}",
     "signIn": "Kasutage seda koodi oma stella kontole sisselogimiseks.",
-    "subject": "stella"
+    "subject": "{otp} on teie stella kinnituskood"
   }
 }

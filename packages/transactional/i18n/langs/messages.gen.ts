@@ -19,7 +19,7 @@ type Messages = {
     "ignore": "If you didn't request this code, you can ignore this email.";
     "preview": "Your one-time code: {otp}";
     "signIn": "Use this code to sign in to your Stella account.";
-    "subject": "Stella";
+    "subject": "{otp} is your stella verification code";
   };
 };
 

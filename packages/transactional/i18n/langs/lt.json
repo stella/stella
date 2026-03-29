@@ -16,6 +16,6 @@
     "ignore": "Jei neprašėte šio kodo, galite nepaisyti šio el. laiško.",
     "preview": "Jūsų vienkartinis kodas: {otp}",
     "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
-    "subject": "stella"
+    "subject": "{otp} yra jūsų stella patvirtinimo kodas"
   }
 }

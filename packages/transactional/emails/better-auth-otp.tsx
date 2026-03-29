@@ -28,8 +28,8 @@ type Props = {
   lang: SupportedLang;
 };
 
-export const subject = (lang: SupportedLang) =>
-  getTranslator(lang)("otp.subject");
+export const subject = (lang: SupportedLang, otp: string) =>
+  getTranslator(lang)("otp.subject", { otp });
 
 export const Email = ({ otp, type, lang }: Props) => {
   const tr = getTranslator(lang);

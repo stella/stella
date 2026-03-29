@@ -73,7 +73,7 @@ export const sendOTPEmail = async ({
   await getTransport().send({
     from: env.TRANSACTIONAL_EMAIL_FROM,
     to: email,
-    subject: BetterAuthOTP.subject(lang),
+    subject: BetterAuthOTP.subject(lang, otp),
     html,
   });
 };
