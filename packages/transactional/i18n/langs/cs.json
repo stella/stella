@@ -16,6 +16,6 @@
     "ignore": "Pokud jste o tento kód nežádali, tento e-mail můžete ignorovat.",
     "preview": "Váš jednorázový kód: {otp}",
     "signIn": "Použijte tento kód pro přihlášení ke svému účtu stella.",
-    "subject": "stella"
+    "subject": "{otp} — váš ověřovací kód stella"
   }
 }

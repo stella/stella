@@ -16,6 +16,6 @@
     "ignore": "Ha nem Ön kérte ezt a kódot, figyelmen kívül hagyhatja ezt az e-mailt.",
     "preview": "Az Ön egyszer használatos kódja: {otp}",
     "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
-    "subject": "stella"
+    "subject": "{otp} az Ön stella ellenőrző kódja"
   }
 }

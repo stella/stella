@@ -16,6 +16,6 @@
     "ignore": "Ja neesat pieprasījis šo kodu, varat ignorēt šo e-pastu.",
     "preview": "Jūsu vienreizējais kods: {otp}",
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
-    "subject": "stella"
+    "subject": "{otp} ir jūsu stella verifikācijas kods"
   }
 }

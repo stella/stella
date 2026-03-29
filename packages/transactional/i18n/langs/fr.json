@@ -16,6 +16,6 @@
     "ignore": "Si vous n'avez pas demandé ce code, vous pouvez ignorer cet e-mail.",
     "preview": "Votre code à usage unique : {otp}",
     "signIn": "Utilisez ce code pour vous connecter à votre compte stella.",
-    "subject": "stella"
+    "subject": "{otp} est votre code de vérification stella"
   }
 }

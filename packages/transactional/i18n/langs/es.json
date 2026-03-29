@@ -16,6 +16,6 @@
     "ignore": "Si no ha solicitado este código, puede ignorar este correo electrónico.",
     "preview": "Su código de un solo uso: {otp}",
     "signIn": "Utilice este código para iniciar sesión en su cuenta de stella.",
-    "subject": "stella"
+    "subject": "{otp} es su código de verificación de stella"
   }
 }

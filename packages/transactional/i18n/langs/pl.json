@@ -16,6 +16,6 @@
     "ignore": "Jeśli nie prosiłeś o ten kod, możesz zignorować tę wiadomość.",
     "preview": "Twój jednorazowy kod: {otp}",
     "signIn": "Użyj tego kodu, aby zalogować się na swoje konto stella.",
-    "subject": "stella"
+    "subject": "{otp} to Twój kod weryfikacyjny stella"
   }
 }
