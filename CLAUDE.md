@@ -241,7 +241,7 @@ guidelines, and visual noise rules in `/conventions-ux`.
 - Never construct Tailwind class names dynamically
   (e.g. `` `bg-${color}-200` ``); Tailwind can't detect
   them. Use `style` with CSS variables instead
-  (e.g. `` style={{ backgroundColor: `var(--color-${name}-200)` }} ``).
+  (e.g. ``style={{ backgroundColor: `var(--color-${name}-200)` }}``).
 - `cn()` utility for conditional class names
 - Return minimal data from endpoints and mutations. Backend
   handlers should only return what callers actually need;
@@ -258,6 +258,11 @@ guidelines, and visual noise rules in `/conventions-ux`.
 - Prefer `useRouteContext` for data already provided by parent
   route loaders (`beforeLoad`) over firing a separate query.
   Extend the route context if needed rather than adding a query.
+- Use `useSuspenseQuery` only in route/page content where the
+  query is preloaded or wrapped by an explicit local `Suspense`
+  boundary. In shared chrome (breadcrumbs, headers, toolbars,
+  sidebar shell), prefer `useQuery` so a cache miss cannot
+  suspend the whole layout.
 - Always use `select` with `useParams`, `useSearch`, and
   `useRouteContext` to subscribe only to the fields the
   component needs. Without `select`, the component rerenders
