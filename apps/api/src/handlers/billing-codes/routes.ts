@@ -1,21 +1,9 @@
 import Elysia from "elysia";
 
-import {
-  createBillingCodeBodySchema,
-  createBillingCodeHandler,
-} from "@/api/handlers/billing-codes/create";
-import {
-  deleteBillingCodeBodySchema,
-  deleteBillingCodeHandler,
-} from "@/api/handlers/billing-codes/delete";
-import {
-  readBillingCodesHandler,
-  readBillingCodesQuerySchema,
-} from "@/api/handlers/billing-codes/read";
-import {
-  updateBillingCodeBodySchema,
-  updateBillingCodeHandler,
-} from "@/api/handlers/billing-codes/update";
+import createBillingCode from "@/api/handlers/billing-codes/create";
+import deleteBillingCode from "@/api/handlers/billing-codes/delete";
+import readBillingCodes from "@/api/handlers/billing-codes/read";
+import updateBillingCode from "@/api/handlers/billing-codes/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
@@ -28,58 +16,18 @@ export const billingCodesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .get(
-    "/",
-    async (ctx) =>
-      await readBillingCodesHandler({
-        workspaceId: ctx.workspaceId,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: readBillingCodesQuerySchema,
-    },
-  )
-  .put(
-    "/",
-    async (ctx) =>
-      await createBillingCodeHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { billingCode: ["create"] },
-      invalidateQuery: true,
-      body: createBillingCodeBodySchema,
-    },
-  )
-  .patch(
-    "/",
-    async (ctx) =>
-      await updateBillingCodeHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { billingCode: ["update"] },
-      invalidateQuery: true,
-      body: updateBillingCodeBodySchema,
-    },
-  )
-  .delete(
-    "/",
-    async (ctx) =>
-      await deleteBillingCodeHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { billingCode: ["delete"] },
-      invalidateQuery: true,
-      body: deleteBillingCodeBodySchema,
-    },
-  );
+  .get("/", readBillingCodes.handler, {
+    query: readBillingCodes.config.query,
+  })
+  .put("/", createBillingCode.handler, {
+    body: createBillingCode.config.body,
+    invalidateQuery: true,
+  })
+  .patch("/", updateBillingCode.handler, {
+    body: updateBillingCode.config.body,
+    invalidateQuery: true,
+  })
+  .delete("/", deleteBillingCode.handler, {
+    body: deleteBillingCode.config.body,
+    invalidateQuery: true,
+  });

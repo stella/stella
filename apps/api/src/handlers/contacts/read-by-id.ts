@@ -1,75 +1,77 @@
 import { and, count, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { workspaceContacts } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-type ReadContactByIdHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  contactId: string;
-};
+const readContactByIdParamsSchema = t.Object({
+  contactId: tNanoid,
+});
 
-export const readContactByIdHandler = async ({
-  scopedDb,
-  organizationId,
-  contactId,
-}: ReadContactByIdHandlerProps) => {
-  const contact = await scopedDb((tx) =>
-    tx.query.contacts.findFirst({
-      where: {
-        id: contactId,
-        organizationId: { eq: organizationId },
-      },
-      with: {
-        originatingAttorney: {
-          columns: { id: true, name: true, image: true },
+const readContactById = createRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    params: readContactByIdParamsSchema,
+  },
+  async ({ scopedDb, session, params }) => {
+    const contact = await scopedDb((tx) =>
+      tx.query.contacts.findFirst({
+        where: {
+          id: params.contactId,
+          organizationId: { eq: session.activeOrganizationId },
         },
-        responsibleAttorney: {
-          columns: { id: true, name: true, image: true },
+        with: {
+          originatingAttorney: {
+            columns: { id: true, name: true, image: true },
+          },
+          responsibleAttorney: {
+            columns: { id: true, name: true, image: true },
+          },
         },
-      },
-    }),
-  );
+      }),
+    );
 
-  if (!contact) {
-    return status(404, { message: "Contact not found" });
-  }
+    if (!contact) {
+      return status(404, { message: "Contact not found" });
+    }
 
-  const clientMatters = await scopedDb((tx) =>
-    tx.query.workspaces.findMany({
-      where: {
-        clientId: contactId,
-        organizationId: { eq: organizationId },
-        status: "active",
-      },
-      columns: {
-        id: true,
-        name: true,
-        color: true,
-        createdAt: true,
-      },
-      limit: LIMITS.workspacesCount,
-    }),
-  );
+    const clientMatters = await scopedDb((tx) =>
+      tx.query.workspaces.findMany({
+        where: {
+          clientId: params.contactId,
+          organizationId: { eq: session.activeOrganizationId },
+          status: "active",
+        },
+        columns: {
+          id: true,
+          name: true,
+          color: true,
+          createdAt: true,
+        },
+        limit: LIMITS.workspacesCount,
+      }),
+    );
 
-  const [partyMatters] = await scopedDb((tx) =>
-    tx
-      .select({ count: count() })
-      .from(workspaceContacts)
-      .where(
-        and(
-          eq(workspaceContacts.contactId, contactId),
-          eq(workspaceContacts.organizationId, organizationId),
+    const [partyMatters] = await scopedDb((tx) =>
+      tx
+        .select({ count: count() })
+        .from(workspaceContacts)
+        .where(
+          and(
+            eq(workspaceContacts.contactId, params.contactId),
+            eq(workspaceContacts.organizationId, session.activeOrganizationId),
+          ),
         ),
-      ),
-  );
+    );
 
-  return {
-    ...contact,
-    clientMatters,
-    partyCount: partyMatters?.count ?? 0,
-  };
-};
+    return {
+      ...contact,
+      clientMatters,
+      partyCount: partyMatters?.count ?? 0,
+    };
+  },
+);
+
+export default readContactById;

@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
+import { createHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const resolveRateQuerySchema = t.Object({
@@ -11,28 +11,22 @@ export const resolveRateQuerySchema = t.Object({
   date: t.String({ format: "date" }),
 });
 
-type ResolveRateQuerySchema = Static<typeof resolveRateQuerySchema>;
+const resolveRateHandler = createHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: resolveRateQuerySchema,
+  },
+  async ({ scopedDb, workspaceId, query }) => {
+    const result = await resolveRate({
+      scopedDb,
+      workspaceId,
+      userId: query.userId,
+      dateWorked: query.date,
+    });
 
-type ResolveRateHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  query: ResolveRateQuerySchema;
-};
-
-export const resolveRateHandler = async ({
-  scopedDb,
-  workspaceId,
-  query,
-}: ResolveRateHandlerProps) => {
-  const result = await resolveRate({
-    scopedDb,
-    workspaceId,
-    userId: query.userId,
-    dateWorked: query.date,
-  });
-
-  return result ?? { hourlyRate: null, currency: null };
-};
+    return result ?? { hourlyRate: null, currency: null };
+  },
+);
 
 export const resolveRate = async ({
   scopedDb,
@@ -82,7 +76,7 @@ export const resolveRate = async ({
       .limit(1),
   );
 
-  const userRateRow = userRate[0];
+  const userRateRow = userRate.at(0);
   if (userRateRow) {
     return {
       hourlyRate: userRateRow.hourlyRate,
@@ -108,7 +102,7 @@ export const resolveRate = async ({
       .limit(1),
   );
 
-  const defaultRateRow = defaultRate[0];
+  const defaultRateRow = defaultRate.at(0);
   if (defaultRateRow) {
     return {
       hourlyRate: defaultRateRow.hourlyRate,
@@ -118,3 +112,5 @@ export const resolveRate = async ({
 
   return null;
 };
+
+export default resolveRateHandler;

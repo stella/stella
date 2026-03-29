@@ -1,33 +1,34 @@
-import type { ScopedDb } from "@/api/db";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
 
-type ReadOrganizationSettingsHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-};
+const config = {
+  permissions: { workspace: ["read"] },
+} satisfies HandlerConfig;
 
-export const readOrganizationSettingsHandler = async ({
-  scopedDb,
-  organizationId,
-}: ReadOrganizationSettingsHandlerProps) => {
-  const row = await scopedDb((tx) =>
-    tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: {
-        matterNumberPattern: true,
-        matterNumberPadding: true,
-      },
-    }),
-  );
+const readOrganizationSettings = createRootHandler(
+  config,
+  async ({ scopedDb, session }) => {
+    const row = await scopedDb((tx) =>
+      tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: session.activeOrganizationId } },
+        columns: {
+          matterNumberPattern: true,
+          matterNumberPadding: true,
+        },
+      }),
+    );
 
-  return {
-    matterNumberPattern:
-      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-    matterNumberPadding:
-      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-  };
-};
+    return {
+      matterNumberPattern:
+        row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+      matterNumberPadding:
+        row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+    };
+  },
+);
+
+export default readOrganizationSettings;

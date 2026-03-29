@@ -1,8 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -11,7 +9,7 @@ import {
   contactEmailSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -42,67 +40,61 @@ export const createContactBodySchema = t.Object({
   responsibleAttorneyId: t.Optional(t.String()),
 });
 
-type CreateContactBody = Static<typeof createContactBodySchema>;
+const createContact = createRootHandler(
+  {
+    permissions: { contact: ["create"] },
+    body: createContactBodySchema,
+  },
+  async ({ scopedDb, session, user, body }) => {
+    const [totalRow] = await scopedDb((tx) =>
+      tx
+        .select({ total: count() })
+        .from(contacts)
+        .where(eq(contacts.organizationId, session.activeOrganizationId)),
+    );
 
-type CreateContactHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  userId: string;
-  body: CreateContactBody;
-};
+    const total = totalRow?.total ?? 0;
 
-export const createContactHandler = async ({
-  scopedDb,
-  organizationId,
-  userId,
-  body,
-}: CreateContactHandlerProps) => {
-  const [totalRow] = await scopedDb((tx) =>
-    tx
-      .select({ total: count() })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId)),
-  );
+    if (total >= LIMITS.contactsCount) {
+      return status(400, { message: "Contacts limit reached" });
+    }
 
-  const total = totalRow?.total ?? 0;
+    const [contact] = await scopedDb((tx) =>
+      tx
+        .insert(contacts)
+        .values({
+          id: body.id,
+          organizationId: session.activeOrganizationId,
+          type: body.type,
+          prefix: body.prefix,
+          firstName: body.firstName,
+          middleName: body.middleName,
+          lastName: body.lastName,
+          suffix: body.suffix,
+          organizationName: body.organizationName,
+          displayName: body.displayName,
+          notes: body.notes,
+          emails: body.emails,
+          phones: body.phones,
+          addresses: body.addresses,
+          tags: body.tags,
+          color: body.color,
+          registrationNumber: body.registrationNumber,
+          taxId: body.taxId,
+          bankAccounts: body.bankAccounts,
+          billingAddress: body.billingAddress,
+          defaultHourlyRate: body.defaultHourlyRate,
+          currency: body.currency,
+          paymentTermDays: body.paymentTermDays,
+          originatingAttorneyId: body.originatingAttorneyId,
+          responsibleAttorneyId: body.responsibleAttorneyId,
+          createdBy: user.id,
+        })
+        .returning(),
+    );
 
-  if (total >= LIMITS.contactsCount) {
-    return status(400, { message: "Contacts limit reached" });
-  }
+    return contact;
+  },
+);
 
-  const [contact] = await scopedDb((tx) =>
-    tx
-      .insert(contacts)
-      .values({
-        id: body.id,
-        organizationId,
-        type: body.type,
-        prefix: body.prefix,
-        firstName: body.firstName,
-        middleName: body.middleName,
-        lastName: body.lastName,
-        suffix: body.suffix,
-        organizationName: body.organizationName,
-        displayName: body.displayName,
-        notes: body.notes,
-        emails: body.emails,
-        phones: body.phones,
-        addresses: body.addresses,
-        tags: body.tags,
-        color: body.color,
-        registrationNumber: body.registrationNumber,
-        taxId: body.taxId,
-        bankAccounts: body.bankAccounts,
-        billingAddress: body.billingAddress,
-        defaultHourlyRate: body.defaultHourlyRate,
-        currency: body.currency,
-        paymentTermDays: body.paymentTermDays,
-        originatingAttorneyId: body.originatingAttorneyId,
-        responsibleAttorneyId: body.responsibleAttorneyId,
-        createdBy: userId,
-      })
-      .returning(),
-  );
-
-  return contact;
-};
+export default createContact;

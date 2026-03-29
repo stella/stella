@@ -1,63 +1,60 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 export const deleteRateEntryBodySchema = t.Object({
   id: tNanoid,
 });
 
-type DeleteRateEntryBodySchema = Static<typeof deleteRateEntryBodySchema>;
+const rateEntryParamsSchema = t.Object({
+  rateTableId: tNanoid,
+});
 
-type DeleteRateEntryHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  rateTableId: string;
-  body: DeleteRateEntryBodySchema;
-};
+const deleteRateEntry = createHandler(
+  {
+    permissions: { rate: ["delete"] },
+    params: rateEntryParamsSchema,
+    body: deleteRateEntryBodySchema,
+  },
+  async ({ scopedDb, workspaceId, params, body }) => {
+    const table = await scopedDb((tx) =>
+      tx.query.rateTables.findFirst({
+        where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+        columns: { id: true },
+      }),
+    );
 
-export const deleteRateEntryHandler = async ({
-  scopedDb,
-  workspaceId,
-  rateTableId,
-  body,
-}: DeleteRateEntryHandlerProps) => {
-  const table = await scopedDb((tx) =>
-    tx.query.rateTables.findFirst({
-      where: { id: rateTableId, workspaceId: { eq: workspaceId } },
-      columns: { id: true },
-    }),
-  );
+    if (!table) {
+      return status(404, { message: "Rate table not found" });
+    }
 
-  if (!table) {
-    return status(404, { message: "Rate table not found" });
-  }
+    const existing = await scopedDb((tx) =>
+      tx.query.rateEntries.findFirst({
+        where: { id: body.id, rateTableId: params.rateTableId },
+        columns: { id: true },
+      }),
+    );
 
-  const existing = await scopedDb((tx) =>
-    tx.query.rateEntries.findFirst({
-      where: { id: body.id, rateTableId },
-      columns: { id: true },
-    }),
-  );
+    if (!existing) {
+      return status(404, { message: "Rate entry not found" });
+    }
 
-  if (!existing) {
-    return status(404, { message: "Rate entry not found" });
-  }
-
-  await scopedDb((tx) =>
-    tx
-      .delete(rateEntries)
-      .where(
-        and(
-          eq(rateEntries.id, body.id),
-          eq(rateEntries.rateTableId, rateTableId),
+    await scopedDb((tx) =>
+      tx
+        .delete(rateEntries)
+        .where(
+          and(
+            eq(rateEntries.id, body.id),
+            eq(rateEntries.rateTableId, params.rateTableId),
+          ),
         ),
-      ),
-  );
+    );
 
-  return { deleted: true };
-};
+    return { deleted: true };
+  },
+);
+
+export default deleteRateEntry;

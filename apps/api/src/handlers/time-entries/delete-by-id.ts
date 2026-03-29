@@ -1,49 +1,58 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 export const deleteTimeEntryBodySchema = t.Object({
   id: tNanoid,
 });
 
-type DeleteTimeEntryBodySchema = Static<typeof deleteTimeEntryBodySchema>;
+const deleteTimeEntryById = createHandler(
+  {
+    permissions: { timeEntry: ["delete"] },
+    body: deleteTimeEntryBodySchema,
+  },
+  async ({ scopedDb, workspaceId, body }) => {
+    const existing = await scopedDb((tx) =>
+      tx.query.timeEntries.findFirst({
+        where: {
+          id: body.id,
+          workspaceId: { eq: workspaceId },
+        },
+        columns: {
+          status: true,
+        },
+      }),
+    );
 
-type DeleteTimeEntryByIdHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  body: DeleteTimeEntryBodySchema;
-};
+    if (!existing) {
+      return status(404, { message: "Time entry not found" });
+    }
 
-export const deleteTimeEntryByIdHandler = async ({
-  scopedDb,
-  workspaceId,
-  body,
-}: DeleteTimeEntryByIdHandlerProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.timeEntries.findFirst({
-      where: {
-        id: body.id,
-        workspaceId: { eq: workspaceId },
-      },
-      columns: {
-        status: true,
-      },
-    }),
-  );
+    if (existing.status === BILLING_STATUS.DRAFT) {
+      await scopedDb((tx) =>
+        tx
+          .delete(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.id, body.id),
+              eq(timeEntries.workspaceId, workspaceId),
+            ),
+          ),
+      );
+      return { deleted: true };
+    }
 
-  if (!existing) {
-    return status(404, { message: "Time entry not found" });
-  }
-
-  if (existing.status === BILLING_STATUS.DRAFT) {
+    // Non-draft entries get written off instead of deleted
     await scopedDb((tx) =>
       tx
-        .delete(timeEntries)
+        .update(timeEntries)
+        .set({
+          status: BILLING_STATUS.WRITTEN_OFF,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(timeEntries.id, body.id),
@@ -51,24 +60,9 @@ export const deleteTimeEntryByIdHandler = async ({
           ),
         ),
     );
-    return { deleted: true };
-  }
 
-  // Non-draft entries get written off instead of deleted
-  await scopedDb((tx) =>
-    tx
-      .update(timeEntries)
-      .set({
-        status: BILLING_STATUS.WRITTEN_OFF,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(timeEntries.id, body.id),
-          eq(timeEntries.workspaceId, workspaceId),
-        ),
-      ),
-  );
+    return { deleted: false };
+  },
+);
 
-  return { deleted: false };
-};
+export default deleteTimeEntryById;

@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -9,83 +8,83 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 
-type DeleteInvoiceHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  invoiceId: string;
-};
+const invoiceParamsSchema = t.Object({
+  invoiceId: tNanoid,
+});
 
-export const deleteInvoiceHandler = async ({
-  scopedDb,
-  workspaceId,
-  invoiceId,
-}: DeleteInvoiceHandlerProps) => {
-  const now = new Date();
+const deleteInvoice = createHandler(
+  {
+    permissions: { invoice: ["delete"] },
+    params: invoiceParamsSchema,
+  },
+  async ({ scopedDb, workspaceId, params }) => {
+    const now = new Date();
 
-  const result = await scopedDb(async (tx) => {
-    // Verify draft status before touching linked entries.
-    const invoice = await tx.query.invoices.findFirst({
-      where: {
-        id: invoiceId,
-        workspaceId: { eq: workspaceId },
-        status: INVOICE_STATUS.DRAFT,
-      },
-      columns: { id: true },
+    const result = await scopedDb(async (tx) => {
+      const invoice = await tx.query.invoices.findFirst({
+        where: {
+          id: params.invoiceId,
+          workspaceId: { eq: workspaceId },
+          status: INVOICE_STATUS.DRAFT,
+        },
+        columns: { id: true },
+      });
+
+      if (!invoice) {
+        return null;
+      }
+
+      await tx
+        .update(timeEntries)
+        .set({
+          status: BILLING_STATUS.APPROVED,
+          invoiceId: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(timeEntries.invoiceId, params.invoiceId),
+            eq(timeEntries.workspaceId, workspaceId),
+          ),
+        );
+
+      await tx
+        .update(expenses)
+        .set({
+          status: BILLING_STATUS.APPROVED,
+          invoiceId: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(expenses.invoiceId, params.invoiceId),
+            eq(expenses.workspaceId, workspaceId),
+          ),
+        );
+
+      await tx
+        .delete(invoices)
+        .where(
+          and(
+            eq(invoices.id, params.invoiceId),
+            eq(invoices.workspaceId, workspaceId),
+          ),
+        );
+
+      return { deleted: true };
     });
 
-    if (!invoice) {
-      return null;
+    if (!result) {
+      return status(409, {
+        message: "Invoice not found or not in draft status",
+      });
     }
 
-    // Revert time entries before deleting the invoice,
-    // because the FK onDelete: "set null" would nullify
-    // invoiceId and prevent the UPDATE from matching.
-    await tx
-      .update(timeEntries)
-      .set({
-        status: BILLING_STATUS.APPROVED,
-        invoiceId: null,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(timeEntries.invoiceId, invoiceId),
-          eq(timeEntries.workspaceId, workspaceId),
-        ),
-      );
+    return result;
+  },
+);
 
-    // Revert expenses before deleting the invoice.
-    await tx
-      .update(expenses)
-      .set({
-        status: BILLING_STATUS.APPROVED,
-        invoiceId: null,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(expenses.invoiceId, invoiceId),
-          eq(expenses.workspaceId, workspaceId),
-        ),
-      );
-
-    // Delete the invoice.
-    await tx
-      .delete(invoices)
-      .where(
-        and(eq(invoices.id, invoiceId), eq(invoices.workspaceId, workspaceId)),
-      );
-
-    return { deleted: true };
-  });
-
-  if (!result) {
-    return status(409, {
-      message: "Invoice not found or not in draft status",
-    });
-  }
-
-  return result;
-};
+export default deleteInvoice;

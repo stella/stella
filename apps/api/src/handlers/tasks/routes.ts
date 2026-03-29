@@ -1,27 +1,13 @@
-import Elysia, { status, t } from "elysia";
+import Elysia from "elysia";
 
-import {
-  addAssigneeBodySchema,
-  addAssigneeHandler,
-  removeAssigneeBodySchema,
-  removeAssigneeHandler,
-} from "@/api/handlers/tasks/assignees";
-import {
-  createTaskBodySchema,
-  createTaskHandler,
-} from "@/api/handlers/tasks/create";
-import {
-  createEntityLinkBodySchema,
-  createEntityLinkHandler,
-  deleteEntityLinkBodySchema,
-  deleteEntityLinkHandler,
-  listEntityLinksHandler,
-} from "@/api/handlers/tasks/entity-links";
-import { readTaskByIdHandler } from "@/api/handlers/tasks/read-by-id";
-import {
-  updateTaskBodySchema,
-  updateTaskHandler,
-} from "@/api/handlers/tasks/update";
+import addAssignee from "@/api/handlers/tasks/assignees-add";
+import removeAssignee from "@/api/handlers/tasks/assignees-remove";
+import createTask from "@/api/handlers/tasks/create";
+import createEntityLink from "@/api/handlers/tasks/entity-links-create";
+import deleteEntityLink from "@/api/handlers/tasks/entity-links-delete";
+import listEntityLinks from "@/api/handlers/tasks/entity-links-read";
+import readTaskById from "@/api/handlers/tasks/read-by-id";
+import updateTask from "@/api/handlers/tasks/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
@@ -34,123 +20,33 @@ export const tasksRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .put(
-    "/",
-    async (ctx) =>
-      await createTaskHandler({
-        workspaceId: ctx.workspaceId,
-        userId: ctx.user.id,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["create"] },
-      invalidateQuery: true,
-      body: createTaskBodySchema,
-    },
-  )
-  .patch(
-    "/",
-    async (ctx) =>
-      await updateTaskHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["update"] },
-      invalidateQuery: true,
-      body: updateTaskBodySchema,
-    },
-  )
-  .get(
-    "/:taskId",
-    async (ctx) => {
-      const result = await readTaskByIdHandler({
-        workspaceId: ctx.workspaceId,
-        taskId: ctx.params.taskId,
-        scopedDb: ctx.scopedDb,
-      });
-      if (!result) {
-        return status(404, { message: "Task not found" });
-      }
-      return result;
-    },
-    {
-      params: t.Object({
-        workspaceId: t.String(),
-        taskId: t.String(),
-      }),
-    },
-  )
-  .post(
-    "/assignees",
-    async (ctx) =>
-      await addAssigneeHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["update"] },
-      invalidateQuery: true,
-      body: addAssigneeBodySchema,
-    },
-  )
-  .delete(
-    "/assignees",
-    async (ctx) =>
-      await removeAssigneeHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["update"] },
-      invalidateQuery: true,
-      body: removeAssigneeBodySchema,
-    },
-  )
-  .post(
-    "/links",
-    async (ctx) =>
-      await createEntityLinkHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["update"] },
-      invalidateQuery: true,
-      body: createEntityLinkBodySchema,
-    },
-  )
-  .delete(
-    "/links",
-    async (ctx) =>
-      await deleteEntityLinkHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["update"] },
-      invalidateQuery: true,
-      body: deleteEntityLinkBodySchema,
-    },
-  )
-  .get(
-    "/:taskId/links",
-    async (ctx) =>
-      await listEntityLinksHandler({
-        workspaceId: ctx.workspaceId,
-        entityId: ctx.params.taskId,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      params: t.Object({
-        workspaceId: t.String(),
-        taskId: t.String(),
-      }),
-    },
-  );
+  .put("/", createTask.handler, {
+    invalidateQuery: true,
+    body: createTask.config.body,
+  })
+  .patch("/", updateTask.handler, {
+    invalidateQuery: true,
+    body: updateTask.config.body,
+  })
+  .get("/:taskId", readTaskById.handler, {
+    params: readTaskById.config.params,
+  })
+  .post("/assignees", addAssignee.handler, {
+    invalidateQuery: true,
+    body: addAssignee.config.body,
+  })
+  .delete("/assignees", removeAssignee.handler, {
+    invalidateQuery: true,
+    body: removeAssignee.config.body,
+  })
+  .post("/links", createEntityLink.handler, {
+    invalidateQuery: true,
+    body: createEntityLink.config.body,
+  })
+  .delete("/links", deleteEntityLink.handler, {
+    invalidateQuery: true,
+    body: deleteEntityLink.config.body,
+  })
+  .get("/:taskId/links", listEntityLinks.handler, {
+    params: listEntityLinks.config.params,
+  });
