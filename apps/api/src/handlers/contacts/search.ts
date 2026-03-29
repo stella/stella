@@ -1,58 +1,59 @@
 import { and, eq, ilike, or } from "drizzle-orm";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const SEARCH_LIMIT = 20;
 
-type SearchContactsHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  q: string;
-  type?: "person" | "organization" | undefined;
-};
+const searchContactsQuerySchema = t.Object({
+  q: t.String({ minLength: 1 }),
+  type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
+});
 
-export const searchContactsHandler = async ({
-  scopedDb,
-  organizationId,
-  q,
-  type,
-}: SearchContactsHandlerProps) => {
-  const pattern = `%${escapeLike(q)}%`;
+const searchContacts = createRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: searchContactsQuerySchema,
+  },
+  async ({ scopedDb, session, query }) => {
+    const pattern = `%${escapeLike(query.q)}%`;
 
-  const conditions = [
-    eq(contacts.organizationId, organizationId),
-    or(
-      ilike(contacts.displayName, pattern),
-      ilike(contacts.firstName, pattern),
-      ilike(contacts.lastName, pattern),
-      ilike(contacts.organizationName, pattern),
-    ),
-  ];
+    const conditions = [
+      eq(contacts.organizationId, session.activeOrganizationId),
+      or(
+        ilike(contacts.displayName, pattern),
+        ilike(contacts.firstName, pattern),
+        ilike(contacts.lastName, pattern),
+        ilike(contacts.organizationName, pattern),
+      ),
+    ];
 
-  if (type) {
-    conditions.push(eq(contacts.type, type));
-  }
+    if (query.type) {
+      conditions.push(eq(contacts.type, query.type));
+    }
 
-  const items = await scopedDb((tx) =>
-    tx
-      .select({
-        id: contacts.id,
-        type: contacts.type,
-        displayName: contacts.displayName,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        organizationName: contacts.organizationName,
-        emails: contacts.emails,
-        color: contacts.color,
-      })
-      .from(contacts)
-      .where(and(...conditions))
-      .orderBy(contacts.displayName)
-      .limit(SEARCH_LIMIT),
-  );
+    const items = await scopedDb((tx) =>
+      tx
+        .select({
+          id: contacts.id,
+          type: contacts.type,
+          displayName: contacts.displayName,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          organizationName: contacts.organizationName,
+          emails: contacts.emails,
+          color: contacts.color,
+        })
+        .from(contacts)
+        .where(and(...conditions))
+        .orderBy(contacts.displayName)
+        .limit(SEARCH_LIMIT),
+    );
 
-  return { items };
-};
+    return { items };
+  },
+);
+
+export default searchContacts;

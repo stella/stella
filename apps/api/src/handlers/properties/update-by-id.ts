@@ -1,9 +1,7 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import {
   aiModelToolSchema,
@@ -16,7 +14,8 @@ import {
   comparePropertiesForStale,
   validatePropertyInputs,
 } from "@/api/handlers/properties/utils";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
@@ -62,7 +61,7 @@ const getTransitiveDependents = (
   return visited;
 };
 
-export const updatePropertyBodySchema = t.Object({
+const updatePropertyBodySchema = t.Object({
   name: tDefaultVarchar,
   content: propertyContentSchema,
   tool: t.Union([
@@ -81,144 +80,143 @@ export const updatePropertyBodySchema = t.Object({
   ]),
 });
 
-export type UpdatePropertyBodySchema = Static<typeof updatePropertyBodySchema>;
+const config = {
+  permissions: { property: ["update"] },
+  params: t.Object({
+    propertyId: tNanoid,
+  }),
+  body: updatePropertyBodySchema,
+} satisfies HandlerConfig;
 
-type UpdatePropertyHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  propertyId: string;
-  body: UpdatePropertyBodySchema;
-};
+const updateProperty = createHandler(
+  config,
+  async ({ scopedDb, workspaceId, params: { propertyId }, body }) => {
+    const { name, content } = body;
+    const tool =
+      body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
 
-export const updatePropertyHandler = async ({
-  scopedDb,
-  workspaceId,
-  propertyId,
-  body,
-}: UpdatePropertyHandlerProps) => {
-  const { name, content } = body;
-  const tool =
-    body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
-
-  if (content.type === "file" && tool.type !== "manual-input") {
-    return status(422, {
-      message: "File properties must have a manual input tool",
-    });
-  }
-
-  const oldProperty = await scopedDb((tx) =>
-    tx.query.properties.findFirst({
-      where: { id: propertyId, workspaceId: { eq: workspaceId } },
-      with: {
-        dependencies: {
-          columns: {
-            dependsOnPropertyId: true,
-            condition: true,
-          },
-        },
-      },
-    }),
-  );
-
-  if (!oldProperty) {
-    return status(404);
-  }
-
-  const isStale = comparePropertiesForStale({
-    oldProperty: {
-      content: oldProperty.content,
-      tool:
-        oldProperty.tool.type === "ai-model"
-          ? {
-              ...oldProperty.tool,
-              dependencies: oldProperty.dependencies,
-            }
-          : oldProperty.tool,
-    },
-    newProperty: { content, tool },
-  });
-
-  if (tool.type === "ai-model") {
-    const validation = await validatePropertyInputs({
-      scopedDb,
-      propertyId,
-      workspaceId,
-      proposedInputs: tool.dependencies.map((d) => d.dependsOnPropertyId),
-    });
-
-    if (Result.isError(validation)) {
+    if (content.type === "file" && tool.type !== "manual-input") {
       return status(422, {
-        message: "Circular dependency detected",
-        cycle: validation.error,
+        message: "File properties must have a manual input tool",
       });
     }
-  }
 
-  const dependencies = tool.type === "ai-model" ? tool.dependencies : [];
-
-  // Strip dependencies from the tool for DB storage
-  const dbTool: PropertyTool =
-    tool.type === "ai-model"
-      ? {
-          version: tool.version,
-          type: tool.type,
-          prompt: tool.prompt,
-        }
-      : tool;
-
-  await scopedDb(async (tx) => {
-    const updateProperty = tx
-      .update(properties)
-      .set({
-        name,
-        content,
-        tool: dbTool,
-        status: isStale ? "stale" : "fresh",
-      })
-      .where(eq(properties.id, propertyId));
-
-    const deleteDeps = tx
-      .delete(propertyDependencies)
-      .where(eq(propertyDependencies.propertyId, propertyId));
-
-    const promises: Promise<unknown>[] = [updateProperty, deleteDeps];
-
-    if (isStale) {
-      const allProperties = await tx.query.properties.findMany({
-        where: { workspaceId: { eq: workspaceId } },
-        columns: { id: true },
+    const oldProperty = await scopedDb((tx) =>
+      tx.query.properties.findFirst({
+        where: { id: propertyId, workspaceId: { eq: workspaceId } },
         with: {
           dependencies: {
-            columns: { dependsOnPropertyId: true },
+            columns: {
+              dependsOnPropertyId: true,
+              condition: true,
+            },
           },
         },
+      }),
+    );
+
+    if (!oldProperty) {
+      return status(404);
+    }
+
+    const isStale = comparePropertiesForStale({
+      oldProperty: {
+        content: oldProperty.content,
+        tool:
+          oldProperty.tool.type === "ai-model"
+            ? {
+                ...oldProperty.tool,
+                dependencies: oldProperty.dependencies,
+              }
+            : oldProperty.tool,
+      },
+      newProperty: { content, tool },
+    });
+
+    if (tool.type === "ai-model") {
+      const validation = await validatePropertyInputs({
+        scopedDb,
+        propertyId,
+        workspaceId,
+        proposedInputs: tool.dependencies.map((d) => d.dependsOnPropertyId),
       });
 
-      const staleIds = getTransitiveDependents(propertyId, allProperties);
-
-      if (staleIds.size > 0) {
-        promises.push(
-          tx
-            .update(properties)
-            .set({ status: "stale" })
-            .where(inArray(properties.id, [...staleIds])),
-        );
+      if (Result.isError(validation)) {
+        return status(422, {
+          message: "Circular dependency detected",
+          cycle: validation.error,
+        });
       }
     }
 
-    await Promise.all(promises);
+    const dependencies = tool.type === "ai-model" ? tool.dependencies : [];
 
-    if (dependencies.length > 0) {
-      await tx.insert(propertyDependencies).values(
-        dependencies.map(({ dependsOnPropertyId, condition }) => ({
-          workspaceId,
-          propertyId,
-          dependsOnPropertyId,
-          condition,
-        })),
-      );
-    }
-  });
+    // Strip dependencies from the tool for DB storage
+    const dbTool: PropertyTool =
+      tool.type === "ai-model"
+        ? {
+            version: tool.version,
+            type: tool.type,
+            prompt: tool.prompt,
+          }
+        : tool;
 
-  return;
-};
+    await scopedDb(async (tx) => {
+      const updatePropertyQuery = tx
+        .update(properties)
+        .set({
+          name,
+          content,
+          tool: dbTool,
+          status: isStale ? "stale" : "fresh",
+        })
+        .where(eq(properties.id, propertyId));
+
+      const deleteDeps = tx
+        .delete(propertyDependencies)
+        .where(eq(propertyDependencies.propertyId, propertyId));
+
+      const promises: Promise<unknown>[] = [updatePropertyQuery, deleteDeps];
+
+      if (isStale) {
+        const allProperties = await tx.query.properties.findMany({
+          where: { workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+          with: {
+            dependencies: {
+              columns: { dependsOnPropertyId: true },
+            },
+          },
+        });
+
+        const staleIds = getTransitiveDependents(propertyId, allProperties);
+
+        if (staleIds.size > 0) {
+          promises.push(
+            tx
+              .update(properties)
+              .set({ status: "stale" })
+              .where(inArray(properties.id, [...staleIds])),
+          );
+        }
+      }
+
+      await Promise.all(promises);
+
+      if (dependencies.length > 0) {
+        await tx.insert(propertyDependencies).values(
+          dependencies.map(({ dependsOnPropertyId, condition }) => ({
+            workspaceId,
+            propertyId,
+            dependsOnPropertyId,
+            condition,
+          })),
+        );
+      }
+    });
+
+    return;
+  },
+);
+
+export default updateProperty;

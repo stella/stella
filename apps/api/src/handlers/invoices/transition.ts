@@ -1,8 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -11,7 +9,8 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 
 type TransitionAction =
   | "finalize"
@@ -56,126 +55,113 @@ export const transitionInvoiceBodySchema = t.Object({
   ]),
 });
 
-type TransitionInvoiceBodySchema = Static<typeof transitionInvoiceBodySchema>;
+const invoiceParamsSchema = t.Object({
+  invoiceId: tNanoid,
+});
 
-type TransitionInvoiceHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  invoiceId: string;
-  body: TransitionInvoiceBodySchema;
-};
+const transitionInvoice = createHandler(
+  {
+    permissions: { invoice: ["update"] },
+    params: invoiceParamsSchema,
+    body: transitionInvoiceBodySchema,
+  },
+  async ({ scopedDb, workspaceId, params, body }) => {
+    const transition = TRANSITIONS[body.action];
+    const now = new Date();
 
-export const transitionInvoiceHandler = async ({
-  scopedDb,
-  workspaceId,
-  invoiceId,
-  body,
-}: TransitionInvoiceHandlerProps) => {
-  const transition = TRANSITIONS[body.action];
-  const now = new Date();
+    const set: Partial<typeof invoices.$inferInsert> = {
+      status: transition.to,
+      updatedAt: now,
+    };
 
-  const set: Partial<typeof invoices.$inferInsert> = {
-    status: transition.to,
-    updatedAt: now,
-  };
+    if (body.action === "mark_paid") {
+      set.paidAt = now;
+    } else if (body.action === "void") {
+      set.paidAt = null;
+    }
 
-  if (body.action === "mark_paid") {
-    set.paidAt = now;
-  } else if (body.action === "void") {
-    set.paidAt = null;
-  }
+    if (body.action === "void") {
+      const result = await scopedDb(async (tx) => {
+        const updated = await tx
+          .update(invoices)
+          .set(set)
+          .where(
+            and(
+              eq(invoices.id, params.invoiceId),
+              eq(invoices.workspaceId, workspaceId),
+              inArray(invoices.status, transition.from),
+            ),
+          )
+          .returning({ id: invoices.id });
 
-  // Void requires a transaction: revert linked entries.
-  if (body.action === "void") {
-    const result = await scopedDb(async (tx) => {
-      const updated = await tx
+        const voidedInvoice = updated.at(0);
+        if (!voidedInvoice) {
+          return null;
+        }
+
+        await tx
+          .update(timeEntries)
+          .set({
+            status: BILLING_STATUS.APPROVED,
+            invoiceId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(timeEntries.invoiceId, params.invoiceId),
+              eq(timeEntries.workspaceId, workspaceId),
+            ),
+          );
+
+        await tx
+          .update(expenses)
+          .set({
+            status: BILLING_STATUS.APPROVED,
+            invoiceId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(expenses.invoiceId, params.invoiceId),
+              eq(expenses.workspaceId, workspaceId),
+            ),
+          );
+
+        return { id: voidedInvoice.id };
+      });
+
+      if (!result) {
+        return status(409, {
+          message: "Invoice cannot be voided from its current status",
+        });
+      }
+
+      return result;
+    }
+
+    const result = await scopedDb((tx) =>
+      tx
         .update(invoices)
         .set(set)
         .where(
           and(
-            eq(invoices.id, invoiceId),
+            eq(invoices.id, params.invoiceId),
             eq(invoices.workspaceId, workspaceId),
             inArray(invoices.status, transition.from),
           ),
         )
-        .returning({ id: invoices.id });
+        .returning({ id: invoices.id }),
+    );
 
-      if (updated.length === 0) {
-        return null;
-      }
-
-      // Revert time entries: billed → approved, clear invoiceId.
-      await tx
-        .update(timeEntries)
-        .set({
-          status: BILLING_STATUS.APPROVED,
-          invoiceId: null,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(timeEntries.invoiceId, invoiceId),
-            eq(timeEntries.workspaceId, workspaceId),
-          ),
-        );
-
-      // Revert expenses: clear invoiceId and reset status.
-      await tx
-        .update(expenses)
-        .set({
-          status: BILLING_STATUS.APPROVED,
-          invoiceId: null,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(expenses.invoiceId, invoiceId),
-            eq(expenses.workspaceId, workspaceId),
-          ),
-        );
-
-      const voidedInvoice = updated[0];
-      if (!voidedInvoice) {
-        return null;
-      }
-      return { id: voidedInvoice.id };
-    });
-
-    if (!result) {
+    const transitioned = result.at(0);
+    if (!transitioned) {
       return status(409, {
-        message: "Invoice cannot be voided from its current status",
+        message: `Cannot ${body.action} invoice from its current status`,
       });
     }
 
-    return result;
-  }
+    return { id: transitioned.id };
+  },
+);
 
-  // Non-void transitions: simple status update.
-  const result = await scopedDb((tx) =>
-    tx
-      .update(invoices)
-      .set(set)
-      .where(
-        and(
-          eq(invoices.id, invoiceId),
-          eq(invoices.workspaceId, workspaceId),
-          inArray(invoices.status, transition.from),
-        ),
-      )
-      .returning({ id: invoices.id }),
-  );
-
-  if (result.length === 0) {
-    return status(409, {
-      message: `Cannot ${body.action} invoice from its current status`,
-    });
-  }
-
-  const transitioned = result[0];
-  if (!transitioned) {
-    return status(409, {
-      message: `Cannot ${body.action} invoice from its current status`,
-    });
-  }
-  return { id: transitioned.id };
-};
+export default transitionInvoice;

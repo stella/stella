@@ -23,16 +23,38 @@ const resolvingScopedDb = () =>
   >[0]["scopedDb"] &
     ReturnType<typeof mock>;
 
+const createHandlerContext = ({
+  body,
+  scopedDb,
+}: {
+  body: Parameters<typeof createTaskHandler>[0]["body"];
+  scopedDb: Parameters<typeof createTaskHandler>[0]["scopedDb"];
+}): Parameters<typeof createTaskHandler>[0] => ({
+  workspaceId,
+  user: {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
+    id: userId as SafeId<"user">,
+  },
+  session: {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
+    activeOrganizationId: "org_test123" as SafeId<"organization">,
+    token: "token",
+  },
+  memberRole: { role: "owner" },
+  body,
+  scopedDb,
+});
+
 describe("createTaskHandler validation", () => {
   test("invalid status returns 400 before DB call", async () => {
     const scopedDb = throwingScopedDb();
 
-    const result = await createTaskHandler({
-      workspaceId,
-      userId,
-      body: { name: "Test task", status: "bogus" },
-      scopedDb,
-    });
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: { name: "Test task", status: "bogus" },
+        scopedDb,
+      }),
+    );
 
     expect(result).toEqual({
       code: 400,
@@ -43,12 +65,12 @@ describe("createTaskHandler validation", () => {
   test("invalid priority returns 400 before DB call", async () => {
     const scopedDb = throwingScopedDb();
 
-    const result = await createTaskHandler({
-      workspaceId,
-      userId,
-      body: { name: "Test task", priority: "critical" },
-      scopedDb,
-    });
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: { name: "Test task", priority: "critical" },
+        scopedDb,
+      }),
+    );
 
     expect(result).toEqual({
       code: 400,
@@ -59,16 +81,16 @@ describe("createTaskHandler validation", () => {
   test("invalid status checked before invalid priority", async () => {
     const scopedDb = throwingScopedDb();
 
-    const result = await createTaskHandler({
-      workspaceId,
-      userId,
-      body: {
-        name: "Test task",
-        status: "bogus",
-        priority: "critical",
-      },
-      scopedDb,
-    });
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: {
+          name: "Test task",
+          status: "bogus",
+          priority: "critical",
+        },
+        scopedDb,
+      }),
+    );
 
     expect(result).toEqual({
       code: 400,
@@ -79,16 +101,16 @@ describe("createTaskHandler validation", () => {
   test("valid status and priority proceeds to DB call", async () => {
     const scopedDb = resolvingScopedDb();
 
-    await createTaskHandler({
-      workspaceId,
-      userId,
-      body: {
-        name: "Test task",
-        status: "in_progress",
-        priority: "high",
-      },
-      scopedDb,
-    });
+    await createTaskHandler(
+      createHandlerContext({
+        body: {
+          name: "Test task",
+          status: "in_progress",
+          priority: "high",
+        },
+        scopedDb,
+      }),
+    );
 
     expect(scopedDb).toHaveBeenCalledTimes(1);
   });
@@ -96,12 +118,12 @@ describe("createTaskHandler validation", () => {
   test("defaults status to 'open' and priority to 'none'", async () => {
     const scopedDb = resolvingScopedDb();
 
-    await createTaskHandler({
-      workspaceId,
-      userId,
-      body: { name: "Test task" },
-      scopedDb,
-    });
+    await createTaskHandler(
+      createHandlerContext({
+        body: { name: "Test task" },
+        scopedDb,
+      }),
+    );
 
     expect(scopedDb).toHaveBeenCalledTimes(1);
   });
@@ -118,12 +140,12 @@ describe("createTaskHandler validation", () => {
     for (const taskStatus of validStatuses) {
       const scopedDb = resolvingScopedDb();
 
-      await createTaskHandler({
-        workspaceId,
-        userId,
-        body: { name: "Test task", status: taskStatus },
-        scopedDb,
-      });
+      await createTaskHandler(
+        createHandlerContext({
+          body: { name: "Test task", status: taskStatus },
+          scopedDb,
+        }),
+      );
 
       expect(scopedDb).toHaveBeenCalledTimes(1);
     }
@@ -135,12 +157,12 @@ describe("createTaskHandler validation", () => {
     for (const priority of validPriorities) {
       const scopedDb = resolvingScopedDb();
 
-      await createTaskHandler({
-        workspaceId,
-        userId,
-        body: { name: "Test task", priority },
-        scopedDb,
-      });
+      await createTaskHandler(
+        createHandlerContext({
+          body: { name: "Test task", priority },
+          scopedDb,
+        }),
+      );
 
       expect(scopedDb).toHaveBeenCalledTimes(1);
     }

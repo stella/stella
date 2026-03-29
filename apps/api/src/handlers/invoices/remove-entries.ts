@@ -1,8 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import {
   BILLING_STATUS,
   expenses,
@@ -10,7 +8,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 
@@ -19,161 +17,162 @@ export const removeEntriesBodySchema = t.Object({
   expenseIds: t.Optional(t.Array(tNanoid, { minItems: 1, maxItems: 500 })),
 });
 
-type RemoveEntriesBodySchema = Static<typeof removeEntriesBodySchema>;
+const invoiceParamsSchema = t.Object({
+  invoiceId: tNanoid,
+});
 
-type RemoveEntriesHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  invoiceId: string;
-  body: RemoveEntriesBodySchema;
-};
-
-export const removeEntriesHandler = async ({
-  scopedDb,
-  workspaceId,
-  invoiceId,
-  body,
-}: RemoveEntriesHandlerProps) => {
-  if (
-    (body.timeEntryIds?.length ?? 0) === 0 &&
-    (body.expenseIds?.length ?? 0) === 0
-  ) {
-    return status(400, {
-      message: "At least one time entry or expense ID is required",
-    });
-  }
-
-  // Pre-validate: invoice must be draft.
-  const invoice = await scopedDb((tx) =>
-    tx.query.invoices.findFirst({
-      where: {
-        id: invoiceId,
-        workspaceId: { eq: workspaceId },
-      },
-      columns: { id: true, status: true },
-    }),
-  );
-
-  if (!invoice) {
-    return status(404, { message: "Invoice not found" });
-  }
-
-  if (invoice.status !== INVOICE_STATUS.DRAFT) {
-    return status(409, {
-      message: "Entries can only be removed from draft invoices",
-    });
-  }
-
-  const now = new Date();
-
-  const result = await scopedDb(async (tx) => {
-    // Re-verify draft status inside tx to prevent TOCTOU race.
-    const invoiceCheck = await tx.query.invoices.findFirst({
-      where: {
-        id: invoiceId,
-        workspaceId: { eq: workspaceId },
-        status: INVOICE_STATUS.DRAFT,
-      },
-      columns: { id: true },
-    });
-    if (!invoiceCheck) {
-      throw new ConcurrentModificationError({
-        message: "Invoice status changed concurrently",
+const removeEntries = createHandler(
+  {
+    permissions: { invoice: ["update"] },
+    params: invoiceParamsSchema,
+    body: removeEntriesBodySchema,
+  },
+  async ({ scopedDb, workspaceId, params, body }) => {
+    if (
+      (body.timeEntryIds?.length ?? 0) === 0 &&
+      (body.expenseIds?.length ?? 0) === 0
+    ) {
+      return status(400, {
+        message: "At least one time entry or expense ID is required",
       });
     }
 
-    const timeEntryIds = body.timeEntryIds;
-    if (timeEntryIds && timeEntryIds.length > 0) {
-      await tx
-        .update(timeEntries)
-        .set({
-          invoiceId: null,
-          status: BILLING_STATUS.APPROVED,
-          updatedAt: now,
+    const invoice = await scopedDb((tx) =>
+      tx.query.invoices.findFirst({
+        where: {
+          id: params.invoiceId,
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true, status: true },
+      }),
+    );
+
+    if (!invoice) {
+      return status(404, { message: "Invoice not found" });
+    }
+
+    if (invoice.status !== INVOICE_STATUS.DRAFT) {
+      return status(409, {
+        message: "Entries can only be removed from draft invoices",
+      });
+    }
+
+    const now = new Date();
+
+    const result = await scopedDb(async (tx) => {
+      const invoiceCheck = await tx.query.invoices.findFirst({
+        where: {
+          id: params.invoiceId,
+          workspaceId: { eq: workspaceId },
+          status: INVOICE_STATUS.DRAFT,
+        },
+        columns: { id: true },
+      });
+      if (!invoiceCheck) {
+        throw new ConcurrentModificationError({
+          message: "Invoice status changed concurrently",
+        });
+      }
+
+      const timeEntryIds = body.timeEntryIds;
+      if (timeEntryIds && timeEntryIds.length > 0) {
+        await tx
+          .update(timeEntries)
+          .set({
+            invoiceId: null,
+            status: BILLING_STATUS.APPROVED,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(timeEntries.invoiceId, params.invoiceId),
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, timeEntryIds),
+            ),
+          );
+      }
+
+      const expenseIds = body.expenseIds;
+      if (expenseIds && expenseIds.length > 0) {
+        await tx
+          .update(expenses)
+          .set({
+            invoiceId: null,
+            status: BILLING_STATUS.APPROVED,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(expenses.invoiceId, params.invoiceId),
+              eq(expenses.workspaceId, workspaceId),
+              inArray(expenses.id, expenseIds),
+            ),
+          );
+      }
+
+      const remainingTimeEntries = await tx
+        .select({
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
         })
+        .from(timeEntries)
         .where(
           and(
-            eq(timeEntries.invoiceId, invoiceId),
+            eq(timeEntries.invoiceId, params.invoiceId),
             eq(timeEntries.workspaceId, workspaceId),
-            inArray(timeEntries.id, timeEntryIds),
           ),
         );
-    }
 
-    const expenseIds = body.expenseIds;
-    if (expenseIds && expenseIds.length > 0) {
-      await tx
-        .update(expenses)
-        .set({
-          invoiceId: null,
-          status: BILLING_STATUS.APPROVED,
-          updatedAt: now,
+      const remainingExpenses = await tx
+        .select({
+          amount: expenses.amount,
+          markup: expenses.markup,
         })
+        .from(expenses)
         .where(
           and(
-            eq(expenses.invoiceId, invoiceId),
+            eq(expenses.invoiceId, params.invoiceId),
             eq(expenses.workspaceId, workspaceId),
-            inArray(expenses.id, expenseIds),
           ),
         );
-    }
 
-    // Recalculate total from remaining entries.
-    const remainingTimeEntries = await tx
-      .select({
-        billedMinutes: timeEntries.billedMinutes,
-        rateAtEntry: timeEntries.rateAtEntry,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.invoiceId, invoiceId),
-          eq(timeEntries.workspaceId, workspaceId),
-        ),
-      );
+      let totalAmount = 0;
+      for (const entry of remainingTimeEntries) {
+        totalAmount += Math.round(
+          (entry.billedMinutes / 60) * entry.rateAtEntry,
+        );
+      }
+      for (const expense of remainingExpenses) {
+        const markupMultiplier = 1 + expense.markup / 100;
+        totalAmount += Math.round(expense.amount * markupMultiplier);
+      }
 
-    const remainingExpenses = await tx
-      .select({
-        amount: expenses.amount,
-        markup: expenses.markup,
-      })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.invoiceId, invoiceId),
-          eq(expenses.workspaceId, workspaceId),
-        ),
-      );
+      await tx
+        .update(invoices)
+        .set({ totalAmount, updatedAt: now })
+        .where(
+          and(
+            eq(invoices.id, params.invoiceId),
+            eq(invoices.workspaceId, workspaceId),
+          ),
+        );
 
-    let totalAmount = 0;
-    for (const entry of remainingTimeEntries) {
-      totalAmount += Math.round((entry.billedMinutes / 60) * entry.rateAtEntry);
-    }
-    for (const expense of remainingExpenses) {
-      const markupMultiplier = 1 + expense.markup / 100;
-      totalAmount += Math.round(expense.amount * markupMultiplier);
-    }
-
-    await tx
-      .update(invoices)
-      .set({ totalAmount, updatedAt: now })
-      .where(
-        and(eq(invoices.id, invoiceId), eq(invoices.workspaceId, workspaceId)),
-      );
-
-    return { success: true };
-  }).catch((error: unknown) => {
-    if (error instanceof ConcurrentModificationError) {
-      return null;
-    }
-    throw error;
-  });
-
-  if (!result) {
-    return status(409, {
-      message: "Invoice status changed concurrently; please retry",
+      return { success: true };
+    }).catch((error: unknown) => {
+      if (error instanceof ConcurrentModificationError) {
+        return null;
+      }
+      throw error;
     });
-  }
 
-  return result;
-};
+    if (!result) {
+      return status(409, {
+        message: "Invoice status changed concurrently; please retry",
+      });
+    }
+
+    return result;
+  },
+);
+
+export default removeEntries;

@@ -1,15 +1,9 @@
 import Elysia from "elysia";
 
-import {
-  createPropertyBodySchema,
-  createPropertyHandler,
-} from "@/api/handlers/properties/create";
-import { deletePropertyHandler } from "@/api/handlers/properties/delete-by-id";
-import { readPropertiesHandler } from "@/api/handlers/properties/read";
-import {
-  updatePropertyBodySchema,
-  updatePropertyHandler,
-} from "@/api/handlers/properties/update-by-id";
+import createProperty from "@/api/handlers/properties/create";
+import deleteProperty from "@/api/handlers/properties/delete-by-id";
+import readProperties from "@/api/handlers/properties/read";
+import updateProperty from "@/api/handlers/properties/update-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
@@ -22,56 +16,20 @@ export const propertiesRoute = new Elysia({
   .guard({
     validateWorkspaceAccess: true,
   })
-  .put(
-    "/",
-    async (ctx) =>
-      await createPropertyHandler({
-        workspaceId: ctx.workspaceId,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { property: ["create"] },
-      invalidateQuery: true,
-      body: createPropertyBodySchema,
-    },
-  )
-  .get(
-    "/",
-    async (ctx) =>
-      await readPropertiesHandler({
-        workspaceId: ctx.workspaceId,
-        scopedDb: ctx.scopedDb,
-      }),
-  )
+  .put("/", createProperty.handler, {
+    body: createProperty.config.body,
+    invalidateQuery: true,
+  })
+  .get("/", readProperties.handler)
   .group("/property/:propertyId", (app) =>
     app
-      .post(
-        "/",
-        async (ctx) =>
-          await updatePropertyHandler({
-            workspaceId: ctx.workspaceId,
-            propertyId: ctx.params.propertyId,
-            body: ctx.body,
-            scopedDb: ctx.scopedDb,
-          }),
-        {
-          permissions: { property: ["update"] },
-          invalidateQuery: true,
-          body: updatePropertyBodySchema,
-        },
-      )
-      .delete(
-        "/",
-        async (ctx) =>
-          await deletePropertyHandler({
-            workspaceId: ctx.workspaceId,
-            propertyId: ctx.params.propertyId,
-            scopedDb: ctx.scopedDb,
-          }),
-        {
-          permissions: { property: ["delete"] },
-          invalidateQuery: true,
-        },
-      ),
+      .post("/", updateProperty.handler, {
+        body: updateProperty.config.body,
+        params: updateProperty.config.params,
+        invalidateQuery: true,
+      })
+      .delete("/", deleteProperty.handler, {
+        params: deleteProperty.config.params,
+        invalidateQuery: true,
+      }),
   );

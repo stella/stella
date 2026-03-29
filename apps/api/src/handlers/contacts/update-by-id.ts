@@ -1,8 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -11,7 +9,8 @@ import {
   contactEmailSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
+import { tNanoid } from "@/api/lib/custom-schema";
 
 export const updateContactBodySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
@@ -45,38 +44,37 @@ export const updateContactBodySchema = t.Object({
   responsibleAttorneyId: t.Optional(t.Nullable(t.String())),
 });
 
-type UpdateContactBody = Static<typeof updateContactBodySchema>;
+const updateContactParamsSchema = t.Object({
+  contactId: tNanoid,
+});
 
-type UpdateContactByIdHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  contactId: string;
-  body: UpdateContactBody;
-};
+const updateContactById = createRootHandler(
+  {
+    permissions: { contact: ["update"] },
+    params: updateContactParamsSchema,
+    body: updateContactBodySchema,
+  },
+  async ({ scopedDb, session, params, body }) => {
+    const updatedRows = await scopedDb((tx) =>
+      tx
+        .update(contacts)
+        .set(body)
+        .where(
+          and(
+            eq(contacts.id, params.contactId),
+            eq(contacts.organizationId, session.activeOrganizationId),
+          ),
+        )
+        .returning({ id: contacts.id }),
+    );
+    const updated = updatedRows.at(0);
 
-export const updateContactByIdHandler = async ({
-  scopedDb,
-  organizationId,
-  contactId,
-  body,
-}: UpdateContactByIdHandlerProps) => {
-  const updatedRows = await scopedDb((tx) =>
-    tx
-      .update(contacts)
-      .set(body)
-      .where(
-        and(
-          eq(contacts.id, contactId),
-          eq(contacts.organizationId, organizationId),
-        ),
-      )
-      .returning({ id: contacts.id }),
-  );
-  const updated = updatedRows.at(0);
+    if (!updated) {
+      return status(404, { message: "Contact not found" });
+    }
 
-  if (!updated) {
-    return status(404, { message: "Contact not found" });
-  }
+    return updated;
+  },
+);
 
-  return updated;
-};
+export default updateContactById;

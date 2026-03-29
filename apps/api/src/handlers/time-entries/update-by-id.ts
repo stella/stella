@@ -1,11 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -30,91 +28,87 @@ export const updateTimeEntryBodySchema = t.Object({
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
 });
 
-type UpdateTimeEntryBodySchema = Static<typeof updateTimeEntryBodySchema>;
-
-type UpdateTimeEntryByIdHandlerProps = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  body: UpdateTimeEntryBodySchema;
-};
-
-export const updateTimeEntryByIdHandler = async ({
-  scopedDb,
-  workspaceId,
-  body,
-}: UpdateTimeEntryByIdHandlerProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.timeEntries.findFirst({
-      where: {
-        id: body.id,
-        workspaceId: { eq: workspaceId },
-      },
-      columns: {
-        status: true,
-      },
-    }),
-  );
-
-  if (!existing) {
-    return status(404, { message: "Time entry not found" });
-  }
-
-  if (
-    existing.status === BILLING_STATUS.BILLED ||
-    existing.status === BILLING_STATUS.WRITTEN_OFF
-  ) {
-    return status(400, {
-      message: "Cannot edit a billed or written-off entry",
-    });
-  }
-
-  if (body.matterId !== undefined) {
-    const matter = await scopedDb((tx) =>
-      tx.query.entities.findFirst({
-        where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
+const updateTimeEntryById = createHandler(
+  {
+    permissions: { timeEntry: ["update"] },
+    body: updateTimeEntryBodySchema,
+  },
+  async ({ scopedDb, workspaceId, body }) => {
+    const existing = await scopedDb((tx) =>
+      tx.query.timeEntries.findFirst({
+        where: {
+          id: body.id,
+          workspaceId: { eq: workspaceId },
+        },
+        columns: {
+          status: true,
+        },
       }),
     );
 
-    if (!matter) {
+    if (!existing) {
+      return status(404, { message: "Time entry not found" });
+    }
+
+    if (
+      existing.status === BILLING_STATUS.BILLED ||
+      existing.status === BILLING_STATUS.WRITTEN_OFF
+    ) {
       return status(400, {
-        message: "Matter not found in this workspace",
+        message: "Cannot edit a billed or written-off entry",
       });
     }
-  }
 
-  const updates = {
-    ...pickDefined(body, [
-      "dateWorked",
-      "durationMinutes",
-      "narrative",
-      "invoiceNarrative",
-      "billable",
-      "noCharge",
-      "matterId",
-      "taskCode",
-      "activityCode",
-      "status",
-      "rateAtEntry",
-      "currency",
-    ]),
-    ...(body.durationMinutes !== undefined
-      ? { billedMinutes: roundToIncrement(body.durationMinutes) }
-      : {}),
-    updatedAt: new Date(),
-  };
+    if (body.matterId !== undefined) {
+      const matter = await scopedDb((tx) =>
+        tx.query.entities.findFirst({
+          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+        }),
+      );
 
-  await scopedDb((tx) =>
-    tx
-      .update(timeEntries)
-      .set(updates)
-      .where(
-        and(
-          eq(timeEntries.id, body.id),
-          eq(timeEntries.workspaceId, workspaceId),
+      if (!matter) {
+        return status(400, {
+          message: "Matter not found in this workspace",
+        });
+      }
+    }
+
+    const updates = {
+      ...pickDefined(body, [
+        "dateWorked",
+        "durationMinutes",
+        "narrative",
+        "invoiceNarrative",
+        "billable",
+        "noCharge",
+        "matterId",
+        "taskCode",
+        "activityCode",
+        "status",
+        "rateAtEntry",
+        "currency",
+      ]),
+      ...(body.durationMinutes !== undefined
+        ? { billedMinutes: roundToIncrement(body.durationMinutes) }
+        : {}),
+      updatedAt: new Date(),
+    };
+
+    await scopedDb((tx) =>
+      tx
+        .update(timeEntries)
+        .set(updates)
+        .where(
+          and(
+            eq(timeEntries.id, body.id),
+            eq(timeEntries.workspaceId, workspaceId),
+          ),
         ),
-      ),
-  );
+    );
 
-  return { id: body.id };
-};
+    return { id: body.id };
+  },
+);
+
+export default updateTimeEntryById;

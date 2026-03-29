@@ -1,21 +1,14 @@
-import Elysia, { t } from "elysia";
+import Elysia from "elysia";
 
-import {
-  createContactBodySchema,
-  createContactHandler,
-} from "@/api/handlers/contacts/create";
-import { deleteContactByIdHandler } from "@/api/handlers/contacts/delete-by-id";
-import { readContactsHandler } from "@/api/handlers/contacts/read";
-import { readContactByIdHandler } from "@/api/handlers/contacts/read-by-id";
-import { searchContactsHandler } from "@/api/handlers/contacts/search";
-import {
-  updateContactBodySchema,
-  updateContactByIdHandler,
-} from "@/api/handlers/contacts/update-by-id";
+import createContact from "@/api/handlers/contacts/create";
+import deleteContactById from "@/api/handlers/contacts/delete-by-id";
+import readContacts from "@/api/handlers/contacts/read";
+import readContactById from "@/api/handlers/contacts/read-by-id";
+import searchContacts from "@/api/handlers/contacts/search";
+import updateContactById from "@/api/handlers/contacts/update-by-id";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { tNanoid } from "@/api/lib/custom-schema";
 
-const contactIdParams = t.Object({ contactId: tNanoid });
+const contactIdParams = readContactById.config.params;
 
 export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .use(authMacro)
@@ -23,60 +16,15 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .guard({
     validateAuth: true,
   })
-  .get(
-    "/",
-    async (ctx) =>
-      await readContactsHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        limit: ctx.query.limit,
-        cursor: ctx.query.cursor,
-        type: ctx.query.type,
-        q: ctx.query.q,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: t.Object({
-        limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
-        cursor: t.Optional(t.String()),
-        type: t.Optional(
-          t.Union([t.Literal("person"), t.Literal("organization")]),
-        ),
-        q: t.Optional(t.String()),
-      }),
-    },
-  )
-  .get(
-    "/search",
-    async (ctx) =>
-      await searchContactsHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        q: ctx.query.q,
-        type: ctx.query.type,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: t.Object({
-        q: t.String({ minLength: 1 }),
-        type: t.Optional(
-          t.Union([t.Literal("person"), t.Literal("organization")]),
-        ),
-      }),
-    },
-  )
-  .put(
-    "/",
-    async (ctx) =>
-      await createContactHandler({
-        organizationId: ctx.session.activeOrganizationId,
-        userId: ctx.user.id,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { contact: ["create"] },
-      body: createContactBodySchema,
-    },
-  )
+  .get("/", readContacts.handler, {
+    query: readContacts.config.query,
+  })
+  .get("/search", searchContacts.handler, {
+    query: searchContacts.config.query,
+  })
+  .put("/", createContact.handler, {
+    body: createContact.config.body,
+  })
   .group(
     "/:contactId",
     {
@@ -84,39 +32,9 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     },
     (app) =>
       app
-        .get(
-          "/",
-          async (ctx) =>
-            await readContactByIdHandler({
-              organizationId: ctx.session.activeOrganizationId,
-              contactId: ctx.params.contactId,
-              scopedDb: ctx.scopedDb,
-            }),
-        )
-        .post(
-          "/",
-          async (ctx) =>
-            await updateContactByIdHandler({
-              organizationId: ctx.session.activeOrganizationId,
-              contactId: ctx.params.contactId,
-              body: ctx.body,
-              scopedDb: ctx.scopedDb,
-            }),
-          {
-            permissions: { contact: ["update"] },
-            body: updateContactBodySchema,
-          },
-        )
-        .delete(
-          "/",
-          async (ctx) =>
-            await deleteContactByIdHandler({
-              organizationId: ctx.session.activeOrganizationId,
-              contactId: ctx.params.contactId,
-              scopedDb: ctx.scopedDb,
-            }),
-          {
-            permissions: { contact: ["delete"] },
-          },
-        ),
+        .get("/", readContactById.handler)
+        .post("/", updateContactById.handler, {
+          body: updateContactById.config.body,
+        })
+        .delete("/", deleteContactById.handler),
   );

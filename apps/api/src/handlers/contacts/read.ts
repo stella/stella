@@ -1,21 +1,19 @@
 import { and, count, eq, gt, ilike, or } from "drizzle-orm";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { contacts, workspaces } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
-type ReadContactsHandlerProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  limit?: number | undefined;
-  cursor?: string | undefined;
-  type?: "person" | "organization" | undefined;
-  q?: string | undefined;
-};
+const readContactsQuerySchema = t.Object({
+  limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
+  cursor: t.Optional(t.String()),
+  type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
+  q: t.Optional(t.String()),
+});
 
 type DecodedCursor = {
   displayName: string;
@@ -38,79 +36,82 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
 const encodeCursor = (displayName: string, id: string): string =>
   Buffer.from(`${displayName}\0${id}`, "utf8").toString("base64");
 
-export const readContactsHandler = async ({
-  scopedDb,
-  organizationId,
-  limit: rawLimit,
-  cursor,
-  type,
-  q,
-}: ReadContactsHandlerProps) => {
-  const limit = Math.min(rawLimit ?? DEFAULT_LIMIT, MAX_LIMIT);
+const readContacts = createRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: readContactsQuerySchema,
+  },
+  async ({ scopedDb, session, query }) => {
+    const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
 
-  const conditions = [eq(contacts.organizationId, organizationId)];
+    const conditions = [
+      eq(contacts.organizationId, session.activeOrganizationId),
+    ];
 
-  if (type) {
-    conditions.push(eq(contacts.type, type));
-  }
+    if (query.type) {
+      conditions.push(eq(contacts.type, query.type));
+    }
 
-  if (q) {
-    conditions.push(ilike(contacts.displayName, `%${escapeLike(q)}%`));
-  }
+    if (query.q) {
+      conditions.push(ilike(contacts.displayName, `%${escapeLike(query.q)}%`));
+    }
 
-  if (cursor) {
-    const decoded = decodeCursor(cursor);
-    if (decoded) {
-      const cursorCondition = or(
-        gt(contacts.displayName, decoded.displayName),
-        and(
-          eq(contacts.displayName, decoded.displayName),
-          gt(contacts.id, decoded.id),
-        ),
-      );
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
+    if (query.cursor) {
+      const decoded = decodeCursor(query.cursor);
+      if (decoded) {
+        const cursorCondition = or(
+          gt(contacts.displayName, decoded.displayName),
+          and(
+            eq(contacts.displayName, decoded.displayName),
+            gt(contacts.id, decoded.id),
+          ),
+        );
+        if (cursorCondition) {
+          conditions.push(cursorCondition);
+        }
       }
     }
-  }
 
-  const items = await scopedDb((tx) =>
-    tx
-      .select({
-        id: contacts.id,
-        type: contacts.type,
-        displayName: contacts.displayName,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        organizationName: contacts.organizationName,
-        emails: contacts.emails,
-        phones: contacts.phones,
-        tags: contacts.tags,
-        color: contacts.color,
-        createdAt: contacts.createdAt,
-        matterCount: count(workspaces.id),
-      })
-      .from(contacts)
-      .leftJoin(
-        workspaces,
-        and(
-          eq(workspaces.clientId, contacts.id),
-          eq(workspaces.status, "active"),
-        ),
-      )
-      .where(and(...conditions))
-      .groupBy(contacts.id)
-      .orderBy(contacts.displayName, contacts.id)
-      .limit(limit + 1),
-  );
+    const items = await scopedDb((tx) =>
+      tx
+        .select({
+          id: contacts.id,
+          type: contacts.type,
+          displayName: contacts.displayName,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          organizationName: contacts.organizationName,
+          emails: contacts.emails,
+          phones: contacts.phones,
+          tags: contacts.tags,
+          color: contacts.color,
+          createdAt: contacts.createdAt,
+          matterCount: count(workspaces.id),
+        })
+        .from(contacts)
+        .leftJoin(
+          workspaces,
+          and(
+            eq(workspaces.clientId, contacts.id),
+            eq(workspaces.status, "active"),
+          ),
+        )
+        .where(and(...conditions))
+        .groupBy(contacts.id)
+        .orderBy(contacts.displayName, contacts.id)
+        .limit(limit + 1),
+    );
 
-  const hasMore = items.length > limit;
-  const page = hasMore ? items.slice(0, limit) : items;
-  const lastItem = page.at(-1);
-  const nextCursor =
-    hasMore && lastItem
-      ? encodeCursor(lastItem.displayName, lastItem.id)
-      : null;
+    const hasMore = items.length > limit;
+    const page = hasMore ? items.slice(0, limit) : items;
+    const lastItem = page.at(-1);
+    const nextCursor =
+      hasMore && lastItem
+        ? encodeCursor(lastItem.displayName, lastItem.id)
+        : null;
 
-  return { items: page, nextCursor };
-};
+    return { items: page, nextCursor };
+  },
+);
+
+export default readContacts;
