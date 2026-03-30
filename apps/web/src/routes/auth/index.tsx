@@ -84,9 +84,9 @@ function LoginOrSignup() {
   const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
 
   return (
-    <div className="flex w-full max-w-sm flex-col gap-8">
+    <div className="flex w-full max-w-md flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <h2 className="text-foreground text-2xl font-medium tracking-tight">
+        <h2 className="text-foreground text-[2rem] leading-[1.15] font-light tracking-tight">
           {t("auth.signInWithEmail")}
         </h2>
         {isAcceptInvitationRedirect(redirectTo) && (
@@ -111,6 +111,7 @@ function LoginOrSignup() {
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder={t("auth.emailPlaceholder")}
+                size="lg"
                 type="email"
                 value={field.state.value}
               />
