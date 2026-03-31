@@ -16,7 +16,11 @@ echo "==> Starting Docker services (Postgres + MinIO)..."
 docker compose --profile dev up -d --wait --wait-timeout 30
 
 echo "==> Installing dependencies..."
-bun ci || bun install
+if ! bun ci; then
+  echo >&2 "ERROR: bun ci failed — lockfile is out of sync."
+  echo >&2 "Run 'bun install' intentionally, review the diff, then commit bun.lock."
+  exit 1
+fi
 
 echo "==> Setting up .env files..."
 [ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
