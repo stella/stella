@@ -1,0 +1,229 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+---
+
+<Base title="Security — Stella" description="How stella protects your data. Security controls, data handling, and compliance.">
+  <div class="flex min-h-screen flex-col">
+    <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="Stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+        <a
+          href="mailto:security@stll.app"
+          class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          Contact security
+        </a>
+      </div>
+    </nav>
+
+    <main class="flex-1">
+      <!-- ——— Hero ——— -->
+      <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
+        <div class="mx-auto max-w-[1200px]">
+          <div class="max-w-4xl">
+            <h1 class="font-display text-4xl font-medium tracking-tight sm:text-5xl">
+              Security at stella
+            </h1>
+            <p class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
+              stella handles privileged legal data. Security is the foundation
+              everything else is built on. Our architecture enforces least
+              privilege, workspace isolation, and encryption at every layer.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Principles ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-[1200px]">
+          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Principles</p>
+          <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {[
+              { title: "Open by default", body: "Fully open source under AGPL&#8209;3.0. Audit every line, fork anytime, verify our claims in code." },
+              { title: "Your data, your rules", body: "Self&#8209;host on your infrastructure or use our managed cloud. You choose where data lives." },
+              { title: "Least privilege", body: "Workspace isolation, role&#8209;based access, and tenant&#8209;scoped queries at every layer of the stack." },
+            ].map((card) => (
+              <div class="rounded-2xl p-7" style="background: var(--card); border: 1px solid var(--border)">
+                <h3 class="mb-2 font-display text-lg font-medium">{card.title}</h3>
+                <p class="text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={card.body} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Controls ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-[1200px]">
+          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Controls</p>
+          <div class="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              { category: "Organization", items: [
+                "Password policy enforced",
+                "Multi&#8209;factor authentication",
+                "Role&#8209;based access control",
+                "Session management and timeouts",
+              ]},
+              { category: "Network", items: [
+                "TLS 1.2+ for all connections",
+                "VPC&#8209;isolated infrastructure",
+                "WAF and DDoS protection",
+                "No public database endpoints",
+                "VPC flow logging (365&#8209;day retention)",
+              ]},
+              { category: "Data", items: [
+                "AES&#8209;256 encryption at rest",
+                "Encryption in transit (TLS)",
+                "Tenant&#8209;isolated data storage",
+                "Automated backups with PITR",
+                "KMS key rotation enabled",
+                "EBS encryption by default (account&#8209;wide)",
+              ]},
+              { category: "Application", items: [
+                "Input validation at boundaries",
+                "CSRF and XSS protection",
+                "Dependency vulnerability scanning",
+                "Audit logging for mutations",
+                "IMDSv2 enforced (SSRF protection)",
+              ]},
+              { category: "AI", items: [
+                "No training on customer data",
+                "Prompts scoped to workspace",
+                "Citation&#8209;grounded outputs",
+                "Optional PII anonymisation before inference",
+                "Usage&#8209;based, no data retention",
+              ]},
+              { category: "Monitoring", items: [
+                "GuardDuty threat detection",
+                "CloudTrail audit trail (all regions)",
+                "Security Hub (CIS 3.0 benchmark)",
+                "Prowler scanning (SOC&#8209;2, ISO&#8209;27001)",
+                "IAM permission boundaries",
+              ]},
+            ].map((group) => (
+              <div>
+                <h3 class="mb-3 font-display text-base font-medium">{group.category}</h3>
+                <ul class="space-y-2.5 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
+                  {group.items.map((item) => (
+                    <li class="flex items-start gap-2.5">
+                      <span class="mt-[7px] block h-2 w-2 shrink-0 rounded-full" style="background: var(--success)"></span>
+                      <span set:html={item} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Subprocessors ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-[1200px]">
+          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Subprocessors</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border)">
+                  <th class="pb-3 text-left font-medium">Provider</th>
+                  <th class="pb-3 text-left font-medium">Purpose</th>
+                  <th class="pb-3 text-left font-medium">Region</th>
+                </tr>
+              </thead>
+              <tbody style="color: var(--muted-foreground)">
+                {[
+                  { provider: "Amazon Web Services", purpose: "Cloud infrastructure, S3 storage", region: "Customer-selected" },
+                  { provider: "Google Cloud", purpose: "AI model inference (Gemini)", region: "Customer-selected" },
+                  { provider: "PostgreSQL (self-managed)", purpose: "Primary database", region: "Customer-selected" },
+                  { provider: "PostHog", purpose: "Product analytics", region: "EU" },
+                ].map((row) => (
+                  <tr style="border-bottom: 1px solid var(--border)">
+                    <td class="py-3" style="color: var(--foreground)">{row.provider}</td>
+                    <td class="py-3">{row.purpose}</td>
+                    <td class="py-3">{row.region}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Resources ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-[1200px]">
+          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Resources</p>
+          <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {[
+              { title: "Data Processing Agreement", body: "GDPR&#8209;compliant DPA for your records." },
+              { title: "Architecture overview", body: "Data flow diagram and infrastructure summary." },
+              { title: "Compliance scan report", body: "Latest Prowler scan against SOC&#8209;2 and ISO&#8209;27001 benchmarks." },
+            ].map((item) => (
+              <a
+                href={`mailto:security@stll.app?subject=${encodeURIComponent(`Request: ${item.title}`)}`}
+                class="resource-card flex flex-col justify-between rounded-2xl p-7 no-underline transition-all duration-200"
+                style="background: var(--card); border: 1px solid var(--border); color: inherit"
+              >
+                <div>
+                  <h3 class="mb-1 font-display text-base font-medium">{item.title}</h3>
+                  <p class="text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={item.body} />
+                </div>
+                <span class="mt-4 text-sm font-medium" style="color: var(--muted-foreground)">
+                  Request &rarr;
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— FAQ ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-[1200px]">
+          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">FAQ</p>
+          <div class="max-w-4xl space-y-8">
+            {[
+              { q: "Is customer data used to train AI models?", a: "No. Customer data is never used for model training. AI queries are scoped to the workspace and processed in real time without retention by the model provider." },
+              { q: "Where is data stored?", a: "You choose the region. Our managed cloud supports EU, US, and Swiss deployments. Self-hosted runs wherever you choose." },
+              { q: "Do you support SSO?", a: "SSO via Google Workspace and Microsoft Entra is available as an enterprise add-on. SAML support is on the roadmap." },
+              { q: "Can I export all my data?", a: "Yes. Full data export is available at any time in standard formats. There are no contractual or technical barriers to leaving." },
+              { q: "How do I report a vulnerability?", a: "Email <a href='mailto:security@stll.app' style='color: var(--foreground)' class='transition-opacity hover:opacity-70'>security@stll.app</a> with details. We follow responsible disclosure practices and will acknowledge within 48\u00A0hours." },
+            ].map((item) => (
+              <div>
+                <h3 class="font-display text-base font-medium">{item.q}</h3>
+                <p class="mt-2 text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={item.a} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ——— Footer ——— -->
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div class="mx-auto max-w-[1200px] text-center">
+        <p class="text-sm" style="color: var(--muted-foreground)">
+          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a> &#183; Built in the&#160;EU.
+        </p>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      ></div>
+    </footer>
+  </div>
+
+  <style>
+    .resource-card { cursor: pointer; }
+    .resource-card:hover {
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 0 1px var(--primary);
+      transform: translateY(-2px);
+    }
+  </style>
+</Base>

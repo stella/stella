@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "lint": "echo 'no linter configured'",
+    "format": "echo 'no formatter configured'"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.2",
     "@tailwindcss/vite": "catalog:",
     "astro": "^6.0.8",
     "tailwindcss": "catalog:"
