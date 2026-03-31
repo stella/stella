@@ -109,12 +109,30 @@ export const validateAst = (
   const $ = cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
 
+  // Extract text from content elements, but skip nested
+  // elements whose text is already included by a parent
+  // (e.g., <td> inside <td> in NALUS HTML).
+  const seen = new Set<string>();
   const originalParts: string[] = [];
   $("body")
     .find("p, li, td, th")
     .each((_, el) => {
+      // Skip if a parent element in our selector already
+      // captured this text (prevents double-counting).
+      if ($(el).parents("p, li, td, th").length > 0) {
+        const parentText = $(el)
+          .parent()
+          .closest("p, li, td, th")
+          .text()
+          .replace(/\s+/g, " ")
+          .trim();
+        if (seen.has(parentText)) {
+          return;
+        }
+      }
       const text = $(el).text().replace(/\s+/g, " ").trim();
-      if (text) {
+      if (text && !seen.has(text)) {
+        seen.add(text);
         originalParts.push(text);
       }
     });
@@ -194,13 +212,8 @@ export const validateAst = (
   for (const block of blocks) {
     const text = block.plainText.trim();
 
-    // Tiny blocks (excluding ruling items which can be short)
-    if (
-      text.length > 0 &&
-      text.length < 5 &&
-      block.type !== "ruling-item" &&
-      block.type !== "heading"
-    ) {
+    // Tiny blocks (excluding headings which can be short)
+    if (text.length > 0 && text.length < 5 && block.type !== "heading") {
       tinyBlocks++;
     }
 

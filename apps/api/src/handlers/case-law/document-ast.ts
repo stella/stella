@@ -8,7 +8,12 @@
 
 // ── Inline nodes ───────────────────────────────────────────
 
-export type InlineText = { type: "text"; text: string };
+export type InlineText = {
+  type: "text";
+  text: string;
+  /** True when this text was anonymized by the court. */
+  anonymized?: true;
+};
 export type InlineBold = { type: "bold"; children: Inline[] };
 export type InlineItalic = {
   type: "italic";
@@ -59,15 +64,6 @@ export type ParagraphBlock = {
   plainText: string;
 };
 
-export type RulingItemBlock = {
-  id: string;
-  anchorId: string;
-  type: "ruling-item";
-  label: string | null;
-  inlines: Inline[];
-  plainText: string;
-};
-
 export type TableCell = {
   inlines: Inline[];
   plainText: string;
@@ -82,11 +78,7 @@ export type TableBlock = {
   plainText: string;
 };
 
-export type Block =
-  | HeadingBlock
-  | ParagraphBlock
-  | RulingItemBlock
-  | TableBlock;
+export type Block = HeadingBlock | ParagraphBlock | TableBlock;
 
 // ── Document root ──────────────────────────────────────────
 

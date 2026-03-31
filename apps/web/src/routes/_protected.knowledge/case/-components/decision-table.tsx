@@ -7,7 +7,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 const slugify = (caseNumber: string): string =>
   caseNumber
@@ -40,6 +40,7 @@ const columnHelper = createColumnHelper<Decision>();
 
 export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   const columns = useMemo(
     () => [
@@ -52,7 +53,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
               <Link
                 className="text-foreground font-medium hover:underline"
                 params={{ decisionId: `${slugify(info.getValue())}--${id}` }}
-                to="/knowledge/case-law/$decisionId"
+                to="/knowledge/case/$decisionId"
               >
                 {info.getValue()}
               </Link>
@@ -83,12 +84,15 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         cell: (info) => {
           const value = info.getValue();
           if (value === null || value === undefined) {
-            return "—";
+            return "\u2014";
           }
-          if (value instanceof Date) {
-            return value.toLocaleDateString();
+          const date = value instanceof Date ? value : new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return "\u2014";
           }
-          return value;
+          return format.dateTime(date, {
+            dateStyle: "medium",
+          });
         },
       }),
       columnHelper.accessor("decisionType", {
@@ -96,7 +100,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         cell: (info) => info.getValue() ?? "—",
       }),
     ],
-    [t],
+    [t, format],
   );
 
   const table = useReactTable({

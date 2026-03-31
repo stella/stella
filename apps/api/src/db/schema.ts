@@ -1374,6 +1374,12 @@ export const caseLawDecisions = p.pgTable(
     fulltext: p.text(),
     sections: p.jsonb().$type<DecisionSection[]>(),
     documentAst: p.jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
+    /**
+     * Raw source HTML/JSON from the court website, stored
+     * verbatim for future re-parsing without re-downloading.
+     * Compressed at the application level if needed.
+     */
+    sourceRaw: p.text("source_raw"),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
     metadata: p.jsonb().$type<Record<string, unknown>>().default({}),

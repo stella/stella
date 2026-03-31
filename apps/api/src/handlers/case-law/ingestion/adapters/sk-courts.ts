@@ -201,6 +201,7 @@ const parseItemWithDetail = async (
     rawHash: hashContent(rawJson),
     // TODO: integrate court-specific parser for AST
     documentAst: {} as EmptyAst,
+    sourceRaw: undefined,
   };
 };
 

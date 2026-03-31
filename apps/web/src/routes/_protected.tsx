@@ -52,7 +52,7 @@ import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { roleOptions } from "@/routes/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
-import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/decision-metadata-sheet";
+import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
@@ -147,7 +147,7 @@ function ProtectedComponent() {
   const activeWorkspaceId = workspaceMatch?.params.workspaceId;
 
   const decisionMatch = useMatch({
-    from: "/_protected/knowledge/case-law/$decisionId",
+    from: "/_protected/knowledge/case/$decisionId",
     shouldThrow: false,
   });
   const activeDecisionId = decisionMatch?.params.decisionId;

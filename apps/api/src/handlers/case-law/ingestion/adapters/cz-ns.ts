@@ -71,6 +71,25 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
   legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/i,
 };
 
+/**
+ * Extract the presiding judge name from the decision text.
+ *
+ * NS decisions end with a signature block:
+ *   "JUDr. Firstname Surname\npředseda/předsedkyně senátu"
+ * We capture the name on the line immediately before the
+ * "předseda/předsedkyně senátu" label.
+ */
+const JUDGE_RE =
+  /(?:JUDr\.|Mgr\.|doc\.|prof\.)\s+[\p{L}\s,.-]+?(?=\s*předsed[ay]\s+senátu)/iu;
+
+const extractJudge = (text: string): string | undefined => {
+  const match = text.match(JUDGE_RE);
+  if (!match) {
+    return undefined;
+  }
+  return match[0].trim() || undefined;
+};
+
 /** Body text markers. */
 const BODY_START_MARKERS = [
   "Nejvyšší soud rozhodl",
@@ -214,6 +233,8 @@ export const czNsAdapter: SourceAdapter = {
               let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
               let fulltext = meta.fulltext;
 
+              let sourceMetadata: Record<string, unknown> = {};
+
               if (printHtml) {
                 const parsed = parseNsDecisionHtml({
                   documentId: unid,
@@ -224,7 +245,11 @@ export const czNsAdapter: SourceAdapter = {
                 });
                 documentAst = parsed.documentAst;
                 fulltext = parsed.fulltext;
+                sourceMetadata = parsed.sourceMetadata;
               }
+
+              // Extract judge from fulltext signature block
+              const judge = fulltext ? extractJudge(fulltext) : undefined;
 
               decisions.push({
                 caseNumber,
@@ -240,6 +265,8 @@ export const czNsAdapter: SourceAdapter = {
                 sourceUrl: webUrl,
                 documentUrl: webUrl,
                 metadata: {
+                  ...sourceMetadata,
+                  judge,
                   legalSentence: meta.legalSentence,
                   keywords: meta.keywords
                     ?.split("\n")
@@ -253,6 +280,7 @@ export const czNsAdapter: SourceAdapter = {
                 },
                 rawHash: hashContent(raw),
                 documentAst,
+                sourceRaw: JSON.stringify({ webHtml, printHtml }),
               });
             } else {
               // eslint-disable-next-line no-console -- adapter diagnostic

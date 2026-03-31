@@ -32,6 +32,24 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
 
+/**
+ * Map English decision type enums from the API to
+ * lowercase Czech equivalents for consistency across
+ * all CZ adapters.
+ */
+const DECISION_TYPE_MAP: Record<string, string> = {
+  JUDGEMENT: "rozsudek",
+  RESOLUTION: "usnesení",
+  ORDER: "příkaz",
+};
+
+const mapDecisionType = (type: string | undefined): string | undefined => {
+  if (!type) {
+    return undefined;
+  }
+  return DECISION_TYPE_MAP[type] ?? type.toLowerCase();
+};
+
 /** Shape of a single item in the paginated day response. */
 type CzRegionalApiItem = {
   jednaciCislo?: string;
@@ -93,7 +111,9 @@ type FinaldocResult = {
   fulltext: string | undefined;
   decisionType: string | undefined;
   documentAst: DocumentAst | EmptyAst;
+  sourceRaw: string | undefined;
   richMetadata: {
+    decisionTypeRaw?: string;
     solver?: string;
     caseResultType?: string;
     caseSubject?: string;
@@ -116,6 +136,7 @@ const fetchFinaldoc = async (
     fulltext: undefined,
     decisionType: undefined,
     documentAst: {} as EmptyAst,
+    sourceRaw: undefined,
     richMetadata: {},
   };
 
@@ -136,10 +157,14 @@ const fetchFinaldoc = async (
 
     // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- finaldoc API contract
     const doc = (await response.json()) as CzRegionalFinaldoc;
+    const sourceRaw = JSON.stringify(doc);
 
-    const decisionType = doc.metadata?.type?.toLowerCase();
+    const decisionType = mapDecisionType(doc.metadata?.type);
 
     const richMetadata: FinaldocResult["richMetadata"] = {};
+    if (doc.metadata?.type) {
+      richMetadata.decisionTypeRaw = doc.metadata.type;
+    }
     if (doc.metadata?.solver) {
       richMetadata.solver = doc.metadata.solver;
     }
@@ -189,6 +214,7 @@ const fetchFinaldoc = async (
         fulltext: parsed.fulltext || plainFulltext,
         decisionType,
         documentAst: parsed.documentAst,
+        sourceRaw,
         richMetadata,
       };
     } catch {
@@ -197,6 +223,7 @@ const fetchFinaldoc = async (
         fulltext: plainFulltext,
         decisionType,
         documentAst: {} as EmptyAst,
+        sourceRaw,
         richMetadata,
       };
     }
@@ -413,23 +440,14 @@ export const czRegionalAdapter: SourceAdapter = {
             decision.decisionType = result.decisionType;
           }
           decision.documentAst = result.documentAst;
+          decision.sourceRaw = result.sourceRaw;
 
           // Merge rich metadata from finaldoc
           const rm = result.richMetadata;
-          if (
-            rm.solver ||
-            rm.caseResultType ||
-            rm.caseSubject ||
-            rm.regulations ||
-            rm.flags
-          ) {
+          if (Object.keys(rm).length > 0) {
             decision.metadata = {
               ...decision.metadata,
-              solver: rm.solver,
-              caseResultType: rm.caseResultType,
-              caseSubject: rm.caseSubject,
-              regulations: rm.regulations,
-              flags: rm.flags,
+              ...rm,
             };
           }
         }

@@ -74,12 +74,12 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/contacts/$contactId"])]: (params) => (
         <ContactBreadcrumb {...params} />
       ),
-      [serializeKey(["/knowledge/case-law/"])]: () => (
-        <BreadcrumbLink to="/knowledge/case-law">
+      [serializeKey(["/knowledge/case/"])]: () => (
+        <BreadcrumbLink to="/knowledge/case">
           {t("navigation.caseLaw")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge/case-law/$decisionId"])]: (params) => (
+      [serializeKey(["/knowledge/case/$decisionId"])]: (params) => (
         <CaseLawBreadcrumb {...params} />
       ),
       [serializeKey(["/organization"])]: () => (

@@ -2,7 +2,7 @@
  * Convert a DocumentAst to clean markdown for AI consumption.
  *
  * Produces a readable markdown representation that preserves
- * the document structure: headings, ruling items, paragraphs,
+ * the document structure: headings, paragraphs,
  * bold/italic, and tables. Designed for use as LLM context.
  */
 
@@ -43,11 +43,6 @@ const blockToMarkdown = (block: Block): string => {
     return `${prefix} ${inlinesToMarkdown(block.inlines)}`;
   }
 
-  if (block.type === "ruling-item") {
-    const label = block.label ?? "-";
-    return `${label} ${inlinesToMarkdown(block.inlines)}`;
-  }
-
   if (block.type === "paragraph") {
     if (block.role === "case-number") {
       return `> ${block.plainText}`;
@@ -58,10 +53,16 @@ const blockToMarkdown = (block: Block): string => {
     return inlinesToMarkdown(block.inlines);
   }
 
-  // table
-  return block.rows
-    .map((row) => row.map((cell) => cell.plainText).join(" | "))
-    .join("\n");
+  if (block.type === "table") {
+    return block.rows
+      .map((row) => row.map((cell) => cell.plainText).join(" | "))
+      .join("\n");
+  }
+
+  // Unknown block type (e.g., legacy "ruling-item" from old data).
+  // SAFETY: old JSONB data may contain block types removed from
+  // the Block union; plainText exists on all historical types.
+  return (block as { plainText: string }).plainText; // oxlint-disable-line typescript/no-unsafe-type-assertion, typescript/no-unsafe-return
 };
 
 /**

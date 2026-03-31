@@ -295,10 +295,11 @@
       "keywords": "Hesla",
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
+      "popularName": "Populární název",
       "sections": "Části",
       "source": "Zdroj",
       "statutes": "Dotčené předpisy",
-      "viewOriginal": "Zobrazit originál"
+      "viewOriginal": "Zobrazit zdroj"
     }
   },
   "chat": {

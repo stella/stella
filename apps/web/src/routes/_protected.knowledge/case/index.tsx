@@ -6,16 +6,16 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
-import { DecisionFilters } from "@/routes/_protected.knowledge/case-law/-components/decision-filters";
-import { DecisionTable } from "@/routes/_protected.knowledge/case-law/-components/decision-table";
-import type { Decision } from "@/routes/_protected.knowledge/case-law/-components/decision-table";
-import { decisionsInfiniteOptions } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+import { DecisionFilters } from "@/routes/_protected.knowledge/case/-components/decision-filters";
+import { DecisionTable } from "@/routes/_protected.knowledge/case/-components/decision-table";
+import type { Decision } from "@/routes/_protected.knowledge/case/-components/decision-table";
+import { decisionsInfiniteOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 import type {
   DecisionListFilters,
   SearchFacets,
-} from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+} from "@/routes/_protected.knowledge/case/-queries/decisions";
 
-export const Route = createFileRoute("/_protected/knowledge/case-law/")({
+export const Route = createFileRoute("/_protected/knowledge/case/")({
   component: CaseLawIndex,
 });
 

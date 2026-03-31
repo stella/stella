@@ -282,6 +282,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
 type DecisionContent = {
   fulltext: string | undefined;
   documentAst: DocumentAst | EmptyAst | undefined;
+  sourceRaw: string | undefined;
 };
 
 /**
@@ -316,9 +317,11 @@ const fetchDecisionContent = async (
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
           court: "Nejvyšší správní soud",
-          decisionDate: row.decisionDate
-            ? parseCeDate(row.decisionDate)
-            : undefined,
+          decisionDate: detail.decisionDate
+            ? parseCeDate(detail.decisionDate)
+            : row.decisionDate
+              ? parseCeDate(row.decisionDate)
+              : undefined,
           decisionType: (
             detail.decisionType ?? row.decisionType
           )?.toLowerCase(),
@@ -331,6 +334,7 @@ const fetchDecisionContent = async (
         return {
           fulltext: parsed.fulltext,
           documentAst: parsed.documentAst,
+          sourceRaw: html,
         };
       }
     }
@@ -352,7 +356,11 @@ const fetchDecisionContent = async (
     );
 
     if (!response.ok) {
-      return { fulltext: undefined, documentAst: undefined };
+      return {
+        fulltext: undefined,
+        documentAst: undefined,
+        sourceRaw: undefined,
+      };
     }
 
     const buffer = await response.arrayBuffer();
@@ -361,9 +369,14 @@ const fetchDecisionContent = async (
     return {
       fulltext: body.length > 100 ? body : undefined,
       documentAst: undefined,
+      sourceRaw: undefined,
     };
   } catch {
-    return { fulltext: undefined, documentAst: undefined };
+    return {
+      fulltext: undefined,
+      documentAst: undefined,
+      sourceRaw: undefined,
+    };
   }
 };
 
@@ -373,9 +386,13 @@ type DetailMetadata = {
   senate: string | undefined;
   legalArea: string | undefined;
   decisionType: string | undefined;
+  decisionDate: string | undefined;
   outcome: string | undefined;
   caseType: string | undefined;
   parties: string | undefined;
+  caseStatus: string | undefined;
+  administrativeAuthority: string | undefined;
+  citation: string | undefined;
 };
 
 /** Extract a div's value text by its ID, skipping the label span. */
@@ -415,9 +432,13 @@ const EMPTY_DETAIL: DetailMetadata = {
   senate: undefined,
   legalArea: undefined,
   decisionType: undefined,
+  decisionDate: undefined,
   outcome: undefined,
   caseType: undefined,
   parties: undefined,
+  caseStatus: undefined,
+  administrativeAuthority: undefined,
+  citation: undefined,
 };
 
 const fetchDetailMetadata = async (
@@ -450,9 +471,13 @@ const fetchDetailMetadata = async (
       senate: extractDivText(html, "soudsenat"),
       legalArea: extractDivText(html, "oblastupravy"),
       decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
+      decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
       outcome: extractDivText(html, "vyrokrozhodnuti"),
       caseType: extractDivText(html, "typrizeni"),
       parties: extractDivText(html, "ucastnicirizeniz"),
+      caseStatus: extractDivText(html, "stavrizeni"),
+      administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
+      citation: extractDivText(html, "citace"),
     };
   } catch {
     return empty;
@@ -475,7 +500,11 @@ const rowToResult = (
     court: "Nejvyšší správní soud",
     country: "CZE",
     language: "cs",
-    decisionDate: row.decisionDate ? parseCeDate(row.decisionDate) : undefined,
+    decisionDate: detail.decisionDate
+      ? parseCeDate(detail.decisionDate)
+      : row.decisionDate
+        ? parseCeDate(row.decisionDate)
+        : undefined,
     // Prefer structured decisionType from detail page over
     // the heuristic cell match from the search results table
     decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),
@@ -483,15 +512,22 @@ const rowToResult = (
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
     metadata: {
+      ecli: detail.ecli,
       judge: detail.judge,
       senate: detail.senate,
       legalArea: detail.legalArea,
+      decisionType: detail.decisionType,
+      decisionDate: detail.decisionDate,
       outcome: detail.outcome ?? row.outcome,
       caseType: detail.caseType,
       parties: detail.parties,
+      caseStatus: detail.caseStatus,
+      administrativeAuthority: detail.administrativeAuthority,
+      citation: detail.citation,
     },
     rawHash: hashContent(raw),
     documentAst: content.documentAst ?? ({} as EmptyAst),
+    sourceRaw: content.sourceRaw,
   };
 };
 
@@ -788,6 +824,7 @@ export const czNssAdapter: SourceAdapter = {
           let content: DecisionContent = {
             fulltext: undefined,
             documentAst: undefined,
+            sourceRaw: undefined,
           };
 
           if (row.documentId) {

@@ -9,7 +9,7 @@ import "./reader.css";
 // ── AST types (mirror of document-ast.ts) ─────────────────
 
 type Inline =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; anonymized?: true }
   | { type: "bold"; children: Inline[] }
   | { type: "italic"; children: Inline[] }
   | { type: "link"; href: string; children: Inline[] }
@@ -34,15 +34,6 @@ type ParagraphBlock = {
   plainText: string;
 };
 
-type RulingItemBlock = {
-  id: string;
-  anchorId: string;
-  type: "ruling-item";
-  label: string | null;
-  inlines: Inline[];
-  plainText: string;
-};
-
 type TableCell = { inlines: Inline[]; plainText: string };
 
 type TableBlock = {
@@ -54,7 +45,7 @@ type TableBlock = {
   plainText: string;
 };
 
-type Block = HeadingBlock | ParagraphBlock | RulingItemBlock | TableBlock;
+type Block = HeadingBlock | ParagraphBlock | TableBlock;
 
 type DocumentAst = {
   version: 1;
@@ -83,6 +74,16 @@ type DecisionTextProps = {
 
 const renderInline = (node: Inline, key: number): ReactNode => {
   if (node.type === "text") {
+    if (node.anonymized) {
+      return (
+        <span
+          className="bg-muted/60 text-muted-foreground rounded-sm px-0.5"
+          key={key}
+        >
+          [{node.text}]
+        </span>
+      );
+    }
     return node.text;
   }
   if (node.type === "line-break") {
@@ -164,24 +165,6 @@ const BlockRenderer = ({ block }: { block: Block }) => {
     );
   }
 
-  if (block.type === "ruling-item") {
-    return (
-      <div
-        className="mt-2 mb-1 grid scroll-mt-[var(--reader-anchor-offset)] grid-cols-[auto_1fr] items-start gap-x-4"
-        id={block.anchorId}
-      >
-        {block.label && (
-          <span className="font-sans text-[0.95rem] leading-relaxed font-bold">
-            {block.label}
-          </span>
-        )}
-        <div className="reader-justify min-w-0">
-          <InlineContent inlines={block.inlines} />
-        </div>
-      </div>
-    );
-  }
-
   if (block.type === "table") {
     if (block.role === "related-proceedings") {
       return null;
@@ -232,7 +215,7 @@ const FulltextFallback = ({ text }: { text: string }) => {
 // ── Holding zone grouping ─────────────────────────────────
 
 const isHoldingBlock = (b: Block): boolean =>
-  b.type === "ruling-item" || (b.type === "paragraph" && b.role === "holding");
+  b.type === "paragraph" && b.role === "holding";
 
 const renderBlocksWithHoldingZone = (blocks: Block[]): ReactNode[] => {
   const result: ReactNode[] = [];
@@ -309,7 +292,12 @@ export const DecisionText = ({ decision }: DecisionTextProps) => {
         </p>
         {renderBlocksWithHoldingZone(
           ast.blocks.filter(
-            (b) => !(b.type === "paragraph" && b.role === "case-number"),
+            (b) =>
+              !(b.type === "paragraph" && b.role === "case-number") &&
+              !(
+                b.type === "heading" &&
+                b.plainText.toUpperCase() === "JMÉNEM REPUBLIKY"
+              ),
           ),
         )}
       </article>

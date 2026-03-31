@@ -27,7 +27,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
  * No organizationId filtering; decisions are public records.
  */
 const globalCaseLawRoute = new Elysia({
-  prefix: "/case-law",
+  prefix: "/case",
 })
   .use(authMacro)
   .guard({ validateAuth: true })
@@ -57,7 +57,7 @@ const globalCaseLawRoute = new Elysia({
  * Links decisions (global) to matters (workspace-scoped).
  */
 const caseLawMatterLinksRoute = new Elysia({
-  prefix: "/case-law/matter-links/:workspaceId",
+  prefix: "/case/matter-links/:workspaceId",
 })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
