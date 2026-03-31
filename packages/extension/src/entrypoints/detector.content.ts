@@ -27,7 +27,7 @@ export default defineContentScript({
         action: "page-metadata",
         payload: {
           ...metadata,
-          ...(translatorResult ?? {}),
+          ...translatorResult,
         },
       });
     };
@@ -51,7 +51,7 @@ export default defineContentScript({
           sendResponse({
             metadata: {
               ...metadata,
-              ...(translatorResult ?? {}),
+              ...translatorResult,
             },
           });
           return true;

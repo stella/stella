@@ -38,6 +38,7 @@ type ChatThreadOptionsInput = QueryOptionsInput<
   {
     connection: ChatActorConnection;
     workspaceId?: string | undefined;
+    decisionId?: string | undefined;
     getModelId?: (() => string | null) | undefined;
     userContext?: UserContext | undefined;
     getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
@@ -58,6 +59,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
         connection: context.connection,
         threadId: key.threadId,
         workspaceId: context.workspaceId,
+        decisionId: context.decisionId,
         getModelId: context.getModelId,
         userContext: context.userContext,
         getActiveFile: context.getActiveFile,

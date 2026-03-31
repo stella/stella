@@ -3,9 +3,9 @@ import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 export const deleteClauseParamsSchema = t.Object({

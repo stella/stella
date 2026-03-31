@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  EmptyAst,
+  IngestionResult,
+} from "@/api/handlers/case-law/ingestion/adapter";
 
 import { createPagePaginatedFetch } from "./pagination";
 import { mockFetchWithFixtures, saveFixture } from "./test-utils";
@@ -19,6 +22,7 @@ const itemToDecision = (item: TestItem): IngestionResult => ({
   country: "TST",
   language: "en",
   metadata: {},
+  documentAst: {} as EmptyAst,
   rawHash: `hash-${item.id}`,
 });
 

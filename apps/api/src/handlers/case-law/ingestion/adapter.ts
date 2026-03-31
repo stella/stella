@@ -1,6 +1,14 @@
 import type { Result } from "better-result";
 
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+
+/**
+ * Empty AST placeholder for adapters without a parser.
+ * Typed as a narrow object so it's assignable to the
+ * documentAst union without casts.
+ */
+export type EmptyAst = Record<string, never>;
 
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
@@ -16,6 +24,8 @@ export type IngestionResult = {
   documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
   rawHash: string;
+  /** Parsed document AST, or empty object for courts without a parser. */
+  documentAst: DocumentAst | EmptyAst;
 };
 
 /** A page of ingestion results with an optional cursor. */

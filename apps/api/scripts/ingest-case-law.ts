@@ -32,15 +32,15 @@ const SOURCES: SourceDef[] = [
     name: "Czech Regional Courts",
   },
   {
-    adapterKey: ADAPTER_KEYS.CZ_SUPREME,
+    adapterKey: ADAPTER_KEYS.CZ_NS,
     name: "Czech Supreme Court",
   },
   {
-    adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
     name: "Czech Supreme Administrative Court",
   },
   {
-    adapterKey: ADAPTER_KEYS.CZ_CONSTITUTIONAL,
+    adapterKey: ADAPTER_KEYS.CZ_US,
     name: "Czech Constitutional Court",
   },
   {

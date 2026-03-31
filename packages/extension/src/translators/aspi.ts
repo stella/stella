@@ -9,8 +9,5 @@ import type { Translator } from "./types";
 export const aspiTranslator: Translator = {
   name: "ASPI",
   pattern: /aspi\.cz|beck-online\.cz.*aspi/i,
-  extract: (_doc) => {
-    // TODO: implement extraction from ASPI DOM structure.
-    return null;
-  },
+  extract: (_doc) => null,
 };

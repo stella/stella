@@ -33,7 +33,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
         { active: true, currentWindow: true },
         (tabs: chrome.tabs.Tab[]) => {
           const tab = tabs[0];
-          if (!tab?.id) return;
+          if (!tab?.id) {return;}
 
           const favIconUrl = tab.favIconUrl ?? undefined;
 
@@ -43,7 +43,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
             (response: {
               metadata?: PageMetadata;
             }) => {
-              if (chrome.runtime.lastError) return;
+              if (chrome.runtime.lastError) {return;}
               if (response?.metadata) {
                 setMetadata({
                   ...response.metadata,
@@ -73,7 +73,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
       tabId: number,
       changeInfo: chrome.tabs.TabChangeInfo,
     ) => {
-      if (changeInfo.status !== "complete") return;
+      if (changeInfo.status !== "complete") {return;}
       chrome.tabs.query(
         { active: true, currentWindow: true },
         (tabs: chrome.tabs.Tab[]) => {
@@ -91,7 +91,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     ) => {
       if (message.action === "selection-changed") {
         setMetadata((prev) => {
-          if (!prev) return prev;
+          if (!prev) {return prev;}
           const selection =
             (message.payload as string) || undefined;
           return { ...prev, selection };
@@ -110,7 +110,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
   }, []);
 
   const handleSave = async () => {
-    if (!activeMatter || !metadata) return;
+    if (!activeMatter || !metadata) {return;}
 
     setSaveState({ type: "saving" });
 

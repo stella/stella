@@ -120,7 +120,7 @@ function OTP() {
             autoFocus
             maxLength={6}
             onChange={setOtp}
-            onComplete={(code) =>
+            onComplete={(code: string) =>
               verifyOtp.mutate({ email, otp: code })
             }
             value={otp}

@@ -121,7 +121,8 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
       !selectOrganization.isPending
     ) {
       autoSelected.current = true;
-      selectOrganization.mutate(organizations[0]!.id);
+      // SAFETY: length === 1 check above guarantees index 0 exists
+      selectOrganization.mutate(organizations.at(0)?.id ?? "");
     }
   }, [organizations, selectOrganization]);
 

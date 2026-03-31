@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -11,6 +13,7 @@ import {
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -125,8 +128,8 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
   return result;
 };
 
-export const czSupremeAdapter: SourceAdapter = {
-  key: ADAPTER_KEYS.CZ_SUPREME,
+export const czNsAdapter: SourceAdapter = {
+  key: ADAPTER_KEYS.CZ_NS,
   name: "Czech Supreme Court",
   country: "CZE",
   language: "cs",
@@ -158,7 +161,7 @@ export const czSupremeAdapter: SourceAdapter = {
         if (!listResponse.ok) {
           throw new AdapterFetchError({
             message: `CZ Supreme Court list error: ${listResponse.status}`,
-            adapterKey: ADAPTER_KEYS.CZ_SUPREME,
+            adapterKey: ADAPTER_KEYS.CZ_NS,
             cursor,
             httpStatus: listResponse.status,
           });
@@ -180,24 +183,48 @@ export const czSupremeAdapter: SourceAdapter = {
             continue;
           }
 
-          const detailUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
+          const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
+          const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
 
-          // Fetch the detail page for metadata
+          // Fetch detail + print pages in parallel
           try {
-            const detailResponse = await fetch(detailUrl, {
-              signal: signal
-                ? AbortSignal.any([
-                    signal,
-                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                  ])
-                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-            });
+            const requestSignal = signal
+              ? AbortSignal.any([
+                  signal,
+                  AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                ])
+              : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
+
+            const [detailResponse, printResponse] = await Promise.all([
+              fetch(webUrl, { signal: requestSignal }),
+              fetch(printUrl, { signal: requestSignal }),
+            ]);
 
             if (detailResponse.ok) {
-              const html = await detailResponse.text();
-              const meta = parseDetailPage(html);
+              const webHtml = await detailResponse.text();
+              const printHtml = printResponse.ok
+                ? await printResponse.text()
+                : "";
 
+              const meta = parseDetailPage(webHtml);
               const raw = `${caseNumber}|${meta.ecli ?? ""}|${meta.decisionDate ?? ""}`;
+
+              // Parse AST from the print page (rich HTML)
+              // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
+              let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+              let fulltext = meta.fulltext;
+
+              if (printHtml) {
+                const parsed = parseNsDecisionHtml({
+                  documentId: unid,
+                  webUrl,
+                  printUrl,
+                  webHtml,
+                  printHtml,
+                });
+                documentAst = parsed.documentAst;
+                fulltext = parsed.fulltext;
+              }
 
               decisions.push({
                 caseNumber,
@@ -209,9 +236,9 @@ export const czSupremeAdapter: SourceAdapter = {
                   ? parseCeDate(meta.decisionDate)
                   : undefined,
                 decisionType: meta.decisionType?.toLowerCase(),
-                fulltext: meta.fulltext,
-                sourceUrl: detailUrl,
-                documentUrl: detailUrl,
+                fulltext,
+                sourceUrl: webUrl,
+                documentUrl: webUrl,
                 metadata: {
                   legalSentence: meta.legalSentence,
                   keywords: meta.keywords
@@ -225,6 +252,7 @@ export const czSupremeAdapter: SourceAdapter = {
                   category: meta.category?.trim(),
                 },
                 rawHash: hashContent(raw),
+                documentAst,
               });
             } else {
               // eslint-disable-next-line no-console -- adapter diagnostic
@@ -279,7 +307,7 @@ export const czSupremeAdapter: SourceAdapter = {
 
         return { decisions, nextCursor };
       },
-      catch: adapterCatch(ADAPTER_KEYS.CZ_SUPREME, cursor),
+      catch: adapterCatch(ADAPTER_KEYS.CZ_NS, cursor),
     });
   },
 };

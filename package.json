@@ -37,6 +37,7 @@
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
+    "@fontsource-variable/source-serif-4": "^5.2.9",
     "@stella/typescript-config": "workspace:^0.0.0",
     "@typescript/native-preview": "7.0.0-dev.20260327.2",
     "i18n-unused": "^0.19.0",

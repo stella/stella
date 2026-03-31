@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
+      "keywords": "Keywords",
       "legalSentence": "Teza orzeczenia",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Sekcje",
       "source": "Źródło",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Zobacz oryginał"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Wyślij odpowiedzi"
     },
     "attachFile": "Załącz plik",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "Wstaw do czatu AI",
     "deleteThread": "Usuń rozmowę",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Szukaj...",
     "selectARole": "Wybierz rolę",
     "settings": "Ustawienia",
+    "showMore": "Show more",
     "somethingWentWrong": "Coś poszło nie tak",
     "sort": "Sortuj",
     "status": "Status",

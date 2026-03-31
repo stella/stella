@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Cituojama",
       "cites": "Cituoja",
+      "keywords": "Keywords",
       "legalSentence": "Teisinė tezė",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Skyriai",
       "source": "Šaltinis",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Žiūrėti originalą"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Pateikti atsakymus"
     },
     "attachFile": "Prisegti failą",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "Įterpti į AI pokalbį",
     "deleteThread": "Ištrinti pokalbį",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Ieškoti...",
     "selectARole": "Pasirinkite rolę",
     "settings": "Nustatymai",
+    "showMore": "Show more",
     "somethingWentWrong": "Kažkas nepavyko",
     "sort": "Rūšiuoti",
     "status": "Būsena",

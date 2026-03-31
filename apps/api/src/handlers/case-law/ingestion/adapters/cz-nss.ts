@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -11,6 +13,7 @@ import {
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -276,15 +279,66 @@ const parseResultRows = (html: string): ParsedRow[] => {
   return rows;
 };
 
+type DecisionContent = {
+  fulltext: string | undefined;
+  documentAst: DocumentAst | EmptyAst | undefined;
+};
+
 /**
- * Fetch the fulltext of a decision via /DokumentOriginal/Text/{id}.
- * The response is UTF-16LE HTML with <br/> line breaks.
+ * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
+ * it into a DocumentAst. Falls back to /Text/{id} for plain
+ * fulltext if the rich endpoint fails.
  */
-const fetchFulltext = async (
+const fetchDecisionContent = async (
   documentId: string,
+  row: ParsedRow,
+  detail: DetailMetadata,
   session: SessionState,
   signal: AbortSignal,
-): Promise<string | undefined> => {
+): Promise<DecisionContent> => {
+  // Try rich HTML first
+  try {
+    const response = await fetch(
+      `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
+      {
+        signal,
+        headers: {
+          ...COMMON_HEADERS,
+          Cookie: session.cookies,
+        },
+      },
+    );
+
+    if (response.ok) {
+      const html = await response.text();
+      if (html.length > 200 && !html.includes("<body>\n    N/A\n</body>")) {
+        const parsed = parseNssDecisionHtml({
+          caseNumber: row.caseNumber,
+          ecli: detail.ecli,
+          court: "Nejvyšší správní soud",
+          decisionDate: row.decisionDate
+            ? parseCeDate(row.decisionDate)
+            : undefined,
+          decisionType: (
+            detail.decisionType ?? row.decisionType
+          )?.toLowerCase(),
+          sourceUrl: row.documentUrl,
+          html,
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: detail is a parsed metadata object stored as jsonb
+          detailMetadata: detail as Record<string, unknown>,
+        });
+
+        return {
+          fulltext: parsed.fulltext,
+          documentAst: parsed.documentAst,
+        };
+      }
+    }
+  } catch {
+    // Fall through to plain text
+  }
+
+  // Fallback: plain text from /Text/{id}
   try {
     const response = await fetch(
       `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
@@ -298,16 +352,18 @@ const fetchFulltext = async (
     );
 
     if (!response.ok) {
-      return undefined;
+      return { fulltext: undefined, documentAst: undefined };
     }
 
     const buffer = await response.arrayBuffer();
-    // Decode UTF-16LE to string (null bytes stripped by pipeline)
     const text = new TextDecoder("utf-16le").decode(buffer);
     const body = stripHtml(text);
-    return body.length > 100 ? body : undefined;
+    return {
+      fulltext: body.length > 100 ? body : undefined,
+      documentAst: undefined,
+    };
   } catch {
-    return undefined;
+    return { fulltext: undefined, documentAst: undefined };
   }
 };
 
@@ -406,7 +462,7 @@ const fetchDetailMetadata = async (
 /** Convert a parsed row into an IngestionResult. */
 const rowToResult = (
   row: ParsedRow,
-  fulltext: string | undefined,
+  content: DecisionContent,
   detail: DetailMetadata,
 ): IngestionResult => {
   // Hash must be stable across runs regardless of transient
@@ -423,7 +479,7 @@ const rowToResult = (
     // Prefer structured decisionType from detail page over
     // the heuristic cell match from the search results table
     decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),
-    fulltext,
+    fulltext: content.fulltext,
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
     metadata: {
@@ -435,6 +491,7 @@ const rowToResult = (
       parties: detail.parties,
     },
     rawHash: hashContent(raw),
+    documentAst: content.documentAst ?? ({} as EmptyAst),
   };
 };
 
@@ -476,7 +533,7 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   if (!response.ok) {
     throw new AdapterFetchError({
       message: `NSS session init failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: null,
       httpStatus: response.status,
     });
@@ -489,7 +546,7 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   if (!token) {
     throw new AdapterFetchError({
       message: "NSS: antiforgery token not found",
-      adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: null,
     });
   }
@@ -564,7 +621,7 @@ const executeSearch = async (
     invalidateSession();
     throw new AdapterFetchError({
       message: `NSS search failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: date,
       httpStatus: response.status,
     });
@@ -616,7 +673,7 @@ const fetchResultPage = async (
     invalidateSession();
     throw new AdapterFetchError({
       message: `NSS pagination failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: `${date}:${page}`,
       httpStatus: response.status,
     });
@@ -649,8 +706,8 @@ const parseCursor = (cursor: string | null): { date: string; page: number } => {
   };
 };
 
-export const czSupremeAdminAdapter: SourceAdapter = {
-  key: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+export const czNssAdapter: SourceAdapter = {
+  key: ADAPTER_KEYS.CZ_NSS,
   name: "Czech Supreme Administrative Court",
   country: "CZE",
   language: "cs",
@@ -717,18 +774,33 @@ export const czSupremeAdminAdapter: SourceAdapter = {
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
-          let fulltext: string | undefined;
           let detail: DetailMetadata = EMPTY_DETAIL;
 
           if (row.documentId) {
-            // Fetch fulltext and detail metadata in parallel
-            [fulltext, detail] = await Promise.all([
-              fetchFulltext(row.documentId, session, effectiveSignal),
-              fetchDetailMetadata(row.documentId, session, effectiveSignal),
-            ]);
+            // Fetch detail metadata first (needed by parser)
+            detail = await fetchDetailMetadata(
+              row.documentId,
+              session,
+              effectiveSignal,
+            );
           }
 
-          decisions.push(rowToResult(row, fulltext, detail));
+          let content: DecisionContent = {
+            fulltext: undefined,
+            documentAst: undefined,
+          };
+
+          if (row.documentId) {
+            content = await fetchDecisionContent(
+              row.documentId,
+              row,
+              detail,
+              session,
+              effectiveSignal,
+            );
+          }
+
+          decisions.push(rowToResult(row, content, detail));
         }
 
         // Determine next cursor
@@ -747,7 +819,7 @@ export const czSupremeAdminAdapter: SourceAdapter = {
           nextCursor: next <= today ? `${next}:0` : null,
         };
       },
-      catch: adapterCatch(ADAPTER_KEYS.CZ_SUPREME_ADMIN, cursor),
+      catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),
     });
   },
 };

@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Citováno v",
       "cites": "Cituje",
+      "keywords": "Hesla",
       "legalSentence": "Právní věta",
+      "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "sections": "Části",
       "source": "Zdroj",
+      "statutes": "Dotčené předpisy",
       "viewOriginal": "Zobrazit originál"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Odeslat odpovědi"
     },
     "attachFile": "Připojit soubor",
+    "caseLawGreeting": "Zeptejte se mě na toto rozhodnutí — mám k dispozici jeho plný text.",
     "chatAbout": "Vložit do AI chatu",
     "deleteThread": "Smazat konverzaci",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Hledat...",
     "selectARole": "Vyberte roli",
     "settings": "Nastavení",
+    "showMore": "Zobrazit více",
     "somethingWentWrong": "Něco se pokazilo",
     "sort": "Řadit",
     "status": "Stav",

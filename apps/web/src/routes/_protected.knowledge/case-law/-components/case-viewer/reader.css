@@ -1,0 +1,22 @@
+/* Source Serif 4 — loaded only for the case law reader. */
+@import "@fontsource-variable/source-serif-4";
+
+/* Case law reader tokens. */
+
+:root {
+  --reader-body-font: "Source Serif 4 Variable", serif;
+  --reader-body-size: 14px;
+  --reader-body-line-height: 1.65;
+  --reader-paragraph-gap: 0.65em;
+  --reader-section-gap-top: 2.5em;
+  --reader-section-gap-bottom: 0.8em;
+  --reader-anchor-offset: 88px;
+}
+
+/* Justified body on desktop only. No hyphenation:
+   the court's text must not be visually altered. */
+@media (min-width: 1024px) {
+  .reader-justify {
+    text-align: justify;
+  }
+}

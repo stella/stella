@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -11,6 +13,7 @@ import {
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
@@ -118,7 +121,30 @@ const parseDecisionPage = (
   const judge = extractJudge(html);
 
   const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
-  const raw = `${parsed.caseNumber}|${parsed.decisionDate}|${fulltext?.slice(0, 500)}`;
+
+  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
+  let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+  let resolvedFulltext = fulltext;
+
+  try {
+    const parserResult = parseUsDecisionHtml({
+      html,
+      caseNumber: parsed.caseNumber,
+      ecli: undefined,
+      court: "Ústavní soud",
+      decisionDate: parsed.decisionDate,
+      decisionType: decisionForm?.toLowerCase(),
+    });
+    documentAst = parserResult.documentAst;
+    resolvedFulltext = parserResult.fulltext;
+  } catch {
+    // Parser failed; fall back to empty AST and
+    // stripHtml-based fulltext extraction.
+  }
+
+  // Hash on identity fields only (not fulltext) for stability
+  // across parser changes. Matches NSS adapter pattern.
+  const raw = `${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
 
   return {
     caseNumber: parsed.caseNumber,
@@ -127,7 +153,7 @@ const parseDecisionPage = (
     language: "cs",
     decisionDate: parsed.decisionDate,
     decisionType: decisionForm?.toLowerCase(),
-    fulltext,
+    fulltext: resolvedFulltext,
     sourceUrl,
     metadata: {
       judge: judge || undefined,
@@ -135,6 +161,7 @@ const parseDecisionPage = (
       popularName: popularName || undefined,
     },
     rawHash: hashContent(raw),
+    documentAst,
   };
 };
 
@@ -149,7 +176,7 @@ const parseCursor = (cursor: string): CursorState => {
   );
 
   if (Number.isNaN(number) || Number.isNaN(year)) {
-    throw new TypeError("Invalid cz-constitutional cursor format");
+    throw new TypeError("Invalid cz-us cursor format");
   }
 
   return { number, year };
@@ -157,8 +184,8 @@ const parseCursor = (cursor: string): CursorState => {
 
 const makeCursor = (s: CursorState): string => `${s.number}:${s.year}`;
 
-export const czConstitutionalAdapter: SourceAdapter = {
-  key: ADAPTER_KEYS.CZ_CONSTITUTIONAL,
+export const czUsAdapter: SourceAdapter = {
+  key: ADAPTER_KEYS.CZ_US,
   name: "Czech Constitutional Court",
   country: "CZE",
   language: "cs",
@@ -268,7 +295,7 @@ export const czConstitutionalAdapter: SourceAdapter = {
           nextCursor: makeCursor(state),
         };
       },
-      catch: adapterCatch(ADAPTER_KEYS.CZ_CONSTITUTIONAL, cursor),
+      catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),
     });
   },
 };

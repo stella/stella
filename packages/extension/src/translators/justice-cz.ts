@@ -8,8 +8,5 @@ import type { Translator } from "./types";
 export const justiceCzTranslator: Translator = {
   name: "justice.cz",
   pattern: /justice\.cz/i,
-  extract: (_doc) => {
-    // TODO: implement extraction from justice.cz DOM.
-    return null;
-  },
+  extract: (_doc) => null,
 };

@@ -11,8 +11,18 @@ import { defineTool } from "./chat-tools";
 
 const HEADLINE_CONFIG = "MaxWords=50, MinWords=20";
 
-const toNullableString = (x: unknown): string | null =>
-  x === null || x === undefined ? null : String(x);
+const toNullableString = (x: unknown): string | null => {
+  if (x === null || x === undefined) {
+    return null;
+  }
+  if (typeof x === "string") {
+    return x;
+  }
+  if (typeof x === "number" || typeof x === "boolean") {
+    return String(x);
+  }
+  return JSON.stringify(x);
+};
 
 /** Strip HTML tags from ts_headline output so the AI sees
  *  plain text without markup. */
@@ -41,7 +51,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
             v.minLength(2),
             v.maxLength(3),
             v.description(
-              "ISO country code " + "(alpha-3, e.g. CZE, SVK, POL, AUT)",
+              "ISO country code (alpha-3, e.g. CZE, SVK, POL, AUT)",
             ),
           ),
         ),
@@ -125,7 +135,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
       // Tier filter: load court weights and build a regex
       // alternation so the DB can filter by court name pattern.
       let tierFilter = sql``;
-      if (minTier && minTier > 1) {
+      if (minTier !== undefined && minTier > 1) {
         const weightMap = await loadCourtWeights();
         const patterns: string[] = [];
         for (const entries of weightMap.values()) {
@@ -257,7 +267,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
         return { error: "Decision not found" };
       }
 
-      // SAFETY: length check above guarantees index 0 exists
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: length check above guarantees index 0 exists
       const row = result[0] as Record<string, unknown>;
       const fulltext = typeof row.fulltext === "string" ? row.fulltext : "";
       const truncated =

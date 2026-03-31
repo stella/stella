@@ -131,9 +131,9 @@ export const createPagePaginatedFetch = <TResponse>(
           }
 
           if (attempt < SERVER_ERROR_RETRIES) {
+            // oxlint-disable-next-line no-console -- operational retry logging
             console.warn(
-              `${opts.adapterKey}: page ${page} returned ${response.status}, ` +
-                `retry ${attempt + 1}/${SERVER_ERROR_RETRIES}`,
+              `${opts.adapterKey}: page ${page} returned ${response.status}, retry ${attempt + 1}/${SERVER_ERROR_RETRIES}`,
             );
             await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
           }

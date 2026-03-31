@@ -26,7 +26,7 @@ export class PDFErrorBoundary extends Component<
     return { hasError: true };
   }
 
-  override componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, _info: ErrorInfo) {
     getAnalytics().captureError(
       new ClientTelemetryError({
         area: "pdf-viewer",

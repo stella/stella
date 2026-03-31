@@ -107,13 +107,13 @@ type BackfillConfig = {
 
 const CONFIGS: BackfillConfig[] = [
   {
-    adapterKey: ADAPTER_KEYS.CZ_SUPREME,
+    adapterKey: ADAPTER_KEYS.CZ_NS,
     fetchFulltext: fetchCzSupremeFulltext,
     urlField: "source_url",
     delayMs: 300,
   },
   {
-    adapterKey: ADAPTER_KEYS.CZ_SUPREME_ADMIN,
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
     fetchFulltext: fetchCzSupremeAdminFulltext,
     urlField: "document_url",
     delayMs: 500,

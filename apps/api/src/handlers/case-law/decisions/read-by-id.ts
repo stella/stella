@@ -1,6 +1,7 @@
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 
 export const readDecisionHandler = async (
   decisionId: string,
@@ -19,13 +20,14 @@ export const readDecisionHandler = async (
         languageGroupKey: true,
         decisionDate: true,
         decisionType: true,
-        fulltext: true,
-        sections: true,
+        documentAst: true,
         sourceUrl: true,
         documentUrl: true,
         metadata: true,
         createdAt: true,
         updatedAt: true,
+        // fulltext: only as fallback when no AST
+        // sections: frontend doesn't use these
       },
       with: {
         source: {
@@ -55,5 +57,18 @@ export const readDecisionHandler = async (
     return status(404, { message: "Decision not found" });
   }
 
-  return decision;
+  // Only fetch fulltext if no usable documentAst (fallback).
+  // Empty `{}` is stored by adapters without AST parsers;
+  // treat it the same as null.
+  if (!hasUsableAst(decision.documentAst)) {
+    const fallback = await scopedDb((tx) =>
+      tx.query.caseLawDecisions.findFirst({
+        where: { id: decisionId },
+        columns: { fulltext: true },
+      }),
+    );
+    return { ...decision, fulltext: fallback?.fulltext ?? null };
+  }
+
+  return { ...decision, fulltext: null };
 };

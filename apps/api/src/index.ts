@@ -50,9 +50,8 @@ import {
 } from "@/api/lib/rate-limit";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 
-// RivetKit manager runs on port 6420 with basePath /api/rivet.
-// In production, ALB routes /api/rivet/* to port 6420 directly.
-// In dev, the frontend connects to localhost:6420/api/rivet.
+// RivetKit manager on port 6420, no basePath (see registry/index.ts).
+// In production, ALB strips /api/rivet prefix when proxying to 6420.
 registry.startRunner();
 
 const HEALTH_PATH = "/health";

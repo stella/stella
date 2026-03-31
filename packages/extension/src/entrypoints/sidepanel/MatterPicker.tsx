@@ -62,7 +62,7 @@ export const MatterPicker = ({
     }
 
     const matter = matters.find((m) => m.id === matterId);
-    if (!matter) return;
+    if (!matter) {return;}
 
     setActiveMatterId(matterId);
     onMatterChange(matter);

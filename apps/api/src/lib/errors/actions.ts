@@ -1,7 +1,6 @@
 import { isTaggedError, Panic } from "better-result";
 import type { ActionContextOf } from "rivetkit";
 
-import { env } from "@/api/env";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { getAnalytics } from "@/api/lib/analytics";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";

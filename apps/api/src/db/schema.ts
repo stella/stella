@@ -26,6 +26,8 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
@@ -1359,6 +1361,7 @@ export const caseLawDecisions = p.pgTable(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
     country: p.varchar({ length: 3 }).notNull(),
@@ -1370,6 +1373,7 @@ export const caseLawDecisions = p.pgTable(
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
     sections: p.jsonb().$type<DecisionSection[]>(),
+    documentAst: p.jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
     metadata: p.jsonb().$type<Record<string, unknown>>().default({}),

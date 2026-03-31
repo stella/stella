@@ -137,9 +137,13 @@ const DropOverlay = () => {
 
 type RightPanelChatProps = {
   workspaceId?: string | undefined;
+  decisionId?: string | undefined;
 };
 
-export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
+export const RightPanelChat = ({
+  workspaceId,
+  decisionId,
+}: RightPanelChatProps) => {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   // Workspace chat gets entity + org-level mentions;
@@ -167,6 +171,7 @@ export const RightPanelChat = ({ workspaceId }: RightPanelChatProps) => {
       ) : (
         <Suspense>
           <NewChat
+            decisionId={decisionId}
             mentionContext={mentionContext}
             onThreadCreated={setActiveThreadId}
             workspaceId={workspaceId}
@@ -318,6 +323,7 @@ const UserAttachments = ({ parts }: { parts: FileUIPart[] }) => {
 type ChatInputBarProps = {
   attachments: ReturnType<typeof useChatAttachments>;
   mentionContext: MentionContext;
+  placeholder?: string | undefined;
   onSubmit: (
     text: string,
     drained: ReturnType<
@@ -329,6 +335,7 @@ type ChatInputBarProps = {
 const ChatInputBar = ({
   attachments,
   mentionContext,
+  placeholder,
   onSubmit,
 }: ChatInputBarProps) => {
   const t = useTranslations();
@@ -403,6 +410,7 @@ const ChatInputBar = ({
         onEmptyChange={setIsEmpty}
         onSubmit={handleSubmit}
         submitRef={submitRef}
+        {...(placeholder ? { placeholder } : {})}
       />
       <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
         <Button
@@ -439,6 +447,7 @@ const ChatInputBar = ({
 type NewChatProps = {
   onThreadCreated: (threadId: string) => void;
   workspaceId?: string | undefined;
+  decisionId?: string | undefined;
   mentionContext: MentionContext;
 };
 
@@ -469,6 +478,7 @@ const getModelId = () => useDevStore.getState().chatModelId;
 const NewChat = ({
   onThreadCreated,
   workspaceId,
+  decisionId,
   mentionContext,
 }: NewChatProps) => {
   const t = useTranslations();
@@ -518,6 +528,13 @@ const NewChat = ({
                 context: {
                   connection,
                   workspaceId,
+                  decisionId: decisionId
+                    ? decisionId.slice(
+                        decisionId.lastIndexOf("--") >= 0
+                          ? decisionId.lastIndexOf("--") + 2
+                          : 0,
+                      )
+                    : undefined,
                   getModelId,
                   userContext,
                   getActiveFile,

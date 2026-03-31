@@ -4,9 +4,9 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 

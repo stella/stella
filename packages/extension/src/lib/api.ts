@@ -50,11 +50,11 @@ const request = async <T>(
 };
 
 type WorkspacesResponse = {
-  workspaces: Array<{
+  workspaces: {
     id: string;
     name: string;
     reference: string;
-  }>;
+  }[];
 };
 
 type ClipResponse = { entityId: string };

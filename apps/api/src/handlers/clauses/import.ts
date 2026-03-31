@@ -4,9 +4,9 @@ import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 
 import { isClauseExportPayload } from "./import-export-schema";

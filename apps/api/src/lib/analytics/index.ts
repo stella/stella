@@ -11,10 +11,19 @@ export const getAnalytics = (): Analytics => {
     return analytics;
   }
 
-  analytics =
-    env.POSTHOG_KEY && env.POSTHOG_HOST
-      ? createPostHogAnalytics(env.POSTHOG_KEY, env.POSTHOG_HOST)
-      : noopAnalytics;
+  // A key of just "phc_" is the placeholder used to disable
+  // PostHog in local dev (the env var must be non-empty to
+  // pass validation, but a bare prefix has no project).
+  const key = env.POSTHOG_KEY;
+  const host = env.POSTHOG_HOST;
+  const hasRealKey =
+    key !== undefined &&
+    key !== "" &&
+    key !== "phc_" &&
+    host !== undefined &&
+    host !== "";
+
+  analytics = hasRealKey ? createPostHogAnalytics(key, host) : noopAnalytics;
 
   return analytics;
 };

@@ -26,6 +26,7 @@ import {
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
+  BookOpenTextIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -45,11 +46,13 @@ import {
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
+import { getCourtColor } from "@/lib/court-colors";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { roleOptions } from "@/routes/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
+import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/decision-metadata-sheet";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
@@ -143,16 +146,32 @@ function ProtectedComponent() {
   });
   const activeWorkspaceId = workspaceMatch?.params.workspaceId;
 
+  const decisionMatch = useMatch({
+    from: "/_protected/knowledge/case-law/$decisionId",
+    shouldThrow: false,
+  });
+  const activeDecisionId = decisionMatch?.params.decisionId;
+
+  // Auto-open chat panel when viewing a case law decision
+  useEffect(() => {
+    if (activeDecisionId && !isOnChatRoute && !rightOpen) {
+      setRightOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDecisionId]);
+
   return (
     <SidebarProvider>
       <ChatMentionProviders>
         <AppSidebar role={role} />
         <ProtectedContent
+          decisionId={activeDecisionId}
           isOnChatRoute={isOnChatRoute}
           rightOpen={rightOpen}
           toggleRight={toggleRight}
         />
         <RightPanel
+          decisionId={activeDecisionId}
           onToggle={toggleRight}
           open={rightOpen}
           workspaceId={activeWorkspaceId}
@@ -164,12 +183,14 @@ function ProtectedComponent() {
 }
 
 type ProtectedContentProps = {
+  decisionId: string | undefined;
   isOnChatRoute: boolean;
   rightOpen: boolean;
   toggleRight: () => void;
 };
 
 function ProtectedContent({
+  decisionId: activeDecisionId,
   isOnChatRoute,
   rightOpen,
   toggleRight,
@@ -267,6 +288,9 @@ function ProtectedContent({
               </Suspense>
             </>
           )}
+          {activeDecisionId && (
+            <DecisionMetadataSheet decisionId={activeDecisionId} />
+          )}
           {!rightOpen && !isOnChatRoute && (
             <>
               <Separator className="mx-1 h-4" orientation="vertical" />
@@ -316,6 +340,37 @@ const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
   );
 };
 
+// -- Decision context badge --
+
+const extractDecisionNanoid = (param: string): string => {
+  const sep = param.lastIndexOf("--");
+  return sep !== -1 ? param.slice(sep + 2) : param;
+};
+
+const DecisionContextBadge = ({ decisionId }: { decisionId: string }) => {
+  const queryClient = useQueryClient();
+  const id = extractDecisionNanoid(decisionId);
+  const decision = queryClient.getQueryData<{
+    caseNumber: string;
+    court: string;
+  }>(["case-law-decisions", id]);
+  if (!decision?.caseNumber) {
+    return null;
+  }
+  const color = getCourtColor(decision.court);
+  return (
+    <span
+      className="text-muted-foreground ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
+      style={{
+        backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
+      }}
+    >
+      <BookOpenTextIcon className="size-3 shrink-0" style={{ color }} />
+      <span className="truncate">{decision.caseNumber}</span>
+    </span>
+  );
+};
+
 // -- Right panel (chat mock) --
 
 const RIGHT_PANEL_DEFAULT_WIDTH = 384;
@@ -326,9 +381,15 @@ type RightPanelProps = {
   open: boolean;
   onToggle: () => void;
   workspaceId?: string | undefined;
+  decisionId?: string | undefined;
 };
 
-function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
+function RightPanel({
+  open,
+  onToggle,
+  workspaceId,
+  decisionId,
+}: RightPanelProps) {
   const t = useTranslations();
   const assistantActive = useTemplateAssistantStore((s) => s.active);
   const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
@@ -430,10 +491,12 @@ function RightPanel({ open, onToggle, workspaceId }: RightPanelProps) {
                 {workspaceId && (
                   <MatterContextBadge workspaceId={workspaceId} />
                 )}
+                {decisionId && <DecisionContextBadge decisionId={decisionId} />}
               </div>
               <Suspense>
                 <LazyRightPanelChat
-                  key={workspaceId}
+                  decisionId={decisionId}
+                  key={workspaceId ?? decisionId}
                   workspaceId={workspaceId}
                 />
               </Suspense>

@@ -151,7 +151,7 @@ const UserHeader = ({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {return;}
     const handleClickOutside = (e: MouseEvent) => {
       if (
         menuRef.current &&
