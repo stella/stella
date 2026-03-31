@@ -45,6 +45,7 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { useSyncQueries } from "@/hooks/use-sync-queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { getCourtColor } from "@/lib/court-colors";
 import { HOTKEYS } from "@/lib/hotkeys";
@@ -88,6 +89,16 @@ export const Route = createFileRoute("/_protected")({
     if (!context.session.activeOrganizationId) {
       throw redirect({ to: "/auth/organization", replace: true });
     }
+
+    // Prefetch role so useSuspenseQuery in the component is a
+    // cache hit instead of a serial round-trip after child loaders.
+    // staleTime: Infinity → only fetch on cold cache, not every
+    // navigation. Errors surface to the user via useSuspenseQuery.
+    void context.queryClient
+      .ensureQueryData({ ...roleOptions, staleTime: Infinity })
+      .catch((error: unknown) => {
+        getAnalytics().captureError(error);
+      });
 
     return {
       authToken: context.session.token,
