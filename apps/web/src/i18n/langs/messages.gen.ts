@@ -295,9 +295,12 @@ type Messages = {
     "viewer": {
       "citedBy": "Cited by";
       "cites": "Cites";
+      "keywords": "Keywords";
       "legalSentence": "Legal sentence";
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "sections": "Sections";
       "source": "Source";
+      "statutes": "Applicable statutes";
       "viewOriginal": "View original";
     };
   };
@@ -316,6 +319,7 @@ type Messages = {
       "submit": "Submit answers";
     };
     "attachFile": "Attach file";
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.";
     "chatAbout": "Chat about this";
     "deleteThread": "Delete conversation";
     "documentView": {
@@ -499,6 +503,7 @@ type Messages = {
     "search": "Search...";
     "selectARole": "Select a role";
     "settings": "Settings";
+    "showMore": "Show more";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";

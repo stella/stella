@@ -17,9 +17,8 @@ export const transformUnknownError = (error: unknown) => {
     });
   }
 
-  // oxlint-disable-next-line typescript/no-base-to-string
   return new ClientUnknownError({
-    message: String(error),
+    message: typeof error === "string" ? error : JSON.stringify(error),
   });
 };
 

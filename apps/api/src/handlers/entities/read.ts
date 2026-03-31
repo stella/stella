@@ -7,9 +7,9 @@ import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   buildFilterConditions,
   buildSortExpressions,

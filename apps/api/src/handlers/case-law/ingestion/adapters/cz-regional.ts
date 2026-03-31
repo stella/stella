@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -9,6 +11,7 @@ import {
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -50,26 +53,72 @@ type CzRegionalPageResponse = {
   pageNumber?: number;
 };
 
+/** Paragraph shape within finaldoc structured sections. */
+type FinaldocParagraph = {
+  texts: { text: string; anonStyle: string }[];
+  styleLocalId: number;
+  tableCellInfo: unknown;
+};
+
+/** Style definition within finaldoc. */
+type FinaldocStyle = {
+  localId: number;
+  alignment: string;
+  hasSpaceBefore: boolean;
+  hasSpaceAfter: boolean;
+  bold: boolean;
+  italic: boolean;
+};
+
 /** Response shape from /api/finaldoc/{uuid}. */
 type CzRegionalFinaldoc = {
   verdictText?: string;
   justificationText?: string;
+  header?: FinaldocParagraph[];
+  verdict?: FinaldocParagraph[];
+  justification?: FinaldocParagraph[];
+  information?: FinaldocParagraph[];
+  styles?: FinaldocStyle[];
   metadata?: {
     type?: string;
+    solver?: string;
+    caseResultType?: string;
+    caseSubject?: string;
+    regulations?: string[];
+    flags?: string[];
+  };
+};
+
+type FinaldocResult = {
+  fulltext: string | undefined;
+  decisionType: string | undefined;
+  documentAst: DocumentAst | EmptyAst;
+  richMetadata: {
+    solver?: string;
+    caseResultType?: string;
+    caseSubject?: string;
+    regulations?: string[];
+    flags?: string[];
   };
 };
 
 /**
  * Fetch fulltext from the /api/finaldoc/{uuid} endpoint.
- * Returns concatenated verdict + justification text.
+ * Parses the structured JSON into a DocumentAst when possible,
+ * falling back to plain text concatenation on parser failure.
  */
-const fetchFulltext = async (
+const fetchFinaldoc = async (
   docUrl: string,
+  item: IngestionResult,
   signal?: AbortSignal,
-): Promise<{
-  fulltext: string | undefined;
-  decisionType: string | undefined;
-}> => {
+): Promise<FinaldocResult> => {
+  const empty: FinaldocResult = {
+    fulltext: undefined,
+    decisionType: undefined,
+    documentAst: {} as EmptyAst,
+    richMetadata: {},
+  };
+
   try {
     const response = await fetch(docUrl, {
       signal: signal
@@ -82,26 +131,77 @@ const fetchFulltext = async (
     });
 
     if (!response.ok) {
-      return { fulltext: undefined, decisionType: undefined };
+      return empty;
     }
 
     // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- finaldoc API contract
     const doc = (await response.json()) as CzRegionalFinaldoc;
 
-    const parts: string[] = [];
-    if (doc.verdictText) {
-      parts.push(doc.verdictText);
+    const decisionType = doc.metadata?.type?.toLowerCase();
+
+    const richMetadata: FinaldocResult["richMetadata"] = {};
+    if (doc.metadata?.solver) {
+      richMetadata.solver = doc.metadata.solver;
     }
-    if (doc.justificationText) {
-      parts.push(doc.justificationText);
+    if (doc.metadata?.caseResultType) {
+      richMetadata.caseResultType = doc.metadata.caseResultType;
+    }
+    if (doc.metadata?.caseSubject) {
+      richMetadata.caseSubject = doc.metadata.caseSubject;
+    }
+    if (doc.metadata?.regulations) {
+      richMetadata.regulations = doc.metadata.regulations;
+    }
+    if (doc.metadata?.flags) {
+      richMetadata.flags = doc.metadata.flags;
     }
 
-    return {
-      fulltext: parts.length > 0 ? parts.join("\n\n") : undefined,
-      decisionType: doc.metadata?.type?.toLowerCase(),
-    };
+    // Plain text fallback
+    const textParts: string[] = [];
+    if (doc.verdictText) {
+      textParts.push(doc.verdictText);
+    }
+    if (doc.justificationText) {
+      textParts.push(doc.justificationText);
+    }
+    const plainFulltext =
+      textParts.length > 0 ? textParts.join("\n\n") : undefined;
+
+    // Try structured parser
+    try {
+      const parsed = parseRegionalDecision({
+        caseNumber: item.caseNumber,
+        ecli: item.ecli,
+        court: item.court,
+        decisionDate: item.decisionDate,
+        decisionType,
+        sourceUrl: item.sourceUrl,
+        header: doc.header ?? [],
+        verdict: doc.verdict ?? [],
+        justification: doc.justification ?? [],
+        information: doc.information ?? [],
+        styles: doc.styles ?? [],
+        verdictText: doc.verdictText ?? "",
+        justificationText: doc.justificationText ?? "",
+      });
+
+      return {
+        fulltext: parsed.fulltext || plainFulltext,
+        decisionType,
+        documentAst: parsed.documentAst,
+        richMetadata,
+      };
+    } catch {
+      // Parser failed; fall back to empty AST + plain text
+      return {
+        fulltext: plainFulltext,
+        decisionType,
+        documentAst: {} as EmptyAst,
+        richMetadata,
+      };
+    }
   } catch {
-    return { fulltext: undefined, decisionType: undefined };
+    return empty;
   }
 };
 
@@ -129,6 +229,8 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       mentionedStatutes: item.zminenaUstanoveni,
     },
     rawHash: hashContent(raw),
+    // TODO: integrate court-specific parser for AST
+    documentAst: {} as EmptyAst,
   };
 };
 
@@ -292,22 +394,43 @@ export const czRegionalAdapter: SourceAdapter = {
           }
         }
 
-        // Enrich decisions with fulltext from /api/finaldoc
+        // Enrich decisions with fulltext + AST from /api/finaldoc
         for (const decision of decisions) {
           if (!decision.documentUrl) {
             continue;
           }
 
-          const { fulltext, decisionType } = await fetchFulltext(
+          const result = await fetchFinaldoc(
             decision.documentUrl,
+            decision,
             signal,
           );
 
-          if (fulltext) {
-            decision.fulltext = fulltext;
+          if (result.fulltext) {
+            decision.fulltext = result.fulltext;
           }
-          if (decisionType) {
-            decision.decisionType = decisionType;
+          if (result.decisionType) {
+            decision.decisionType = result.decisionType;
+          }
+          decision.documentAst = result.documentAst;
+
+          // Merge rich metadata from finaldoc
+          const rm = result.richMetadata;
+          if (
+            rm.solver ||
+            rm.caseResultType ||
+            rm.caseSubject ||
+            rm.regulations ||
+            rm.flags
+          ) {
+            decision.metadata = {
+              ...decision.metadata,
+              solver: rm.solver,
+              caseResultType: rm.caseResultType,
+              caseSubject: rm.caseSubject,
+              regulations: rm.regulations,
+              flags: rm.flags,
+            };
           }
         }
 

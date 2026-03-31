@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
+      "keywords": "Keywords",
       "legalSentence": "Leitsatz",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Abschnitte",
       "source": "Quelle",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Original anzeigen"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Antworten absenden"
     },
     "attachFile": "Datei anhängen",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "In AI-Chat einfügen",
     "deleteThread": "Konversation löschen",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Suchen...",
     "selectARole": "Rolle auswählen",
     "settings": "Einstellungen",
+    "showMore": "Show more",
     "somethingWentWrong": "Etwas ist schiefgelaufen",
     "sort": "Sortieren",
     "status": "Status",

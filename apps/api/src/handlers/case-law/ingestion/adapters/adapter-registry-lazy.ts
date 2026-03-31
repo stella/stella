@@ -14,10 +14,10 @@ import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
  * eagerly resolving posthog, env, or other heavy deps.
  */
 export const ADAPTER_MODULES: Record<string, () => Promise<unknown>> = {
-  "cz-constitutional": async () => await import("./cz-constitutional"),
+  "cz-ns": async () => await import("./cz-ns"),
+  "cz-nss": async () => await import("./cz-nss"),
+  "cz-us": async () => await import("./cz-us"),
   "cz-regional": async () => await import("./cz-regional"),
-  "cz-supreme": async () => await import("./cz-supreme"),
-  "cz-supreme-admin": async () => await import("./cz-supreme-admin"),
   "sk-courts": async () => await import("./sk-courts"),
   "pl-courts": async () => await import("./pl-courts"),
   "at-courts": async () => await import("./at-courts"),

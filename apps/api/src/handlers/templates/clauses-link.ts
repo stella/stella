@@ -1,6 +1,9 @@
 import { t } from "elysia";
 
-import { linkClauseBodySchema, linkClauseHandler } from "@/api/handlers/clauses/template-links";
+import {
+  linkClauseBodySchema,
+  linkClauseHandler,
+} from "@/api/handlers/clauses/template-links";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";

@@ -25,7 +25,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
   const submitting = useRef(false);
 
   const handleSendOtp = async () => {
-    if (!email.trim()) return;
+    if (!email.trim()) {return;}
     setLoading(true);
     setError(null);
 
@@ -62,8 +62,8 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
   };
 
   const handleVerifyOtp = async () => {
-    if (step.type !== "otp" || !otp.trim()) return;
-    if (submitting.current) return;
+    if (step.type !== "otp" || !otp.trim()) {return;}
+    if (submitting.current) {return;}
     submitting.current = true;
     setLoading(true);
     setError(null);
@@ -115,9 +115,9 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
 
       if (orgsRes.ok) {
         // SAFETY: better-auth Organization[].
-        let orgs = (await orgsRes.json()) as Array<{
+        let orgs = (await orgsRes.json()) as {
           id: string;
-        }>;
+        }[];
 
         // New users have no org; create one.
         // NOTE: In production, this should match the
@@ -217,7 +217,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
                   setEmail(e.currentTarget.value)
                 }
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendOtp();
+                  if (e.key === "Enter") {handleSendOtp();}
                 }}
                 disabled={loading}
                 autoFocus
@@ -257,7 +257,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
                 }
                 onKeyDown={(e) => {
                   if (e.key === "Enter")
-                    handleVerifyOtp();
+                    {handleVerifyOtp();}
                 }}
                 disabled={loading}
                 autoFocus

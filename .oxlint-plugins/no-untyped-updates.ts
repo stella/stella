@@ -29,8 +29,8 @@ export default {
             // The type annotation is on the id node
             const typeAnnotation =
               node.id.typeAnnotation?.typeAnnotation;
-            if (!typeAnnotation) return;
-            if (!node.init) return;
+            if (!typeAnnotation) {return;}
+            if (!node.init) {return;}
 
             if (
               typeAnnotation.type === "TSTypeReference" &&
@@ -38,7 +38,7 @@ export default {
               typeAnnotation.typeName.name === "Record"
             ) {
               const params = typeAnnotation.typeArguments?.params;
-              if (!params || params.length !== 2) return;
+              if (!params || params.length !== 2) {return;}
 
               const [keyType, valueType] = params;
 

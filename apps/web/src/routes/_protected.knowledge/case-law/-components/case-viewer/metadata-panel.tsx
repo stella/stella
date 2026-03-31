@@ -1,4 +1,18 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stella/ui/components/button";
+
+type DocumentAstMetadata = {
+  caseNumber: string | null;
+  ecli: string | null;
+  court: string | null;
+  decisionDate: string | null;
+  decisionType: string | null;
+  keywords: string[];
+  statutes: string[];
+};
 
 type MetadataPanelProps = {
   decision: {
@@ -11,6 +25,7 @@ type MetadataPanelProps = {
     decisionType: string | null;
     sourceUrl: string | null;
     metadata: Record<string, unknown> | null;
+    documentAst?: unknown;
     source: {
       id: string;
       name: string;
@@ -50,9 +65,76 @@ const MetadataField = ({
   );
 };
 
+const TagList = ({ label, values }: { label: string; values: string[] }) => {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <dt className="text-muted-foreground mb-1 text-xs font-medium">
+        {label}
+      </dt>
+      <dd className="flex flex-wrap gap-1">
+        {values.map((v) => (
+          <span className="bg-muted rounded px-1.5 py-0.5 text-xs" key={v}>
+            {v}
+          </span>
+        ))}
+      </dd>
+    </div>
+  );
+};
+
+const parseAstMetadata = (raw: unknown): DocumentAstMetadata | null => {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("metadata" in parsed)
+  ) {
+    return null;
+  }
+  // Narrowed by `"metadata" in parsed` above.
+  const { metadata } = parsed as Record<string, unknown>;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return (metadata ?? null) as DocumentAstMetadata | null;
+};
+
+/** Source-specific fields (excludes duplicates of AST metadata). */
+const SOURCE_FIELD_LABELS: Record<string, string> = {
+  kategorieRozhodnuti: "Kategorie rozhodnutí",
+  zverejnenoNaWebu: "Zveřejněno na webu",
+  legalSentence: "Právní věta",
+};
+
 export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
   const t = useTranslations();
-  const legalSentence = decision.metadata?.legalSentence;
+  const [expanded, setExpanded] = useState(false);
+
+  const astMeta = parseAstMetadata(decision.documentAst);
+  const sourceMeta = decision.metadata ?? {};
+
+  const sourceFields: { label: string; value: string }[] = [];
+  for (const [key, val] of Object.entries(sourceMeta)) {
+    const label = SOURCE_FIELD_LABELS[key];
+    if (!label || val === null || val === undefined) {
+      continue;
+    }
+    if (Array.isArray(val)) {
+      sourceFields.push({ label, value: val.join(", ") });
+    } else if (typeof val === "string" || typeof val === "number") {
+      sourceFields.push({ label, value: String(val) });
+    }
+  }
+
+  const hasExtra =
+    sourceFields.length > 0 ||
+    (astMeta?.keywords?.length ?? 0) > 0 ||
+    (astMeta?.statutes?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4">
@@ -79,15 +161,35 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         />
       </dl>
 
-      {typeof legalSentence === "string" && legalSentence.length > 0 && (
-        <div>
-          <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
-            {t("caseLaw.viewer.legalSentence")}
-          </h4>
-          <p className="bg-muted/50 rounded-md p-3 text-sm leading-relaxed">
-            {legalSentence}
-          </p>
-        </div>
+      {hasExtra && !expanded && (
+        <Button
+          className="w-full"
+          onClick={() => setExpanded(true)}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.showMore")}
+        </Button>
+      )}
+
+      {expanded && (
+        <dl className="space-y-3 border-t pt-3">
+          {astMeta?.keywords && (
+            <TagList
+              label={t("caseLaw.viewer.keywords")}
+              values={astMeta.keywords}
+            />
+          )}
+          {astMeta?.statutes && (
+            <TagList
+              label={t("caseLaw.viewer.statutes")}
+              values={astMeta.statutes}
+            />
+          )}
+          {sourceFields.map((f) => (
+            <MetadataField key={f.label} label={f.label} value={f.value} />
+          ))}
+        </dl>
       )}
 
       {decision.sourceUrl && (
@@ -101,6 +203,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
             {t("caseLaw.viewer.viewOriginal")}
           </a>
         </div>
+      )}
+
+      {decision.court === "Ústavní soud" && (
+        <p className="text-muted-foreground/70 mt-3 text-[0.7rem] leading-snug italic">
+          {t("caseLaw.viewer.nalusDisclaimer")}
+        </p>
       )}
 
       {decision.citationsFrom.length > 0 && (

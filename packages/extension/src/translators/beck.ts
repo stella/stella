@@ -9,8 +9,5 @@ import type { Translator } from "./types";
 export const beckTranslator: Translator = {
   name: "Beck-online",
   pattern: /beck-online\.de/i,
-  extract: (_doc) => {
-    // TODO: implement extraction from Beck DOM structure.
-    return null;
-  },
+  extract: (_doc) => null,
 };

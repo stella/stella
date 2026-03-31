@@ -12,9 +12,10 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientTelemetryError } from "@/lib/errors";
+
+export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
 
 export type SequencedChunk = BaseSequencedChunk<UIMessageChunk>;
 
@@ -56,6 +57,7 @@ export type ChatStreamConnection = {
     userContext?: UserContext | undefined;
     attachments?: ProcessedAttachment[] | undefined;
     activeFile?: ActiveFileContext | undefined;
+    decisionId?: string | undefined;
   }): Promise<{ status: "started" | "busy" }>;
   stop(input: { threadId: string }): Promise<void>;
   getStreamSnapshot(input: {
@@ -79,6 +81,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
   private readonly connection: ChatStreamConnection;
   private readonly threadId: string;
   private readonly workspaceId: string | undefined;
+  private readonly decisionId: string | undefined;
   private readonly getModelId: (() => string | null) | undefined;
   private readonly userContext: UserContext | undefined;
   private readonly getActiveFile:
@@ -101,6 +104,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
     connection: ChatStreamConnection;
     threadId: string;
     workspaceId?: string | undefined;
+    decisionId?: string | undefined;
     getModelId?: (() => string | null) | undefined;
     userContext?: UserContext | undefined;
     getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
@@ -108,6 +112,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
     this.connection = opts.connection;
     this.threadId = opts.threadId;
     this.workspaceId = opts.workspaceId;
+    this.decisionId = opts.decisionId;
     this.getModelId = opts.getModelId;
     this.userContext = opts.userContext;
     this.getActiveFile = opts.getActiveFile;
@@ -225,6 +230,7 @@ export class RivetChatTransport implements ChatTransport<UIMessage> {
       userContext: ctx,
       attachments,
       activeFile: this.getActiveFile?.(),
+      decisionId: this.decisionId,
     });
 
     // Another connection already owns this thread's generation.

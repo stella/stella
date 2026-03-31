@@ -40,7 +40,7 @@ export default {
       create(context) {
         return {
           Literal(node) {
-            if (typeof node.value !== "string") return;
+            if (typeof node.value !== "string") {return;}
             if (hasPhysicalProperty(node.value)) {
               context.report({
                 node,

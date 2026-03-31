@@ -40,7 +40,7 @@ export default {
         return {
           // body.workspaceId, query.organizationId
           MemberExpression(node) {
-            if (node.computed) return;
+            if (node.computed) {return;}
 
             const object = node.object;
             const property = node.property;
@@ -79,7 +79,7 @@ export default {
             }
 
             for (const prop of node.id.properties) {
-              if (prop.type !== "Property") continue;
+              if (prop.type !== "Property") {continue;}
               // Handle both { workspaceId } and { ['workspaceId']: ws }
               const key =
                 prop.key.type === "Identifier"

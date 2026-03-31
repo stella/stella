@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
+      "keywords": "Keywords",
       "legalSentence": "Elvi bírósági határozat",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Szakaszok",
       "source": "Forrás",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Eredeti megtekintése"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Válaszok elküldése"
     },
     "attachFile": "Fájl csatolása",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "Beszúrás az AI chatbe",
     "deleteThread": "Beszélgetés törlése",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Keresés...",
     "selectARole": "Válasszon szerepkört",
     "settings": "Beállítások",
+    "showMore": "Show more",
     "somethingWentWrong": "Hiba történt",
     "sort": "Rendezés",
     "status": "Státusz",

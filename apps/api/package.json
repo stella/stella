@@ -43,6 +43,7 @@
     "ai": "^6.0.104",
     "better-auth": "catalog:",
     "better-result": "catalog:",
+    "cheerio": "^1.2.0",
     "diff-match-patch": "catalog:",
     "docx": "^9.6.0",
     "dompurify": "^3.3.1",

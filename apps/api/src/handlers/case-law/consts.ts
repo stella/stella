@@ -1,9 +1,9 @@
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
   CZ_REGIONAL: "cz-regional",
-  CZ_SUPREME: "cz-supreme",
-  CZ_SUPREME_ADMIN: "cz-supreme-admin",
-  CZ_CONSTITUTIONAL: "cz-constitutional",
+  CZ_NS: "cz-ns",
+  CZ_NSS: "cz-nss",
+  CZ_US: "cz-us",
   SK_COURTS: "sk-courts",
   PL_COURTS: "pl-courts",
   AT_COURTS: "at-courts",

@@ -2,6 +2,7 @@ import { extractText as extractPdfText } from "unpdf";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -198,6 +199,8 @@ const parseItemWithDetail = async (
       documentExtension: detail?.dokument?.fileExtension,
     },
     rawHash: hashContent(rawJson),
+    // TODO: integrate court-specific parser for AST
+    documentAst: {} as EmptyAst,
   };
 };
 

@@ -1,5 +1,6 @@
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -119,6 +120,8 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
       }),
     },
     rawHash: hashContent(raw),
+    // TODO: integrate court-specific parser for AST
+    documentAst: {} as EmptyAst,
   };
 };
 

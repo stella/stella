@@ -1,9 +1,9 @@
 import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 
 export const readEntityByIdParamsSchema = t.Object({
   entityId: t.String(),

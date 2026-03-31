@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@stella/ui/components/breadcrumb";
 
+import { CaseLawBreadcrumb } from "@/components/breadcrumbs/case-law-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
@@ -77,6 +78,9 @@ export const AppBreadcrumbs = () => {
         <BreadcrumbLink to="/knowledge/case-law">
           {t("navigation.caseLaw")}
         </BreadcrumbLink>
+      ),
+      [serializeKey(["/knowledge/case-law/$decisionId"])]: (params) => (
+        <CaseLawBreadcrumb {...params} />
       ),
       [serializeKey(["/organization"])]: () => (
         <BreadcrumbItem>{t("navigation.organization")}</BreadcrumbItem>

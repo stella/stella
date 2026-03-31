@@ -53,7 +53,7 @@ export default {
       create(context) {
         return {
           Literal(node) {
-            if (typeof node.value !== "string") return;
+            if (typeof node.value !== "string") {return;}
             checkValue(context, node, node.value);
           },
           TemplateElement(node) {

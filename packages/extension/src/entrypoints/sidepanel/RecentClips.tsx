@@ -9,11 +9,11 @@ const formatTime = (isoString: string): string => {
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
 
-  if (diffMin < 1) return "Just now";
-  if (diffMin < 60) return `${String(diffMin)}m ago`;
+  if (diffMin < 1) {return "Just now";}
+  if (diffMin < 60) {return `${String(diffMin)}m ago`;}
 
   const diffHrs = Math.floor(diffMin / 60);
-  if (diffHrs < 24) return `${String(diffHrs)}h ago`;
+  if (diffHrs < 24) {return `${String(diffHrs)}h ago`;}
 
   const diffDays = Math.floor(diffHrs / 24);
   return `${String(diffDays)}d ago`;
@@ -27,9 +27,7 @@ export const RecentClips = () => {
 
     // Re-fetch when storage changes (e.g. after a save).
     const listener = (
-      changes: {
-        [key: string]: chrome.storage.StorageChange;
-      },
+      changes: Record<string, chrome.storage.StorageChange>,
       area: string,
     ) => {
       if (

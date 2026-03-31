@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -362,6 +363,8 @@ export const euEcjAdapter: SourceAdapter = {
               documentUrl: eurLexHtmlUrl(lang, celex),
               metadata: { celex },
               rawHash: hashContent(raw),
+              // TODO: integrate court-specific parser for AST
+              documentAst: {} as EmptyAst,
             });
           }
 

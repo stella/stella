@@ -1,47 +1,29 @@
 import { useTranslations } from "use-intl";
 
-type Section = {
-  index: number;
-  type: string;
-  title: string | null;
-  text: string;
+type TocEntry = {
+  anchorId: string;
+  label: string;
+  level: number;
 };
 
 type SectionTocProps = {
-  sections: Section[];
+  entries: TocEntry[];
 };
 
-const SECTION_TYPE_KEYS = {
-  argumentation: "caseLaw.sectionTypes.argumentation",
-  dissent: "caseLaw.sectionTypes.dissent",
-  footer: "caseLaw.sectionTypes.footer",
-  header: "caseLaw.sectionTypes.header",
-  history: "caseLaw.sectionTypes.history",
-  ruling: "caseLaw.sectionTypes.ruling",
-  unknown: "caseLaw.sectionTypes.unknown",
-} as const;
-
-export const SectionToc = ({ sections }: SectionTocProps) => {
+export const SectionToc = ({ entries }: SectionTocProps) => {
   const t = useTranslations();
 
-  const scrollToSection = (index: number) => {
-    const element = document.querySelector(`#section-${index}`);
+  const scrollTo = (anchorId: string) => {
+    const element = document.querySelector(`#${anchorId}`);
     element?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
   };
 
-  const getSectionLabel = (section: Section) => {
-    if (section.title) {
-      return section.title;
-    }
-    // SAFETY: section.type from validated case-law API
-    const key =
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      SECTION_TYPE_KEYS[section.type as keyof typeof SECTION_TYPE_KEYS];
-    return key ? t(key) : t("caseLaw.sectionTypes.unknown");
-  };
+  if (entries.length === 0) {
+    return null;
+  }
 
   return (
     <nav>
@@ -49,14 +31,17 @@ export const SectionToc = ({ sections }: SectionTocProps) => {
         {t("caseLaw.viewer.sections")}
       </h3>
       <ul className="space-y-0.5">
-        {sections.map((section) => (
-          <li key={section.index}>
+        {entries.map((entry) => (
+          <li key={entry.anchorId}>
             <button
               className="hover:bg-muted w-full rounded px-2 py-1 text-start text-sm"
-              onClick={() => scrollToSection(section.index)}
+              onClick={() => scrollTo(entry.anchorId)}
+              style={{
+                paddingInlineStart: `${(entry.level - 1) * 12 + 8}px`,
+              }}
               type="button"
             >
-              {getSectionLabel(section)}
+              {entry.label}
             </button>
           </li>
         ))}

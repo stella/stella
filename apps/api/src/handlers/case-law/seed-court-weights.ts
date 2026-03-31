@@ -157,6 +157,7 @@ const FTS_CONFIGS: FtsRow[] = [
 
 // -- Seed ----------------------------------------------------------------
 
+/* oxlint-disable no-console -- CLI seed script */
 const seed = async () => {
   console.log("Seeding court weights...");
 
@@ -198,3 +199,4 @@ seed().catch((error: unknown) => {
   console.error("Seed failed:", message);
   process.exit(1);
 });
+/* oxlint-enable no-console */

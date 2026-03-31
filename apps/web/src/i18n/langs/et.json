@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Viidatud",
       "cites": "Viitab",
+      "keywords": "Keywords",
       "legalSentence": "Õiguslause",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Jaotised",
       "source": "Allikas",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Vaata originaali"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Esita vastused"
     },
     "attachFile": "Lisa fail",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "Lisa AI vestlusesse",
     "deleteThread": "Kustuta vestlus",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Otsi...",
     "selectARole": "Valige roll",
     "settings": "Seaded",
+    "showMore": "Show more",
     "somethingWentWrong": "Midagi läks valesti",
     "sort": "Sorteeri",
     "status": "Olek",

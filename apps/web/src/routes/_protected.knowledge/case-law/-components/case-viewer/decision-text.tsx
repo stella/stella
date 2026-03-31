@@ -1,60 +1,333 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
-type Section = {
-  index: number;
-  type: string;
-  title: string | null;
-  text: string;
+import { cn } from "@stella/ui/lib/utils";
+
+import "./reader.css";
+
+// ── AST types (mirror of document-ast.ts) ─────────────────
+
+type Inline =
+  | { type: "text"; text: string }
+  | { type: "bold"; children: Inline[] }
+  | { type: "italic"; children: Inline[] }
+  | { type: "link"; href: string; children: Inline[] }
+  | { type: "line-break" };
+
+type HeadingBlock = {
+  id: string;
+  anchorId: string;
+  type: "heading";
+  level: 1 | 2 | 3;
+  role?: string;
+  inlines: Inline[];
+  plainText: string;
 };
+
+type ParagraphBlock = {
+  id: string;
+  anchorId: string;
+  type: "paragraph";
+  role?: string;
+  inlines: Inline[];
+  plainText: string;
+};
+
+type RulingItemBlock = {
+  id: string;
+  anchorId: string;
+  type: "ruling-item";
+  label: string | null;
+  inlines: Inline[];
+  plainText: string;
+};
+
+type TableCell = { inlines: Inline[]; plainText: string };
+
+type TableBlock = {
+  id: string;
+  anchorId: string;
+  type: "table";
+  role?: string;
+  rows: TableCell[][];
+  plainText: string;
+};
+
+type Block = HeadingBlock | ParagraphBlock | RulingItemBlock | TableBlock;
+
+type DocumentAst = {
+  version: 1;
+  blocks: Block[];
+};
+
+const isDocumentAst = (val: unknown): val is DocumentAst =>
+  typeof val === "object" &&
+  val !== null &&
+  "blocks" in val &&
+  Array.isArray((val as Record<string, unknown>).blocks);
 
 type Decision = {
   caseNumber: string;
   court: string;
+  language: string;
   fulltext: string | null;
+  documentAst?: unknown;
 };
 
 type DecisionTextProps = {
   decision: Decision;
-  sections: Section[];
 };
 
-export const DecisionText = ({ decision, sections }: DecisionTextProps) => {
+// ── Inline renderer ───────────────────────────────────────
+
+const renderInline = (node: Inline, key: number): ReactNode => {
+  if (node.type === "text") {
+    return node.text;
+  }
+  if (node.type === "line-break") {
+    return <br key={key} />;
+  }
+  if (node.type === "bold") {
+    return (
+      <strong className="font-[650]" key={key}>
+        {node.children.map(renderInline)}
+      </strong>
+    );
+  }
+  if (node.type === "italic") {
+    return (
+      <em className="italic" key={key}>
+        {node.children.map(renderInline)}
+      </em>
+    );
+  }
+  if (node.type === "link") {
+    return (
+      <a
+        className="decoration-border underline underline-offset-2 hover:decoration-current"
+        href={node.href}
+        key={key}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        {node.children.map(renderInline)}
+      </a>
+    );
+  }
+  return null;
+};
+
+const InlineContent = ({ inlines }: { inlines: Inline[] }) => (
+  <>{inlines.map(renderInline)}</>
+);
+
+// ── Block renderers ───────────────────────────────────────
+
+const BlockRenderer = ({ block }: { block: Block }) => {
+  if (block.type === "heading") {
+    const Tag = `h${block.level}` as const;
+    return (
+      <Tag
+        className={cn(
+          "scroll-mt-[var(--reader-anchor-offset)]",
+          block.level === 1 &&
+            "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
+          block.level === 2 &&
+            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
+          block.level === 3 &&
+            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
+        )}
+        id={block.anchorId}
+      >
+        <InlineContent inlines={block.inlines} />
+      </Tag>
+    );
+  }
+
+  if (block.type === "paragraph") {
+    return (
+      <p
+        className={cn(
+          "mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
+          !block.role && "reader-justify",
+          block.role === "holding" && "reader-justify font-[520]",
+          block.role === "case-number" &&
+            "text-muted-foreground mb-2 text-right font-sans text-[0.95rem]",
+          block.role === "closing" && "mt-8 text-center",
+          block.role === "signature" && "text-muted-foreground mt-1 text-right",
+        )}
+        id={block.anchorId}
+      >
+        <InlineContent inlines={block.inlines} />
+      </p>
+    );
+  }
+
+  if (block.type === "ruling-item") {
+    return (
+      <div
+        className="mt-2 mb-1 grid scroll-mt-[var(--reader-anchor-offset)] grid-cols-[auto_1fr] items-start gap-x-4"
+        id={block.anchorId}
+      >
+        {block.label && (
+          <span className="font-sans text-[0.95rem] leading-relaxed font-bold">
+            {block.label}
+          </span>
+        )}
+        <div className="reader-justify min-w-0">
+          <InlineContent inlines={block.inlines} />
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === "table") {
+    if (block.role === "related-proceedings") {
+      return null;
+    }
+
+    return (
+      <table
+        className="my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] font-sans text-[0.88rem]"
+        id={block.anchorId}
+      >
+        <tbody>
+          {block.rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td
+                  className="border-border/55 border-b px-3 py-1 align-top last:border-b-0"
+                  key={ci}
+                >
+                  <InlineContent inlines={cell.inlines} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  return null;
+};
+
+// ── Fulltext fallback ─────────────────────────────────────
+
+const FulltextFallback = ({ text }: { text: string }) => {
+  const paragraphs = text.split(/\n{2,}/);
+
+  return (
+    <>
+      {paragraphs.map((p, i) => (
+        <p className="mb-[var(--reader-paragraph-gap)] last:mb-0" key={i}>
+          {p}
+        </p>
+      ))}
+    </>
+  );
+};
+
+// ── Holding zone grouping ─────────────────────────────────
+
+const isHoldingBlock = (b: Block): boolean =>
+  b.type === "ruling-item" || (b.type === "paragraph" && b.role === "holding");
+
+const renderBlocksWithHoldingZone = (blocks: Block[]): ReactNode[] => {
+  const result: ReactNode[] = [];
+  let holdingGroup: Block[] = [];
+
+  const flushHolding = () => {
+    if (holdingGroup.length === 0) {
+      return;
+    }
+    result.push(
+      <div
+        className="border-foreground/15 my-4 border-l-2 pl-4 font-[520]"
+        key={`holding-${holdingGroup.at(0)?.id}`}
+      >
+        {holdingGroup.map((b) => (
+          <BlockRenderer block={b} key={b.id} />
+        ))}
+      </div>,
+    );
+    holdingGroup = [];
+  };
+
+  for (const block of blocks) {
+    if (isHoldingBlock(block)) {
+      holdingGroup.push(block);
+    } else {
+      flushHolding();
+      result.push(<BlockRenderer block={block} key={block.id} />);
+    }
+  }
+  flushHolding();
+
+  return result;
+};
+
+// ── Main component ────────────────────────────────────────
+
+export const DecisionText = ({ decision }: DecisionTextProps) => {
   const t = useTranslations();
 
-  // If we have structured sections, render them
-  if (sections.length > 0) {
-    return (
-      <article className="mx-auto max-w-3xl space-y-6">
-        <header>
-          <h1 className="text-xl font-semibold">{decision.caseNumber}</h1>
-          <p className="text-muted-foreground text-sm">{decision.court}</p>
-        </header>
+  const rawAst = decision.documentAst;
+  const ast: DocumentAst | null = (() => {
+    if (rawAst === null || rawAst === undefined) {
+      return null;
+    }
+    if (typeof rawAst === "string") {
+      const parsed: unknown = JSON.parse(rawAst);
+      return isDocumentAst(parsed) ? parsed : null;
+    }
+    return isDocumentAst(rawAst) ? rawAst : null;
+  })();
 
-        {sections.map((section) => (
-          <section id={`section-${section.index}`} key={section.index}>
-            {section.title && (
-              <h2 className="mb-2 text-base font-semibold">{section.title}</h2>
-            )}
-            <div className="text-sm leading-relaxed whitespace-pre-wrap">
-              {section.text}
-            </div>
-          </section>
-        ))}
+  if (ast && ast.blocks.length > 0) {
+    // Use the full case reference from the AST (e.g.
+    // "6 Tdo 647/2017-I") if available, otherwise
+    // fall back to the DB caseNumber.
+    const caseNumberBlock = ast.blocks.find(
+      (b) => b.type === "paragraph" && b.role === "case-number",
+    );
+    const displayRef = caseNumberBlock?.plainText ?? decision.caseNumber;
+
+    return (
+      <article
+        className="text-card-foreground text-left"
+        lang={decision.language}
+        style={{
+          fontFamily: "var(--reader-body-font)",
+          fontSize: "var(--reader-body-size)",
+          lineHeight: "var(--reader-body-line-height)",
+        }}
+      >
+        <p className="text-muted-foreground mb-4 text-right font-sans text-xs italic">
+          {decision.court}, {displayRef}
+        </p>
+        {renderBlocksWithHoldingZone(
+          ast.blocks.filter(
+            (b) => !(b.type === "paragraph" && b.role === "case-number"),
+          ),
+        )}
       </article>
     );
   }
 
-  // Fallback: render raw fulltext
   if (decision.fulltext) {
     return (
-      <article className="mx-auto max-w-3xl space-y-6">
-        <header>
-          <h1 className="text-xl font-semibold">{decision.caseNumber}</h1>
-          <p className="text-muted-foreground text-sm">{decision.court}</p>
-        </header>
-        <div className="text-sm leading-relaxed whitespace-pre-wrap">
-          {decision.fulltext}
-        </div>
+      <article
+        className="text-card-foreground text-left"
+        lang={decision.language}
+        style={{
+          fontFamily: "var(--reader-body-font)",
+          fontSize: "var(--reader-body-size)",
+          lineHeight: "var(--reader-body-line-height)",
+        }}
+      >
+        <FulltextFallback text={decision.fulltext} />
       </article>
     );
   }

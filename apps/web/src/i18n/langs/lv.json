@@ -292,9 +292,12 @@
     "viewer": {
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
+      "keywords": "Keywords",
       "legalSentence": "Tiesību tēze",
+      "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "sections": "Sadaļas",
       "source": "Avots",
+      "statutes": "Applicable statutes",
       "viewOriginal": "Skatīt oriģinālu"
     }
   },
@@ -313,6 +316,7 @@
       "submit": "Iesniegt atbildes"
     },
     "attachFile": "Pievienot failu",
+    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
     "chatAbout": "Ievietot AI čatā",
     "deleteThread": "Dzēst sarunu",
     "documentView": {
@@ -496,6 +500,7 @@
     "search": "Meklēt...",
     "selectARole": "Izvēlieties lomu",
     "settings": "Iestatījumi",
+    "showMore": "Show more",
     "somethingWentWrong": "Kaut kas nogāja greizi",
     "sort": "Kārtot",
     "status": "Statuss",

@@ -186,7 +186,7 @@ export default defineBackground(() => {
 
   const syncOfflineQueue = async () => {
     const queue = await storage.getOfflineQueue();
-    if (queue.length === 0) return;
+    if (queue.length === 0) {return;}
 
     for (const item of queue) {
       const result = await stellaApi.createClip(

@@ -22,6 +22,7 @@ import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   ExtractedTextAttachment,
   ProcessedAttachment,
@@ -410,6 +411,8 @@ export const chatActor = actor({
         userContext?: UserContext;
         attachments?: ProcessedAttachment[];
         activeFile?: { entityId: string; fileName: string };
+        /** Case law decision ID for contextual chat. */
+        decisionId?: string;
       },
     ) => {
       const {
@@ -421,6 +424,7 @@ export const chatActor = actor({
         userContext,
         attachments,
         activeFile,
+        decisionId,
       } = input;
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
@@ -659,6 +663,50 @@ export const chatActor = actor({
                 .replace(/[\r\n]/g, " ")
                 .slice(0, 100);
               system = `${system ?? ""}\n\nThe user is currently viewing "${safeName}" (entity ID: ${safeEntityId}) in the inspector sidebar. When they refer to "this document" or "the open file", they mean this entity. Use readEntity or readContent with this entity ID to access its data.`;
+            }
+          }
+
+          // Inject case law decision context when the user
+          // is viewing a specific decision.
+          if (decisionId) {
+            const decisionRow = await scopedDb((tx) =>
+              tx.query.caseLawDecisions.findFirst({
+                where: { id: decisionId },
+                columns: {
+                  caseNumber: true,
+                  court: true,
+                  ecli: true,
+                  decisionDate: true,
+                  decisionType: true,
+                  fulltext: true,
+                  documentAst: true,
+                },
+              }),
+            );
+            if (decisionRow) {
+              // Use AST plaintext if available, else fulltext
+              let decisionText: string;
+              const ast = decisionRow.documentAst;
+              if (isDocumentAst(ast)) {
+                decisionText = ast.blocks
+                  .map((b) => b.plainText)
+                  .filter(Boolean)
+                  .join("\n\n");
+              } else {
+                decisionText = decisionRow.fulltext ?? "";
+              }
+
+              const meta = [
+                decisionRow.court,
+                decisionRow.caseNumber,
+                decisionRow.ecli,
+                decisionRow.decisionDate,
+                decisionRow.decisionType,
+              ]
+                .filter(Boolean)
+                .join(" | ");
+
+              system = `${system ?? ""}\n\nThe user is currently reading this court decision:\n${meta}\n\n--- Full decision text ---\n${decisionText}\n---\n\nWhen the user asks about "this decision", "this case", "the ruling", etc., they mean the decision above. Answer based on its content. Cite specific parts when relevant.`;
             }
           }
 
