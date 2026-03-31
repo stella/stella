@@ -290,6 +290,7 @@
     },
     "title": "Kohtupraktika",
     "viewer": {
+      "abstract": "Kokkuvõte",
       "citedBy": "Viidatud",
       "cites": "Viitab",
       "keywords": "Keywords",

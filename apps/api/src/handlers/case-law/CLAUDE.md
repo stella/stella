@@ -40,6 +40,16 @@ website. Check hidden fields, print views, API variants,
 alternative export formats. The 30 minutes you spend now saves
 hours of parsing heuristics later.
 
+**Important: a single decision may require multiple endpoints.**
+The full picture of a case often lives across separate pages.
+For example, CZ-ÚS has `GetText.aspx` (decision body) and
+`GetAbstract.aspx` (abstract + legal sentence) as separate
+endpoints. Neither is complete alone. Investigate every
+available endpoint for each court and join the data in the
+adapter. This applies to all countries; always check whether
+detail pages, metadata endpoints, or abstract/summary pages
+exist alongside the main decision text.
+
 ### 2. Save ALL available metadata
 
 Every field the court API exposes must be forwarded to

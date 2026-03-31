@@ -290,6 +290,7 @@
     },
     "title": "Teismų praktika",
     "viewer": {
+      "abstract": "Santrauka",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
       "keywords": "Keywords",

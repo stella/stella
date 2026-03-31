@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -35,6 +36,7 @@ import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/c
  */
 
 const BASE_URL = "https://nalus.usoud.cz/Search/GetText.aspx";
+const ABSTRACT_URL = "https://nalus.usoud.cz/Search/GetAbstract.aspx";
 
 /**
  * After this many consecutive empty pages we assume we've
@@ -97,6 +99,27 @@ const extractFulltext = (html: string): string | undefined => {
 const extractJudge = (html: string): string | undefined => {
   const match = html.match(JUDGE_PATTERN);
   return match?.[1] ? stripHtml(match[1]) : undefined;
+};
+
+/** Extract abstract and legal sentence from GetAbstract.aspx. */
+const extractAbstract = (
+  html: string,
+): {
+  abstract?: string;
+  legalSentence?: string;
+} => {
+  const $ = cheerio.load(html);
+  const abstractText = $("table.abstractContent td").text().trim();
+  const legalText = $("table.legalSentenceContent td").text().trim();
+
+  const result: { abstract?: string; legalSentence?: string } = {};
+  if (abstractText.length > 20) {
+    result.abstract = abstractText;
+  }
+  if (legalText.length > 20) {
+    result.legalSentence = legalText;
+  }
+  return result;
 };
 
 const parseDecisionPage = (
@@ -232,6 +255,41 @@ export const czUsAdapter: SourceAdapter = {
               );
 
               if (decision) {
+                // Rate limit before second request
+                await Bun.sleep(300);
+
+                // Fetch abstract + legal sentence (separate endpoint)
+                try {
+                  const szParam = `I-${state.number}-${toYearSuffix(state.year)}_1`;
+                  const absSignal = callerSignal
+                    ? AbortSignal.any([
+                        callerSignal,
+                        AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                      ])
+                    : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
+                  const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
+                    signal: absSignal,
+                  });
+                  if (absResp.ok) {
+                    const absHtml = await absResp.text();
+                    const { abstract, legalSentence } =
+                      extractAbstract(absHtml);
+                    if (abstract) {
+                      decision.metadata.abstract = abstract;
+                    }
+                    if (legalSentence) {
+                      decision.metadata.legalSentence = legalSentence;
+                    }
+                    // Include abstract HTML in sourceRaw
+                    decision.sourceRaw = JSON.stringify({
+                      textHtml: decision.sourceRaw,
+                      abstractHtml: absHtml,
+                    });
+                  }
+                } catch {
+                  // Abstract fetch failed; proceed without it
+                }
+
                 decisions.push(decision);
                 consecutiveMisses = 0;
               } else {

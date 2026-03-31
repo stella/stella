@@ -290,6 +290,7 @@
     },
     "title": "Rechtsprechung",
     "viewer": {
+      "abstract": "Zusammenfassung",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
       "keywords": "Keywords",

@@ -290,6 +290,7 @@
     },
     "title": "Judikatúra",
     "viewer": {
+      "abstract": "Abstrakt",
       "citedBy": "Citované v",
       "cites": "Cituje",
       "keywords": "Keywords",
