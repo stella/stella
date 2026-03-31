@@ -293,6 +293,7 @@ type Messages = {
     };
     "title": "Case Law";
     "viewer": {
+      "abstract": "Abstract";
       "citedBy": "Cited by";
       "cites": "Cites";
       "keywords": "Keywords";

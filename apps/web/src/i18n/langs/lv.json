@@ -290,6 +290,7 @@
     },
     "title": "Tiesu prakse",
     "viewer": {
+      "abstract": "Kopsavilkums",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
       "keywords": "Keywords",

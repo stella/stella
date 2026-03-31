@@ -290,6 +290,7 @@
     },
     "title": "Joggyakorlat",
     "viewer": {
+      "abstract": "Kivonat",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
       "keywords": "Keywords",

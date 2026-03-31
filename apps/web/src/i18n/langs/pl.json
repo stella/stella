@@ -290,6 +290,7 @@
     },
     "title": "Orzecznictwo",
     "viewer": {
+      "abstract": "Streszczenie",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
       "keywords": "Keywords",

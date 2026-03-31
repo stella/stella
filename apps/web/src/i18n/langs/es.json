@@ -290,6 +290,7 @@
     },
     "title": "Jurisprudencia",
     "viewer": {
+      "abstract": "Resumen",
       "citedBy": "Citado por",
       "cites": "Cita",
       "keywords": "Keywords",

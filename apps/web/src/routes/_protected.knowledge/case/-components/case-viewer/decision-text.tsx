@@ -64,6 +64,7 @@ type Decision = {
   language: string;
   fulltext: string | null;
   documentAst?: unknown;
+  metadata?: Record<string, unknown> | null;
 };
 
 type DecisionTextProps = {
@@ -251,6 +252,45 @@ const renderBlocksWithHoldingZone = (blocks: Block[]): ReactNode[] => {
   return result;
 };
 
+// ── Editorial supplement (abstract, legal sentence) ───────
+
+const EditorialSupplement = ({
+  metadata,
+}: {
+  metadata: Record<string, unknown>;
+}) => {
+  const t = useTranslations();
+  const abstract =
+    typeof metadata.abstract === "string" ? metadata.abstract : null;
+  const legalSentence =
+    typeof metadata.legalSentence === "string" ? metadata.legalSentence : null;
+
+  if (!abstract && !legalSentence) {
+    return null;
+  }
+
+  return (
+    <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4 font-sans text-[0.88rem] leading-relaxed">
+      {legalSentence && (
+        <section>
+          <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
+            {t("caseLaw.viewer.legalSentence")}
+          </h4>
+          <p className="reader-justify">{legalSentence}</p>
+        </section>
+      )}
+      {abstract && (
+        <section className={legalSentence ? "mt-4" : ""}>
+          <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
+            {t("caseLaw.viewer.abstract")}
+          </h4>
+          <p className="text-muted-foreground/80 reader-justify">{abstract}</p>
+        </section>
+      )}
+    </div>
+  );
+};
+
 // ── Main component ────────────────────────────────────────
 
 export const DecisionText = ({ decision }: DecisionTextProps) => {
@@ -290,6 +330,9 @@ export const DecisionText = ({ decision }: DecisionTextProps) => {
         <p className="text-muted-foreground mb-4 text-right font-sans text-xs italic">
           {decision.court}, {displayRef}
         </p>
+        {decision.metadata !== null && decision.metadata !== undefined && (
+          <EditorialSupplement metadata={decision.metadata} />
+        )}
         {renderBlocksWithHoldingZone(
           ast.blocks.filter(
             (b) =>
@@ -315,6 +358,9 @@ export const DecisionText = ({ decision }: DecisionTextProps) => {
           lineHeight: "var(--reader-body-line-height)",
         }}
       >
+        {decision.metadata !== null && decision.metadata !== undefined && (
+          <EditorialSupplement metadata={decision.metadata} />
+        )}
         <FulltextFallback text={decision.fulltext} />
       </article>
     );

@@ -290,6 +290,7 @@
     },
     "title": "Judikatura",
     "viewer": {
+      "abstract": "Abstrakt",
       "citedBy": "Citováno v",
       "cites": "Cituje",
       "keywords": "Hesla",
