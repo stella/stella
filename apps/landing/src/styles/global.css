@@ -11,7 +11,7 @@
 @property --auth-gradient-end {
   syntax: "<color>";
   inherits: true;
-  initial-value: #cbe1fc;
+  initial-value: #a8cfe8;
 }
 
 @property --background {
@@ -30,6 +30,7 @@
   --muted-foreground: #6b7280;
   --border: rgba(0, 0, 0, 0.08);
   --auth-gradient-end: #a8cfe8;
+  --success: #3fa674;
   transition:
     --auth-gradient-end 800ms ease,
     --background 800ms ease;
@@ -45,6 +46,7 @@
   --muted-foreground: #a8a29e;
   --border: rgba(255, 255, 255, 0.06);
   --auth-gradient-end: #1a3a5c;
+  --success: #3fa674;
 }
 
 html.no-transitions {

@@ -5,9 +5,6 @@ import { defineConfig } from "astro/config";
 export default defineConfig({
   site: "https://stll.app",
   integrations: [sitemap()],
-  security: {
-    checkOrigin: true,
-  },
   vite: {
     plugins: [tailwindcss()],
   },
