@@ -8,9 +8,9 @@ updates:
       day: "saturday"
       time: "09:00"
       timezone: "Europe/Prague"
-    # Only accept updates that have been published for at least 3 days
+    # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
-      default-days: 3
+      default-days: 5
     groups:
       actions:
         patterns:
@@ -31,7 +31,7 @@ updates:
       time: "09:00"
       timezone: "Europe/Prague"
     cooldown:
-      default-days: 3
+      default-days: 5
     labels:
       - "📦 dependencies"
     commit-message:
@@ -50,9 +50,9 @@ updates:
       day: "saturday"
       time: "09:00"
       timezone: "Europe/Prague"
-    # Only accept updates that have been published for at least 3 days
+    # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
-      default-days: 3
+      default-days: 5
     open-pull-requests-limit: 10
     groups:
       tanstack:
@@ -60,6 +60,14 @@ updates:
           - "@tanstack/*"
         exclude-patterns:
           - "@tanstack/react-query*"
+      astro:
+        patterns:
+          - "astro"
+          - "@astrojs/*"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
       vite:
         patterns:
           - "vite*"

@@ -16,7 +16,7 @@
     "react-dom": "catalog:react19"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.1",
+    "@tailwindcss/vite": "catalog:",
     "@types/chrome": "^0.0.304",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",

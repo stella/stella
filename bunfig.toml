@@ -1,5 +1,21 @@
 [install]
 linker = "hoisted"
+# 5-day quarantine: reject package versions published
+# less than 5 days ago to mitigate supply chain attacks.
+minimumReleaseAge = 432_000
+# First-party @stll packages are on public npm (open source).
+# They share a release cadence and would otherwise be blocked
+# by the quarantine on every publish cycle.
+minimumReleaseAgeExcludes = [
+  "@stll/aho-corasick-wasm",
+  "@stll/anonymize-data",
+  "@stll/anonymize-wasm",
+  "@stll/fuzzy-search-wasm",
+  "@stll/regex-set-wasm",
+  "@stll/stdnum",
+  "@stll/text-search-wasm",
+  "@typescript/native-preview",
+]
 
 [install.scopes]
 "@stella" = "https://registry.invalid/"
