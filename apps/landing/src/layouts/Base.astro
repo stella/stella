@@ -1,0 +1,173 @@
+---
+import "../styles/global.css";
+type Props = {
+  title?: string;
+  description?: string;
+};
+
+const {
+  title = "Stella — Legal Workspace",
+  description = "Documents, matters, and research — powered by AI. Free core. No lock-in.",
+} = Astro.props;
+
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!--
+  stll.app — Stella landing page
+  Open source legal workspace: https://github.com/stella/stella
+  Built with Astro, Tailwind CSS 4, Cabinet Grotesk, DM Sans.
+  stella labs, s.r.o. — Built in the EU.
+-->
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+
+    <!-- Canonical -->
+    <link rel="canonical" href={canonicalUrl.href} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="Stella" />
+    <meta property="og:url" content={canonicalUrl.href} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+    <!-- Fonts: self-hosted, no external requests -->
+    <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Theme: resolve before first paint to prevent flash -->
+    <script is:inline>
+      (function() {
+        var t = localStorage.getItem("theme");
+        if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+
+    <!-- Structured data -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Stella",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "description": description,
+      "url": "https://stll.app",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "stella labs, s.r.o.",
+        "url": "https://stll.app/imprint",
+      },
+    })} />
+
+    <style is:global>
+      /* Cabinet Grotesk — display headings */
+      @font-face {
+        font-family: "Cabinet Grotesk";
+        src: url("/fonts/CabinetGrotesk-Variable.woff2") format("woff2-variations");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      /* DM Sans — body text (latin) */
+      @font-face {
+        font-family: "DM Sans";
+        src: url("/fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+        font-weight: 100 1000;
+        font-display: swap;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      /* DM Sans — body text (latin-ext: Czech, Polish, etc.) */
+      @font-face {
+        font-family: "DM Sans";
+        src: url("/fonts/dm-sans-latin-ext-wght-normal.woff2") format("woff2");
+        font-weight: 100 1000;
+        font-display: swap;
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      /* DM Sans italic (latin) */
+      @font-face {
+        font-family: "DM Sans";
+        src: url("/fonts/dm-sans-latin-wght-italic.woff2") format("woff2");
+        font-weight: 100 1000;
+        font-display: swap;
+        font-style: italic;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      /* DM Sans italic (latin-ext) */
+      @font-face {
+        font-family: "DM Sans";
+        src: url("/fonts/dm-sans-latin-ext-wght-italic.woff2") format("woff2");
+        font-weight: 100 1000;
+        font-display: swap;
+        font-style: italic;
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+
+      /*
+       * Typography craftsmanship:
+       * - OpenType ligatures and kerning enabled
+       * - Tabular figures for pricing alignment
+       */
+      body {
+        font-feature-settings:
+          "kern" 1,
+          "liga" 1,
+          "calt" 1;
+        text-rendering: optimizeLegibility;
+      }
+
+      .font-display {
+        letter-spacing: -0.02em;
+      }
+
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+
+      /*
+       * Theme transition:
+       * The gradient and background crossfade over 800ms via
+       * @property registration in global.css. Other tokens
+       * snap instantly (intentional; the toggle is at the top
+       * of the page so only the hero gradient matters).
+       */
+    </style>
+  </head>
+  <body class="antialiased">
+    <slot />
+
+    <!--
+      Disable transitions on first load so the theme
+      applies instantly, then enable after paint.
+    -->
+    <script is:inline>
+      document.documentElement.classList.add("no-transitions");
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          document.documentElement.classList.remove("no-transitions");
+        });
+      });
+    </script>
+  </body>
+</html>

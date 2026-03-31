@@ -1,0 +1,37 @@
+# Stella
+
+> Open source legal workspace. Documents, matters, and research — powered by AI.
+
+Stella is a legal workspace built for mid-size law firms (5–50 lawyers). Core document management features are free forever. AI-powered review, research, and drafting are usage-based.
+
+## Key facts
+
+- Open source (AGPL-3.0)
+- Built in the EU (stella labs, s.r.o., Czech Republic)
+- Self-hostable or cloud-hosted
+- AI outputs are grounded by citations
+- No per-seat pricing, no feature gates on core DMS
+
+## Links
+
+- Website: https://stll.app
+- Application: https://app.stll.app
+- Source code: https://github.com/stella/stella
+- Documentation: https://docs.stll.app
+- Status: https://status.stll.app
+
+## Tech stack
+
+- Frontend: React 19, Vite, Tailwind CSS 4
+- Backend: Elysia (Bun runtime)
+- Database: PostgreSQL + Drizzle ORM
+- AI: Vercel AI SDK + Google Generative AI
+- Auth: better-auth
+
+## Company
+
+stella labs, s.r.o.
+Nad Porubkou 2355, Poruba
+708 00 Ostrava, Czech Republic
+IČO: 24632872
+Contact: contact@stll.app

@@ -1,0 +1,55 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+---
+
+<Base title="Terms of Service — Stella" description="Terms of Service.">
+  <div class="flex min-h-screen flex-col">
+    <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="Stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+        <a
+          href="https://app.stll.app"
+          class="text-sm font-medium transition-colors"
+          style="color: var(--muted-foreground)"
+        >
+          Start free &rarr;
+        </a>
+      </div>
+    </nav>
+
+    <div class="flex flex-1 items-center justify-center px-6">
+      <div class="w-full max-w-[1200px] grid grid-cols-1 gap-16 py-16 md:grid-cols-2 md:gap-24">
+        <div>
+          <h1 class="font-display text-4xl font-medium tracking-tight sm:text-5xl">
+            Terms of Service
+          </h1>
+          <p class="mt-4 text-base leading-relaxed" style="color: var(--muted-foreground)">
+            The terms governing your use of Stella.
+          </p>
+        </div>
+        <div class="text-sm leading-relaxed" style="color: var(--muted-foreground)">
+          <p>This page is under preparation. For questions, contact
+            <a href="mailto:contact@stll.app" style="color: var(--foreground)" class="transition-opacity hover:opacity-70">contact@stll.app</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="relative px-6 py-12">
+      <div class="mx-auto max-w-[1200px] text-center">
+        <p class="text-sm" style="color: var(--muted-foreground)">
+          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a> &#183; Built in the&#160;EU.
+        </p>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      ></div>
+    </footer>
+  </div>
+
+</Base>

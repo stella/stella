@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-display: "Cabinet Grotesk", system-ui, sans-serif;
+}
+
+/* Register gradient endpoint so the browser can interpolate it */
+@property --auth-gradient-end {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #cbe1fc;
+}
+
+@property --background {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --primary: #1c1917;
+  --primary-foreground: #fafaf9;
+  --muted-foreground: #6b7280;
+  --border: rgba(0, 0, 0, 0.08);
+  --auth-gradient-end: #a8cfe8;
+  transition:
+    --auth-gradient-end 800ms ease,
+    --background 800ms ease;
+}
+
+.dark {
+  --background: #0c0a09;
+  --foreground: #f5f5f4;
+  --card: rgba(255, 255, 255, 0.03);
+  --card-foreground: #f5f5f4;
+  --primary: #f5f5f4;
+  --primary-foreground: #1c1917;
+  --muted-foreground: #a8a29e;
+  --border: rgba(255, 255, 255, 0.06);
+  --auth-gradient-end: #1a3a5c;
+}
+
+html.no-transitions {
+  transition: none !important;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
