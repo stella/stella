@@ -31,13 +31,13 @@ export type KnowledgeSection = {
     | "/knowledge/templates"
     | "/knowledge/clauses"
     | "/knowledge/analytics"
-    | "/knowledge/case-law";
+    | "/knowledge/case";
 };
 
 export const knowledgeSections: KnowledgeSection[] = [
   { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
   { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
-  { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case-law" },
+  { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },
   { key: "analytics", icon: BarChart3Icon, to: "/knowledge/analytics" },
   { key: "skills", icon: LightbulbIcon },
   { key: "agents", icon: BotIcon },

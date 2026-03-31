@@ -162,6 +162,7 @@ const parseDecisionPage = (
     },
     rawHash: hashContent(raw),
     documentAst,
+    sourceRaw: html,
   };
 };
 

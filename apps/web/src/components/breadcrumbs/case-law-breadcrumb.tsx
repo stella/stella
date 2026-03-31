@@ -5,7 +5,7 @@ import { BookOpenTextIcon } from "lucide-react";
 import { BreadcrumbItem } from "@stella/ui/components/breadcrumb";
 
 import { getCourtColor } from "@/lib/court-colors";
-import { decisionOptions } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 
 type AstBlock = {
   type: string;
@@ -36,7 +36,7 @@ const extractId = (param: string): string => {
 
 export const CaseLawBreadcrumb = ({
   decisionId: rawParam,
-}: ResolveParams<"/knowledge/case-law/$decisionId">) => {
+}: ResolveParams<"/knowledge/case/$decisionId">) => {
   const { data: decision } = useSuspenseQuery(
     decisionOptions(extractId(rawParam)),
   );

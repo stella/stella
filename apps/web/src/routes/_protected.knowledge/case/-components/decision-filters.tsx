@@ -15,7 +15,7 @@ import {
 import type {
   DecisionListFilters,
   SearchFacets,
-} from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+} from "@/routes/_protected.knowledge/case/-queries/decisions";
 
 type DecisionFiltersProps = {
   filters: DecisionListFilters;

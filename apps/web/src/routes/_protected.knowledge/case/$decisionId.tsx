@@ -4,9 +4,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronUpIcon } from "lucide-react";
 
-import { DecisionText } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/decision-text";
-import { SectionToc } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/section-toc";
-import { decisionOptions } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+import { DecisionText } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-text";
+import { SectionToc } from "@/routes/_protected.knowledge/case/-components/case-viewer/section-toc";
+import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 
 /**
  * Extract the nanoid from a composite URL param.
@@ -17,9 +17,7 @@ const extractId = (param: string): string => {
   return sep !== -1 ? param.slice(sep + 2) : param;
 };
 
-export const Route = createFileRoute(
-  "/_protected/knowledge/case-law/$decisionId",
-)({
+export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
   loader: async ({ context: { queryClient }, params: { decisionId } }) =>
     await queryClient.ensureQueryData(decisionOptions(extractId(decisionId))),
   component: DecisionViewer,

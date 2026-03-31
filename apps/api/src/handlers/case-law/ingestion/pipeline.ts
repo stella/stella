@@ -144,6 +144,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
     documentAst: sanitizedAst,
+    sourceRaw: strip(r.sourceRaw),
   };
 };
 
@@ -207,6 +208,7 @@ const processDecision = async (
           documentUrl: result.documentUrl,
           metadata: result.metadata,
           documentAst: result.documentAst,
+          sourceRaw: result.sourceRaw,
           sourceHash: result.rawHash,
           updatedAt: new Date(),
         })
@@ -248,6 +250,7 @@ const processDecision = async (
         documentUrl: result.documentUrl,
         metadata: result.metadata,
         documentAst: result.documentAst ?? null,
+        sourceRaw: result.sourceRaw,
         sourceHash: result.rawHash,
       })
       .returning({ id: caseLawDecisions.id });

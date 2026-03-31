@@ -57,3 +57,6 @@ npm-debug.log*
 *.pem
 .prettiercache
 i18n.cache
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock

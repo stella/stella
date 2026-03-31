@@ -80,6 +80,26 @@ export const parseRegionalDecision = (
   const blocks: Block[] = [];
   let blockIndex = 0;
 
+  // ── Decision type heading (synthesized from metadata) ──
+  const titleMap: Record<string, string> = {
+    rozsudek: "ROZSUDEK",
+    usnesení: "USNESENÍ",
+    příkaz: "PŘÍKAZ",
+  };
+  const title = titleMap[input.decisionType ?? ""];
+  if (title) {
+    blockIndex += 1;
+    blocks.push({
+      id: makeBlockId(),
+      anchorId: `h-${blockIndex}`,
+      type: "heading",
+      level: 1,
+      role: "decision-title",
+      inlines: textInline(title),
+      plainText: title,
+    });
+  }
+
   // ── Header (intro) ───────────────────────────────────
   for (const para of input.header) {
     const { inlines, plainText } = toInlines(para, styleMap);
@@ -118,28 +138,14 @@ export const parseRegionalDecision = (
       }
 
       blockIndex += 1;
-      const rulingMatch = plainText.match(RULING_ITEM_RE);
-      if (rulingMatch) {
-        const label = `${rulingMatch[1] ?? ""}.`;
-        const text = (rulingMatch[2] ?? "").trim();
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: `r-${blockIndex}`,
-          type: "ruling-item",
-          label,
-          inlines: stripPrefix(inlines, rulingMatch[0].length - text.length),
-          plainText: text,
-        });
-      } else {
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: `p-${blockIndex}`,
-          type: "paragraph",
-          role: "holding",
-          inlines,
-          plainText,
-        });
-      }
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: `p-${blockIndex}`,
+        type: "paragraph",
+        role: "holding",
+        inlines,
+        plainText,
+      });
     }
   }
 
@@ -264,7 +270,10 @@ const toInlines = (
     }
     plain += span.text;
 
-    const node: Inline = { type: "text", text: span.text };
+    const isAnon = span.anonStyle === "ANON";
+    const node: Inline = isAnon
+      ? { type: "text", text: span.text, anonymized: true }
+      : { type: "text", text: span.text };
 
     if (style?.bold && style?.italic) {
       inlines.push({
@@ -313,10 +322,12 @@ const stripPrefix = (inlines: Inline[], charCount: number): Inline[] => {
       if (node.text.length <= remaining) {
         remaining -= node.text.length;
       } else {
-        result.push({
+        const sliced: Inline = {
           type: "text",
           text: node.text.slice(remaining),
-        });
+          ...(node.anonymized && { anonymized: true }),
+        };
+        result.push(sliced);
         remaining = 0;
       }
     } else if ("children" in node) {
@@ -337,7 +348,11 @@ const stripPrefix = (inlines: Inline[], charCount: number): Inline[] => {
   if (result.length > 0 && first?.type === "text") {
     const trimmed = first.text.trimStart();
     if (trimmed) {
-      result[0] = { type: "text", text: trimmed };
+      result[0] = {
+        type: "text",
+        text: trimmed,
+        ...(first.anonymized && { anonymized: true }),
+      };
     } else {
       result.shift();
     }
@@ -400,8 +415,6 @@ const classifyJustificationParagraph = (
 };
 
 // ── Patterns ───────────────────────────────────────────────
-
-const RULING_ITEM_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s+(.+)/;
 
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
 

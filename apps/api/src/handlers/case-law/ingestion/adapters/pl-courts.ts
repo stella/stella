@@ -122,6 +122,7 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
     rawHash: hashContent(raw),
     // TODO: integrate court-specific parser for AST
     documentAst: {} as EmptyAst,
+    sourceRaw: undefined,
   };
 };
 

@@ -4,10 +4,24 @@
  * Converts HTML from nalus.usoud.cz/Search/GetText.aspx
  * into a canonical DocumentAst.
  *
- * The HTML uses a `<table class="DocContent">` for the decision
- * body, with `<br />` line breaks (no `<p>` or semantic paragraph
- * structure). Metadata lives in `<span>` elements with IDs
- * like `lblRegistrySign`, `lblDecisionForm`, etc.
+ * Primary source: the `docContentHidden` hidden field contains
+ * RTF-encoded text with proper paragraph structure (`\par`
+ * breaks, `\b`/`\b0` bold markers). This is far more reliable
+ * than the visible `DocContent` HTML, which cramps everything
+ * into a single run.
+ *
+ * Fallback: for pre-2007 decisions that lack the hidden field,
+ * the old `extractLinesFromDocContent` approach is used.
+ *
+ * Additional hidden fields extracted for metadata:
+ *   - `registrySignHidden` — e.g., "I.ÚS 100/25 #1"
+ *   - `paralellQuotationHidden` — parallel citation
+ *   - `popularNameHidden` — popular name
+ *   - `docIdHidden` — numeric internal ID
+ *   - `lblDecisionForm` — NÁLEZ/USNESENÍ
+ *
+ * Cross-reference `<a>` links in the DocContent HTML are
+ * extracted for citation graph purposes.
  *
  * Structure:
  *   Ceska republika
@@ -50,17 +64,49 @@ export type ParseUsDecisionInput = {
   decisionType: string | undefined;
 };
 
+export type CrossReference = {
+  caseNumber: string;
+  href: string;
+};
+
 export type ParseUsDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
+  /** Cross-references to other decisions found in the HTML. */
+  crossReferences: CrossReference[];
 };
 
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
   const $ = cheerio.load(input.html);
+
+  // Extract metadata from hidden fields
+  const hiddenMeta = extractHiddenMetadata($);
+
+  // Extract cross-reference links from the visible HTML
+  const crossReferences = extractCrossReferences($);
+
   const lines = extractLines($);
   const blocks = classifyLines(lines);
+
+  // Synthesize decision title heading if none was parsed.
+  // The RTF docContentHidden doesn't include decorative
+  // headers; the decision form lives in lblDecisionForm.
+  const hasTitle = blocks.some(
+    (b) => b.type === "heading" && b.role === "decision-title",
+  );
+  if (!hasTitle && hiddenMeta.decisionForm) {
+    blocks.unshift({
+      id: `b0`,
+      anchorId: "h-title",
+      type: "heading",
+      level: 1,
+      role: "decision-title",
+      inlines: [{ type: "text", text: hiddenMeta.decisionForm }],
+      plainText: hiddenMeta.decisionForm,
+    });
+  }
 
   validateAndLog("cz-us", input.caseNumber, input.html, blocks);
 
@@ -73,7 +119,7 @@ export const parseUsDecisionHtml = (
     version: 1,
     source: {
       system: "nalus.usoud.cz",
-      documentId: input.caseNumber,
+      documentId: hiddenMeta.docId ?? input.caseNumber,
       webUrl: "",
       printUrl: "",
     },
@@ -82,19 +128,67 @@ export const parseUsDecisionHtml = (
       ecli: input.ecli ?? null,
       court: input.court,
       decisionDate: input.decisionDate ?? null,
-      decisionType: input.decisionType ?? null,
+      decisionType: hiddenMeta.decisionForm ?? input.decisionType ?? null,
       keywords: [],
       statutes: [],
     },
     blocks,
   };
 
-  return { documentAst: ast, fulltext };
+  return { documentAst: ast, fulltext, crossReferences };
 };
 
-// ── Inline walking ─────────────────────────────────────────
+// ── Hidden-field metadata ─────────────────────────────────
 
-// oxlint-disable-next-line no-unused-vars -- recursive-only; kept for future rich-inline extraction
+type HiddenMetadata = {
+  registrySign: string | null;
+  parallelQuotation: string | null;
+  popularName: string | null;
+  docId: string | null;
+  decisionForm: string | null;
+};
+
+const extractHiddenMetadata = ($: cheerio.CheerioAPI): HiddenMetadata => ({
+  registrySign: $("input#registrySignHidden").attr("value") ?? null,
+  parallelQuotation: $("input#paralellQuotationHidden").attr("value") ?? null,
+  popularName: $("input#popularNameHidden").attr("value") ?? null,
+  docId: $("input#docIdHidden").attr("value") ?? null,
+  decisionForm: $("span#lblDecisionForm").text().trim() || null,
+});
+
+// ── Cross-reference extraction ────────────────────────────
+
+const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/i;
+
+/**
+ * Extract cross-reference links to other ÚS decisions from
+ * the visible DocContent HTML.
+ */
+const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
+  const refs: CrossReference[] = [];
+  const seen = new Set<string>();
+
+  $(".DocContent a[href]").each((_, el) => {
+    const href = $(el).attr("href") ?? "";
+    if (!CROSS_REF_HREF_RE.test(href)) {
+      return;
+    }
+
+    const text = $(el).text().trim();
+    if (!text || seen.has(text)) {
+      return;
+    }
+
+    seen.add(text);
+    refs.push({ caseNumber: text, href });
+  });
+
+  return refs;
+};
+
+// ── Inline walking (HTML fallback) ────────────────────────
+
+// oxlint-disable-next-line no-unused-vars -- kept for HTML fallback path
 const _walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
@@ -175,6 +269,71 @@ const inlinesToPlainText = (inlines: Inline[]): string => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
+// ── RTF inline parser ─────────────────────────────────────
+
+/**
+ * Strip RTF control words that are not semantically useful
+ * for our purposes (font tables, Unicode escapes, etc.).
+ */
+const stripRtfControls = (text: string): string =>
+  text
+    // Remove \uN Unicode escapes followed by a replacement char
+    .replace(/\\u-?\d+\s?\??/g, "")
+    // Remove \' hex escapes (e.g., \'e9 for é) — these are
+    // already decoded in the hidden field value
+    .replace(/\\'[0-9a-fA-F]{2}/g, "")
+    // Remove font/color/style control words we don't handle
+    .replace(
+      /\\(?:f\d+|fs\d+|cf\d+|cb\d+|highlight\d+|lang\d+|pard|ltrpar|qj|ql|qr|qc|ri\d+|li\d+|fi-?\d+|sl-?\d+|slmult\d+|widctlpar|nowidctlpar|tx\d+|tqr|tqc|tqdec|sb\d+|sa\d+|keepn|outlinelevel\d+)\s?/g,
+      "",
+    )
+    // Remove \{ and \} escaped braces
+    .replace(/\\[{}]/g, "")
+    // Remove remaining curly braces (RTF grouping)
+    .replace(/[{}]/g, "")
+    // Collapse multiple spaces
+    .replace(/ {2,}/g, " ");
+
+/**
+ * Parse RTF bold markers (`\b` / `\b0`) into Inline nodes.
+ *
+ * `\b` turns bold on; `\b0` turns it off. Any text between
+ * these markers is wrapped in an InlineBold node.
+ */
+const parseRtfInlines = (rtf: string): Inline[] => {
+  const cleaned = stripRtfControls(rtf);
+  const inlines: Inline[] = [];
+
+  // Split on \b and \b0 markers, keeping the delimiters
+  const parts = cleaned.split(/(\\b0?\s?)/);
+  let bold = false;
+
+  for (const part of parts) {
+    if (/^\\b0\s?$/.test(part)) {
+      bold = false;
+      continue;
+    }
+    if (/^\\b\s?$/.test(part)) {
+      bold = true;
+      continue;
+    }
+
+    const text = part.trim();
+    if (!text) {
+      continue;
+    }
+
+    const textNode: Inline = { type: "text", text };
+    if (bold) {
+      inlines.push({ type: "bold", children: [textNode] });
+    } else {
+      inlines.push(textNode);
+    }
+  }
+
+  return inlines;
+};
+
 // ── Line extraction ────────────────────────────────────────
 
 type ParsedLine = {
@@ -183,41 +342,44 @@ type ParsedLine = {
 };
 
 /**
- * Extract lines from the DocContent table.
+ * Primary extraction: parse the `docContentHidden` RTF field.
  *
- * The US HTML uses `<br />` tags as line separators inside a
- * single table cell. We split on `<br>` boundaries, then
- * group consecutive non-empty lines into logical paragraphs
- * separated by blank lines (2+ consecutive `<br>`).
+ * Splits on `\par` (paragraph breaks). Double `\par\par` acts
+ * as a section/paragraph break; single `\par` is a line break
+ * within a paragraph.
  */
-/**
- * Split a long text block at embedded paragraph boundaries.
- *
- * ÚS decisions often have all paragraphs crammed into one
- * continuous string like "...stěžovatele.5.  Ústavní soud..."
- * This splits at:
- *   - Numbered paragraphs: ".N. " or ".N.  " (after sentence end)
- *   - Section markers: "Odůvodnění:", "Poučení:"
- *   - Closing: "V Brně dne"
- */
-const splitAtParagraphBoundaries = (text: string): string[] => {
-  // Split at:
-  // - After a period, before a numbered paragraph ("1. ")
-  // - Before section markers (Odůvodnění:, Poučení:)
-  // - Before closing pattern (V Brně dne)
-  const parts = text.split(
-    /(?<=\.)(?=\d{1,3}\.\s)|(?=Odůvodnění\s*:)|(?=Poučení\s*:)|(?=V\s+\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d)/u,
-  );
-  return parts.length > 1 ? parts : [text];
+const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
+  // Split on \par (paragraph breaks)
+  const segments = rtfContent.split(/\\par\s*/);
+
+  const lines: ParsedLine[] = [];
+  for (const segment of segments) {
+    const trimmed = segment.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const inlines = parseRtfInlines(trimmed);
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (plainText) {
+      lines.push({ inlines, plainText });
+    }
+  }
+
+  return lines;
 };
 
-const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
+/**
+ * Fallback extraction from the visible DocContent HTML.
+ *
+ * Used for pre-2007 decisions that may not have the
+ * `docContentHidden` field. Splits the crammed text at
+ * paragraph boundaries using heuristics.
+ */
+const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
   const docContent = $(".DocContent");
   const container = docContent.length > 0 ? docContent : $("body");
 
-  // ÚS HTML has the decision body inside a nested <td>
-  // with minimal <br> breaks. Extract the full text and
-  // split at paragraph boundaries instead.
   const fullText = container.text().trim();
   if (!fullText) {
     return [];
@@ -240,6 +402,40 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
   return lines;
 };
 
+/**
+ * Split a long text block at embedded paragraph boundaries.
+ *
+ * ÚS decisions often have all paragraphs crammed into one
+ * continuous string like "...stěžovatele.5.  Ústavní soud..."
+ * This splits at:
+ *   - Numbered paragraphs: ".N. " or ".N.  " (after sentence end)
+ *   - Section markers: "Odůvodnění:", "Poučení:"
+ *   - Closing: "V Brně dne"
+ */
+const splitAtParagraphBoundaries = (text: string): string[] => {
+  const parts = text.split(
+    /(?<=\.)(?=\d{1,3}\.\s)|(?=Odůvodnění\s*:)|(?=Poučení\s*:)|(?=V\s+\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d)/u,
+  );
+  return parts.length > 1 ? parts : [text];
+};
+
+/**
+ * Extract lines from the HTML page.
+ *
+ * Prefers the `docContentHidden` RTF field; falls back to
+ * parsing the visible DocContent HTML.
+ */
+const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
+  const rtfContent = $("input#docContentHidden").attr("value") ?? "";
+
+  if (rtfContent.trim()) {
+    return extractLinesFromRtf(rtfContent);
+  }
+
+  // Fallback: parse the visible DocContent HTML
+  return extractLinesFromDocContent($);
+};
+
 // ── Patterns ───────────────────────────────────────────────
 
 /** Decorative lines to skip entirely. */
@@ -259,9 +455,6 @@ const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/i;
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
   /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*:?\s*$/i;
-
-/** Ruling item: "I. ...", "II. ..." (Roman numeral prefix). */
-const RULING_ITEM_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s+(.+)/;
 
 /**
  * Section heading in Odůvodnění: standalone Roman numeral,
@@ -492,26 +685,10 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
       }
     }
 
-    // Ruling items (in the ruling zone)
+    // Ruling items (in the ruling zone): detected by Roman
+    // numeral prefix, emitted as holding paragraphs with
+    // the full original text preserved.
     if (inRuling && !inOduvodneni) {
-      const rulingMatch = plainText.match(RULING_ITEM_RE);
-      if (rulingMatch) {
-        const label = `${rulingMatch[1] ?? ""}.`;
-        const text = (rulingMatch[2] ?? "").trim();
-        const prefixLen = rulingMatch[0].length - text.length;
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("r", blockIndex),
-          type: "ruling-item",
-          label,
-          inlines: stripInlinePrefix(inlines, prefixLen),
-          plainText: text,
-        });
-        continue;
-      }
-
-      // Non-Roman-numeral text in ruling zone: holding paragraph
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -524,12 +701,12 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
       continue;
     }
 
-    // Section headings in Odůvodnění: standalone Roman numeral
-    // possibly followed by a title on the next line
+    // Section headings in Odůvodnění: standalone Roman
+    // numeral possibly followed by a title on the next line
     if (inOduvodneni) {
       const romanMatch = plainText.match(SECTION_ROMAN_RE);
       if (romanMatch) {
-        // Check if the next non-empty line is a short title
+        // Check if next non-empty line is a short title
         const nextNonEmpty = findNextNonEmpty(lines, i + 1);
         if (
           nextNonEmpty &&

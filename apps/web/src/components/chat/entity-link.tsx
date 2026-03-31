@@ -134,7 +134,7 @@ export const EntityLink = ({
         // eslint-disable-next-line typescript/no-misused-promises
         onClick={async () =>
           await navigate({
-            to: "/knowledge/case-law/$decisionId",
+            to: "/knowledge/case/$decisionId",
             params: { decisionId },
           })
         }

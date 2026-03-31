@@ -295,10 +295,11 @@
       "keywords": "Keywords",
       "legalSentence": "Legal sentence",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.",
+      "popularName": "Popular name",
       "sections": "Sections",
       "source": "Source",
       "statutes": "Applicable statutes",
-      "viewOriginal": "View original"
+      "viewOriginal": "View source"
     }
   },
   "chat": {

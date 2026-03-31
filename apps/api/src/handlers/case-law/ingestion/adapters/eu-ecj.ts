@@ -365,6 +365,7 @@ export const euEcjAdapter: SourceAdapter = {
               rawHash: hashContent(raw),
               // TODO: integrate court-specific parser for AST
               documentAst: {} as EmptyAst,
+              sourceRaw: undefined,
             });
           }
 

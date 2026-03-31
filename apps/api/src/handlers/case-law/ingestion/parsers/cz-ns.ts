@@ -515,61 +515,6 @@ export const blocksToPlainText = (blocks: Block[]): string =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-/**
- * Strip a prefix from the inline array by character count.
- * Skips leading whitespace nodes, then removes characters
- * matching the label length (e.g. "I. " = 3 chars) from
- * the beginning of the inline content.
- */
-const stripInlinePrefix = (inlines: Inline[], prefix: string): Inline[] => {
-  // Count how many plaintext characters to skip,
-  // normalized for whitespace differences.
-  const prefixLen = prefix.trim().length;
-  let charsToSkip = prefixLen;
-  const result: Inline[] = [];
-
-  for (const node of inlines) {
-    if (charsToSkip <= 0) {
-      result.push(node);
-      continue;
-    }
-
-    if (node.type === "line-break") {
-      // Skip whitespace-like nodes during prefix stripping
-      continue;
-    }
-
-    if (node.type === "text") {
-      const trimmed = node.text.replace(/^\s+/, "");
-      if (trimmed.length <= charsToSkip) {
-        charsToSkip -= trimmed.length;
-        continue;
-      }
-      // Partial match: keep the remainder
-      const after = trimmed.slice(charsToSkip).trimStart();
-      charsToSkip = 0;
-      if (after) {
-        result.push({ type: "text", text: after });
-      }
-      continue;
-    }
-
-    if (node.type === "bold" || node.type === "italic") {
-      const childPlain = inlinesToPlainText(node.children).trim();
-      if (childPlain.length <= charsToSkip) {
-        charsToSkip -= childPlain.length;
-        continue;
-      }
-    }
-
-    // Can't strip this node; keep it
-    charsToSkip = 0;
-    result.push(node);
-  }
-
-  return result;
-};
-
 // ── Pattern constants ─────────────────────────────────────
 
 const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/;
@@ -608,7 +553,7 @@ const isSectionHeading = (plainText: string): boolean => {
 type InlineBlock = Exclude<Block, { type: "table" }>;
 
 const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
-  if (prev.type !== "paragraph" && prev.type !== "ruling-item") {
+  if (prev.type !== "paragraph") {
     return false;
   }
   if (next.type !== "paragraph") {
@@ -888,19 +833,17 @@ const classifyBlocks = (
       continue;
     }
 
-    // Ruling items: "I. ...", "II. ..."
-    const rulingMatch = plainText.match(RULING_ITEM_RE);
-    if (rulingMatch) {
-      const label = rulingMatch[1] ?? "";
-      const strippedInlines = stripInlinePrefix(inlines, rulingMatch[0]);
-      const strippedPlain = plainText.slice(rulingMatch[0].length).trim();
+    // Ruling items: "I. ...", "II. ..." — detected by
+    // Roman numeral prefix, emitted as holding paragraphs
+    // with the full original text preserved.
+    if (RULING_ITEM_RE.test(plainText)) {
       blocks.push({
         id,
         anchorId,
-        type: "ruling-item",
-        label,
-        inlines: strippedInlines,
-        plainText: strippedPlain,
+        type: "paragraph",
+        role: "holding",
+        inlines,
+        plainText,
       });
       continue;
     }

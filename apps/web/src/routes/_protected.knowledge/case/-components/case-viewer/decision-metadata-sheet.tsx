@@ -14,8 +14,8 @@ import {
   SheetTrigger,
 } from "@stella/ui/components/sheet";
 
-import { MetadataPanel } from "@/routes/_protected.knowledge/case-law/-components/case-viewer/metadata-panel";
-import { decisionOptions } from "@/routes/_protected.knowledge/case-law/-queries/decisions";
+import { MetadataPanel } from "@/routes/_protected.knowledge/case/-components/case-viewer/metadata-panel";
+import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 
 /**
  * Extract the nanoid from a composite URL param.

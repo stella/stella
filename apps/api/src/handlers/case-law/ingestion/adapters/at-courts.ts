@@ -223,6 +223,7 @@ const parseRisItem = async (
     rawHash: hashContent(raw_),
     // TODO: integrate court-specific parser for AST
     documentAst: {} as EmptyAst,
+    sourceRaw: undefined,
   };
 };
 

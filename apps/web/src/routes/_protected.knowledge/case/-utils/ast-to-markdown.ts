@@ -13,7 +13,6 @@ type Inline =
 type Block = {
   type: string;
   level?: number;
-  label?: string | null;
   role?: string;
   inlines?: Inline[];
   plainText: string;
@@ -56,9 +55,6 @@ const blockToMd = (b: Block): string => {
   if (b.type === "heading") {
     const prefix = "#".repeat(b.level ?? 1);
     return `${prefix} ${b.inlines?.map(inlineToMd).join("") ?? b.plainText}`;
-  }
-  if (b.type === "ruling-item") {
-    return `${b.label ?? "-"} ${b.inlines?.map(inlineToMd).join("") ?? b.plainText}`;
   }
   if (b.type === "table" && b.rows) {
     return b.rows

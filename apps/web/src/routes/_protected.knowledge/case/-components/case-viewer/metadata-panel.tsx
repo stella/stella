@@ -4,6 +4,30 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
+/**
+ * Convert API URLs to public-facing court page URLs.
+ * e.g. finaldoc API → rozhodnuti.justice.cz/rozhodnuti/
+ */
+const humanizeSourceUrl = (url: string): string => {
+  // Regional courts: API endpoint → public page
+  const finaldocMatch = url.match(
+    /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/,
+  );
+  if (finaldocMatch) {
+    return `https://rozhodnuti.justice.cz/rozhodnuti/${finaldocMatch[1]}`;
+  }
+  return url;
+};
+
+/** Extract a human-readable label from a source URL. */
+const sourceLabel = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
 type DocumentAstMetadata = {
   caseNumber: string | null;
   ecli: string | null;
@@ -111,12 +135,19 @@ const SOURCE_FIELD_LABELS: Record<string, string> = {
   legalSentence: "Právní věta",
 };
 
+/** Extract the popular name from source metadata (ÚS decisions). */
+const getPopularName = (meta: Record<string, unknown>): string | null => {
+  const val = meta.popularName;
+  return typeof val === "string" && val.length > 0 ? val : null;
+};
+
 export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
 
   const astMeta = parseAstMetadata(decision.documentAst);
   const sourceMeta = decision.metadata ?? {};
+  const popularName = getPopularName(sourceMeta);
 
   const sourceFields: { label: string; value: string }[] = [];
   for (const [key, val] of Object.entries(sourceMeta)) {
@@ -147,6 +178,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           label={t("caseLaw.columns.court")}
           value={decision.court}
         />
+        {popularName && (
+          <MetadataField
+            label={t("caseLaw.viewer.popularName")}
+            value={popularName}
+          />
+        )}
         <MetadataField label={t("common.date")} value={decision.decisionDate} />
         <MetadataField label="ECLI" value={decision.ecli} />
         <MetadataField
@@ -196,11 +233,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         <div>
           <a
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-            href={decision.sourceUrl}
+            href={humanizeSourceUrl(decision.sourceUrl)}
             rel="noopener noreferrer"
             target="_blank"
           >
-            {t("caseLaw.viewer.viewOriginal")}
+            {t("caseLaw.viewer.viewOriginal")} —{" "}
+            {sourceLabel(decision.sourceUrl)}
           </a>
         </div>
       )}

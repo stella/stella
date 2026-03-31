@@ -656,19 +656,25 @@ const classifyChunks = (chunks: PChunk[]): Block[] => {
       }
     }
 
-    // <ol> list items: ruling items before Odůvodnění,
+    // <ol> list items: holding paragraphs before Odůvodnění,
     // numbered paragraphs after
     if (chunk.listItemIndex !== null) {
       if (!inOduvodneni && !inPouceni) {
-        const label = `${toRoman(chunk.listItemIndex)}.`;
+        // Reconstruct the full text with Roman numeral prefix
+        const roman = `${toRoman(chunk.listItemIndex)}.`;
+        const fullInlines: Inline[] = [
+          { type: "text", text: `${roman} ` },
+          ...inlines,
+        ];
+        const fullPlain = `${roman} ${plainText}`;
         blockIndex += 1;
         blocks.push({
           id: makeBlockId(),
-          anchorId: makeAnchorId("r", blockIndex),
-          type: "ruling-item",
-          label,
-          inlines,
-          plainText,
+          anchorId: makeAnchorId("p", blockIndex),
+          type: "paragraph",
+          role: "holding",
+          inlines: fullInlines,
+          plainText: fullPlain,
         });
       } else {
         blockIndex += 1;
@@ -683,26 +689,20 @@ const classifyChunks = (chunks: PChunk[]): Block[] => {
       continue;
     }
 
-    // Ruling items by text pattern (before Odůvodnění)
-    if (!inOduvodneni && !inPouceni) {
-      const rulingMatch = plainText.match(RULING_ITEM_RE);
-      if (rulingMatch) {
-        const label = `${rulingMatch[1] ?? ""}.`;
-        const text = (rulingMatch[2] ?? "").trim();
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("r", blockIndex),
-          type: "ruling-item",
-          label,
-          inlines: stripInlinePrefix(
-            inlines,
-            rulingMatch[0].length - text.length,
-          ),
-          plainText: text,
-        });
-        continue;
-      }
+    // Ruling items by text pattern (before Odůvodnění):
+    // detected by Roman numeral prefix, emitted as holding
+    // paragraphs with the full original text preserved.
+    if (!inOduvodneni && !inPouceni && RULING_ITEM_RE.test(plainText)) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        role: "holding",
+        inlines,
+        plainText,
+      });
+      continue;
     }
 
     // Section headings in Odůvodnění (centered or bold,
