@@ -67,4 +67,10 @@ export type SourceAdapter = {
    * should set this lower (e.g., 10).
    */
   maxSyncPages?: number | undefined;
+  /**
+   * Fetch the total number of decisions available from
+   * the source. Returns null if the source doesn't expose
+   * a count endpoint or if the request fails.
+   */
+  getTotalCount?: (signal: AbortSignal) => Promise<number | null>;
 };

@@ -221,6 +221,14 @@ export const czUsAdapter: SourceAdapter = {
   // 10 pages ≈ 6 min, persists cursor frequently.
   maxSyncPages: 10,
 
+  // TODO: NALUS requires a POST with ASP.NET ViewState to
+  // return search results. A GET to the search page returns
+  // the form but no count. Implement POST-based total count
+  // when we add full ÚS historical ingestion.
+  async getTotalCount() {
+    return null;
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {

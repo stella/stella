@@ -71,9 +71,7 @@ const SOURCES = ALL_SOURCES.filter(
 );
 
 if (DISABLED_ADAPTER_KEYS.size > 0) {
-  console.log(
-    `Disabled adapters: ${[...DISABLED_ADAPTER_KEYS].join(", ")}`,
-  );
+  console.log(`Disabled adapters: ${[...DISABLED_ADAPTER_KEYS].join(", ")}`);
 }
 
 const ensureSource = async (

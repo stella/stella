@@ -24,6 +24,10 @@ import {
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
+import {
+  listAdapterKeys,
+  loadAdapterByKey,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 
 // ── Types ───────────────────────────────────────────────
 
@@ -59,6 +63,10 @@ type AdapterReport = {
 
   /** Total decisions in DB for this adapter. */
   totalDecisions: number;
+  /** Total decisions on the court website (null if unknown). */
+  remoteTotal: number | null;
+  /** DB decisions / remote total as percentage (null if unknown). */
+  coveragePct: number | null;
   /** Growth in the reporting window. */
   growth: GrowthWindow;
 
@@ -127,8 +135,14 @@ const CHECKED_FIELDS = Object.keys(
 /** Adapter is "stuck" if no growth in this many hours. */
 const STUCK_THRESHOLD_HOURS = 12;
 
+/** Flag an issue when coverage drops below this percentage. */
+const COVERAGE_THRESHOLD_PCT = 80;
+
 /** Issue prefix for stuck detection (used in summary counts). */
 const STUCK_PREFIX = "Stuck:" as const;
+
+/** Timeout for each remote total fetch (ms). */
+const SOURCE_TOTAL_TIMEOUT = 10_000;
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -146,6 +160,39 @@ const parseWindowArg = (args: string[]): number => {
     return Number.parseInt(match[1], 10);
   }
   return 24;
+};
+
+// ── Source total fetchers ────────────────────────────────
+
+type SourceTotal = {
+  adapterKey: string;
+  remoteTotal: number | null;
+};
+
+/**
+ * Fetch the total available decisions from each court
+ * website via the adapter's `getTotalCount` method.
+ * Each fetch is independent and has its own timeout.
+ * Adapters without `getTotalCount` return null.
+ */
+const getSourceTotals = async (): Promise<SourceTotal[]> => {
+  const keys = listAdapterKeys();
+
+  return await Promise.all(
+    keys.map(async (adapterKey: string) => {
+      try {
+        const adapter = await loadAdapterByKey(adapterKey);
+        if (!adapter?.getTotalCount) {
+          return { adapterKey, remoteTotal: null };
+        }
+        const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);
+        const remoteTotal = await adapter.getTotalCount(signal);
+        return { adapterKey, remoteTotal };
+      } catch {
+        return { adapterKey, remoteTotal: null };
+      }
+    }),
+  );
 };
 
 // ── Queries ─────────────────────────────────────────────
@@ -274,6 +321,7 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     searchIndexRows,
     citationRows,
     fieldCoverageRows,
+    sourceTotals,
   ] = await Promise.all([
     getSources(),
     getDecisionCounts(),
@@ -281,14 +329,21 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     getSearchIndexCoverage(),
     getCitationStats(),
     getAllFieldCoverage(),
+    getSourceTotals(),
   ]);
 
   // Index by sourceId for fast lookup
-  const countMap = new Map(
-    decisionCounts.map((r) => [r.sourceId, Number(r.total)]),
+  const countMap = new Map<string, number>(
+    decisionCounts.map((r: { sourceId: string; total: number }) => [
+      r.sourceId,
+      Number(r.total),
+    ]),
   );
-  const growthMap = new Map(
-    growthCounts.map((r) => [r.sourceId, Number(r.inserted)]),
+  const growthMap = new Map<string, number>(
+    growthCounts.map((r: { sourceId: string; inserted: number }) => [
+      r.sourceId,
+      Number(r.inserted),
+    ]),
   );
 
   // Search index: { sourceId → { indexed, notIndexed } }
@@ -307,16 +362,28 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
   }
 
   // Citations: { sourceId → { total, resolved } }
-  const citationMap = new Map(
-    citationRows.map((r) => [
-      r.sourceId,
-      { total: Number(r.total), resolved: Number(r.resolved) },
-    ]),
+  const citationMap = new Map<string, { total: number; resolved: number }>(
+    citationRows.map(
+      (r: { sourceId: string; total: number; resolved: number }) => [
+        r.sourceId,
+        { total: Number(r.total), resolved: Number(r.resolved) },
+      ],
+    ),
   );
 
   // Field coverage: { sourceId → row }
   const fieldCoverageMap = new Map(
-    fieldCoverageRows.map((r) => [r.sourceId, r]),
+    fieldCoverageRows.map(
+      (r: { sourceId: string; total: number } & Record<string, unknown>) => [
+        r.sourceId,
+        r,
+      ],
+    ),
+  );
+
+  // Remote totals: { adapterKey → remoteTotal }
+  const sourceTotalMap = new Map<string, number | null>(
+    sourceTotals.map((r: SourceTotal) => [r.adapterKey, r.remoteTotal]),
   );
 
   // Build per-adapter reports
@@ -350,6 +417,13 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     const fulltextField = fields.find((f) => f.field === "fulltext");
     const withFulltext = fulltextField?.present ?? 0;
     const withoutFulltext = total - withFulltext;
+
+    // Remote source total
+    const remoteTotal = sourceTotalMap.get(source.adapterKey) ?? null;
+    const coveragePct =
+      remoteTotal !== null && remoteTotal > 0
+        ? Math.round((total / remoteTotal) * 1000) / 10
+        : null;
 
     // Detect issues
     const issues: string[] = [];
@@ -386,6 +460,19 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       issues.push("Adapter disabled but has decisions");
     }
 
+    if (
+      remoteTotal !== null &&
+      coveragePct !== null &&
+      coveragePct < COVERAGE_THRESHOLD_PCT
+    ) {
+      issues.push(
+        `Low source coverage:` +
+          ` ${total.toLocaleString()}` +
+          `/${remoteTotal.toLocaleString()}` +
+          ` (${coveragePct}%)`,
+      );
+    }
+
     adapters.push({
       adapterKey: source.adapterKey,
       name: source.name,
@@ -396,6 +483,8 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       hoursSinceSync:
         hoursSinceSync !== null ? Math.round(hoursSinceSync * 10) / 10 : null,
       totalDecisions: total,
+      remoteTotal,
+      coveragePct,
       growth: {
         since: sinceDate.toISOString(),
         inserted,
@@ -471,10 +560,12 @@ const formatTable = (report: HealthReport): string => {
     const status = a.issues.length === 0 ? (a.enabled ? "OK" : "OFF") : "!!";
 
     lines.push(`[${status}] ${a.adapterKey} (${a.name})`);
+    const remoteSuffix =
+      a.remoteTotal !== null
+        ? ` / ${a.remoteTotal.toLocaleString()} remote (${a.coveragePct ?? "?"}%)`
+        : "";
     lines.push(
-      `  Decisions: ${a.totalDecisions.toLocaleString()}` +
-        ` | Growth: +${a.growth.inserted.toLocaleString()}` +
-        ` (${a.growth.perHour}/h)`,
+      `  Decisions: ${a.totalDecisions.toLocaleString()}${remoteSuffix} | Growth: +${a.growth.inserted.toLocaleString()} (${a.growth.perHour}/h)`,
     );
     lines.push(
       `  Fulltext: ${a.fulltext.pct}%` +
