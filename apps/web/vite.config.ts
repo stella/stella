@@ -28,6 +28,10 @@ export default defineConfig({
     }),
     react(),
     babel({
+      // `apps/web` imports TSX from workspace packages such as `@stella/ui`.
+      // Be explicit so Babel parses TS/JSX outside the app CWD before the
+      // React Compiler preset runs.
+      parserOpts: { plugins: ["typescript", "jsx"] },
       presets: [reactCompilerPreset()],
     }),
   ],
