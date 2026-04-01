@@ -60,7 +60,6 @@ export const parseNssDecisionHtml = (
   const chunks = extractChunks($);
   const blocks = classifyChunks(chunks);
 
-  // Validate AST completeness and structure
   validateAndLog("cz-nss", input.caseNumber, input.html, blocks);
 
   const fulltext = blocks
@@ -258,10 +257,53 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   body.find("div[style*='-aw-headerfooter-type']").remove();
 
   // Walk top-level children in document order to
-  // preserve the correct sequence of <p> and <ol>.
-  body.find("p, ol").each((_, el) => {
+  // preserve the correct sequence of <p>, <ol>, and <table>.
+  body.find("p, ol, table").each((_, el) => {
     const $el = $(el);
     const tag = el.tagName.toLowerCase();
+
+    if (tag === "table") {
+      // Extract each row as a paragraph. Cell values are
+      // joined with " | " to preserve tabular structure
+      // in plain text (e.g., cost breakdowns, fee summaries).
+      $el.find("tr").each((_tr, trEl) => {
+        const cells: string[] = [];
+        const cellInlines: Inline[] = [];
+
+        $(trEl)
+          .find("td, th")
+          .each((_td, tdEl) => {
+            const cellText = $(tdEl).text().trim();
+            if (cellText) {
+              cells.push(cellText);
+              if (cellInlines.length > 0) {
+                cellInlines.push({
+                  type: "text",
+                  text: " | ",
+                });
+              }
+              cellInlines.push({
+                type: "text",
+                text: cellText,
+              });
+            }
+          });
+
+        const plainText = cells.join(" | ");
+        if (!plainText) return;
+
+        chunks.push({
+          inlines: cellInlines,
+          plainText,
+          centered: false,
+          bold: false,
+          letterSpacing: false,
+          fontSize: 12,
+          listItemIndex: null,
+        });
+      });
+      return;
+    }
 
     if (tag === "ol") {
       // Ruling items: <ol type="I"><li>...

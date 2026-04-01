@@ -49,6 +49,7 @@ const normalize = (text: string): string =>
 
 const SKIP_WORDS = new Set([
   "[obrázek]",
+  "obrázek",
   "česká",
   "republika",
   "jménem",
