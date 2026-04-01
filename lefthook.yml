@@ -10,6 +10,8 @@ no_auto_install: true
 pre-commit:
   parallel: true
   commands:
+    secrets:
+      run: bun run secrets:check:staged
     typecheck:
       run: bun run typecheck
     lint:

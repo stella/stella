@@ -154,6 +154,17 @@ Examples per country:
 - PL: `wyrok`, `postanowienie`
 - AT/DE: `Urteil`, `Beschluss`
 
+### 9. Cursors must never cause full re-scans
+
+After an adapter exhausts its range (reaches the oldest year
+in a backward crawl, or the current date in a forward crawl),
+the cursor must **park** at a position that only re-scans a
+bounded recent window (e.g., current year). Never return
+`null` from an exhausted sweep; `null` restarts the adapter
+from scratch, causing an infinite re-scan loop where every
+previously ingested decision is re-fetched, hash-checked,
+and skipped, consuming the page budget with zero progress.
+
 ## DocumentAst Conventions
 
 ```typescript
