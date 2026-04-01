@@ -1,15 +1,11 @@
 import { useEffect, useRef } from "react";
 
-import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Avatar, AvatarFallback } from "@stella/ui/components/avatar";
-import { Button } from "@stella/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
-import { Form } from "@stella/ui/components/form";
 import {
   Frame,
   FrameDescription,
@@ -17,7 +13,6 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stella/ui/components/frame";
-import { Input } from "@stella/ui/components/input";
 import { Skeleton } from "@stella/ui/components/skeleton";
 import { toastManager } from "@stella/ui/components/toast";
 
@@ -26,11 +21,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
-import { toFormErrors } from "@/lib/schema";
-import {
-  createSlug,
-  getOrganizationSchema,
-} from "@/routes/_protected.organization/-utils";
 
 const searchSchema = v.strictObject({
   redirectTo: redirectToSchema,
@@ -56,8 +46,17 @@ export const Route = createFileRoute("/auth/organization")({
 function Organization() {
   const { data: organizations, isPending } = authClient.useListOrganizations();
   const hasOrgs = organizations && organizations.length > 0;
+  const navigate = useNavigate();
 
-  if (isPending) {
+  // First-time users (no orgs) go through the onboarding wizard
+  useEffect(() => {
+    if (!isPending && !hasOrgs) {
+      // eslint-disable-next-line typescript/no-floating-promises
+      navigate({ to: "/onboarding", replace: true });
+    }
+  }, [isPending, hasOrgs, navigate]);
+
+  if (isPending || !hasOrgs) {
     return (
       <Frame className="w-full max-w-sm">
         <FrameHeader>
@@ -72,11 +71,7 @@ function Organization() {
     );
   }
 
-  if (hasOrgs) {
-    return <OrganizationList organizations={organizations} />;
-  }
-
-  return <CreateOrganizationForm />;
+  return <OrganizationList organizations={organizations} />;
 }
 
 type OrganizationListProps = {
@@ -152,146 +147,6 @@ const OrganizationList = ({ organizations }: OrganizationListProps) => {
             </div>
           </button>
         ))}
-      </FramePanel>
-    </Frame>
-  );
-};
-
-const CreateOrganizationForm = () => {
-  const t = useTranslations();
-  const { redirectTo } = Route.useSearch();
-  const analytics = useAnalytics();
-  const navigate = Route.useNavigate();
-  const invalidateSession = useInvalidateSession();
-
-  const form = useForm({
-    defaultValues: { name: "", slug: "" },
-    validators: {
-      onDynamic: getOrganizationSchema(),
-    },
-    onSubmit: async ({ value, formApi }) => {
-      const parseResult = v.safeParse(getOrganizationSchema(), value);
-      if (!parseResult.success) {
-        return;
-      }
-      const parsedValue = parseResult.output;
-      const { data: slugCheckData, error: slugCheckError } =
-        await authClient.organization.checkSlug({
-          slug: parsedValue.slug,
-        });
-
-      if (slugCheckError) {
-        analytics.captureError(toAuthClientError(slugCheckError));
-        toastManager.add({
-          title: slugCheckError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      if (!slugCheckData?.status) {
-        formApi.setErrorMap({
-          onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
-        });
-        return;
-      }
-
-      const { data, error: createError } = await authClient.organization.create(
-        {
-          name: parsedValue.name,
-          slug: parsedValue.slug,
-        },
-      );
-
-      if (createError) {
-        analytics.captureError(toAuthClientError(createError));
-        toastManager.add({
-          title: createError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      const { error: setActiveError } = await authClient.organization.setActive(
-        {
-          organizationId: data.id,
-        },
-      );
-
-      if (setActiveError) {
-        analytics.captureError(toAuthClientError(setActiveError));
-        toastManager.add({
-          title: setActiveError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      await invalidateSession.mutateAsync();
-      await navigate({ to: redirectTo, replace: true });
-    },
-  });
-
-  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
-
-  return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.createOrganization")}</FrameTitle>
-        <FrameDescription>{t("auth.createFirstOrganization")}</FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <Form
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            // eslint-disable-next-line typescript/no-floating-promises
-            form.handleSubmit();
-          }}
-        >
-          <form.Field name="name">
-            {(field) => (
-              <Field name={field.name}>
-                <FieldLabel>{t("auth.organizationNameLabel")}</FieldLabel>
-                <Input
-                  autoFocus
-                  onBlur={field.handleBlur}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    field.handleChange(value);
-                    form.setFieldValue("slug", createSlug(value));
-                  }}
-                  placeholder={t("auth.organizationNamePlaceholder")}
-                  required
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Field name="slug">
-            {(field) => (
-              <Field name={field.name}>
-                <FieldLabel>{t("auth.slugLabel")}</FieldLabel>
-                <Input
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t("auth.slugPlaceholder")}
-                  required
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe selector={(s) => s.isSubmitting}>
-            {(isSubmitting) => (
-              <Button className="w-full" loading={isSubmitting} type="submit">
-                {t("auth.createOrganizationButton")}
-              </Button>
-            )}
-          </form.Subscribe>
-        </Form>
       </FramePanel>
     </Frame>
   );

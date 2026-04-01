@@ -484,6 +484,7 @@
     "metadata": "Metadati",
     "name": "Nosaukums",
     "newRow": "Jauna rinda",
+    "next": "Tālāk",
     "noResults": "Nav rezultātu",
     "notes": "Piezīmes",
     "open": "Atvērt",
@@ -735,6 +736,39 @@
     "timeTracking": "Laika uzskaite",
     "toggleChat": "Pārslēgt sarunu",
     "toggleSidebar": "Pārslēgt sānjoslu"
+  },
+  "onboarding": {
+    "changeAnytime": "Šo iestatījumu varat mainīt jebkurā laikā vēlāk.",
+    "creating": {
+      "done": "Pabeigšana...",
+      "invites": "Ielūgumu sūtīšana...",
+      "org": "Komandas izveide..."
+    },
+    "creatingTrust": "Jūsu dati ir šifrēti pārsūtīšanas un glabāšanas laikā.",
+    "dmsConfirmFresh": "Nav problēmu. Pirmo lietu varat izveidot jebkurā laikā.",
+    "dmsConfirmMigration": "Labi zināt. Sazināsimies par {dms} migrācijas iespējām.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Sāku no nulles",
+    "dmsPlaceholder": "Meklējiet vai ievadiet savu DMS...",
+    "dmsSubtitle": "Palīdzēsim pārnest jūsu datus.",
+    "dmsTitle": "Kur šobrīd atrodas jūsu dokumenti?",
+    "enterTeamName": "Ievadiet augstāk komandas nosaukumu",
+    "getStarted": "Sākt",
+    "inviteExternal": "Ārējais lietotājs — iegūs piekļuvi jūsu dokumentiem",
+    "inviteHint": "Atdaliet vairākas adreses ar komatiem vai ielīmējiet sarakstu.",
+    "inviteInvalidEmail": "Nederīgs e-pasts: {value}",
+    "inviteSubtitle": "Viņi saņems e-pastu ar pievienošanās saiti.",
+    "inviteTitle": "Uzaiciniet savu komandu",
+    "orgNameLabel": "Komandas nosaukums",
+    "orgSubtitle": "Tā kolēģi jūs atradīs.",
+    "orgTitle": "Nosauciet savu komandu",
+    "skipStep": "Izlaist",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Dokumenti",
+    "stepOrganization": "Komanda",
+    "stepTeam": "Uzaicināt",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "Iestatīšana aizņems mazāk par minūti."
   },
   "organization": {
     "invitations": {

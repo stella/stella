@@ -484,6 +484,7 @@
     "metadata": "Metadaten",
     "name": "Name",
     "newRow": "Neue Zeile",
+    "next": "Weiter",
     "noResults": "Keine Ergebnisse",
     "notes": "Notizen",
     "open": "Öffnen",
@@ -735,6 +736,39 @@
     "timeTracking": "Zeiterfassung",
     "toggleChat": "Chat ein-/ausblenden",
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
+  },
+  "onboarding": {
+    "changeAnytime": "Diese Einstellung können Sie jederzeit später ändern.",
+    "creating": {
+      "done": "Wird abgeschlossen...",
+      "invites": "Einladungen werden versendet...",
+      "org": "Ihr Team wird eingerichtet..."
+    },
+    "creatingTrust": "Ihre Daten sind bei Übertragung und Speicherung verschlüsselt.",
+    "dmsConfirmFresh": "Kein Problem. Sie können Ihre erste Akte anlegen, wann immer Sie möchten.",
+    "dmsConfirmMigration": "Gut zu wissen. Wir melden uns bei Ihnen zu den Migrationsmöglichkeiten von {dms}.",
+    "dmsNoCommitment": "Sie können auch ganz ohne Datenimport loslegen.",
+    "dmsNone": "Ich fange neu an",
+    "dmsPlaceholder": "DMS suchen oder eingeben...",
+    "dmsSubtitle": "Wir helfen Ihnen beim Umzug.",
+    "dmsTitle": "Wo liegen Ihre Dokumente heute?",
+    "enterTeamName": "Teamname eingeben",
+    "getStarted": "Loslegen",
+    "inviteExternal": "Externer Nutzer — erhält Zugriff auf Ihre Dokumente",
+    "inviteHint": "Mehrere Adressen mit Komma trennen oder Liste einfügen.",
+    "inviteInvalidEmail": "Keine gültige E-Mail: {value}",
+    "inviteSubtitle": "Sie erhalten eine E-Mail mit einem Einladungslink.",
+    "inviteTitle": "Laden Sie Ihr Team ein",
+    "orgNameLabel": "Teamname",
+    "orgSubtitle": "So finden Ihre Kollegen Sie.",
+    "orgTitle": "Benennen Sie Ihr Team",
+    "skipStep": "Überspringen",
+    "someInvitesFailed": "{count, plural, one {# Einladung fehlgeschlagen} other {# Einladungen fehlgeschlagen}}",
+    "stepDocuments": "Dokumente",
+    "stepOrganization": "Team",
+    "stepTeam": "Einladen",
+    "termsNotice": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> und der <privacy>Datenschutzrichtlinie</privacy> zu.",
+    "welcomeSubtitle": "Die Einrichtung dauert weniger als eine Minute."
   },
   "organization": {
     "invitations": {

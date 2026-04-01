@@ -484,6 +484,7 @@
     "metadata": "Métadonnées",
     "name": "Nom",
     "newRow": "Nouvelle ligne",
+    "next": "Suivant",
     "noResults": "Aucun résultat",
     "notes": "Notes",
     "open": "Ouvrir",
@@ -735,6 +736,39 @@
     "timeTracking": "Suivi du temps",
     "toggleChat": "Afficher / masquer la conversation",
     "toggleSidebar": "Afficher/masquer la barre latérale"
+  },
+  "onboarding": {
+    "changeAnytime": "Vous pourrez modifier cela à tout moment.",
+    "creating": {
+      "done": "Finalisation...",
+      "invites": "Envoi des invitations...",
+      "org": "Création de votre équipe..."
+    },
+    "creatingTrust": "Vos données sont chiffrées en transit et au repos.",
+    "dmsConfirmFresh": "Pas de problème. Vous pourrez créer votre premier dossier quand vous le souhaitez.",
+    "dmsConfirmMigration": "Bien noté. Nous vous contacterons concernant les options de migration depuis {dms}.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Je pars de zéro",
+    "dmsPlaceholder": "Rechercher ou saisir votre DMS...",
+    "dmsSubtitle": "Nous vous aiderons à transférer vos données.",
+    "dmsTitle": "Où sont vos documents actuellement ?",
+    "enterTeamName": "Saisissez le nom de l'équipe ci-dessus",
+    "getStarted": "Commencer",
+    "inviteExternal": "Utilisateur externe — aura accès à vos documents",
+    "inviteHint": "Séparez les adresses par des virgules ou collez une liste.",
+    "inviteInvalidEmail": "Adresse e-mail invalide : {value}",
+    "inviteSubtitle": "Ils recevront un e-mail avec un lien pour rejoindre.",
+    "inviteTitle": "Invitez votre équipe",
+    "orgNameLabel": "Nom de l'équipe",
+    "orgSubtitle": "C'est ainsi que vos collègues vous trouveront.",
+    "orgTitle": "Nommez votre équipe",
+    "skipStep": "Passer",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Documents",
+    "stepOrganization": "Équipe",
+    "stepTeam": "Inviter",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "La configuration prend moins d'une minute."
   },
   "organization": {
     "invitations": {

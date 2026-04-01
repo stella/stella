@@ -484,6 +484,7 @@
     "metadata": "Metaduomenys",
     "name": "Pavadinimas",
     "newRow": "Nauja eilutė",
+    "next": "Toliau",
     "noResults": "Rezultatų nėra",
     "notes": "Pastabos",
     "open": "Atidaryti",
@@ -735,6 +736,39 @@
     "timeTracking": "Laiko apskaita",
     "toggleChat": "Perjungti pokalbį",
     "toggleSidebar": "Perjungti šoninę juostą"
+  },
+  "onboarding": {
+    "changeAnytime": "Šį nustatymą galėsite pakeisti bet kada vėliau.",
+    "creating": {
+      "done": "Baigiama...",
+      "invites": "Siunčiami kvietimai...",
+      "org": "Kuriama komanda..."
+    },
+    "creatingTrust": "Jūsų duomenys yra šifruojami perduodant ir saugant.",
+    "dmsConfirmFresh": "Jokių problemų. Pirmą bylą galėsite sukurti bet kada.",
+    "dmsConfirmMigration": "Gerai žinoti. Susisieksime dėl {dms} migracijos galimybių.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Pradedu nuo nulio",
+    "dmsPlaceholder": "Ieškokite arba įveskite DMS...",
+    "dmsSubtitle": "Padėsime perkelti duomenis.",
+    "dmsTitle": "Kur šiuo metu laikote dokumentus?",
+    "enterTeamName": "Įveskite aukščiau komandos pavadinimą",
+    "getStarted": "Pradėti",
+    "inviteExternal": "Išorinis naudotojas — turės prieigą prie jūsų dokumentų",
+    "inviteHint": "Atskirkite adresus kableliais arba įklijuokite sąrašą.",
+    "inviteInvalidEmail": "Neteisingas el. paštas: {value}",
+    "inviteSubtitle": "Jie gaus el. laišką su prisijungimo nuoroda.",
+    "inviteTitle": "Pakvieskite savo komandą",
+    "orgNameLabel": "Komandos pavadinimas",
+    "orgSubtitle": "Taip jus ras kolegos.",
+    "orgTitle": "Pavadinkite savo komandą",
+    "skipStep": "Praleisti",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Dokumentai",
+    "stepOrganization": "Komanda",
+    "stepTeam": "Kvietimai",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "Nustatymas užtruks mažiau nei minutę."
   },
   "organization": {
     "invitations": {

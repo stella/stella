@@ -127,6 +127,30 @@ function LoginOrSignup() {
           )}
         </form.Subscribe>
       </Form>
+      <p className="text-muted-foreground/60 text-xs">
+        {t.rich("onboarding.termsNotice", {
+          terms: (chunks: React.ReactNode) => (
+            <a
+              className="hover:text-foreground underline"
+              href="/terms"
+              rel="noopener"
+              target="_blank"
+            >
+              {chunks}
+            </a>
+          ),
+          privacy: (chunks: React.ReactNode) => (
+            <a
+              className="hover:text-foreground underline"
+              href="/privacy"
+              rel="noopener"
+              target="_blank"
+            >
+              {chunks}
+            </a>
+          ),
+        })}
+      </p>
     </div>
   );
 }
