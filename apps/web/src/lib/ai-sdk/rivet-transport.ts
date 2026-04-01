@@ -13,7 +13,7 @@ import type {
 } from "@stella/rivet/actors/chat-actor-config";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { ClientTelemetryError } from "@/lib/errors";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 export type { UserContext } from "@stella/rivet/actors/chat-actor-config";
 

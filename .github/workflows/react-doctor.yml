@@ -2,18 +2,24 @@ name: React Doctor
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "apps/**"
-      - "packages/**"
+    # React Doctor is expensive relative to its value while the repo is
+    # private, so only run it when a maintainer explicitly adds the
+    # "run-react-doctor" label to a PR. The workflow itself then checks
+    # whether the PR actually touches React surfaces before invoking the
+    # doctor so maintainers can still get an explicit N/A result.
+    types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Avoid unrelated label events cancelling an explicit
+  # `run-react-doctor` run for the same PR.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:
   react-doctor:
-    if: github.event.pull_request.draft != true
+    if: >-
+      github.event.pull_request.draft != true
+      && github.event.label.name == 'run-react-doctor'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -70,7 +76,7 @@ jobs:
             exit 0
           fi
           MIN_SCORE=$(echo "$SCORES" | sort -n | head -1)
-          echo "Scores found: $(echo $SCORES | tr '\n' ' ')"
+          echo "Scores found: $(echo "$SCORES" | tr '\n' ' ')"
           echo "Minimum: $MIN_SCORE"
           echo "score=$MIN_SCORE" >> "$GITHUB_OUTPUT"
 

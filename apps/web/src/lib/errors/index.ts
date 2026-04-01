@@ -22,11 +22,7 @@ export class ClientCapabilityError extends TaggedError(
   cause?: unknown;
 }>() {}
 
-export class ClientTelemetryError extends TaggedError("ClientTelemetryError")<{
-  area: string;
-  message: string;
-  cause?: unknown;
-}>() {}
+export { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
   message: string;
