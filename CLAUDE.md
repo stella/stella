@@ -228,6 +228,12 @@ guidelines, and visual noise rules in `/conventions-ux`.
 - Prefer `if` statements over nested ternaries for conditional
   rendering. Extract complex logic into a small component that
   returns early with `if` branches instead of chaining ternaries.
+- React Compiler is enabled in the Vite build. Prefer plain React
+  over prophylactic `useMemo`, `useCallback`, and `React.memo`.
+- Clean up legacy memoization gradually when touching a file; do not
+  do broad mechanical removals. Keep manual memoization only when a
+  library contract requires referential stability or profiling proves
+  a real benefit.
 - Zustand with `useShallow()` for multi-slice selectors
 - Skip barrel files (`index.ts`) — import from explicit paths
 - Use coss (Base UI) components — registered as `@coss` in
