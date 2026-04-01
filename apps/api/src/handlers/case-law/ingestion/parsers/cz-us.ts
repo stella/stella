@@ -358,8 +358,11 @@ type ParsedLine = {
  * within a paragraph.
  */
 const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
-  // Split on \par (paragraph breaks)
-  const segments = rtfContent.split(/\\par\s*/);
+  // Split on \par (paragraph breaks). Lookahead prevents
+  // matching \pard (paragraph defaults). Uses [a-zA-Z]
+  // instead of \w because RTF control words are alpha-only;
+  // digits after \par are content (e.g., \par1. Soud...).
+  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/);
 
   const lines: ParsedLine[] = [];
   for (const segment of segments) {
