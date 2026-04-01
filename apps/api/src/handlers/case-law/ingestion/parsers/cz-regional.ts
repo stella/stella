@@ -22,7 +22,10 @@ import type {
   DocumentAst,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import {
+  buildValidationHtml,
+  validateAndLog,
+} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -217,22 +220,16 @@ export const parseRegionalDecision = (
   // boundaries match the AST. Using the plain text fallbacks
   // (verdictText/justificationText) caused false positives:
   // adjacent section text was concatenated without whitespace
-  // (e.g., "zamítá.II." → word "zamítá.ii" missing from AST).
-  const buildValidationHtml = (
-    paragraphs: FinaldocParagraph[],
-  ): string => {
-    const parts = paragraphs.map((para) => {
-      const text = para.texts.map((s) => s.text).join("");
-      return `<p>${text}</p>`;
-    });
-    return `<body>${parts.join("")}</body>`;
-  };
-  const validationHtml = buildValidationHtml([
+  // (e.g., "zamítá.II." -> word "zamítá.ii" missing from AST).
+  const allParagraphs = [
     ...input.header,
     ...input.verdict,
     ...input.justification,
     ...input.information,
-  ]);
+  ];
+  const validationHtml = buildValidationHtml(
+    allParagraphs.map((para) => para.texts.map((s) => s.text).join("")),
+  );
   validateAndLog("cz-regional", input.caseNumber, validationHtml, blocks);
 
   const ast: DocumentAst = {
@@ -427,7 +424,6 @@ const classifyJustificationParagraph = (
     plainText,
   };
 };
-
 
 // ── Patterns ───────────────────────────────────────────────
 

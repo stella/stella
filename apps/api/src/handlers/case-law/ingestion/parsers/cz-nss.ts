@@ -126,6 +126,17 @@ const walkInlines = (
       return;
     }
 
+    // Extract alt text from images (e.g., decorative headers,
+    // embedded labels). Some decisions embed meaningful text
+    // in <img alt="...">.
+    if (tag === "img") {
+      const alt = $node.attr("alt")?.trim();
+      if (alt) {
+        inlines.push({ type: "text", text: alt });
+      }
+      return;
+    }
+
     if (tag === "span") {
       const style = $node.attr("style") ?? "";
 
@@ -257,10 +268,50 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   body.find("div[style*='-aw-headerfooter-type']").remove();
 
   // Walk top-level children in document order to
-  // preserve the correct sequence of <p>, <ol>, and <table>.
-  body.find("p, ol, table").each((_, el) => {
+  // preserve the correct sequence of <p>, <ol>, <div>,
+  // and <table>. Some decisions use <div> for content
+  // blocks (e.g., cost breakdowns, footnotes).
+  body.find("p, ol, table, div").each((_, el) => {
     const $el = $(el);
     const tag = el.tagName.toLowerCase();
+
+    // Skip <div> elements that contain child block
+    // elements — those children are matched separately
+    // by the selector, so processing the <div> would
+    // double-count. Only process leaf-level <div>s.
+    if (tag === "div") {
+      if ($el.find("p, ol, table, div").length > 0) {
+        return;
+      }
+
+      const style = $el.attr("style") ?? "";
+      const inlines = walkInlines($, $el);
+      const plainText = inlinesToPlainText(inlines).trim();
+      if (!plainText) {
+        return;
+      }
+
+      const centered = style.includes("text-align:center");
+      const fontSize = parseFontSize(style);
+      const boldSpans = $el.find("span[style*='font-weight:bold']");
+      const boldText = boldSpans.text().trim();
+      const bold =
+        boldText.length > 0 && boldText.length >= plainText.length * 0.7;
+      const letterSpacing =
+        style.includes("letter-spacing") ||
+        $el.find("span[style*='letter-spacing']").length > 0;
+
+      chunks.push({
+        inlines,
+        plainText,
+        centered,
+        bold,
+        letterSpacing,
+        fontSize,
+        listItemIndex: null,
+      });
+      return;
+    }
 
     if (tag === "table") {
       // Extract each row as a paragraph. Cell values are
@@ -290,7 +341,9 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           });
 
         const plainText = cells.join(" | ");
-        if (!plainText) return;
+        if (!plainText) {
+          return;
+        }
 
         chunks.push({
           inlines: cellInlines,
