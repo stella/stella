@@ -60,7 +60,11 @@ const SKIP_WORDS = new Set([
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
   for (const w of text.split(/\s+/)) {
-    const clean = w
+    // Strip brackets first (anonymization markers like
+    // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
+    // non-letter chars from edges.
+    const noBrackets = w.replace(/[[\]]/g, "");
+    const clean = noBrackets
       .toLowerCase()
       .replace(/^[^a-záčďéěíňóřšťúůýž]+/, "")
       .replace(/[^a-záčďéěíňóřšťúůýž]+$/, "");
@@ -113,17 +117,29 @@ export const validateAst = (
   // Extract text from content elements, but skip nested
   // elements whose text is already included by a parent
   // (e.g., <td> inside <td> in NALUS HTML).
+  const contentSelector = "p, li, td, th, div";
   const seen = new Set<string>();
   const originalParts: string[] = [];
   $("body")
-    .find("p, li, td, th")
+    .find(contentSelector)
     .each((_, el) => {
+      const $el = $(el);
+
+      // Skip <div> wrappers that contain child content
+      // elements — those children are matched separately.
+      if (
+        el.tagName?.toLowerCase() === "div" &&
+        $el.find("p, li, td, th, div").length > 0
+      ) {
+        return;
+      }
+
       // Skip if a parent element in our selector already
       // captured this text (prevents double-counting).
-      if ($(el).parents("p, li, td, th").length > 0) {
-        const parentText = $(el)
+      if ($el.parents(contentSelector).length > 0) {
+        const parentText = $el
           .parent()
-          .closest("p, li, td, th")
+          .closest(contentSelector)
           .text()
           .replace(/\s+/g, " ")
           .trim();
@@ -131,12 +147,25 @@ export const validateAst = (
           return;
         }
       }
-      const text = $(el).text().replace(/\s+/g, " ").trim();
+      const text = $el.text().replace(/\s+/g, " ").trim();
       if (text && !seen.has(text)) {
         seen.add(text);
         originalParts.push(text);
       }
     });
+
+  // Also collect <img> alt text (some courts embed
+  // meaningful text in alt attributes).
+  $("body")
+    .find("img[alt]")
+    .each((_, el) => {
+      const alt = $(el).attr("alt")?.trim();
+      if (alt && !seen.has(alt)) {
+        seen.add(alt);
+        originalParts.push(alt);
+      }
+    });
+
   const originalText = normalize(originalParts.join(" "));
 
   const astText = normalize(
@@ -328,3 +357,21 @@ export const validateAndLog = (
 
 // Re-export old name for backward compatibility
 export const validateAstCompleteness = validateAst;
+
+/**
+ * Build minimal validation HTML from structured paragraphs.
+ *
+ * For parsers that consume structured data (JSON sections, RTF
+ * paragraphs) rather than raw HTML, the source HTML is unsuitable
+ * for validation: text from adjacent sections gets concatenated
+ * without whitespace, creating phantom words like "zamítá.ii."
+ * that the AST rightfully doesn't contain.
+ *
+ * This utility wraps each paragraph in a `<p>` tag so the
+ * validator's cheerio-based word extraction sees proper word
+ * boundaries between paragraphs.
+ */
+export const buildValidationHtml = (paragraphs: string[]): string => {
+  const parts = paragraphs.filter((p) => p.trim()).map((p) => `<p>${p}</p>`);
+  return `<body>${parts.join("")}</body>`;
+};

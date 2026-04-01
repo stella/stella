@@ -51,7 +51,10 @@ import type {
   DocumentAst,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import {
+  buildValidationHtml,
+  validateAndLog,
+} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -108,7 +111,13 @@ export const parseUsDecisionHtml = (
     });
   }
 
-  validateAndLog("cz-us", input.caseNumber, input.html, blocks);
+  // Build validation HTML from extracted lines instead of
+  // passing the raw page HTML. The page HTML concatenates
+  // all text without whitespace between sections, creating
+  // phantom words like "tarifu.ii.skutkové" that aren't in
+  // the AST. Using per-line <p> tags preserves word boundaries.
+  const validationHtml = buildValidationHtml(lines.map((l) => l.plainText));
+  validateAndLog("cz-us", input.caseNumber, validationHtml, blocks);
 
   const fulltext = blocks
     .map((b) => b.plainText)
