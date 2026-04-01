@@ -157,6 +157,31 @@ export const czNsAdapter: SourceAdapter = {
   // 20 pages ≈ 10 min. Persist cursor often.
   maxSyncPages: 20,
 
+  async getTotalCount(signal) {
+    try {
+      const url =
+        `${BASE_URL}/WebSearch?ReadViewEntries` +
+        `&Count=1&Start=1&OutputFormat=JSON`;
+
+      const response = await fetch(url, { signal });
+      if (!response.ok) {
+        return null;
+      }
+
+      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- Domino JSON API
+      const json = (await response.json()) as DominoViewResponse;
+      const raw = json["@toplevelentries"];
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    } catch {
+      return null;
+    }
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {

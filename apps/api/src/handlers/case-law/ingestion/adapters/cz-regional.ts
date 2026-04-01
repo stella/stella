@@ -369,6 +369,14 @@ export const czRegionalAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 200,
 
+  // eslint-disable-next-line require-await -- interface requires Promise
+  async getTotalCount(_signal) {
+    // The rozhodnuti.justice.cz API is date-based with no
+    // single total count endpoint. There is no efficient way
+    // to get the total without crawling all dates.
+    return null;
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {

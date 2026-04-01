@@ -753,6 +753,62 @@ export const czNssAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
+  async getTotalCount(signal) {
+    try {
+      const session = await getSession(signal);
+
+      // Submit empty search (no date filters = all results)
+      const formData = new URLSearchParams();
+      for (const [name, value] of session.formFields) {
+        formData.set(name, value);
+      }
+      formData.set("__RequestVerificationToken", session.token);
+
+      const response = await fetch(`${BASE_URL}/Home/Index`, {
+        method: "POST",
+        signal,
+        headers: {
+          ...COMMON_HEADERS,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Cookie: session.cookies,
+          Referer: BASE_URL,
+        },
+        body: formData.toString(),
+        redirect: "follow",
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const html = await response.text();
+
+      const countPatterns = [
+        /Nalezeno\s+(\d[\d\s]*)\s+záznam/i,
+        /Celkem\s+(\d[\d\s]*)\s+záznam/i,
+        /(\d[\d\s]*)\s+výsledk/i,
+        /resCount[^>]*>(\d[\d\s]*)</i,
+        /myResCount[^>]*>(\d[\d\s]*)</i,
+        /pocetZaznamu[^>]*>(\d[\d\s]*)</i,
+      ];
+
+      for (const pattern of countPatterns) {
+        const match = html.match(pattern);
+        if (match?.[1]) {
+          const cleaned = match[1].replace(/\s/g, "");
+          const parsed = Number.parseInt(cleaned, 10);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            return parsed;
+          }
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
