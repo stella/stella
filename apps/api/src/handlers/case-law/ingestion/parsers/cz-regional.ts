@@ -213,13 +213,27 @@ export const parseRegionalDecision = (
     .filter(Boolean)
     .join("\n\n");
 
-  // Validate with synthetic HTML wrapper
-  validateAndLog(
-    "cz-regional",
-    input.caseNumber,
-    `<body><p>${input.verdictText}</p><p>${input.justificationText}</p></body>`,
-    blocks,
-  );
+  // Build validation HTML from the structured sections so word
+  // boundaries match the AST. Using the plain text fallbacks
+  // (verdictText/justificationText) caused false positives:
+  // adjacent section text was concatenated without whitespace
+  // (e.g., "zamítá.II." → word "zamítá.ii" missing from AST).
+  const buildValidationHtml = (
+    paragraphs: FinaldocParagraph[],
+  ): string => {
+    const parts = paragraphs.map((para) => {
+      const text = para.texts.map((s) => s.text).join("");
+      return `<p>${text}</p>`;
+    });
+    return `<body>${parts.join("")}</body>`;
+  };
+  const validationHtml = buildValidationHtml([
+    ...input.header,
+    ...input.verdict,
+    ...input.justification,
+    ...input.information,
+  ]);
+  validateAndLog("cz-regional", input.caseNumber, validationHtml, blocks);
 
   const ast: DocumentAst = {
     version: 1,
@@ -413,6 +427,7 @@ const classifyJustificationParagraph = (
     plainText,
   };
 };
+
 
 // ── Patterns ───────────────────────────────────────────────
 
