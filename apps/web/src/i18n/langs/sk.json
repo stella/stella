@@ -484,6 +484,7 @@
     "metadata": "Metadáta",
     "name": "Názov",
     "newRow": "Nový riadok",
+    "next": "Pokračovať",
     "noResults": "Žiadne výsledky",
     "notes": "Poznámky",
     "open": "Otvoriť",
@@ -735,6 +736,39 @@
     "timeTracking": "Sledovanie času",
     "toggleChat": "Prepnúť chat",
     "toggleSidebar": "Prepnúť bočný panel"
+  },
+  "onboarding": {
+    "changeAnytime": "Toto nastavenie môžete zmeniť aj kedykoľvek neskôr.",
+    "creating": {
+      "done": "Dokončujeme nastavenie...",
+      "invites": "Odosielame pozvánky...",
+      "org": "Vytvárame váš tím..."
+    },
+    "creatingTrust": "Vaše dáta sú šifrované pri prenose aj v úložisku.",
+    "dmsConfirmFresh": "Žiadny problém. Spis si založíte, keď budete pripravení.",
+    "dmsConfirmMigration": "Ďakujeme za info. Ozveme sa vám ohľadom možností migrácie z {dms}.",
+    "dmsNoCommitment": "Môžete začať aj bez akéhokoľvek importu dát.",
+    "dmsNone": "Začínam od začiatku",
+    "dmsPlaceholder": "Hľadajte alebo napíšte názov DMS...",
+    "dmsSubtitle": "Pomôžeme vám s prenosom.",
+    "dmsTitle": "Kde v súčasnosti máte svoje dokumenty?",
+    "enterTeamName": "Zadajte vyššie názov tímu",
+    "getStarted": "Začať",
+    "inviteExternal": "Externý používateľ — bude mať prístup k vašim dokumentom",
+    "inviteHint": "Viac adries oddeľte čiarkou alebo vložte zoznam.",
+    "inviteInvalidEmail": "Neplatný e-mail: {value}",
+    "inviteSubtitle": "Kolegovia dostanú e-mail s odkazom na pripojenie.",
+    "inviteTitle": "Pozvite svoj tím",
+    "orgNameLabel": "Názov tímu",
+    "orgSubtitle": "Tak vás nájdu vaši kolegovia.",
+    "orgTitle": "Pomenujte svoj tím",
+    "skipStep": "Preskočiť",
+    "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo}}",
+    "stepDocuments": "Dokumenty",
+    "stepOrganization": "Tím",
+    "stepTeam": "Pozvánky",
+    "termsNotice": "Pokračovaním súhlasíte s <terms>Podmienkami služby</terms> a <privacy>Zásadami ochrany osobných údajov</privacy>.",
+    "welcomeSubtitle": "Nastavenie zaberie necelú minútu."
   },
   "organization": {
     "invitations": {

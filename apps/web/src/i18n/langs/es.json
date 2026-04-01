@@ -484,6 +484,7 @@
     "metadata": "Metadatos",
     "name": "Nombre",
     "newRow": "Nueva fila",
+    "next": "Siguiente",
     "noResults": "Sin resultados",
     "notes": "Notas",
     "open": "Abrir",
@@ -735,6 +736,39 @@
     "timeTracking": "Seguimiento de tiempo",
     "toggleChat": "Mostrar/ocultar chat",
     "toggleSidebar": "Alternar barra lateral"
+  },
+  "onboarding": {
+    "changeAnytime": "Puede cambiarlo en cualquier momento.",
+    "creating": {
+      "done": "Finalizando...",
+      "invites": "Enviando invitaciones...",
+      "org": "Creando su equipo..."
+    },
+    "creatingTrust": "Sus datos están cifrados en tránsito y en reposo.",
+    "dmsConfirmFresh": "Sin problema. Puede crear su primer asunto cuando lo desee.",
+    "dmsConfirmMigration": "Bien. Nos pondremos en contacto sobre las opciones de migración de {dms}.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Empiezo desde cero",
+    "dmsPlaceholder": "Buscar o escribir su DMS...",
+    "dmsSubtitle": "Le ayudaremos con el traslado.",
+    "dmsTitle": "Dónde tiene sus documentos actualmente?",
+    "enterTeamName": "Introduzca el nombre del equipo arriba",
+    "getStarted": "Comenzar",
+    "inviteExternal": "Usuario externo — tendrá acceso a sus documentos",
+    "inviteHint": "Separe varias direcciones con comas o pegue una lista.",
+    "inviteInvalidEmail": "No es un correo válido: {value}",
+    "inviteSubtitle": "Recibirán un correo con un enlace para unirse.",
+    "inviteTitle": "Invite a su equipo",
+    "orgNameLabel": "Nombre del equipo",
+    "orgSubtitle": "Así es como sus colegas le encontrarán.",
+    "orgTitle": "Nombre de su equipo",
+    "skipStep": "Omitir",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Documentos",
+    "stepOrganization": "Equipo",
+    "stepTeam": "Invitar",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "La configuración toma menos de un minuto."
   },
   "organization": {
     "invitations": {

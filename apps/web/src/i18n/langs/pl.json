@@ -484,6 +484,7 @@
     "metadata": "Metadane",
     "name": "Nazwa",
     "newRow": "Nowy wiersz",
+    "next": "Dalej",
     "noResults": "Brak wyników",
     "notes": "Notatki",
     "open": "Otwórz",
@@ -735,6 +736,39 @@
     "timeTracking": "Ewidencja czasu",
     "toggleChat": "Przełącz czat",
     "toggleSidebar": "Przełącz panel boczny"
+  },
+  "onboarding": {
+    "changeAnytime": "To ustawienie możesz zmienić w dowolnym momencie.",
+    "creating": {
+      "done": "Kończenie...",
+      "invites": "Wysyłanie zaproszeń...",
+      "org": "Tworzenie zespołu..."
+    },
+    "creatingTrust": "Twoje dane są szyfrowane podczas przesyłania i przechowywania.",
+    "dmsConfirmFresh": "Żaden problem. Pierwszą sprawę możesz utworzyć w dowolnym momencie.",
+    "dmsConfirmMigration": "Dobrze wiedzieć. Skontaktujemy się w sprawie opcji migracji z {dms}.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Zaczynam od zera",
+    "dmsPlaceholder": "Wyszukaj lub wpisz nazwę DMS...",
+    "dmsSubtitle": "Pomożemy Ci z przeniesieniem.",
+    "dmsTitle": "Gdzie obecnie masz swoje dokumenty?",
+    "enterTeamName": "Wpisz powyżej nazwę zespołu",
+    "getStarted": "Rozpocznij",
+    "inviteExternal": "Użytkownik zewnętrzny — uzyska dostęp do Twoich dokumentów",
+    "inviteHint": "Oddziel adresy przecinkami lub wklej listę.",
+    "inviteInvalidEmail": "Nieprawidłowy e-mail: {value}",
+    "inviteSubtitle": "Otrzymają e-mail z linkiem do dołączenia.",
+    "inviteTitle": "Zaproś swój zespół",
+    "orgNameLabel": "Nazwa zespołu",
+    "orgSubtitle": "Tak Cię znajdą Twoi koledzy.",
+    "orgTitle": "Nazwij swój zespół",
+    "skipStep": "Pomiń",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Dokumenty",
+    "stepOrganization": "Zespół",
+    "stepTeam": "Zaproszenia",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "Konfiguracja zajmie mniej niż minutę."
   },
   "organization": {
     "invitations": {

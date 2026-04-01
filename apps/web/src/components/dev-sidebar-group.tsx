@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseIcon,
+  PlayIcon,
   RotateCcwIcon,
   Trash2Icon,
   WrenchIcon,
@@ -234,6 +235,14 @@ export const DevSidebarGroup = () => {
         <MenuItem disabled={clearingCache} onClick={handleClearCache}>
           <RotateCcwIcon />
           {clearingCache ? "Clearing…" : "Clear cache"}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            window.location.href = "/onboarding?preview=true";
+          }}
+        >
+          <PlayIcon />
+          Onboard again
         </MenuItem>
       </MenuSubPopup>
     </MenuSub>

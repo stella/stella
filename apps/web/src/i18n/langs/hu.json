@@ -484,6 +484,7 @@
     "metadata": "Metaadatok",
     "name": "Név",
     "newRow": "Új sor",
+    "next": "Tovább",
     "noResults": "Nincs találat",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
@@ -735,6 +736,39 @@
     "timeTracking": "Időkövetés",
     "toggleChat": "Csevegés be/ki",
     "toggleSidebar": "Oldalsáv be/ki"
+  },
+  "onboarding": {
+    "changeAnytime": "Ezt bármikor módosíthatja később.",
+    "creating": {
+      "done": "Befejezés...",
+      "invites": "Meghívók küldése...",
+      "org": "Csapat létrehozása..."
+    },
+    "creatingTrust": "Adatai átvitel és tárolás közben is titkosítva vannak.",
+    "dmsConfirmFresh": "Nem probléma. Bármikor létrehozhatja az első ügyét.",
+    "dmsConfirmMigration": "Köszönjük. Felvesszük Önnel a kapcsolatot a {dms} migrációs lehetőségekről.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Nulláról indulok",
+    "dmsPlaceholder": "DMS keresése vagy beírása...",
+    "dmsSubtitle": "Segítünk az átvitelben.",
+    "dmsTitle": "Hol vannak jelenleg a dokumentumai?",
+    "enterTeamName": "Adja meg fent a csapat nevét",
+    "getStarted": "Kezdés",
+    "inviteExternal": "Külső felhasználó — hozzáférést kap a dokumentumaihoz",
+    "inviteHint": "Több címet vesszővel válasszon el, vagy illesszen be egy listát.",
+    "inviteInvalidEmail": "Érvénytelen e-mail: {value}",
+    "inviteSubtitle": "E-mailt kapnak egy csatlakozási linkkel.",
+    "inviteTitle": "Hívja meg csapatát",
+    "orgNameLabel": "Csapat neve",
+    "orgSubtitle": "Így találnak meg Önt a kollégái.",
+    "orgTitle": "Nevezze el csapatát",
+    "skipStep": "Kihagyás",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Dokumentumok",
+    "stepOrganization": "Csapat",
+    "stepTeam": "Meghívás",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "A beállítás kevesebb mint egy percet vesz igénybe."
   },
   "organization": {
     "invitations": {

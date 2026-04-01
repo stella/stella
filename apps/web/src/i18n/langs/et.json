@@ -484,6 +484,7 @@
     "metadata": "Metaandmed",
     "name": "Nimi",
     "newRow": "Uus rida",
+    "next": "Edasi",
     "noResults": "Tulemused puuduvad",
     "notes": "Märkused",
     "open": "Ava",
@@ -735,6 +736,39 @@
     "timeTracking": "Ajaarvestus",
     "toggleChat": "Lülita vestlus sisse/välja",
     "toggleSidebar": "Külgriba kuvamine"
+  },
+  "onboarding": {
+    "changeAnytime": "Seda saate igal ajal hiljem muuta.",
+    "creating": {
+      "done": "Lõpetamine...",
+      "invites": "Kutsete saatmine...",
+      "org": "Meeskonna loomine..."
+    },
+    "creatingTrust": "Teie andmed on krüptitud nii edastamisel kui salvestamisel.",
+    "dmsConfirmFresh": "Pole probleemi. Saate oma esimese asja luua igal ajal.",
+    "dmsConfirmMigration": "Hea teada. Võtame teiega ühendust {dms} migratsioonivõimaluste osas.",
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
+    "dmsNone": "Alustan nullist",
+    "dmsPlaceholder": "Otsige või sisestage oma DMS...",
+    "dmsSubtitle": "Aitame teil andmed üle tuua.",
+    "dmsTitle": "Kus on teie dokumendid praegu?",
+    "enterTeamName": "Sisestage ülal meeskonna nimi",
+    "getStarted": "Alusta",
+    "inviteExternal": "Väline kasutaja — saab juurdepääsu teie dokumentidele",
+    "inviteHint": "Eraldage mitu aadressi komadega või kleepige nimekiri.",
+    "inviteInvalidEmail": "Kehtetu e-post: {value}",
+    "inviteSubtitle": "Nad saavad e-kirja liitumislingiga.",
+    "inviteTitle": "Kutsuge oma meeskond",
+    "orgNameLabel": "Meeskonna nimi",
+    "orgSubtitle": "Nii leiavad teid kolleegid.",
+    "orgTitle": "Nimetage oma meeskond",
+    "skipStep": "Jäta vahele",
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepDocuments": "Dokumendid",
+    "stepOrganization": "Meeskond",
+    "stepTeam": "Kutsu",
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+    "welcomeSubtitle": "Seadistamine võtab vähem kui minuti."
   },
   "organization": {
     "invitations": {

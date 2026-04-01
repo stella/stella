@@ -487,6 +487,7 @@ type Messages = {
     "metadata": "Metadata";
     "name": "Name";
     "newRow": "New row";
+    "next": "Next";
     "noResults": "No results";
     "notes": "Notes";
     "open": "Open";
@@ -738,6 +739,39 @@ type Messages = {
     "timeTracking": "Time tracking";
     "toggleChat": "Toggle chat";
     "toggleSidebar": "Toggle sidebar";
+  };
+  "onboarding": {
+    "changeAnytime": "You can change this anytime in settings.";
+    "creating": {
+      "done": "Finishing up...";
+      "invites": "Sending invitations...";
+      "org": "Creating your team...";
+    };
+    "creatingTrust": "Your data is encrypted at rest and in transit.";
+    "dmsConfirmFresh": "No problem; you can create your first matter anytime.";
+    "dmsConfirmMigration": "Good to know. We'll reach out about {dms} migration options.";
+    "dmsNoCommitment": "No commitment required. You can start fresh and import later.";
+    "dmsNone": "Starting fresh";
+    "dmsPlaceholder": "Search or type your DMS...";
+    "dmsSubtitle": "We'll help you bring them over.";
+    "dmsTitle": "Where are your documents today?";
+    "enterTeamName": "Enter your team name above";
+    "getStarted": "Get Started";
+    "inviteExternal": "External — will have access to your documents";
+    "inviteHint": "Separate multiple addresses with commas, or paste a list.";
+    "inviteInvalidEmail": "Not a valid email: {value}";
+    "inviteSubtitle": "They'll receive an email with a link to join.";
+    "inviteTitle": "Invite your team";
+    "orgNameLabel": "Team name";
+    "orgSubtitle": "This is how your colleagues will find you.";
+    "orgTitle": "Name your team";
+    "skipStep": "Skip this step";
+    "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
+    "stepDocuments": "Documents";
+    "stepOrganization": "Team";
+    "stepTeam": "Invite";
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.";
+    "welcomeSubtitle": "Set up takes less than a minute.";
   };
   "organization": {
     "invitations": {
