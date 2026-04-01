@@ -25,6 +25,7 @@ import {
   broadcastEvent,
   parseBrandedWorkflowActorKey,
 } from "@/api/handlers/registry/utils";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureActorError } from "@/api/lib/errors/actions";
 import type { FieldContent } from "@/api/types";
 
@@ -146,6 +147,7 @@ const processWorkflowBatch = async (
 ) =>
   await Result.tryPromise(async () => {
     const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
+    const orgAIConfig = await loadOrgAIConfig(organizationId);
 
     await setFieldsContent(
       c,
@@ -168,6 +170,7 @@ const processWorkflowBatch = async (
       organizationId,
       workspaceId,
       scopedDb,
+      orgAIConfig,
     });
 
     const isBatchPending = c.state.executionPlan

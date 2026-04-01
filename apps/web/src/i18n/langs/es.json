@@ -771,6 +771,40 @@
     "welcomeSubtitle": "La configuración toma menos de un minuto."
   },
   "organization": {
+    "aiConfig": {
+      "active": "Active",
+      "apiKey": "API key",
+      "apiKeyPlaceholder": "Enter your API key",
+      "apiKeyUpdatePlaceholder": "Enter new key to update",
+      "baseUrl": "Base URL",
+      "configure": "Configure",
+      "dataRegion": "Data region",
+      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
+      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "description": "Bring your own API key or configure data sovereignty region.",
+      "overrideRoles": "Override roles",
+      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "provider": "Provider",
+      "providers": {
+        "anthropic": "Anthropic",
+        "google": "Google AI",
+        "openai": "OpenAI",
+        "openai_compatible": "OpenAI-compatible",
+        "openrouter": "OpenRouter"
+      },
+      "regions": {
+        "ch": "Switzerland (europe-west6)",
+        "eu": "EU (europe-west4)",
+        "global": "Global"
+      },
+      "roles": {
+        "chat": "Chat (conversation)",
+        "fast": "Fast (classification)",
+        "pdf": "PDF (documents)",
+        "reasoning": "Reasoning (analysis)"
+      },
+      "title": "AI configuration"
+    },
     "invitations": {
       "cancelInvitation": "Cancelar invitación",
       "emailAddressLabel": "Dirección de correo electrónico",
@@ -862,6 +896,8 @@
     "resultCount": "{count, plural, one {# resultado} other {# resultados}}"
   },
   "success": {
+    "aiConfigDeleted": "AI configuration removed",
+    "aiConfigUpdated": "AI configuration updated",
     "clientUpdated": "Cliente actualizado",
     "contactCreated": "Cliente creado",
     "contactDeleted": "Cliente eliminado",

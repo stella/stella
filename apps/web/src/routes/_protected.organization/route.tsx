@@ -59,6 +59,7 @@ import {
   toFormErrors,
 } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
+import { AIConfigSection } from "@/routes/_protected.organization/-ai-config-section";
 import {
   getRoles,
   managementRoles,
@@ -133,6 +134,7 @@ function MembersLayout() {
         <InviteDialog />
       </div>
       <MatterNumberingSection />
+      <AIConfigSection />
       <Outlet />
     </div>
   );

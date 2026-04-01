@@ -70,6 +70,7 @@ export const bBoxActor = actor({
             async (pageNumber) =>
               await generateFn({
                 abortSignal: c.abortSignal,
+                orgAIConfig: c.conn.state.orgAIConfig,
                 data: {
                   pdf: preparedData.pdf,
                   pageNumber,

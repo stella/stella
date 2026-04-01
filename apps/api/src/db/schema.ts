@@ -1098,6 +1098,10 @@ export const organizationSettings = p.pgTable(
       .boolean("document_stamp_enabled")
       .notNull()
       .default(true),
+    /** Encrypted OrgAIConfig JSON (AES-256-GCM). */
+    aiConfigEncrypted: bytea("ai_config_encrypted"),
+    /** AES-GCM initialization vector for aiConfigEncrypted. */
+    aiConfigIv: bytea("ai_config_iv"),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   () => [...orgPolicies()],

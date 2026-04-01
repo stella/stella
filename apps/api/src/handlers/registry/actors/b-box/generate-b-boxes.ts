@@ -9,6 +9,7 @@ import type {
 
 export const generateBBoxes = async ({
   abortSignal,
+  orgAIConfig,
   data: { prompt, fieldContent, justificationText, pdf, pageNumber },
 }: GenerateBBoxesProps): Promise<GenerateBBoxesResult> => {
   const pagePdf = await pdf.extractPages([pageNumber - 1]);
@@ -28,6 +29,7 @@ export const generateBBoxes = async ({
       fieldContent,
       justificationText,
       abortSignal,
+      orgAIConfig: orgAIConfig ?? null,
     }),
   );
 

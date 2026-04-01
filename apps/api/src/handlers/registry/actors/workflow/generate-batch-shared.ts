@@ -9,6 +9,7 @@ import type {
   PropertyBatch,
 } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
 import { evaluateCondition } from "@/api/handlers/registry/actors/workflow/utils";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
@@ -46,6 +47,7 @@ export type GenerateBatchProps = {
   scopedDb: ScopedDb;
   batch: PropertyBatch;
   entityVersionId: string;
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 export type GenerateBatchResult = Result<

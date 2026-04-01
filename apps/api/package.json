@@ -22,7 +22,10 @@
     "db:seed-templates": "bun scripts/seed-templates.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.64",
     "@ai-sdk/google": "^3.0.33",
+    "@ai-sdk/google-vertex": "^4.0.95",
+    "@ai-sdk/openai": "^3.0.48",
     "@ai-sdk/valibot": "^2.0.0",
     "@aws-sdk/client-sesv2": "^3.1008.0",
     "@elysiajs/cors": "^1.4.1",

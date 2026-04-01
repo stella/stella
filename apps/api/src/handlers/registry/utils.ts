@@ -14,6 +14,8 @@ import type { ActorEvent } from "@stella/rivet/types";
 import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { identify } from "@/api/lib/analytics";
 import {
   getSessionAndMemberRole,
@@ -47,6 +49,7 @@ export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: string[];
+  orgAIConfig: OrgAIConfig | null;
 };
 
 export type UserActorConnState = GlobalActorConnState & {
@@ -98,11 +101,13 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     },
   });
 
-  const accessibleWorkspaces = await resolveAccessibleWorkspaces(
-    userId,
-    organizationId,
-    memberRole.role,
-  );
+  // Load accessible workspaces and org AI config in
+  // parallel to avoid sequential roundtrips.
+  const [accessibleWorkspaces, orgAIConfig] = await Promise.all([
+    resolveAccessibleWorkspaces(userId, organizationId, memberRole.role),
+    loadOrgAIConfig(organizationId),
+  ]);
+
   const accessibleWorkspaceIds = accessibleWorkspaces.map((w) => w.id);
 
   return {
@@ -112,6 +117,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     parsedKey,
     accessibleWorkspaces,
     accessibleWorkspaceIds,
+    orgAIConfig,
   };
 };
 
@@ -119,10 +125,15 @@ export const validateGlobalActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<GlobalActorConnState> => {
-  const { authToken, organizationId, accessibleWorkspaceIds } =
+  const { authToken, organizationId, accessibleWorkspaceIds, orgAIConfig } =
     await validateActorAuth(key, params);
 
-  return { authToken, organizationId, accessibleWorkspaceIds };
+  return {
+    authToken,
+    organizationId,
+    accessibleWorkspaceIds,
+    orgAIConfig,
+  };
 };
 
 export const validateUserActorSession = async (
@@ -135,6 +146,7 @@ export const validateUserActorSession = async (
     sessionUserId,
     parsedKey,
     accessibleWorkspaceIds,
+    orgAIConfig,
   } = await validateActorAuth(key, params);
 
   if (!parsedKey.userId) {
@@ -150,6 +162,7 @@ export const validateUserActorSession = async (
     organizationId,
     userId: parsedKey.userId,
     accessibleWorkspaceIds,
+    orgAIConfig,
   };
 };
 
@@ -163,6 +176,7 @@ export const validateActorSession = async (
     parsedKey,
     accessibleWorkspaces,
     accessibleWorkspaceIds,
+    orgAIConfig,
   } = await validateActorAuth(key, params);
 
   if (!parsedKey.workspaceId) {
@@ -182,6 +196,7 @@ export const validateActorSession = async (
     organizationId,
     workspaceId: toSafeId<"workspace">(workspaceId),
     accessibleWorkspaceIds,
+    orgAIConfig,
   };
 };
 
