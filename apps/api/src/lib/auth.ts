@@ -47,161 +47,171 @@ const validateTimezoneId = (timezoneId: unknown): void => {
   }
 };
 
-export const auth = betterAuth({
-  trustedOrigins: [
-    env.FRONTEND_URL,
-    ...(env.isDev ? ["chrome-extension://*"] : []),
-    ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
-  ],
-  user: {
-    additionalFields: {
-      timezoneId: {
-        type: "string",
-        required: false,
-        defaultValue: "UTC",
+// Lazy singleton: `betterAuth()` eagerly resolves the
+// database adapter, which accesses `db`. Deferring to
+// first use prevents the TDZ error when the test runner
+// evaluates this module before db/index.ts finishes.
+const createAuth = () =>
+  betterAuth({
+    trustedOrigins: [
+      env.FRONTEND_URL,
+      ...(env.isDev ? ["chrome-extension://*"] : []),
+      ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+    ],
+    user: {
+      additionalFields: {
+        timezoneId: {
+          type: "string",
+          required: false,
+          defaultValue: "UTC",
+        },
       },
     },
-  },
-  session: {
-    expiresIn: SESSION_LIFETIME_SECONDS,
-    updateAge: SESSION_UPDATE_AGE_SECONDS,
-  },
-  advanced: {
-    useSecureCookies: !env.isDev,
-  },
-  rateLimit: {
-    enabled: true,
-    window: AUTH_RATE_LIMITS.global.window,
-    max: AUTH_RATE_LIMITS.global.max,
-    customStorage: (() => {
-      type Entry = {
-        value: { key: string; count: number; lastRequest: number };
-        expiresAt: number;
-      };
-      const store = new Map<string, Entry>();
-      const ttlMs = AUTH_RATE_LIMIT_MAX_WINDOW * 1000;
-      const cleanup = setInterval(() => {
-        const now = Date.now();
-        for (const [k, e] of store) {
-          if (e.expiresAt <= now) {
-            store.delete(k);
+    session: {
+      expiresIn: SESSION_LIFETIME_SECONDS,
+      updateAge: SESSION_UPDATE_AGE_SECONDS,
+    },
+    advanced: {
+      useSecureCookies: !env.isDev,
+    },
+    rateLimit: {
+      enabled: true,
+      window: AUTH_RATE_LIMITS.global.window,
+      max: AUTH_RATE_LIMITS.global.max,
+      customStorage: (() => {
+        type Entry = {
+          value: { key: string; count: number; lastRequest: number };
+          expiresAt: number;
+        };
+        const store = new Map<string, Entry>();
+        const ttlMs = AUTH_RATE_LIMIT_MAX_WINDOW * 1000;
+        const cleanup = setInterval(() => {
+          const now = Date.now();
+          for (const [k, e] of store) {
+            if (e.expiresAt <= now) {
+              store.delete(k);
+            }
           }
-        }
-      }, 60_000);
-      cleanup.unref();
-      return {
-        // eslint-disable-next-line require-await -- interface requires Promise
-        async get(key: string) {
-          const entry = store.get(key);
-          if (!entry || entry.expiresAt <= Date.now()) {
-            return null;
-          }
-          return entry.value;
-        },
-        // eslint-disable-next-line require-await -- interface requires Promise
-        async set(
-          key: string,
-          value: {
-            key: string;
-            count: number;
-            lastRequest: number;
+        }, 60_000);
+        cleanup.unref();
+        return {
+          // eslint-disable-next-line require-await -- interface requires Promise
+          async get(key: string) {
+            const entry = store.get(key);
+            if (!entry || entry.expiresAt <= Date.now()) {
+              return null;
+            }
+            return entry.value;
           },
-        ) {
-          store.set(key, {
-            value,
-            expiresAt: Date.now() + ttlMs,
+          // eslint-disable-next-line require-await -- interface requires Promise
+          async set(
+            key: string,
+            value: {
+              key: string;
+              count: number;
+              lastRequest: number;
+            },
+          ) {
+            store.set(key, {
+              value,
+              expiresAt: Date.now() + ttlMs,
+            });
+          },
+        };
+      })(),
+      customRules: {
+        "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
+        "/sign-up/email": AUTH_RATE_LIMITS.signUp,
+        "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
+        "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
+        "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
+        "/reset-password": AUTH_RATE_LIMITS.resetPassword,
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // eslint-disable-next-line require-await -- async required by better-auth hook type
+          before: async (user) => {
+            validateTimezoneId(user.timezoneId);
+            return { data: user };
+          },
+        },
+        update: {
+          // eslint-disable-next-line require-await -- async required by better-auth hook type
+          before: async (user) => {
+            validateTimezoneId(user.timezoneId);
+            return { data: user };
+          },
+        },
+      },
+    },
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: authSchema,
+      transaction: true,
+    }),
+    plugins: [
+      bearer(),
+      emailOTP({
+        async sendVerificationOTP({ email, otp, type }, ctx) {
+          if (env.isDev) {
+            // eslint-disable-next-line no-console
+            console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
+            return;
+          }
+
+          const lang = extractLangFromRequest(ctx?.request);
+          await sendOTPEmail({ email, otp, type, lang });
+        },
+      }),
+      organization({
+        ac,
+        roles,
+        organizationHooks: {
+          async afterRemoveMember({ member, organization: org }) {
+            await db
+              .delete(sessionTable)
+              .where(
+                and(
+                  eq(sessionTable.userId, member.userId),
+                  eq(sessionTable.activeOrganizationId, org.id),
+                ),
+              );
+          },
+        },
+        async sendInvitationEmail(data, request) {
+          const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
+          if (env.isDev) {
+            // eslint-disable-next-line no-console
+            console.log(
+              `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
+            );
+            return;
+          }
+
+          const lang = extractLangFromRequest(request);
+          await sendOrganizationInvitation({
+            email: data.email,
+            inviteLink,
+            invitedByUsername: data.inviter.user.name,
+            organizationName: data.organization.name,
+            lang,
           });
         },
-      };
-    })(),
-    customRules: {
-      "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
-      "/sign-up/email": AUTH_RATE_LIMITS.signUp,
-      "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
-      "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
-      "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
-      "/reset-password": AUTH_RATE_LIMITS.resetPassword,
-    },
-  },
-  databaseHooks: {
-    user: {
-      create: {
-        // eslint-disable-next-line require-await -- async required by better-auth hook type
-        before: async (user) => {
-          validateTimezoneId(user.timezoneId);
-          return { data: user };
-        },
-      },
-      update: {
-        // eslint-disable-next-line require-await -- async required by better-auth hook type
-        before: async (user) => {
-          validateTimezoneId(user.timezoneId);
-          return { data: user };
-        },
-      },
-    },
-  },
-  // TODO: replace drizzleAdapter with a direct PostgresDialect
-  // connection (e.g. `new PostgresDialect({ connection: env.DATABASE_URL })`).
-  // This decouples auth from the app's drizzle `db` instance,
-  // eliminating the module-init-order TDZ bug that causes
-  // `Cannot access 'db' before initialization` when the test
-  // runner evaluates auth.ts before db/index.ts finishes.
-  // Auth queries are infrequent; a separate pool is fine.
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: authSchema,
-    transaction: true,
-  }),
-  plugins: [
-    bearer(),
-    emailOTP({
-      async sendVerificationOTP({ email, otp, type }, ctx) {
-        if (env.isDev) {
-          // eslint-disable-next-line no-console
-          console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
-          return;
-        }
+      }),
+    ],
+  });
 
-        const lang = extractLangFromRequest(ctx?.request);
-        await sendOTPEmail({ email, otp, type, lang });
-      },
-    }),
-    organization({
-      ac,
-      roles,
-      organizationHooks: {
-        async afterRemoveMember({ member, organization: org }) {
-          await db
-            .delete(sessionTable)
-            .where(
-              and(
-                eq(sessionTable.userId, member.userId),
-                eq(sessionTable.activeOrganizationId, org.id),
-              ),
-            );
-        },
-      },
-      async sendInvitationEmail(data, request) {
-        const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
-        if (env.isDev) {
-          // eslint-disable-next-line no-console
-          console.log(`[DEV] Org invitation for ${data.email}: ${inviteLink}`);
-          return;
-        }
+let _auth: ReturnType<typeof createAuth> | undefined;
 
-        const lang = extractLangFromRequest(request);
-        await sendOrganizationInvitation({
-          email: data.email,
-          inviteLink,
-          invitedByUsername: data.inviter.user.name,
-          organizationName: data.organization.name,
-          lang,
-        });
-      },
-    }),
-  ],
-});
+export const getAuth = () => {
+  if (_auth) {
+    return _auth;
+  }
+  _auth = createAuth();
+  return _auth;
+};
 
 export type MemberRole = keyof typeof roles;
 
@@ -209,13 +219,13 @@ export const getSessionAndMemberRole = async (headers: HeadersInit) => {
   const [sessionResult, memberRoleResult] = await Promise.all([
     Result.tryPromise(
       async () =>
-        await auth.api.getSession({
+        await getAuth().api.getSession({
           headers,
         }),
     ),
     Result.tryPromise(
       async () =>
-        await auth.api.getActiveMemberRole({
+        await getAuth().api.getActiveMemberRole({
           headers,
         }),
     ),
@@ -353,7 +363,7 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
     async beforeHandle(ctx) {
-      const hasPermissions = await auth.api.hasPermission({
+      const hasPermissions = await getAuth().api.hasPermission({
         headers: ctx.request.headers,
         body: {
           permissions,

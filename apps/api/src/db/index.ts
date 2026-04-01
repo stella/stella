@@ -16,10 +16,15 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-export type TransactionOf<TDatabase extends Database | TestDatabase> =
-  Parameters<Parameters<TDatabase["transaction"]>[0]>[0];
+// Generic constraint accepts any drizzle instance (prod or
+// test PGlite) without importing test-only types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDrizzle = { transaction: (fn: (tx: any) => any) => any };
+
+export type TransactionOf<TDatabase extends AnyDrizzle> = Parameters<
+  Parameters<TDatabase["transaction"]>[0]
+>[0];
 
 /**
  * Primary database handle connecting as postgres (table owner).
@@ -58,9 +63,7 @@ export type ScopedDb = <T>(
   fn: (tx: TransactionOf<Database>) => Promise<T>,
 ) => Promise<T>;
 
-export const createScopedDb = <
-  TDatabase extends Database | TestDatabase = Database,
->(
+export const createScopedDb = <TDatabase extends AnyDrizzle = Database>(
   database: TDatabase,
   workspaceIds: string[],
   organizationId: SafeId<"organization">,
@@ -70,7 +73,9 @@ export const createScopedDb = <
   return async <T>(
     fn: (tx: TransactionOf<TDatabase>) => Promise<T>,
   ): Promise<T> =>
-    await database.transaction(async (tx) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- generic AnyDrizzle constraint
+    await database.transaction(async (tx: TransactionOf<TDatabase>) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- tx type is generic
       await tx.execute(
         sql`SELECT
           set_config('role', '${sql.raw(stella.name)}', true),

@@ -35,7 +35,7 @@ import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureError, getAnalytics } from "@/api/lib/analytics";
-import { auth } from "@/api/lib/auth";
+import { getAuth } from "@/api/lib/auth";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -245,7 +245,7 @@ const api = new Elysia()
   })
   .use(healthRoute)
   .use(verifyRoute)
-  .mount(auth.handler)
+  .mount(getAuth().handler)
   .group("/v1", (app) =>
     app
 
