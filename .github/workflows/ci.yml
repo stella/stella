@@ -79,6 +79,8 @@ jobs:
 
       - name: Install dependencies
         run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Prepare environment
         run: |

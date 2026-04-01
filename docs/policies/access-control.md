@@ -85,8 +85,9 @@ operations runbook (private).
   without the macro causes a type error (missing `SafeId`).
 - Branch protection rules are enforced by GitHub and audited
   weekly.
-- oxlint's `no-secrets` lint rule (entropy threshold 50) blocks
-  commits containing tokens or credentials.
+- Lefthook's staged Gitleaks scan helps block commits
+  containing tokens or credentials before they are written to
+  Git history.
 
 ## Review
 

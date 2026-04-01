@@ -82,9 +82,9 @@ by default.
     credentials, API keys) are stored in environment variables,
     never in source code or configuration files.
 
-11. **Lint enforcement.** oxlint's `no-secrets` rule (entropy
-    threshold 50) runs in CI and blocks commits containing
-    high-entropy strings that resemble credentials.
+11. **Local secret scanning.** Developers who opt into
+    Lefthook pre-commit hooks get a staged Gitleaks scan that
+    blocks commits containing candidate credentials or tokens.
 
 12. **No secrets in logs.** Error handlers and logging
     utilities strip sensitive fields before output.
@@ -94,8 +94,8 @@ by default.
 - Workspace isolation is enforced at both the application
   layer (`workspaceAccessMacro`, `SafeId`) and the database
   layer (FK constraints, scoped indexes).
-- CI checks (`ci-result`) include linting rules that detect
-  secrets in source.
+- Developers who install Lefthook hooks get staged secret
+  scanning via Gitleaks before secrets enter Git history.
 - S3 ACL and presigned URL expiry are set in code and verified
   during code review.
 

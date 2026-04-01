@@ -18,6 +18,7 @@
     "dev": "turbo dev",
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
+    "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
     "link-codex": "bash scripts/link-codex-skills.sh",
     "format": "turbo run format",
