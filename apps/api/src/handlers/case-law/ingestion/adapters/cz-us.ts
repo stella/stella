@@ -42,10 +42,15 @@ const ABSTRACT_URL = "https://nalus.usoud.cz/Search/GetAbstract.aspx";
  * After this many consecutive empty pages we assume we've
  * passed the last case number for this year and move on.
  */
-const MAX_CONSECUTIVE_MISSES = 100;
+/**
+ * After this many consecutive empty numbers we assume the
+ * year is exhausted. Real gaps are tiny (max ~5 in any year);
+ * 30 gives a wide safety margin without wasting probes.
+ */
+const MAX_CONSECUTIVE_MISSES = 30;
 
 /** Decisions to collect per fetchPage call. */
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 /** First year of the Constitutional Court's existence. */
 const FIRST_YEAR = 1993;
@@ -215,11 +220,9 @@ export const czUsAdapter: SourceAdapter = {
   language: "cs",
   minRequestIntervalMs: 300,
   // Each fetchPage probes up to PAGE_SIZE + MAX_CONSECUTIVE_MISSES
-  // case numbers sequentially. Default 30s is too short.
-  pageTimeoutMs: 180_000,
-  // Short cycles: each page takes ~36s (120 probes × 300ms).
-  // 10 pages ≈ 6 min, persists cursor frequently.
-  maxSyncPages: 10,
+  // numbers sequentially (~2 requests each × 300ms). 30s is tight.
+  pageTimeoutMs: 120_000,
+  maxSyncPages: 20,
 
   // TODO: NALUS requires a POST with ASP.NET ViewState to
   // return search results. A GET to the search page returns
@@ -234,10 +237,11 @@ export const czUsAdapter: SourceAdapter = {
     return await Result.tryPromise({
       try: async () => {
         const callerSignal = signal;
+        const currentYear = new Date().getFullYear();
 
         const state: CursorState = cursor
           ? parseCursor(cursor)
-          : { number: 1, year: new Date().getFullYear() };
+          : { number: 1, year: currentYear };
 
         const decisions: IngestionResult[] = [];
         let consecutiveMisses = 0;
@@ -320,42 +324,42 @@ export const czUsAdapter: SourceAdapter = {
               error instanceof DOMException &&
               error.name === "TimeoutError"
             ) {
-              // Per-request timeout: treat as a miss
-              consecutiveMisses++;
-              await Bun.sleep(300);
-              state.number++;
-              if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
-                if (state.year <= FIRST_YEAR) {
-                  return {
-                    decisions,
-                    nextCursor: null,
-                  };
-                }
-                state.number = 1;
-                state.year -= 1;
-                consecutiveMisses = 0;
+              // Distinguish page-level timeout (callerSignal
+              // aborted) from per-request timeout.
+              if (callerSignal?.aborted) {
+                return {
+                  decisions,
+                  nextCursor: makeCursor(state),
+                };
               }
-              continue;
+              consecutiveMisses++;
+            } else {
+              throw error;
             }
-            // Unknown per-request error: propagate up
-            // via the outer Result.tryPromise catch
-            throw error;
           }
-
-          // Rate limit between requests to NALUS
-          await Bun.sleep(300);
 
           state.number++;
 
-          // Too many misses: year exhausted, move back
+          // Too many consecutive numbers with no decisions:
+          // year exhausted, move to previous year (or park).
           if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
-            if (state.year <= FIRST_YEAR) {
-              return { decisions, nextCursor: null };
+            if (state.year <= FIRST_YEAR || state.year >= currentYear) {
+              // Either historical sweep is complete or we've
+              // caught up to the present. Park at the current
+              // year so subsequent cycles only re-scan for new
+              // filings instead of descending into history.
+              return {
+                decisions,
+                nextCursor: `1:${currentYear}`,
+              };
             }
             state.number = 1;
             state.year -= 1;
             consecutiveMisses = 0;
           }
+
+          // Rate limit between requests
+          await Bun.sleep(300);
         }
 
         return {
