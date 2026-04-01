@@ -5,6 +5,12 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 
 /**
+ * Countries with a single official court language.
+ * Language field is redundant for these; hide it in the UI.
+ */
+const MONOLINGUAL_COUNTRIES = new Set(["CZE", "SVK", "POL", "AUT"]);
+
+/**
  * Convert API URLs to public-facing court page URLs.
  * e.g. finaldoc API → rozhodnuti.justice.cz/rozhodnuti/
  */
@@ -190,7 +196,12 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           label={t("caseLaw.columns.country")}
           value={decision.country}
         />
-        <MetadataField label={t("common.language")} value={decision.language} />
+        {!MONOLINGUAL_COUNTRIES.has(decision.country) && (
+          <MetadataField
+            label={t("common.language")}
+            value={decision.language}
+          />
+        )}
         <MetadataField label={t("common.type")} value={decision.decisionType} />
         <MetadataField
           label={t("caseLaw.viewer.source")}

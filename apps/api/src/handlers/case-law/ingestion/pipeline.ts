@@ -82,6 +82,30 @@ const DANGEROUS_CHARS = new RegExp(
   "g",
 );
 
+/**
+ * Collapse spaced-out letters used for emphasis in court PDFs.
+ *
+ * Slovak and Czech courts format words with letter-spacing:
+ *   `r o z h o d o l :` → `rozhodol:`
+ *   `o d ô v o d n e n i e :` → `odôvodnenie:`
+ *   `z a m i e t a` → `zamieta`
+ *
+ * These break full-text search ("rozhodol" won't match
+ * "r o z h o d o l"). We collapse sequences of single Unicode
+ * letters separated by single spaces, optionally followed by
+ * punctuation. Multi-spaces between collapsed words are then
+ * normalized to single space.
+ *
+ * Safe: won't touch normal text, digits, IČO numbers, or
+ * case references (anchored by whitespace/string boundaries).
+ */
+const SPACED_WORD = /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
+
+export const collapseSpacedLetters = (text: string): string =>
+  text
+    .replace(SPACED_WORD, (match) => match.replace(/ /g, ""))
+    .replace(/ {2,}/g, " ");
+
 const sanitizeResult = (r: IngestionResult): IngestionResult => {
   const strip = (s: string | undefined): string | undefined =>
     s?.replace(DANGEROUS_CHARS, "");
@@ -109,19 +133,22 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // Recursively sanitize all strings in documentAst.
   // JSON.stringify escapes control chars to \uXXXX sequences
   // that the regex wouldn't match, so we walk the tree.
-  const deepSanitizeImpl = (val: unknown): unknown => {
+  const deepSanitizeImpl = (val: unknown, key?: string): unknown => {
     if (typeof val === "string") {
-      return val.replace(DANGEROUS_CHARS, "");
+      const stripped = val.replace(DANGEROUS_CHARS, "");
+      // Collapse spaced-out letters in plainText fields
+      // so search indexes match normal word queries.
+      return key === "plainText" ? collapseSpacedLetters(stripped) : stripped;
     }
     if (Array.isArray(val)) {
-      return val.map(deepSanitizeImpl);
+      return val.map((item) => deepSanitizeImpl(item));
     }
     if (val !== null && typeof val === "object") {
       // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator
       const out: Record<string, unknown> = {};
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- val is a non-null object
       for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-        out[k] = deepSanitizeImpl(v);
+        out[k] = deepSanitizeImpl(v, k);
       }
       return out;
     }
@@ -137,7 +164,9 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
   return {
     ...r,
     caseNumber: r.caseNumber.replace(DANGEROUS_CHARS, ""),
-    fulltext: strip(r.fulltext),
+    fulltext: r.fulltext
+      ? collapseSpacedLetters(strip(r.fulltext) ?? "")
+      : undefined,
     ecli: strip(r.ecli),
     decisionType: strip(r.decisionType),
     sourceUrl: strip(r.sourceUrl),
