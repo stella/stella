@@ -1,6 +1,5 @@
-import { extractText as extractPdfText } from "unpdf";
-
 import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
   IngestionResult,
@@ -11,6 +10,7 @@ import {
   hashContent,
   parseCeDate,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
 
 /**
  * Slovak Courts adapter.
@@ -64,7 +64,8 @@ type SkDetailItem = SkApiItem & {
   ecli?: string;
   podOblast?: string[];
   odkazovanePredpisy?: SkOdkazovanyPredpis[];
-  dokument?: SkDokument;
+  dokument?: SkDokument & { size?: number };
+  updateDate?: string;
 };
 
 type SkApiResponse = {
@@ -117,13 +118,13 @@ const fetchDetail = async (
 };
 
 /**
- * Fetch a PDF from the SK courts document endpoint and extract
- * text using unpdf. Returns undefined on any failure.
+ * Fetch a PDF from the SK courts document endpoint.
+ * Returns raw bytes for @libpdf/core parsing.
  */
-const fetchPdfFulltext = async (
+const fetchPdfBytes = async (
   documentUrl: string,
   signal?: AbortSignal,
-): Promise<string | undefined> => {
+): Promise<Uint8Array | undefined> => {
   try {
     const response = await fetch(documentUrl, {
       signal: signal
@@ -134,21 +135,24 @@ const fetchPdfFulltext = async (
       return undefined;
     }
 
-    const buffer = new Uint8Array(await response.arrayBuffer());
-    const result = await extractPdfText(buffer, { mergePages: true });
-    const text = result.text?.trim();
-    return text && text.length > 100 ? text : undefined;
+    return new Uint8Array(await response.arrayBuffer());
   } catch {
     return undefined;
   }
 };
 
-const sourceUrlForGuid = (guid: string): string => {
-  const docId = guid.split(":").at(-1);
-  return docId
-    ? `https://obcan.justice.sk/infosud/-/infosud/i-detail/rozhodnutie/${docId}`
-    : `${BASE_URL}/${encodeURIComponent(guid)}`;
-};
+/**
+ * Build the public source URL for a decision.
+ *
+ * The infosud viewer (obcan.justice.sk/infosud/...) is a
+ * Liferay portlet that frequently returns "item not found"
+ * for valid decisions. Use the direct PDF content URL
+ * instead — it's always available and is the actual document.
+ */
+const sourceUrlForDecision = (
+  guid: string,
+  documentUrl: string | undefined,
+): string => documentUrl ?? `${BASE_URL}/${encodeURIComponent(guid)}`;
 
 const parseItemWithDetail = async (
   raw: unknown,
@@ -165,9 +169,9 @@ const parseItemWithDetail = async (
 
   const detail = item.guid ? await fetchDetail(item.guid, signal) : null;
 
-  // Fetch fulltext from the PDF document
-  const fulltext = detail?.dokument?.url
-    ? await fetchPdfFulltext(detail.dokument.url, signal)
+  // Fetch PDF bytes for parsing
+  const pdfBytes = detail?.dokument?.url
+    ? await fetchPdfBytes(detail.dokument.url, signal)
     : undefined;
 
   // Hash only the list-endpoint payload so the
@@ -175,16 +179,46 @@ const parseItemWithDetail = async (
   // transient detail-fetch failures.
   const rawJson = JSON.stringify(item);
 
+  const caseNumber = item.spisovaZnacka;
+  const decisionDate = parseSkDate(item.datumVydania);
+  const decisionType = item.formaRozhodnutia;
+  const court = item.sud.nazov;
+  const ecli = detail?.ecli;
+
+  // Parse PDF into structured AST using @libpdf/core
+  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
+  let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+  let fulltext: string | undefined;
+
+  if (pdfBytes) {
+    try {
+      const parsed = await parseSkDecisionPdf({
+        pdfBytes,
+        caseNumber,
+        ecli,
+        court,
+        decisionDate,
+        decisionType: decisionType?.toLowerCase(),
+      });
+      documentAst = parsed.documentAst;
+      fulltext = parsed.fulltext;
+    } catch {
+      // Parser failed; keep empty AST + no fulltext
+    }
+  }
+
   return {
-    caseNumber: item.spisovaZnacka,
-    ecli: detail?.ecli,
-    court: item.sud.nazov,
+    caseNumber,
+    ecli,
+    court,
     country: "SVK",
     language: "sk",
-    decisionDate: parseSkDate(item.datumVydania),
-    decisionType: item.formaRozhodnutia,
+    decisionDate,
+    decisionType,
     fulltext,
-    sourceUrl: item.guid ? sourceUrlForGuid(item.guid) : undefined,
+    sourceUrl: item.guid
+      ? sourceUrlForDecision(item.guid, detail?.dokument?.url)
+      : undefined,
     documentUrl: detail?.dokument?.url,
     metadata: {
       guid: item.guid,
@@ -197,17 +231,18 @@ const parseItemWithDetail = async (
       referencedLegislation: detail?.odkazovanePredpisy,
       documentName: detail?.dokument?.name,
       documentExtension: detail?.dokument?.fileExtension,
+      documentSize: detail?.dokument?.size,
+      updateDate: detail?.updateDate,
     },
     rawHash: hashContent(rawJson),
-    // TODO: integrate court-specific parser for AST
-    documentAst: {} as EmptyAst,
-    sourceRaw: undefined,
+    documentAst,
+    sourceRaw: JSON.stringify({ listItem: item, detail }),
   };
 };
 
 export const skCourtsAdapter: SourceAdapter = {
   key: ADAPTER_KEYS.SK_COURTS,
-  name: "Slovak Courts",
+  name: "obcan.justice.sk",
   country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
