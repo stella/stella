@@ -55,7 +55,12 @@ const isSupportedLanguage = (value: string): value is SupportedLanguage =>
   value in langMessages;
 
 const detectLang = (): SupportedLanguage => {
-  for (const candidate of navigator.languages) {
+  const languages =
+    typeof navigator !== "undefined" && "languages" in navigator
+      ? navigator.languages
+      : [];
+
+  for (const candidate of languages) {
     const prefix = candidate.split("-")[0] ?? candidate;
     if (isSupportedLanguage(prefix)) {
       return prefix;

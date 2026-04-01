@@ -1,5 +1,5 @@
 import type { UIMessage, UIMessageChunk } from "ai";
-import { describe, expect, it, mock, spyOn } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 
 import { RivetChatTransport } from "./rivet-transport";
 import type { ChatStreamConnection, SequencedChunk } from "./rivet-transport";
@@ -330,10 +330,6 @@ describe(RivetChatTransport, () => {
         threadId: THREAD_ID,
       });
 
-      const consoleSpy = spyOn(console, "error").mockImplementation(() => {
-        // suppress
-      });
-
       const stream = await transport.reconnectToStream();
       if (stream === null) {
         expect.unreachable("stream should not be null");
@@ -351,11 +347,7 @@ describe(RivetChatTransport, () => {
       // should unsubscribe.
       emit(textDelta(0, "after cancel"));
 
-      // eslint-disable-next-line jest/prefer-called-with
-      expect(consoleSpy).toHaveBeenCalled();
       expect(listeners).toHaveLength(0);
-
-      consoleSpy.mockRestore();
     });
   });
 

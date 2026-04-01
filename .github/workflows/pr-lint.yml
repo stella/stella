@@ -2,17 +2,27 @@ name: PR Lint
 
 on:
   pull_request:
-    types: [opened, reopened, edited]
+    # Run once when the PR opens, then only when a maintainer explicitly
+    # adds the "run-pr-lint" label.
+    types: [opened, labeled]
     branches-ignore:
       - "dependabot/**"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Keep manual reruns cancellable, but do not let unrelated label
+  # events cancel an in-flight `run-pr-lint` execution.
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{
+      github.event.action == 'labeled' && github.event.label.name || 'opened'
+    }}
   cancel-in-progress: true
 
 permissions: write-all
 
 jobs:
   pr-lint:
+    if: >-
+      github.event.action != 'labeled'
+      || github.event.label.name == 'run-pr-lint'
     uses: stella/.github/.github/workflows/pr-lint.yml@main
     secrets: inherit

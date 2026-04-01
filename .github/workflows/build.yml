@@ -3,6 +3,14 @@ name: Build
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "bun.lock"
+      - "bunfig.toml"
+      - "package.json"
+      - "turbo.json"
+      - "tsconfig*.json"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
