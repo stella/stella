@@ -24,9 +24,18 @@ type SourceDef = {
   name: string;
 };
 
+// Adapters to skip. Set DISABLED_ADAPTERS env var to a
+// comma-separated list of adapter keys (e.g. "sk-courts,pl-courts").
+const DISABLED_ADAPTER_KEYS = new Set(
+  (process.env.DISABLED_ADAPTERS ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean),
+);
+
 // AT_COURTS excluded: adapter exists but has not been
 // validated in production yet.
-const SOURCES: SourceDef[] = [
+const ALL_SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
     name: "Czech Regional Courts",
@@ -56,6 +65,16 @@ const SOURCES: SourceDef[] = [
     name: "Court of Justice of the EU (CJEU)",
   },
 ];
+
+const SOURCES = ALL_SOURCES.filter(
+  (s) => !DISABLED_ADAPTER_KEYS.has(s.adapterKey),
+);
+
+if (DISABLED_ADAPTER_KEYS.size > 0) {
+  console.log(
+    `Disabled adapters: ${[...DISABLED_ADAPTER_KEYS].join(", ")}`,
+  );
+}
 
 const ensureSource = async (
   adapterKey: string,
