@@ -5,6 +5,7 @@ import * as slimdom from "slimdom";
 import type { ScopedDb } from "@/api/db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
@@ -13,6 +14,7 @@ import type { BoundingBox } from "@/api/types";
 
 export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;
+  orgAIConfig?: OrgAIConfig | null;
   data: {
     prompt: string;
     fieldContent: string;

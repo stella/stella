@@ -7,15 +7,13 @@
  * for potential rule generation.
  */
 
-import { google } from "@ai-sdk/google";
 import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { env } from "@/api/env";
+import { getModelForRole } from "@/api/lib/ai-models";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 import type { Polarity } from "./consts";
@@ -55,13 +53,6 @@ export type ClassificationResult = {
   confidence: number;
 };
 
-const getAIModel = () =>
-  env.OPENROUTER_API_KEY
-    ? createOpenRouter({
-        apiKey: env.OPENROUTER_API_KEY,
-      }).chat("google/gemini-3-flash-preview")
-    : google("gemini-3-flash-preview");
-
 /**
  * Classify a citation's polarity using an LLM.
  *
@@ -78,7 +69,7 @@ export const classifyWithLLM = async (
   await Result.tryPromise({
     try: async () => {
       const result = await generateText({
-        model: getAIModel(),
+        model: getModelForRole("fast"),
         system: SYSTEM_PROMPT,
         messages: [
           {

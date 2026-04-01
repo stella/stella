@@ -14,6 +14,7 @@ import { createScopedDb, db } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { identify } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -140,6 +141,13 @@ export const auth = betterAuth({
       },
     },
   },
+  // TODO: replace drizzleAdapter with a direct PostgresDialect
+  // connection (e.g. `new PostgresDialect({ connection: env.DATABASE_URL })`).
+  // This decouples auth from the app's drizzle `db` instance,
+  // eliminating the module-init-order TDZ bug that causes
+  // `Cannot access 'db' before initialization` when the test
+  // runner evaluates auth.ts before db/index.ts finishes.
+  // Auth queries are infrequent; a separate pool is fine.
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: authSchema,
@@ -306,11 +314,15 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         organizationId: activeOrganizationId,
       });
 
-      const accessibleWorkspaces = await resolveAccessibleWorkspaces(
-        userId,
-        activeOrganizationId,
-        memberRole.role,
-      );
+      // Load workspaces and AI config in parallel.
+      const [accessibleWorkspaces, orgAIConfig] = await Promise.all([
+        resolveAccessibleWorkspaces(
+          userId,
+          activeOrganizationId,
+          memberRole.role,
+        ),
+        loadOrgAIConfig(activeOrganizationId),
+      ]);
 
       const scopedDb = createScopedDb(
         db,
@@ -329,6 +341,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         accessibleWorkspaces,
         scopedDb,
         memberRole,
+        orgAIConfig,
       };
     },
   },

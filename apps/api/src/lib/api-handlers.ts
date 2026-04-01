@@ -10,6 +10,7 @@ import { roles } from "@stella/permissions";
 import type { PermissionInput } from "@stella/permissions";
 
 import type { ScopedDb } from "@/api/db";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type HandlerConfig = InputSchema & {
@@ -33,6 +34,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     memberRole: {
       role: keyof typeof roles;
     };
+    orgAIConfig: OrgAIConfig | null;
   };
 
 type RootHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =

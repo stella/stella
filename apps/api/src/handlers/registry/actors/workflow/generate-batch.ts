@@ -127,6 +127,7 @@ export const generateBatch = async ({
   organizationId,
   workspaceId,
   scopedDb,
+  orgAIConfig,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
   await Result.gen(async function* generateBatchGen() {
     const inputFields = await fetchInputFieldsForBatch({
@@ -178,6 +179,7 @@ export const generateBatch = async ({
         filenames,
         textInputs,
         abortSignal,
+        orgAIConfig: orgAIConfig ?? null,
       }),
     );
 

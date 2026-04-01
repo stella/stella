@@ -8,7 +8,8 @@ import {
   bboxSchema,
   buildBBoxUserMessage,
 } from "@/api/handlers/registry/actors/b-box/ai-prompts";
-import { getModel, PDF_NATIVE_MODEL } from "@/api/lib/ai-models";
+import { getModelForRole } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 type GenerateBBoxDataProps = {
@@ -17,6 +18,7 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 export const generateBBoxData = async ({
@@ -25,13 +27,14 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  orgAIConfig,
 }: GenerateBBoxDataProps): Promise<
   Result<[number, number, number, number][], WorkflowIntegrationError>
 > =>
   await Result.tryPromise({
     try: async () => {
       const result = await generateText({
-        model: getModel(PDF_NATIVE_MODEL),
+        model: getModelForRole("pdf", orgAIConfig),
         system: BBOX_SYSTEM_PROMPT,
         messages: [
           {

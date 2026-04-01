@@ -1,70 +1,419 @@
 /**
- * Centralized AI model registry.
+ * Centralized AI model and provider registry.
  *
- * All model IDs live here so upgrades and deprecations
- * are a single-line change. Each constant documents which
- * capabilities the call-site depends on.
+ * Call sites use `getModelForRole()` with a logical role;
+ * provider and model ID are resolved from env config.
  *
- * Model IDs use the OpenRouter naming convention
- * ("provider/model"). When calling the Google SDK directly,
- * strip the "google/" prefix.
+ * Provider selection (AI_PROVIDER env var):
+ * - "google": Google AI (GOOGLE_GENERATIVE_AI_API_KEY)
+ * - "openrouter": OpenRouter (OPENROUTER_API_KEY)
+ * - "openai": OpenAI (OPENAI_API_KEY)
+ * - "anthropic": Anthropic (ANTHROPIC_API_KEY)
+ * - "openai_compatible": Any OpenAI-compatible endpoint
+ *   (OPENAI_API_KEY + AI_PROVIDER_BASE_URL)
+ *
+ * When AI_PROVIDER is not set, auto-detects from available
+ * API keys: OPENROUTER → Google → OpenAI → Anthropic.
  */
 
-import { google } from "@ai-sdk/google";
+import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
+import { createVertex } from "@ai-sdk/google-vertex";
+import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { LanguageModel } from "ai";
+import { panic } from "better-result";
 
 import { env } from "@/api/env";
 
-/**
- * Fast, cheap model for structured output tasks:
- * classification, extraction, short generation.
- *
- * Capabilities relied on: structured output (JSON mode),
- * multilingual (cs/sk/pl/de), low latency.
- */
-export const FAST_MODEL = "google/gemini-3-flash-preview";
+// -- Types ------------------------------------------------------
 
 /**
- * Model with native PDF/image understanding for
- * document processing: bounding boxes, OCR, layout.
+ * Logical model roles. Call sites declare *what* they need,
+ * not *which* model to use.
  *
- * Capabilities relied on: PDF file input, spatial
- * reasoning, bounding box coordinate output.
+ * - fast: classification, extraction, short generation
+ * - chat: conversational with tool use and streaming
+ * - reasoning: complex multi-step legal analysis
+ * - pdf: native PDF/image understanding
  */
-export const PDF_NATIVE_MODEL = "google/gemini-3-flash-preview";
+export type ModelRole = "fast" | "chat" | "reasoning" | "pdf";
+
+export type AIProvider =
+  | "google"
+  | "openrouter"
+  | "openai"
+  | "anthropic"
+  | "openai_compatible";
+
+// -- Default model IDs per provider -----------------------------
+
+const DEFAULT_MODELS: Record<AIProvider, Record<ModelRole, string>> = {
+  google: {
+    fast: "gemini-3.1-flash-lite-preview",
+    chat: "gemini-3-flash-preview",
+    reasoning: "gemini-3.1-pro-preview",
+    pdf: "gemini-3-flash-preview",
+  },
+  openrouter: {
+    fast: "google/gemini-3.1-flash-lite-preview",
+    chat: "google/gemini-3-flash-preview",
+    reasoning: "google/gemini-3.1-pro-preview",
+    pdf: "google/gemini-3-flash-preview",
+  },
+  openai: {
+    fast: "gpt-5.4-nano",
+    chat: "gpt-5.4-mini",
+    reasoning: "gpt-5.4",
+    pdf: "gpt-5.4",
+  },
+  anthropic: {
+    fast: "claude-haiku-4-5-20251001",
+    chat: "claude-sonnet-4-6",
+    reasoning: "claude-sonnet-4-6",
+    pdf: "claude-sonnet-4-6",
+  },
+  openai_compatible: {
+    fast: "default",
+    chat: "default",
+    reasoning: "default",
+    pdf: "default",
+  },
+};
+
+export type DataRegion = "eu" | "global" | "ch";
 
 /**
- * Conversational model for the chat actor.
- *
- * Capabilities relied on: tool use, streaming,
- * multilingual, long context, conversational tone.
+ * Providers that support regional endpoint routing.
+ * Currently only Google via Vertex AI Express Mode.
+ * OpenAI (Azure), Anthropic (Bedrock) require separate
+ * integration work and are not yet supported.
  */
-export const CHAT_MODEL = "google/gemini-3-flash-preview";
+export const REGIONAL_PROVIDERS = new Set<AIProvider>(["google"]);
 
 /**
- * Reasoning model for complex multi-step tasks:
- * legal analysis, document editing, comparison, strategy.
- *
- * Capabilities relied on: advanced reasoning, long context,
- * structured output, multilingual. Higher latency and cost
- * than FAST_MODEL; use only where reasoning depth matters.
+ * Check whether a provider supports regional routing.
+ * Used at config save time to reject unsupported
+ * provider + region combinations.
  */
-export const REASONING_MODEL = "google/gemini-3-pro-preview";
+export const supportsRegion = (provider: AIProvider): boolean =>
+  REGIONAL_PROVIDERS.has(provider);
 
-/** Strip the "google/" prefix for direct Google SDK calls. */
-const GOOGLE_PREFIX = /^google\//;
-const googleModelId = (model: string) => model.replace(GOOGLE_PREFIX, "");
+// -- Provider resolution ----------------------------------------
 
-/** Lazily created OpenRouter client (reused across calls). */
-const openrouter = env.OPENROUTER_API_KEY
-  ? createOpenRouter({ apiKey: env.OPENROUTER_API_KEY })
-  : null;
+type ModelFactory = (modelId: string) => LanguageModel;
+
+const resolveProvider = (): AIProvider => {
+  if (env.AI_PROVIDER) {
+    return env.AI_PROVIDER;
+  }
+  if (env.OPENROUTER_API_KEY) {
+    return "openrouter";
+  }
+  if (env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    return "google";
+  }
+  if (env.OPENAI_API_KEY) {
+    return "openai";
+  }
+  if (env.ANTHROPIC_API_KEY) {
+    return "anthropic";
+  }
+
+  panic(
+    "No AI provider configured. Set AI_PROVIDER or " +
+      "provide at least one API key: " +
+      "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
+      "OPENAI_API_KEY, or ANTHROPIC_API_KEY.",
+  );
+};
 
 /**
- * Get a Vercel AI SDK model instance.
- *
- * Uses OpenRouter when an API key is configured,
- * otherwise falls back to the Google AI SDK directly.
+ * GCP locations for data sovereignty regions.
+ * Vertex AI Express Mode routes through these.
  */
-export const getModel = (model: string) =>
-  openrouter ? openrouter.chat(model) : google(googleModelId(model));
+const REGION_LOCATIONS: Record<Exclude<DataRegion, "global">, string> = {
+  eu: "europe-west4",
+  ch: "europe-west6",
+};
+
+/**
+ * Create a regional Vertex AI factory.
+ * Uses Express Mode (API key) when available, otherwise
+ * falls back to a regional Google AI Studio key.
+ */
+const createRegionalGoogleFactory = (
+  region: Exclude<DataRegion, "global">,
+  apiKey?: string,
+): ModelFactory | null => {
+  // Vertex AI Express Mode: API key + location.
+  const vertexKey =
+    apiKey ??
+    (region === "eu" ? env.GOOGLE_AI_API_KEY_EU : env.GOOGLE_AI_API_KEY_CH);
+
+  if (!vertexKey) {
+    return null;
+  }
+
+  const client = createVertex({
+    apiKey: vertexKey,
+    location: REGION_LOCATIONS[region],
+  });
+  return (id) => client(id);
+};
+
+const createModelFactory = (
+  provider: AIProvider,
+  apiKey?: string,
+  baseURL?: string,
+  region?: DataRegion,
+): ModelFactory => {
+  switch (provider) {
+    case "google": {
+      // Regional routing: use Vertex AI with location.
+      if (region && region !== "global") {
+        const regional = createRegionalGoogleFactory(region, apiKey);
+        if (regional) {
+          return regional;
+        }
+        // BYOK path: the org explicitly requested a region
+        // with their own key, so failing is correct.
+        if (apiKey) {
+          panic(
+            `Regional routing requested (${region}) but ` +
+              "Vertex AI Express Mode key is invalid.",
+          );
+        }
+        // Instance path: regional key not configured by
+        // the deployment. Fall through to the default
+        // (non-regional) factory rather than crashing.
+      }
+      // BYOK with explicit key (non-regional).
+      if (apiKey) {
+        const client = createGoogleGenerativeAI({
+          apiKey,
+        });
+        return (id) => client(id);
+      }
+      return (id) => google(id);
+    }
+    case "openrouter": {
+      const key =
+        apiKey ??
+        env.OPENROUTER_API_KEY ??
+        panic("OPENROUTER_API_KEY required for openrouter");
+      const client = createOpenRouter({ apiKey: key });
+      return (id) => client.chat(id);
+    }
+    case "openai": {
+      if (apiKey) {
+        const client = createOpenAI({ apiKey });
+        return (id) => client(id);
+      }
+      return (id) => openai(id);
+    }
+    case "anthropic": {
+      if (apiKey) {
+        const client = createAnthropic({ apiKey });
+        return (id) => client(id);
+      }
+      return (id) => anthropic(id);
+    }
+    case "openai_compatible": {
+      const key =
+        apiKey ??
+        env.OPENAI_API_KEY ??
+        panic("OPENAI_API_KEY required for openai_compatible");
+      const url =
+        baseURL ??
+        env.AI_PROVIDER_BASE_URL ??
+        panic("AI_PROVIDER_BASE_URL required for openai_compatible");
+      const client = createOpenAI({
+        baseURL: url,
+        apiKey: key,
+      });
+      return (id) => client(id);
+    }
+    default:
+      // Exhaustive check: if a new provider is added to
+      // AIProvider but not handled above, this errors at
+      // compile time.
+      panic(provider);
+  }
+};
+
+// -- BYOK org config --------------------------------------------
+
+/**
+ * Organization-level AI configuration (BYOK).
+ *
+ * Loaded once at connection/session establishment and
+ * threaded through to getModelForRole. Never fetched
+ * per AI call.
+ */
+export type OrgAIConfig = {
+  provider: AIProvider;
+  /** Decrypted API key. */
+  apiKey: string;
+  /** For openai_compatible only. */
+  baseURL?: string | undefined;
+  /**
+   * Which roles use the org key. Roles not listed fall
+   * back to the instance-level provider. Empty array or
+   * omitted = override all roles.
+   */
+  overrideRoles?: ModelRole[] | undefined;
+  /**
+   * Data sovereignty region. When set, AI calls are
+   * routed to region-specific endpoints (e.g. Vertex AI
+   * europe-west4 for EU).
+   */
+  region?: DataRegion | undefined;
+};
+
+// -- BYOK factory cache -----------------------------------------
+
+/**
+ * LRU cache for BYOK model factories. Keyed by a stable
+ * hash of (provider + apiKey + baseURL + region) so we
+ * don't recreate HTTP clients on every call within the
+ * same connection. Uses a truncated SHA-256 digest to
+ * avoid holding full secrets as map keys.
+ */
+const BYOK_CACHE_MAX = 64;
+const byokCache = new Map<string, ModelFactory>();
+
+const byokCacheKey = (config: OrgAIConfig): string => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(config.apiKey);
+  const hash = hasher.digest("hex").slice(0, 16);
+  return `${config.provider}:${hash}:${config.baseURL ?? ""}:${config.region ?? "global"}`;
+};
+
+const getCachedFactory = (config: OrgAIConfig): ModelFactory => {
+  const key = byokCacheKey(config);
+  const cached = byokCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  // Evict oldest entry if at capacity.
+  if (byokCache.size >= BYOK_CACHE_MAX) {
+    const oldest = byokCache.keys().next().value;
+    if (oldest !== undefined) {
+      byokCache.delete(oldest);
+    }
+  }
+  const factory = createModelFactory(
+    config.provider,
+    config.apiKey,
+    config.baseURL,
+    config.region,
+  );
+  byokCache.set(key, factory);
+  return factory;
+};
+
+// -- Instance-level singleton (lazy) ----------------------------
+
+let _activeProvider: AIProvider | undefined;
+
+/** Resolved provider (e.g. "google", "openrouter"). */
+const getActiveProvider = (): AIProvider => {
+  _activeProvider ??= resolveProvider();
+  return _activeProvider;
+};
+
+let _instanceFactory: ModelFactory | undefined;
+
+const getInstanceFactory = (): ModelFactory => {
+  _instanceFactory ??= createModelFactory(getActiveProvider());
+  return _instanceFactory;
+};
+
+const MODEL_OVERRIDES: Record<ModelRole, string | undefined> = {
+  fast: env.AI_MODEL_FAST,
+  chat: env.AI_MODEL_CHAT,
+  reasoning: env.AI_MODEL_REASONING,
+  pdf: env.AI_MODEL_PDF,
+};
+
+// -- Public API -------------------------------------------------
+
+/** Regional instance factory cache (non-BYOK). */
+const regionalFactoryCache = new Map<DataRegion, ModelFactory>();
+
+const getRegionalInstanceFactory = (region: DataRegion): ModelFactory => {
+  const cached = regionalFactoryCache.get(region);
+  if (cached) {
+    return cached;
+  }
+  const factory = createModelFactory(
+    getActiveProvider(),
+    undefined,
+    undefined,
+    region,
+  );
+  regionalFactoryCache.set(region, factory);
+  return factory;
+};
+
+/**
+ * Get a model instance for a logical role.
+ *
+ * Resolution order:
+ * 1. BYOK: orgConfig with provider + key overrides the role
+ * 2. Regional: orgConfig with only region uses instance
+ *    provider routed through a regional endpoint
+ * 3. Default: instance-level provider
+ *
+ * Callers must load OrgAIConfig once at session/connection
+ * start, not per AI call.
+ */
+export const getModelForRole = (
+  role: ModelRole,
+  orgConfig?: OrgAIConfig | null,
+): LanguageModel => {
+  // BYOK path: org overrides this role with their own key.
+  if (orgConfig) {
+    const roles = orgConfig.overrideRoles;
+    const shouldOverride = !roles || roles.length === 0 || roles.includes(role);
+
+    if (shouldOverride) {
+      const factory = getCachedFactory(orgConfig);
+      const modelId = DEFAULT_MODELS[orgConfig.provider][role];
+      return factory(modelId);
+    }
+
+    // Region-only path: org has a region booster but this
+    // role falls back to instance provider. Route through
+    // the regional endpoint.
+    if (orgConfig.region && orgConfig.region !== "global") {
+      const factory = getRegionalInstanceFactory(orgConfig.region);
+      const modelId =
+        MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
+      return factory(modelId);
+    }
+  }
+
+  // Default instance path.
+  const modelId =
+    MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
+  return getInstanceFactory()(modelId);
+};
+
+/**
+ * Get a model instance by explicit model ID.
+ *
+ * Routes the ID through the active provider (or org
+ * provider if BYOK config is supplied). Used for
+ * dev model picker overrides.
+ */
+export const getModelById = (
+  modelId: string,
+  orgConfig?: OrgAIConfig | null,
+): LanguageModel => {
+  if (orgConfig) {
+    return getCachedFactory(orgConfig)(modelId);
+  }
+  return getInstanceFactory()(modelId);
+};

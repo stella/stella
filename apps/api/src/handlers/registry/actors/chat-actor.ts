@@ -1,4 +1,3 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   convertToModelMessages,
   hasToolCall,
@@ -46,31 +45,17 @@ import {
   validateUserActorSession,
 } from "@/api/handlers/registry/utils";
 import type { UserActorConnState } from "@/api/handlers/registry/utils";
-import { CHAT_MODEL } from "@/api/lib/ai-models";
+import { getModelById, getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 // eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
-const DEFAULT_MODEL = CHAT_MODEL;
 const MAX_TOOL_STEPS = 8;
 /** User turns to keep in the sliding window. Tools are always
  *  available, so we use a larger window to accommodate
  *  tool-call + tool-result message pairs. */
 const MESSAGE_WINDOW = 20;
-
-const openrouter = createOpenRouter({
-  ...(env.OPENROUTER_API_KEY !== undefined && {
-    apiKey: env.OPENROUTER_API_KEY,
-  }),
-});
-
-const getModel = (modelId?: string) => {
-  if (env.isDev && modelId) {
-    return openrouter(modelId);
-  }
-  return openrouter(DEFAULT_MODEL);
-};
 
 type SequencedChunk = BaseSequencedChunk<UIMessageChunk>;
 
@@ -727,7 +712,10 @@ export const chatActor = actor({
           const modelMessages = await convertToModelMessages(cleanMessages);
 
           const stream = streamText({
-            model: getModel(modelId),
+            model:
+              env.isDev && modelId
+                ? getModelById(modelId, connState.orgAIConfig)
+                : getModelForRole("chat", connState.orgAIConfig),
             system,
             tools,
             stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("askUser")],
