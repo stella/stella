@@ -88,7 +88,7 @@ const fetchCzSupremeAdminFulltext = async (
     }
 
     const buffer = await response.arrayBuffer();
-    const text = new TextDecoder("utf-16le").decode(buffer);
+    const text = new TextDecoder("utf-16").decode(buffer);
     const body = stripHtml(text);
     return body.length > 100 ? body : undefined;
   } catch {
