@@ -57,6 +57,10 @@ const ALL_SOURCES: SourceDef[] = [
     name: "Slovak Courts",
   },
   {
+    adapterKey: ADAPTER_KEYS.SK_US,
+    name: "Slovak Constitutional Court",
+  },
+  {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
   },

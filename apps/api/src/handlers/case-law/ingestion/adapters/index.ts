@@ -7,6 +7,7 @@ import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 
 const ADAPTER_REGISTRY: ReadonlyMap<string, SourceAdapter> = new Map([
   [czNsAdapter.key, czNsAdapter],
@@ -14,6 +15,7 @@ const ADAPTER_REGISTRY: ReadonlyMap<string, SourceAdapter> = new Map([
   [czUsAdapter.key, czUsAdapter],
   [czRegionalAdapter.key, czRegionalAdapter],
   [skCourtsAdapter.key, skCourtsAdapter],
+  [skUsAdapter.key, skUsAdapter],
   [plCourtsAdapter.key, plCourtsAdapter],
   [atCourtsAdapter.key, atCourtsAdapter],
   [euEcjAdapter.key, euEcjAdapter],

@@ -22,6 +22,7 @@ import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { s3 } from "@/api/lib/s3";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
@@ -101,14 +102,25 @@ const DANGEROUS_CHARS = new RegExp(
  */
 const SPACED_WORD = /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
 
+/**
+ * Collapse multiple spaces to single. Applied to all
+ * ingested text to normalize PDF justified spacing where
+ * words are padded with extra spaces for alignment.
+ */
+export const collapseMultiSpaces = (text: string): string =>
+  text.replace(/ {2,}/g, " ");
+
 export const collapseSpacedLetters = (text: string): string =>
-  text
-    .replace(SPACED_WORD, (match) => match.replace(/ /g, ""))
-    .replace(/ {2,}/g, " ");
+  collapseMultiSpaces(
+    text.replace(SPACED_WORD, (match) => match.replace(/ /g, "")),
+  );
 
 const sanitizeResult = (r: IngestionResult): IngestionResult => {
+  // Strip dangerous chars and normalize non-breaking spaces.
+  // \u00A0 (nbsp) comes from PDF text extraction (@libpdf/core)
+  // and prevents the browser from wrapping at word boundaries.
   const strip = (s: string | undefined): string | undefined =>
-    s?.replace(DANGEROUS_CHARS, "");
+    s?.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
 
   // Recursively strip null bytes from metadata values
   const sanitizeMetadata = (
@@ -135,7 +147,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // that the regex wouldn't match, so we walk the tree.
   const deepSanitizeImpl = (val: unknown, key?: string): unknown => {
     if (typeof val === "string") {
-      const stripped = val.replace(DANGEROUS_CHARS, "");
+      const stripped = val.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
       // Collapse spaced-out letters in plainText fields
       // so search indexes match normal word queries.
       return key === "plainText" ? collapseSpacedLetters(stripped) : stripped;
@@ -178,6 +190,23 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
 };
 
 /**
+ * Upload sourceRaw to S3 under a content-addressable key.
+ * Returns the S3 object key.
+ */
+const uploadSourceRaw = async (
+  sourceId: string,
+  data: Uint8Array | string,
+  contentType: string,
+): Promise<string> => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(data);
+  const blobHash = hasher.digest("hex");
+  const key = `case-law/raw/${sourceId}/${blobHash}`;
+  await s3.write(key, data, { type: contentType });
+  return key;
+};
+
+/**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
@@ -202,6 +231,16 @@ const processDecision = async (
   if (existing?.sourceHash === result.rawHash) {
     return { inserted: false, searchVectorFailed: false };
   }
+
+  // Upload sourceRaw to S3
+  const rawPayload = result.sourceRawBytes ?? result.sourceRaw;
+  const rawContentType = result.sourceRawContentType ?? "text/plain";
+
+  const sourceRawS3Key =
+    rawPayload !== undefined
+      ? await uploadSourceRaw(sourceId, rawPayload, rawContentType)
+      : null;
+  const sourceRawContentType = rawPayload !== undefined ? rawContentType : null;
 
   const sections = result.fulltext ? segmentDecision(result.fulltext) : [];
 
@@ -237,7 +276,10 @@ const processDecision = async (
           documentUrl: result.documentUrl,
           metadata: result.metadata,
           documentAst: result.documentAst,
-          sourceRaw: result.sourceRaw,
+          sourceRaw: null,
+          sourceRawS3Key,
+          sourceRawContentType,
+          parserVersion: result.parserVersion ?? 0,
           sourceHash: result.rawHash,
           updatedAt: new Date(),
         })
@@ -279,7 +321,10 @@ const processDecision = async (
         documentUrl: result.documentUrl,
         metadata: result.metadata,
         documentAst: result.documentAst ?? null,
-        sourceRaw: result.sourceRaw,
+        parserVersion: result.parserVersion ?? 0,
+        sourceRaw: null,
+        sourceRawS3Key,
+        sourceRawContentType,
         sourceHash: result.rawHash,
       })
       .returning({ id: caseLawDecisions.id });

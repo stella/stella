@@ -1,4 +1,8 @@
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type {
   EmptyAst,
   IngestionResult,
@@ -221,9 +225,11 @@ const parseRisItem = async (
       modified: meta?.Allgemein?.Geaendert,
     },
     rawHash: hashContent(raw_),
+    parserVersion: PARSER_VERSION,
     // TODO: integrate court-specific parser for AST
     documentAst: {} as EmptyAst,
     sourceRaw: undefined,
+    sourceRawContentType: "text/html",
   };
 };
 

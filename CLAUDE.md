@@ -150,8 +150,8 @@ For these, use `WebFetch` or `WebSearch` directly.
 
 ## Regulated Industry
 
-Stella handles privileged legal data. All code must meet **SOC 2
-Type II** and **ISO 27001** standards: least privilege, audit
+Stella handles privileged legal data. All code must meet **SOC 2 Type II** and
+**ISO 27001** standards: least privilege, audit
 trails, encryption, workspace isolation, ethical walls. Full
 checklist in `/conventions-security`.
 
@@ -335,9 +335,11 @@ guidelines, and visual noise rules in `/conventions-ux`.
   structural invariants of the data model (e.g. `entity.currentVersion`
   always exists after creation). Use `panic()` instead.
 - Timeouts on all external calls:
+
   ```typescript
   fetch(url, { signal: AbortSignal.timeout(10_000) });
   ```
+
 - Validate inputs at the boundary with Valibot or Elysia schemas
 - Prefer one obvious validation split:
   use Elysia `t` for HTTP route contracts, Valibot for web and

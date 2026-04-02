@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type {
   EmptyAst,
   IngestionResult,
@@ -363,6 +367,7 @@ export const euEcjAdapter: SourceAdapter = {
               documentUrl: eurLexHtmlUrl(lang, celex),
               metadata: { celex },
               rawHash: hashContent(raw),
+              parserVersion: PARSER_VERSION,
               // TODO: integrate court-specific parser for AST
               documentAst: {} as EmptyAst,
               sourceRaw: undefined,

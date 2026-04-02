@@ -40,6 +40,38 @@ website. Check hidden fields, print views, API variants,
 alternative export formats. The 30 minutes you spend now saves
 hours of parsing heuristics later.
 
+**How to find the richest source:**
+
+1. **Open Chrome DevTools → Network tab**, load the court's
+   search page, execute a search, and watch the XHR/Fetch
+   requests. Most "modern" court sites are SPAs (React,
+   Angular, Liferay portlets) that fetch data from a JSON
+   API behind the scenes. The Network tab reveals the real
+   endpoints, query params, and response shapes.
+2. **Check for existing open-source scrapers.** Search GitHub
+   for `site:github.com "{court-domain}"` or the court's
+   API base URL. Academic NLP projects, legal-tech startups,
+   and open-data initiatives often have working scrapers
+   with documented endpoints. Use them as a reference, not
+   a dependency.
+3. **Probe common API patterns.** Many court sites are
+   Liferay, ASP.NET, or WordPress-based. Try:
+   - `/api/jsonws` (Liferay JSON-WS)
+   - `?page=1&size=25&format=json` (REST pagination)
+   - Hidden `<input type="hidden">` fields with data
+   - Print/export views (`?format=pdf`, `?print=true`)
+   - RSS/Atom feeds for recent decisions
+4. **Check PDF structure with `@libpdf/core`.** If the court
+   only serves PDFs, use `page.extractText()` which gives
+   per-line text with font name (bold detection) and font
+   size (title detection). This is far richer than `unpdf`'s
+   merged plaintext. Always extract without `mergePages` to
+   preserve line breaks.
+5. **Test multiple decision types.** A Rozsudok (judgment)
+   often has different structure than an Uznesenie
+   (resolution) or Trestný rozkaz (criminal order). Download
+   at least 3 different types before designing the parser.
+
 **Important: a single decision may require multiple endpoints.**
 The full picture of a case often lives across separate pages.
 For example, CZ-ÚS has `GetText.aspx` (decision body) and

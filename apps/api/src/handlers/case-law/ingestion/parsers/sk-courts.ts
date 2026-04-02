@@ -2,7 +2,7 @@
  * Slovak Courts PDF parser.
  *
  * Extracts structured DocumentAst from court decision PDFs
- * using @libpdf/core's text extraction with line/font info.
+ * using libpdf/core's text extraction with line/font info.
  *
  * libpdf/core provides:
  *   - Per-line text with bounding boxes
@@ -44,6 +44,16 @@ import type {
   Inline,
 } from "@/api/handlers/case-law/document-ast";
 import {
+  buildBoldRanges,
+  isBoldFont,
+  normalizeSpanText,
+  segmentsToInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/libpdf-utils";
+import type {
+  PdfSegment,
+  PdfSpan,
+} from "@/api/handlers/case-law/ingestion/parsers/libpdf-utils";
+import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
@@ -58,6 +68,8 @@ export type ParseSkDecisionInput = {
   court: string;
   decisionDate: string | undefined;
   decisionType: string | undefined;
+  /** Override for source.system in the AST. */
+  sourceSystem?: string;
 };
 
 export type ParseSkDecisionOutput = {
@@ -67,8 +79,13 @@ export type ParseSkDecisionOutput = {
 
 type PdfLine = {
   text: string;
+  segments: PdfSegment[];
+  /** True when the PRIMARY (first) span is bold. Used for
+   *  structural detection (section markers, headings). */
   bold: boolean;
   fontSize: number;
+  /** 0-based page index from PDF extraction. */
+  pageIndex: number;
 };
 
 export const parseSkDecisionPdf = async (
@@ -107,7 +124,7 @@ export const parseSkDecisionPdf = async (
   const ast: DocumentAst = {
     version: 1,
     source: {
-      system: "obcan.justice.sk",
+      system: input.sourceSystem ?? "obcan.justice.sk",
       documentId: input.caseNumber,
       webUrl: "",
       printUrl: "",
@@ -129,35 +146,199 @@ export const parseSkDecisionPdf = async (
 
 // ── PDF extraction ────────────────────────────────────────
 
-const isBoldFont = (fontName: string): boolean => /bold/i.test(fontName);
+/** Placeholder text for redacted (anonymized) spans. */
+const ANONYMIZED_PLACEHOLDER = "anonymizované";
 
 /**
- * Extract lines from all PDF pages using @libpdf/core.
- * Each line carries text, bold flag, and font size.
+ * Extract lines from all PDF pages using libpdf/core.
+ * Each line carries text, bold flag, font size, and
+ * segments with anonymization markers for redaction gaps.
  */
 const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
   const pdf = await PDF.load(pdfBytes);
   const pages = pdf.getPages();
   const lines: PdfLine[] = [];
 
-  for (const page of pages) {
+  for (const [pageIdx, page] of pages.entries()) {
     const result = page.extractText();
+
+    // Detect left margin from most common line start X.
+    const leftMargin = detectLeftMargin(result.lines);
+
     for (const line of result.lines) {
-      const text = line.text.trim();
+      // Build per-span segments with bold info and
+      // redaction gap detection.
+      const segments = buildSpanSegments(
+        line.spans,
+        { ...line.bbox, text: line.text },
+        leftMargin,
+      );
+      if (segments.length === 0) {
+        continue;
+      }
+
+      const text = segments
+        .map((s) => s.text)
+        .join(" ")
+        .replace(/ {2,}/g, " ")
+        .trim();
       if (!text) {
         continue;
       }
 
-      // Determine if line is bold from primary span's font
       const primarySpan = line.spans[0];
       const bold = primarySpan ? isBoldFont(primarySpan.fontName ?? "") : false;
       const fontSize = primarySpan?.fontSize ?? 10;
 
-      lines.push({ text, bold, fontSize });
+      lines.push({
+        text,
+        segments,
+        bold,
+        fontSize,
+        pageIndex: pageIdx,
+      });
     }
   }
 
-  return mergeWrappedLines(lines);
+  // Strip page numbers BEFORE merging — otherwise they
+  // get joined into the preceding paragraph's text.
+  const withoutPageNumbers = lines.filter((line) => !isPageNumber(line, lines));
+
+  return mergeWrappedLines(withoutPageNumbers);
+};
+
+type PdfTextLine = {
+  spans: PdfSpan[];
+  bbox: { x: number; width: number };
+};
+
+/**
+ * Detect the most common left margin on a page.
+ * Most body text lines start at the same X position;
+ * lines starting further right have leading redaction.
+ */
+const detectLeftMargin = (lines: PdfTextLine[]): number => {
+  const xCounts = new Map<number, number>();
+  for (const line of lines) {
+    if (line.spans.length === 0) {
+      continue;
+    }
+    // Round to integer to group similar positions
+    const x = Math.round(line.bbox.x);
+    xCounts.set(x, (xCounts.get(x) ?? 0) + 1);
+  }
+  let bestX = 70; // reasonable default
+  let bestCount = 0;
+  for (const [x, count] of xCounts) {
+    if (count > bestCount) {
+      bestX = x;
+      bestCount = count;
+    }
+  }
+  return bestX;
+};
+
+/**
+ * Minimum gap (in points) for redaction detection.
+ * SK ÚS PDFs redact names with black rectangles that
+ * libpdf/core renders as missing text or large
+ * whitespace spans.
+ */
+const REDACTION_MIN_GAP = 50;
+
+/**
+ * Build segments from individual PDF spans, preserving
+ * per-span bold info and detecting redaction gaps.
+ *
+ * Each non-whitespace span becomes a segment with its own
+ * bold flag. Consecutive spans with the same bold state
+ * are merged to reduce fragment count.
+ *
+ * Redaction detection:
+ * 1. Leading gap: line starts far from left margin AND
+ *    begins with punctuation (continuation after redaction)
+ * 2. Trailing whitespace: wide empty span at line end
+ */
+type LineBbox = {
+  x: number;
+  width: number;
+  text: string;
+};
+
+const buildSpanSegments = (
+  spans: PdfSpan[],
+  lineBbox: LineBbox,
+  leftMargin: number,
+): PdfSegment[] => {
+  if (spans.length === 0) {
+    return [];
+  }
+
+  const segments: PdfSegment[] = [];
+
+  // 1. Leading redaction gap
+  const firstTextSpan = spans.find((s) => normalizeSpanText(s.text) !== "");
+  if (firstTextSpan) {
+    const firstText = normalizeSpanText(firstTextSpan.text);
+    const leadingGap = lineBbox.x - leftMargin;
+    const startsWithContinuation = /^[,;.)\s]/.test(firstText);
+    if (leadingGap > REDACTION_MIN_GAP && startsWithContinuation) {
+      segments.push({
+        text: ANONYMIZED_PLACEHOLDER,
+        anonymized: true,
+      });
+    }
+  }
+
+  // 2. Build per-span segments with bold info.
+  //    Use line.text (properly joined by libpdf/core)
+  //    for content, and map character offsets to spans
+  //    for bold detection. Building text from individual
+  //    spans breaks words that @libpdf splits across
+  //    multiple spans (e.g., "N" + "apadnuté").
+  const lineText = normalizeSpanText(lineBbox.text);
+  if (lineText) {
+    // Build a bold map: for each char offset, is it bold?
+    // Walk spans and line text in parallel.
+    const boldRanges = buildBoldRanges(spans, lineText);
+
+    for (const range of boldRanges) {
+      const chunk = lineText.slice(range.start, range.end);
+      if (!chunk.trim()) {
+        continue;
+      }
+      const seg: PdfSegment = { text: chunk.trim() };
+      if (range.bold) {
+        seg.bold = true;
+      }
+      segments.push(seg);
+    }
+  }
+
+  // 3. Trailing redaction: wide whitespace at end
+  const totalTextLen = segments
+    .filter((s) => !s.anonymized)
+    .reduce((sum, s) => sum + s.text.length, 0);
+  if (spans.length > 0 && totalTextLen >= 30) {
+    const lastSpan = spans.at(-1);
+    if (
+      lastSpan &&
+      !lastSpan.text.trim() &&
+      lastSpan.bbox.width > REDACTION_MIN_GAP
+    ) {
+      segments.push({
+        text: ANONYMIZED_PLACEHOLDER,
+        anonymized: true,
+      });
+    }
+  }
+
+  // Clean up: trim each segment text
+  for (const seg of segments) {
+    seg.text = seg.text.replace(/ {2,}/g, " ").trim();
+  }
+
+  return segments.filter((s) => s.text !== "");
 };
 
 /**
@@ -173,8 +354,10 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
  * intro text too; those are only treated as signatures
  * when they appear after the instruction section.
  */
+// Roman numeral pattern excludes case citations like
+// "II. ÚS 177/04" via negative lookahead for "ÚS".
 const STARTS_NEW_PARAGRAPH_RE =
-  /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.\s|\([a-z]\)\s)/u;
+  /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
 
 function isStructuralStart(line: PdfLine): boolean {
   if (line.fontSize > 14) {
@@ -187,11 +370,20 @@ function isStructuralStart(line: PdfLine): boolean {
   if (
     HOLDING_MARKERS.some((m) => norm.endsWith(m)) ||
     REASONING_MARKERS.some((m) => norm === m) ||
-    INSTRUCTION_MARKERS.some((m) => norm === m)
+    // startsWith: SK ÚS PDFs put "Poučenie:" inline with
+    // text on the same line, not as a standalone heading.
+    INSTRUCTION_MARKERS.some((m) => norm === m || norm.startsWith(m))
   ) {
     return true;
   }
   if (DECISION_TITLES.has(line.text.toLowerCase().trim())) {
+    return true;
+  }
+  // Closing formula and signature always start a new block
+  if (CLOSING_RE.test(line.text)) {
+    return true;
+  }
+  if (SIGNATURE_RE.test(line.text)) {
     return true;
   }
   return false;
@@ -209,18 +401,43 @@ const mergeWrappedLines = (lines: PdfLine[]): PdfLine[] => {
     // - font size changed
     // - line is a structural start (numbered, section marker)
     // - previous line was bold (section markers are standalone)
+    // Font size tolerance: libpdf/core may report
+    // slightly different sizes across pages (e.g., 10.0
+    // vs 9.98) due to PDF matrix rounding.
+    const fontSizeChanged =
+      Math.abs(line.fontSize - (prev?.fontSize ?? 0)) > 0.5;
+
+    // SK ÚS PDFs sometimes bold a short continuation
+    // (e.g., "zrušuje.", "1 014,41 eur ...") that belongs
+    // to the preceding non-bold paragraph. Allow merging
+    // when: prev is non-bold, current is bold but not a
+    // section marker. This preserves the prev.bold rule
+    // that prevents merging after section headings.
+    const boldContinuation =
+      prev &&
+      !prev.bold &&
+      line.bold &&
+      !fontSizeChanged &&
+      !isStructuralStart(line);
+
     const startNew =
       !prev ||
-      line.bold !== prev.bold ||
-      line.fontSize !== prev.fontSize ||
+      (line.bold !== prev.bold && !boldContinuation) ||
+      fontSizeChanged ||
       isStructuralStart(line) ||
       prev.bold;
 
     if (startNew) {
-      merged.push({ ...line });
+      merged.push({
+        ...line,
+        segments: [...line.segments],
+      });
     } else {
-      // Continuation: append text to previous paragraph
+      // Continuation: append text and segments.
+      // Keep latest pageIndex for page boundary detection.
       prev.text += ` ${line.text}`;
+      prev.segments.push(...line.segments);
+      prev.pageIndex = line.pageIndex;
     }
   }
 
@@ -296,12 +513,18 @@ const isReasoningMarker = (text: string): boolean => {
 
 const isInstructionMarker = (text: string): boolean => {
   const norm = normalizeSpaced(text.toLowerCase().trim());
-  return INSTRUCTION_MARKERS.some((m) => norm === m);
+  // startsWith: SK ÚS PDFs put "Poučenie:" inline with
+  // text on the same line, not as a standalone heading.
+  return INSTRUCTION_MARKERS.some((m) => norm === m || norm.startsWith(m));
 };
 
-/** Closing formula: "V {City} dňa ..." */
-/** Closing formula: "V {City} dňa ..." or "Vo {City} dňa ..." */
-const CLOSING_RE = /^Vo?\s+\p{Lu}\p{Ll}+\s+dňa\s/u;
+/**
+ * Closing formula:
+ *   "V {City} dňa ..."   (obcan.justice.sk)
+ *   "V {City} {date}"    (ustavnysud.sk, no "dňa")
+ *   "Vo {City} ..."      (locative variant)
+ */
+const CLOSING_RE = /^Vo?\s+\p{Lu}\p{Ll}+\s+(?:dňa\s|\d{1,2}\.\s)/u;
 
 /** Judge signature: title prefix */
 const SIGNATURE_RE =
@@ -312,13 +535,46 @@ const createIdGenerator = (): (() => string) => {
   return () => `b${++counter}`;
 };
 
-const textInline = (text: string): Inline[] => [{ type: "text", text }];
-
 const boldInline = (text: string): Inline[] => [
   { type: "bold", children: [{ type: "text", text }] },
 ];
 
-type Section = "preamble" | "holding" | "reasoning" | "instruction";
+type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
+
+/**
+ * Detect page numbers using PDF page boundary info.
+ *
+ * A standalone number is a page number when it's the first
+ * or last line on its PDF page (page headers/footers).
+ * This is more robust than matching digit patterns alone.
+ */
+const isPageNumber = (line: PdfLine, allLines: PdfLine[]): boolean => {
+  if (!/^\d{1,4}$/.test(line.text.trim())) {
+    return false;
+  }
+  if (line.bold) {
+    return false;
+  }
+
+  const idx = allLines.indexOf(line);
+  if (idx === -1) {
+    return false;
+  }
+
+  // First line on this page
+  const prevLine = allLines[idx - 1];
+  if (!prevLine || prevLine.pageIndex !== line.pageIndex) {
+    return true;
+  }
+
+  // Last line on this page
+  const nextLine = allLines[idx + 1];
+  if (!nextLine || nextLine.pageIndex !== line.pageIndex) {
+    return true;
+  }
+
+  return false;
+};
 
 /**
  * Classify extracted PDF lines into AST blocks.
@@ -346,7 +602,7 @@ const classifyLines = (lines: PdfLine[]): Block[] => {
         type: "heading",
         level: 1,
         role: "decision-title",
-        inlines: [{ type: "text", text }],
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;
@@ -383,15 +639,29 @@ const classifyLines = (lines: PdfLine[]): Block[] => {
 
     if (bold && isInstructionMarker(text)) {
       section = "instruction";
-      blocks.push({
-        id: makeId(),
-        anchorId: "h-instruction",
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: boldInline(text),
-        plainText: text,
-      });
+      const norm = normalizeSpaced(text.toLowerCase().trim());
+      const isStandalone = INSTRUCTION_MARKERS.some((m) => norm === m);
+      if (isStandalone) {
+        blocks.push({
+          id: makeId(),
+          anchorId: "h-instruction",
+          type: "heading",
+          level: 2,
+          role: "section-heading",
+          inlines: boldInline(text),
+          plainText: text,
+        });
+      } else {
+        // Inline "Poučenie:" with body text following
+        // (common in SK ÚS PDFs). Emit as paragraph.
+        blocks.push({
+          id: makeId(),
+          anchorId: `p${++blockCount}`,
+          type: "paragraph",
+          inlines: segmentsToInlines(line.segments),
+          plainText: text,
+        });
+      }
       continue;
     }
 
@@ -400,12 +670,32 @@ const classifyLines = (lines: PdfLine[]): Block[] => {
     // JUDr., Mgr. appear in intro text (senate composition)
     // and must not be classified as signatures there.
     if (section === "instruction" && CLOSING_RE.test(text)) {
+      section = "closing";
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
         type: "paragraph",
         role: "closing",
-        inlines: textInline(text),
+        inlines: segmentsToInlines(line.segments),
+        plainText: text,
+      });
+      continue;
+    }
+
+    // After the closing formula, everything is signature
+    // material (judge name, title). Standalone numbers
+    // are page numbers — drop them entirely.
+    if (section === "closing") {
+      // Drop page numbers (standalone digits)
+      if (/^\d{1,3}$/.test(text.trim())) {
+        continue;
+      }
+      blocks.push({
+        id: makeId(),
+        anchorId: `p${++blockCount}`,
+        type: "paragraph",
+        role: "signature",
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;
@@ -417,14 +707,50 @@ const classifyLines = (lines: PdfLine[]): Block[] => {
         anchorId: `p${++blockCount}`,
         type: "paragraph",
         role: "signature",
-        inlines: textInline(text),
+        inlines: segmentsToInlines(line.segments),
+        plainText: text,
+      });
+      continue;
+    }
+
+    // Standalone bold Roman numeral markers (I., II., III.)
+    // are sub-section dividers. Classify as level 3 headings
+    // so they render as visual separators, not plain paragraphs.
+    if (bold && /^(?:I{1,3}|IV|VI{0,3}|IX|X{1,3})\.$/u.test(text.trim())) {
+      blocks.push({
+        id: makeId(),
+        anchorId: `p${++blockCount}`,
+        type: "heading",
+        level: 3,
+        inlines: boldInline(text),
+        plainText: text,
+      });
+      continue;
+    }
+
+    // Short bold line after a Roman numeral heading is a
+    // sub-section title (e.g., "Ústavná sťažnosť",
+    // "Argumentácia sťažovateľa"). Center it as h3.
+    const prevBlock = blocks.at(-1);
+    if (
+      bold &&
+      text.length < 80 &&
+      prevBlock?.type === "heading" &&
+      prevBlock.level === 3
+    ) {
+      blocks.push({
+        id: makeId(),
+        anchorId: `p${++blockCount}`,
+        type: "heading",
+        level: 3,
+        inlines: segmentsToInlines(line.segments),
         plainText: text,
       });
       continue;
     }
 
     // Regular paragraph with section-appropriate role
-    const inlines = bold ? boldInline(text) : textInline(text);
+    const inlines = segmentsToInlines(line.segments);
 
     const block: Block = {
       id: makeId(),

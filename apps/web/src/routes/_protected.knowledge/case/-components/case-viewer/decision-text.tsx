@@ -138,7 +138,7 @@ const BlockRenderer = ({ block }: { block: Block }) => {
           block.level === 2 &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
           block.level === 3 &&
-            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
+            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
         )}
         id={block.anchorId}
       >
@@ -157,7 +157,8 @@ const BlockRenderer = ({ block }: { block: Block }) => {
           block.role === "case-number" &&
             "text-muted-foreground mb-2 text-right font-sans text-[0.95rem]",
           block.role === "closing" && "mt-8 text-center",
-          block.role === "signature" && "text-muted-foreground mt-1 text-right",
+          block.role === "signature" &&
+            "reader-signature text-muted-foreground mt-1 text-right",
         )}
         id={block.anchorId}
       >

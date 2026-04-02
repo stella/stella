@@ -1,4 +1,8 @@
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
@@ -221,12 +225,17 @@ const parseItemWithDetail = async (
       : undefined,
     documentUrl: detail?.dokument?.url,
     metadata: {
+      caseNumber,
+      ecli,
+      court,
+      decisionDate,
+      decisionType,
       guid: item.guid,
       identifikacneCislo: item.identifikacneCislo,
       judge: item.sudca?.meno,
       judgeRegistreGuid: item.sudca?.registreGuid,
       courtRegistreGuid: item.sud?.registreGuid,
-      decisionNature: item.povaha?.join(", "),
+      decisionNature: item.povaha,
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,
       documentName: detail?.dokument?.name,
@@ -235,8 +244,11 @@ const parseItemWithDetail = async (
       updateDate: detail?.updateDate,
     },
     rawHash: hashContent(rawJson),
+    parserVersion: PARSER_VERSION,
     documentAst,
     sourceRaw: JSON.stringify({ listItem: item, detail }),
+    sourceRawBytes: pdfBytes,
+    sourceRawContentType: pdfBytes ? "application/pdf" : "application/json",
   };
 };
 

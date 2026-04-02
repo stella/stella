@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
@@ -180,13 +184,19 @@ const parseDecisionPage = (
     fulltext: resolvedFulltext,
     sourceUrl,
     metadata: {
+      caseNumber: parsed.caseNumber,
+      court: "Ústavní soud" as const,
+      decisionDate: parsed.decisionDate,
+      decisionType: decisionForm?.toLowerCase(),
       judge: judge || undefined,
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
     },
     rawHash: hashContent(raw),
+    parserVersion: PARSER_VERSION,
     documentAst,
     sourceRaw: html,
+    sourceRawContentType: "text/html",
   };
 };
 

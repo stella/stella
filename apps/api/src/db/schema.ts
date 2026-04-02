@@ -1368,11 +1368,21 @@ export const caseLawDecisions = p.pgTable(
     sections: p.jsonb().$type<DecisionSection[]>(),
     documentAst: p.jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     /**
+     * Parser version that produced documentAst. Compared
+     * against the adapter's current version on read; stale
+     * ASTs are re-parsed lazily from sourceRaw in S3.
+     */
+    parserVersion: p.smallint("parser_version").default(0),
+    /**
      * Raw source HTML/JSON from the court website, stored
      * verbatim for future re-parsing without re-downloading.
      * Compressed at the application level if needed.
      */
     sourceRaw: p.text("source_raw"),
+    sourceRawS3Key: p.varchar("source_raw_s3_key", {
+      length: 512,
+    }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
     metadata: p.jsonb().$type<Record<string, unknown>>().default({}),

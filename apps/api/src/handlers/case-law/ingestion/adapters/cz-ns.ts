@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
@@ -290,6 +294,13 @@ export const czNsAdapter: SourceAdapter = {
                 sourceUrl: webUrl,
                 documentUrl: webUrl,
                 metadata: {
+                  caseNumber,
+                  ecli: meta.ecli,
+                  court: "Nejvyšší soud" as const,
+                  decisionDate: meta.decisionDate
+                    ? parseCeDate(meta.decisionDate)
+                    : undefined,
+                  decisionType: meta.decisionType?.toLowerCase(),
                   ...sourceMetadata,
                   judge,
                   legalSentence: meta.legalSentence,
@@ -304,8 +315,10 @@ export const czNsAdapter: SourceAdapter = {
                   category: meta.category?.trim(),
                 },
                 rawHash: hashContent(raw),
+                parserVersion: PARSER_VERSION,
                 documentAst,
                 sourceRaw: JSON.stringify({ webHtml, printHtml }),
+                sourceRawContentType: "text/html",
               });
             } else {
               // eslint-disable-next-line no-console -- adapter diagnostic
