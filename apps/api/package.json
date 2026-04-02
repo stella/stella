@@ -62,7 +62,6 @@
     "posthog-node": "^5.26.0",
     "rivetkit": "catalog:rivet",
     "slimdom": "^4.3.5",
-    "unpdf": "^1.4.0",
     "valibot": "catalog:"
   },
   "devDependencies": {

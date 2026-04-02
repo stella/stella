@@ -2,8 +2,8 @@
  * Sandboxed extraction worker.
  *
  * Runs as a standalone Bun subprocess. Receives the MIME type
- * as a CLI argument and raw file bytes on stdin; writes a JSON
- * result to stdout.
+ * as a CLI argument and raw file bytes on stdin; writes
+ * extracted plain text to stdout.
  *
  * If the parser crashes or hangs, the parent process kills this
  * subprocess via timeout; the main API server is unaffected.
@@ -15,11 +15,30 @@
  *   exit 0 = success, exit 1 = extraction error
  */
 
-import { extractText as extractPdfText } from "unpdf";
+import { PDF } from "@libpdf/core";
 
 import { extractText as extractDocxText } from "@/api/handlers/docx/extract-text";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+
+const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
+  const pdf = await PDF.load(pdfBytes);
+  const pages = pdf.getPages();
+  const parts: string[] = [];
+
+  for (const page of pages) {
+    const result = page.extractText();
+    const pageText = result.lines
+      .map((line) => line.text.trim())
+      .filter(Boolean)
+      .join("\n");
+    if (pageText) {
+      parts.push(pageText);
+    }
+  }
+
+  return parts.join("\n\n");
+};
 
 const extract = async (
   fileBytes: Uint8Array,
@@ -29,10 +48,7 @@ const extract = async (
   let text: string | null = null;
 
   if (mimeType === PDF_MIME_TYPE) {
-    const result = await extractPdfText(fileBytes, {
-      mergePages: true,
-    });
-    text = result.text;
+    text = await extractPdfPlaintext(fileBytes);
   } else if (mimeType === DOCX_MIME_TYPE) {
     const doc = await extractDocxText(fileBytes);
     text = doc.paragraphs.map((p) => p.text).join("\n");
