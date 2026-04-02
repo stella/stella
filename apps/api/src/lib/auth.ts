@@ -215,7 +215,9 @@ export const getAuth = () => {
 
 export type MemberRole = keyof typeof roles;
 
-export const getSessionAndMemberRole = async (headers: HeadersInit) => {
+export const getSessionAndMemberRole = async (
+  headers: Headers | Record<string, string>,
+) => {
   const [sessionResult, memberRoleResult] = await Promise.all([
     Result.tryPromise(
       async () =>

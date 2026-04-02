@@ -16,10 +16,16 @@ jobs:
     # "run-ci" label matters — without this gate, adding any
     # label (e.g. priority, triage) would cancel an in-progress
     # CI run due to cancel-in-progress.
+    #
+    # While the repo is private, skip PR CI to save minutes.
+    # The nightly-typecheck workflow catches drift. Remove the
+    # visibility gate when the repo goes public.
     if: >-
-      github.event.pull_request.draft != true
-      && (github.event.action != 'labeled'
-          || github.event.label.name == 'run-ci')
+      github.event_name == 'workflow_dispatch'
+      || (github.event.repository.visibility == 'public'
+          && github.event.pull_request.draft != true
+          && (github.event.action != 'labeled'
+              || github.event.label.name == 'run-ci'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -131,11 +137,12 @@ jobs:
           TRUST_RESULT="${{ needs.trust-check.result }}"
           EVENT="${{ github.event_name }}"
 
-          # When the trust-check job was skipped (irrelevant label
-          # event), all downstream jobs are also skipped. This is
-          # expected and should not block the PR.
+          # When the trust-check job was skipped (private repo
+          # visibility gate or irrelevant label event), all
+          # downstream jobs are also skipped. This is expected
+          # and should not block the PR.
           if [[ "$TRUST_RESULT" == "skipped" ]]; then
-            echo "Trust-check skipped (irrelevant label event). Passing."
+            echo "Trust-check skipped. Passing."
             exit 0
           fi
 
