@@ -6,7 +6,6 @@ import {
   RepeatIcon,
   SparklesIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -47,13 +46,13 @@ export const TemplateAssistantPanel = () => {
       const userText = selectedText ? `"${selectedText}" → ${kind}` : kind;
 
       addMessage({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         role: "user",
         text: userText,
       });
 
       addMessage({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         role: "assistant",
         text: getMockResponse(kind),
       });

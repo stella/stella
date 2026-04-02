@@ -10,7 +10,6 @@ import {
   SquareCheckIcon,
   XIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -132,7 +131,7 @@ const AddFilterButton = ({
           disabled={hasFilter(filters, "kind")}
           onClick={() =>
             onAdd({
-              id: nanoid(),
+              id: crypto.randomUUID(),
               field: "kind",
               op: "in",
               value: [],
@@ -146,7 +145,7 @@ const AddFilterButton = ({
           disabled={hasFilter(filters, "builtin", "status")}
           onClick={() =>
             onAdd({
-              id: nanoid(),
+              id: crypto.randomUUID(),
               field: "builtin",
               builtinField: "status",
               op: "eq",
@@ -161,7 +160,7 @@ const AddFilterButton = ({
           disabled={hasFilter(filters, "builtin", "priority")}
           onClick={() =>
             onAdd({
-              id: nanoid(),
+              id: crypto.randomUUID(),
               field: "builtin",
               builtinField: "priority",
               op: "eq",
@@ -179,7 +178,7 @@ const AddFilterButton = ({
               key={prop.id}
               onClick={() =>
                 onAdd({
-                  id: nanoid(),
+                  id: crypto.randomUUID(),
                   field: "property",
                   propertyId: prop.id,
                   op: "eq",

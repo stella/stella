@@ -1,7 +1,6 @@
 import { generateText } from "ai";
 import { Result } from "better-result";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import { organizationSettings } from "@/api/db/schema";
 import { invalidateOrgAIConfig } from "@/api/lib/ai-config-cache";
@@ -163,7 +162,7 @@ const updateAIConfig = createRootHandler(
       tx
         .insert(organizationSettings)
         .values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           organizationId: session.activeOrganizationId,
           aiConfigEncrypted: newCiphertext,
           aiConfigIv: newIv,

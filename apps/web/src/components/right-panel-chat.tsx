@@ -15,7 +15,6 @@ import {
   TrashIcon,
   UploadIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -521,7 +520,7 @@ const NewChat = ({
           mentionContext={mentionContext}
           // eslint-disable-next-line typescript/no-misused-promises
           onSubmit={async (text, drained) => {
-            const threadId = nanoid();
+            const threadId = crypto.randomUUID();
             const chat = await queryClient.ensureQueryData(
               chatThreadOptions({
                 key: { threadId },

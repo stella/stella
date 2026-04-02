@@ -1,7 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { templateCategories } from "@/api/db/schema";
@@ -111,7 +110,7 @@ export const createTemplateCategoryHandler = async ({
     const [inserted] = await tx
       .insert(templateCategories)
       .values({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         organizationId,
         parentId: body.parentId ?? null,
         name: body.name,

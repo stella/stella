@@ -429,7 +429,7 @@ describe("workspaces table — correct scope", () => {
     // Not throwing IS the verification.
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(workspaces).values({
-        id: toSafeId<"workspace">("rls_ws_ins"),
+        id: toSafeId<"workspace">(crypto.randomUUID()),
         organizationId: ids.orgA,
         name: "RLS Insert Test",
         reference: "REF-INS",
@@ -474,7 +474,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(entities)
         .values({
-          id: "rls_pos_ins_ent",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           kind: "document" as const,
         })
@@ -488,7 +488,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(entityVersions)
         .values({
-          id: "rls_pos_ins_ev",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           entityId: ids.entityA1,
         })
@@ -502,7 +502,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(properties)
         .values({
-          id: "rls_pos_ins_prop",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           name: "RLS Positive",
           content: propContent,
@@ -518,7 +518,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(fields)
         .values({
-          id: "rls_pos_ins_fld",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           propertyId: ids.propertyA1dep,
           entityVersionId: ids.entityVersionA1,
@@ -534,7 +534,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(workspaceMembers)
         .values({
-          id: "rls_pos_ins_wm",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           userId: ids.userAdmin,
         })
@@ -552,7 +552,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(documentCounters)
         .values({
-          id: "rls_pos_ins_dc",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           lastValue: 0,
         })
@@ -566,7 +566,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(workspaceContacts)
         .values({
-          id: "rls_pos_ins_wc",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           contactId: ids.contactA2,
@@ -582,7 +582,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(propertyDependencies)
         .values({
-          id: "rls_pos_ins_pd",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           propertyId: ids.propertyA1dep,
           dependsOnPropertyId: ids.propertyA1,
@@ -601,7 +601,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(justifications)
         .values({
-          id: "rls_pos_ins_jst",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           fieldId: ids.fieldA1,
           htmlVersion: 99,
@@ -617,7 +617,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(timeEntries)
         .values({
-          id: "rls_pos_ins_te",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           userId: ids.userA1,
@@ -640,7 +640,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(billingCodes)
         .values({
-          id: "rls_pos_ins_bc",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           type: "task" as const,
@@ -657,7 +657,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(rateTables)
         .values({
-          id: "rls_pos_ins_rt",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           name: "RLS Positive",
@@ -673,7 +673,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(rateEntries)
         .values({
-          id: "rls_pos_ins_re",
+          id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           rateTableId: ids.rateTableA1,
           hourlyRate: 150,
@@ -689,7 +689,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(expenses)
         .values({
-          id: "rls_pos_ins_exp",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           userId: ids.userA1,
@@ -710,7 +710,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(invoices)
         .values({
-          id: "rls_pos_ins_inv",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           invoiceNumber: "RLS-POS-001",
@@ -728,7 +728,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(caseLawMatterLinks)
         .values({
-          id: "rls_pos_ins_clml",
+          id: crypto.randomUUID(),
           decisionId: ids.caseLawDecisionB,
           workspaceId: ids.wsA1,
           linkedBy: ids.userA1,
@@ -745,7 +745,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(contacts)
         .values({
-          id: "rls_pos_ins_ct",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           type: "person" as const,
           displayName: "Positive Insert",
@@ -760,7 +760,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(contactRelationships)
         .values({
-          id: "rls_pos_ins_cr",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           personId: ids.contactA2,
           relatedContactId: ids.contactA,
@@ -776,7 +776,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templates)
         .values({
-          id: "rls_pos_ins_tmpl",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           name: "RLS Positive",
           fileName: "pos.docx",
@@ -794,7 +794,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateVersions)
         .values({
-          id: "rls_pos_ins_tv",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           version: 99,
@@ -811,7 +811,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateCategories)
         .values({
-          id: "rls_pos_ins_tc",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           name: "RLS Positive",
         })
@@ -825,7 +825,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateClauses)
         .values({
-          id: "rls_pos_ins_tcl",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           clauseId: ids.clauseA,
@@ -840,7 +840,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateFills)
         .values({
-          id: "rls_pos_ins_tf",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           userId: ids.userA2,
@@ -857,7 +857,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseCategories)
         .values({
-          id: "rls_pos_ins_cc",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           name: "RLS Positive",
         })
@@ -871,7 +871,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauses)
         .values({
-          id: "rls_pos_ins_cl",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           title: "RLS Positive",
           body: clauseBody,
@@ -887,7 +887,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseVariants)
         .values({
-          id: "rls_pos_ins_cv",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           clauseId: ids.clauseA,
           label: "RLS Positive",
@@ -903,7 +903,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseVersions)
         .values({
-          id: "rls_pos_ins_cvr",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           clauseId: ids.clauseA,
           version: 99,
@@ -923,7 +923,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(organizationSettings)
         .values({
-          id: "rls_pos_ins_os",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
         })
         .returning({ id: organizationSettings.id });
@@ -936,7 +936,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(matterCounters)
         .values({
-          id: "rls_pos_ins_mc",
+          id: crypto.randomUUID(),
           organizationId: ids.orgA,
           scopeKey: "rls-positive-test",
           lastValue: 0,
@@ -954,14 +954,15 @@ describe("organization INSERT — correct scope", () => {
 describe("workspace DELETE — correct scope", () => {
   test("DELETE entity in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(entities).values({
-        id: "rls_pos_del_ent",
+        id: delId,
         workspaceId: ids.wsA1,
         kind: "document" as const,
       });
       const rows = await tx
         .delete(entities)
-        .where(eq(entities.id, "rls_pos_del_ent"))
+        .where(eq(entities.id, delId))
         .returning({ id: entities.id });
       expect(rows).toHaveLength(1);
     });
@@ -969,14 +970,15 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE entityVersion in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(entityVersions).values({
-        id: "rls_pos_del_ev",
+        id: delId,
         workspaceId: ids.wsA1,
         entityId: ids.entityA1,
       });
       const rows = await tx
         .delete(entityVersions)
-        .where(eq(entityVersions.id, "rls_pos_del_ev"))
+        .where(eq(entityVersions.id, delId))
         .returning({ id: entityVersions.id });
       expect(rows).toHaveLength(1);
     });
@@ -984,8 +986,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE property in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(properties).values({
-        id: "rls_pos_del_prop",
+        id: delId,
         workspaceId: ids.wsA1,
         name: "To Delete",
         content: propContent,
@@ -993,7 +996,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(properties)
-        .where(eq(properties.id, "rls_pos_del_prop"))
+        .where(eq(properties.id, delId))
         .returning({ id: properties.id });
       expect(rows).toHaveLength(1);
     });
@@ -1011,14 +1014,15 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE workspaceMember in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(workspaceMembers).values({
-        id: "rls_pos_del_wm",
+        id: delId,
         workspaceId: ids.wsA1,
         userId: ids.userAdmin,
       });
       const rows = await tx
         .delete(workspaceMembers)
-        .where(eq(workspaceMembers.id, "rls_pos_del_wm"))
+        .where(eq(workspaceMembers.id, delId))
         .returning({ id: workspaceMembers.id });
       expect(rows).toHaveLength(1);
     });
@@ -1036,8 +1040,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE workspaceContact in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(workspaceContacts).values({
-        id: "rls_pos_del_wc",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         contactId: ids.contactA2,
@@ -1045,7 +1050,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(workspaceContacts)
-        .where(eq(workspaceContacts.id, "rls_pos_del_wc"))
+        .where(eq(workspaceContacts.id, delId))
         .returning({ id: workspaceContacts.id });
       expect(rows).toHaveLength(1);
     });
@@ -1053,15 +1058,16 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE propertyDependency in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(propertyDependencies).values({
-        id: "rls_pos_del_pd",
+        id: delId,
         workspaceId: ids.wsA1,
         propertyId: ids.propertyA1dep,
         dependsOnPropertyId: ids.propertyA1,
       });
       const rows = await tx
         .delete(propertyDependencies)
-        .where(eq(propertyDependencies.id, "rls_pos_del_pd"))
+        .where(eq(propertyDependencies.id, delId))
         .returning({ id: propertyDependencies.id });
       expect(rows).toHaveLength(1);
     });
@@ -1079,8 +1085,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE timeEntry in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(timeEntries).values({
-        id: "rls_pos_del_te",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -1095,7 +1102,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(timeEntries)
-        .where(eq(timeEntries.id, "rls_pos_del_te"))
+        .where(eq(timeEntries.id, delId))
         .returning({ id: timeEntries.id });
       expect(rows).toHaveLength(1);
     });
@@ -1103,8 +1110,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE billingCode in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(billingCodes).values({
-        id: "rls_pos_del_bc",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         type: "task" as const,
@@ -1113,7 +1121,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(billingCodes)
-        .where(eq(billingCodes.id, "rls_pos_del_bc"))
+        .where(eq(billingCodes.id, delId))
         .returning({ id: billingCodes.id });
       expect(rows).toHaveLength(1);
     });
@@ -1121,8 +1129,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE rateTable in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(rateTables).values({
-        id: "rls_pos_del_rt",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         name: "To Delete",
@@ -1130,7 +1139,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(rateTables)
-        .where(eq(rateTables.id, "rls_pos_del_rt"))
+        .where(eq(rateTables.id, delId))
         .returning({ id: rateTables.id });
       expect(rows).toHaveLength(1);
     });
@@ -1138,8 +1147,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE rateEntry in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(rateEntries).values({
-        id: "rls_pos_del_re",
+        id: delId,
         workspaceId: ids.wsA1,
         rateTableId: ids.rateTableA1,
         hourlyRate: 150,
@@ -1147,7 +1157,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(rateEntries)
-        .where(eq(rateEntries.id, "rls_pos_del_re"))
+        .where(eq(rateEntries.id, delId))
         .returning({ id: rateEntries.id });
       expect(rows).toHaveLength(1);
     });
@@ -1155,8 +1165,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE expense in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(expenses).values({
-        id: "rls_pos_del_exp",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -1169,7 +1180,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(expenses)
-        .where(eq(expenses.id, "rls_pos_del_exp"))
+        .where(eq(expenses.id, delId))
         .returning({ id: expenses.id });
       expect(rows).toHaveLength(1);
     });
@@ -1177,8 +1188,9 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE invoice in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(invoices).values({
-        id: "rls_pos_del_inv",
+        id: delId,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         invoiceNumber: "DEL-001",
@@ -1187,7 +1199,7 @@ describe("workspace DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(invoices)
-        .where(eq(invoices.id, "rls_pos_del_inv"))
+        .where(eq(invoices.id, delId))
         .returning({ id: invoices.id });
       expect(rows).toHaveLength(1);
     });
@@ -1207,15 +1219,16 @@ describe("workspace DELETE — correct scope", () => {
 describe("organization DELETE — correct scope", () => {
   test("DELETE contact in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(contacts).values({
-        id: "rls_pos_del_ct",
+        id: delId,
         organizationId: ids.orgA,
         type: "person" as const,
         displayName: "To Delete",
       });
       const rows = await tx
         .delete(contacts)
-        .where(eq(contacts.id, "rls_pos_del_ct"))
+        .where(eq(contacts.id, delId))
         .returning({ id: contacts.id });
       expect(rows).toHaveLength(1);
     });
@@ -1223,8 +1236,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE contactRelationship in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(contactRelationships).values({
-        id: "rls_pos_del_cr",
+        id: delId,
         organizationId: ids.orgA,
         personId: ids.contactA2,
         relatedContactId: ids.contactA,
@@ -1232,7 +1246,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(contactRelationships)
-        .where(eq(contactRelationships.id, "rls_pos_del_cr"))
+        .where(eq(contactRelationships.id, delId))
         .returning({ id: contactRelationships.id });
       expect(rows).toHaveLength(1);
     });
@@ -1240,8 +1254,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE template in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(templates).values({
-        id: "rls_pos_del_tmpl",
+        id: delId,
         organizationId: ids.orgA,
         name: "To Delete",
         fileName: "del.docx",
@@ -1251,7 +1266,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(templates)
-        .where(eq(templates.id, "rls_pos_del_tmpl"))
+        .where(eq(templates.id, delId))
         .returning({ id: templates.id });
       expect(rows).toHaveLength(1);
     });
@@ -1259,8 +1274,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateVersion in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(templateVersions).values({
-        id: "rls_pos_del_tv",
+        id: delId,
         organizationId: ids.orgA,
         templateId: ids.templateA,
         version: 98,
@@ -1269,7 +1285,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(templateVersions)
-        .where(eq(templateVersions.id, "rls_pos_del_tv"))
+        .where(eq(templateVersions.id, delId))
         .returning({ id: templateVersions.id });
       expect(rows).toHaveLength(1);
     });
@@ -1277,14 +1293,15 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateCategory in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(templateCategories).values({
-        id: "rls_pos_del_tc",
+        id: delId,
         organizationId: ids.orgA,
         name: "To Delete",
       });
       const rows = await tx
         .delete(templateCategories)
-        .where(eq(templateCategories.id, "rls_pos_del_tc"))
+        .where(eq(templateCategories.id, delId))
         .returning({ id: templateCategories.id });
       expect(rows).toHaveLength(1);
     });
@@ -1292,15 +1309,16 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateClause in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(templateClauses).values({
-        id: "rls_pos_del_tcl",
+        id: delId,
         organizationId: ids.orgA,
         templateId: ids.templateA,
         clauseId: ids.clauseA,
       });
       const rows = await tx
         .delete(templateClauses)
-        .where(eq(templateClauses.id, "rls_pos_del_tcl"))
+        .where(eq(templateClauses.id, delId))
         .returning({ id: templateClauses.id });
       expect(rows).toHaveLength(1);
     });
@@ -1308,8 +1326,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateFill in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(templateFills).values({
-        id: "rls_pos_del_tf",
+        id: delId,
         organizationId: ids.orgA,
         templateId: ids.templateA,
         userId: ids.userA2,
@@ -1318,7 +1337,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(templateFills)
-        .where(eq(templateFills.id, "rls_pos_del_tf"))
+        .where(eq(templateFills.id, delId))
         .returning({ id: templateFills.id });
       expect(rows).toHaveLength(1);
     });
@@ -1326,14 +1345,15 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseCategory in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(clauseCategories).values({
-        id: "rls_pos_del_cc",
+        id: delId,
         organizationId: ids.orgA,
         name: "To Delete",
       });
       const rows = await tx
         .delete(clauseCategories)
-        .where(eq(clauseCategories.id, "rls_pos_del_cc"))
+        .where(eq(clauseCategories.id, delId))
         .returning({ id: clauseCategories.id });
       expect(rows).toHaveLength(1);
     });
@@ -1341,8 +1361,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clause in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(clauses).values({
-        id: "rls_pos_del_cl",
+        id: delId,
         organizationId: ids.orgA,
         title: "To Delete",
         body: clauseBody,
@@ -1350,7 +1371,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(clauses)
-        .where(eq(clauses.id, "rls_pos_del_cl"))
+        .where(eq(clauses.id, delId))
         .returning({ id: clauses.id });
       expect(rows).toHaveLength(1);
     });
@@ -1358,8 +1379,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseVariant in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(clauseVariants).values({
-        id: "rls_pos_del_cv",
+        id: delId,
         organizationId: ids.orgA,
         clauseId: ids.clauseA,
         label: "To Delete",
@@ -1367,7 +1389,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(clauseVariants)
-        .where(eq(clauseVariants.id, "rls_pos_del_cv"))
+        .where(eq(clauseVariants.id, delId))
         .returning({ id: clauseVariants.id });
       expect(rows).toHaveLength(1);
     });
@@ -1375,8 +1397,9 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseVersion in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(clauseVersions).values({
-        id: "rls_pos_del_cvr",
+        id: delId,
         organizationId: ids.orgA,
         clauseId: ids.clauseA,
         version: 98,
@@ -1384,7 +1407,7 @@ describe("organization DELETE — correct scope", () => {
       });
       const rows = await tx
         .delete(clauseVersions)
-        .where(eq(clauseVersions.id, "rls_pos_del_cvr"))
+        .where(eq(clauseVersions.id, delId))
         .returning({ id: clauseVersions.id });
       expect(rows).toHaveLength(1);
     });
@@ -1402,15 +1425,16 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE matterCounter in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+      const delId = crypto.randomUUID();
       await tx.insert(matterCounters).values({
-        id: "rls_pos_del_mc",
+        id: delId,
         organizationId: ids.orgA,
         scopeKey: "rls-delete-test",
         lastValue: 0,
       });
       const rows = await tx
         .delete(matterCounters)
-        .where(eq(matterCounters.id, "rls_pos_del_mc"))
+        .where(eq(matterCounters.id, delId))
         .returning({ id: matterCounters.id });
       expect(rows).toHaveLength(1);
     });

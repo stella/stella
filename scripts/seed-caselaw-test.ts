@@ -32,16 +32,7 @@ const UNIDS = [
   "000342F8ACB64C62C125867E0037C65C", // 21 Cdo 4994/2007
 ];
 
-const nanoid = (size = 21): string => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
-  const bytes = crypto.getRandomValues(new Uint8Array(size));
-  let id = "";
-  for (const byte of bytes) {
-    id += chars[byte! & 63];
-  }
-  return id;
-};
+const generateId = (): string => crypto.randomUUID();
 
 const slugify = (caseNumber: string): string =>
   caseNumber
@@ -97,7 +88,7 @@ const main = async () => {
     const meta = result.metadata;
     const caseNumber = meta.caseNumber ?? `unknown-${unid}`;
     const slug = slugify(caseNumber);
-    const id = nanoid();
+    const id = generateId();
 
     // Bun SQL double-encodes JSONB params. Use a
     // two-step approach: insert row, then update JSONB.

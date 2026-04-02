@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import type { ActionContextOf } from "rivetkit";
 
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
@@ -229,7 +228,7 @@ const processWorkflowBatch = async (
           }),
         ),
         ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           workspaceId,
           propertyId,
           entityVersionId,

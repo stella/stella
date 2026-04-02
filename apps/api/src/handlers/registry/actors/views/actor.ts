@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import { actor, event } from "rivetkit";
 
 import {
@@ -225,7 +224,7 @@ export const viewsActor = actor({
     c.state.views = DEFAULT_VIEWS.map(
       (v): ViewState => ({
         version: 1,
-        id: nanoid(),
+        id: crypto.randomUUID(),
         name: v.name,
         layout: v.layout,
         position: v.position,

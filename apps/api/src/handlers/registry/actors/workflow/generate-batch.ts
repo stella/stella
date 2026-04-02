@@ -1,6 +1,5 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
 import { matchError, Result } from "better-result";
-import { nanoid } from "nanoid";
 
 import { createFileKey } from "@/api/handlers/files/utils";
 import { generateWorkflowData } from "@/api/handlers/registry/actors/workflow/ai-generate-batch";
@@ -197,7 +196,7 @@ export const generateBatch = async ({
         property,
       });
 
-      const fieldId = nanoid();
+      const fieldId = crypto.randomUUID();
 
       const justification = yield* parseJustificationXml({
         xml: validated.justificationXml,
@@ -205,7 +204,7 @@ export const generateBatch = async ({
       });
 
       if (justification) {
-        const justificationId = nanoid();
+        const justificationId = crypto.randomUUID();
         aiJustifications.push({
           fieldId,
           justificationId,

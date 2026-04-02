@@ -1,6 +1,5 @@
 import { Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
@@ -52,7 +51,7 @@ export const createEntityFromBuffer = async ({
   fileName,
   mimeType,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
-  const fileId = nanoid();
+  const fileId = crypto.randomUUID();
   const s3Key = createFileKey({
     organizationId,
     workspaceId,
@@ -82,8 +81,8 @@ export const createEntityFromBuffer = async ({
 
   let pdfFileId: string | null = null;
 
-  const entityId = nanoid();
-  const entityVersionId = nanoid();
+  const entityId = crypto.randomUUID();
+  const entityVersionId = crypto.randomUUID();
 
   try {
     // Upload source file and convert to PDF in parallel.
@@ -98,7 +97,7 @@ export const createEntityFromBuffer = async ({
         : Promise.resolve(null),
     ]);
     if (pdfResult && Result.isOk(pdfResult)) {
-      pdfFileId = nanoid();
+      pdfFileId = crypto.randomUUID();
       const pdfKey = createFileKey({
         organizationId,
         workspaceId,

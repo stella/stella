@@ -1,20 +1,27 @@
 import { t } from "elysia";
 
 /**
- * ^        - Start of string anchor
- * [\w-]    - Character class matching:
- *            \w = word characters (a-z, A-Z, 0-9, _)
- *            -  = hyphen
- * +        - One or more of the preceding characters
- * $        - End of string anchor
- * u (flag) - Enable full Unicode support
+ * UUID v4 format: 8-4-4-4-12 hex digits (case-insensitive).
+ *
+ * Uses explicit [0-9a-fA-F] ranges instead of the `i` flag
+ * because Elysia consumes `.source` (which strips flags).
  */
-const NANO_ID_REGEX: RegExp = /^[\w-]+$/u;
+const UUID_REGEX: RegExp =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
+/**
+ * Elysia schema for UUID string validation.
+ *
+ * Historically named `tNanoid` when the project used nanoid
+ * for ID generation. Now validates UUID format after the
+ * migration to `crypto.randomUUID()`. The export name is
+ * kept for compatibility across ~80+ import sites; a rename
+ * to `tUuid` is tracked as a follow-up chore.
+ */
 export const tNanoid = t.String({
-  minLength: 21,
-  maxLength: 21,
-  pattern: NANO_ID_REGEX.source,
+  minLength: 36,
+  maxLength: 36,
+  pattern: UUID_REGEX.source,
 });
 
 export const tDefaultVarchar = t.String({

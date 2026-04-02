@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import { organizationSettings } from "@/api/db/schema";
 import { createRootHandler } from "@/api/lib/api-handlers";
@@ -33,7 +32,7 @@ const updateOrganizationSettings = createRootHandler(
       tx
         .insert(organizationSettings)
         .values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           organizationId: session.activeOrganizationId,
           matterNumberPattern: body.matterNumberPattern,
           matterNumberPadding: body.matterNumberPadding,

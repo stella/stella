@@ -13,7 +13,6 @@ import {
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -86,7 +85,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     name: string,
     type: "person" | "organization",
   ) => {
-    const id = nanoid();
+    const id = crypto.randomUUID();
     createContact.mutate(
       { id, type, displayName: name },
       {

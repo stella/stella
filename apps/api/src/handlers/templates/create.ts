@@ -1,6 +1,5 @@
 import { eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
@@ -146,12 +145,12 @@ export const createTemplateHandler = async ({
   const docxWithManifest = await writeManifest(buffer, manifest);
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
-  const templateId = nanoid();
+  const templateId = crypto.randomUUID();
   const s3Key = buildS3Key(organizationId, templateId);
 
   await s3.write(s3Key, new Uint8Array(docxWithManifest));
 
-  const versionId = nanoid();
+  const versionId = crypto.randomUUID();
 
   // Advisory lock + count + insert in one transaction to
   // prevent TOCTOU on the template limit.

@@ -12,7 +12,7 @@ export const SETTING_ORGANIZATION_ID = "app.organization_id";
  *  `current_setting` once (init plan) instead of per row. */
 const wsIdsArray = sql`(SELECT current_setting(
   '${sql.raw(SETTING_WORKSPACE_IDS)}', true
-))::text[]`;
+))::uuid[]`;
 
 const workspaceCheck = sql`workspace_id = ANY(${wsIdsArray})`;
 

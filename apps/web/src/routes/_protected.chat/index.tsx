@@ -1,6 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
 import { ChatEditor } from "@/components/mentionable-prompt-input";
@@ -40,7 +39,7 @@ function ChatIndex() {
             mentionContext={GLOBAL_MENTION_CONTEXT}
             // eslint-disable-next-line typescript/no-misused-promises
             onSubmit={async (text) => {
-              const threadId = nanoid();
+              const threadId = crypto.randomUUID();
               const chat = await queryClient.ensureQueryData(
                 chatThreadOptions({
                   key: { threadId },

@@ -1,6 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
@@ -95,7 +94,7 @@ export const importHandler = async ({
       return null;
     }
 
-    const id = nanoid();
+    const id = crypto.randomUUID();
     await tx.insert(clauseCategories).values({
       id,
       organizationId,
@@ -120,8 +119,8 @@ export const importHandler = async ({
     const insertedIds: string[] = [];
 
     for (const item of toProcess) {
-      const clauseId = nanoid();
-      const versionId = nanoid();
+      const clauseId = crypto.randomUUID();
+      const versionId = crypto.randomUUID();
 
       let categoryId: string | null = null;
       if (item.categoryName) {
