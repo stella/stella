@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 
-import { applyFilters, buildFilterConditions } from "./entity-filters";
+import {
+  applyFilters,
+  applySorts,
+  buildFilterConditions,
+} from "./entity-filters";
 
 // -- buildFilterConditions (builtin filters) --
 
@@ -165,6 +170,18 @@ const makeEntity = (
   })),
 });
 
+const makeIntField = (entityId: string, propertyId: string, value: number) => ({
+  id: `field_${propertyId}_${entityId}`,
+  propertyId,
+  entityId,
+  content: {
+    type: "int" as const,
+    version: 1 as const,
+    value,
+    currency: null,
+  },
+});
+
 describe("applyFilters (in-memory)", () => {
   test("empty filters returns all items", () => {
     const items = [makeEntity("1", "task"), makeEntity("2", "task")];
@@ -277,5 +294,97 @@ describe("applyFilters (in-memory)", () => {
     // Builtin filters are server-side only; in-memory always
     // returns true
     expect(filtered).toHaveLength(2);
+  });
+});
+
+describe("applySorts (in-memory)", () => {
+  test("empty sorts returns the original order", () => {
+    const items = [
+      makeEntity("1", "task", [["p1", "beta"]]),
+      makeEntity("2", "task", [["p1", "alpha"]]),
+    ];
+
+    expect(applySorts(items, [])).toEqual(items);
+  });
+
+  test("sorts string values ascending", () => {
+    const items = [
+      makeEntity("1", "task", [["p1", "beta"]]),
+      makeEntity("2", "task", [["p1", "alpha"]]),
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
+  });
+
+  test("sorts integer values descending", () => {
+    const items = [
+      {
+        entityId: "1",
+        kind: "task" as const,
+        fields: [makeIntField("1", "p1", 2)],
+      },
+      {
+        entityId: "2",
+        kind: "task" as const,
+        fields: [makeIntField("2", "p1", 9)],
+      },
+    ];
+
+    const sorted = applySorts(items, [{ propertyId: "p1", desc: true }]);
+
+    expect(sorted.map((item) => item.entityId)).toEqual(["2", "1"]);
+  });
+
+  test("property: ascending string sort is monotonic", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.string(), { minLength: 1, maxLength: 20 }),
+        (values) => {
+          const items = values.map((value, index) =>
+            makeEntity(String(index), "task", [["p1", value]]),
+          );
+
+          const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
+          const extracted = sorted.map((item) => item.fields[0]?.content.value);
+
+          for (const [index, value] of extracted.entries()) {
+            if (value === undefined) {
+              continue;
+            }
+            const next = extracted.at(index + 1);
+            if (next === undefined) {
+              continue;
+            }
+            expect(value.localeCompare(next)).toBeLessThanOrEqual(0);
+          }
+        },
+      ),
+    );
+  });
+
+  test("property: descending int sort is monotonic", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer(), { minLength: 1, maxLength: 20 }),
+        (values) => {
+          const items = values.map((value, index) => ({
+            entityId: String(index),
+            kind: "task" as const,
+            fields: [makeIntField(String(index), "p1", value)],
+          }));
+
+          const sorted = applySorts(items, [{ propertyId: "p1", desc: true }]);
+          const extracted = sorted.map((item) =>
+            item.fields[0]?.content.type === "int"
+              ? item.fields[0].content.value
+              : Number.NaN,
+          );
+
+          expect(extracted).toEqual([...extracted].toSorted((a, b) => b - a));
+        },
+      ),
+    );
   });
 });
