@@ -10,7 +10,6 @@ import {
   SearchIcon,
   UserIcon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -345,7 +344,7 @@ const CreateContactDialog = () => {
           : undefined;
 
       await createContact.mutateAsync({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         type: parsedValue.type,
         displayName: parsedValue.displayName,
         ...(firstName && { firstName }),

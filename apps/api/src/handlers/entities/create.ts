@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
@@ -102,7 +101,7 @@ export const createEntitiesHandler = async ({
       }
     }
 
-    const entityId = nanoid();
+    const entityId = crypto.randomUUID();
     const effectiveKind = kind ?? "document";
 
     const entityStamp =
@@ -120,7 +119,7 @@ export const createEntitiesHandler = async ({
       docSequence: entityStamp?.docSequence ?? null,
     });
 
-    const entityVersionId = nanoid();
+    const entityVersionId = crypto.randomUUID();
 
     await tx.insert(entityVersions).values({
       id: entityVersionId,

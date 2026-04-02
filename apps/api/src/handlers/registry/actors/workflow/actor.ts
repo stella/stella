@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { actor, UserError } from "rivetkit";
 
 import { entities } from "@/api/db/schema";
@@ -84,7 +83,7 @@ export const workflowActor = actor({
         return { status: "already-running" };
       }
 
-      c.state.requestId = nanoid();
+      c.state.requestId = crypto.randomUUID();
       c.state.isRunning = true;
       broadcastEvent(c, {
         name: "workflow-status",

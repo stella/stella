@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, eq, like } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
@@ -162,7 +161,7 @@ export const uploadEntityHandler = async ({
     encrypted = result.value;
   }
 
-  const fileId = nanoid();
+  const fileId = crypto.randomUUID();
   const sourceKey = createFileKey({
     organizationId,
     workspaceId,
@@ -199,7 +198,7 @@ export const uploadEntityHandler = async ({
   let pdfFileId: string | null = null;
 
   if (conversionResult && Result.isOk(conversionResult)) {
-    pdfFileId = nanoid();
+    pdfFileId = crypto.randomUUID();
 
     const pdfKey = createFileKey({
       organizationId,
@@ -214,8 +213,8 @@ export const uploadEntityHandler = async ({
   }
 
   try {
-    const entityId = nanoid();
-    const entityVersionId = nanoid();
+    const entityId = crypto.randomUUID();
+    const entityVersionId = crypto.randomUUID();
 
     const fileName = await scopedDb(async (tx) => {
       const resolvedName = await resolveFileName({ tx, propertyId, name });

@@ -6,7 +6,6 @@ import {
 } from "ai";
 import type { ToolSet, UIMessage, UIMessageChunk } from "ai";
 import { count, eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { actor, event } from "rivetkit";
 import type { ActionContextOf, AnyActorDefinition } from "rivetkit";
 import { joinSignals } from "rivetkit/utils";
@@ -728,7 +727,7 @@ export const chatActor = actor({
           const priorMessages = allMessages.slice(0, -MESSAGE_WINDOW);
 
           const uiStream = stream.toUIMessageStream({
-            generateMessageId: nanoid,
+            generateMessageId: () => crypto.randomUUID(),
             originalMessages: messages,
             onFinish: ({ messages: finishedMessages }) => {
               // Merge: prior messages + windowed conversation

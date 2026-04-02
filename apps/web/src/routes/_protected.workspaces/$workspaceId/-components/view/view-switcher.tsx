@@ -20,7 +20,6 @@ import {
   TableIcon,
   Trash2Icon,
 } from "lucide-react";
-import { nanoid } from "nanoid";
 import { useTranslations } from "use-intl";
 
 import type { ViewLayout, ViewLayoutType } from "@stella/api/types";
@@ -240,7 +239,7 @@ export const ViewSwitcher = ({
                 <MenuItem
                   key={layoutType}
                   onClick={() => {
-                    const viewId = nanoid();
+                    const viewId = crypto.randomUUID();
                     createView.mutate(
                       {
                         id: viewId,
@@ -450,7 +449,7 @@ const ViewTabMenu = ({
   const Icon = layoutIcons[layout.type];
 
   const handleDuplicate = () => {
-    const newId = nanoid();
+    const newId = crypto.randomUUID();
     createView.mutate(
       {
         id: newId,

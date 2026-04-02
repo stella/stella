@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, count, eq, ilike, sql } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
@@ -82,7 +81,7 @@ const createWorkspaces = createRootHandler(
       const counter = await tx
         .insert(matterCounters)
         .values({
-          id: nanoid(),
+          id: crypto.randomUUID(),
           organizationId,
           scopeKey,
           lastValue: 1,

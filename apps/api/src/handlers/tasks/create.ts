@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import {
   entities,
@@ -71,7 +70,7 @@ const createTask = createHandler(
         }
       }
 
-      const entityId = nanoid();
+      const entityId = crypto.randomUUID();
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
@@ -84,7 +83,7 @@ const createTask = createHandler(
         dueDate: body.dueDate ?? null,
       });
 
-      const entityVersionId = nanoid();
+      const entityVersionId = crypto.randomUUID();
       await tx.insert(entityVersions).values({
         id: entityVersionId,
         workspaceId,

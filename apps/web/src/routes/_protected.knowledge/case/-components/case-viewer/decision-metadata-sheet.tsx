@@ -18,8 +18,8 @@ import { MetadataPanel } from "@/routes/_protected.knowledge/case/-components/ca
 import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 
 /**
- * Extract the nanoid from a composite URL param.
- * Format: "case-slug--nanoid" or just "nanoid" (legacy).
+ * Extract the ID from a composite URL param.
+ * Format: "case-slug--id" or just "id" (legacy).
  */
 const extractId = (param: string): string => {
   const sep = param.lastIndexOf("--");

@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
@@ -73,8 +72,8 @@ export const createClauseHandler = async ({
     }
   }
 
-  const clauseId = nanoid();
-  const versionId = nanoid();
+  const clauseId = crypto.randomUUID();
+  const versionId = crypto.randomUUID();
 
   const inserted = await scopedDb(async (tx) => {
     const [row] = await tx

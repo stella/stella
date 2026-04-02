@@ -67,7 +67,6 @@
     "immer": "^11.1.4",
     "lru-cache": "^11.2.6",
     "lucide-react": "catalog:",
-    "nanoid": "catalog:",
     "pdfjs-dist": "^5.4.624",
     "posthog-js": "^1.356.1",
     "react": "catalog:react19",

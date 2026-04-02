@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import type { PropertyStatus } from "@/api/db/schema";
@@ -184,7 +183,7 @@ export const buildLevelBatches = (
   for (const [signature, batchProperties] of signatureToProperties) {
     if (batchProperties.length > 0) {
       batches.push({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         inputs: signature ? signature.split(",") : [],
         properties: batchProperties,
       });

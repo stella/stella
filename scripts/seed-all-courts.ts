@@ -23,14 +23,7 @@ const db = new Bun.SQL({
   password: "postgres",
 });
 
-const nanoid = (size = 21): string => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
-  const bytes = crypto.getRandomValues(new Uint8Array(size));
-  let id = "";
-  for (const byte of bytes) {id += chars[byte! & 63];}
-  return id;
-};
+const generateId = (): string => crypto.randomUUID();
 
 const slugify = (s: string): string =>
   s
@@ -55,7 +48,7 @@ const upsert = async (
   metadata: Record<string, unknown> = {},
 ) => {
   const slug = slugify(caseNumber);
-  const id = nanoid();
+  const id = generateId();
   await db`
     INSERT INTO case_law_decisions (
       id, source_id, case_number, slug, ecli, court,

@@ -1,7 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
@@ -183,7 +182,7 @@ export const updateTemplateHandler = async ({
         });
 
       await tx.insert(templateVersions).values({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         organizationId,
         templateId,
         version: newVersion,

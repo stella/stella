@@ -63,7 +63,6 @@
     "@libpdf/core": "0.3.4",
     "elysia": "1.4.28",
     "lucide-react": "1.6.0",
-    "nanoid": "5.1.7",
     "@tailwindcss/vite": "4.2.2",
     "tailwindcss": "4.2.2",
     "oxfmt": "0.42.0",

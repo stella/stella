@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
@@ -83,7 +82,7 @@ const splitEntry = createHandler(
       }
     }
 
-    const splitGroupId = nanoid();
+    const splitGroupId = crypto.randomUUID();
     const now = new Date();
     const newEntryIds: string[] = [];
 

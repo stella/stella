@@ -1,7 +1,6 @@
 import { and, eq, isNull, like } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
@@ -182,8 +181,8 @@ export const duplicateEntityHandler = async ({
       });
     }
 
-    const newEntityId = nanoid();
-    const newVersionId = nanoid();
+    const newEntityId = crypto.randomUUID();
+    const newVersionId = crypto.randomUUID();
 
     const duplicateName = await resolveEntityName({
       tx,

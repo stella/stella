@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { actor } from "rivetkit";
 
 import { getSyncActorConfig } from "@stella/rivet/actors/sync-actor-config";
@@ -33,7 +32,7 @@ export const bBoxActor = actor({
   },
   actions: {
     generateBBoxes: async (c, input: GenerateBBoxesSchema) => {
-      const requestId = nanoid();
+      const requestId = crypto.randomUUID();
       const { queryKey, justificationId } = validateActorInput(
         generateBBoxesSchema,
         input,

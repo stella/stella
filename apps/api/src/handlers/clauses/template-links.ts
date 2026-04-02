@@ -1,7 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { templateClauses } from "@/api/db/schema";
@@ -205,7 +204,7 @@ export const linkClauseHandler = async ({
     const [row] = await tx
       .insert(templateClauses)
       .values({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         organizationId,
         templateId,
         clauseId: body.clauseId,

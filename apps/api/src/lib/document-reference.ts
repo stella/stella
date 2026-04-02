@@ -1,5 +1,3 @@
-import { customAlphabet } from "nanoid";
-
 /**
  * Alphabet for verification codes: lowercase alphanumeric
  * excluding ambiguous characters (0, O, 1, l, I).
@@ -9,7 +7,27 @@ import { customAlphabet } from "nanoid";
 const VCODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const VCODE_LENGTH = 10;
 
-const generateCode = customAlphabet(VCODE_ALPHABET, VCODE_LENGTH);
+/** Rejection-sampling to avoid modulo bias (256 % 31 = 8). */
+const generateCode = (): string => {
+  // eslint-disable-next-line no-bitwise
+  const mask = (1 << Math.ceil(Math.log2(VCODE_ALPHABET.length))) - 1;
+  const result: string[] = [];
+  while (result.length < VCODE_LENGTH) {
+    const bytes = new Uint8Array(VCODE_LENGTH * 2);
+    crypto.getRandomValues(bytes);
+    for (const b of bytes) {
+      // eslint-disable-next-line no-bitwise
+      const idx = b & mask;
+      if (idx < VCODE_ALPHABET.length) {
+        result.push(VCODE_ALPHABET.at(idx) ?? "");
+      }
+      if (result.length === VCODE_LENGTH) {
+        break;
+      }
+    }
+  }
+  return result.join("");
+};
 
 /**
  * Generate a globally unique, unguessable verification code.

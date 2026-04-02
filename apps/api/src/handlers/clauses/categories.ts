@@ -1,7 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import { nanoid } from "nanoid";
 
 import type { ScopedDb } from "@/api/db";
 import { clauseCategories } from "@/api/db/schema";
@@ -107,7 +106,7 @@ export const createCategoryHandler = async ({
     tx
       .insert(clauseCategories)
       .values({
-        id: nanoid(),
+        id: crypto.randomUUID(),
         organizationId,
         parentId: body.parentId ?? null,
         name: body.name,

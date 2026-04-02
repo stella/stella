@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { nanoid } from "nanoid";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -23,7 +22,7 @@ export const useCreateWorkspace = () => {
     mutationFn: async (vars?: CreateWorkspaceVars) => {
       const response = await api.workspaces.put({
         queryKey: workspacesKeys.all,
-        id: nanoid(),
+        id: crypto.randomUUID(),
         name: vars?.name || DEFAULT_WORKSPACE_NAME,
         filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
       });

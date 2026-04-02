@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 import type { Transaction } from "@/api/db";
 import { documentCounters } from "@/api/db/schema";
@@ -23,7 +22,7 @@ export const allocateDocSequence = async (
   const rows = await tx
     .insert(documentCounters)
     .values({
-      id: nanoid(),
+      id: crypto.randomUUID(),
       workspaceId,
       lastValue: 1,
     })

@@ -17,16 +17,7 @@ const db = new Bun.SQL({
 
 const BASE = "https://vyhledavac.nssoud.cz";
 
-const nanoid = (size = 21): string => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
-  const bytes = crypto.getRandomValues(new Uint8Array(size));
-  let id = "";
-  for (const byte of bytes) {
-    id += chars[byte! & 63];
-  }
-  return id;
-};
+const generateId = (): string => crypto.randomUUID();
 
 const slugify = (caseNumber: string): string =>
   caseNumber
@@ -204,7 +195,7 @@ const main = async () => {
       });
 
       const slug = slugify(caseNumber);
-      const id = nanoid();
+      const id = generateId();
 
       // Build metadata JSONB
       const metadata: Record<string, unknown> = {};

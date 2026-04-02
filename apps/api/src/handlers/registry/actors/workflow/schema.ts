@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import * as v from "valibot";
 
 import type { ExecutionLevel } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
@@ -17,7 +16,7 @@ type WorkflowState = {
 };
 
 export const defaultWorkflowState = (): WorkflowState => ({
-  requestId: nanoid(),
+  requestId: crypto.randomUUID(),
   isRunning: false,
   executionPlan: [],
   queuedEntities: new Set(),

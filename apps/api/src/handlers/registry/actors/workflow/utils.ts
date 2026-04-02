@@ -1,5 +1,4 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import type { ActionContextOf, ActorContextOf } from "rivetkit";
 
 import type { ScopedDb } from "@/api/db";
@@ -84,7 +83,7 @@ export const setFieldsContent = async (
       );
 
     const fieldValues = propertyIds.map((propertyId) => ({
-      id: nanoid(),
+      id: crypto.randomUUID(),
       workspaceId,
       propertyId,
       entityVersionId,

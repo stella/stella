@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
-import { nanoid } from "nanoid";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { stella } from "@/api/db/rls";
@@ -47,8 +46,7 @@ import type {
 
 // ── ID generation ──────────────────────────────────────
 
-const prefix = "rls_test_";
-const tid = () => `${prefix}${nanoid(12)}`;
+const tid = () => crypto.randomUUID();
 const wsId = () => toSafeId<"workspace">(tid());
 const orgId = () => toSafeId<"organization">(tid());
 

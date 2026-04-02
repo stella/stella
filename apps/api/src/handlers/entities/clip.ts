@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { status, t } from "elysia";
-import { nanoid } from "nanoid";
 
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
@@ -49,8 +48,8 @@ export default createHandler(
       ...(sourceType !== undefined && { sourceType }),
     };
 
-    const entityId = nanoid();
-    const entityVersionId = nanoid();
+    const entityId = crypto.randomUUID();
+    const entityVersionId = crypto.randomUUID();
 
     await scopedDb(async (tx) => {
       const entityStamp = await allocateEntityStamp(tx, workspaceId);

@@ -1,7 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { matchError, Result } from "better-result";
 import { sleep } from "bun";
-import { nanoid } from "nanoid";
 
 import {
   fetchInputFieldsForBatch,
@@ -92,7 +91,7 @@ export const generateBatchMock = async ({
 
     for (const property of inputProperties) {
       const content = property.content;
-      const fieldId = nanoid();
+      const fieldId = crypto.randomUUID();
 
       const justificationXml = createMockJustifications(filenames);
       const justification = yield* parseJustificationXml({
@@ -101,7 +100,7 @@ export const generateBatchMock = async ({
       });
 
       if (justification) {
-        const justificationId = nanoid();
+        const justificationId = crypto.randomUUID();
         aiJustifications.push({
           fieldId,
           justificationId,
