@@ -16,5 +16,9 @@
     "@tailwindcss/vite": "catalog:",
     "astro": "^6.0.8",
     "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "catalog:"
   }
 }
