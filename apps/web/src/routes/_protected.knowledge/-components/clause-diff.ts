@@ -1,4 +1,4 @@
-import DiffMatchPatch from "diff-match-patch";
+import { diffArrays } from "diff";
 
 type ClauseParagraph = {
   text: string;
@@ -15,7 +15,9 @@ type ParagraphDiff = {
   segments: DiffSegment[];
 };
 
-const dmp = new DiffMatchPatch();
+const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
+
+const tokenize = (text: string): string[] => text.match(WORD_TOKEN_RE) ?? [];
 
 /**
  * Diff two clause bodies paragraph-by-paragraph.
@@ -60,17 +62,12 @@ export const diffClauseBodies = (
       continue;
     }
 
-    const diffs = dmp.diff_main(oldP.text, newP.text);
-    dmp.diff_cleanupSemantic(diffs);
-
-    const segments: DiffSegment[] = diffs.map(([op, text]) => ({
-      text,
-      type:
-        op === DiffMatchPatch.DIFF_INSERT
-          ? "added"
-          : op === DiffMatchPatch.DIFF_DELETE
-            ? "removed"
-            : "equal",
+    const segments: DiffSegment[] = diffArrays(
+      tokenize(oldP.text),
+      tokenize(newP.text),
+    ).map((change) => ({
+      text: change.value.join(""),
+      type: change.added ? "added" : change.removed ? "removed" : "equal",
     }));
 
     result.push({ status: "modified", segments });

@@ -6,7 +6,7 @@
  * tokenization so tracked changes align to word boundaries.
  */
 
-import DiffMatchPatch from "diff-match-patch";
+import { diffArrays } from "diff";
 
 import type {
   DiffResult,
@@ -15,11 +15,12 @@ import type {
   ParagraphRewrite,
 } from "./types";
 
-type Diff = [number, string];
+type Diff = {
+  kind: "delete" | "insert" | "equal";
+  text: string;
+};
 
-const DIFF_DELETE = -1;
-const DIFF_INSERT = 1;
-const DIFF_EQUAL = 0;
+const SHORT_NEUTRAL_EQUALITY_RE = /^[\s()[\]{}.,;:/-]{1,3}$/u;
 
 // ── Word-level diffing ───────────────────────────────────
 
@@ -29,43 +30,57 @@ const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
 export const tokenize = (text: string): string[] =>
   text.match(WORD_TOKEN_RE) ?? [];
 
+const mergeAdjacentWordChanges = (diffs: Diff[]): Diff[] => {
+  const merged: Diff[] = [];
+
+  for (let i = 0; i < diffs.length; i++) {
+    const current = diffs[i];
+    const next = diffs.at(i + 1);
+    const equality = diffs.at(i + 2);
+    const afterEquality = diffs.at(i + 3);
+    const final = diffs.at(i + 4);
+
+    if (
+      current?.kind === "delete" &&
+      next?.kind === "insert" &&
+      equality?.kind === "equal" &&
+      SHORT_NEUTRAL_EQUALITY_RE.test(equality.text) &&
+      afterEquality?.kind === "delete" &&
+      final?.kind === "insert"
+    ) {
+      merged.push({
+        kind: "delete",
+        text: current.text + equality.text + afterEquality.text,
+      });
+      merged.push({
+        kind: "insert",
+        text: next.text + equality.text + final.text,
+      });
+      i += 4;
+      continue;
+    }
+
+    if (current) {
+      merged.push(current);
+    }
+  }
+
+  return merged;
+};
+
 /**
- * Word-level diff: maps tokens to single chars, diffs the
- * compressed strings, then decodes back to word boundaries.
+ * Word-level diff: tokenizes both texts, diffs the token
+ * arrays, then merges adjacent small changes.
  */
 const wordDiff = (oldText: string, newText: string): Diff[] => {
-  const dmp = new DiffMatchPatch();
-
-  const tokenList: string[] = [];
-  const tokenToIndex = new Map<string, number>();
-
-  const encode = (tokens: string[]): string =>
-    tokens
-      .map((token) => {
-        let idx = tokenToIndex.get(token);
-        if (idx === undefined) {
-          idx = tokenList.length;
-          tokenList.push(token);
-          tokenToIndex.set(token, idx);
-        }
-        return String.fromCodePoint(idx);
-      })
-      .join("");
-
-  const oldEncoded = encode(tokenize(oldText));
-  const newEncoded = encode(tokenize(newText));
-
-  const diffs = dmp.diff_main(oldEncoded, newEncoded);
-  dmp.diff_cleanupSemantic(diffs);
-
-  return diffs.map(
-    ([op, chars]): Diff => [
-      op,
-      Array.from(chars)
-        .map((c) => tokenList[c.codePointAt(0) ?? 0] ?? "")
-        .join(""),
-    ],
+  const rawDiffs = diffArrays(tokenize(oldText), tokenize(newText)).map(
+    (change): Diff => ({
+      kind: change.added ? "insert" : change.removed ? "delete" : "equal",
+      text: change.value.join(""),
+    }),
   );
+
+  return mergeAdjacentWordChanges(rawDiffs);
 };
 
 // ── Diff → DocxEdit conversion ───────────────────────────
@@ -84,23 +99,23 @@ const diffSingleParagraph = (
     if (!diff) {
       continue;
     }
-    const [op, text] = diff;
+    const { kind, text } = diff;
 
-    if (op === DIFF_EQUAL) {
+    if (kind === "equal") {
       charOffset += text.length;
       continue;
     }
 
-    if (op === DIFF_DELETE) {
+    if (kind === "delete") {
       // DELETE followed by INSERT = REPLACE
       const next = diffs.at(i + 1);
-      if (next && next[0] === DIFF_INSERT) {
+      if (next?.kind === "insert") {
         edits.push({
           kind: "replace",
           paragraphIndex,
           charOffset,
           length: text.length,
-          text: next[1],
+          text: next.text,
         });
         charOffset += text.length;
         i++; // skip the INSERT
@@ -117,7 +132,7 @@ const diffSingleParagraph = (
     }
 
     // INSERT (standalone, not preceded by DELETE)
-    if (op === DIFF_INSERT) {
+    if (kind === "insert") {
       edits.push({
         kind: "insert",
         paragraphIndex,
