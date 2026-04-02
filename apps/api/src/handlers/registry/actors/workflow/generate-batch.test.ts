@@ -1,10 +1,27 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
-import { parseJustificationContent } from "@/api/handlers/registry/actors/b-box/generate-b-boxes-shared";
-import { createMockJustifications } from "@/api/handlers/registry/actors/workflow/generate-batch-mock";
-import { parseJustificationXml } from "@/api/handlers/registry/actors/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
+
+// Stub @/api/db to prevent drizzle(DATABASE_URL) from
+// firing through transitive imports. This test only
+// exercises justification parsing (pure functions).
+void mock.module("@/api/db", () => ({
+  db: {},
+  // eslint-disable-next-line no-empty-function
+  createScopedDb: () => async () => {},
+}));
+void mock.module("@/api/db/scoped", () => ({
+  // eslint-disable-next-line no-empty-function
+  createScopedDb: () => async () => {},
+}));
+
+const { parseJustificationContent } =
+  await import("@/api/handlers/registry/actors/b-box/generate-b-boxes-shared");
+const { createMockJustifications } =
+  await import("@/api/handlers/registry/actors/workflow/generate-batch-mock");
+const { parseJustificationXml } =
+  await import("@/api/handlers/registry/actors/workflow/parse-justifications");
 
 describe("justifications", () => {
   const filenames: JustificationFilenames = [

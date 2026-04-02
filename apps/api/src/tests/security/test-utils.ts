@@ -3,11 +3,11 @@ import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { createScopedDb } from "@/api/db";
-import type { TransactionOf } from "@/api/db";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
+import type { TransactionOf } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const allSchema = {
