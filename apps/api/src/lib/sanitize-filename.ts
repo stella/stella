@@ -3,7 +3,7 @@
  * or cause path-traversal issues on downstream systems.
  */
 // eslint-disable-next-line no-control-regex -- intentional: strip null byte and other unsafe characters
-const UNSAFE_CHARS_RE = /["\\<>\r\n\0|*?:]/g;
+const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/g;
 const PATH_TRAVERSAL_RE = /\.\./g;
 const LEADING_TRAILING_DOTS_RE = /^\.+|\.+$/g;
 
