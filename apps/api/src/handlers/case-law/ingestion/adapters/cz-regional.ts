@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
-import { ADAPTER_KEYS, ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSION,
+} from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
@@ -249,6 +253,11 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     sourceUrl: item.odkaz,
     documentUrl: item.odkaz,
     metadata: {
+      caseNumber: item.jednaciCislo,
+      ecli: item.ecli,
+      court: item.soud,
+      decisionDate: item.datumVydani,
+      decisionType: undefined as string | undefined,
       author: item.autor,
       subjectOfProceeding: item.predmetRizeni,
       publishedDate: item.datumZverejneni,
@@ -256,6 +265,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       mentionedStatutes: item.zminenaUstanoveni,
     },
     rawHash: hashContent(raw),
+    parserVersion: PARSER_VERSION,
     // TODO: integrate court-specific parser for AST
     documentAst: {} as EmptyAst,
   };
@@ -449,6 +459,7 @@ export const czRegionalAdapter: SourceAdapter = {
           }
           decision.documentAst = result.documentAst;
           decision.sourceRaw = result.sourceRaw;
+          decision.sourceRawContentType = "application/json";
 
           // Merge rich metadata from finaldoc
           const rm = result.richMetadata;

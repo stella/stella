@@ -403,7 +403,18 @@ function RightPanel({
 }: RightPanelProps) {
   const t = useTranslations();
   const assistantActive = useTemplateAssistantStore((s) => s.active);
-  const [width, setWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
+  // Start narrow when opened for case law decisions
+  const defaultWidth = decisionId
+    ? RIGHT_PANEL_MIN_WIDTH
+    : RIGHT_PANEL_DEFAULT_WIDTH;
+  const [width, setWidth] = useState(defaultWidth);
+
+  // Sync width when switching between decision and non-decision views
+  const hasDecision = Boolean(decisionId);
+  useEffect(() => {
+    setWidth(hasDecision ? RIGHT_PANEL_MIN_WIDTH : RIGHT_PANEL_DEFAULT_WIDTH);
+  }, [hasDecision]);
+
   const isDragging = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {

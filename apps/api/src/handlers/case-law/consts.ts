@@ -5,12 +5,20 @@ export const ADAPTER_KEYS = {
   CZ_NSS: "cz-nss",
   CZ_US: "cz-us",
   SK_COURTS: "sk-courts",
+  SK_US: "sk-us",
   PL_COURTS: "pl-courts",
   AT_COURTS: "at-courts",
   EU_ECJ: "eu-ecj",
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
+
+/**
+ * Global parser version. Bump when ANY parser's AST output
+ * changes. Stale decisions (parserVersion < PARSER_VERSION)
+ * are re-parsed lazily from sourceRaw on next user access.
+ */
+export const PARSER_VERSION = 1;
 
 /** Maximum number of pages to sync per invocation. */
 export const MAX_SYNC_PAGES = 100;

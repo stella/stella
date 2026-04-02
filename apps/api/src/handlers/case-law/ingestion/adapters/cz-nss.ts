@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
   EmptyAst,
@@ -512,6 +512,8 @@ const rowToResult = (
     sourceUrl: row.documentUrl,
     documentUrl: row.documentUrl,
     metadata: {
+      caseNumber: row.caseNumber,
+      court: "Nejvyšší správní soud" as const,
       ecli: detail.ecli,
       judge: detail.judge,
       senate: detail.senate,
@@ -526,8 +528,10 @@ const rowToResult = (
       citation: detail.citation,
     },
     rawHash: hashContent(raw),
+    parserVersion: PARSER_VERSION,
     documentAst: content.documentAst ?? ({} as EmptyAst),
     sourceRaw: content.sourceRaw,
+    sourceRawContentType: "text/html",
   };
 };
 

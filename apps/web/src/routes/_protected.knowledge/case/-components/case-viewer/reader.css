@@ -14,9 +14,40 @@
 }
 
 /* Justified body on desktop only. No hyphenation:
-   the court's text must not be visually altered. */
+   the court's text must not be visually altered.
+   text-align-last: left prevents short/single-line
+   paragraphs from being stretched. */
 @media (min-width: 1024px) {
   .reader-justify {
     text-align: justify;
+    text-align-last: left;
   }
+}
+
+/* Paper-like background for the reader.
+   Dark mode: uses the card color (already paper-like).
+   Light mode: subtle warm tint for a document feel. */
+.reader-paper {
+  background-color: var(--color-card);
+}
+
+@media (prefers-color-scheme: light) {
+  .reader-paper {
+    background-color: #faf9f7;
+  }
+}
+
+:root.dark .reader-paper {
+  background-color: var(--color-card);
+}
+
+/* Collapse gap between consecutive h3 sub-headings
+   (e.g., "I." followed by "Ústavná sťažnosť"). */
+article h3 + h3 {
+  margin-top: 0.2em;
+}
+
+/* Tight stacking for signature lines (judge name + title). */
+article .reader-signature + .reader-signature {
+  margin-top: 0;
 }

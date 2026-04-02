@@ -119,7 +119,7 @@ function DecisionViewer() {
       </aside>
 
       <main
-        className="bg-card relative h-full min-w-0 overflow-y-auto px-10 py-8 max-sm:px-4"
+        className="reader-paper relative h-full min-w-0 overflow-y-auto px-10 py-8 max-sm:px-4"
         ref={mainRef}
       >
         <DecisionText decision={decision} />

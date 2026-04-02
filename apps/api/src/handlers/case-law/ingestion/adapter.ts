@@ -26,11 +26,17 @@ export type IngestionResult = {
   rawHash: string;
   /** Parsed document AST, or empty object for courts without a parser. */
   documentAst: DocumentAst | EmptyAst;
+  /** Parser version that produced the AST. Enables lazy re-parsing. */
+  parserVersion?: number | undefined;
   /**
    * Raw source from the court website (HTML, JSON string, etc.)
    * stored verbatim for future re-parsing without re-downloading.
    */
   sourceRaw?: string | undefined;
+  /** Binary raw source (e.g., PDF bytes) for S3 upload. */
+  sourceRawBytes?: Uint8Array | undefined;
+  /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
+  sourceRawContentType?: string | undefined;
 };
 
 /** A page of ingestion results with an optional cursor. */
