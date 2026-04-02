@@ -9,9 +9,8 @@
  *   - Font name per span (Arial-BoldMT vs ArialMT)
  *   - Font size per span (20pt title vs 10pt body)
  *
- * This is far richer than unpdf's mergePages plaintext; it
- * gives us real line breaks and bold detection without
- * heuristics.
+ * Per-line extraction gives us real line breaks and bold
+ * detection without heuristics.
  *
  * SK court PDFs have a consistent structure:
  *
