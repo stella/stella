@@ -1,42 +1,71 @@
 "use client";
 
 import { useCallback } from "react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
-import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 import { Button } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
-type ConversationProps = ComponentProps<typeof StickToBottom>;
+import {
+  StickToBottomContext,
+  useStickToBottom,
+  useStickToBottomContext,
+} from "@/hooks/use-stick-to-bottom";
 
-export const Conversation = ({ className, ...props }: ConversationProps) => (
-  <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial="smooth"
-    resize="smooth"
-    role="log"
-    {...props}
-  />
-);
+type ConversationProps = ComponentProps<"div">;
 
-type ConversationContentProps = ComponentProps<typeof StickToBottom.Content>;
+export const Conversation = ({
+  className,
+  children,
+  ...props
+}: ConversationProps) => {
+  const stickToBottom = useStickToBottom();
+
+  return (
+    <StickToBottomContext.Provider value={stickToBottom}>
+      <div
+        className={cn("relative flex-1 overflow-y-hidden", className)}
+        role="log"
+        {...props}
+      >
+        {children}
+      </div>
+    </StickToBottomContext.Provider>
+  );
+};
+
+type ConversationContentProps = ComponentProps<"div">;
 
 export const ConversationContent = ({
   className,
+  children,
   ...props
-}: ConversationContentProps) => (
-  <StickToBottom.Content
-    className={cn("flex flex-col gap-8 p-4", className)}
-    {...props}
-  />
-);
+}: ConversationContentProps) => {
+  const { scrollRef, contentRef } = useStickToBottomContext();
+
+  return (
+    <div
+      ref={scrollRef}
+      className="size-full overflow-y-auto"
+      style={{ scrollbarGutter: "stable both-edges" }}
+    >
+      <div
+        className={cn("flex flex-col gap-8 p-4", className)}
+        {...props}
+        ref={contentRef}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
 
 type ConversationEmptyStateProps = ComponentProps<"div"> & {
   title?: string;
   description?: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 };
 
 export const ConversationEmptyState = ({
@@ -81,8 +110,7 @@ export const ConversationScrollButton = ({
       <div className="bg-background absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full">
         <Button
           className={cn("rounded-full", className)}
-          // eslint-disable-next-line typescript/no-misused-promises
-          onClick={async () => await scrollToBottom()}
+          onClick={() => scrollToBottom()}
           size="icon"
           type="button"
           variant="outline"
