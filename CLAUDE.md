@@ -221,6 +221,24 @@ guidelines, and visual noise rules in `/conventions-ux`.
   Check React, TanStack, and other deps before defining custom
   equivalents.
 
+### Module Side Effects
+
+- **No module-level side effects in shared modules.** If a
+  module exports both a side-effecting singleton (DB
+  connection, auth client, pool) and reusable utilities,
+  split them: put utilities in a separate file so consumers
+  can import them without triggering initialization. The
+  side-effecting module re-exports for convenience.
+- **Never import test-only types in prod code.** If a prod
+  generic needs to accept both prod and test instances, use
+  a structural constraint (`{ transaction: ... }`) instead
+  of importing a type from a test file.
+- **Defer eager initialization with lazy singletons.** When
+  a module-level call (`betterAuth()`, `drizzle()`) depends
+  on another module's export, wrap it in a `getX()` getter
+  so it runs at first use, not at import time. This prevents
+  TDZ errors from non-deterministic module evaluation order.
+
 ### React
 
 - Put the root/exported component at the top of the file (after

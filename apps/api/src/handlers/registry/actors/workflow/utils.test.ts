@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import type {
   FieldContent,
@@ -8,10 +8,22 @@ import type {
   BatchProperty,
   PropertyBatch,
 } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
-import {
-  evaluateCondition,
-  prepareBatch,
-} from "@/api/handlers/registry/actors/workflow/utils";
+
+// Stub @/api/db to prevent drizzle(DATABASE_URL) from
+// firing when the module graph pulls in registry/utils.ts.
+// This test only uses pure functions that don't touch db.
+void mock.module("@/api/db", () => ({
+  db: {},
+  // eslint-disable-next-line no-empty-function
+  createScopedDb: () => async () => {},
+}));
+void mock.module("@/api/db/scoped", () => ({
+  // eslint-disable-next-line no-empty-function
+  createScopedDb: () => async () => {},
+}));
+
+const { evaluateCondition, prepareBatch } =
+  await import("@/api/handlers/registry/actors/workflow/utils");
 
 const createBatchProperty = (
   id: string,

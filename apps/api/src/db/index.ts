@@ -1,12 +1,6 @@
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import {
-  SETTING_ORGANIZATION_ID,
-  SETTING_WORKSPACE_IDS,
-  stella,
-} from "@/api/db/rls";
 import {
   invoiceStatusEnum,
   propertyStatusEnum,
@@ -14,17 +8,13 @@ import {
   timeEntrySourceEnum,
   timeEntryStatusEnum,
 } from "@/api/db/schema";
+import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import type { SafeId } from "@/api/lib/branded-types";
 
-// Generic constraint accepts any drizzle instance (prod or
-// test PGlite) without importing test-only types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDrizzle = { transaction: (fn: (tx: any) => any) => any };
-
-export type TransactionOf<TDatabase extends AnyDrizzle> = Parameters<
-  Parameters<TDatabase["transaction"]>[0]
->[0];
+// Re-export scoped utilities so existing `from "@/api/db"`
+// imports keep working without pulling in db initialization.
+export { createScopedDb } from "@/api/db/scoped";
+export type { AnyDrizzle, TransactionOf } from "@/api/db/scoped";
 
 /**
  * Primary database handle connecting as postgres (table owner).
@@ -62,26 +52,3 @@ export type Transaction = TransactionOf<Database>;
 export type ScopedDb = <T>(
   fn: (tx: TransactionOf<Database>) => Promise<T>,
 ) => Promise<T>;
-
-export const createScopedDb = <TDatabase extends AnyDrizzle = Database>(
-  database: TDatabase,
-  workspaceIds: string[],
-  organizationId: SafeId<"organization">,
-) => {
-  const wsIds = `{${workspaceIds.join(",")}}`;
-
-  return async <T>(
-    fn: (tx: TransactionOf<TDatabase>) => Promise<T>,
-  ): Promise<T> =>
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- generic AnyDrizzle constraint
-    await database.transaction(async (tx: TransactionOf<TDatabase>) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- tx type is generic
-      await tx.execute(
-        sql`SELECT
-          set_config('role', '${sql.raw(stella.name)}', true),
-          set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${wsIds}, true),
-          set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true)`,
-      );
-      return fn(tx);
-    });
-};

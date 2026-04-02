@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { createScopedDb } from "@/api/db";
 import { entities, fields, properties } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import {
   getRlsFixture,
   releaseRlsFixture,
