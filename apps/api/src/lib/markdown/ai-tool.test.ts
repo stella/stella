@@ -90,6 +90,48 @@ describe("ai tool", () => {
     expect(serialized.prompt).toBe("Plain text with no mentions\n");
   });
 
+  test("serialize strips dangerous href schemes", () => {
+    // eslint-disable-next-line no-script-url
+    const jsScheme = "javascript:alert(1)";
+    const dataScheme = "data:text/html,<script>alert(2)</script>";
+    const xss: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: `<p><a href="${jsScheme}">click</a> <a href="${dataScheme}">data</a> <a href="https://safe.example">ok</a></p>`,
+      dependencies: [],
+    };
+    const serialized = serializeAITool(xss);
+    expect(serialized.prompt).not.toContain(jsScheme);
+    expect(serialized.prompt).not.toContain(dataScheme);
+    expect(serialized.prompt).toContain("https://safe.example");
+  });
+
+  test("serialize allows tel: and mailto: href schemes", () => {
+    const tool: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt:
+        '<p><a href="tel:+1234567890">call</a> <a href="mailto:a@b.com">email</a></p>',
+      dependencies: [],
+    };
+    const serialized = serializeAITool(tool);
+    expect(serialized.prompt).toContain("tel:+1234567890");
+    expect(serialized.prompt).toContain("mailto:a@b.com");
+  });
+
+  test("serialize strips nested disallowed tags", () => {
+    const tool: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "<p><div><span>nested text</span></div></p>",
+      dependencies: [],
+    };
+    const serialized = serializeAITool(tool);
+    expect(serialized.prompt).not.toContain("<div");
+    expect(serialized.prompt).not.toContain("<span");
+    expect(serialized.prompt).toContain("nested text");
+  });
+
   test("serialize and deserialize handle empty prompt", () => {
     const emptyTool: AITool = {
       version: 1,

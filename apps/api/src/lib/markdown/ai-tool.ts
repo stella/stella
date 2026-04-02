@@ -1,11 +1,99 @@
 import { convert } from "@kreuzberg/html-to-markdown";
-import createDOMPurify from "dompurify";
-import { JSDOM } from "jsdom";
+import * as cheerio from "cheerio";
 import { marked } from "marked";
 
 import type { PropertyCondition } from "@/api/db/schema-validators";
 
-const DOMPurify = createDOMPurify(new JSDOM().window);
+/**
+ * Allowlist-based HTML sanitizer using cheerio.
+ * Strips all tags and attributes not explicitly listed.
+ */
+const ALLOWED_TAGS = new Set([
+  "a",
+  "b",
+  "blockquote",
+  "br",
+  "caption",
+  "code",
+  "col",
+  "colgroup",
+  "del",
+  "em",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "i",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "s",
+  "strong",
+  "sub",
+  "sup",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "u",
+  "ul",
+]);
+
+const ALLOWED_ATTRS: Record<string, Set<string>> = {
+  a: new Set(["href"]),
+  td: new Set(["colspan", "rowspan"]),
+  th: new Set(["colspan", "rowspan"]),
+};
+
+const ALLOWED_HREF_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
+
+const sanitizeHtml = (html: string): string => {
+  const $ = cheerio.load(html, undefined, false);
+
+  $("script, style, iframe, object, embed, form, textarea").remove();
+
+  // Walk bottom-up so that unwrapping a disallowed parent
+  // never leaves unvisited disallowed children behind.
+  // `$("*").get().reverse()` gives us a leaf-first order.
+  for (const el of $("*").get().toReversed()) {
+    if (!("tagName" in el)) {
+      continue;
+    }
+    const tagName = el.tagName.toLowerCase();
+
+    if (!ALLOWED_TAGS.has(tagName)) {
+      $(el).replaceWith($(el).contents());
+      continue;
+    }
+
+    const allowed = ALLOWED_ATTRS[tagName];
+    for (const attr of Object.keys(el.attribs)) {
+      if (!allowed?.has(attr)) {
+        $(el).removeAttr(attr);
+      }
+    }
+
+    if (tagName === "a" && el.attribs.href) {
+      try {
+        const url = new URL(el.attribs.href, "https://placeholder.invalid");
+        if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
+          $(el).removeAttr("href");
+        }
+      } catch {
+        $(el).removeAttr("href");
+      }
+    }
+  }
+
+  return $.html();
+};
 
 export type AITool = {
   version: 1;
@@ -38,7 +126,7 @@ const replaceMentionsWithAnchors = (html: string): string => {
     })
     .transform(html);
 
-  return DOMPurify.sanitize(unsafeHtml);
+  return sanitizeHtml(unsafeHtml);
 };
 
 export const serializeAITool = (data: AITool): AITool => {
