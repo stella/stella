@@ -24,7 +24,6 @@
     "@elysiajs/eden": "^1.4.8",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.8.1",
-    "@radix-ui/react-slot": "^1.2.4",
     "@rivetkit/react": "catalog:rivet",
     "@stella/api": "workspace:*",
     "@stella/permissions": "workspace:*",
