@@ -6,7 +6,6 @@ import {
   useState,
 } from "react";
 
-import { Slot } from "@radix-ui/react-slot";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
@@ -34,6 +33,7 @@ import { useIsMobile } from "@stella/ui/hooks/use-mobile";
 import { cn } from "@stella/ui/lib/utils";
 
 import { HOTKEYS } from "@/lib/hotkeys";
+import { Slot } from "@/lib/slot";
 
 const SIDEBAR_LS_NAME = "sidebar_state";
 const SIDEBAR_WIDTH = "16rem";
