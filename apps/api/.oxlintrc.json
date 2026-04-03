@@ -2,6 +2,30 @@
   "extends": ["../../.oxlintrc.json"],
   "overrides": [
     {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/api/lib/branded-types",
+                "importNames": ["toSafeId"],
+                "message": "Only approved boundary modules and tests may brand raw IDs with toSafeId."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/lib/auth.ts",
+        "src/lib/search/**"
+      ],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
       "files": ["src/handlers/**"],
       "rules": {
         "no-restricted-imports": [
@@ -46,6 +70,7 @@
     },
     {
       "files": [
+        "src/tests/**",
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}"
       ],

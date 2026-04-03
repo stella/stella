@@ -45,8 +45,6 @@ import {
 import type { UserActorConnState } from "@/api/handlers/registry/utils";
 import { getModelById, getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-// eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 
@@ -501,19 +499,15 @@ export const chatActor = actor({
           // before granting tool access. If the workspace is
           // not found (wrong org or deleted), treat as a
           // non-workspace thread.
-          let validatedWsId: SafeId<"workspace"> | null = null;
-          if (wsId) {
-            const ws = await connScopedDb((tx) =>
-              tx.query.workspaces.findFirst({
-                where: {
-                  id: wsId,
-                  organizationId: { eq: connState.organizationId },
-                },
-                columns: { id: true },
-              }),
-            );
-            validatedWsId = ws ? toSafeId<"workspace">(wsId) : null;
-          }
+          const validatedWsId = wsId
+            ? ((
+                await validateWorkspaceIds(
+                  [wsId],
+                  connState.organizationId,
+                  connScopedDb,
+                )
+              ).at(0) ?? null)
+            : null;
 
           // Validate mentioned workspace IDs from mentions
           const allMentionedWsIds = [...thread.metadata.mentionedWorkspaceIds];
@@ -840,15 +834,31 @@ export const chatActor = actor({
       const ctx = thread.metadata.userContext;
       // SAFETY: same as sendMessages — RivetKit erases conn state type
       // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const { organizationId } = c.conn.state as UserActorConnState;
+      const connState = c.conn.state as UserActorConnState;
       if (rawWsId) {
-        const wsId = toSafeId<"workspace">(rawWsId);
+        const connScopedDb = getScopedDb(connState);
+        const wsId =
+          (
+            await validateWorkspaceIds(
+              [rawWsId],
+              connState.organizationId,
+              connScopedDb,
+            )
+          ).at(0) ?? null;
+        if (!wsId) {
+          return { prompt: buildGlobalPrompt(ctx) };
+        }
         const promptDb = createRootScopedDb({
-          organizationId,
+          organizationId: connState.organizationId,
           workspaceIds: [wsId],
         });
         return {
-          prompt: await buildSystemPrompt(promptDb, wsId, organizationId, ctx),
+          prompt: await buildSystemPrompt(
+            promptDb,
+            wsId,
+            connState.organizationId,
+            ctx,
+          ),
         };
       }
       return { prompt: buildGlobalPrompt(ctx) };

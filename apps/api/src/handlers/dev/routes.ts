@@ -13,8 +13,6 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
-// eslint-disable-next-line no-restricted-imports -- dev-only route; brands session org ID
-import { toSafeId } from "@/api/lib/branded-types";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const VITE_CACHE_DIR = resolve(
@@ -82,8 +80,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     return { ok: true };
   })
   .post("/rebuild-search", async (ctx) => {
-    const orgId = toSafeId<"organization">(ctx.session.activeOrganizationId);
-    await getSearchProvider().rebuildIndex(orgId);
+    await getSearchProvider().rebuildIndex(ctx.session.activeOrganizationId);
     return { ok: true };
   })
   .post("/clear-cache", () => {
