@@ -8,6 +8,6 @@
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",
-    "types": ["bun-types"]
+    "types": ["bun"]
   }
 }

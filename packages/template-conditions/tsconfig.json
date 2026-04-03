@@ -3,7 +3,7 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "module": "ESNext",
-    "types": ["bun-types"]
+    "types": ["bun"]
   },
   "include": ["."],
   "exclude": ["node_modules"]
