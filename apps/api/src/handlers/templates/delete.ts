@@ -10,7 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
 
-export const deleteTemplateParamsSchema = t.Object({
+const deleteTemplateParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -20,7 +20,7 @@ type DeleteTemplateProps = {
   templateId: string;
 };
 
-export const deleteTemplateHandler = async ({
+const deleteTemplateHandler = async ({
   scopedDb,
   organizationId,
   templateId,

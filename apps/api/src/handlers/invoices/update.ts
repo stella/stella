@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-export const updateInvoiceBodySchema = t.Object({
+const updateInvoiceBodySchema = t.Object({
   invoiceNumber: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   invoiceDate: t.Optional(t.String({ format: "date" })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),

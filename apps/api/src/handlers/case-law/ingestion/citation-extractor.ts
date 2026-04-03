@@ -1,7 +1,7 @@
 /**
  * Extracted citation reference found in decision text.
  */
-export type ExtractedCitation = {
+type ExtractedCitation = {
   /** The raw citation text as found in the source. */
   citationText: string;
   /** Section index where the citation was found. */

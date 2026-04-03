@@ -75,7 +75,7 @@ type ConvertToPdfResult = {
   sizeBytes: number;
 };
 
-export class GotenbergError extends TaggedError("GotenbergError")<{
+class GotenbergError extends TaggedError("GotenbergError")<{
   message: string;
   statusCode?: number;
   cause?: unknown;

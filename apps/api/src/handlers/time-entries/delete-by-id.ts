@@ -5,7 +5,7 @@ import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const deleteTimeEntryBodySchema = t.Object({
+const deleteTimeEntryBodySchema = t.Object({
   id: tNanoid,
 });
 

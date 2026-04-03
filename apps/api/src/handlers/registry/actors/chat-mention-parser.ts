@@ -5,7 +5,7 @@
  *  `#stella-entity=WS_ID:ENTITY_ID` — the workspace ID is
  *  extracted so the backend can activate tools for it. */
 
-export type MentionRef =
+type MentionRef =
   | { type: "entity"; id: string; workspaceId: string | null }
   | { type: "workspace"; id: string }
   | { type: "contact"; id: string }
@@ -16,7 +16,7 @@ const MENTION_RE =
   /\[([^\]]*)\]\(#stella-(entity|workspace|contact|template|clause)=([^)]+)\)/g;
 
 /** Extract all mention references from a message string. */
-export const parseMentions = (text: string): MentionRef[] => {
+const parseMentions = (text: string): MentionRef[] => {
   const seen = new Set<string>();
   const refs: MentionRef[] = [];
 

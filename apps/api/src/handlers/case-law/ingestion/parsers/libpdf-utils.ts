@@ -18,7 +18,7 @@ export type PdfSpan = {
   fontName: string;
 };
 
-export type BoldRange = {
+type BoldRange = {
   start: number;
   end: number;
   bold: boolean;

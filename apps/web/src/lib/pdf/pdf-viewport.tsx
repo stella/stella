@@ -31,8 +31,6 @@ import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
-export type { PageInfo } from "@/lib/pdf/pdf-context";
-export type { PDFPageFallback, PDFPageProps } from "@/lib/pdf/pdf-page";
 
 const [, roundY] = approximateFraction(getDevicePixelRatio());
 

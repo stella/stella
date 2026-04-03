@@ -12,13 +12,13 @@ import { isElement, W_NS } from "./ooxml";
 
 // ── Types ────────────────────────────────────────────────
 
-export type OoxmlViolation = {
+type OoxmlViolation = {
   rule: string;
   message: string;
   element?: string | undefined;
 };
 
-export type OoxmlValidationResult = {
+type OoxmlValidationResult = {
   valid: boolean;
   violations: OoxmlViolation[];
 };

@@ -9,7 +9,7 @@ import {
   updateTemplateCategoryHandler,
 } from "./categories";
 
-export const updateTemplateCategoryParamsSchema = t.Object({
+const updateTemplateCategoryParamsSchema = t.Object({
   categoryId: tNanoid,
 });
 

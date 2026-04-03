@@ -56,7 +56,7 @@ export type UserActorConnState = GlobalActorConnState & {
   userId: string;
 };
 
-export type ActorConnState = GlobalActorConnState & {
+type ActorConnState = GlobalActorConnState & {
   workspaceId: SafeId<"workspace">;
 };
 

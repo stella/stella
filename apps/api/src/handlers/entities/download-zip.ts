@@ -11,7 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 
-export const downloadZipParamsSchema = t.Object({
+const downloadZipParamsSchema = t.Object({
   entityId: t.String(),
 });
 
@@ -58,7 +58,7 @@ const collectDescendantIds = async (
   return result.map((r) => String(r.id));
 };
 
-export const downloadZipHandler = async ({
+const downloadZipHandler = async ({
   scopedDb,
   entityId,
   organizationId,

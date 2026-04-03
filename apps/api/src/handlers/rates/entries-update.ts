@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-export const updateRateEntryBodySchema = t.Object({
+const updateRateEntryBodySchema = t.Object({
   id: tNanoid,
   hourlyRate: t.Optional(t.Integer({ minimum: 0 })),
   effectiveFrom: t.Optional(t.String({ format: "date" })),

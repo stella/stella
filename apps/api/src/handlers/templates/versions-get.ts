@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { getTemplateVersionHandler } from "./versions";
 
-export const getTemplateVersionParamsSchema = t.Object({
+const getTemplateVersionParamsSchema = t.Object({
   templateId: tNanoid,
   versionId: tNanoid,
 });

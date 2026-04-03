@@ -7,7 +7,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
 
-export const getTemplateParamsSchema = t.Object({
+const getTemplateParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -20,7 +20,7 @@ type GetTemplateProps = {
 /** Presigned URL validity in seconds (15 min). */
 const PRESIGN_EXPIRES_IN = 900;
 
-export const getTemplateHandler = async ({
+const getTemplateHandler = async ({
   scopedDb,
   organizationId,
   templateId,

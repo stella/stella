@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createRateEntryBodySchema = t.Object({
+const createRateEntryBodySchema = t.Object({
   userId: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
   hourlyRate: t.Integer({ minimum: 0 }),
   effectiveFrom: t.String({ format: "date" }),

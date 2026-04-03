@@ -60,7 +60,7 @@ import {
 
 // ── Public API ─────────────────────────────────────────────
 
-export type ParseSkDecisionInput = {
+type ParseSkDecisionInput = {
   /** Raw PDF bytes. */
   pdfBytes: Uint8Array;
   caseNumber: string;
@@ -72,7 +72,7 @@ export type ParseSkDecisionInput = {
   sourceSystem?: string;
 };
 
-export type ParseSkDecisionOutput = {
+type ParseSkDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
 };

@@ -15,7 +15,7 @@ import {
  *
  * Returns the newly allocated sequence number.
  */
-export const allocateDocSequence = async (
+const allocateDocSequence = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
 ): Promise<number> => {

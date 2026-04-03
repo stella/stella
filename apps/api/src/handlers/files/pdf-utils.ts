@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { LIMITS } from "@/api/lib/limits";
 import { spawnWorker } from "@/api/lib/subprocess";
 
-export class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
+class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
   message: string;
 }>() {}
 

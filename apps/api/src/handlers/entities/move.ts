@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const moveEntityBodySchema = t.Object({
+const moveEntityBodySchema = t.Object({
   entityId: tNanoid,
   parentId: t.Nullable(tNanoid),
 });
@@ -22,7 +22,7 @@ type MoveEntityHandlerProps = {
   body: MoveEntityBodySchema;
 };
 
-export const moveEntityHandler = async ({
+const moveEntityHandler = async ({
   scopedDb,
   workspaceId,
   body,

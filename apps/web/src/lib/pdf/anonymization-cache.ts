@@ -7,7 +7,7 @@ const listeners = new Set<() => void>();
 
 let cacheVersion = 0;
 
-export const getAnonymizationCacheVersion = () => cacheVersion;
+const getAnonymizationCacheVersion = () => cacheVersion;
 
 export const subscribeAnonymizationCache = (listener: () => void) => {
   listeners.add(listener);

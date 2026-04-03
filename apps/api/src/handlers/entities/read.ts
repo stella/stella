@@ -66,7 +66,7 @@ const viewSortSchema = t.Object({
   desc: t.Boolean(),
 });
 
-export const readEntitiesBodySchema = t.Object({
+const readEntitiesBodySchema = t.Object({
   filters: t.Optional(t.Array(viewFilterConditionSchema)),
   sorts: t.Optional(t.Array(viewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
@@ -92,7 +92,7 @@ type ReadEntitiesHandlerProps = {
   pageSize: number;
 };
 
-export const readEntitiesHandler = async ({
+const readEntitiesHandler = async ({
   scopedDb,
   workspaceId,
   filters,

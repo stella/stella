@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { listVariantsHandler } from "./variants";
 
-export const listVariantsParamsSchema = t.Object({
+const listVariantsParamsSchema = t.Object({
   clauseId: tNanoid,
 });
 

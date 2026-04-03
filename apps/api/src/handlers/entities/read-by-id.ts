@@ -5,7 +5,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export const readEntityByIdParamsSchema = t.Object({
+const readEntityByIdParamsSchema = t.Object({
   entityId: t.String(),
 });
 
@@ -15,7 +15,7 @@ type ReadEntityByIdHandlerProps = {
   entityId: string;
 };
 
-export const readEntityByIdHandler = async ({
+const readEntityByIdHandler = async ({
   scopedDb,
   workspaceId,
   entityId,

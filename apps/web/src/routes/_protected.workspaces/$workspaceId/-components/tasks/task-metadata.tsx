@@ -67,7 +67,7 @@ const StatusIcon = ({ status }: { status: TaskStatus }) => {
   return <Icon className={cn("size-3.5", STATUS_COLORS[status])} />;
 };
 
-export const PriorityIcon = ({ priority }: { priority: TaskPriority }) => {
+const PriorityIcon = ({ priority }: { priority: TaskPriority }) => {
   const Icon = PRIORITY_ICONS[priority];
   return <Icon className={cn("size-3.5", PRIORITY_COLORS[priority])} />;
 };

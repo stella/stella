@@ -12,7 +12,7 @@ import {
 import { createRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const updateContactBodySchema = t.Object({
+const updateContactBodySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
   prefix: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   firstName: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),

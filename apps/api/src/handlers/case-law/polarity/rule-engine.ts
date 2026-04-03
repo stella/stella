@@ -59,7 +59,7 @@ const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
  * Without a cache, rules are fetched from the database on every
  * call (stateless for the API server).
  */
-export const loadRules = async (
+const loadRules = async (
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,

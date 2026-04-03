@@ -30,7 +30,7 @@ export type ParseNsDecisionInput = {
   printHtml: string;
 };
 
-export type ParseNsDecisionOutput = {
+type ParseNsDecisionOutput = {
   metadata: DocumentAstMetadata;
   sourceMetadata: Record<string, unknown>;
   documentAst: DocumentAst;

@@ -79,7 +79,7 @@ export const parseJustificationContent = (justification: string) => {
 
 const GEMINI_B_BOX_SCALE = 1000;
 
-export type GeminiBBox = [number, number, number, number];
+type GeminiBBox = [number, number, number, number];
 
 type Page = {
   pageNumber: number;
@@ -148,7 +148,7 @@ class JustificationDataError extends TaggedError("JustificationDataError")<{
   justificationId: string;
 }>() {}
 
-export type PreparedJustificationData = {
+type PreparedJustificationData = {
   prompt: string;
   fieldContent: string;
   justificationText: string;

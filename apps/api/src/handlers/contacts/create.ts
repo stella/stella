@@ -13,7 +13,7 @@ import { createRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createContactBodySchema = t.Object({
+const createContactBodySchema = t.Object({
   id: tNanoid,
   type: t.UnionEnum(["person", "organization"]),
   prefix: t.Optional(t.String({ maxLength: 32 })),

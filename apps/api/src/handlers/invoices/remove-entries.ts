@@ -12,7 +12,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 
-export const removeEntriesBodySchema = t.Object({
+const removeEntriesBodySchema = t.Object({
   timeEntryIds: t.Optional(t.Array(tNanoid, { minItems: 1, maxItems: 500 })),
   expenseIds: t.Optional(t.Array(tNanoid, { minItems: 1, maxItems: 500 })),
 });

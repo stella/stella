@@ -12,7 +12,7 @@ import {
   validatePattern,
 } from "@/api/lib/matter-reference";
 
-export const previewOrganizationSettingsBodySchema = t.Object({
+const previewOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.String({ minLength: 1, maxLength: 128 }),
   matterNumberPadding: t.Integer({ minimum: 1, maximum: 6 }),
 });
@@ -27,7 +27,7 @@ type PreviewOrganizationSettingsHandlerProps = {
   body: PreviewOrganizationSettingsBodySchema;
 };
 
-export const previewOrganizationSettingsHandler = async ({
+const previewOrganizationSettingsHandler = async ({
   scopedDb,
   organizationId,
   body,

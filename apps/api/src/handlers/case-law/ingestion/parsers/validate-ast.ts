@@ -19,7 +19,7 @@ type Issue = {
   severity: "error" | "warning";
 };
 
-export type ValidationResult = {
+type ValidationResult = {
   ok: boolean;
   issues: Issue[];
   stats: {

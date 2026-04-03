@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 
-export const readRateTablesQuerySchema = t.Object({
+const readRateTablesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
 });

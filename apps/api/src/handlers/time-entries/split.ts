@@ -8,7 +8,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const splitEntryBodySchema = t.Object({
+const splitEntryBodySchema = t.Object({
   id: tNanoid,
   splits: t.Array(
     t.Object({

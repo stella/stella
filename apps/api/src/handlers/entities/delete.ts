@@ -15,7 +15,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-export const deleteEntitiesBodySchema = t.Object({
+const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tNanoid, { minItems: 1 }),
 });
 
@@ -47,7 +47,7 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
   return refs;
 };
 
-export const deleteEntitiesHandler = async ({
+const deleteEntitiesHandler = async ({
   scopedDb,
   organizationId,
   workspaceId,

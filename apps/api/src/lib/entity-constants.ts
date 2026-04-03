@@ -11,7 +11,7 @@ export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 
 export const TASK_STATUSES = Object.values(TASK_STATUS);
 
-export const DOCUMENT_STATUS = {
+const DOCUMENT_STATUS = {
   DRAFT: "draft",
   REVIEW: "review",
   FINAL: "final",
@@ -22,7 +22,7 @@ export type DocumentStatus =
 
 export const DOCUMENT_STATUSES = Object.values(DOCUMENT_STATUS);
 
-export const ENTITY_PRIORITY = {
+const ENTITY_PRIORITY = {
   NONE: "none",
   URGENT: "urgent",
   HIGH: "high",
@@ -45,7 +45,7 @@ export type TaskAssigneeRole =
 
 export const TASK_ASSIGNEE_ROLES = Object.values(TASK_ASSIGNEE_ROLE);
 
-export const ENTITY_LINK_TYPE = {
+const ENTITY_LINK_TYPE = {
   RELATED: "related",
 } as const;
 

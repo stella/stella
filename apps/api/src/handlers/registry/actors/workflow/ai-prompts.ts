@@ -65,9 +65,7 @@ export type Answer =
   | null
   | { amount: number; currency: string | null };
 
-export const createJustificationSchema = (
-  filenames: JustificationFilenames,
-) => {
+const createJustificationSchema = (filenames: JustificationFilenames) => {
   const filenamesList = filenames
     .map((filename) => `- ${filename.simplified}`)
     .join("\n");

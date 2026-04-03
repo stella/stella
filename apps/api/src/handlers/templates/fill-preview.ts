@@ -16,11 +16,11 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { containsNull } from "./fill";
 
-export const fillPreviewBodySchema = t.Object({
+const fillPreviewBodySchema = t.Object({
   values: t.String(),
 });
 
-export const fillPreviewParamsSchema = t.Object({
+const fillPreviewParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -31,7 +31,7 @@ type FillPreviewProps = {
   body: { values: string };
 };
 
-export const fillPreviewHandler = async ({
+const fillPreviewHandler = async ({
   scopedDb,
   organizationId,
   templateId,

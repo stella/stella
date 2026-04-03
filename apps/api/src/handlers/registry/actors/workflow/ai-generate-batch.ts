@@ -31,7 +31,7 @@ type GenerateWorkflowDataProps = {
   orgAIConfig?: OrgAIConfig | null;
 };
 
-export type WorkflowDataOutput = Record<
+type WorkflowDataOutput = Record<
   string,
   { answer: Answer; justification: string }
 >;

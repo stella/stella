@@ -11,7 +11,7 @@ import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { isClauseExportPayload } from "./import-export-schema";
 import { updateSearchVector } from "./search-vector";
 
-export const importBodySchema = t.Object({
+const importBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
 });
 
@@ -22,7 +22,7 @@ type ImportProps = {
   body: { file: File };
 };
 
-export const importHandler = async ({
+const importHandler = async ({
   scopedDb,
   organizationId,
   userId,

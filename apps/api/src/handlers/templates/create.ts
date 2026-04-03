@@ -20,7 +20,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export const createTemplateBodySchema = t.Object({
+const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   name: tDefaultVarchar,
   categoryId: t.Optional(tNanoid),
@@ -72,7 +72,7 @@ const parseClientManifest = (value: unknown): TemplateManifest | null => {
   return parsed as TemplateManifest;
 };
 
-export const createTemplateHandler = async ({
+const createTemplateHandler = async ({
   scopedDb,
   organizationId,
   userId,

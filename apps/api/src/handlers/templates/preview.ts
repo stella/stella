@@ -10,7 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
 
-export const previewTemplateParamsSchema = t.Object({
+const previewTemplateParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -20,7 +20,7 @@ type PreviewTemplateProps = {
   templateId: string;
 };
 
-export const previewTemplateHandler = async ({
+const previewTemplateHandler = async ({
   scopedDb,
   organizationId,
   templateId,

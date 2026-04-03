@@ -44,7 +44,7 @@ const extractFieldText = (content: FieldContent): string => {
   }
 };
 
-export const buildSearchDocument = async (
+const buildSearchDocument = async (
   entityId: string,
 ): Promise<SearchDocumentRow | null> => {
   const entity = await db.query.entities.findFirst({

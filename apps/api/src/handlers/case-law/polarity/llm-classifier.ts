@@ -47,7 +47,7 @@ const classificationSchema = v.strictObject({
   confidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
 });
 
-export type ClassificationResult = {
+type ClassificationResult = {
   polarity: Polarity;
   keyPhrase: string;
   confidence: number;
@@ -111,5 +111,3 @@ ${context}`,
         cause: error,
       }),
   });
-
-export { isValidPolarity, phraseToPattern } from "./consts";

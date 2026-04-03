@@ -107,10 +107,10 @@ const SPACED_WORD = /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
  * ingested text to normalize PDF justified spacing where
  * words are padded with extra spaces for alignment.
  */
-export const collapseMultiSpaces = (text: string): string =>
+const collapseMultiSpaces = (text: string): string =>
   text.replace(/ {2,}/g, " ");
 
-export const collapseSpacedLetters = (text: string): string =>
+const collapseSpacedLetters = (text: string): string =>
   collapseMultiSpaces(
     text.replace(SPACED_WORD, (match) => match.replace(/ /g, "")),
   );

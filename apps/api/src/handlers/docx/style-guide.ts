@@ -16,7 +16,7 @@
  * template's styles.xml. For now, hardcoded from our stock
  * template.
  */
-export type StyleDescription = {
+type StyleDescription = {
   id: string;
   name: string;
   description: string;

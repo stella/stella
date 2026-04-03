@@ -119,7 +119,7 @@ export const recencyFactor = (
 
 // -- Combined score ------------------------------------------------------
 
-export type CitationInput = {
+type CitationInput = {
   citingCourt: string;
   citingDate: Date | string | null;
 };

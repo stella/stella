@@ -23,7 +23,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
  * 0-indexed). Covers: SK, PL, AT, CZ-supreme-admin,
  * EE, HR, and similar adapters.
  */
-export type PagePaginationOptions<TResponse> = {
+type PagePaginationOptions<TResponse> = {
   /** Adapter key for error context. */
   adapterKey: string;
   /** Whether page numbers are 0-indexed (default: false = 1-indexed). */

@@ -6,7 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export const resolveRateQuerySchema = t.Object({
+const resolveRateQuerySchema = t.Object({
   userId: t.String({ minLength: 1 }),
   date: t.String({ format: "date" }),
 });
@@ -28,7 +28,7 @@ const resolveRateHandler = createHandler(
   },
 );
 
-export const resolveRate = async ({
+const resolveRate = async ({
   scopedDb,
   workspaceId,
   userId,

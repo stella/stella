@@ -13,7 +13,7 @@ import type {
   ClauseExportPayload,
 } from "./import-export-schema";
 
-export const exportQuerySchema = t.Object({
+const exportQuerySchema = t.Object({
   ids: t.Optional(t.String()),
 });
 
@@ -23,7 +23,7 @@ type ExportProps = {
   query: { ids?: string };
 };
 
-export const exportHandler = async ({
+const exportHandler = async ({
   scopedDb,
   organizationId,
   query,

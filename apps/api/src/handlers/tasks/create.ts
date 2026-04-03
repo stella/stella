@@ -13,7 +13,7 @@ import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { includes } from "@/api/lib/type-guards";
 
-export const createTaskBodySchema = t.Object({
+const createTaskBodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
   parentId: t.Optional(tNanoid),
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),

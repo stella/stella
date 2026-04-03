@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createRateTableBodySchema = t.Object({
+const createRateTableBodySchema = t.Object({
   name: tDefaultVarchar,
   currency: t.String({ minLength: 3, maxLength: 3 }),
   isDefault: t.Optional(t.Boolean()),

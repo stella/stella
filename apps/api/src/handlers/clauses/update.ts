@@ -15,7 +15,7 @@ import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
 
-export const updateClauseBodySchema = t.Object({
+const updateClauseBodySchema = t.Object({
   title: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tNanoid)),
   language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
@@ -25,7 +25,7 @@ export const updateClauseBodySchema = t.Object({
   metadata: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),
 });
 
-export const updateClauseParamsSchema = t.Object({
+const updateClauseParamsSchema = t.Object({
   clauseId: tNanoid,
 });
 
@@ -38,7 +38,7 @@ type UpdateClauseProps = {
   body: UpdateClauseBody;
 };
 
-export const updateClauseHandler = async ({
+const updateClauseHandler = async ({
   scopedDb,
   organizationId,
   clauseId,

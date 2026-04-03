@@ -7,7 +7,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-export const updateTimeEntryBodySchema = t.Object({
+const updateTimeEntryBodySchema = t.Object({
   id: tNanoid,
   dateWorked: t.Optional(t.String({ format: "date" })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),

@@ -5,7 +5,7 @@ import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const batchUpdateBodySchema = t.Object({
+const batchUpdateBodySchema = t.Object({
   ids: t.Array(tNanoid, { minItems: 1, maxItems: 200 }),
   action: t.UnionEnum([
     "approve",

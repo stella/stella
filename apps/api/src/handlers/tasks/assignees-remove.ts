@@ -5,7 +5,7 @@ import { taskAssignees } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const removeAssigneeBodySchema = t.Object({
+const removeAssigneeBodySchema = t.Object({
   taskId: tNanoid,
   userId: t.String({ minLength: 1 }),
 });
