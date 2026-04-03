@@ -1,3 +1,3 @@
 import { env } from "@/api/env";
 
-export const isMockAI = () => env.USE_MOCK_AI === "true";
+export const isMockAI = () => env.USE_MOCK_AI;

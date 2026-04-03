@@ -34,7 +34,7 @@ export const env = createEnv({
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
     isDev: v.optional(v.boolean(), process.env.NODE_ENV !== "production"),
-    USE_MOCK_AI: v.optional(v.picklist(["true", "false"]), "false"),
+    USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
     BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
     EMAIL_PROVIDER: v.pipe(
