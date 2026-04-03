@@ -2,6 +2,15 @@
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
+/**
+ * User-Agent sent on all court website requests.
+ *
+ * Configurable via INGESTION_USER_AGENT env var so forks don't
+ * accidentally identify as the upstream project.
+ */
+export const INGESTION_USER_AGENT =
+  process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
+
 const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
 
 /** SHA-256 content hash via Bun.CryptoHasher. */

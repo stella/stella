@@ -11,6 +11,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
   stripHtml,
@@ -157,6 +158,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
     headers: {
       Accept: "application/sparql-results+json",
       "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": INGESTION_USER_AGENT,
     },
     body: new URLSearchParams({ query }).toString(),
   });
@@ -234,7 +236,10 @@ const fetchFulltext = async (
   signal: AbortSignal,
 ): Promise<string | undefined> => {
   try {
-    const response = await fetch(eurLexHtmlUrl(lang, celex), { signal });
+    const response = await fetch(eurLexHtmlUrl(lang, celex), {
+      signal,
+      headers: { "User-Agent": INGESTION_USER_AGENT },
+    });
 
     if (!response.ok) {
       return;
@@ -391,7 +396,9 @@ export const euEcjAdapter: SourceAdapter = {
         // we've reached today
         const nextDate = addDays(dateFrom, 1);
         const today = toIsoDate(new Date());
-        const nextCursor = nextDate <= today ? nextDate : null;
+        // Park at today when exhausted; never null (null
+        // restarts from 7 days ago).
+        const nextCursor = nextDate <= today ? nextDate : today;
 
         return { decisions, nextCursor };
       },

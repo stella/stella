@@ -13,6 +13,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -153,7 +154,10 @@ const fetchFinaldoc = async (
             AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
           ])
         : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "User-Agent": INGESTION_USER_AGENT,
+      },
     });
 
     if (!response.ok) {
@@ -399,7 +403,10 @@ export const czRegionalAdapter: SourceAdapter = {
 
         const response = await fetch(url, {
           signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          headers: { Accept: "application/json" },
+          headers: {
+            Accept: "application/json",
+            "User-Agent": INGESTION_USER_AGENT,
+          },
         });
 
         if (!response.ok) {
@@ -415,7 +422,7 @@ export const czRegionalAdapter: SourceAdapter = {
               nextCursor:
                 next <= today
                   ? makeCursor({ date: next, page: 0, emptyDays: empty })
-                  : null,
+                  : makeCursor({ date: today, page: 0, emptyDays: 0 }),
             };
           }
 
@@ -506,7 +513,7 @@ export const czRegionalAdapter: SourceAdapter = {
           nextCursor:
             next <= today
               ? makeCursor({ date: next, page: 0, emptyDays: empty })
-              : null,
+              : makeCursor({ date: today, page: 0, emptyDays: 0 }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),

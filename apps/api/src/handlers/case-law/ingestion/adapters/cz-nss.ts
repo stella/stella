@@ -9,6 +9,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
   parseCeDate,
@@ -544,7 +545,7 @@ type SessionState = {
 
 /** Common headers for all requests to the NSS website. */
 const COMMON_HEADERS = {
-  "User-Agent": "Stella/1.0 (legal research; +https://stll.app)",
+  "User-Agent": INGESTION_USER_AGENT,
 } as const;
 
 /**
@@ -828,9 +829,11 @@ export const czNssAdapter: SourceAdapter = {
         const { date, page } = parseCursor(cursor);
         const today = todayIso();
 
-        // If the date is in the future, we are done
+        // If the date is in the future, park at today so we
+        // only re-check today on the next cycle (never null —
+        // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: null };
+          return { decisions: [], nextCursor: `${today}:0` };
         }
 
         // 1. Get or reuse session
@@ -848,7 +851,7 @@ export const czNssAdapter: SourceAdapter = {
           const next = nextDay(date);
           return {
             decisions: [],
-            nextCursor: next <= today ? `${next}:0` : null,
+            nextCursor: next <= today ? `${next}:0` : `${today}:0`,
           };
         }
 
@@ -914,7 +917,7 @@ export const czNssAdapter: SourceAdapter = {
         const next = nextDay(date);
         return {
           decisions,
-          nextCursor: next <= today ? `${next}:0` : null,
+          nextCursor: next <= today ? `${next}:0` : `${today}:0`,
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),

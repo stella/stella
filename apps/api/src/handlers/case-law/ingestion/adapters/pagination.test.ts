@@ -87,7 +87,7 @@ describe("createPagePaginatedFetch", () => {
     expect(page.nextCursor).toBe("2");
   });
 
-  test("returns null cursor on last page", async () => {
+  test("parks cursor one page back on last page", async () => {
     await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
     restore = await mockFetchWithFixtures([
       { pattern: "/test-api", fixture: FIXTURE_NAME },
@@ -96,7 +96,9 @@ describe("createPagePaginatedFetch", () => {
     const fetchPage = createTestFetch();
     const result = await fetchPage(null, {});
     const page = result.unwrap();
-    expect(page.nextCursor).toBeNull();
+    // Should park at firstPage (1) instead of null to avoid
+    // restarting the full scan.
+    expect(page.nextCursor).toBe("1");
   });
 
   test("returns error for invalid cursor", async () => {
