@@ -355,9 +355,6 @@ export const validateAndLog = (
   return result;
 };
 
-// Re-export old name for backward compatibility
-export const validateAstCompleteness = validateAst;
-
 /**
  * Build minimal validation HTML from structured paragraphs.
  *
