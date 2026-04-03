@@ -6,6 +6,10 @@
  * are persisted in RDS after each cycle; safe to restart
  * at any time.
  *
+ * Each cycle writes an event row to `case_law_ingestion_events`
+ * for observability and touches `/tmp/ingestion.lock` as a
+ * heartbeat for the Docker health check.
+ *
  * Usage:
  *   bun apps/api/scripts/ingest-case-law.ts [adapter-key]
  *
@@ -15,14 +19,25 @@
 
 import { createScopedDb } from "@/api/db";
 import { db } from "@/api/db/root";
-import { caseLawSources } from "@/api/db/schema";
+import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { toSafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
 
 type SourceDef = {
   adapterKey: string;
   name: string;
+};
+
+const HEARTBEAT_PATH = "/tmp/ingestion.lock";
+
+const writeHeartbeat = () => {
+  try {
+    Bun.write(HEARTBEAT_PATH, new Date().toISOString());
+  } catch {
+    // Non-fatal; health check will notice staleness
+  }
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
@@ -123,6 +138,8 @@ const daysAgoCursor = (n: number): string => {
 const filterKey = process.argv[2];
 
 const main = async () => {
+  writeHeartbeat();
+
   const toRun = filterKey
     ? SOURCES.filter((s) => s.adapterKey === filterKey)
     : SOURCES;
@@ -141,25 +158,72 @@ const main = async () => {
         adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
       const source = await ensureSource(adapterKey, name, initialCursor);
+      const cursorBefore = source.syncCursor;
 
-      console.log(
-        `\nIngesting: ${name} (cursor: ${source.syncCursor ?? "start"})`,
-      );
+      console.log(`\nIngesting: ${name} (cursor: ${cursorBefore ?? "start"})`);
+
+      const startedAt = new Date();
+      const t0 = performance.now();
 
       // SAFETY: CLI script operates on global case law
       // data (no tenant).
       const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
-      const result = await runIngestionPipeline({
-        source,
-        scopedDb,
-      });
 
-      console.log(
-        `  Inserted: ${result.inserted}, ` +
-          `Skipped: ${result.skipped}, ` +
-          `Search failures: ${result.searchVectorFailures}`,
-      );
-      console.log(`  Next cursor: ${result.nextCursor ?? "done"}`);
+      let status: "completed" | "failed" = "completed";
+      let errorMessage: string | null = null;
+      let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null =
+        null;
+
+      try {
+        result = await runIngestionPipeline({ source, scopedDb });
+      } catch (error) {
+        status = "failed";
+        errorMessage =
+          `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
+            0,
+            2048,
+          );
+      }
+
+      const durationMs = Math.round(performance.now() - t0);
+
+      // Persist ingestion event
+      try {
+        await db.insert(caseLawIngestionEvents).values({
+          sourceId: source.id,
+          status,
+          inserted: result?.inserted ?? 0,
+          skipped: result?.skipped ?? 0,
+          searchVectorFailures: result?.searchVectorFailures ?? 0,
+          pagesProcessed: result?.pagesProcessed ?? 0,
+          cursorBefore,
+          // When the pipeline failed (result is null), cursor did not advance.
+          // When it succeeded, use the actual nextCursor (which may be null if exhausted).
+          cursorAfter: result !== null ? result.nextCursor : cursorBefore,
+          durationMs,
+          errorMessage,
+          startedAt,
+        });
+      } catch (eventError) {
+        console.error("Failed to write ingestion event:", eventError);
+      }
+
+      writeHeartbeat();
+
+      if (status === "failed") {
+        throw new Error(errorMessage ?? "Pipeline failed");
+      }
+
+      if (result) {
+        console.log(
+          `  Inserted: ${result.inserted}, ` +
+            `Skipped: ${result.skipped}, ` +
+            `Search failures: ${result.searchVectorFailures}, ` +
+            `Pages: ${result.pagesProcessed}, ` +
+            `Duration: ${durationMs}ms`,
+        );
+        console.log(`  Next cursor: ${result.nextCursor ?? "done"}`);
+      }
     }),
   );
 
@@ -191,6 +255,7 @@ if (filterKey) {
 
 // All adapters: continuous daemon loop.
 console.log("Ingestion daemon started.");
+writeHeartbeat();
 while (true) {
   try {
     await main();

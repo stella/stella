@@ -240,7 +240,7 @@ export const getSessionAndMemberRole = async (
   };
 };
 
-const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
+export const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
 
 type AccessibleWorkspace = {
   id: SafeId<"workspace">;
