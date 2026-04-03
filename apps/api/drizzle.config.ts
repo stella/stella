@@ -1,9 +1,8 @@
 import { defineConfig } from "drizzle-kit";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-  throw new Error("DATABASE_URL is required");
-}
+// Fallback keeps knip and CI happy when DATABASE_URL is unset.
+// drizzle-kit push/generate will fail fast on connection, not silently.
+const url = process.env.DATABASE_URL ?? "postgresql://invalid";
 
 export default defineConfig({
   out: "./drizzle",
