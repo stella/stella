@@ -1,3 +1,5 @@
+import { isRecord } from "@/api/lib/type-guards";
+
 import { isClauseBody } from "./types";
 import type { ClauseBody } from "./types";
 
@@ -21,34 +23,28 @@ export type ClauseExportPayload = {
 export const isClauseExportPayload = (
   value: unknown,
 ): value is ClauseExportPayload => {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
 
-  // SAFETY: value is object; any object is Record<string, unknown>
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const obj = value as Record<string, unknown>;
-  if (obj.version !== 1) {
+  if (value.version !== 1) {
     return false;
   }
-  if (typeof obj.exportedAt !== "string") {
+  if (typeof value.exportedAt !== "string") {
     return false;
   }
-  if (!Array.isArray(obj.clauses)) {
+  if (!Array.isArray(value.clauses)) {
     return false;
   }
 
-  for (const clause of obj.clauses) {
-    if (typeof clause !== "object" || clause === null) {
+  for (const clause of value.clauses) {
+    if (!isRecord(clause)) {
       return false;
     }
-    // SAFETY: clause is object; any object is Record<string, unknown>
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-    const c = clause as Record<string, unknown>;
-    if (typeof c.title !== "string" || !c.title) {
+    if (typeof clause.title !== "string" || !clause.title) {
       return false;
     }
-    if (!isClauseBody(c.body)) {
+    if (!isClauseBody(clause.body)) {
       return false;
     }
   }

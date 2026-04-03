@@ -29,6 +29,10 @@ const orgAIConfigSchema = v.strictObject({
   ),
   region: v.optional(v.picklist(["eu", "global", "ch"])),
 });
+const parseOrgAIConfig = v.safeParser(orgAIConfigSchema);
+
+export const isOrgAIConfig = (value: unknown): value is OrgAIConfig =>
+  parseOrgAIConfig(value).success;
 
 /**
  * Encrypt an OrgAIConfig for storage.

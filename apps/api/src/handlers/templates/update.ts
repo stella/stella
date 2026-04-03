@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,7 +14,6 @@ import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { s3 } from "@/api/lib/s3";
-import { isRecord } from "@/api/lib/type-guards";
 
 const buildVersionS3Key = (
   organizationId: string,
@@ -36,7 +36,7 @@ type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
 type UpdateTemplateProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   templateId: string;
   body: UpdateTemplateBody;
 };
@@ -49,22 +49,7 @@ const parseManifest = (json: string): TemplateManifest | null => {
     return null;
   }
 
-  if (!isRecord(parsed)) {
-    return null;
-  }
-  if (!("version" in parsed) || typeof parsed.version !== "number") {
-    return null;
-  }
-  if (!("fields" in parsed) || !Array.isArray(parsed.fields)) {
-    return null;
-  }
-  if (!("conditions" in parsed) || !Array.isArray(parsed.conditions)) {
-    return null;
-  }
-
-  // SAFETY: top-level shape validated above
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  return parsed as TemplateManifest;
+  return isTemplateManifest(parsed) ? parsed : null;
 };
 
 const updateTemplateHandler = async ({

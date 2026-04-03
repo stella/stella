@@ -1,7 +1,6 @@
 import { valibotSchema } from "@ai-sdk/valibot";
 import type { Tool, ToolExecutionOptions } from "ai";
-// eslint-disable-next-line no-restricted-imports -- defineTool wraps tool() internally
-import { tool } from "ai";
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -11,30 +10,30 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { captureError } from "@/api/lib/analytics";
-// eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CONTENT_MAX_CHARS = 8000;
-
-/** Wrapper around `tool()` from "ai" that automatically
- *  wraps the execute callback with error handling: unhandled
- *  errors become structured `{ error: string }` objects the
- *  model can act on, instead of throwing and causing an
- *  opaque output-error state.
- *
- *  Usage: replace `tool({ ... })` with
- *  `defineTool({ name: "myTool", ... })`. */
-export const defineTool = <INPUT, OUTPUT>({
-  name,
-  execute,
-  ...rest
-}: Omit<Tool<INPUT, OUTPUT>, "execute"> & {
+type ToolErrorResult = { error: string };
+type WrappedTool<INPUT, OUTPUT> = Tool<INPUT, OUTPUT | ToolErrorResult>;
+type DefineToolReturn<INPUT, OUTPUT> = {
+  description?: string;
+  inputSchema: WrappedTool<INPUT, OUTPUT>["inputSchema"];
+  needsApproval?: WrappedTool<INPUT, OUTPUT>["needsApproval"];
+  execute: (
+    args: INPUT,
+    options: ToolExecutionOptions,
+  ) => OUTPUT | ToolErrorResult | Promise<OUTPUT | ToolErrorResult>;
+};
+type DefineToolOptions<INPUT, OUTPUT> = {
+  description?: string;
+  inputSchema: WrappedTool<INPUT, OUTPUT>["inputSchema"];
+  needsApproval?: WrappedTool<INPUT, OUTPUT>["needsApproval"];
   /** Tool name used for error reporting. */
   name: string;
   /** Execute function. Receives parsed args and, optionally,
@@ -45,25 +44,45 @@ export const defineTool = <INPUT, OUTPUT>({
     args: INPUT,
     options?: ToolExecutionOptions,
   ) => OUTPUT | Promise<OUTPUT>;
-}): Tool<INPUT, OUTPUT | { error: string }> =>
-  // SAFETY: AI SDK `tool()` infers OUTPUT from execute;
-  // cast widens to include the error branch we added.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-  tool({
-    ...rest,
+};
+
+/** Wrapper around AI SDK tools that automatically wraps the
+ *  execute callback with error handling: unhandled errors
+ *  become structured `{ error: string }` objects the model
+ *  can act on, instead of throwing and causing an opaque
+ *  output-error state.
+ *
+ *  Intentionally returns a structural `Tool` instead of
+ *  calling `tool()`: in `ai@6.0.116`, `tool()` is a runtime
+ *  no-op used for inference, and reintroducing it here would
+ *  require unsafe casts to widen the output with the error
+ *  branch. */
+export function defineTool<INPUT, OUTPUT>(
+  options: DefineToolOptions<INPUT, OUTPUT>,
+): WrappedTool<INPUT, OUTPUT>;
+export function defineTool<INPUT, OUTPUT>({
+  name,
+  execute,
+  ...rest
+}: DefineToolOptions<INPUT, OUTPUT>): DefineToolReturn<INPUT, OUTPUT> {
+  return {
+    ...(rest.description === undefined
+      ? {}
+      : { description: rest.description }),
+    ...(rest.needsApproval === undefined
+      ? {}
+      : { needsApproval: rest.needsApproval }),
+    inputSchema: rest.inputSchema,
     execute: async (args: INPUT, options: ToolExecutionOptions) => {
       try {
         return await execute(args, options);
       } catch (error) {
         captureError(error, { toolName: name });
-        // SAFETY: single-hop cast; error branch returns { error }
-        // which is part of the declared Tool return union.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-        return { error: "Tool execution failed" } as OUTPUT;
+        return { error: "Tool execution failed" };
       }
     },
-    // eslint-disable-next-line typescript/consistent-type-assertions, @typescript-eslint/no-unsafe-type-assertion
-  } as Tool<INPUT, OUTPUT | { error: string }>);
+  };
+}
 
 /** Summarize a field value into a human-readable string. */
 const formatFieldValue = (content: FieldContent): string => {
@@ -117,20 +136,31 @@ type MatterToolsContext = {
   /** Validated workspace IDs the AI is allowed to access. */
   allowedWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
 };
 
 const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) => {
-  const allowedSet: ReadonlySet<string> = new Set(allowedIds);
+  const allowedIdsByValue = new Map<string, SafeId<"workspace">>(
+    allowedIds.map((id) => [id, id]),
+  );
   return v.pipe(
     v.string(),
     v.description(
       "The workspace/matter ID to operate on. " +
         `Allowed values: ${allowedIds.join(", ")}`,
     ),
-    v.check((id) => allowedSet.has(id), "Workspace not in the allowed set"),
-    v.transform((id) => toSafeId<"workspace">(id)),
+    v.check(
+      (id) => allowedIdsByValue.has(id),
+      "Workspace not in the allowed set",
+    ),
+    v.transform((id) => {
+      const allowedId = allowedIdsByValue.get(id);
+      if (!allowedId) {
+        panic("Workspace ID passed validation but was not in the allowlist");
+      }
+      return allowedId;
+    }),
   );
 };
 
@@ -504,8 +534,13 @@ export const createMatterTools = ({
         // for non-null values; null values hit the isEmpty
         // path which skips the insert.
         let content!: FieldContent;
-        // oxlint-disable-next-line typescript/switch-exhaustiveness-check
         switch (propType) {
+          case "file":
+            return {
+              error:
+                'Property is "file"; use the document ' +
+                "creation or upload tools instead.",
+            };
           case "text": {
             if (typeof value !== "string") {
               return {
@@ -596,9 +631,7 @@ export const createMatterTools = ({
             break;
           }
           default:
-            return {
-              error: `Unsupported property type "${propType}".`,
-            };
+            panic("Unhandled property type in updateEntityFields tool");
         }
 
         const entity = await scopedDb((tx) =>
@@ -1103,5 +1136,5 @@ export const validateWorkspaceIds = async (
     }),
   );
 
-  return rows.map((w) => toSafeId<"workspace">(w.id));
+  return rows.map((w) => brandPersistedWorkspaceId(w.id));
 };

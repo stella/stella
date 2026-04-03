@@ -18,7 +18,7 @@ type CreateMatterLinkBody = Static<typeof createMatterLinkBodySchema>;
 type CreateMatterLinkProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
   body: CreateMatterLinkBody;
 };
 

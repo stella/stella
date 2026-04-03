@@ -8,6 +8,7 @@
  * DOM before `patchDocument()` runs.
  */
 
+import { panic } from "better-result";
 import { patchDocument } from "docx";
 import type { IPatch } from "docx";
 import JSZip from "jszip";
@@ -30,38 +31,13 @@ import type {
   TemplateDataValue,
   TemplateStructureError,
 } from "./types";
+import { isTemplateData } from "./types";
 
 type PatchValues = Record<string, RichPatchValue>;
 
-/**
- * Check whether a value looks like a plain PatchValues map
- * (all values are string or RichPatchValue) or a richer
- * TemplateData object (contains booleans, numbers, arrays,
- * or nested objects).
- */
-const isTemplateData = (
-  values: PatchValues | TemplateData,
-): values is TemplateData => {
-  for (const value of Object.values(values)) {
-    if (typeof value === "boolean") {
-      return true;
-    }
-    if (typeof value === "number") {
-      return true;
-    }
-    if (Array.isArray(value)) {
-      return true;
-    }
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      !("paragraphs" in value)
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
+const isPatchValues = (
+  value: PatchValues | TemplateData,
+): value is PatchValues => Object.values(value).every(isPatchableValue);
 
 /**
  * Fill values into a template buffer using `patchDocument`.
@@ -162,7 +138,9 @@ export const fillTemplate = async (
   let effectiveValues: PatchValues;
   let structureErrors: TemplateStructureError[] = [];
 
-  if (isTemplateData(values)) {
+  if (isPatchValues(values)) {
+    effectiveValues = values;
+  } else if (isTemplateData(values)) {
     // Checks for block directives internally; returns null
     // when none are found
     const result = await preProcessBlockDirectives(
@@ -181,7 +159,7 @@ export const fillTemplate = async (
       effectiveValues = flattenTemplateData(values);
     }
   } else {
-    effectiveValues = values;
+    panic("fillTemplate received values outside the supported data model");
   }
 
   // Discover what the template actually contains

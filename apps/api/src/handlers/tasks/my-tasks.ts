@@ -1,8 +1,9 @@
 import type { ScopedDb } from "@/api/db";
+import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 
 type MyTasksProps = {
-  userId: string;
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
 };
 

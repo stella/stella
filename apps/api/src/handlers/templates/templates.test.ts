@@ -101,7 +101,7 @@ const DOCX_MIME =
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const fakeOrgId = toSafeId<"organization">("org_test");
-const fakeUserId = "user_test";
+const fakeUserId = toSafeId<"user">("user_test");
 
 /** No-op ScopedDb stub for tests. Calls the callback but
  *  returns `undefined`; sufficient for handlers where the

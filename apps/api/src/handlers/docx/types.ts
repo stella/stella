@@ -272,6 +272,124 @@ export type TemplateManifest = {
   conditions: NamedCondition[];
 };
 
+const isRecordLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isInputType = (value: unknown): value is InputType => {
+  switch (value) {
+    case "text":
+    case "textarea":
+    case "number":
+    case "boolean":
+    case "date":
+    case "select":
+      return true;
+    default:
+      return false;
+  }
+};
+
+const isFieldValidation = (value: unknown): value is FieldValidation => {
+  if (!isRecordLike(value)) {
+    return false;
+  }
+
+  return (
+    (value.required === undefined || typeof value.required === "boolean") &&
+    (value.minLength === undefined || typeof value.minLength === "number") &&
+    (value.maxLength === undefined || typeof value.maxLength === "number") &&
+    (value.min === undefined || typeof value.min === "number") &&
+    (value.max === undefined || typeof value.max === "number") &&
+    (value.pattern === undefined || typeof value.pattern === "string")
+  );
+};
+
+export const isFieldMeta = (value: unknown): value is FieldMeta => {
+  if (!isRecordLike(value) || typeof value.path !== "string") {
+    return false;
+  }
+
+  return (
+    (value.label === undefined || typeof value.label === "string") &&
+    (value.inputType === undefined || isInputType(value.inputType)) &&
+    (value.options === undefined ||
+      (Array.isArray(value.options) &&
+        value.options.every((option) => typeof option === "string"))) &&
+    (value.validation === undefined || isFieldValidation(value.validation)) &&
+    (value.required === undefined || typeof value.required === "boolean")
+  );
+};
+
+export const isNamedCondition = (value: unknown): value is NamedCondition =>
+  isRecordLike(value) &&
+  typeof value.name === "string" &&
+  typeof value.expression === "string" &&
+  (value.label === undefined || typeof value.label === "string");
+
+const isRichRun = (value: unknown): value is RichRun =>
+  isRecordLike(value) &&
+  typeof value.text === "string" &&
+  (value.bold === undefined || typeof value.bold === "boolean") &&
+  (value.italic === undefined || typeof value.italic === "boolean");
+
+const isRichPatchValueObject = (value: unknown): value is RichPatchValue =>
+  isRecordLike(value) &&
+  Array.isArray(value.paragraphs) &&
+  value.paragraphs.every(
+    (paragraph) =>
+      isRecordLike(paragraph) &&
+      Array.isArray(paragraph.runs) &&
+      paragraph.runs.every(isRichRun),
+  );
+
+const TEMPLATE_DATA_MAX_DEPTH = 64;
+
+const isTemplateDataValueAtDepth = (
+  value: unknown,
+  depth: number,
+): value is TemplateDataValue => {
+  if (depth > TEMPLATE_DATA_MAX_DEPTH) {
+    return false;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every((item) => isTemplateDataValueAtDepth(item, depth + 1));
+  }
+  if (isRichPatchValueObject(value)) {
+    return true;
+  }
+  if (isRecordLike(value)) {
+    return Object.values(value).every((item) =>
+      isTemplateDataValueAtDepth(item, depth + 1),
+    );
+  }
+  return false;
+};
+
+export const isTemplateDataValue = (
+  value: unknown,
+): value is TemplateDataValue => isTemplateDataValueAtDepth(value, 0);
+
+export const isTemplateData = (value: unknown): value is TemplateData =>
+  isRecordLike(value) &&
+  Object.values(value).every((item) => isTemplateDataValueAtDepth(item, 0));
+
+export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
+  isRecordLike(value) &&
+  typeof value.version === "number" &&
+  Number.isFinite(value.version) &&
+  Array.isArray(value.fields) &&
+  value.fields.every(isFieldMeta) &&
+  Array.isArray(value.conditions) &&
+  value.conditions.every(isNamedCondition);
+
 export type ResolvedField = {
   path: string;
   kind: TemplateFieldKind;

@@ -5,6 +5,7 @@
  */
 
 import { sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -15,28 +16,30 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
-export type AnyDrizzle = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  transaction: (fn: (tx: any) => any) => any;
+type ScopedTransactionBase = {
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
 };
 
-export type TransactionOf<TDatabase extends AnyDrizzle> = Parameters<
-  Parameters<TDatabase["transaction"]>[0]
->[0];
+export type AnyDrizzle<
+  TTransaction extends ScopedTransactionBase = ScopedTransactionBase,
+> = {
+  transaction: <TResult>(
+    fn: (tx: TTransaction) => Promise<TResult>,
+  ) => Promise<TResult>;
+};
 
-export const createScopedDb = <TDatabase extends AnyDrizzle>(
-  database: TDatabase,
+export type TransactionOf<TDatabase extends AnyDrizzle> =
+  TDatabase extends AnyDrizzle<infer TTransaction> ? TTransaction : never;
+
+export const createScopedDb = <TTransaction extends ScopedTransactionBase>(
+  database: AnyDrizzle<TTransaction>,
   workspaceIds: SafeId<"workspace">[],
   organizationId: SafeId<"organization">,
 ) => {
   const wsIds = `{${workspaceIds.join(",")}}`;
 
-  return async <T>(
-    fn: (tx: TransactionOf<TDatabase>) => Promise<T>,
-  ): Promise<T> =>
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- generic AnyDrizzle constraint
-    await database.transaction(async (tx: TransactionOf<TDatabase>) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- tx type is generic
+  return async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx: TTransaction) => {
       await tx.execute(
         sql`SELECT
           set_config('role', '${sql.raw(stella.name)}', true),

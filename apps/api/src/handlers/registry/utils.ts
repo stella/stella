@@ -20,10 +20,12 @@ import {
   getSessionAndMemberRole,
   resolveAccessibleWorkspaces,
 } from "@/api/lib/auth";
-// oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  brandActorSessionIdentity,
+  brandValidatedWorkflowActorKey,
+} from "@/api/lib/safe-id-boundaries";
 
 export const createUserError = (
   errorCode: UserErrorCode,
@@ -35,9 +37,14 @@ export const createUserError = (
     metadata: config?.metadata,
   });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// oxlint-disable-next-line typescript-eslint/no-explicit-any -- any is intentional here
-type AnyActorContext = ActorContext<any, any, any, any, any, any>;
+type AnyActorContext = ActorContext<
+  unknown,
+  unknown,
+  unknown,
+  unknown,
+  unknown,
+  undefined
+>;
 
 /** Context with a broadcast method. Accepts any actor context (including chat). */
 type BroadcastCapableContext = Pick<AnyActorContext, "broadcast">;
@@ -53,7 +60,7 @@ export type GlobalActorConnState = {
 };
 
 export type UserActorConnState = GlobalActorConnState & {
-  userId: string;
+  userId: SafeId<"user">;
 };
 
 type ActorConnState = GlobalActorConnState & {
@@ -90,8 +97,10 @@ const validateActorAuth = async (key: string[], params: unknown) => {
     throw createUserError("forbidden");
   }
 
-  const organizationId = toSafeId<"organization">(rawOrgId);
-  const userId = toSafeId<"user">(session.user.id);
+  const { organizationId, userId } = brandActorSessionIdentity({
+    organizationId: rawOrgId,
+    userId: session.user.id,
+  });
 
   identify({
     distinctId: userId,
@@ -112,7 +121,7 @@ const validateActorAuth = async (key: string[], params: unknown) => {
   return {
     authToken,
     organizationId,
-    sessionUserId: session.user.id,
+    sessionUserId: userId,
     parsedKey,
     accessibleWorkspaces,
     accessibleWorkspaceIds,
@@ -159,7 +168,7 @@ export const validateUserActorSession = async (
   return {
     authToken,
     organizationId,
-    userId: parsedKey.userId,
+    userId: sessionUserId,
     accessibleWorkspaceIds,
     orgAIConfig,
   };
@@ -193,7 +202,7 @@ export const validateActorSession = async (
   return {
     authToken,
     organizationId,
-    workspaceId: toSafeId<"workspace">(workspaceId),
+    workspaceId: ws.id,
     accessibleWorkspaceIds,
     orgAIConfig,
   };
@@ -219,10 +228,7 @@ export const validateActorInput = <T>(
  *  branding the parsed values is sound. */
 export const parseBrandedWorkflowActorKey = (key: string | string[]) => {
   const parsed = parseWorkflowActorKey(key);
-  return {
-    organizationId: toSafeId<"organization">(parsed.organizationId),
-    workspaceId: toSafeId<"workspace">(parsed.workspaceId),
-  };
+  return brandValidatedWorkflowActorKey(parsed);
 };
 
 export const resetActorState = <TContext extends ActionContextOf<ActorsUnion>>(

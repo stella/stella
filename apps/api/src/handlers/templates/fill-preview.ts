@@ -6,7 +6,7 @@ import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
-import type { TemplateData } from "@/api/handlers/docx/types";
+import { isTemplateData } from "@/api/handlers/docx/types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -87,9 +87,15 @@ const fillPreviewHandler = async ({
     }
   }
 
-  // SAFETY: same as fillByIdHandler
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const result = await fillTemplate(buffer, record as TemplateData);
+  if (!isTemplateData(record)) {
+    return status(400, {
+      message:
+        "'values' must contain only strings, numbers, booleans, " +
+        "arrays, nested objects, or rich-text patch values.",
+    });
+  }
+
+  const result = await fillTemplate(buffer, record);
 
   // Extract text from the filled document
   const { paragraphs, charCount } = await extractText(result.buffer);

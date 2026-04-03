@@ -20,6 +20,46 @@ export const hashContent = (input: string): string => {
   return hasher.digest("hex");
 };
 
+export const isArrayOf = <T>(
+  value: unknown,
+  guard: (item: unknown) => item is T,
+): value is T[] => Array.isArray(value) && value.every(guard);
+
+export const isNullishString = (
+  value: unknown,
+): value is string | null | undefined =>
+  value === undefined || value === null || typeof value === "string";
+
+export const isNullishNumber = (
+  value: unknown,
+): value is number | null | undefined =>
+  value === undefined || value === null || typeof value === "number";
+
+export const isNullishValue = <T>(
+  value: unknown,
+  guard: (item: unknown) => item is T,
+): value is T | null | undefined =>
+  value === undefined || value === null || guard(value);
+
+export const isNullishArrayOf = <T>(
+  value: unknown,
+  guard: (item: unknown) => item is T,
+): value is T[] | null | undefined =>
+  value === undefined || value === null || isArrayOf(value, guard);
+
+export const isNullishOneOrArrayOf = <T>(
+  value: unknown,
+  guard: (item: unknown) => item is T,
+): value is T | T[] | null | undefined =>
+  value === undefined ||
+  value === null ||
+  guard(value) ||
+  isArrayOf(value, guard);
+
+export const toOptionalValue = <T>(
+  value: T | null | undefined,
+): T | undefined => value ?? undefined;
+
 /**
  * Strip HTML tags, decode common entities (including numeric
  * &#xNN; and &#NNNN; forms), and collapse excessive newlines.

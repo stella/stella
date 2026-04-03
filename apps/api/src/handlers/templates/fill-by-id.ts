@@ -6,7 +6,7 @@ import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
-import type { TemplateData } from "@/api/handlers/docx/types";
+import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -37,7 +37,7 @@ const PDF_MIME_TYPE = "application/pdf";
 type FillByIdProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   templateId: string;
   body: { values: string };
   query: { format?: "docx" | "pdf" };
@@ -103,11 +103,15 @@ const fillByIdHandler = async ({
     }
   }
 
-  // SAFETY: `parsed` is validated as a non-null, non-array object
-  // with no null values. `fillTemplate` handles arbitrary value
-  // shapes via `isTemplateData` discrimination internally.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const result = await fillTemplate(buffer, parsed as TemplateData);
+  if (!isTemplateData(parsed)) {
+    return status(400, {
+      message:
+        "'values' must contain only strings, numbers, booleans, " +
+        "arrays, nested objects, or rich-text patch values.",
+    });
+  }
+
+  const result = await fillTemplate(buffer, parsed);
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";

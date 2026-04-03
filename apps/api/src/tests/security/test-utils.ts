@@ -22,18 +22,11 @@ export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 const createTestDb = async (): Promise<TestDatabase> => {
   const client = await PGlite.create();
   const testDb = drizzle({ client, schema: allSchema });
+  const pushSchemaDb = drizzle({ client });
 
   await testDb.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
 
-  // SAFETY: pushSchema's second parameter type is overly
-  // narrow in drizzle-kit beta — it rejects databases
-  // created with a schema generic. The runtime value is
-  // compatible; only the branded type wrapper differs.
-  const { sqlStatements } = await pushSchema(
-    allSchema,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    testDb as unknown as Parameters<typeof pushSchema>[1],
-  );
+  const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
     await testDb.execute(sql.raw(statement));
   }

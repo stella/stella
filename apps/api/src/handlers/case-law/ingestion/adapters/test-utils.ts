@@ -26,23 +26,12 @@
  * ```
  */
 
-import { mock } from "bun:test";
-
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 /** Load a fixture file as a string. */
 const loadFixture = async (filename: string): Promise<string> => {
   const path = new URL(filename, FIXTURES_DIR);
   return await Bun.file(path).text();
-};
-
-/** Load a fixture file as parsed JSON. */
-export const loadJsonFixture = async <T = unknown>(
-  filename: string,
-): Promise<T> => {
-  const text = await loadFixture(filename);
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-  return JSON.parse(text) as T;
 };
 
 /** Save response data as a fixture file. */
@@ -110,35 +99,40 @@ export const mockFetchWithFixtures = async (
     })),
   );
 
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- mock signature matches fetch for test purposes
-  globalThis.fetch = mock(async (input: string | URL | Request) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
+  const mockedFetch: typeof fetch = Object.assign(
+    async (input: string | URL | Request): Promise<Response> => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
 
-    // Longest-match: prefer more specific patterns
-    const match = loaded
-      .filter((r) => url.includes(r.pattern))
-      .toSorted((a, b) => b.pattern.length - a.pattern.length)
-      .at(0);
+      // Longest-match: prefer more specific patterns
+      const match = loaded
+        .filter((r) => url.includes(r.pattern))
+        .toSorted((a, b) => b.pattern.length - a.pattern.length)
+        .at(0);
 
-    if (match) {
-      return await Promise.resolve(
-        new Response(match.body, {
-          status: match.status ?? 200,
-          headers: {
-            "Content-Type":
-              match.contentType ?? inferContentType(match.fixture),
-          },
-        }),
-      );
-    }
+      if (match) {
+        return await Promise.resolve(
+          new Response(match.body, {
+            status: match.status ?? 200,
+            headers: {
+              "Content-Type":
+                match.contentType ?? inferContentType(match.fixture),
+            },
+          }),
+        );
+      }
 
-    return new Response("Not found", { status: 404 });
-  }) as unknown as typeof fetch;
+      return new Response("Not found", { status: 404 });
+    },
+    {
+      preconnect: originalFetch.preconnect.bind(originalFetch),
+    },
+  );
+  globalThis.fetch = mockedFetch;
 
   return () => {
     globalThis.fetch = originalFetch;

@@ -118,8 +118,14 @@ describe("branded types", () => {
   describe("createScopedDb", () => {
     test("requires branded workspace ID arrays", () => {
       const fakeDb = {
-        transaction: async (fn: (tx: object) => Promise<unknown>) =>
-          await fn({}),
+        transaction: async <TResult>(
+          fn: (tx: {
+            execute: (query: unknown) => Promise<unknown>;
+          }) => Promise<TResult>,
+        ) =>
+          await fn({
+            execute: async (_query: unknown) => ({}),
+          }),
       } satisfies AnyDrizzle;
 
       createScopedDb(

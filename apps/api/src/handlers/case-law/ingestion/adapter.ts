@@ -14,9 +14,7 @@ export type EmptyAst = Record<string, never>;
  * Constant empty AST for adapters without a parser.
  * Avoids `{} as EmptyAst` casts at every call site.
  */
-// SAFETY: empty object satisfies Record<string, never> at runtime
-// eslint-disable-next-line typescript/consistent-type-assertions
-export const EMPTY_AST: EmptyAst = {} as EmptyAst;
+export const EMPTY_AST: EmptyAst = {};
 
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {

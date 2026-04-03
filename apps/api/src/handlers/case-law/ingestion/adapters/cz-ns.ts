@@ -16,11 +16,17 @@ import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
+  isNullishArrayOf,
+  isNullishOneOrArrayOf,
+  isNullishString,
+  isNullishValue,
   parseCeDate,
   stripHtml,
+  toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
@@ -43,18 +49,55 @@ const PAGE_SIZE = 20;
 
 /** Domino ReadViewEntries JSON shape. */
 type DominoViewEntry = {
-  "@position"?: string;
-  "@unid"?: string;
-  entrydata?: {
-    "@name"?: string;
-    text?: { "0"?: string };
-  }[];
+  "@position"?: string | null;
+  "@unid"?: string | null;
+  entrydata?:
+    | {
+        "@name"?: string | null;
+        text?: { "0"?: string | null } | null;
+      }[]
+    | null;
 };
 
 type DominoViewResponse = {
-  "@toplevelentries"?: string;
-  viewentry?: DominoViewEntry[];
+  "@toplevelentries"?: string | null;
+  viewentry?: DominoViewEntry | DominoViewEntry[] | null;
 };
+
+const isDominoText = (
+  value: unknown,
+): value is { "0"?: string | null | undefined } =>
+  isRecord(value) && isNullishString(value["0"]);
+
+const isDominoEntryData = (
+  value: unknown,
+): value is {
+  "@name"?: string | null;
+  text?: { "0"?: string | null } | null;
+} =>
+  isRecord(value) &&
+  isNullishString(value["@name"]) &&
+  isNullishValue(value.text, isDominoText);
+
+const isDominoViewEntry = (value: unknown): value is DominoViewEntry =>
+  isRecord(value) &&
+  isNullishString(value["@position"]) &&
+  isNullishString(value["@unid"]) &&
+  isNullishArrayOf(value.entrydata, isDominoEntryData);
+
+const isDominoViewResponse = (value: unknown): value is DominoViewResponse =>
+  isRecord(value) &&
+  isNullishString(value["@toplevelentries"]) &&
+  isNullishOneOrArrayOf(value.viewentry, isDominoViewEntry);
+
+const normalizeViewEntries = (
+  viewentry: DominoViewResponse["viewentry"],
+): DominoViewEntry[] =>
+  viewentry === undefined || viewentry === null
+    ? []
+    : Array.isArray(viewentry)
+      ? viewentry
+      : [viewentry];
 
 /** Extract a named field from Domino entrydata. */
 const entryField = (
@@ -62,7 +105,7 @@ const entryField = (
   name: string,
 ): string | undefined => {
   const field = entry.entrydata?.find((e) => e["@name"] === name);
-  return field?.text?.["0"] || undefined;
+  return toOptionalValue(field?.text?.["0"]);
 };
 
 /** Metadata label patterns on detail pages. */
@@ -178,8 +221,10 @@ export const czNsAdapter: SourceAdapter = {
         return null;
       }
 
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- Domino JSON API
-      const json = (await response.json()) as DominoViewResponse;
+      const json = await response.json();
+      if (!isDominoViewResponse(json)) {
+        return null;
+      }
       const raw = json["@toplevelentries"];
       if (!raw) {
         return null;
@@ -222,15 +267,23 @@ export const czNsAdapter: SourceAdapter = {
           });
         }
 
-        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- Domino JSON API
-        const json = (await listResponse.json()) as DominoViewResponse;
-        const entries = json.viewentry ?? [];
+        const json = await listResponse.json();
+        if (!isDominoViewResponse(json)) {
+          throw new AdapterFetchError({
+            message: "CZ Supreme Court list returned an invalid payload",
+            adapterKey: ADAPTER_KEYS.CZ_NS,
+            cursor,
+          });
+        }
+        const entries = normalizeViewEntries(json.viewentry);
 
         const decisions: IngestionResult[] = [];
 
         for (let i = 0; i < entries.length; i++) {
-          // eslint-disable-next-line typescript-eslint/no-non-null-assertion -- bounded by loop
-          const entry = entries[i]!;
+          const entry = entries.at(i);
+          if (!entry) {
+            continue;
+          }
           const unid = entry["@unid"];
           const caseNumber = entryField(entry, "znacka");
 

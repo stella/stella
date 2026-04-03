@@ -45,9 +45,22 @@ const parseMentions = (text: string): MentionRef[] => {
         refs.push({ type: "entity", id: rawId, workspaceId: null });
       }
     } else {
-      // SAFETY: type is from validated prefix; MentionRef shape is constructed
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      refs.push({ type: type as MentionRef["type"], id: rawId } as MentionRef);
+      switch (type) {
+        case "workspace":
+          refs.push({ type: "workspace", id: rawId });
+          break;
+        case "contact":
+          refs.push({ type: "contact", id: rawId });
+          break;
+        case "template":
+          refs.push({ type: "template", id: rawId });
+          break;
+        case "clause":
+          refs.push({ type: "clause", id: rawId });
+          break;
+        default:
+          break;
+      }
     }
   }
 

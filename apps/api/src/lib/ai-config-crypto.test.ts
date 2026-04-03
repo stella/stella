@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { maskApiKey } from "@/api/lib/ai-config-crypto";
+import { isOrgAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 
 describe("maskApiKey", () => {
   test("shows first 8 chars for keys longer than 16 chars", () => {
@@ -29,5 +29,26 @@ describe("maskApiKey", () => {
     const masked = maskApiKey("a".repeat(200));
 
     expect(masked).toBe(`${"a".repeat(8)}${"*".repeat(16)}`);
+  });
+});
+
+describe("isOrgAIConfig", () => {
+  test("accepts a valid org AI config", () => {
+    expect(
+      isOrgAIConfig({
+        provider: "openai",
+        apiKey: "sk-test",
+        overrideRoles: ["chat"],
+        region: "eu",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects configs missing the api key", () => {
+    expect(
+      isOrgAIConfig({
+        provider: "openai",
+      }),
+    ).toBe(false);
   });
 });
