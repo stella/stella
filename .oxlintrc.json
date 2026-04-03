@@ -40,6 +40,17 @@
     "react/rules-of-hooks": "error",
 
     "import/no-cycle": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "zod",
+            "message": "Use 'valibot' instead of 'zod'.",
+          },
+        ],
+      },
+    ],
     "no-nanoid/no-nanoid": "error",
 
     // Allow void as statement (fire-and-forget promises)
@@ -161,6 +172,28 @@
       "rules": {
         "no-raw-colors/no-raw-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+      },
+    },
+    {
+      "files": ["apps/web/src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "zod",
+                "message": "Use 'valibot' instead of 'zod'.",
+              },
+            ],
+            "patterns": [
+              {
+                "group": ["@/api/*", "@/api/**/*"],
+                "message": "Use '@stella/api/types' instead of '@/api/'.",
+              },
+            ],
+          },
+        ],
       },
     },
     {

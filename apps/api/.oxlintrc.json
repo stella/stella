@@ -9,6 +9,10 @@
           {
             "paths": [
               {
+                "name": "zod",
+                "message": "Use 'valibot' instead of 'zod'."
+              },
+              {
                 "name": "@/api/lib/branded-types",
                 "importNames": ["toSafeId"],
                 "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
