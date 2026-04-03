@@ -82,9 +82,13 @@ comments.
 
 7. **Start rabbit round monitoring**:
 
-   Once the draft PR is open, invoke `/loop 7m /rabbit-round`
-   to process review bot comments every 7 minutes. `/loop` is
-   a built-in Claude Code skill, not a custom command.
+   Once the draft PR is open, schedule rabbit round monitoring
+   using `CronCreate` directly (do **not** use `/loop`, which
+   runs immediately — review bots need time to post):
+
+   ```
+   CronCreate(cron: "*/7 * * * *", prompt: "/rabbit-round", recurring: true)
+   ```
 
    **When to stop:** cancel the cron job (via `CronDelete`)
    after two consecutive checks find nothing to act on (no
