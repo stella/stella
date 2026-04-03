@@ -49,7 +49,9 @@ export const Route = createFileRoute("/auth/otp")({
 
 function OTP() {
   const t = useTranslations();
-  const { email, redirectTo } = Route.useSearch();
+  const { email, redirectTo } = Route.useSearch({
+    select: (s) => ({ email: s.email, redirectTo: s.redirectTo }),
+  });
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const [otp, setOtp] = useState("");

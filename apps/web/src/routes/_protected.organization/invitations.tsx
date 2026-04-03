@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_protected/organization/invitations")({
 function Invitations() {
   const t = useTranslations();
   const { data } = useSuspenseQuery(organizationOptions);
-  const { q } = useSearch({ from: "/_protected/organization" });
+  const q = useSearch({ from: "/_protected/organization", select: (s) => s.q });
 
   const filtered = useMemo(() => {
     if (!q) {

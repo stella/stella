@@ -12,6 +12,7 @@
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/require-router-select.ts",
   ],
 
   "rules": {
@@ -52,7 +53,6 @@
       },
     ],
     "no-nanoid/no-nanoid": "error",
-
     // Allow void as statement (fire-and-forget promises)
     "no-void": ["error", { "allowAsStatement": true }],
 
@@ -194,6 +194,7 @@
             ],
           },
         ],
+        "require-router-select/require-router-select": "error",
       },
     },
     {

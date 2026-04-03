@@ -58,7 +58,7 @@ export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
 });
 
 function AcceptInvitation() {
-  const { invitationId } = Route.useParams();
+  const invitationId = Route.useParams({ select: (p) => p.invitationId });
   const { invitation } = Route.useLoaderData();
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();

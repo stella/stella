@@ -63,7 +63,12 @@ export const Route = createFileRoute(
 
 function InvoiceDetailPage() {
   const t = useTranslations();
-  const { workspaceId, invoiceId } = Route.useParams();
+  const { workspaceId, invoiceId } = Route.useParams({
+    select: (p) => ({
+      workspaceId: p.workspaceId,
+      invoiceId: p.invoiceId,
+    }),
+  });
 
   return (
     <div className="flex h-full flex-col">
