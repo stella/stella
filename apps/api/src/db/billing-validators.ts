@@ -1,5 +1,5 @@
-import type { Static } from "@sinclair/typebox";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 export const timeEntryStatusSchema = t.UnionEnum([
   "draft",

@@ -17,10 +17,11 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@rivetkit/framework-base": "catalog:rivet",
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@rivetkit/react": "catalog:rivet",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
