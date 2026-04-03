@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { ActionContextOf } from "rivetkit";
 
-import { createScopedDb, db } from "@/api/db";
 import { properties } from "@/api/db/schema";
 import type { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
@@ -11,6 +10,7 @@ import {
   parseBrandedWorkflowActorKey,
   resetActorState,
 } from "@/api/handlers/registry/utils";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 
 export const finishWorkflowAction = async (
   c: ActionContextOf<typeof workflowActor>,
@@ -21,7 +21,10 @@ export const finishWorkflowAction = async (
     }
 
     const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
-    const scopedDb = createScopedDb(db, [workspaceId], organizationId);
+    const scopedDb = createRootScopedDb({
+      organizationId,
+      workspaceIds: [workspaceId],
+    });
 
     await scopedDb((tx) =>
       tx

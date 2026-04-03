@@ -16,7 +16,6 @@ import type {
   UserContext,
 } from "@stella/rivet/actors/chat-actor-config";
 
-import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -49,6 +48,7 @@ import { captureError } from "@/api/lib/analytics";
 // eslint-disable-next-line no-restricted-imports -- brands actor-validated IDs
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 
 const MAX_TOOL_STEPS = 8;
 /** User turns to keep in the sliding window. Tools are always
@@ -537,11 +537,10 @@ export const chatActor = actor({
 
           // Org tools and case law are always available. Matter
           // tools are added when there are accessible workspaces.
-          const scopedDb = createScopedDb(
-            db,
-            allWorkspaceIds,
-            connState.organizationId,
-          );
+          const scopedDb = createRootScopedDb({
+            organizationId: connState.organizationId,
+            workspaceIds: allWorkspaceIds,
+          });
           const orgTools = createOrgTools({
             organizationId: connState.organizationId,
             scopedDb,
@@ -844,7 +843,10 @@ export const chatActor = actor({
       const { organizationId } = c.conn.state as UserActorConnState;
       if (rawWsId) {
         const wsId = toSafeId<"workspace">(rawWsId);
-        const promptDb = createScopedDb(db, [wsId], organizationId);
+        const promptDb = createRootScopedDb({
+          organizationId,
+          workspaceIds: [wsId],
+        });
         return {
           prompt: await buildSystemPrompt(promptDb, wsId, organizationId, ctx),
         };

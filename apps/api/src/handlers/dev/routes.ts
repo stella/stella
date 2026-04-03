@@ -3,7 +3,6 @@ import Elysia from "elysia";
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { db } from "@/api/db";
 import {
   contacts,
   properties,
@@ -46,35 +45,39 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .post("/clean", async (ctx) => {
     const orgId = ctx.session.activeOrganizationId;
 
-    // Delete in dependency order.
-    // 1. Time entries and workspace contacts (org-scoped)
-    await db.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));
-    await db
-      .delete(workspaceContacts)
-      .where(eq(workspaceContacts.organizationId, orgId));
+    await ctx.scopedDb(async (tx) => {
+      // Delete in dependency order.
+      // 1. Time entries and workspace contacts (org-scoped)
+      await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));
+      await tx
+        .delete(workspaceContacts)
+        .where(eq(workspaceContacts.organizationId, orgId));
 
-    // 2. Property dependencies (no org FK; resolve via
-    //    properties -> workspaces). The restrict FK on
-    //    dependsOnPropertyId blocks workspace cascade.
-    const orgPropertyIds = db
-      .select({ id: properties.id })
-      .from(properties)
-      .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id))
-      .where(eq(workspaces.organizationId, orgId));
+      // 2. Property dependencies (no org FK; resolve via
+      //    properties -> workspaces). The restrict FK on
+      //    dependsOnPropertyId blocks workspace cascade.
+      const orgPropertyIds = tx
+        .select({ id: properties.id })
+        .from(properties)
+        .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id))
+        .where(eq(workspaces.organizationId, orgId));
 
-    await db
-      .delete(propertyDependencies)
-      .where(inArray(propertyDependencies.propertyId, orgPropertyIds));
-    await db
-      .delete(propertyDependencies)
-      .where(inArray(propertyDependencies.dependsOnPropertyId, orgPropertyIds));
+      await tx
+        .delete(propertyDependencies)
+        .where(inArray(propertyDependencies.propertyId, orgPropertyIds));
+      await tx
+        .delete(propertyDependencies)
+        .where(
+          inArray(propertyDependencies.dependsOnPropertyId, orgPropertyIds),
+        );
 
-    // 3. Workspaces (cascades entities, versions, fields,
-    //    properties, views)
-    await db.delete(workspaces).where(eq(workspaces.organizationId, orgId));
+      // 3. Workspaces (cascades entities, versions, fields,
+      //    properties, views)
+      await tx.delete(workspaces).where(eq(workspaces.organizationId, orgId));
 
-    // 4. Contacts
-    await db.delete(contacts).where(eq(contacts.organizationId, orgId));
+      // 4. Contacts
+      await tx.delete(contacts).where(eq(contacts.organizationId, orgId));
+    });
 
     return { ok: true };
   })

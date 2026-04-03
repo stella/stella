@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import type { searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";

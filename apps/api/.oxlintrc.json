@@ -18,6 +18,23 @@
                 "message": "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings."
               },
               {
+                "name": "@/api/db",
+                "importNames": ["createScopedDb"],
+                "message": "Handlers must not construct scoped DB instances from the root db module. Use ctx.scopedDb or createRootScopedDb from lib/root-scoped-db.ts."
+              },
+              {
+                "name": "@/api/db",
+                "importNames": ["db"],
+                // Defensive: `db` is not currently exported from
+                // `@/api/db`, but this guards against accidental
+                // re-export.
+                "message": "Handlers must not import the root db. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper."
+              },
+              {
+                "name": "@/api/db/root",
+                "message": "Handlers must not import the root db module. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper."
+              },
+              {
                 "name": "ai",
                 "importNames": ["tool"],
                 "message": "Use defineTool from chat-tools.ts instead of tool() directly. defineTool automatically wraps execute with safeExecute."

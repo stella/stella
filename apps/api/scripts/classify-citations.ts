@@ -19,7 +19,8 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { createScopedDb, db } from "@/api/db";
+import { createScopedDb } from "@/api/db";
+import { db } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,

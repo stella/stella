@@ -1,41 +1,11 @@
-import { drizzle } from "drizzle-orm/bun-sql";
+import type { Transaction } from "@/api/db/root";
 
-import { authRelationsPart } from "@/api/db/auth-schema";
-import {
-  invoiceStatusEnum,
-  propertyStatusEnum,
-  relations,
-  timeEntrySourceEnum,
-  timeEntryStatusEnum,
-} from "@/api/db/schema";
-import type { TransactionOf } from "@/api/db/scoped";
-import { env } from "@/api/env";
-
-// Re-export scoped utilities so existing `from "@/api/db"`
-// imports keep working without pulling in db initialization.
+// Re-export scoped utilities without pulling in the owner-level
+// db initialization. Runtime imports from `@/api/db` stay safe for
+// handlers and tests; `db` now lives in `@/api/db/root`.
 export { createScopedDb } from "@/api/db/scoped";
 export type { AnyDrizzle, TransactionOf } from "@/api/db/scoped";
-
-/**
- * Primary database handle connecting as postgres (table owner).
- * RLS is enforced per-transaction via `SET LOCAL ROLE stella`.
- *
- * All handler queries MUST go through `ScopedDb`.
- * Direct `db` usage is reserved for internal infrastructure
- * (workspace resolution in authMacro, better-auth).
- */
-export const db = drizzle(env.DATABASE_URL, {
-  relations: { ...relations, ...authRelationsPart },
-  schema: {
-    propertyStatusEnum,
-    timeEntryStatusEnum,
-    timeEntrySourceEnum,
-    invoiceStatusEnum,
-  },
-});
-
-type Database = typeof db;
-export type Transaction = TransactionOf<Database>;
+export type { Transaction } from "@/api/db/root";
 
 /**
  * Scoped database handle that wraps every operation in a
@@ -49,6 +19,4 @@ export type Transaction = TransactionOf<Database>;
  * Handlers receive this from `authMacro` and must never
  * import `db` directly.
  */
-export type ScopedDb = <T>(
-  fn: (tx: TransactionOf<Database>) => Promise<T>,
-) => Promise<T>;
+export type ScopedDb = <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;

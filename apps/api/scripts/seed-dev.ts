@@ -19,7 +19,7 @@
 
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import {
   billingCodes,
   contacts,

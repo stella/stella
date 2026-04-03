@@ -5,7 +5,6 @@ import type { ActionContextOf } from "rivetkit";
 import type { WorkflowActorEvent } from "@stella/rivet/actors/workflow-actor-config";
 
 import { isMockAI } from "@/api/consts";
-import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { fields, justifications } from "@/api/db/schema";
@@ -26,6 +25,7 @@ import {
 } from "@/api/handlers/registry/utils";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureActorError } from "@/api/lib/errors/actions";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import type { FieldContent } from "@/api/types";
 
 const { advanceQueue, processBatch } = workflowActions;
@@ -36,7 +36,10 @@ export const processBatchAction = async (
 ) =>
   await Result.tryPromise(async () => {
     const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
-    const scopedDb = createScopedDb(db, [workspaceId], organizationId);
+    const scopedDb = createRootScopedDb({
+      organizationId,
+      workspaceIds: [workspaceId],
+    });
 
     const rawBatch = c.state.executionPlan
       .at(level)
