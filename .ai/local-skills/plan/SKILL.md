@@ -1,3 +1,8 @@
+---
+name: plan
+description: 'Create a new plan file in `.agents/plans/` for a feature or task.'
+---
+
 # Create Plan
 
 Create a new plan file in `.agents/plans/` for a feature or task.

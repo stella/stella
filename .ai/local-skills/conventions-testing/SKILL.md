@@ -1,3 +1,8 @@
+---
+name: conventions-testing
+description: 'Apply when writing or reviewing tests.'
+---
+
 # Testing Conventions
 
 Apply when writing or reviewing tests.

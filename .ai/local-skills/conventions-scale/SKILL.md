@@ -1,3 +1,8 @@
+---
+name: conventions-scale
+description: 'Apply when making architectural decisions, designing new endpoints, or adding database tables.'
+---
+
 # Scalability Conventions
 
 Apply when making architectural decisions, designing new endpoints,

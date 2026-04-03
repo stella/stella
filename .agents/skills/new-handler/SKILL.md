@@ -1,3 +1,8 @@
+---
+name: new-handler
+description: 'Scaffold a new Elysia API handler following Stella''s conventions.'
+---
+
 # New Handler
 
 Scaffold a new Elysia API handler following Stella's conventions.

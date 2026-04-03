@@ -1,3 +1,8 @@
+---
+name: conventions-db
+description: 'Apply when writing or modifying database schema, queries, or migrations.'
+---
+
 # Database Conventions
 
 Apply when writing or modifying database schema, queries, or

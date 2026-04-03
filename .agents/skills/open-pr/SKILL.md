@@ -1,3 +1,8 @@
+---
+name: open-pr
+description: 'Prepare the current worktree branch for a pull request: rebase, self-review, quality checks, open the PR, then monitor review comments.'
+---
+
 # Open PR
 
 Prepare the current worktree branch for a pull request: rebase,

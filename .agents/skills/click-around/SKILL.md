@@ -1,3 +1,8 @@
+---
+name: click-around
+description: 'Autonomous browser-based QA and UX smoke test. Starts the dev server, takes control of Chrome, walks through user stories for a feature area, monitors the console, and produces a structured report on what works, what breaks, and what feels wrong.'
+---
+
 # Click Around
 
 Autonomous browser-based QA and UX smoke test. Starts the dev

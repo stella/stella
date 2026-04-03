@@ -1,3 +1,8 @@
+---
+name: rabbit-round
+description: 'Process automated PR review comments systematically. Run this for CodeRabbit, Google Code Assist (Gemini), GitHub Copilot, Devin, Greptile, and so on.'
+---
+
 # Rabbit Round
 
 Process automated PR review comments systematically. Run this for CodeRabbit, Google

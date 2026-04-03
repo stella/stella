@@ -1,3 +1,8 @@
+---
+name: conventions-i18n
+description: 'Internationalization conventions for Stella. Apply when adding or modifying user-facing strings.'
+---
+
 # i18n Conventions
 
 Internationalization conventions for Stella. Apply when adding or
