@@ -8,6 +8,8 @@ import type {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
+import { createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -110,6 +112,24 @@ describe("branded types", () => {
       const a: EntityWs = wsId;
       const b: PropertyWs = wsId;
       expect(a).toBe(b);
+    });
+  });
+
+  describe("createScopedDb", () => {
+    test("requires branded workspace ID arrays", () => {
+      const fakeDb = {
+        transaction: async (fn: (tx: object) => Promise<unknown>) =>
+          await fn({}),
+      } satisfies AnyDrizzle;
+
+      createScopedDb(
+        fakeDb,
+        [toSafeId<"workspace">("ws_test")],
+        toSafeId<"organization">("org_test"),
+      );
+
+      // @ts-expect-error - plain strings must not satisfy the RLS workspace boundary
+      createScopedDb(fakeDb, ["ws_test"], toSafeId<"organization">("org_test"));
     });
   });
 });
