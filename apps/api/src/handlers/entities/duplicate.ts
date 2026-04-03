@@ -22,7 +22,7 @@ const duplicateEntityBodySchema = t.Object({
 type DuplicateEntityHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
   body: Static<typeof duplicateEntityBodySchema>;
 };
 

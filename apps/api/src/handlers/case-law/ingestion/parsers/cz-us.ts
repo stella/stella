@@ -580,9 +580,10 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
   let inOduvodneni = false;
 
   for (let i = 0; i < lines.length; i++) {
-    // SAFETY: i is bounded by lines.length
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const line = lines[i]!;
+    const line = lines.at(i);
+    if (!line) {
+      continue;
+    }
     const { plainText, inlines } = line;
 
     // Skip empty sentinel lines (paragraph breaks)

@@ -3,9 +3,8 @@ import { and, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
-// eslint-disable-next-line no-restricted-imports -- brands verified workspace IDs
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 const SOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "readEntity",
@@ -175,7 +174,7 @@ const nameFromDbOrgScoped = async (
   }
 
   // Delegate to workspace-scoped lookup for full metadata.
-  return nameFromDb(entityId, toSafeId<"workspace">(row.workspaceId), scopedDb);
+  return nameFromDb(entityId, row.workspaceId, scopedDb);
 };
 
 /**
@@ -212,14 +211,10 @@ export const createSourceInjectionTransform = (
         return;
       }
 
-      // SAFETY: chunk.output is typed as `unknown` by the AI
-      // SDK. The tools always return JSON objects, so casting
-      // to Record is sound after the typeof guard below.
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const output = chunk.output as Record<string, unknown> | null;
-      if (!output || typeof output !== "object") {
+      if (!isRecord(chunk.output)) {
         return;
       }
+      const output = chunk.output;
       if ("error" in output) {
         return;
       }

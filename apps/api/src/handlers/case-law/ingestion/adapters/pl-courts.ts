@@ -5,7 +5,15 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  hashContent,
+  isNullishArrayOf,
+  isNullishNumber,
+  isNullishString,
+  isNullishValue,
+  toOptionalValue,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Polish Courts adapter (SAOS).
@@ -30,51 +38,122 @@ const COURT_TYPE_MAP: Record<string, string> = {
 
 type SaosJudge = {
   name: string;
-  function?: string;
-  specialRoles?: string[];
+  function?: string | null;
+  specialRoles?: string[] | null;
 };
 
 type SaosCourt = {
-  name?: string;
-  code?: string;
-  type?: string;
+  name?: string | null;
+  code?: string | null;
+  type?: string | null;
 };
 
 type SaosDivision = {
-  name?: string;
-  court?: SaosCourt;
+  name?: string | null;
+  court?: SaosCourt | null;
 };
 
 type SaosItem = {
-  id?: number;
-  courtType?: string;
-  courtCases?: { caseNumber?: string }[];
-  judgmentType?: string;
-  judgmentDate?: string;
-  judges?: SaosJudge[];
-  textContent?: string;
-  keywords?: string[];
-  division?: SaosDivision;
+  id?: number | null;
+  courtType?: string | null;
+  courtCases?: { caseNumber?: string | null }[] | null;
+  judgmentType?: string | null;
+  judgmentDate?: string | null;
+  judges?: SaosJudge[] | null;
+  textContent?: string | null;
+  keywords?: string[] | null;
+  division?: SaosDivision | null;
   source?: {
-    sourceUrl?: string;
-  };
-  ecli?: string;
+    sourceUrl?: string | null;
+  } | null;
+  ecli?: string | null;
 };
 
 type SaosResponse = {
-  items?: SaosItem[];
+  items?: SaosItem[] | null;
   queryTemplate?: {
-    pageSize?: { value?: number };
-    pageNumber?: { value?: number };
-  };
+    pageSize?: { value?: number | null } | null;
+    pageNumber?: { value?: number | null } | null;
+  } | null;
   info?: {
-    totalResults?: number;
-  };
+    totalResults?: number | null;
+  } | null;
 };
+
+const isOptionalNumber = (value: unknown): value is number | null | undefined =>
+  isNullishNumber(value);
+
+const isSaosJudge = (value: unknown): value is SaosJudge =>
+  isRecord(value) &&
+  typeof value.name === "string" &&
+  isNullishString(value.function) &&
+  isNullishArrayOf(
+    value.specialRoles,
+    (item): item is string => typeof item === "string",
+  );
+
+const isSaosCourt = (value: unknown): value is SaosCourt =>
+  isRecord(value) &&
+  isNullishString(value.name) &&
+  isNullishString(value.code) &&
+  isNullishString(value.type);
+
+const isSaosDivision = (value: unknown): value is SaosDivision =>
+  isRecord(value) &&
+  isNullishString(value.name) &&
+  isNullishValue(value.court, isSaosCourt);
+
+const isSaosCourtCase = (
+  value: unknown,
+): value is { caseNumber?: string | null | undefined } =>
+  isRecord(value) && isNullishString(value.caseNumber);
+
+const isSaosSource = (
+  value: unknown,
+): value is { sourceUrl?: string | null | undefined } =>
+  isRecord(value) && isNullishString(value.sourceUrl);
+
+const isSaosItem = (value: unknown): value is SaosItem =>
+  isRecord(value) &&
+  isOptionalNumber(value.id) &&
+  isNullishString(value.courtType) &&
+  isNullishArrayOf(value.courtCases, isSaosCourtCase) &&
+  isNullishString(value.judgmentType) &&
+  isNullishString(value.judgmentDate) &&
+  isNullishArrayOf(value.judges, isSaosJudge) &&
+  isNullishString(value.textContent) &&
+  isNullishArrayOf(
+    value.keywords,
+    (item): item is string => typeof item === "string",
+  ) &&
+  isNullishValue(value.division, isSaosDivision) &&
+  isNullishValue(value.source, isSaosSource) &&
+  isNullishString(value.ecli);
+
+const isPageValue = (value: unknown): value is { value?: number | undefined } =>
+  isRecord(value) && isOptionalNumber(value.value);
+
+const isSaosResponse = (value: unknown): value is SaosResponse =>
+  isRecord(value) &&
+  isNullishArrayOf(value.items, isSaosItem) &&
+  isNullishValue(
+    value.queryTemplate,
+    (
+      queryTemplate,
+    ): queryTemplate is NonNullable<SaosResponse["queryTemplate"]> =>
+      isRecord(queryTemplate) &&
+      isNullishValue(queryTemplate.pageSize, isPageValue) &&
+      isNullishValue(queryTemplate.pageNumber, isPageValue),
+  ) &&
+  isNullishValue(
+    value.info,
+    (info): info is NonNullable<SaosResponse["info"]> =>
+      isRecord(info) && isOptionalNumber(info.totalResults),
+  );
 
 const parseItem = (item: SaosItem): IngestionResult | null => {
   const primaryCase = item.courtCases?.find((c) => c.caseNumber);
-  const caseNumber = primaryCase?.caseNumber;
+  const caseNumber = toOptionalValue(primaryCase?.caseNumber);
   const courtName =
     item.division?.court?.name ??
     (item.courtType
@@ -96,25 +175,25 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
 
   return {
     caseNumber,
-    ecli: item.ecli,
+    ecli: toOptionalValue(item.ecli),
     court: courtName,
     country: "POL",
     language: "pl",
-    decisionDate: item.judgmentDate,
-    decisionType: item.judgmentType,
-    fulltext: item.textContent,
-    sourceUrl: item.source?.sourceUrl,
+    decisionDate: toOptionalValue(item.judgmentDate),
+    decisionType: toOptionalValue(item.judgmentType),
+    fulltext: toOptionalValue(item.textContent),
+    sourceUrl: toOptionalValue(item.source?.sourceUrl),
     metadata: {
       saosId: item.id,
-      courtType: item.courtType,
-      courtCode: item.division?.court?.code,
+      courtType: toOptionalValue(item.courtType),
+      courtCode: toOptionalValue(item.division?.court?.code),
       judges: item.judges?.map((j) => ({
         name: j.name,
-        function: j.function,
+        function: toOptionalValue(j.function),
         specialRoles: j.specialRoles,
       })),
       keywords: item.keywords,
-      division: item.division?.name,
+      division: toOptionalValue(item.division?.name),
       ...((additionalCaseNumbers?.length ?? 0) > 0 && {
         additionalCaseNumbers,
       }),
@@ -154,21 +233,15 @@ export const plCourtsAdapter: SourceAdapter = {
 
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      // SAFETY: structural check confirms object; all
-      // fields are optional so missing properties
-      // degrade gracefully.
-      return typeof json === "object" && json !== null
-        ? (json as SaosResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-        : {};
+      return isSaosResponse(json) ? json : {};
     },
 
     extractItems: (data) => ({
       items: data.items ?? [],
-      total: data.info?.totalResults,
+      total: toOptionalValue(data.info?.totalResults),
     }),
 
-    // SAFETY: items come from extractItems which returns
-    // data.items (SaosItem[]); all fields are optional.
-    parseItem: async (raw) => await Promise.resolve(parseItem(raw as SaosItem)), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
+    parseItem: async (raw) =>
+      await Promise.resolve(isSaosItem(raw) ? parseItem(raw) : null),
   }),
 };

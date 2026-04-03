@@ -21,6 +21,7 @@ import {
   AdapterFetchError,
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * European Court of Justice (CJEU) adapter.
@@ -105,6 +106,24 @@ type SparqlResponse = {
   };
 };
 
+const isSparqlBinding = (value: unknown): value is SparqlBinding =>
+  isRecord(value) &&
+  typeof value.value === "string" &&
+  typeof value.type === "string";
+
+const isSparqlResult = (value: unknown): value is SparqlResult =>
+  isRecord(value) &&
+  isSparqlBinding(value.ecli) &&
+  isSparqlBinding(value.date) &&
+  isSparqlBinding(value.celex) &&
+  isSparqlBinding(value.type);
+
+const isSparqlResponse = (value: unknown): value is SparqlResponse =>
+  isRecord(value) &&
+  isRecord(value.results) &&
+  Array.isArray(value.results.bindings) &&
+  value.results.bindings.every(isSparqlResult);
+
 const SPARQL_LIMIT = 200;
 
 const CDM_TYPE_MAP: Record<string, string> = {
@@ -172,9 +191,15 @@ LIMIT ${SPARQL_LIMIT}`.trim();
     });
   }
 
-  // SAFETY: Cellar SPARQL always returns this shape for
-  // SELECT queries with ?ecli, ?date, ?celex, ?type.
-  const json = (await response.json()) as SparqlResponse; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
+  const json = await response.json();
+  if (!isSparqlResponse(json)) {
+    throw new AdapterFetchError({
+      message: "CJEU SPARQL returned an invalid payload",
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      cursor: dateFrom,
+      httpStatus: response.status,
+    });
+  }
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {

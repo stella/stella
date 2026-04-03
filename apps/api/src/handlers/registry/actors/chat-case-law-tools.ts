@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db";
 import { loadCourtWeights } from "@/api/handlers/case-law/court-weights";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { defineTool } from "./chat-tools";
 
@@ -267,8 +268,10 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
         return { error: "Decision not found" };
       }
 
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- SAFETY: length check above guarantees index 0 exists
-      const row = result[0] as Record<string, unknown>;
+      const row = result.at(0);
+      if (!isRecord(row)) {
+        return { error: "Decision not found" };
+      }
       const fulltext = typeof row.fulltext === "string" ? row.fulltext : "";
       const truncated =
         fulltext.length > maxChars

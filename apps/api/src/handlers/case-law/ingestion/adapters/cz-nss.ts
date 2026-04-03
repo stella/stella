@@ -329,8 +329,7 @@ const fetchDecisionContent = async (
           )?.toLowerCase(),
           sourceUrl: row.documentUrl,
           html,
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- SAFETY: detail is a parsed metadata object stored as jsonb
-          detailMetadata: detail as Record<string, unknown>,
+          detailMetadata: { ...detail },
         });
 
         return {

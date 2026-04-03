@@ -36,6 +36,7 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
+import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -94,11 +95,10 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
     throw new Error(`SK ÚS OAuth2 token failed: ${response.status}`);
   }
 
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- OAuth2 token response
-  const data = (await response.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
+  const data = await response.json();
+  if (!isTokenResponse(data)) {
+    throw new Error("SK ÚS OAuth2 token returned an invalid payload");
+  }
 
   // Cache with 30s safety margin
   cachedToken = {
@@ -140,6 +140,59 @@ type SearchResponse = {
   documents: SearchDocument[];
   numFound: number;
 };
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === "string";
+
+const isOptionalStringArray = (value: unknown): value is string[] | undefined =>
+  value === undefined || isStringArray(value);
+
+const isTokenResponse = (
+  value: unknown,
+): value is { access_token: string; expires_in: number } =>
+  isRecord(value) &&
+  typeof value.access_token === "string" &&
+  typeof value.expires_in === "number";
+
+const isSearchDocument = (value: unknown): value is SearchDocument => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isOptionalString(value.documentId) &&
+    isOptionalString(value.mkDocumentType) &&
+    isOptionalString(value.mkRSAPNumberOfFile) &&
+    isOptionalString(value.mkRVPNumberOfFile) &&
+    isOptionalString(value.mkECLI) &&
+    isOptionalString(value.mkDateOfDecision) &&
+    isOptionalString(value.mkDateOfLegalForce) &&
+    isOptionalString(value.mkPublicationDate) &&
+    isOptionalString(value.mkFormOfDecision) &&
+    isOptionalStringArray(value.mkTypeOfDecision) &&
+    isOptionalString(value.mkTypeOfProceeding) &&
+    isOptionalStringArray(value.mkTypeOfNegotiation) &&
+    isOptionalStringArray(value.mkDecisionInTermsOf) &&
+    isOptionalStringArray(value.mkResultOfNegotiation) &&
+    isOptionalStringArray(value.mkCause) &&
+    isOptionalString(value.mkJudgeReporter) &&
+    isOptionalStringArray(value.mkDifferentView) &&
+    isOptionalStringArray(value.mkWordRegister) &&
+    isOptionalStringArray(value.mkMaterialRegister) &&
+    isOptionalString(value.mkComplainedLegalRegulation) &&
+    isOptionalStringArray(value.mkFileReference) &&
+    isOptionalStringArray(value.mkReferences)
+  );
+};
+
+const isSearchResponse = (value: unknown): value is SearchResponse =>
+  isRecord(value) &&
+  Array.isArray(value.documents) &&
+  value.documents.every(isSearchDocument) &&
+  typeof value.numFound === "number";
 
 // ── Date parsing ─────────────────────────────────────────
 
@@ -340,8 +393,10 @@ export const skUsAdapter: SourceAdapter = {
           return { decisions: [], nextCursor: String(offset) };
         }
 
-        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- search API response
-        const data = (await response.json()) as SearchResponse;
+        const data = await response.json();
+        if (!isSearchResponse(data)) {
+          throw new Error("SK ÚS search returned an invalid payload");
+        }
         const decisions: IngestionResult[] = [];
 
         for (const doc of data.documents) {

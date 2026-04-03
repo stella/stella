@@ -4,9 +4,8 @@ import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-// oxlint-disable-next-line no-restricted-imports: brands DB-returned workspace PKs for map lookups
-import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: {
@@ -49,7 +48,7 @@ const readWorkspaces = createRootHandler(
 
       const workspaceRows = allRows.filter((w) => w.status === "active");
 
-      const wsIds = workspaceRows.map((w) => toSafeId<"workspace">(w.id));
+      const wsIds = workspaceRows.map((w) => brandPersistedWorkspaceId(w.id));
 
       if (wsIds.length === 0) {
         return {

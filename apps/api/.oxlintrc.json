@@ -21,7 +21,8 @@
     {
       "files": [
         "src/lib/auth.ts",
-        "src/lib/search/**"
+        "src/lib/search/**",
+        "src/lib/safe-id-boundaries.ts"
       ],
       "rules": { "no-restricted-imports": "off" }
     },

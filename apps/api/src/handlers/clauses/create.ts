@@ -26,7 +26,7 @@ const createClauseBodySchema = t.Object({
 type CreateClauseProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   body: {
     title: string;
     categoryId?: string;

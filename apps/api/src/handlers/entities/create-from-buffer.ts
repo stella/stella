@@ -20,7 +20,7 @@ type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
   /** Raw file content (Buffer or ArrayBuffer). */
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
@@ -91,9 +91,7 @@ export const createEntityFromBuffer = async ({
     const [, pdfResult] = await Promise.all([
       s3.write(s3Key, bytes),
       shouldConvert
-        ? // SAFETY: Uint8Array.buffer is ArrayBuffer
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          convertToPdf(bytes.buffer as ArrayBuffer, fileName, mimeType)
+        ? convertToPdf(bytes.slice().buffer, fileName, mimeType)
         : Promise.resolve(null),
     ]);
     if (pdfResult && Result.isOk(pdfResult)) {

@@ -9,7 +9,12 @@ import {
   readManifest,
   writeManifest,
 } from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
+import type {
+  FieldMeta,
+  NamedCondition,
+  TemplateManifest,
+} from "@/api/handlers/docx/types";
+import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,7 +39,7 @@ const createTemplateBodySchema = t.Object({
 type CreateTemplateProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   body: {
     file: File;
     name: string;
@@ -48,7 +53,12 @@ const buildS3Key = (organizationId: string, templateId: string) =>
 
 /** Accept a string (JSON body) or already-parsed object
  *  (FormData auto-parsed by Elysia). */
-const parseClientManifest = (value: unknown): TemplateManifest | null => {
+type ClientTemplateManifest = {
+  fields: FieldMeta[];
+  conditions?: NamedCondition[] | undefined;
+};
+
+const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   let parsed: unknown = value;
   if (typeof value === "string") {
     try {
@@ -60,16 +70,21 @@ const parseClientManifest = (value: unknown): TemplateManifest | null => {
   if (!isRecord(parsed)) {
     return null;
   }
-  if (!Array.isArray(parsed.fields)) {
+  const fields = parsed.fields;
+  if (!Array.isArray(fields) || !fields.every(isFieldMeta)) {
     return null;
   }
-  if ("conditions" in parsed && !Array.isArray(parsed.conditions)) {
+  const conditions = parsed.conditions;
+  if (
+    conditions !== undefined &&
+    (!Array.isArray(conditions) || !conditions.every(isNamedCondition))
+  ) {
     return null;
   }
-  // SAFETY: top-level shape validated above; FieldMeta
-  // optional properties handled gracefully downstream.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  return parsed as TemplateManifest;
+  return {
+    fields,
+    conditions,
+  };
 };
 
 const createTemplateHandler = async ({

@@ -135,9 +135,11 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
           relatedProceedingsTable = rows.length > 0 ? rows : null;
 
           if (rows.length > 1) {
-            // SAFETY: length > 1 guarantees rows[0] exists
-            // oxlint-disable-next-line typescript/no-non-null-assertion
-            const headers = rows[0]!.map((c) =>
+            const headerRow = rows.at(0);
+            if (!headerRow) {
+              return;
+            }
+            const headers = headerRow.map((c) =>
               c.plainText.trim().toLowerCase(),
             );
             source.ustavniStiznost = rows.slice(1).map((row) => {
@@ -565,9 +567,10 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
     return false;
   }
 
-  // SAFETY: nextText is non-empty (checked above)
-  // oxlint-disable-next-line typescript/no-non-null-assertion
-  const firstChar = nextText[0]!;
+  const firstChar = nextText.at(0);
+  if (!firstChar) {
+    return false;
+  }
 
   // Starts with comma, semicolon, or lone punctuation
   if (",;".includes(firstChar)) {
@@ -614,9 +617,10 @@ const mergeBlocks = (rawBlocks: Block[]): Block[] => {
 
   // Assign closing/signature roles to tail blocks only
   for (let i = merged.length - 1; i >= 0; i--) {
-    // SAFETY: i is bounded by merged.length
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const block = merged[i]!;
+    const block = merged.at(i);
+    if (!block) {
+      continue;
+    }
     if (block.type !== "paragraph") {
       break;
     }
@@ -641,9 +645,10 @@ const mergeBlocks = (rawBlocks: Block[]): Block[] => {
   // and title; drop the court preamble.
   const firstParaIdx = merged.findIndex((b) => b.type === "paragraph");
   if (firstParaIdx !== -1) {
-    // SAFETY: findIndex returned !== -1
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const firstPara = merged[firstParaIdx]!;
+    const firstPara = merged.at(firstParaIdx);
+    if (!firstPara) {
+      return merged;
+    }
     if (firstPara.type === "paragraph") {
       const text = firstPara.plainText;
       // Check for embedded title

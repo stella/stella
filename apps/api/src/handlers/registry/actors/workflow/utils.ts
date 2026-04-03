@@ -46,9 +46,14 @@ export async function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
     ? []
     : [input: WorkflowActionSchemas[T]]
 ): ReturnType<typeof c.schedule.after> {
-  // SAFETY: args is [WorkflowActionSchemas[T]] when T extends non-void schema
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  await c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
+  if (args.length === 0) {
+    await c.schedule.after(0, action);
+    return;
+  }
+
+  const [input] = args;
+  await c.schedule.after(0, action, input);
+  return;
 }
 
 type SetFieldsContentProps = {

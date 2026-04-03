@@ -7,6 +7,7 @@
  */
 
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Map of adapter keys to lazy-import functions.
@@ -39,13 +40,14 @@ export const loadAdapterByKey = async (
     return;
   }
   const mod = await loader();
-  // SAFETY: dynamic import returns a module object; we
-  // narrow via the type guard below.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-  const entries = mod as Record<string, unknown>;
-  return Object.values(entries).find(
+  if (!isRecord(mod)) {
+    return;
+  }
+  return Object.values(mod).find(
     (v): v is SourceAdapter =>
-      typeof v === "object" && v !== null && "key" in v && "fetchPage" in v,
+      isRecord(v) &&
+      typeof v.key === "string" &&
+      typeof v.fetchPage === "function",
   );
 };
 

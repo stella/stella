@@ -5,6 +5,7 @@ import {
   streamText,
 } from "ai";
 import type { ToolSet, UIMessage, UIMessageChunk } from "ai";
+import { panic } from "better-result";
 import { count, eq } from "drizzle-orm";
 import { actor, event } from "rivetkit";
 import type { ActionContextOf, AnyActorDefinition } from "rivetkit";
@@ -43,10 +44,12 @@ import {
   validateUserActorSession,
 } from "@/api/handlers/registry/utils";
 import type { UserActorConnState } from "@/api/handlers/registry/utils";
+import { isOrgAIConfig } from "@/api/lib/ai-config-crypto";
 import { getModelById, getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { isRecord } from "@/api/lib/type-guards";
 
 const MAX_TOOL_STEPS = 8;
 /** User turns to keep in the sliding window. Tools are always
@@ -70,6 +73,23 @@ type ThreadState = {
   messages: UIMessage[];
   pendingChunks: SequencedChunk[];
   metadata: ThreadMetadata;
+};
+
+const isUserActorConnState = (value: unknown): value is UserActorConnState =>
+  isRecord(value) &&
+  typeof value.authToken === "string" &&
+  typeof value.organizationId === "string" &&
+  typeof value.userId === "string" &&
+  Object.hasOwn(value, "orgAIConfig") &&
+  (value.orgAIConfig === null || isOrgAIConfig(value.orgAIConfig)) &&
+  Array.isArray(value.accessibleWorkspaceIds) &&
+  value.accessibleWorkspaceIds.every((id) => typeof id === "string");
+
+const getUserActorConnState = (value: unknown): UserActorConnState => {
+  if (!isUserActorConnState(value)) {
+    panic("Invalid user actor connection state");
+  }
+  return value;
 };
 
 const TITLE_MAX_LENGTH = 80;
@@ -410,9 +430,7 @@ export const chatActor = actor({
       } = input;
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
-      // TODO: fix this
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const connState = c.conn.state as UserActorConnState;
+      const connState = getUserActorConnState(c.conn.state);
       const connScopedDb = getScopedDb(connState);
 
       if (thread.running) {
@@ -832,9 +850,7 @@ export const chatActor = actor({
       }
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
-      // SAFETY: same as sendMessages — RivetKit erases conn state type
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const connState = c.conn.state as UserActorConnState;
+      const connState = getUserActorConnState(c.conn.state);
       if (rawWsId) {
         const connScopedDb = getScopedDb(connState);
         const wsId =

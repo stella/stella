@@ -38,7 +38,7 @@ type UploadEntityHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
   body: Static<typeof uploadEntityBodySchema>;
 };
 

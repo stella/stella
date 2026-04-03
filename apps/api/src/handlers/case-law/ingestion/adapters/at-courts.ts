@@ -10,9 +10,15 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
+  isArrayOf,
+  isNullishOneOrArrayOf,
+  isNullishString,
+  isNullishValue,
   hashContent,
   stripHtml,
+  toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Austrian Courts adapter (RIS Judikatur).
@@ -32,81 +38,236 @@ const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const PAGE_SIZE = 20;
 
 type RisContentUrl = {
-  DataType?: string;
-  Url?: string;
+  DataType?: string | null;
+  Url?: string | null;
 };
 
 type RisEntscheidungstext = {
-  Geschaeftszahl?: string;
-  Dokumenttyp?: string;
-  Gericht?: string;
-  Entscheidungsart?: string;
-  Entscheidungsdatum?: string;
-  DokumentUrl?: string;
+  Geschaeftszahl?: string | null;
+  Dokumenttyp?: string | null;
+  Gericht?: string | null;
+  Entscheidungsart?: string | null;
+  Entscheidungsdatum?: string | null;
+  DokumentUrl?: string | null;
 };
 
 type RisJustiz = {
-  Rechtsgebiete?: { item?: string | string[] };
-  Gericht?: string;
+  Rechtsgebiete?: { item?: string | string[] | null } | null;
+  Gericht?: string | null;
   Rechtssatznummern?: {
-    item?: string | string[];
-  };
+    item?: string | string[] | null;
+  } | null;
   Entscheidungstexte?: {
-    item?: RisEntscheidungstext | RisEntscheidungstext[];
-  };
+    item?: RisEntscheidungstext | RisEntscheidungstext[] | null;
+  } | null;
 };
 
 type RisJudikatur = {
-  Dokumenttyp?: string;
-  Geschaeftszahl?: { item?: string | string[] };
-  Normen?: { item?: string | string[] };
-  Entscheidungsdatum?: string;
-  EuropeanCaseLawIdentifier?: string;
-  Justiz?: RisJustiz;
+  Dokumenttyp?: string | null;
+  Geschaeftszahl?: { item?: string | string[] | null } | null;
+  Normen?: { item?: string | string[] | null } | null;
+  Entscheidungsdatum?: string | null;
+  EuropeanCaseLawIdentifier?: string | null;
+  Justiz?: RisJustiz | null;
 };
 
 type RisMetadaten = {
   Technisch?: {
-    ID?: string;
-    Applikation?: string;
-    Organ?: string;
-  };
+    ID?: string | null;
+    Applikation?: string | null;
+    Organ?: string | null;
+  } | null;
   Allgemein?: {
-    Veroeffentlicht?: string;
-    Geaendert?: string;
-    DokumentUrl?: string;
-  };
-  Judikatur?: RisJudikatur;
+    Veroeffentlicht?: string | null;
+    Geaendert?: string | null;
+    DokumentUrl?: string | null;
+  } | null;
+  Judikatur?: RisJudikatur | null;
 };
 
 type RisDocumentReference = {
   Data?: {
-    Metadaten?: RisMetadaten;
+    Metadaten?: RisMetadaten | null;
     Dokumentliste?: {
       ContentReference?: {
         Urls?: {
-          ContentUrl?: RisContentUrl[] | RisContentUrl;
-        };
-      };
-    };
-  };
+          ContentUrl?: RisContentUrl[] | RisContentUrl | null;
+        } | null;
+      } | null;
+    } | null;
+  } | null;
 };
 
 type RisApiResponse = {
   OgdSearchResult?: {
     OgdDocumentResults?: {
       Hits?: {
-        "@pageNumber"?: string;
-        "@pageSize"?: string;
-        "#text"?: string;
-      };
+        "@pageNumber"?: string | null;
+        "@pageSize"?: string | null;
+        "#text"?: string | null;
+      } | null;
       OgdDocumentReference?:
         | RisDocumentReference[]
         | RisDocumentReference
         | null;
-    };
-  };
+    } | null;
+  } | null;
 };
+
+const isOptionalStringList = (
+  value: unknown,
+): value is string | string[] | null | undefined =>
+  value === undefined ||
+  value === null ||
+  typeof value === "string" ||
+  isArrayOf(value, (item): item is string => typeof item === "string");
+
+const isRisContentUrl = (value: unknown): value is RisContentUrl =>
+  isRecord(value) &&
+  isNullishString(value.DataType) &&
+  isNullishString(value.Url);
+
+const isRisEntscheidungstext = (
+  value: unknown,
+): value is RisEntscheidungstext =>
+  isRecord(value) &&
+  isNullishString(value.Geschaeftszahl) &&
+  isNullishString(value.Dokumenttyp) &&
+  isNullishString(value.Gericht) &&
+  isNullishString(value.Entscheidungsart) &&
+  isNullishString(value.Entscheidungsdatum) &&
+  isNullishString(value.DokumentUrl);
+
+const isRisStringItems = (
+  value: unknown,
+): value is { item?: string | string[] | null } =>
+  isRecord(value) && isOptionalStringList(value.item);
+
+const isRisEntscheidungstextItems = (
+  value: unknown,
+): value is {
+  item?: RisEntscheidungstext | RisEntscheidungstext[] | null;
+} =>
+  isRecord(value) && isNullishOneOrArrayOf(value.item, isRisEntscheidungstext);
+
+const isRisJustiz = (value: unknown): value is RisJustiz =>
+  isRecord(value) &&
+  isNullishValue(value.Rechtsgebiete, isRisStringItems) &&
+  isNullishString(value.Gericht) &&
+  isNullishValue(value.Rechtssatznummern, isRisStringItems) &&
+  isNullishValue(value.Entscheidungstexte, isRisEntscheidungstextItems);
+
+const isRisJudikatur = (value: unknown): value is RisJudikatur =>
+  isRecord(value) &&
+  isNullishString(value.Dokumenttyp) &&
+  isNullishValue(value.Geschaeftszahl, isRisStringItems) &&
+  isNullishValue(value.Normen, isRisStringItems) &&
+  isNullishString(value.Entscheidungsdatum) &&
+  isNullishString(value.EuropeanCaseLawIdentifier) &&
+  isNullishValue(value.Justiz, isRisJustiz);
+
+const isRisMetadaten = (value: unknown): value is RisMetadaten =>
+  isRecord(value) &&
+  isNullishValue(
+    value.Technisch,
+    (technical): technical is NonNullable<RisMetadaten["Technisch"]> =>
+      isRecord(technical) &&
+      isNullishString(technical.ID) &&
+      isNullishString(technical.Applikation) &&
+      isNullishString(technical.Organ),
+  ) &&
+  isNullishValue(
+    value.Allgemein,
+    (general): general is NonNullable<RisMetadaten["Allgemein"]> =>
+      isRecord(general) &&
+      isNullishString(general.Veroeffentlicht) &&
+      isNullishString(general.Geaendert) &&
+      isNullishString(general.DokumentUrl),
+  ) &&
+  isNullishValue(value.Judikatur, isRisJudikatur);
+
+const isRisUrls = (
+  value: unknown,
+): value is { ContentUrl?: RisContentUrl[] | RisContentUrl | null } =>
+  isRecord(value) && isNullishOneOrArrayOf(value.ContentUrl, isRisContentUrl);
+
+const isRisContentReference = (
+  value: unknown,
+): value is {
+  Urls?: { ContentUrl?: RisContentUrl[] | RisContentUrl | null } | null;
+} => isRecord(value) && isNullishValue(value.Urls, isRisUrls);
+
+const isRisDokumentliste = (
+  value: unknown,
+): value is {
+  ContentReference?: {
+    Urls?: {
+      ContentUrl?: RisContentUrl[] | RisContentUrl | null;
+    } | null;
+  } | null;
+} =>
+  isRecord(value) &&
+  isNullishValue(value.ContentReference, isRisContentReference);
+
+const isRisData = (
+  value: unknown,
+): value is {
+  Metadaten?: RisMetadaten | null;
+  Dokumentliste?: {
+    ContentReference?: {
+      Urls?: {
+        ContentUrl?: RisContentUrl[] | RisContentUrl | null;
+      } | null;
+    } | null;
+  } | null;
+} =>
+  isRecord(value) &&
+  isNullishValue(value.Metadaten, isRisMetadaten) &&
+  isNullishValue(value.Dokumentliste, isRisDokumentliste);
+
+const isRisDocumentReference = (
+  value: unknown,
+): value is RisDocumentReference =>
+  isRecord(value) && isNullishValue(value.Data, isRisData);
+
+const isRisApiResponse = (value: unknown): value is RisApiResponse =>
+  isRecord(value) &&
+  isNullishValue(
+    value.OgdSearchResult,
+    (
+      searchResult,
+    ): searchResult is NonNullable<RisApiResponse["OgdSearchResult"]> =>
+      isRecord(searchResult) &&
+      isNullishValue(
+        searchResult.OgdDocumentResults,
+        (
+          documentResults,
+        ): documentResults is NonNullable<
+          NonNullable<RisApiResponse["OgdSearchResult"]>["OgdDocumentResults"]
+        > =>
+          isRecord(documentResults) &&
+          isNullishValue(
+            documentResults.Hits,
+            (
+              hits,
+            ): hits is NonNullable<
+              NonNullable<
+                NonNullable<
+                  RisApiResponse["OgdSearchResult"]
+                >["OgdDocumentResults"]
+              >["Hits"]
+            > =>
+              isRecord(hits) &&
+              isNullishString(hits["@pageNumber"]) &&
+              isNullishString(hits["@pageSize"]) &&
+              isNullishString(hits["#text"]),
+          ) &&
+          isNullishOneOrArrayOf(
+            documentResults.OgdDocumentReference,
+            isRisDocumentReference,
+          ),
+      ),
+  );
 
 /** Normalize item fields that can be string or string[]. */
 const toArray = (val: string | string[] | undefined | null): string[] => {
@@ -123,7 +284,7 @@ const findHtmlUrl = (doc: RisDocumentReference): string | undefined => {
     return;
   }
   const urls = Array.isArray(raw) ? raw : [raw];
-  return urls.find((u) => u.DataType === "Html")?.Url;
+  return toOptionalValue(urls.find((u) => u.DataType === "Html")?.Url);
 };
 
 /** Fetch fulltext HTML and strip to plain text. */
@@ -165,7 +326,7 @@ const fetchFulltext = async (
 
 /** Extract Entscheidungsart from the first Entscheidungstext. */
 const extractEntscheidungsart = (
-  justiz: RisJustiz | undefined,
+  justiz: RisJustiz | null | undefined,
 ): string | undefined => {
   if (!justiz?.Entscheidungstexte?.item) {
     return;
@@ -173,17 +334,17 @@ const extractEntscheidungsart = (
   const items = Array.isArray(justiz.Entscheidungstexte.item)
     ? justiz.Entscheidungstexte.item
     : [justiz.Entscheidungstexte.item];
-  return items[0]?.Entscheidungsart;
+  return toOptionalValue(items[0]?.Entscheidungsart);
 };
 
 const parseRisItem = async (
   raw: unknown,
   signal?: AbortSignal,
 ): Promise<IngestionResult | null> => {
-  // SAFETY: items come from extractItems which returns
-  // OgdDocumentReference[]; all fields are optional so
-  // missing properties degrade gracefully.
-  const doc = raw as RisDocumentReference; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
+  if (!isRisDocumentReference(raw)) {
+    return null;
+  }
+  const doc = raw;
 
   const meta = doc.Data?.Metadaten;
   const jud = meta?.Judikatur;
@@ -191,7 +352,8 @@ const parseRisItem = async (
 
   const caseNumbers = toArray(jud?.Geschaeftszahl?.item);
   const caseNumber = caseNumbers.at(0);
-  const court = justiz?.Gericht ?? meta?.Technisch?.Organ;
+  const court =
+    toOptionalValue(justiz?.Gericht) ?? toOptionalValue(meta?.Technisch?.Organ);
 
   if (!caseNumber || !court) {
     return null;
@@ -204,25 +366,25 @@ const parseRisItem = async (
 
   return {
     caseNumber,
-    ecli: jud?.EuropeanCaseLawIdentifier,
+    ecli: toOptionalValue(jud?.EuropeanCaseLawIdentifier),
     court,
     country: "AUT",
     language: "de",
-    decisionDate: jud?.Entscheidungsdatum,
-    decisionType: jud?.Dokumenttyp,
+    decisionDate: toOptionalValue(jud?.Entscheidungsdatum),
+    decisionType: toOptionalValue(jud?.Dokumenttyp),
     fulltext,
-    sourceUrl: meta?.Allgemein?.DokumentUrl,
+    sourceUrl: toOptionalValue(meta?.Allgemein?.DokumentUrl),
     documentUrl: htmlUrl,
     metadata: {
-      risId: meta?.Technisch?.ID,
-      applikation: meta?.Technisch?.Applikation,
+      risId: toOptionalValue(meta?.Technisch?.ID),
+      applikation: toOptionalValue(meta?.Technisch?.Applikation),
       normen: toArray(jud?.Normen?.item),
       rechtsgebiete: toArray(justiz?.Rechtsgebiete?.item),
       entscheidungsart: extractEntscheidungsart(justiz),
       additionalCaseNumbers:
         caseNumbers.length > 1 ? caseNumbers.slice(1) : undefined,
-      published: meta?.Allgemein?.Veroeffentlicht,
-      modified: meta?.Allgemein?.Geaendert,
+      published: toOptionalValue(meta?.Allgemein?.Veroeffentlicht),
+      modified: toOptionalValue(meta?.Allgemein?.Geaendert),
     },
     rawHash: hashContent(raw_),
     parserVersion: PARSER_VERSION,
@@ -259,12 +421,7 @@ export const atCourtsAdapter: SourceAdapter = {
 
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      // SAFETY: structural check confirms object; all
-      // fields are optional so missing properties
-      // degrade gracefully.
-      return typeof json === "object" && json !== null
-        ? (json as RisApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-        : {};
+      return isRisApiResponse(json) ? json : {};
     },
 
     extractItems: (data) => {

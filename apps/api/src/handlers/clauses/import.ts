@@ -18,7 +18,7 @@ const importBodySchema = t.Object({
 type ImportProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   body: { file: File };
 };
 

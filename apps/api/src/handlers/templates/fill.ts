@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import type { TemplateData } from "@/api/handlers/docx/types";
+import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -29,7 +29,7 @@ const PDF_MIME_TYPE = "application/pdf";
 type FillProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   body: { file: File; values: string };
   query: { format?: "docx" | "pdf" };
 };
@@ -94,11 +94,18 @@ export const fillHandler = async ({
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  // SAFETY: `parsed` is validated as a non-null, non-array object
-  // with no null values. `fillTemplate` handles arbitrary value
-  // shapes via `isTemplateData` discrimination internally.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const result = await fillTemplate(buffer, parsed as TemplateData);
+  if (!isTemplateData(parsed)) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "'values' must contain only strings, numbers, booleans, " +
+          "arrays, nested objects, or rich-text patch values.",
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const result = await fillTemplate(buffer, parsed);
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";

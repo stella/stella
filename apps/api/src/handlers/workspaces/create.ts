@@ -11,8 +11,6 @@ import {
 } from "@/api/db/schema";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-// oxlint-disable-next-line no-restricted-imports: freshly-inserted workspace PK for FK usage
-import { toSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -22,6 +20,7 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { workspace: ["create"] },
@@ -128,7 +127,7 @@ const createWorkspaces = createRootHandler(
       )`,
       );
 
-      const workspaceId = toSafeId<"workspace">(body.id);
+      const workspaceId = brandPersistedWorkspaceId(body.id);
 
       await tx.insert(workspaceMembers).values({
         workspaceId,

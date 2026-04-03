@@ -246,13 +246,14 @@ const toRoman = (n: number): string => {
   let result = "";
   let remaining = n;
   for (let i = 0; i < vals.length; i++) {
-    // SAFETY: i is bounded by vals.length, so vals[i] and syms[i] always exist
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    while (remaining >= vals[i]!) {
-      // oxlint-disable-next-line typescript/no-non-null-assertion
-      result += syms[i]!;
-      // oxlint-disable-next-line typescript/no-non-null-assertion
-      remaining -= vals[i]!;
+    const value = vals.at(i);
+    const symbol = syms.at(i);
+    if (value === undefined || symbol === undefined) {
+      continue;
+    }
+    while (remaining >= value) {
+      result += symbol;
+      remaining -= value;
     }
   }
   return result;

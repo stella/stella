@@ -13,9 +13,15 @@ import type {
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   hashContent,
+  isNullishArrayOf,
+  isNullishNumber,
+  isNullishString,
+  isNullishValue,
   parseCeDate,
+  toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Slovak Courts adapter.
@@ -34,52 +40,120 @@ const BASE_URL =
 const PAGE_SIZE = 25;
 
 type SkSud = {
-  registreGuid?: string;
-  nazov?: string;
+  registreGuid?: string | null;
+  nazov?: string | null;
 };
 
 type SkSudca = {
-  registreGuid?: string;
-  meno?: string;
+  registreGuid?: string | null;
+  meno?: string | null;
 };
 
 type SkApiItem = {
-  guid?: string;
-  spisovaZnacka?: string;
-  identifikacneCislo?: string;
-  sud?: SkSud;
-  sudca?: SkSudca;
-  datumVydania?: string;
-  formaRozhodnutia?: string;
-  povaha?: string[];
+  guid?: string | null;
+  spisovaZnacka?: string | null;
+  identifikacneCislo?: string | null;
+  sud?: SkSud | null;
+  sudca?: SkSudca | null;
+  datumVydania?: string | null;
+  formaRozhodnutia?: string | null;
+  povaha?: string[] | null;
 };
 
 type SkDokument = {
-  name?: string;
-  fileExtension?: string;
-  url?: string;
+  name?: string | null;
+  fileExtension?: string | null;
+  url?: string | null;
 };
 
 type SkOdkazovanyPredpis = {
-  nazov?: string;
-  url?: string;
+  nazov?: string | null;
+  url?: string | null;
 };
 
 type SkDetailItem = SkApiItem & {
-  ecli?: string;
-  podOblast?: string[];
-  odkazovanePredpisy?: SkOdkazovanyPredpis[];
-  dokument?: SkDokument & { size?: number };
-  updateDate?: string;
+  ecli?: string | null;
+  podOblast?: string[] | null;
+  odkazovanePredpisy?: SkOdkazovanyPredpis[] | null;
+  dokument?: (SkDokument & { size?: number | null }) | null;
+  updateDate?: string | null;
 };
 
 type SkApiResponse = {
-  rozhodnutieList?: SkApiItem[];
-  numFound?: number;
+  rozhodnutieList?: SkApiItem[] | null;
+  numFound?: number | null;
 };
 
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isOptionalNumber = (value: unknown): value is number | null | undefined =>
+  isNullishNumber(value);
+
+const isOptionalStringArray = (
+  value: unknown,
+): value is string[] | null | undefined =>
+  value === undefined || value === null || isStringArray(value);
+
+const isSkSud = (value: unknown): value is SkSud =>
+  isRecord(value) &&
+  isNullishString(value.registreGuid) &&
+  isNullishString(value.nazov);
+
+const isSkSudca = (value: unknown): value is SkSudca =>
+  isRecord(value) &&
+  isNullishString(value.registreGuid) &&
+  isNullishString(value.meno);
+
+const isSkDokument = (
+  value: unknown,
+): value is SkDokument & { size?: number } =>
+  isRecord(value) &&
+  isNullishString(value.name) &&
+  isNullishString(value.fileExtension) &&
+  isNullishString(value.url) &&
+  isOptionalNumber(value.size);
+
+const isSkOdkazovanyPredpis = (value: unknown): value is SkOdkazovanyPredpis =>
+  isRecord(value) && isNullishString(value.nazov) && isNullishString(value.url);
+
+const isSkApiItem = (value: unknown): value is SkApiItem =>
+  isRecord(value) &&
+  isNullishString(value.guid) &&
+  isNullishString(value.spisovaZnacka) &&
+  isNullishString(value.identifikacneCislo) &&
+  isNullishValue(value.sud, isSkSud) &&
+  isNullishValue(value.sudca, isSkSudca) &&
+  isNullishString(value.datumVydania) &&
+  isNullishString(value.formaRozhodnutia) &&
+  isOptionalStringArray(value.povaha);
+
+const isSkApiItemRecord = (
+  value: unknown,
+): value is Record<string, unknown> & SkApiItem =>
+  isRecord(value) && isSkApiItem(value);
+
+const isSkDetailItem = (value: unknown): value is SkDetailItem => {
+  if (!isSkApiItemRecord(value)) {
+    return false;
+  }
+
+  return (
+    isNullishString(value.ecli) &&
+    isOptionalStringArray(value.podOblast) &&
+    isNullishArrayOf(value.odkazovanePredpisy, isSkOdkazovanyPredpis) &&
+    isNullishValue(value.dokument, isSkDokument) &&
+    isNullishString(value.updateDate)
+  );
+};
+
+const isSkApiResponse = (value: unknown): value is SkApiResponse =>
+  isRecord(value) &&
+  isNullishArrayOf(value.rozhodnutieList, isSkApiItem) &&
+  isOptionalNumber(value.numFound);
+
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
-const parseSkDate = (raw: string | undefined): string | undefined => {
+const parseSkDate = (raw: string | null | undefined): string | undefined => {
   if (!raw) {
     return;
   }
@@ -114,12 +188,10 @@ const fetchDetail = async (
   }
 
   const json: unknown = await response.json();
-  if (typeof json !== "object" || json === null) {
+  if (!isSkDetailItem(json)) {
     return null;
   }
-  // SAFETY: structural check above confirms object; fields
-  // are all optional so parseItem handles missing properties.
-  return json as SkDetailItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
+  return json;
 };
 
 /**
@@ -156,17 +228,17 @@ const fetchPdfBytes = async (
  */
 const sourceUrlForDecision = (
   guid: string,
-  documentUrl: string | undefined,
+  documentUrl: string | null | undefined,
 ): string => documentUrl ?? `${BASE_URL}/${encodeURIComponent(guid)}`;
 
 const parseItemWithDetail = async (
   raw: unknown,
   signal?: AbortSignal,
 ): Promise<IngestionResult | null> => {
-  // SAFETY: items come from extractItems which returns
-  // data.rozhodnutieList (SkApiItem[]); all fields are
-  // optional so missing properties degrade gracefully.
-  const item = raw as SkApiItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
+  if (!isSkApiItem(raw)) {
+    return null;
+  }
+  const item = raw;
 
   if (!item.spisovaZnacka || !item.sud?.nazov) {
     return null;
@@ -186,9 +258,9 @@ const parseItemWithDetail = async (
 
   const caseNumber = item.spisovaZnacka;
   const decisionDate = parseSkDate(item.datumVydania);
-  const decisionType = item.formaRozhodnutia;
+  const decisionType = toOptionalValue(item.formaRozhodnutia);
   const court = item.sud.nazov;
-  const ecli = detail?.ecli;
+  const ecli = toOptionalValue(detail?.ecli);
 
   // Parse PDF into structured AST using @libpdf/core
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
@@ -224,25 +296,25 @@ const parseItemWithDetail = async (
     sourceUrl: item.guid
       ? sourceUrlForDecision(item.guid, detail?.dokument?.url)
       : undefined,
-    documentUrl: detail?.dokument?.url,
+    documentUrl: toOptionalValue(detail?.dokument?.url),
     metadata: {
       caseNumber,
       ecli,
       court,
       decisionDate,
       decisionType,
-      guid: item.guid,
-      identifikacneCislo: item.identifikacneCislo,
-      judge: item.sudca?.meno,
-      judgeRegistreGuid: item.sudca?.registreGuid,
-      courtRegistreGuid: item.sud?.registreGuid,
+      guid: toOptionalValue(item.guid),
+      identifikacneCislo: toOptionalValue(item.identifikacneCislo),
+      judge: toOptionalValue(item.sudca?.meno),
+      judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
+      courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
       decisionNature: item.povaha,
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,
-      documentName: detail?.dokument?.name,
-      documentExtension: detail?.dokument?.fileExtension,
+      documentName: toOptionalValue(detail?.dokument?.name),
+      documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
-      updateDate: detail?.updateDate,
+      updateDate: toOptionalValue(detail?.updateDate),
     },
     rawHash: hashContent(rawJson),
     parserVersion: PARSER_VERSION,
@@ -279,22 +351,14 @@ export const skCourtsAdapter: SourceAdapter = {
 
     parseResponse: async (response) => {
       const json: unknown = await response.json();
-      // SAFETY: structural check confirms object; all
-      // fields are optional so missing properties
-      // degrade gracefully.
-      return typeof json === "object" && json !== null
-        ? (json as SkApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-        : {};
+      return isSkApiResponse(json) ? json : {};
     },
 
     extractItems: (data) => ({
       items: data.rozhodnutieList ?? [],
-      total: data.numFound,
+      total: toOptionalValue(data.numFound),
     }),
 
-    // SAFETY: parseItemWithDetail accepts unknown as first
-    // arg via the SkApiItem cast inside it; signature
-    // matches PagePaginationOptions["parseItem"].
     parseItem: parseItemWithDetail,
   }),
 };

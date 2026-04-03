@@ -9,7 +9,4 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const includes = <T extends string>(
   arr: readonly T[],
   value: string,
-): value is T =>
-  // SAFETY: widening is sound; .includes() only checks equality.
-  // eslint-disable-next-line typescript/consistent-type-assertions
-  (arr as readonly string[]).includes(value);
+): value is T => arr.some((item) => item === value);

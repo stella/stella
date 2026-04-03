@@ -26,7 +26,7 @@ type CreateEntityBodySchema = Static<typeof createEntityBodySchema>;
 type CreateEntitiesHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: SafeId<"user">;
   body: CreateEntityBodySchema;
 };
 

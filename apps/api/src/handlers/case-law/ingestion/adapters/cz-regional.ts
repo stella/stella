@@ -16,9 +16,16 @@ import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
+  isArrayOf,
+  isNullishArrayOf,
+  isNullishNumber,
+  isNullishString,
+  isNullishValue,
+  toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Czech Regional Courts adapter.
@@ -58,23 +65,23 @@ const mapDecisionType = (type: string | undefined): string | undefined => {
 
 /** Shape of a single item in the paginated day response. */
 type CzRegionalApiItem = {
-  jednaciCislo?: string;
-  ecli?: string;
-  soud?: string;
-  autor?: string;
-  predmetRizeni?: string;
-  datumVydani?: string;
-  datumZverejneni?: string;
-  klicovaSlova?: string[];
-  zminenaUstanoveni?: string[];
-  odkaz?: string;
+  jednaciCislo?: string | null;
+  ecli?: string | null;
+  soud?: string | null;
+  autor?: string | null;
+  predmetRizeni?: string | null;
+  datumVydani?: string | null;
+  datumZverejneni?: string | null;
+  klicovaSlova?: string[] | null;
+  zminenaUstanoveni?: string[] | null;
+  odkaz?: string | null;
 };
 
 /** Paginated response from /api/opendata/{y}/{m}/{d}. */
 type CzRegionalPageResponse = {
-  items?: CzRegionalApiItem[];
-  totalPages?: number;
-  pageNumber?: number;
+  items?: CzRegionalApiItem[] | null;
+  totalPages?: number | null;
+  pageNumber?: number | null;
 };
 
 /** Paragraph shape within finaldoc structured sections. */
@@ -96,21 +103,21 @@ type FinaldocStyle = {
 
 /** Response shape from /api/finaldoc/{uuid}. */
 type CzRegionalFinaldoc = {
-  verdictText?: string;
-  justificationText?: string;
-  header?: FinaldocParagraph[];
-  verdict?: FinaldocParagraph[];
-  justification?: FinaldocParagraph[];
-  information?: FinaldocParagraph[];
-  styles?: FinaldocStyle[];
+  verdictText?: string | null;
+  justificationText?: string | null;
+  header?: FinaldocParagraph[] | null;
+  verdict?: FinaldocParagraph[] | null;
+  justification?: FinaldocParagraph[] | null;
+  information?: FinaldocParagraph[] | null;
+  styles?: FinaldocStyle[] | null;
   metadata?: {
-    type?: string;
-    solver?: string;
-    caseResultType?: string;
-    caseSubject?: string;
-    regulations?: string[];
-    flags?: string[];
-  };
+    type?: string | null;
+    solver?: string | null;
+    caseResultType?: string | null;
+    caseSubject?: string | null;
+    regulations?: string[] | null;
+    flags?: string[] | null;
+  } | null;
 };
 
 type FinaldocResult = {
@@ -127,6 +134,78 @@ type FinaldocResult = {
     flags?: string[];
   };
 };
+
+const isOptionalStringArray = (
+  value: unknown,
+): value is string[] | null | undefined =>
+  value === undefined ||
+  value === null ||
+  isArrayOf(value, (item): item is string => typeof item === "string");
+
+const isFinaldocText = (
+  value: unknown,
+): value is { text: string; anonStyle: string } =>
+  isRecord(value) &&
+  typeof value.text === "string" &&
+  typeof value.anonStyle === "string";
+
+const isFinaldocParagraph = (value: unknown): value is FinaldocParagraph =>
+  isRecord(value) &&
+  isArrayOf(value.texts, isFinaldocText) &&
+  typeof value.styleLocalId === "number" &&
+  "tableCellInfo" in value;
+
+const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
+  isRecord(value) &&
+  typeof value.localId === "number" &&
+  typeof value.alignment === "string" &&
+  typeof value.hasSpaceBefore === "boolean" &&
+  typeof value.hasSpaceAfter === "boolean" &&
+  typeof value.bold === "boolean" &&
+  typeof value.italic === "boolean";
+
+const isCzRegionalMetadata = (
+  value: unknown,
+): value is NonNullable<CzRegionalFinaldoc["metadata"]> =>
+  isRecord(value) &&
+  isNullishString(value.type) &&
+  isNullishString(value.solver) &&
+  isNullishString(value.caseResultType) &&
+  isNullishString(value.caseSubject) &&
+  isOptionalStringArray(value.regulations) &&
+  isOptionalStringArray(value.flags);
+
+const isCzRegionalFinaldoc = (value: unknown): value is CzRegionalFinaldoc =>
+  isRecord(value) &&
+  isNullishString(value.verdictText) &&
+  isNullishString(value.justificationText) &&
+  isNullishArrayOf(value.header, isFinaldocParagraph) &&
+  isNullishArrayOf(value.verdict, isFinaldocParagraph) &&
+  isNullishArrayOf(value.justification, isFinaldocParagraph) &&
+  isNullishArrayOf(value.information, isFinaldocParagraph) &&
+  isNullishArrayOf(value.styles, isFinaldocStyle) &&
+  isNullishValue(value.metadata, isCzRegionalMetadata);
+
+const isCzRegionalApiItem = (value: unknown): value is CzRegionalApiItem =>
+  isRecord(value) &&
+  isNullishString(value.jednaciCislo) &&
+  isNullishString(value.ecli) &&
+  isNullishString(value.soud) &&
+  isNullishString(value.autor) &&
+  isNullishString(value.predmetRizeni) &&
+  isNullishString(value.datumVydani) &&
+  isNullishString(value.datumZverejneni) &&
+  isOptionalStringArray(value.klicovaSlova) &&
+  isOptionalStringArray(value.zminenaUstanoveni) &&
+  isNullishString(value.odkaz);
+
+const isCzRegionalPageResponse = (
+  value: unknown,
+): value is CzRegionalPageResponse =>
+  isRecord(value) &&
+  isNullishArrayOf(value.items, isCzRegionalApiItem) &&
+  isNullishNumber(value.totalPages) &&
+  isNullishNumber(value.pageNumber);
 
 /**
  * Fetch fulltext from the /api/finaldoc/{uuid} endpoint.
@@ -164,24 +243,30 @@ const fetchFinaldoc = async (
       return empty;
     }
 
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- finaldoc API contract
-    const doc = (await response.json()) as CzRegionalFinaldoc;
+    const doc = await response.json();
+    if (!isCzRegionalFinaldoc(doc)) {
+      return empty;
+    }
     const sourceRaw = JSON.stringify(doc);
 
-    const decisionType = mapDecisionType(doc.metadata?.type);
+    const decisionType = mapDecisionType(toOptionalValue(doc.metadata?.type));
 
     const richMetadata: FinaldocResult["richMetadata"] = {};
-    if (doc.metadata?.type) {
-      richMetadata.decisionTypeRaw = doc.metadata.type;
+    const decisionTypeRaw = toOptionalValue(doc.metadata?.type);
+    if (decisionTypeRaw) {
+      richMetadata.decisionTypeRaw = decisionTypeRaw;
     }
-    if (doc.metadata?.solver) {
-      richMetadata.solver = doc.metadata.solver;
+    const solver = toOptionalValue(doc.metadata?.solver);
+    if (solver) {
+      richMetadata.solver = solver;
     }
-    if (doc.metadata?.caseResultType) {
-      richMetadata.caseResultType = doc.metadata.caseResultType;
+    const caseResultType = toOptionalValue(doc.metadata?.caseResultType);
+    if (caseResultType) {
+      richMetadata.caseResultType = caseResultType;
     }
-    if (doc.metadata?.caseSubject) {
-      richMetadata.caseSubject = doc.metadata.caseSubject;
+    const caseSubject = toOptionalValue(doc.metadata?.caseSubject);
+    if (caseSubject) {
+      richMetadata.caseSubject = caseSubject;
     }
     if (doc.metadata?.regulations) {
       richMetadata.regulations = doc.metadata.regulations;
@@ -192,11 +277,13 @@ const fetchFinaldoc = async (
 
     // Plain text fallback
     const textParts: string[] = [];
-    if (doc.verdictText) {
-      textParts.push(doc.verdictText);
+    const verdictText = toOptionalValue(doc.verdictText);
+    if (verdictText) {
+      textParts.push(verdictText);
     }
-    if (doc.justificationText) {
-      textParts.push(doc.justificationText);
+    const justificationText = toOptionalValue(doc.justificationText);
+    if (justificationText) {
+      textParts.push(justificationText);
     }
     const plainFulltext =
       textParts.length > 0 ? textParts.join("\n\n") : undefined;
@@ -215,8 +302,8 @@ const fetchFinaldoc = async (
         justification: doc.justification ?? [],
         information: doc.information ?? [],
         styles: doc.styles ?? [],
-        verdictText: doc.verdictText ?? "",
-        justificationText: doc.justificationText ?? "",
+        verdictText: verdictText ?? "",
+        justificationText: justificationText ?? "",
       });
 
       return {
@@ -250,22 +337,22 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
 
   return {
     caseNumber: item.jednaciCislo,
-    ecli: item.ecli,
+    ecli: toOptionalValue(item.ecli),
     court: item.soud,
     country: "CZE",
     language: "cs",
-    decisionDate: item.datumVydani,
-    sourceUrl: item.odkaz,
-    documentUrl: item.odkaz,
+    decisionDate: toOptionalValue(item.datumVydani),
+    sourceUrl: toOptionalValue(item.odkaz),
+    documentUrl: toOptionalValue(item.odkaz),
     metadata: {
       caseNumber: item.jednaciCislo,
-      ecli: item.ecli,
+      ecli: toOptionalValue(item.ecli),
       court: item.soud,
-      decisionDate: item.datumVydani,
+      decisionDate: toOptionalValue(item.datumVydani),
       decisionType: undefined,
-      author: item.autor,
-      subjectOfProceeding: item.predmetRizeni,
-      publishedDate: item.datumZverejneni,
+      author: toOptionalValue(item.autor),
+      subjectOfProceeding: toOptionalValue(item.predmetRizeni),
+      publishedDate: toOptionalValue(item.datumZverejneni),
       keywords: item.klicovaSlova,
       mentionedStatutes: item.zminenaUstanoveni,
     },
@@ -434,9 +521,14 @@ export const czRegionalAdapter: SourceAdapter = {
           });
         }
 
-        // SAFETY: response shape validated by optional fields in CzRegionalPageResponse
-        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
-        const json = (await response.json()) as CzRegionalPageResponse;
+        const json = await response.json();
+        if (!isCzRegionalPageResponse(json)) {
+          throw new AdapterFetchError({
+            message: "CZ Regional API returned an invalid payload",
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            cursor,
+          });
+        }
         const items = json.items ?? [];
 
         const decisions: IngestionResult[] = [];

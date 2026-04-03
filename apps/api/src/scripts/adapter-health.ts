@@ -28,6 +28,7 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { isRecord } from "@/api/lib/type-guards";
 
 // ── Types ───────────────────────────────────────────────
 
@@ -126,11 +127,15 @@ const FIELD_COLUMN_MAP = {
   document_url: caseLawDecisions.documentUrl,
   source_hash: caseLawDecisions.sourceHash,
 } as const;
-
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- SAFETY: keys match the const object literal above
-const CHECKED_FIELDS = Object.keys(
-  FIELD_COLUMN_MAP,
-) as (keyof typeof FIELD_COLUMN_MAP)[];
+const CHECKED_FIELDS = [
+  "ecli",
+  "decision_date",
+  "decision_type",
+  "fulltext",
+  "source_url",
+  "document_url",
+  "source_hash",
+] as const satisfies readonly (keyof typeof FIELD_COLUMN_MAP)[];
 
 /** Adapter is "stuck" if no growth in this many hours. */
 const STUCK_THRESHOLD_HOURS = 12;
@@ -405,12 +410,8 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       ? (now.getTime() - source.lastSyncAt.getTime()) / 3_600_000
       : null;
 
-    // SAFETY: fcRow includes dynamic field columns built
-    // from CHECKED_FIELDS; the cast lets parseFieldCoverage
-    // access them by name. All fields come from the constant.
     const fcRow = fieldCoverageMap.get(source.id);
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    const fcRecord = fcRow as unknown as Record<string, unknown> | undefined;
+    const fcRecord = isRecord(fcRow) ? fcRow : undefined;
     const fields = fcRecord ? parseFieldCoverage(fcRecord, total) : [];
 
     // Derive fulltext coverage from field coverage

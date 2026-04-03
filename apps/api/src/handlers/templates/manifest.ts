@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -87,10 +88,8 @@ export const manifestHandler = async ({
     );
   }
 
-  const hasInvalidField = parsed.fields.some(
-    (f: unknown) => !isRecord(f) || typeof f.path !== "string",
-  );
-  if (hasInvalidField) {
+  const fields = parsed.fields;
+  if (!fields.every(isFieldMeta)) {
     return new Response(
       JSON.stringify({
         error:
@@ -101,13 +100,8 @@ export const manifestHandler = async ({
     );
   }
 
-  const hasInvalidCondition = parsed.conditions.some(
-    (c: unknown) =>
-      !isRecord(c) ||
-      typeof c.name !== "string" ||
-      typeof c.expression !== "string",
-  );
-  if (hasInvalidCondition) {
+  const conditions = parsed.conditions;
+  if (!conditions.every(isNamedCondition)) {
     return new Response(
       JSON.stringify({
         error:
@@ -118,19 +112,11 @@ export const manifestHandler = async ({
     );
   }
 
-  // SAFETY: top-level shape and element-level required properties
-  // are validated above. Optional FieldMeta properties (label,
-  // inputType, options, validation) are handled gracefully by
-  // buildFieldXml which uses ?? and conditional checks.
-  // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
-  // oxlint-disable typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
-  const manifest = {
+  const manifest: TemplateManifest = {
     version: parsed.version,
-    fields: parsed.fields,
-    conditions: parsed.conditions,
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  } as TemplateManifest;
-  // oxlint-enable typescript-eslint/no-unsafe-assignment
+    fields,
+    conditions,
+  };
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const resultBuffer = await writeManifest(buffer, manifest);

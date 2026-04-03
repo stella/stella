@@ -11,7 +11,9 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
+import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import {
   extractCitations,
@@ -23,6 +25,7 @@ import { captureError } from "@/api/lib/analytics";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { s3 } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
 
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
@@ -155,11 +158,10 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
     if (Array.isArray(val)) {
       return val.map((item) => deepSanitizeImpl(item));
     }
-    if (val !== null && typeof val === "object") {
+    if (isRecord(val)) {
       // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator
       const out: Record<string, unknown> = {};
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- val is a non-null object
-      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      for (const [k, v] of Object.entries(val)) {
         out[k] = deepSanitizeImpl(v, k);
       }
       return out;
@@ -167,11 +169,14 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
     return val;
   };
 
-  // SAFETY: deepSanitize only replaces string leaves;
-  // the structural shape is preserved.
-  const deepSanitize = <T>(val: T): T => deepSanitizeImpl(val) as T; // eslint-disable-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  const sanitizeDocumentAst = (
+    documentAst: IngestionResult["documentAst"],
+  ): IngestionResult["documentAst"] => {
+    const sanitized = deepSanitizeImpl(documentAst);
+    return isDocumentAst(sanitized) ? sanitized : EMPTY_AST;
+  };
 
-  const sanitizedAst = deepSanitize(r.documentAst);
+  const sanitizedAst = sanitizeDocumentAst(r.documentAst);
 
   return {
     ...r,

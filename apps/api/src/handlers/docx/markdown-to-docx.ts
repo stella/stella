@@ -27,7 +27,7 @@ import {
   WidthType,
 } from "docx";
 import { lexer } from "marked";
-import type { Token, Tokens } from "marked";
+import type { MarkedToken, Token, Tokens } from "marked";
 
 import { DEFAULT_STYLE_MAPPING } from "./style-guide";
 import type { StyleMapping } from "./style-guide";
@@ -53,14 +53,58 @@ type InlineFormat = {
   italics?: boolean;
 };
 
+type KnownTokenType = MarkedToken["type"];
+
+const hasTokenType = <TType extends KnownTokenType>(
+  token: Token,
+  type: TType,
+): token is Extract<MarkedToken, { type: TType }> => token.type === type;
+
+const isStrongToken = (token: Token): token is Tokens.Strong =>
+  hasTokenType(token, "strong") && Array.isArray(token.tokens);
+
+const isEmToken = (token: Token): token is Tokens.Em =>
+  hasTokenType(token, "em") && Array.isArray(token.tokens);
+
+const isCodespanToken = (token: Token): token is Tokens.Codespan =>
+  hasTokenType(token, "codespan") && typeof token.text === "string";
+
+const isLinkToken = (token: Token): token is Tokens.Link =>
+  hasTokenType(token, "link") &&
+  typeof token.text === "string" &&
+  Array.isArray(token.tokens);
+
+const isTextToken = (token: Token): token is Tokens.Text =>
+  hasTokenType(token, "text") && typeof token.text === "string";
+
+const isHeadingToken = (token: Token): token is Tokens.Heading =>
+  hasTokenType(token, "heading") &&
+  typeof token.depth === "number" &&
+  Array.isArray(token.tokens);
+
+const isParagraphToken = (token: Token): token is Tokens.Paragraph =>
+  hasTokenType(token, "paragraph") && Array.isArray(token.tokens);
+
+const isBlockquoteToken = (token: Token): token is Tokens.Blockquote =>
+  hasTokenType(token, "blockquote") && Array.isArray(token.tokens);
+
+const isListToken = (token: Token): token is Tokens.List =>
+  hasTokenType(token, "list") && Array.isArray(token.items);
+
+const isTableToken = (token: Token): token is Tokens.Table =>
+  hasTokenType(token, "table") &&
+  Array.isArray(token.header) &&
+  Array.isArray(token.rows);
+
+const isCodeToken = (token: Token): token is Tokens.Code =>
+  hasTokenType(token, "code") && typeof token.text === "string";
+
 /**
  * Parse inline tokens (bold, italic, code, links, text) into
  * an array of TextRun elements. The `format` parameter carries
  * inherited formatting from parent nodes (e.g., bold from a
  * strong wrapper).
  */
-// SAFETY: token.type discriminates the marked Token union;
-// each switch branch narrows to the corresponding Tokens.* subtype.
 const parseInlineTokens = (
   tokens: Token[],
   format: InlineFormat = {},
@@ -68,71 +112,60 @@ const parseInlineTokens = (
   const runs: TextRun[] = [];
 
   for (const token of tokens) {
-    switch (token.type) {
-      case "strong":
-        runs.push(
-          // SAFETY: token.type discriminates; branch narrows to Tokens.Strong
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          ...parseInlineTokens((token as Tokens.Strong).tokens, {
-            ...format,
-            bold: true,
-          }),
-        );
-        break;
+    if (isStrongToken(token)) {
+      runs.push(
+        ...parseInlineTokens(token.tokens, {
+          ...format,
+          bold: true,
+        }),
+      );
+      continue;
+    }
 
-      case "em":
-        runs.push(
-          // SAFETY: token.type discriminates; branch narrows to Tokens.Em
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          ...parseInlineTokens((token as Tokens.Em).tokens, {
-            ...format,
-            italics: true,
-          }),
-        );
-        break;
+    if (isEmToken(token)) {
+      runs.push(
+        ...parseInlineTokens(token.tokens, {
+          ...format,
+          italics: true,
+        }),
+      );
+      continue;
+    }
 
-      case "codespan":
-        runs.push(
-          new TextRun({
-            // SAFETY: token.type discriminates; branch narrows to Tokens.Codespan
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            text: (token as Tokens.Codespan).text,
-            font: "Courier New",
-            ...format,
-          }),
-        );
-        break;
+    if (isCodespanToken(token)) {
+      runs.push(
+        new TextRun({
+          text: token.text,
+          font: "Courier New",
+          ...format,
+        }),
+      );
+      continue;
+    }
 
-      case "link": {
-        // SAFETY: token.type discriminates; branch narrows to Tokens.Link
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        const link = token as Tokens.Link;
-        runs.push(
-          new TextRun({
-            text: link.text,
-            style: "Hyperlink",
-            ...format,
-          }),
-        );
-        break;
-      }
+    if (isLinkToken(token)) {
+      runs.push(
+        new TextRun({
+          text: token.text,
+          style: "Hyperlink",
+          ...format,
+        }),
+      );
+      continue;
+    }
 
-      case "text":
-        runs.push(
-          new TextRun({
-            // SAFETY: token.type discriminates; branch narrows to Tokens.Text
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            text: (token as Tokens.Text).text,
-            ...format,
-          }),
-        );
-        break;
+    if (isTextToken(token)) {
+      runs.push(
+        new TextRun({
+          text: token.text,
+          ...format,
+        }),
+      );
+      continue;
+    }
 
-      default:
-        if ("text" in token && typeof token.text === "string") {
-          runs.push(new TextRun({ text: token.text, ...format }));
-        }
-        break;
+    if ("text" in token && typeof token.text === "string") {
+      runs.push(new TextRun({ text: token.text, ...format }));
     }
   }
 
@@ -167,13 +200,11 @@ const createConverters = (mapping: StyleMapping) => {
 
   const convertBlockquote = (token: Tokens.Blockquote): DocxChild[] =>
     token.tokens.flatMap((inner) => {
-      if (inner.type === "paragraph") {
+      if (isParagraphToken(inner)) {
         return [
           new Paragraph({
             style: mapping.blockquote,
-            // SAFETY: inner.type discriminates; branch narrows to Tokens.Paragraph
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            children: parseInlineTokens((inner as Tokens.Paragraph).tokens),
+            children: parseInlineTokens(inner.tokens),
           }),
         ];
       }
@@ -189,8 +220,7 @@ const createConverters = (mapping: StyleMapping) => {
       );
 
       const contentRuns =
-        // eslint-disable-next-line typescript-eslint/strict-boolean-expressions
-        firstBlock && "tokens" in firstBlock && firstBlock.tokens
+        firstBlock && "tokens" in firstBlock && Array.isArray(firstBlock.tokens)
           ? parseInlineTokens(firstBlock.tokens)
           : [new TextRun(item.text)];
 
@@ -253,73 +283,64 @@ const createConverters = (mapping: StyleMapping) => {
     });
   };
 
-  // SAFETY: token.type discriminates the marked Token union;
-  // each switch branch narrows to the corresponding Tokens.* subtype.
   const convertToken = (token: Token): DocxChild[] => {
-    switch (token.type) {
-      case "heading":
-        // SAFETY: token.type discriminates; branch narrows to Tokens.Heading
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        return [convertHeading(token as Tokens.Heading)];
-
-      case "paragraph":
-        return [
-          new Paragraph({
-            style: mapping.paragraph,
-            // SAFETY: token.type discriminates; branch narrows to Tokens.Paragraph
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            children: parseInlineTokens((token as Tokens.Paragraph).tokens),
-          }),
-        ];
-
-      case "blockquote":
-        // SAFETY: token.type discriminates; branch narrows to Tokens.Blockquote
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        return convertBlockquote(token as Tokens.Blockquote);
-
-      case "list":
-        // SAFETY: token.type discriminates; branch narrows to Tokens.List
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        return convertList(token as Tokens.List);
-
-      case "table":
-        // SAFETY: token.type discriminates; branch narrows to Tokens.Table
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        return [convertTable(token as Tokens.Table)];
-
-      case "code":
-        return [
-          new Paragraph({
-            children: [
-              new TextRun({
-                // SAFETY: token.type discriminates; branch narrows to Tokens.Code
-                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                text: (token as Tokens.Code).text,
-                font: "Courier New",
-              }),
-            ],
-          }),
-        ];
-
-      case "hr":
-        return [
-          new Paragraph({
-            border: {
-              bottom: {
-                style: BorderStyle.SINGLE,
-                size: 1,
-                color: "999999",
-              },
-            },
-          }),
-        ];
-
-      case "space":
-        return [];
-
-      default:
-        return [];
+    if (isHeadingToken(token)) {
+      return [convertHeading(token)];
     }
+
+    if (isParagraphToken(token)) {
+      return [
+        new Paragraph({
+          style: mapping.paragraph,
+          children: parseInlineTokens(token.tokens),
+        }),
+      ];
+    }
+
+    if (isBlockquoteToken(token)) {
+      return convertBlockquote(token);
+    }
+
+    if (isListToken(token)) {
+      return convertList(token);
+    }
+
+    if (isTableToken(token)) {
+      return [convertTable(token)];
+    }
+
+    if (isCodeToken(token)) {
+      return [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: token.text,
+              font: "Courier New",
+            }),
+          ],
+        }),
+      ];
+    }
+
+    if (hasTokenType(token, "hr")) {
+      return [
+        new Paragraph({
+          border: {
+            bottom: {
+              style: BorderStyle.SINGLE,
+              size: 1,
+              color: "999999",
+            },
+          },
+        }),
+      ];
+    }
+
+    if (hasTokenType(token, "space")) {
+      return [];
+    }
+
+    return [];
   };
 
   return { convertToken };
