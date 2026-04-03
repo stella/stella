@@ -6,13 +6,24 @@ import { Input } from "@stella/ui/components/input";
 import { API_BASE } from "../../lib/config";
 import { storage } from "../../lib/storage";
 
-type SignInStep =
-  | { type: "email" }
-  | { type: "otp"; email: string };
+/**
+ * Parse a Response body as JSON with a type assertion.
+ * Single suppression point for chrome/fetch untyped JSON.
+ */
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters
+const parseJson = async <T,>(
+  res: Response,
+  // SAFETY: caller verifies shape; used for known API contracts.
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+): Promise<T> => (await res.json()) as T;
+
+type SignInStep = { type: "email" } | { type: "otp"; email: string };
 
 type SignInProps = {
   onSuccess: () => void;
 };
+
+type ErrorBody = { message?: string };
 
 export const SignIn = ({ onSuccess }: SignInProps) => {
   const [step, setStep] = useState<SignInStep>({
@@ -25,7 +36,9 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
   const submitting = useRef(false);
 
   const handleSendOtp = async () => {
-    if (!email.trim()) {return;}
+    if (!email.trim()) {
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -44,13 +57,8 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
       );
 
       if (!res.ok) {
-        // SAFETY: error shape from better-auth.
-        const body = await res.json().catch(() => null);
-        setError(
-          // eslint-disable-next-line typescript/consistent-type-assertions
-          (body as { message?: string })?.message ??
-            "Failed to send code",
-        );
+        const body = await parseJson<ErrorBody>(res).catch(() => null);
+        setError(body?.message ?? "Failed to send code");
         return;
       }
 
@@ -63,8 +71,12 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
   };
 
   const handleVerifyOtp = async () => {
-    if (step.type !== "otp" || !otp.trim()) {return;}
-    if (submitting.current) {return;}
+    if (step.type !== "otp" || !otp.trim()) {
+      return;
+    }
+    if (submitting.current) {
+      return;
+    }
     submitting.current = true;
     setLoading(true);
     setError(null);
@@ -72,27 +84,19 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
     try {
       // Sign in via direct fetch to capture the
       // set-auth-token response header for bearer auth.
-      const res = await fetch(
-        `${API_BASE}/api/auth/sign-in/email-otp`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: step.email,
-            otp: otp.trim(),
-          }),
-          signal: AbortSignal.timeout(10_000),
-        },
-      );
+      const res = await fetch(`${API_BASE}/api/auth/sign-in/email-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: step.email,
+          otp: otp.trim(),
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
 
       if (!res.ok) {
-        // SAFETY: error shape from better-auth.
-        const body = await res.json().catch(() => null);
-        setError(
-          // eslint-disable-next-line typescript/consistent-type-assertions
-          (body as { message?: string })?.message ??
-            "Invalid code",
-        );
+        const body = await parseJson<ErrorBody>(res).catch(() => null);
+        setError(body?.message ?? "Invalid code");
         return;
       }
 
@@ -105,22 +109,15 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
       await storage.setBearerToken(token);
 
       // Set active organization.
-      const orgsRes = await fetch(
-        `${API_BASE}/api/auth/organization/list`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          signal: AbortSignal.timeout(10_000),
+      const orgsRes = await fetch(`${API_BASE}/api/auth/organization/list`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+        signal: AbortSignal.timeout(10_000),
+      });
 
       if (orgsRes.ok) {
-        // SAFETY: better-auth Organization[].
-        // eslint-disable-next-line typescript/consistent-type-assertions
-        let orgs = (await orgsRes.json()) as {
-          id: string;
-        }[];
+        let orgs = await parseJson<{ id: string }[]>(orgsRes);
 
         // New users have no org; create one.
         // NOTE: In production, this should match the
@@ -137,40 +134,33 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
-                name: step.email.split("@")[1]
-                  ?? "My Organization",
+                name: step.email.split("@")[1] ?? "My Organization",
                 slug: `org-${Date.now()}`,
               }),
               signal: AbortSignal.timeout(10_000),
             },
           );
           if (createRes.ok) {
-            // SAFETY: better-auth Organization.
-            // eslint-disable-next-line typescript/consistent-type-assertions
-            const created =
-              (await createRes.json()) as {
-                id: string;
-              };
+            const created = await parseJson<{
+              id: string;
+            }>(createRes);
             orgs = [created];
           }
         }
 
         const firstOrg = orgs.at(0);
         if (firstOrg) {
-          await fetch(
-            `${API_BASE}/api/auth/organization/set-active`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                organizationId: firstOrg.id,
-              }),
-              signal: AbortSignal.timeout(10_000),
+          await fetch(`${API_BASE}/api/auth/organization/set-active`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
-          );
+            body: JSON.stringify({
+              organizationId: firstOrg.id,
+            }),
+            signal: AbortSignal.timeout(10_000),
+          });
         }
       }
 
@@ -195,10 +185,8 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
               height={48}
               className="rounded-[10px]"
             />
-            <h1 className="text-xl font-semibold text-foreground">
-              stella
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <h1 className="text-foreground text-xl font-semibold">stella</h1>
+            <p className="text-muted-foreground text-sm leading-relaxed">
               Sign in to start clipping.
             </p>
           </div>
@@ -207,7 +195,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
             <div className="flex w-full flex-col gap-3">
               <label
                 htmlFor="sign-in-email"
-                className="text-xs font-medium text-foreground"
+                className="text-foreground text-xs font-medium"
               >
                 Email
               </label>
@@ -217,11 +205,11 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
                 type="email"
                 placeholder="you@firm.com"
                 value={email}
-                onChange={(e) =>
-                  setEmail(e.currentTarget.value)
-                }
+                onChange={(e) => setEmail(e.currentTarget.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {handleSendOtp();}
+                  if (e.key === "Enter") {
+                    void handleSendOtp();
+                  }
                 }}
                 disabled={loading}
                 autoFocus
@@ -237,15 +225,15 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
             </div>
           ) : (
             <div className="flex w-full flex-col gap-3">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 Enter the code sent to{" "}
-                <span className="font-medium text-foreground">
+                <span className="text-foreground font-medium">
                   {step.email}
                 </span>
               </p>
               <label
                 htmlFor="sign-in-otp"
-                className="text-xs font-medium text-foreground"
+                className="text-foreground text-xs font-medium"
               >
                 Verification code
               </label>
@@ -256,12 +244,11 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
                 inputMode="numeric"
                 placeholder="000000"
                 value={otp}
-                onChange={(e) =>
-                  setOtp(e.currentTarget.value)
-                }
+                onChange={(e) => setOtp(e.currentTarget.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter")
-                    {handleVerifyOtp();}
+                  if (e.key === "Enter") {
+                    void handleVerifyOtp();
+                  }
                 }}
                 disabled={loading}
                 autoFocus
@@ -276,7 +263,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
               </Button>
               <button
                 type="button"
-                className="text-xs text-muted-foreground underline hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground text-xs underline"
                 onClick={() => {
                   setStep({ type: "email" });
                   setOtp("");
@@ -288,11 +275,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
             </div>
           )}
 
-          {error ? (
-            <p className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </div>
       </div>
     </div>

@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@stella/ui/components/button";
 
@@ -20,14 +15,17 @@ type SessionUser = {
   email: string;
 };
 
+type SessionResponse = {
+  user: { name: string | null; email: string };
+};
+
 type AuthState =
   | { type: "loading" }
   | { type: "unauthenticated" }
   | { type: "authenticated"; user: SessionUser };
 
 export const App = () => {
-  const [activeMatter, setActiveMatter] =
-    useState<Matter | null>(null);
+  const [activeMatter, setActiveMatter] = useState<Matter | null>(null);
   const [authState, setAuthState] = useState<AuthState>({
     type: "loading",
   });
@@ -40,15 +38,12 @@ export const App = () => {
     }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/auth/get-session`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          signal: AbortSignal.timeout(10_000),
+      const res = await fetch(`${API_BASE}/api/auth/get-session`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+        signal: AbortSignal.timeout(10_000),
+      });
 
       if (!res.ok) {
         // Only clear token on auth failures; transient
@@ -61,10 +56,8 @@ export const App = () => {
       }
 
       // SAFETY: better-auth session response shape.
-      // eslint-disable-next-line typescript/consistent-type-assertions
-      const data = (await res.json()) as {
-        user: { name: string | null; email: string };
-      };
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      const data = (await res.json()) as SessionResponse;
       setAuthState({
         type: "authenticated",
         user: data.user,
@@ -77,15 +70,13 @@ export const App = () => {
   }, []);
 
   useEffect(() => {
-    checkSession();
+    void checkSession();
   }, [checkSession]);
 
   if (authState.type === "loading") {
     return (
       <div className="flex h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">
-          Loading...
-        </p>
+        <p className="text-muted-foreground text-sm">Loading...</p>
       </div>
     );
   }
@@ -123,11 +114,7 @@ export const App = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <UserHeader
-        user={user}
-        initials={initials}
-        onSignOut={handleSignOut}
-      />
+      <UserHeader user={user} initials={initials} onSignOut={handleSignOut} />
       <div className="flex-1 overflow-y-auto p-4">
         <MatterPicker onMatterChange={setActiveMatter} />
         <ClipForm activeMatter={activeMatter} />
@@ -143,41 +130,33 @@ type UserHeaderProps = {
   onSignOut: () => void;
 };
 
-const UserHeader = ({
-  user,
-  initials,
-  onSignOut,
-}: UserHeaderProps) => {
+const UserHeader = ({ user, initials, onSignOut }: UserHeaderProps) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) {return;}
+    if (!open) {
+      return;
+    }
     const handleClickOutside = (e: MouseEvent) => {
       if (
         menuRef.current &&
-        // eslint-disable-next-line typescript/consistent-type-assertions
-        !menuRef.current.contains(e.target as Node)
+        e.target instanceof Node &&
+        !menuRef.current.contains(e.target)
       ) {
         setOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside,
-      );
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
   return (
-    <header className="relative flex items-center justify-between border-b border-border px-4 py-2">
-      <span className="text-xs font-medium text-muted-foreground">
-        stella
-      </span>
+    <header className="border-border relative flex items-center justify-between border-b px-4 py-2">
+      <span className="text-muted-foreground text-xs font-medium">stella</span>
       <button
         type="button"
-        className="flex size-7 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className="bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground flex size-7 items-center justify-center rounded-full text-[11px] font-medium"
         onClick={() => setOpen((prev) => !prev)}
       >
         {initials}
@@ -185,15 +164,15 @@ const UserHeader = ({
       {open ? (
         <div
           ref={menuRef}
-          className="absolute right-4 top-10 z-10 w-48 rounded-lg border border-border bg-card p-2 shadow-md"
+          className="border-border bg-card absolute top-10 right-4 z-10 w-48 rounded-lg border p-2 shadow-md"
         >
-          <p className="truncate px-2 py-1 text-sm font-medium text-foreground">
+          <p className="text-foreground truncate px-2 py-1 text-sm font-medium">
             {user.name ?? user.email}
           </p>
-          <p className="truncate px-2 pb-2 text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate px-2 pb-2 text-xs">
             {user.email}
           </p>
-          <div className="border-t border-border pt-1">
+          <div className="border-border border-t pt-1">
             <Button
               variant="ghost"
               className="h-7 w-full justify-start px-2 text-xs"

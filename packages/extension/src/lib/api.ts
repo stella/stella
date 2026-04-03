@@ -14,13 +14,10 @@ const request = async <T>(
 ): Promise<ApiResult<T>> => {
   try {
     const token = await storage.getBearerToken();
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      // eslint-disable-next-line typescript/consistent-type-assertions
-      ...(init?.headers as Record<string, string>),
-    };
+    const headers = new Headers(init?.headers);
+    headers.set("Content-Type", "application/json");
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+      headers.set("Authorization", `Bearer ${token}`);
     }
 
     const res = await fetch(`${API_V1}${path}`, {
@@ -39,14 +36,11 @@ const request = async <T>(
     }
 
     // SAFETY: Response JSON shape matches T by API contract.
-    // eslint-disable-next-line typescript/consistent-type-assertions
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const data = (await res.json()) as T;
     return { ok: true, data };
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown error";
+    const message = error instanceof Error ? error.message : "Unknown error";
     return { ok: false, error: message };
   }
 };
@@ -63,8 +57,7 @@ type ClipResponse = { entityId: string };
 
 export const stellaApi = {
   getMatters: async (): Promise<ApiResult<Matter[]>> => {
-    const result =
-      await request<WorkspacesResponse>("/workspaces");
+    const result = await request<WorkspacesResponse>("/workspaces");
     if (!result.ok) {
       return result;
     }
@@ -78,15 +71,13 @@ export const stellaApi = {
     };
   },
 
-  createClip: async (
+  // eslint-disable-next-line typescript/promise-function-async
+  createClip: (
     workspaceId: string,
     data: ClipData,
   ): Promise<ApiResult<ClipResponse>> =>
-    request<ClipResponse>(
-      `/entities/${workspaceId}/clip`,
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      },
-    ),
+    request<ClipResponse>(`/entities/${workspaceId}/clip`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

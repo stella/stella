@@ -9,14 +9,24 @@ const KEYS = {
 
 const MAX_RECENT_CLIPS = 50;
 
+/**
+ * Typed wrapper around chrome.storage.local.get().
+ * Chrome returns `{ [key: string]: any }`; this narrows
+ * via a single suppression point instead of per-call casts.
+ */
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters
+const getStorageValue = async <T>(key: string): Promise<T | undefined> => {
+  const result = await chrome.storage.local.get(key);
+  // SAFETY: chrome.storage returns untyped values;
+  // we control all writes to these keys.
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  return result[key] as T | undefined;
+};
+
 export const storage = {
   getActiveMatter: async (): Promise<Matter | null> => {
-    const result = await chrome.storage.local.get(
-      KEYS.activeMatter,
-    );
-    // SAFETY: chrome.storage returns untyped values; we control writes.
-    // eslint-disable-next-line typescript/consistent-type-assertions
-    return (result[KEYS.activeMatter] as Matter | undefined) ?? null;
+    const value = await getStorageValue<Matter>(KEYS.activeMatter);
+    return value ?? null;
   },
 
   setActiveMatter: async (matter: Matter): Promise<void> => {
@@ -26,14 +36,8 @@ export const storage = {
   },
 
   getRecentClips: async (): Promise<RecentClip[]> => {
-    const result = await chrome.storage.local.get(
-      KEYS.recentClips,
-    );
-    return (
-      // SAFETY: chrome.storage returns untyped values; we control writes.
-      // eslint-disable-next-line typescript/consistent-type-assertions
-      (result[KEYS.recentClips] as RecentClip[] | undefined) ?? []
-    );
+    const value = await getStorageValue<RecentClip[]>(KEYS.recentClips);
+    return value ?? [];
   },
 
   addRecentClip: async (clip: RecentClip): Promise<void> => {
@@ -45,14 +49,8 @@ export const storage = {
   },
 
   getOfflineQueue: async (): Promise<QueuedClip[]> => {
-    const result = await chrome.storage.local.get(
-      KEYS.offlineQueue,
-    );
-    return (
-      // SAFETY: chrome.storage returns untyped values; we control writes.
-      // eslint-disable-next-line typescript/consistent-type-assertions
-      (result[KEYS.offlineQueue] as QueuedClip[] | undefined) ?? []
-    );
+    const value = await getStorageValue<QueuedClip[]>(KEYS.offlineQueue);
+    return value ?? [];
   },
 
   addToOfflineQueue: async (clip: QueuedClip): Promise<void> => {
@@ -75,14 +73,8 @@ export const storage = {
   },
 
   getBearerToken: async (): Promise<string | null> => {
-    const result = await chrome.storage.local.get(
-      KEYS.bearerToken,
-    );
-    return (
-      // SAFETY: chrome.storage returns untyped; we control writes.
-      // eslint-disable-next-line typescript/consistent-type-assertions
-      (result[KEYS.bearerToken] as string | undefined) ?? null
-    );
+    const value = await getStorageValue<string>(KEYS.bearerToken);
+    return value ?? null;
   },
 
   setBearerToken: async (token: string): Promise<void> => {

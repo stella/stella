@@ -8,7 +8,10 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "prepare": "wxt prepare",
-    "typecheck": "wxt prepare && tsgo --noEmit"
+    "typecheck": "wxt prepare && tsgo --noEmit",
+    "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "format": "oxfmt ."
   },
   "dependencies": {
     "@stella/ui": "workspace:*",

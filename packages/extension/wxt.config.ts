@@ -1,3 +1,4 @@
+// eslint-disable-next-line typescript/ban-ts-comment
 // @ts-nocheck – wxt's recursive Vite plugin types cause
 // TS2321 (excessive stack depth) with TypeScript 6.0.
 import tailwindcss from "@tailwindcss/vite";
@@ -16,8 +17,7 @@ export default defineConfig({
   }),
   manifest: {
     name: "stella",
-    description:
-      "Save anything from the web to a matter in stella",
+    description: "Save anything from the web to a matter in stella",
     permissions: [
       "sidePanel",
       "tabs",
@@ -26,10 +26,7 @@ export default defineConfig({
       "storage",
       "alarms",
     ],
-    host_permissions: [
-      "http://localhost:3000/*",
-      "http://localhost:3001/*",
-    ],
+    host_permissions: ["http://localhost:3000/*", "http://localhost:3001/*"],
     externally_connectable: {
       matches: ["http://localhost:3000/*"],
     },
