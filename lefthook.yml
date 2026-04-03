@@ -22,3 +22,5 @@ pre-commit:
     i18n:
       run: bun run i18n:sync
       stage_fixed: true
+    ai-skills:
+      run: bash scripts/check-ai-skill-sources.sh

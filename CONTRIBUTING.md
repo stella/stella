@@ -34,8 +34,8 @@ and may not load reliably. To try it:
    }
    ```
 
-If the LSP tool doesn't appear after restart, Claude falls
-back to [CODEBASE.md](CODEBASE.md) for navigation.
+If the LSP tool doesn't appear after restart, use Glob/Grep
+to explore the codebase.
 
 ## Development Workflow
 
