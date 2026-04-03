@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useSearch } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 
-import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { BreadcrumbItem } from "@stella/ui/components/breadcrumb";
+
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 export const PdfBreadcrumb = () => {
@@ -9,9 +10,23 @@ export const PdfBreadcrumb = () => {
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (params) => params.workspaceId,
   });
-  const fieldId = useSearch({
-    select: (search) => search.file.fieldId,
+  const viewId = useParams({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: (params) => params.viewId,
+  });
+  const fieldId = useSearch({
+    select: (search) => search.field,
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+  });
+  const currentSearch = useSearch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: ({ entity, field, justification, justificationPage, pdfPage }) => ({
+      entity,
+      field,
+      justification,
+      justificationPage,
+      pdfPage,
+    }),
   });
   const { data: fileName } = useQuery({
     ...fileOptions({ workspaceId, fieldId }),
@@ -19,8 +34,17 @@ export const PdfBreadcrumb = () => {
   });
 
   return (
-    <BreadcrumbLink to="/workspaces/$workspaceId/$viewId/pdf">
-      {fileName ?? fieldId}
-    </BreadcrumbLink>
+    <BreadcrumbItem>
+      <Link
+        activeOptions={{ exact: true, includeSearch: false }}
+        activeProps={{ className: "text-foreground font-semibold" }}
+        className="hover:text-foreground max-w-64 truncate transition-colors"
+        params={{ workspaceId, viewId }}
+        search={currentSearch}
+        to="/workspaces/$workspaceId/$viewId/pdf"
+      >
+        {fileName ?? fieldId}
+      </Link>
+    </BreadcrumbItem>
   );
 };

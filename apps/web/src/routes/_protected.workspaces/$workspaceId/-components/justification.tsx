@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import parse, { domToReact, Element } from "html-react-parser";
 import type { DOMNode } from "html-react-parser";
 import { produce } from "immer";
@@ -68,10 +68,10 @@ const Citation = ({
   fileFieldId,
   children,
 }: PropsWithChildren<CitationProps>) => {
-  const currentJustification = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.justification,
-  });
+  const currentJustification = useWorkspaceStore((s) => s.activeJustification);
+  const setActiveJustification = useWorkspaceStore(
+    (s) => s.setActiveJustification,
+  );
 
   const isActive =
     justification?.id === currentJustification?.id &&
@@ -95,6 +95,10 @@ const Citation = ({
       // eslint-disable-next-line typescript/no-misused-promises
       onClick={async () => {
         createBoundingBoxes();
+        setActiveJustification({
+          id: justification.id,
+          pageNumber,
+        });
 
         const boundingBoxes = useWorkspaceStore
           .getState()
@@ -114,12 +118,10 @@ const Citation = ({
           replace: true,
           search: (prev) =>
             produce(prev, (s) => {
-              s.file.fieldId = fileFieldId;
-              s.file.pageNumber = pageNumber;
-              s.justification = {
-                id: justification.id,
-                pageNumber,
-              };
+              s.field = fileFieldId;
+              s.justification = justification.id;
+              s.justificationPage = pageNumber;
+              s.pdfPage = pageNumber;
             }),
         });
       }}

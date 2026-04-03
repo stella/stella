@@ -16,11 +16,19 @@ type FolderState = {
   toggleVersion: number;
 };
 
+type PdfViewerState = {
+  activePropertyId: string | null;
+  pendingAnonymizeEntityId: number | null;
+  scaleOffset: number;
+  sidebar: "none" | "entity" | "anonymize";
+};
+
 type State = {
   pendingBoundingBoxIds: Set<string>;
   justifications: WorkspaceJustification[];
   activeJustification: ActiveJustification | null;
   pdfPageCount: number;
+  pdfViewer: PdfViewerState;
   folderState: FolderState;
 };
 
@@ -38,9 +46,22 @@ type Actions = {
   ) => void;
   setActiveJustification: (justification: ActiveJustification | null) => void;
   setPdfPageCount: (count: number) => void;
+  setPdfActivePropertyId: (propertyId: string | null) => void;
+  setPendingAnonymizeEntityId: (entityId: number | null) => void;
+  setPdfScaleOffset: (scaleOffset: number) => void;
+  setPdfSidebar: (sidebar: PdfViewerState["sidebar"]) => void;
+  setPdfViewerState: (state: Partial<PdfViewerState>) => void;
+  resetPdfViewerState: () => void;
   setFolderState: (state: Omit<FolderState, "toggleVersion">) => void;
   toggleAllFolders: () => void;
 };
+
+const initialPdfViewerState = (): PdfViewerState => ({
+  activePropertyId: null,
+  pendingAnonymizeEntityId: null,
+  scaleOffset: 0,
+  sidebar: "entity",
+});
 
 export const useWorkspaceStore = create<State & Actions>()(
   immer((set, get) => ({
@@ -48,6 +69,7 @@ export const useWorkspaceStore = create<State & Actions>()(
     justifications: [],
     activeJustification: null,
     pdfPageCount: 0,
+    pdfViewer: initialPdfViewerState(),
     folderState: {
       allExpanded: false,
       hasFolders: false,
@@ -112,6 +134,30 @@ export const useWorkspaceStore = create<State & Actions>()(
     setActiveJustification: (justification) =>
       set({ activeJustification: justification }),
     setPdfPageCount: (count) => set({ pdfPageCount: count }),
+    setPdfActivePropertyId: (propertyId) =>
+      set((state) => {
+        state.pdfViewer.activePropertyId = propertyId;
+      }),
+    setPendingAnonymizeEntityId: (entityId) =>
+      set((state) => {
+        state.pdfViewer.pendingAnonymizeEntityId = entityId;
+      }),
+    setPdfScaleOffset: (scaleOffset) =>
+      set((state) => {
+        state.pdfViewer.scaleOffset = scaleOffset;
+      }),
+    setPdfSidebar: (sidebar) =>
+      set((state) => {
+        state.pdfViewer.sidebar = sidebar;
+      }),
+    setPdfViewerState: (pdfViewer) =>
+      set((state) => {
+        Object.assign(state.pdfViewer, pdfViewer);
+      }),
+    resetPdfViewerState: () =>
+      set((state) => {
+        state.pdfViewer = initialPdfViewerState();
+      }),
     setFolderState: ({ allExpanded, hasFolders }) =>
       set((state) => {
         state.folderState.allExpanded = allExpanded;

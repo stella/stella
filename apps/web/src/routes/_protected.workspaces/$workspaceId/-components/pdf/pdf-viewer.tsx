@@ -22,18 +22,16 @@ const FullscreenPdfViewer = () => {
   const workspaceId = routeApi.useParams({
     select: (p) => p.workspaceId,
   });
-  const fileSearch = routeApi.useSearch({
-    select: (s) => s.file,
-  });
-  const entityId = routeApi.useSearch({
-    select: (s) => s.entityId,
-  });
+  const fieldId = routeApi.useSearch({ select: (s) => s.field });
+  const entityId = routeApi.useSearch({ select: (s) => s.entity });
+  const pageNumber = routeApi.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
+  const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
 
   const { data: file } = useSuspenseQuery(
     fileOptions({
       workspaceId,
-      fieldId: fileSearch.fieldId,
+      fieldId,
     }),
   );
 
@@ -42,7 +40,7 @@ const FullscreenPdfViewer = () => {
   const { data: isImageOrigin } = useSuspenseQuery({
     ...entityOptions(workspaceId, entityId),
     select: (entity) => {
-      const field = entity.fields.find((f) => f.id === fileSearch.fieldId);
+      const field = entity.fields.find((f) => f.id === fieldId);
       if (!field || field.content.type !== "file") {
         return false;
       }
@@ -64,9 +62,7 @@ const FullscreenPdfViewer = () => {
         replace: true,
         search: (prev) =>
           produce(prev, (s) => {
-            if (s.file?.fieldId) {
-              s.file.pageNumber = page;
-            }
+            s.pdfPage = page;
           }),
       });
     },
@@ -83,8 +79,8 @@ const FullscreenPdfViewer = () => {
         invertColors={invertColors}
         onPageChanged={handlePageChanged}
         onPageCountChanged={setPdfPageCount}
-        page={fileSearch.pageNumber}
-        scaleOffset={fileSearch.scaleOffset}
+        page={pageNumber}
+        scaleOffset={scaleOffset}
         renderPage={(props) => (
           <PDFPage {...props} renderOverlay={renderPageOverlay} />
         )}
@@ -99,9 +95,9 @@ const renderPageOverlay = (pageId: string) => <PageOverlays pageId={pageId} />;
 
 const PageOverlays = ({ pageId }: { pageId: string }) => {
   const page = usePDFStore((s) => s.pages.get(pageId));
-  const showAnonymizeOverlays = routeApi.useSearch({
-    select: (s) => s.sidebar.type === "anonymize",
-  });
+  const showAnonymizeOverlays = useWorkspaceStore(
+    (s) => s.pdfViewer.sidebar === "anonymize",
+  );
 
   if (!page) {
     return null;

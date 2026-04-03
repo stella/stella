@@ -54,6 +54,7 @@ export const EntityFileInfo = ({
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/pdf",
   });
+  const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
 
   if (field?.content.type !== "file") {
     return null;
@@ -67,24 +68,30 @@ export const EntityFileInfo = ({
           disabled={!prevFile}
           // eslint-disable-next-line typescript/no-misused-promises
           onClick={async () => {
-            await navigate({
-              resetScroll: true,
-              search: (prev) =>
-                produce(prev, (s) => {
-                  if (!prevFile) {
-                    return;
-                  }
+            const previousPdfViewer = {
+              ...useWorkspaceStore.getState().pdfViewer,
+            };
+            try {
+              setPdfViewerState({ scaleOffset: 0 });
+              await navigate({
+                resetScroll: true,
+                search: (prev) =>
+                  produce(prev, (s) => {
+                    if (!prevFile) {
+                      return;
+                    }
 
-                  s.file = {
-                    fieldId: prevFile.fieldId,
-                    pageNumber: 1,
-                    scaleOffset: 0,
-                  };
-                  s.justification = undefined;
-                  s.entityId = prevFile.entityId;
-                  // keep the active property id
-                }),
-            });
+                    s.field = prevFile.fieldId;
+                    s.pdfPage = undefined;
+                    s.entity = prevFile.entityId;
+                    s.justification = undefined;
+                    s.justificationPage = undefined;
+                  }),
+              });
+            } catch (error) {
+              setPdfViewerState(previousPdfViewer);
+              throw error;
+            }
 
             scrollContainerRef.current?.scrollTo({ top: 0 });
           }}
@@ -97,24 +104,30 @@ export const EntityFileInfo = ({
           disabled={!nextFile}
           // eslint-disable-next-line typescript/no-misused-promises
           onClick={async () => {
-            await navigate({
-              replace: true,
-              search: (prev) =>
-                produce(prev, (s) => {
-                  if (!nextFile) {
-                    return;
-                  }
+            const previousPdfViewer = {
+              ...useWorkspaceStore.getState().pdfViewer,
+            };
+            try {
+              setPdfViewerState({ scaleOffset: 0 });
+              await navigate({
+                replace: true,
+                search: (prev) =>
+                  produce(prev, (s) => {
+                    if (!nextFile) {
+                      return;
+                    }
 
-                  s.file = {
-                    fieldId: nextFile.fieldId,
-                    pageNumber: 1,
-                    scaleOffset: 0,
-                  };
-                  s.justification = undefined;
-                  s.entityId = nextFile.entityId;
-                  // keep the active property id
-                }),
-            });
+                    s.field = nextFile.fieldId;
+                    s.pdfPage = undefined;
+                    s.entity = nextFile.entityId;
+                    s.justification = undefined;
+                    s.justificationPage = undefined;
+                  }),
+              });
+            } catch (error) {
+              setPdfViewerState(previousPdfViewer);
+              throw error;
+            }
 
             scrollContainerRef.current?.scrollTo({ top: 0 });
           }}

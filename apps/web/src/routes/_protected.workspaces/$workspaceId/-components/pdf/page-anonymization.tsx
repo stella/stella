@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";
 import { useOverlayRects } from "@/lib/anonymize/use-overlay-rects";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type PageAnonymizationProps = {
   pageId: string;
@@ -40,6 +41,7 @@ export const PageAnonymization = ({
   );
 
   const navigate = useNavigate();
+  const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
 
   if (!overlays || !entityRects || entityRects.size === 0) {
     return null;
@@ -74,31 +76,39 @@ export const PageAnonymization = ({
 
           const handlePeekClick =
             variant === "peek" && peekNavigation
-              ? (e: MouseEvent<HTMLButtonElement>) => {
+              ? async (e: MouseEvent<HTMLButtonElement>) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onPeekNavigate?.();
                   const pageNumber = pageIndex + 1;
-                  // eslint-disable-next-line typescript/no-floating-promises
-                  navigate({
-                    to: "/workspaces/$workspaceId/$viewId/pdf",
-                    params: {
-                      workspaceId: peekNavigation.workspaceId,
-                      viewId: peekNavigation.viewId,
-                    },
-                    search: {
-                      file: {
-                        fieldId: peekNavigation.fieldId,
-                        pageNumber,
-                        scaleOffset: 0,
-                      },
-                      entityId: peekNavigation.entityId,
+                  const previousPdfViewer = {
+                    ...useWorkspaceStore.getState().pdfViewer,
+                  };
+                  try {
+                    setPdfViewerState({
                       activePropertyId: peekNavigation.activePropertyId,
-                      sidebar: { type: "anonymize" },
-                      justification: undefined,
-                      anonymizeScroll: { entityId: entity.id },
-                    },
-                  });
+                      pendingAnonymizeEntityId: entity.id,
+                      scaleOffset: 0,
+                      sidebar: "anonymize",
+                    });
+                    await navigate({
+                      to: "/workspaces/$workspaceId/$viewId/pdf",
+                      params: {
+                        workspaceId: peekNavigation.workspaceId,
+                        viewId: peekNavigation.viewId,
+                      },
+                      search: {
+                        entity: peekNavigation.entityId,
+                        field: peekNavigation.fieldId,
+                        justification: undefined,
+                        justificationPage: undefined,
+                        pdfPage: pageNumber,
+                      },
+                    });
+                  } catch (error) {
+                    setPdfViewerState(previousPdfViewer);
+                    throw error;
+                  }
                 }
               : undefined;
 
