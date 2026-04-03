@@ -1,0 +1,75 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts", "i18n-unused.config.js"],
+      "ignoreDependencies": [
+        "@fontsource-variable/source-serif-4",
+        "oxlint-tsgolint",
+        "ultracite",
+        "i18n-unused",
+        "oxlint",
+        "vite"
+      ],
+      "ignoreBinaries": ["scripts/dev.sh"]
+    },
+    "apps/api": {
+      "entry": [
+        "src/index.ts",
+        "scripts/*.ts",
+        "src/scripts/*.ts",
+        "src/handlers/files/pdf-worker.ts",
+        "src/lib/__fixtures__/*.ts",
+        "src/lib/search/extraction-worker.ts",
+        "src/handlers/case-law/seed-court-weights.ts",
+        "src/handlers/case-law/ingestion/adapters/health-check.ts",
+        "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
+        "src/handlers/docx/generate-sample.ts",
+        "src/handlers/docx/generate-samples.ts",
+        "src/handlers/docx/generate-spa-filled.ts",
+        "src/handlers/docx/prepare-spa-template.ts",
+        "src/tests/load/*.ts",
+        "drizzle.config.ts"
+      ],
+      "ignoreDependencies": ["@electric-sql/pglite"]
+    },
+    "apps/web": {
+      "entry": ["src/main.tsx", "vite.config.ts"],
+      "ignore": ["src/routeTree.gen.ts"]
+    },
+    "apps/landing": {
+      "entry": ["src/**/*.astro", "astro.config.*"]
+    },
+    "packages/extension": {
+      "entry": ["src/entrypoints/**/*.{ts,tsx}", "wxt.config.ts"]
+    },
+    "packages/permissions": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/rivet": {
+      "entry": ["src/consts.ts", "src/actors/*.ts", "src/types.ts", "src/errors.ts"]
+    },
+    "packages/scripts": {
+      "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
+    },
+    "packages/template-conditions": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/transactional": {
+      "entry": ["emails/*.tsx"],
+      "ignoreDependencies": ["react-dom", "@react-email/preview-server"]
+    },
+    "packages/ui": {
+      "entry": [
+        "src/components/*.tsx",
+        "src/hooks/*.ts",
+        "src/lib/*.ts",
+        "src/styles/globals.css"
+      ]
+    }
+  },
+  "ignore": [".oxlint-plugins/**", ".claude/**"],
+  "ignoreBinaries": ["docker", "oxfmt", "tsgo", "bun"],
+  "ignoreDependencies": ["@stella/typescript-config"],
+  "ignoreWorkspaces": ["packages/skills", "packages/typescript-config"]
+}
