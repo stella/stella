@@ -99,7 +99,7 @@ export const Route = createFileRoute("/_protected/organization")({
 
 function MembersLayout() {
   const t = useTranslations();
-  const { q } = Route.useSearch();
+  const q = Route.useSearch({ select: (s) => s.q });
   const navigate = useNavigate({ from: Route.fullPath });
   const [localQuery, setLocalQuery] = useState(() => q ?? "");
 

@@ -17,8 +17,10 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-  const { workspaceId, viewId } = Route.useParams();
-  const { page = 1 } = viewRoute.useSearch();
+  const { workspaceId, viewId } = Route.useParams({
+    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
+  });
+  const page = viewRoute.useSearch({ select: (s) => s.page ?? 1 });
   const viewsContext = Route.useRouteContext({
     select: (ctx) => ({
       authToken: ctx.authToken,

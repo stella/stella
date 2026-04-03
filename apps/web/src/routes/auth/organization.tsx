@@ -80,7 +80,7 @@ type OrganizationListProps = {
 
 const OrganizationList = ({ organizations }: OrganizationListProps) => {
   const t = useTranslations();
-  const { redirectTo } = Route.useSearch();
+  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();

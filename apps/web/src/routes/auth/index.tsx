@@ -45,7 +45,7 @@ function LoginOrSignup() {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
-  const { redirectTo } = Route.useSearch();
+  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
 
   const form = useForm({
     defaultValues: { email: "" },

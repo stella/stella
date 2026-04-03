@@ -42,8 +42,9 @@ export const PdfViewerControls = () => {
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     select: (s) => s.sidebar,
   });
-  const { workspaceId } = useParams({
+  const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: (p) => p.workspaceId,
   });
 
   const { data: isImageOrigin } = useQuery({

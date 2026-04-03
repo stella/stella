@@ -73,7 +73,7 @@ function Members() {
   const userId = Route.useRouteContext({
     select: (ctx) => ctx.user.id,
   });
-  const { q } = useSearch({ from: "/_protected/organization" });
+  const q = useSearch({ from: "/_protected/organization", select: (s) => s.q });
 
   const filtered = useMemo(() => {
     if (!q) {

@@ -55,7 +55,7 @@ const parseDocumentAst = (raw: unknown): DocumentAst | null => {
 };
 
 function DecisionViewer() {
-  const { decisionId: rawParam } = Route.useParams();
+  const rawParam = Route.useParams({ select: (p) => p.decisionId });
   const decisionId = extractId(rawParam);
   const { data: decision } = useSuspenseQuery(decisionOptions(decisionId));
 

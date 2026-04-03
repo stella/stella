@@ -59,7 +59,7 @@ type ContactData = NonNullable<
 
 function ContactDetailPage() {
   const t = useTranslations();
-  const { contactId } = Route.useParams();
+  const contactId = Route.useParams({ select: (p) => p.contactId });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: contact } = useSuspenseQuery(contactOptions(contactId));

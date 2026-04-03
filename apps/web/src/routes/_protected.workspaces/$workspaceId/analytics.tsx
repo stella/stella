@@ -35,7 +35,7 @@ const LoadingFallback = () => (
 
 function AnalyticsPage() {
   const t = useTranslations("analytics");
-  const { workspaceId } = Route.useParams();
+  const workspaceId = Route.useParams({ select: (p) => p.workspaceId });
   const defaults = getDefaultRange();
   const [dateFrom, setDateFrom] = useState(defaults.dateFrom);
   const [dateTo, setDateTo] = useState(defaults.dateTo);
