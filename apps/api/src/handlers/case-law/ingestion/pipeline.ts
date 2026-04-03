@@ -382,11 +382,14 @@ export const runIngestionPipeline = async ({
   let skipped = 0;
   let searchVectorFailures = 0;
   let pagesProcessed = 0;
+  /** Track recent cursors to detect parking (stagnation or ping-pong). */
+  const recentCursors = new Set<string | null>();
 
   const maxPages = adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
   while (pagesProcessed < maxPages) {
     const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
+    recentCursors.add(cursor);
     const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
@@ -434,7 +437,10 @@ export const runIngestionPipeline = async ({
     cursor = page.nextCursor;
     pagesProcessed++;
 
-    if (!page.nextCursor) {
+    // Stop when the adapter signals exhaustion: null cursor
+    // or a cursor we've already visited (stagnation / ping-pong
+    // between two parked positions).
+    if (!page.nextCursor || recentCursors.has(page.nextCursor)) {
       break;
     }
 

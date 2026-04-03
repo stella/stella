@@ -31,6 +31,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -81,6 +82,7 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": INGESTION_USER_AGENT,
     },
     body: `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}`,
     signal: signal
@@ -164,6 +166,7 @@ const fetchPdfBytes = async (
 ): Promise<Uint8Array | undefined> => {
   try {
     const response = await fetch(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+      headers: { "User-Agent": INGESTION_USER_AGENT },
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
         : AbortSignal.timeout(30_000),
@@ -296,6 +299,7 @@ export const skUsAdapter: SourceAdapter = {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "User-Agent": INGESTION_USER_AGENT,
           },
           body: JSON.stringify({
             docType: "USSR_DECISION_MK",
@@ -330,9 +334,10 @@ export const skUsAdapter: SourceAdapter = {
           throw new Error(`SK ÚS search failed: ${response.status}`);
         }
 
-        // 204 = no results (empty search)
+        // 204 = no results (empty search); park at current
+        // offset so we don't restart from 0 on a transient 204.
         if (response.status === 204) {
-          return { decisions: [], nextCursor: null };
+          return { decisions: [], nextCursor: String(offset) };
         }
 
         // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- search API response
@@ -357,10 +362,13 @@ export const skUsAdapter: SourceAdapter = {
         }
 
         const nextOffset = offset + PAGE_SIZE;
-        const nextCursor =
-          data.documents.length >= PAGE_SIZE && nextOffset < data.numFound
-            ? String(nextOffset)
-            : null;
+        const hasMore =
+          data.documents.length >= PAGE_SIZE && nextOffset < data.numFound;
+        // Park one page back when exhausted; never null (null
+        // restarts from offset 0).
+        const nextCursor = hasMore
+          ? String(nextOffset)
+          : String(Math.max(0, offset));
 
         return { decisions, nextCursor };
       },

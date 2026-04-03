@@ -13,6 +13,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
   parseCeDate,
@@ -20,6 +21,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+
+const COMMON_HEADERS = {
+  "User-Agent": INGESTION_USER_AGENT,
+} as const;
 
 /**
  * Czech Supreme Court adapter.
@@ -168,7 +173,7 @@ export const czNsAdapter: SourceAdapter = {
         `${BASE_URL}/WebSearch?ReadViewEntries` +
         `&Count=1&Start=1&OutputFormat=JSON`;
 
-      const response = await fetch(url, { signal });
+      const response = await fetch(url, { signal, headers: COMMON_HEADERS });
       if (!response.ok) {
         return null;
       }
@@ -199,6 +204,7 @@ export const czNsAdapter: SourceAdapter = {
           `&OutputFormat=JSON`;
 
         const listResponse = await fetch(listUrl, {
+          headers: COMMON_HEADERS,
           signal: signal
             ? AbortSignal.any([
                 signal,
@@ -245,8 +251,11 @@ export const czNsAdapter: SourceAdapter = {
               : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
 
             const [detailResponse, printResponse] = await Promise.all([
-              fetch(webUrl, { signal: requestSignal }),
-              fetch(printUrl, { signal: requestSignal }),
+              fetch(webUrl, { signal: requestSignal, headers: COMMON_HEADERS }),
+              fetch(printUrl, {
+                signal: requestSignal,
+                headers: COMMON_HEADERS,
+              }),
             ]);
 
             if (detailResponse.ok) {
@@ -363,14 +372,18 @@ export const czNsAdapter: SourceAdapter = {
           ? Number.parseInt(json["@toplevelentries"], 10)
           : undefined;
 
-        const nextCursor =
+        const hasMore =
           totalEntries !== undefined
             ? start + entries.length <= totalEntries
-              ? String(start + entries.length)
-              : null
-            : entries.length >= PAGE_SIZE
-              ? String(start + entries.length)
-              : null;
+            : entries.length >= PAGE_SIZE;
+
+        // When exhausted, park the cursor one page back from the
+        // end so the next cycle only re-checks recent entries for
+        // new additions. Never return null — that restarts the
+        // full scan from position 1.
+        const nextCursor = hasMore
+          ? String(start + entries.length)
+          : String(Math.max(1, start + entries.length - PAGE_SIZE));
 
         return { decisions, nextCursor };
       },

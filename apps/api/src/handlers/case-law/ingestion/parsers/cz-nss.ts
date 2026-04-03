@@ -140,16 +140,19 @@ const walkInlines = (
     if (tag === "span") {
       const style = $node.attr("style") ?? "";
 
-      // Skip Aspose spacer spans (tab stops, invisible fills,
-      // inline-block width spacers)
-      if (style.includes("-aw-import:ignore")) {
-        return;
-      }
-      if (style.includes("-aw-import:spaces")) {
-        return;
-      }
-      if (style.includes("display:inline-block")) {
-        return;
+      // Skip Aspose spacer spans only when they contain no
+      // meaningful text. Modern exports use these for tab stops
+      // and invisible fills (whitespace-only), but older 2004-era
+      // conversions sometimes place real words inside them.
+      if (
+        style.includes("-aw-import:ignore") ||
+        style.includes("-aw-import:spaces") ||
+        style.includes("display:inline-block")
+      ) {
+        const innerText = $node.text().trim();
+        if (!innerText) {
+          return;
+        }
       }
 
       const isBold = style.includes("font-weight:bold");

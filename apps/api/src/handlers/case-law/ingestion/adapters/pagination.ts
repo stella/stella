@@ -14,7 +14,10 @@ import type {
   IngestionResult,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  INGESTION_USER_AGENT,
+  adapterCatch,
+} from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
@@ -116,8 +119,13 @@ export const createPagePaginatedFetch = <TResponse>(
         // Retry on 5xx up to SERVER_ERROR_RETRIES times
         let response: Response | undefined;
         for (let attempt = 0; attempt <= SERVER_ERROR_RETRIES; attempt++) {
+          const headers = new Headers(init?.headers);
+          if (!headers.has("User-Agent")) {
+            headers.set("User-Agent", INGESTION_USER_AGENT);
+          }
           response = await fetch(url, {
             ...init,
+            headers,
             signal: signal
               ? AbortSignal.any([
                   signal,
@@ -198,11 +206,16 @@ export const createPagePaginatedFetch = <TResponse>(
         }
 
         const fetched = (page - firstPage + 1) * opts.pageSize;
-        const nextCursor =
+        const hasMore =
           items.length >= opts.pageSize &&
-          (total === undefined || total === null || fetched < total)
-            ? String(page + 1)
-            : null;
+          (total === undefined || total === null || fetched < total);
+
+        // When exhausted, park one page back so the next cycle
+        // only re-checks the tail for new entries. Never return
+        // null — that restarts from firstPage.
+        const nextCursor = hasMore
+          ? String(page + 1)
+          : String(Math.max(firstPage, page - 1));
 
         return { decisions, nextCursor };
       },

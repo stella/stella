@@ -14,12 +14,17 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+
+const COMMON_HEADERS = {
+  "User-Agent": INGESTION_USER_AGENT,
+} as const;
 
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
@@ -258,6 +263,7 @@ export const czUsAdapter: SourceAdapter = {
 
           try {
             const response = await fetch(url, {
+              headers: COMMON_HEADERS,
               signal: callerSignal
                 ? AbortSignal.any([
                     callerSignal,
@@ -288,6 +294,7 @@ export const czUsAdapter: SourceAdapter = {
                       ])
                     : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
                   const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
+                    headers: COMMON_HEADERS,
                     signal: absSignal,
                   });
                   if (absResp.ok) {

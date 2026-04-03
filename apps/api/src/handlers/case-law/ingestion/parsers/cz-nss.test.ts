@@ -433,6 +433,35 @@ describe("parseNssDecisionHtml", () => {
       expect(para?.plainText).not.toMatch(/^\s{3}/);
     });
 
+    test("preserves words inside Aspose spacer spans (old exports)", () => {
+      const html = `<html><body>
+        <p style="text-align:center">5 Azs 250/2004</p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">ROZSUDEK</span>
+        </p>
+        <p style="text-align:center">
+          <span style="font-weight:bold">Odůvodnění:</span>
+        </p>
+        <p>
+          <span style="-aw-import:spaces">písemnou smlouvu</span>
+          <span> opatřenou podpisy obou stran.</span>
+        </p>
+        <p>
+          <span>Žalobce předložil </span>
+          <span style="display:inline-block; width:36pt">důkaz</span>
+          <span> o doručení.</span>
+        </p>
+      </body></html>`;
+
+      const input = baseInput(html, { caseNumber: "5 Azs 250/2004" });
+      const { fulltext } = parseNssDecisionHtml(input);
+
+      // Words inside -aw-import:spaces must be preserved
+      expect(fulltext).toContain("písemnou smlouvu");
+      // Words inside display:inline-block must be preserved
+      expect(fulltext).toContain("důkaz");
+    });
+
     test("handles ČESKÁ REPUBLIKA skip", () => {
       const html = `<html><body>
         <p style="text-align:center">ČESKÁ REPUBLIKA</p>
