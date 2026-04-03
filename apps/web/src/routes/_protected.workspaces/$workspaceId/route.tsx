@@ -101,7 +101,10 @@ function RouteComponent() {
   useEffect(
     () => () => {
       useInspectorStore.getState().closeAll();
-      useWorkspaceStore.getState().clearJustifications();
+      const workspaceStore = useWorkspaceStore.getState();
+      workspaceStore.clearJustifications();
+      workspaceStore.setActiveJustification(null);
+      workspaceStore.resetPdfViewerState();
     },
     [workspaceId],
   );

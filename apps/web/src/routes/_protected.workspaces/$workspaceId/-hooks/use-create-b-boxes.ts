@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 
 import { useIsMutating, useMutation } from "@tanstack/react-query";
-import { useParams, useSearch } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { eventHandler } from "@/lib/rivet";
@@ -86,10 +86,7 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
 };
 
 export const useIsCreatingBBoxes = () => {
-  const justificationId = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.justification?.id,
-  });
+  const justificationId = useWorkspaceStore((s) => s.activeJustification?.id);
   const isPending = useWorkspaceStore((s) =>
     justificationId ? s.pendingBoundingBoxIds.has(justificationId) : false,
   );

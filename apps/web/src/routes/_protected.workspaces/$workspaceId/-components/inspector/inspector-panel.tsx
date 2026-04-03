@@ -132,6 +132,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
+  const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
 
   const viewMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -221,26 +222,35 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     if (!activeTab || activeTab.type !== "pdf") {
       return;
     }
+    const previousPdfViewer = {
+      ...useWorkspaceStore.getState().pdfViewer,
+    };
     try {
       const openAnonymizeSidebar =
         getCachedAnonymization(activeTab.id) !== undefined;
+      setPdfViewerState({
+        activePropertyId: activeTab.propertyId ?? null,
+        pendingAnonymizeEntityId: null,
+        scaleOffset: 0,
+        sidebar: openAnonymizeSidebar ? "anonymize" : "entity",
+      });
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/pdf",
         params: { workspaceId, viewId: "all" },
         search: {
-          file: { fieldId: activeTab.id },
+          entity: activeTab.entityId,
+          field: activeTab.id,
           justification: undefined,
-          entityId: activeTab.entityId,
-          activePropertyId: activeTab.propertyId ?? "",
-          sidebar: {
-            type: openAnonymizeSidebar ? "anonymize" : "entity",
-          },
+          justificationPage: undefined,
         },
       });
+    } catch (error) {
+      setPdfViewerState(previousPdfViewer);
+      throw error;
     } finally {
       closeAll();
     }
-  }, [activeTab, navigate, closeAll, workspaceId]);
+  }, [activeTab, closeAll, navigate, setPdfViewerState, workspaceId]);
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently

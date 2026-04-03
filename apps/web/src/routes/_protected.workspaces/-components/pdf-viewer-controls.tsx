@@ -29,18 +29,9 @@ const SCALE_OFFSET_STEP = 0.2;
 
 export const PdfViewerControls = () => {
   const t = useTranslations();
-  const {
-    fieldId,
-    scaleOffset,
-    pageNumber: currentPage,
-  } = useSearch({
+  const { field: fieldId, pdfPage: currentPage = 1 } = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.file,
-  });
-
-  const sidebar = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.sidebar,
+    select: (s) => ({ field: s.field, pdfPage: s.pdfPage }),
   });
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
@@ -54,6 +45,10 @@ export const PdfViewerControls = () => {
 
   const { resolvedTheme } = useTheme();
   const totalPages = useWorkspaceStore((s) => s.pdfPageCount);
+  const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
+  const sidebar = useWorkspaceStore((s) => s.pdfViewer.sidebar);
+  const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
+  const setPdfSidebar = useWorkspaceStore((s) => s.setPdfSidebar);
   // TODO: invertPages toggle needs a small persisted store
   // or to be lifted to the route. For now, dark mode always
   // inverts (matching the viewer prop).
@@ -64,17 +59,7 @@ export const PdfViewerControls = () => {
   });
 
   const navigateToScale = (offset: number) => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    navigate({
-      replace: true,
-      search: (prev) =>
-        produce(prev, (s) => {
-          if (s.file === undefined) {
-            return;
-          }
-          s.file.scaleOffset = Math.round(offset * 10) / 10;
-        }),
-    });
+    setPdfScaleOffset(Math.round(offset * 10) / 10);
   };
 
   const navigateToPage = (pageNumber: number) => {
@@ -83,10 +68,7 @@ export const PdfViewerControls = () => {
       replace: true,
       search: (prev) =>
         produce(prev, (s) => {
-          if (s.file === undefined) {
-            return;
-          }
-          s.file.pageNumber = pageNumber;
+          s.pdfPage = pageNumber;
         }),
     });
   };
@@ -237,23 +219,11 @@ export const PdfViewerControls = () => {
         content={t("workspaces.pdf.entitySidebar")}
         render={
           <Button
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () =>
-              await navigate({
-                replace: true,
-                to: ".",
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (s.sidebar.type === "entity") {
-                      s.sidebar = { type: "none" };
-                    } else {
-                      s.sidebar = { type: "entity" };
-                    }
-                  }),
-              })
+            onClick={() =>
+              setPdfSidebar(sidebar === "entity" ? "none" : "entity")
             }
             size="icon"
-            variant={sidebar.type === "entity" ? "default" : "ghost"}
+            variant={sidebar === "entity" ? "default" : "ghost"}
           />
         }
       >
@@ -263,23 +233,11 @@ export const PdfViewerControls = () => {
         content={t("workspaces.pdf.anonymizeSidebar")}
         render={
           <Button
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () =>
-              await navigate({
-                replace: true,
-                to: ".",
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (s.sidebar.type === "anonymize") {
-                      s.sidebar = { type: "none" };
-                    } else {
-                      s.sidebar = { type: "anonymize" };
-                    }
-                  }),
-              })
+            onClick={() =>
+              setPdfSidebar(sidebar === "anonymize" ? "none" : "anonymize")
             }
             size="icon"
-            variant={sidebar.type === "anonymize" ? "default" : "ghost"}
+            variant={sidebar === "anonymize" ? "default" : "ghost"}
           />
         }
       >

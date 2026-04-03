@@ -1,12 +1,7 @@
-import { Activity, useEffect, useRef } from "react";
+import { Activity, useEffect, useLayoutEffect, useRef } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  retainSearchParams,
-  useNavigate,
-} from "@tanstack/react-router";
-import { produce } from "immer";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -28,12 +23,6 @@ import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspace
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
-const sidebarSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("none") }),
-  v.strictObject({ type: v.literal("entity") }),
-  v.strictObject({ type: v.literal("anonymize") }),
-]);
-
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/pdf",
 )({
@@ -41,46 +30,32 @@ export const Route = createFileRoute(
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.
   validateSearch: v.object({
-    file: v.strictObject({
-      fieldId: v.string(),
-      pageNumber: v.optional(v.number(), 1),
-      scaleOffset: v.optional(v.number(), 0),
-    }),
-    entityId: v.string(),
-    activePropertyId: v.string(),
-    sidebar: sidebarSchema,
-    justification: v.optional(
-      v.strictObject({
-        id: v.string(),
-        pageNumber: v.number(),
-      }),
+    entity: v.string(),
+    field: v.string(),
+    justification: v.optional(v.string()),
+    justificationPage: v.optional(
+      v.pipe(v.number(), v.integer(), v.minValue(1)),
     ),
-    anonymizeScroll: v.optional(
-      v.strictObject({
-        entityId: v.number(),
-      }),
-    ),
+    pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   }),
   search: {
-    middlewares: [retainSearchParams(true)],
+    middlewares: [stripSearchParams({ pdfPage: 1 })],
   },
 });
 
 const AnonymizeScrollSync = () => {
-  const anonymizeScroll = Route.useSearch({
-    select: (s) => s.anonymizeScroll,
-  });
-  const pageNumber = Route.useSearch({
-    select: (s) => s.file.pageNumber ?? 1,
-  });
-  const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
-  });
+  const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setScrollTo = usePDFStore((s) => s.setScrollTo);
   const pages = usePDFStore((s) => s.pages);
+  const pendingAnonymizeEntityId = useWorkspaceStore(
+    (s) => s.pdfViewer.pendingAnonymizeEntityId,
+  );
+  const setPendingAnonymizeEntityId = useWorkspaceStore(
+    (s) => s.setPendingAnonymizeEntityId,
+  );
 
   useEffect(() => {
-    if (!anonymizeScroll || pages.size === 0) {
+    if (pendingAnonymizeEntityId === null || pages.size === 0) {
       return;
     }
 
@@ -94,19 +69,17 @@ const AnonymizeScrollSync = () => {
       pageId,
       target: {
         kind: "anonymizeEntity",
-        entityId: anonymizeScroll.entityId,
+        entityId: pendingAnonymizeEntityId,
       },
     });
-
-    // eslint-disable-next-line typescript/no-floating-promises
-    navigate({
-      replace: true,
-      search: (prev) =>
-        produce(prev, (s) => {
-          s.anonymizeScroll = undefined;
-        }),
-    });
-  }, [anonymizeScroll, pages, pageNumber, navigate, setScrollTo]);
+    setPendingAnonymizeEntityId(null);
+  }, [
+    pageNumber,
+    pages,
+    pendingAnonymizeEntityId,
+    setPendingAnonymizeEntityId,
+    setScrollTo,
+  ]);
 
   return null;
 };
@@ -116,33 +89,47 @@ function RouteComponent() {
     select: (p) => p.workspaceId,
   });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const fileSearch = Route.useSearch({
-    select: (s) => s.file,
-  });
-  const entityId = Route.useSearch({
-    select: (s) => s.entityId,
-  });
+  const fieldId = Route.useSearch({ select: (s) => s.field });
+  const entityId = Route.useSearch({ select: (s) => s.entity });
   useSyncJustifications([entityId]);
-  const sidebar = Route.useSearch({
-    select: (s) => s.sidebar,
+  const sidebar = useWorkspaceStore((s) => s.pdfViewer.sidebar);
+  const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
+  const justificationId = Route.useSearch({
+    select: (s) => s.justification,
   });
+  const justificationPage = Route.useSearch({
+    select: (s) => s.justificationPage,
+  });
+  const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const { data: entity } = useSuspenseQuery(
     entityOptions(workspaceId, entityId),
   );
-
-  const justificationSearch = Route.useSearch({
-    select: (s) => s.justification,
-  });
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
+  const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
 
-  useEffect(() => {
-    setActiveJustification(justificationSearch ?? null);
-    return () => setActiveJustification(null);
-  }, [justificationSearch, setActiveJustification]);
+  useLayoutEffect(() => {
+    if (!justificationId || justificationPage === undefined) {
+      setActiveJustification(null);
+      return;
+    }
 
-  const sidebarOpen = sidebar.type !== "none";
+    setActiveJustification({
+      id: justificationId,
+      pageNumber: justificationPage,
+    });
+  }, [justificationId, justificationPage, setActiveJustification]);
+
+  useEffect(
+    () => () => {
+      setActiveJustification(null);
+      resetPdfViewerState();
+    },
+    [resetPdfViewerState, setActiveJustification],
+  );
+
+  const sidebarOpen = sidebar !== "none";
 
   return (
     <div
@@ -150,9 +137,9 @@ function RouteComponent() {
       ref={scrollContainerRef}
     >
       <PDFProvider
-        fieldId={fileSearch.fieldId}
-        initialScaleOffset={fileSearch.scaleOffset}
-        startPage={fileSearch.pageNumber}
+        fieldId={fieldId}
+        initialScaleOffset={scaleOffset}
+        startPage={pageNumber}
         fallback={{ suspense: <PDFSuspenseFallback /> }}
       >
         <AnonymizeScrollSync />
@@ -166,7 +153,7 @@ function RouteComponent() {
             </Separator>
             <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
               <div className="bg-background h-full overflow-y-auto">
-                {sidebar.type === "entity" && (
+                {sidebar === "entity" && (
                   <>
                     <EntityFileInfo
                       entityId={entity.entityId}
@@ -176,8 +163,8 @@ function RouteComponent() {
                     <FieldInfoList entity={entity} workspaceId={workspaceId} />
                   </>
                 )}
-                {sidebar.type === "anonymize" && (
-                  <AnonymizeSidebar fieldId={fileSearch.fieldId} />
+                {sidebar === "anonymize" && (
+                  <AnonymizeSidebar fieldId={fieldId} />
                 )}
               </div>
             </Panel>
@@ -198,16 +185,34 @@ type FieldInfoListProps = {
 
 const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   const t = useTranslations();
-  const activePropertyId = Route.useSearch({
-    select: (s) => s.activePropertyId,
-  });
-  const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
-  });
+  const activePropertyId = useWorkspaceStore(
+    (s) => s.pdfViewer.activePropertyId,
+  );
+  const setPdfActivePropertyId = useWorkspaceStore(
+    (s) => s.setPdfActivePropertyId,
+  );
 
   const visibleFields = entity.fields.filter(
     (field) => !skipFieldFilter(field.content),
   );
+
+  useEffect(() => {
+    const nextPropertyId = visibleFields.at(0)?.propertyId ?? null;
+
+    if (!nextPropertyId) {
+      if (activePropertyId !== null) {
+        setPdfActivePropertyId(null);
+      }
+      return;
+    }
+
+    if (
+      activePropertyId === null ||
+      !visibleFields.some((field) => field.propertyId === activePropertyId)
+    ) {
+      setPdfActivePropertyId(nextPropertyId);
+    }
+  }, [activePropertyId, setPdfActivePropertyId, visibleFields]);
 
   if (visibleFields.length === 0) {
     return (
@@ -222,17 +227,9 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
       key={entity.entityId}
       onValueChange={(nextValue) => {
         const nextId = nextValue.at(0);
-
-        // oxlint-disable-next-line typescript/no-floating-promises
-        navigate({
-          replace: true,
-          search: (prev) =>
-            produce(prev, (s) => {
-              s.activePropertyId = nextId ?? activePropertyId;
-            }),
-        });
+        setPdfActivePropertyId(nextId ?? activePropertyId);
       }}
-      value={[activePropertyId]}
+      value={activePropertyId ? [activePropertyId] : []}
     >
       {visibleFields.map((field) => (
         <FieldInfo
