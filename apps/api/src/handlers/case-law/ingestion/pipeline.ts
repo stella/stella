@@ -37,13 +37,17 @@ type PipelineResult = {
   inserted: number;
   skipped: number;
   searchVectorFailures: number;
+  s3UploadFailures: number;
   pagesProcessed: number;
   nextCursor: string | null;
+  /** Non-null if the adapter was halted early due to repeated failures. */
+  haltReason: string | null;
 };
 
 type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
+  s3UploadFailed: boolean;
 };
 
 /**
@@ -231,23 +235,61 @@ const processDecision = async (
         caseNumber: result.caseNumber,
         language: result.language,
       },
-      columns: { id: true, sourceHash: true },
+      columns: {
+        id: true,
+        sourceHash: true,
+        sourceRawS3Key: true,
+        sourceRawContentType: true,
+      },
     }),
   );
 
   if (existing?.sourceHash === result.rawHash) {
-    return { inserted: false, searchVectorFailed: false };
+    return {
+      inserted: false,
+      searchVectorFailed: false,
+      s3UploadFailed: false,
+    };
   }
 
-  // Upload sourceRaw to S3
+  // Upload sourceRaw to S3 — best-effort; failure must not
+  // prevent the decision from being inserted.
   const rawPayload = result.sourceRawBytes ?? result.sourceRaw;
   const rawContentType = result.sourceRawContentType ?? "text/plain";
 
-  const sourceRawS3Key =
-    rawPayload !== undefined
-      ? await uploadSourceRaw(sourceId, rawPayload, rawContentType)
-      : null;
-  const sourceRawContentType = rawPayload !== undefined ? rawContentType : null;
+  let sourceRawS3Key: string | null = null;
+  let sourceRawContentType: string | null = null;
+  let s3UploadFailed = false;
+  if (rawPayload !== undefined) {
+    try {
+      sourceRawS3Key = await uploadSourceRaw(
+        sourceId,
+        rawPayload,
+        rawContentType,
+      );
+      sourceRawContentType = rawContentType;
+    } catch (error) {
+      if (!existing) {
+        // New decision: re-throw so the pipeline skips this decision
+        // and retries next cycle. Inserting with sourceRawS3Key: null
+        // would set sourceHash, causing the dedup check to skip it
+        // permanently — the raw source would be lost forever.
+        // Skip captureError here; the outer catch in
+        // runIngestionPipeline will capture it once.
+        throw error;
+      }
+
+      captureError(error, { sourceId, step: "uploadSourceRaw" });
+
+      // Update: preserve existing S3 key and DO NOT advance sourceHash.
+      // If we wrote the new hash with the old key, the hash mismatch
+      // would never trigger again and the stale raw source could never
+      // be corrected through normal ingestion.
+      sourceRawS3Key = existing.sourceRawS3Key;
+      sourceRawContentType = existing.sourceRawContentType;
+      s3UploadFailed = true;
+    }
+  }
 
   const sections = result.fulltext ? segmentDecision(result.fulltext) : [];
 
@@ -287,7 +329,10 @@ const processDecision = async (
           sourceRawS3Key,
           sourceRawContentType,
           parserVersion: result.parserVersion ?? 0,
-          sourceHash: result.rawHash,
+          // When S3 upload failed, keep the old sourceHash so the
+          // next ingestion cycle sees a hash mismatch and retries
+          // the upload instead of permanently skipping the decision.
+          sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
           updatedAt: new Date(),
         })
         .where(eq(caseLawDecisions.id, existing.id));
@@ -364,7 +409,7 @@ const processDecision = async (
     }
   }
 
-  return { inserted: true, searchVectorFailed };
+  return { inserted: true, searchVectorFailed, s3UploadFailed };
 };
 
 /**
@@ -388,9 +433,18 @@ export const runIngestionPipeline = async ({
   let inserted = 0;
   let skipped = 0;
   let searchVectorFailures = 0;
+  let s3UploadFailures = 0;
   let pagesProcessed = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
+  /**
+   * Consecutive decision-level failures. Reset on each success.
+   * If this exceeds the threshold, the adapter is halted for
+   * this cycle to avoid hammering a broken court API.
+   */
+  let consecutiveFailures = 0;
+  const MAX_CONSECUTIVE_FAILURES = 10;
+  let haltReason: string | null = null;
 
   const maxPages = adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
@@ -408,6 +462,14 @@ export const runIngestionPipeline = async ({
         adapterKey: adapter.key,
         cursor: cursor ?? "",
       });
+      haltReason = `Page fetch failed: ${pageResult.error.message}`;
+      logger.error("case_law.ingestion.adapter_halted", {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+        reason: haltReason,
+        inserted,
+        skipped,
+      });
       break;
     }
 
@@ -422,10 +484,15 @@ export const runIngestionPipeline = async ({
         } else {
           skipped++;
         }
+        consecutiveFailures = 0;
         if (outcome.searchVectorFailed) {
           searchVectorFailures++;
         }
+        if (outcome.s3UploadFailed) {
+          s3UploadFailures++;
+        }
       } catch (error) {
+        consecutiveFailures++;
         const tag = errorTag(error);
         const message = error instanceof Error ? error.message : String(error);
 
@@ -434,6 +501,7 @@ export const runIngestionPipeline = async ({
           caseNumber: result.caseNumber,
           cursor: cursor ?? "",
           "error.type": tag,
+          consecutiveFailures,
         });
         captureError(error, {
           adapterKey: adapter.key,
@@ -454,7 +522,6 @@ export const runIngestionPipeline = async ({
             }),
           );
         } catch (failureLogError) {
-          // Don't let failure logging break the pipeline
           captureError(failureLogError, {
             sourceId: source.id,
             caseNumber: result.caseNumber,
@@ -462,7 +529,25 @@ export const runIngestionPipeline = async ({
         }
 
         skipped++;
+
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          haltReason =
+            `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
+            `last: [${tag}] ${message.slice(0, 200)}`;
+          break;
+        }
       }
+    }
+
+    if (haltReason) {
+      logger.error("case_law.ingestion.adapter_halted", {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+        reason: haltReason,
+        inserted,
+        skipped,
+      });
+      break;
     }
 
     cursor = page.nextCursor;
@@ -492,7 +577,9 @@ export const runIngestionPipeline = async ({
     inserted,
     skipped,
     searchVectorFailures,
+    s3UploadFailures,
     pagesProcessed,
     nextCursor: cursor,
+    haltReason,
   };
 };

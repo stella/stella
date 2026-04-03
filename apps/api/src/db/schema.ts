@@ -1583,6 +1583,7 @@ export const caseLawIngestionEvents = p.pgTable(
       .integer("search_vector_failures")
       .notNull()
       .default(0),
+    s3UploadFailures: p.integer("s3_upload_failures").notNull().default(0),
     pagesProcessed: p.integer("pages_processed").notNull().default(0),
     cursorBefore: p.text("cursor_before"),
     cursorAfter: p.text("cursor_after"),

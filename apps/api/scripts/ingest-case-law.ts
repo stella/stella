@@ -176,6 +176,10 @@ const main = async () => {
 
       try {
         result = await runIngestionPipeline({ source, scopedDb });
+        if (result.haltReason) {
+          status = "failed";
+          errorMessage = result.haltReason.slice(0, 2048);
+        }
       } catch (error) {
         status = "failed";
         errorMessage =
@@ -195,6 +199,7 @@ const main = async () => {
           inserted: result?.inserted ?? 0,
           skipped: result?.skipped ?? 0,
           searchVectorFailures: result?.searchVectorFailures ?? 0,
+          s3UploadFailures: result?.s3UploadFailures ?? 0,
           pagesProcessed: result?.pagesProcessed ?? 0,
           cursorBefore,
           // When the pipeline failed (result is null), cursor did not advance.
@@ -219,6 +224,7 @@ const main = async () => {
           `  Inserted: ${result.inserted}, ` +
             `Skipped: ${result.skipped}, ` +
             `Search failures: ${result.searchVectorFailures}, ` +
+            `S3 failures: ${result.s3UploadFailures}, ` +
             `Pages: ${result.pagesProcessed}, ` +
             `Duration: ${durationMs}ms`,
         );
