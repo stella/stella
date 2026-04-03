@@ -6,8 +6,10 @@ Apply when writing or reviewing tests.
 
 **Test when code has:** parsing/transformation logic, security
 boundaries, business rules with arithmetic, state machines,
-non-obvious edge cases. **Skip:** simple CRUD handlers,
-library wrappers, layout components, constants.
+non-obvious edge cases, or CRUD paths with auth, tenancy,
+validation, serialization, uploads/downloads, or other side
+effects. **Skip:** shallow CRUD handlers with no meaningful
+branching, library wrappers, layout components, constants.
 
 ## Prefer invariants over examples
 
@@ -25,19 +27,28 @@ normalization.
 
 ## Structure
 
-Colocate `foo.test.ts` next to `foo.ts`. For frontend, extract
-logic into `foo.logic.ts` and test that (no React/DOM needed).
-Structural invariant tests (auth enforcement, branded types)
-live in `apps/api/src/tests/security/`.
+Colocate `foo.test.ts` next to `foo.ts`. For frontend, default
+to extracting logic into `foo.logic.ts` and test that in Bun.
+Use Playwright for browser-only behavior: auth redirects, route
+guards, uploads/downloads, keyboard/focus, drag/drop, and
+viewer/editor flows. Structural invariant tests (auth
+enforcement, branded types) live in
+`apps/api/src/tests/security/`.
 
 ## Rules
 
-- `bun:test` only
+- Use `bun:test` for unit, invariant, and integration tests;
+  use Playwright for browser behavior. Do not add another test
+  runner without a clear gap Bun and Playwright cannot cover.
 - Describe by behaviour, not by function name
-- No `beforeEach` / shared mutable state
+- Avoid hidden shared mutable state. Prefer per-test setup; use
+  `beforeEach` only for deterministic reset, and use expensive
+  shared fixtures only when explicit and isolated
 - Prefer plain fakes over mocking libraries for simple cases;
   use mocks when simulating failure modes, testing varied
   edge-case inputs, or isolating external services
+- Test tenant isolation and ownership-source rules at the
+  highest meaningful layer, not only as pure helper tests
 - Every bug fix gets a regression test
 - Avoid "tests for tests' sake": don't add shallow examples
   just to increase coverage if a stronger invariant test would
