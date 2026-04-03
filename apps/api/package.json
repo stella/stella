@@ -49,6 +49,7 @@
     "cheerio": "^1.2.0",
     "diff": "catalog:",
     "docx": "^9.6.0",
+    "domhandler": "^5.0.3",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
     "elysia-rate-limit": "^4.5.0",

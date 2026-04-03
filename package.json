@@ -85,6 +85,7 @@
       "react-dom": "^19.2.4"
     },
     "rivet": {
+      "@rivetkit/framework-base": "2.1.6",
       "@rivetkit/react": "2.1.6",
       "rivetkit": "2.1.6"
     }

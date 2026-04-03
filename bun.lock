@@ -51,6 +51,7 @@
         "cheerio": "^1.2.0",
         "diff": "catalog:",
         "docx": "^9.6.0",
+        "domhandler": "^5.0.3",
         "drizzle-orm": "catalog:",
         "elysia": "catalog:",
         "elysia-rate-limit": "^4.5.0",
@@ -99,6 +100,7 @@
         "@elysiajs/eden": "^1.4.8",
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.8.1",
+        "@rivetkit/framework-base": "catalog:rivet",
         "@rivetkit/react": "catalog:rivet",
         "@stella/api": "workspace:*",
         "@stella/permissions": "workspace:*",
@@ -122,6 +124,7 @@
         "@tanstack/react-router-devtools": "^1.163.3",
         "@tanstack/react-router-ssr-query": "^1.163.3",
         "@tanstack/react-table": "^8.21.3",
+        "@tanstack/table-core": "^8.21.3",
         "@tiptap/extension-bold": "^3.20.0",
         "@tiptap/extension-document": "^3.20.0",
         "@tiptap/extension-heading": "^3.20.0",
@@ -133,8 +136,10 @@
         "@tiptap/extension-text": "^3.20.0",
         "@tiptap/react": "^3.20.0",
         "@tiptap/suggestion": "^3.20.0",
+        "ai": "^6.0.104",
         "better-auth": "catalog:",
         "better-result": "catalog:",
+        "class-variance-authority": "^0.7.1",
         "diff": "catalog:",
         "dompurify": "^3.3.1",
         "html-react-parser": "^5.2.17",
@@ -148,6 +153,7 @@
         "react-dom": "catalog:react19",
         "react-resizable-panels": "^4.6.5",
         "recharts": "^3.7.0",
+        "rivetkit": "catalog:rivet",
         "streamdown": "^2.4.0",
         "use-debounce": "^10.1.0",
         "use-intl": "catalog:",
@@ -163,7 +169,6 @@
         "@tailwindcss/vite": "catalog:",
         "@tanstack/router-plugin": "^1.163.3",
         "@types/babel__core": "^7.20.5",
-        "@types/dompurify": "^3.0.5",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "^6.0.0",
@@ -207,10 +212,11 @@
       "name": "@stella/rivet",
       "version": "0.0.0",
       "dependencies": {
+        "@rivetkit/framework-base": "catalog:rivet",
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
-        "@rivetkit/react": "catalog:rivet",
         "typescript": "catalog:",
         "vite": "catalog:",
       },
@@ -256,7 +262,6 @@
         "@stella/typescript-config": "workspace:*",
         "@types/node": "catalog:react19",
         "@types/react": "catalog:react19",
-        "@types/react-dom": "catalog:react19",
         "react-email": "5.2.8",
         "typescript": "catalog:",
       },
@@ -325,6 +330,7 @@
       "react-dom": "^19.2.4",
     },
     "rivet": {
+      "@rivetkit/framework-base": "2.1.6",
       "@rivetkit/react": "2.1.6",
       "rivetkit": "2.1.6",
     },
@@ -1643,8 +1649,6 @@
     "@types/d3-zoom": ["@types/d3-zoom@3.0.8", "", { "dependencies": { "@types/d3-interpolate": "*", "@types/d3-selection": "*" } }, "sha512-iqMC4/YlFCSlO8+2Ii1GGGliCAY4XdeG748w5vQUbevlbDu0zSjH/+jojorQVBK/se0j6DUFNPBGSqD3YWYnDw=="],
 
     "@types/debug": ["@types/debug@4.1.12", "", { "dependencies": { "@types/ms": "*" } }, "sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ=="],
-
-    "@types/dompurify": ["@types/dompurify@3.2.0", "", { "dependencies": { "dompurify": "*" } }, "sha512-Fgg31wv9QbLDA0SpTOXO3MaxySc4DKGLi8sna4/Utjo4r3ZRPdCt4UQee8BWr+Q5z21yifghREPJGYaEOEIACg=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 
