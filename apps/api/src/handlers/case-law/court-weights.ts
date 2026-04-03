@@ -5,8 +5,7 @@
  * with database-driven weights per jurisdiction.
  */
 
-import { db } from "@/api/db";
-import { caseLawCourtWeights } from "@/api/db/schema";
+import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
 
 // -- Types ---------------------------------------------------------------
 
@@ -32,7 +31,7 @@ export const loadCourtWeights = async (): Promise<CourtWeightMap> => {
     return cached.map;
   }
 
-  const rows = await db.select().from(caseLawCourtWeights);
+  const rows = await readCourtWeightRows();
 
   const map: CourtWeightMap = new Map();
   for (const row of rows) {

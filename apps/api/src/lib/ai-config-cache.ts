@@ -6,7 +6,7 @@
  * Config changes rarely; a 5-minute stale window is fine.
  */
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";

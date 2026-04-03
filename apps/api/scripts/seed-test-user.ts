@@ -23,8 +23,8 @@ import { createHmac } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { db } from "@/api/db";
 import { member, organization, session, user } from "@/api/db/auth-schema";
+import { db } from "@/api/db/root";
 import { env } from "@/api/env";
 
 const TEST_USER = {

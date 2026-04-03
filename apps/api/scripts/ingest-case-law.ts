@@ -13,7 +13,8 @@
  * With an adapter key, runs only that source once and exits.
  */
 
-import { createScopedDb, db } from "@/api/db";
+import { createScopedDb } from "@/api/db";
+import { db } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";

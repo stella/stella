@@ -11,7 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";

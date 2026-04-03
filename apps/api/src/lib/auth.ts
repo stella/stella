@@ -10,8 +10,9 @@ import Elysia, { t } from "elysia";
 import { ac, roles } from "@stella/permissions";
 import type { PermissionInput } from "@stella/permissions";
 
-import { createScopedDb, db } from "@/api/db";
+import { createScopedDb } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
+import { db } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
@@ -242,7 +243,7 @@ export const getSessionAndMemberRole = async (
 const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
 
 export type AccessibleWorkspace = {
-  id: string;
+  id: SafeId<"workspace">;
   status: InferSelectModel<typeof workspaces>["status"];
 };
 
@@ -264,16 +265,21 @@ export const resolveAccessibleWorkspaces = async (
   memberRole: MemberRole,
 ): Promise<AccessibleWorkspace[]> => {
   if (ADMIN_BYPASS_ROLES.includes(memberRole)) {
-    return await db.query.workspaces.findMany({
+    const accessibleWorkspaces = await db.query.workspaces.findMany({
       where: { organizationId: { eq: organizationId } },
       columns: { id: true, status: true },
     });
+
+    return accessibleWorkspaces.map((workspace) => ({
+      ...workspace,
+      id: toSafeId<"workspace">(workspace.id),
+    }));
   }
 
   // JOIN with workspaces filters by org, preventing
   // cross-org leaks when a user belongs to multiple
   // organizations.
-  return await db
+  const accessibleWorkspaces = await db
     .select({
       id: workspaceMembers.workspaceId,
       status: workspaces.status,
@@ -286,6 +292,11 @@ export const resolveAccessibleWorkspaces = async (
         eq(workspaces.organizationId, organizationId),
       ),
     );
+
+  return accessibleWorkspaces.map((workspace) => ({
+    ...workspace,
+    id: toSafeId<"workspace">(workspace.id),
+  }));
 };
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({

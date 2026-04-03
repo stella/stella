@@ -1,12 +1,11 @@
 import { Result } from "better-result";
-import { sql } from "drizzle-orm";
 import Elysia from "elysia";
 
-import { db } from "@/api/db";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
+import { probeDatabase } from "@/api/lib/health/probe-database";
 
 export const healthRoute = new Elysia().get("/health", async ({ set }) => {
-  const probe = db.execute(sql`SELECT 1`);
+  const probe = probeDatabase();
   const timeout = new Promise((_resolve, reject) => {
     setTimeout(
       () => reject(new HealthCheckError({ message: "DB probe timeout" })),

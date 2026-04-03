@@ -5,8 +5,7 @@
  * backed by the `case_law_fts_configs` table with in-memory cache.
  */
 
-import { db } from "@/api/db";
-import { caseLawFtsConfigs } from "@/api/db/schema";
+import { readFtsConfigRows } from "@/api/lib/case-law/case-law-config-store";
 
 // -- Types ---------------------------------------------------------------
 
@@ -34,7 +33,7 @@ export const loadFtsConfigs = async (): Promise<Map<string, FtsConfig>> => {
     return cached.map;
   }
 
-  const rows = await db.select().from(caseLawFtsConfigs);
+  const rows = await readFtsConfigRows();
 
   const map = new Map<string, FtsConfig>();
   for (const row of rows) {

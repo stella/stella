@@ -7,10 +7,10 @@
  * safely after adding new jurisdictions or adjusting weights.
  */
 
-import { sql } from "drizzle-orm";
-
-import { db } from "@/api/db";
-import { caseLawCourtWeights, caseLawFtsConfigs } from "@/api/db/schema";
+import {
+  upsertCourtWeightRows,
+  upsertFtsConfigRows,
+} from "@/api/lib/case-law/case-law-config-store";
 
 // -- Court weight seed data ----------------------------------------------
 
@@ -161,32 +161,13 @@ const FTS_CONFIGS: FtsRow[] = [
 const seed = async () => {
   console.log("Seeding court weights...");
 
-  await db
-    .insert(caseLawCourtWeights)
-    .values(COURT_WEIGHTS)
-    .onConflictDoUpdate({
-      target: [caseLawCourtWeights.country, caseLawCourtWeights.courtPattern],
-      set: {
-        tier: sql`excluded.tier`,
-        tierLabel: sql`excluded.tier_label`,
-        weight: sql`excluded.weight`,
-      },
-    });
+  await upsertCourtWeightRows(COURT_WEIGHTS);
 
   console.log(`  ${COURT_WEIGHTS.length} court weight rows upserted.`);
 
   console.log("Seeding FTS configs...");
 
-  await db
-    .insert(caseLawFtsConfigs)
-    .values(FTS_CONFIGS)
-    .onConflictDoUpdate({
-      target: [caseLawFtsConfigs.language],
-      set: {
-        regconfig: sql`excluded.regconfig`,
-        useUnaccent: sql`excluded.use_unaccent`,
-      },
-    });
+  await upsertFtsConfigRows(FTS_CONFIGS);
 
   console.log(`  ${FTS_CONFIGS.length} FTS config rows upserted.`);
 

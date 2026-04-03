@@ -8,7 +8,7 @@
 
 import { panic } from "better-result";
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";

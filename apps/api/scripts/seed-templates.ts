@@ -19,7 +19,7 @@
 
 import JSZip from "jszip";
 
-import { db } from "@/api/db";
+import { db } from "@/api/db/root";
 import {
   clauseCategories,
   clauses,

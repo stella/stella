@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
@@ -52,13 +51,15 @@ export const fillByIdHandler = async ({
   body: { values: valuesJson },
   query: { format = "docx" },
 }: FillByIdProps) => {
-  const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: {
-      s3Key: true,
-      fileName: true,
-    },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: {
+        s3Key: true,
+        fileName: true,
+      },
+    }),
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });
@@ -112,8 +113,8 @@ export const fillByIdHandler = async ({
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
 
   // Best-effort analytics; don't block the download
-  db.insert(templateFills)
-    .values({
+  void scopedDb((tx) =>
+    tx.insert(templateFills).values({
       organizationId,
       templateId,
       userId,
@@ -123,7 +124,8 @@ export const fillByIdHandler = async ({
       unusedCount: result.unusedValues.length,
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
-    })
+    }),
+  )
     // TODO: fix this
     // oxlint-disable-next-line no-empty-function
     .catch(() => {});

@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
 
-import { db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -38,10 +37,12 @@ export const fillPreviewHandler = async ({
   templateId,
   body: { values: valuesJson },
 }: FillPreviewProps) => {
-  const template = await db.query.templates.findFirst({
-    where: { id: templateId, organizationId: { eq: organizationId } },
-    columns: { s3Key: true },
-  });
+  const template = await scopedDb((tx) =>
+    tx.query.templates.findFirst({
+      where: { id: templateId, organizationId: { eq: organizationId } },
+      columns: { s3Key: true },
+    }),
+  );
 
   if (!template) {
     return status(404, { message: "Template not found" });

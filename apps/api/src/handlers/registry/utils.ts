@@ -11,7 +11,6 @@ import { userErrors } from "@stella/rivet/errors";
 import type { UserErrorCode } from "@stella/rivet/errors";
 import type { ActorEvent } from "@stella/rivet/types";
 
-import { createScopedDb, db } from "@/api/db";
 import type { ScopedDb } from "@/api/db";
 import type { ActorsUnion } from "@/api/handlers/registry";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
@@ -24,6 +23,7 @@ import {
 // oxlint-disable-next-line no-restricted-imports: actor session validator (equivalent to authMacro)
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 
 export const createUserError = (
   errorCode: UserErrorCode,
@@ -48,7 +48,7 @@ export const broadcastEvent = (c: BroadcastCapableContext, event: ActorEvent) =>
 export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
-  accessibleWorkspaceIds: string[];
+  accessibleWorkspaceIds: SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
 };
 
@@ -61,11 +61,10 @@ export type ActorConnState = GlobalActorConnState & {
 };
 
 export const getScopedDb = (connState: GlobalActorConnState): ScopedDb =>
-  createScopedDb(
-    db,
-    connState.accessibleWorkspaceIds,
-    connState.organizationId,
-  );
+  createRootScopedDb({
+    organizationId: connState.organizationId,
+    workspaceIds: connState.accessibleWorkspaceIds,
+  });
 
 const validateActorAuth = async (key: string[], params: unknown) => {
   const { authToken } = validateActorInput(authedActorParamsSchema, params);
