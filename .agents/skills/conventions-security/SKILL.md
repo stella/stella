@@ -1,3 +1,8 @@
+---
+name: conventions-security
+description: 'Apply when writing code that touches auth, data access, file handling, or external APIs. Stella handles privileged legal data (attorney-client privilege, litigation holds, personal data).'
+---
+
 # Security Conventions
 
 Apply when writing code that touches auth, data access, file

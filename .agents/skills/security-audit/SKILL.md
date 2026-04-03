@@ -1,3 +1,8 @@
+---
+name: security-audit
+description: 'Scan the Stella codebase for security issues. We handle sensitive legal documents — security is non-negotiable.'
+---
+
 # Security Audit
 
 Scan the Stella codebase for security issues. We handle sensitive legal

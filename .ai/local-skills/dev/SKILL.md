@@ -1,3 +1,8 @@
+---
+name: dev
+description: 'Prepare and launch the local dev environment for the current worktree (or main worktree). Handles the common pain points: stale processes blocking ports, missing `.env` files, and opening the browser.'
+---
+
 # Dev Server
 
 Prepare and launch the local dev environment for the current worktree

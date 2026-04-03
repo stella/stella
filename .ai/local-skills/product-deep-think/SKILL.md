@@ -1,3 +1,8 @@
+---
+name: product-deep-think
+description: 'Assess a feature idea through a product lens before writing any plan or code. This is a conversational exercise: no code changes, no files produced. The output is clarity on whether and how to build something.'
+---
+
 # Product Deep Think
 
 Assess a feature idea through a product lens before writing any
