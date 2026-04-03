@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
     "typescript": "catalog:"
   }
 }

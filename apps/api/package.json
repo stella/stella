@@ -67,7 +67,6 @@
     "@stella/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "@types/nodemailer": "^7.0.11",
-    "bun-types": "latest",
     "drizzle-kit": "catalog:",
     "fast-check": "^4.5.3"
   }
