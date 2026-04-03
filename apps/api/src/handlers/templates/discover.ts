@@ -11,7 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export const discoverBodySchema = t.Object({
+const discoverBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
 });
 

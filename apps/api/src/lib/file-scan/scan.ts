@@ -6,13 +6,7 @@ import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
 import { aggregateVerdict } from "@/api/lib/file-scan/verdict";
 import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
 
-export type {
-  ScanFinding,
-  ScanResult,
-  ScanVerdict,
-} from "@/api/lib/file-scan/types";
-
-export class FileScanError extends TaggedError("FileScanError")<{
+class FileScanError extends TaggedError("FileScanError")<{
   message: string;
   cause?: unknown;
 }>() {}

@@ -30,7 +30,7 @@ import { captureError } from "@/api/lib/analytics";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 
-export type ClassifyResult = {
+type ClassifyResult = {
   polarity: Polarity;
   ruleId: string | null;
   source: "regex" | "llm" | "fallback";

@@ -10,7 +10,7 @@ import { timeEntries } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const readTimeEntriesQuerySchema = t.Object({
+const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
   userId: t.Optional(t.String({ minLength: 1 })),

@@ -6,7 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const readRateEntriesQuerySchema = t.Object({
+const readRateEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 500 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
 });

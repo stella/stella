@@ -31,7 +31,7 @@ import type {
   TemplateStructureError,
 } from "./types";
 
-export type PatchValues = Record<string, RichPatchValue>;
+type PatchValues = Record<string, RichPatchValue>;
 
 /**
  * Check whether a value looks like a plain PatchValues map

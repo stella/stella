@@ -3,7 +3,7 @@ import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import type { EmailTransport } from "@/api/lib/email/transport";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-export type SESTransportConfig = {
+type SESTransportConfig = {
   region: string;
   /** Omit both to use the SDK default credential chain (IAM roles, env vars, etc.). */
   accessKeyId?: string;

@@ -9,7 +9,7 @@ type FileByFieldIdKey = {
   fieldId: string;
 };
 
-export type FileData = {
+type FileData = {
   fileId: string;
   fileName: string;
   mimeType: string;

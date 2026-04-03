@@ -60,7 +60,7 @@ export type GenerateBatchResult = Result<
   WorkflowValidationError | WorkflowIntegrationError
 >;
 
-export const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
+const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
   switch (content.type) {
     case "text":
       return content.value.trim().length === 0;
@@ -86,7 +86,7 @@ export type TextInput = {
   value: string;
 };
 
-export type PreparedBatchInput = {
+type PreparedBatchInput = {
   inputProperties: BatchProperty[];
   inputFieldsForAI: FieldContentForAI[];
   resolvedFiles: ResolvedFile[];
@@ -94,7 +94,7 @@ export type PreparedBatchInput = {
   skippedPropertyIds: string[];
 };
 
-export type PrepareBatchInputResult = Result<
+type PrepareBatchInputResult = Result<
   PreparedBatchInput,
   WorkflowValidationError
 >;

@@ -7,7 +7,7 @@ export type OverlayRect = {
   height: number;
 };
 
-export type SpanSlice = {
+type SpanSlice = {
   spanIndex: number;
   localStart: number;
   localEnd: number;

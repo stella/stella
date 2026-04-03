@@ -31,7 +31,7 @@ import { mock } from "bun:test";
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 /** Load a fixture file as a string. */
-export const loadFixture = async (filename: string): Promise<string> => {
+const loadFixture = async (filename: string): Promise<string> => {
   const path = new URL(filename, FIXTURES_DIR);
   return await Bun.file(path).text();
 };

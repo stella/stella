@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { getClauseHandler } from "./read";
 
-export const getClauseParamsSchema = t.Object({
+const getClauseParamsSchema = t.Object({
   clauseId: tNanoid,
 });
 

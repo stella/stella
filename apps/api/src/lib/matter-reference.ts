@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-export class PatternError extends TaggedError("PatternError")<{
+class PatternError extends TaggedError("PatternError")<{
   message: string;
 }>() {}
 

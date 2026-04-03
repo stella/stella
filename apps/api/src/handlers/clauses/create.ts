@@ -13,7 +13,7 @@ import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
 
-export const createClauseBodySchema = t.Object({
+const createClauseBodySchema = t.Object({
   title: tDefaultVarchar,
   categoryId: t.Optional(tNanoid),
   language: t.Optional(t.String({ maxLength: 10 })),
@@ -38,7 +38,7 @@ type CreateClauseProps = {
   };
 };
 
-export const createClauseHandler = async ({
+const createClauseHandler = async ({
   scopedDb,
   organizationId,
   userId,

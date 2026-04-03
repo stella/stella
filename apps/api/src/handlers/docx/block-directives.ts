@@ -391,7 +391,7 @@ const cloneParagraph = (
 
 // ── Main processor ───────────────────────────────────────
 
-export type ProcessResult = {
+type ProcessResult = {
   patchValues: Record<string, RichPatchValue>;
   errors: TemplateStructureError[];
 };

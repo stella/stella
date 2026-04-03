@@ -5,7 +5,7 @@ import { rateTables } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const deleteRateTableBodySchema = t.Object({
+const deleteRateTableBodySchema = t.Object({
   id: tNanoid,
 });
 

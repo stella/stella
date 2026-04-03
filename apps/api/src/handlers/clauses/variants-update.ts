@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { updateVariantBodySchema, updateVariantHandler } from "./variants";
 
-export const updateVariantParamsSchema = t.Object({
+const updateVariantParamsSchema = t.Object({
   clauseId: tNanoid,
   variantId: tNanoid,
 });

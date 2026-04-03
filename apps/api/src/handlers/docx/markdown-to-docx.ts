@@ -325,7 +325,7 @@ const createConverters = (mapping: StyleMapping) => {
   return { convertToken };
 };
 
-export type MarkdownToDocxOptions = {
+type MarkdownToDocxOptions = {
   /** AI-chosen mapping from Markdown elements to style IDs.
    *  Defaults to the stock Series A cascade mapping. */
   styleMapping?: StyleMapping;

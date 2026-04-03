@@ -69,7 +69,7 @@ export type ParseRegionalInput = {
   justificationText: string;
 };
 
-export type ParseRegionalOutput = {
+type ParseRegionalOutput = {
   documentAst: DocumentAst;
   fulltext: string;
 };

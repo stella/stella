@@ -15,7 +15,7 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
-export const createEntityBodySchema = t.Object({
+const createEntityBodySchema = t.Object({
   kind: t.Optional(entityKindSchema),
   parentId: t.Optional(t.Nullable(tNanoid)),
   name: t.Optional(t.String()),
@@ -76,7 +76,7 @@ const validateParentId = async (
   return null;
 };
 
-export const createEntitiesHandler = async ({
+const createEntitiesHandler = async ({
   scopedDb,
   workspaceId,
   userId,

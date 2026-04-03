@@ -9,7 +9,7 @@ import { readFtsConfigRows } from "@/api/lib/case-law/case-law-config-store";
 
 // -- Types ---------------------------------------------------------------
 
-export type FtsConfig = {
+type FtsConfig = {
   regconfig: string;
   useUnaccent: boolean;
 };
@@ -28,7 +28,7 @@ let cached: {
 } | null = null;
 
 /** Load FTS configs from the database, caching for 60 s. */
-export const loadFtsConfigs = async (): Promise<Map<string, FtsConfig>> => {
+const loadFtsConfigs = async (): Promise<Map<string, FtsConfig>> => {
   if (cached && Date.now() < cached.expiresAt) {
     return cached.map;
   }

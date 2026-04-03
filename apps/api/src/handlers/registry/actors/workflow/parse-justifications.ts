@@ -17,7 +17,7 @@ type ParseJustificationXmlProps = {
   filenames: JustificationFilenames;
 };
 
-export type ParsedJustificationXml = {
+type ParsedJustificationXml = {
   htmlVersion: number;
   htmlContent: string;
   fileFieldIds: string[];

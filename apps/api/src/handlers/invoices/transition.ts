@@ -45,7 +45,7 @@ const TRANSITIONS = {
   { from: InvoiceStatus[]; to: InvoiceStatus }
 >;
 
-export const transitionInvoiceBodySchema = t.Object({
+const transitionInvoiceBodySchema = t.Object({
   action: t.UnionEnum([
     "finalize",
     "send",

@@ -20,15 +20,15 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { containsNull } from "./fill";
 
-export const fillByIdBodySchema = t.Object({
+const fillByIdBodySchema = t.Object({
   values: t.String(),
 });
 
-export const fillByIdQuerySchema = t.Object({
+const fillByIdQuerySchema = t.Object({
   format: t.Optional(t.UnionEnum(["docx", "pdf"])),
 });
 
-export const fillByIdParamsSchema = t.Object({
+const fillByIdParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -43,7 +43,7 @@ type FillByIdProps = {
   query: { format?: "docx" | "pdf" };
 };
 
-export const fillByIdHandler = async ({
+const fillByIdHandler = async ({
   scopedDb,
   organizationId,
   userId,

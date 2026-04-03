@@ -12,7 +12,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createInvoiceBodySchema = t.Object({
+const createInvoiceBodySchema = t.Object({
   invoiceNumber: t.String({ minLength: 1, maxLength: 64 }),
   invoiceDate: t.String({ format: "date" }),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),

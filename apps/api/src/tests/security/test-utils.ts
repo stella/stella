@@ -19,7 +19,7 @@ const allSchema = {
 export type TestDatabase = ReturnType<typeof drizzle<typeof allSchema>>;
 export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 
-export const createTestDb = async (): Promise<TestDatabase> => {
+const createTestDb = async (): Promise<TestDatabase> => {
   const client = await PGlite.create();
   const testDb = drizzle({ client, schema: allSchema });
 

@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { invoices } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 
-export const readInvoicesQuerySchema = t.Object({
+const readInvoicesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
 });

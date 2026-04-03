@@ -18,7 +18,7 @@ export type ClauseParagraph = {
 
 export type ClauseBody = ClauseParagraph[];
 
-export const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
+const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
   if (typeof value !== "object" || value === null) {
     return false;
   }

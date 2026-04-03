@@ -24,7 +24,7 @@ export type ClauseSlot = {
 
 // ── Regex ────────────────────────────────────────────
 
-export const CLAUSE_SLOT_RE = /\{\{@clause:([^:}]+)(?::([^}]+))?\}\}/gu;
+const CLAUSE_SLOT_RE = /\{\{@clause:([^:}]+)(?::([^}]+))?\}\}/gu;
 
 // ── Scanning ─────────────────────────────────────────
 

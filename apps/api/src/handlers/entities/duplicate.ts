@@ -15,7 +15,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
-export const duplicateEntityBodySchema = t.Object({
+const duplicateEntityBodySchema = t.Object({
   entityId: tNanoid,
 });
 
@@ -116,7 +116,7 @@ const extractFileName = (
   return null;
 };
 
-export const duplicateEntityHandler = async ({
+const duplicateEntityHandler = async ({
   scopedDb,
   workspaceId,
   userId,

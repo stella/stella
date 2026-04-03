@@ -10,7 +10,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const timerStartBodySchema = t.Object({
+const timerStartBodySchema = t.Object({
   matterId: tNanoid,
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   rateAtEntry: t.Integer({ minimum: 0 }),

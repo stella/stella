@@ -4,7 +4,6 @@ import type { Transaction } from "@/api/db/root";
 // db initialization. Runtime imports from `@/api/db` stay safe for
 // handlers and tests; `db` now lives in `@/api/db/root`.
 export { createScopedDb } from "@/api/db/scoped";
-export type { AnyDrizzle, TransactionOf } from "@/api/db/scoped";
 export type { Transaction } from "@/api/db/root";
 
 /**

@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-export const updateRateTableBodySchema = t.Object({
+const updateRateTableBodySchema = t.Object({
   id: tNanoid,
   name: t.Optional(tDefaultVarchar),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),

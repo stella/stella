@@ -8,7 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
-export const readEntitySummariesQuerySchema = t.Object({
+const readEntitySummariesQuerySchema = t.Object({
   page: t.Optional(t.Integer({ minimum: 1 })),
 });
 
@@ -18,7 +18,7 @@ type ReadEntitySummariesHandlerProps = {
   page: number;
 };
 
-export const readEntitySummariesHandler = async ({
+const readEntitySummariesHandler = async ({
   scopedDb,
   workspaceId,
   page,

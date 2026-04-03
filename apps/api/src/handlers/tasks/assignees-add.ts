@@ -7,7 +7,7 @@ import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { includes } from "@/api/lib/type-guards";
 
-export const addAssigneeBodySchema = t.Object({
+const addAssigneeBodySchema = t.Object({
   taskId: tNanoid,
   userId: t.String({ minLength: 1 }),
   role: t.Optional(t.String({ minLength: 1, maxLength: 16 })),

@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { updateCategoryBodySchema, updateCategoryHandler } from "./categories";
 
-export const updateClauseCategoryParamsSchema = t.Object({
+const updateClauseCategoryParamsSchema = t.Object({
   categoryId: tNanoid,
 });
 

@@ -10,7 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
-export const checkStampBodySchema = t.Object({
+const checkStampBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
 });
 
@@ -27,7 +27,7 @@ type CheckStampHandlerProps = {
  * Returns match info for the frontend to offer "update
  * existing" vs "upload as new" options.
  */
-export const checkStampHandler = async ({
+const checkStampHandler = async ({
   scopedDb,
   organizationId,
   body: { file },

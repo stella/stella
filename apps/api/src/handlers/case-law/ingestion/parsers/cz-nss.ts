@@ -48,7 +48,7 @@ export type ParseNssDecisionInput = {
   detailMetadata: Record<string, unknown>;
 };
 
-export type ParseNssDecisionOutput = {
+type ParseNssDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
 };

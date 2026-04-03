@@ -26,7 +26,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-export const uploadEntityBodySchema = t.Object({
+const uploadEntityBodySchema = t.Object({
   file: t.File({
     maxSize: FILE_SIZE_LIMITS.document,
   }),
@@ -74,7 +74,7 @@ const resolveFileName = async ({
   return { renamed: true, value: `${base}_${fieldsCount}${ext}` };
 };
 
-export const uploadEntityHandler = async ({
+const uploadEntityHandler = async ({
   scopedDb,
   organizationId,
   workspaceId,

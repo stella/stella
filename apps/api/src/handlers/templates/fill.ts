@@ -15,12 +15,12 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export const fillBodySchema = t.Object({
+const fillBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   values: t.String(),
 });
 
-export const fillQuerySchema = t.Object({
+const fillQuerySchema = t.Object({
   format: t.Optional(t.UnionEnum(["docx", "pdf"])),
 });
 

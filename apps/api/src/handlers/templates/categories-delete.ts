@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { deleteTemplateCategoryHandler } from "./categories";
 
-export const deleteTemplateCategoryParamsSchema = t.Object({
+const deleteTemplateCategoryParamsSchema = t.Object({
   categoryId: tNanoid,
 });
 

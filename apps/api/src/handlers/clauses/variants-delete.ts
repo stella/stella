@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 
 import { deleteVariantHandler } from "./variants";
 
-export const deleteVariantParamsSchema = t.Object({
+const deleteVariantParamsSchema = t.Object({
   clauseId: tNanoid,
   variantId: tNanoid,
 });

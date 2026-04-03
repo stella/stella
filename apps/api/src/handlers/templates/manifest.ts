@@ -10,7 +10,7 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export const manifestBodySchema = t.Object({
+const manifestBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   manifest: t.Any(),
 });

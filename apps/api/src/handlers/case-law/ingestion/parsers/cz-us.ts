@@ -67,12 +67,12 @@ export type ParseUsDecisionInput = {
   decisionType: string | undefined;
 };
 
-export type CrossReference = {
+type CrossReference = {
   caseNumber: string;
   href: string;
 };
 
-export type ParseUsDecisionOutput = {
+type ParseUsDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
   /** Cross-references to other decisions found in the HTML. */

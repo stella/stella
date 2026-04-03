@@ -37,7 +37,7 @@ export type ViewFilterCondition = v.InferOutput<
   typeof viewFilterConditionSchema
 >;
 
-export const viewSortSchema = v.strictObject({
+const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   desc: v.boolean(),
 });
@@ -126,7 +126,7 @@ export const updateViewInputSchema = v.strictObject({
 
 export type UpdateViewInput = v.InferInput<typeof updateViewInputSchema>;
 
-export const viewLayoutTypeSchema = v.picklist([
+const viewLayoutTypeSchema = v.picklist([
   "overview",
   "table",
   "filesystem",

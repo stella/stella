@@ -13,7 +13,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
-export const renameEntityBodySchema = t.Object({
+const renameEntityBodySchema = t.Object({
   entityId: tNanoid,
   name: t.String({
     minLength: 1,
@@ -29,7 +29,7 @@ type RenameEntityHandlerProps = {
   body: RenameEntityBodySchema;
 };
 
-export const renameEntityHandler = async ({
+const renameEntityHandler = async ({
   scopedDb,
   workspaceId,
   body,

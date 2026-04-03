@@ -38,7 +38,7 @@ type IntValidatedResult = {
   justificationXml: string;
 };
 
-export type ValidatedResult =
+type ValidatedResult =
   | TextValidatedResult
   | SingleSelectValidatedResult
   | MultiSelectValidatedResult

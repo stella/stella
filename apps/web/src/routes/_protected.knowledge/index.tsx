@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,
 });
 
-export type KnowledgeSection = {
+type KnowledgeSection = {
   key:
     | "templates"
     | "clauses"

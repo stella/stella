@@ -6,7 +6,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const createTimeEntryBodySchema = t.Object({
+const createTimeEntryBodySchema = t.Object({
   matterId: tNanoid,
   dateWorked: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),

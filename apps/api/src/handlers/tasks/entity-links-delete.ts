@@ -5,7 +5,7 @@ import { entityLinks } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const deleteEntityLinkBodySchema = t.Object({
+const deleteEntityLinkBodySchema = t.Object({
   linkId: tNanoid,
 });
 

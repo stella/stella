@@ -11,7 +11,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const UNCATEGORIZED = "uncategorized" as const;
 
-export const listTemplatesQuerySchema = t.Object({
+const listTemplatesQuerySchema = t.Object({
   categoryId: t.Optional(t.Union([tNanoid, t.Literal(UNCATEGORIZED)])),
 });
 
@@ -21,7 +21,7 @@ type ListTemplatesProps = {
   query: { categoryId?: string };
 };
 
-export const listTemplatesHandler = async ({
+const listTemplatesHandler = async ({
   scopedDb,
   organizationId,
   query,

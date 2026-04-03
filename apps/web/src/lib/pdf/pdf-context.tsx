@@ -56,11 +56,11 @@ export type RenderedPage = {
 
 export type RenderPageResult = Result<RenderedPage, PDFViewerError>;
 
-export type ScrollToTarget =
+type ScrollToTarget =
   | { kind: "justification"; id: string }
   | { kind: "anonymizeEntity"; entityId: number };
 
-export type ScrollTo = {
+type ScrollTo = {
   pageId: string;
   target?: ScrollToTarget | undefined;
 };
@@ -101,7 +101,7 @@ type PDFActions = {
   addAnonymizationEntityByText: (searchText: string, label: string) => number;
 };
 
-export type PDFStore = PDFState & PDFActions;
+type PDFStore = PDFState & PDFActions;
 
 // ── Store factory ──────────────────────────────────
 

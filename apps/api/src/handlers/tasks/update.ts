@@ -7,7 +7,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { includes } from "@/api/lib/type-guards";
 
-export const updateTaskBodySchema = t.Object({
+const updateTaskBodySchema = t.Object({
   taskId: tNanoid,
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),

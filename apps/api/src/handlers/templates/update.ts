@@ -21,13 +21,13 @@ const buildVersionS3Key = (
   version: number,
 ) => `${organizationId}/templates/${templateId}/v${version}.docx`;
 
-export const updateTemplateBodySchema = t.Object({
+const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tNanoid)),
   manifest: t.Optional(t.String()),
 });
 
-export const updateTemplateParamsSchema = t.Object({
+const updateTemplateParamsSchema = t.Object({
   templateId: tNanoid,
 });
 
@@ -67,7 +67,7 @@ const parseManifest = (json: string): TemplateManifest | null => {
   return parsed as TemplateManifest;
 };
 
-export const updateTemplateHandler = async ({
+const updateTemplateHandler = async ({
   scopedDb,
   organizationId,
   userId,

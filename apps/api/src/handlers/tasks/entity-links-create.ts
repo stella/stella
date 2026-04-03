@@ -6,7 +6,7 @@ import { tNanoid } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { includes } from "@/api/lib/type-guards";
 
-export const createEntityLinkBodySchema = t.Object({
+const createEntityLinkBodySchema = t.Object({
   sourceEntityId: tNanoid,
   targetEntityId: tNanoid,
   linkType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),

@@ -61,7 +61,7 @@ type DeleteS3ObjectsProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-export class S3Error extends TaggedError("S3Error")<{
+class S3Error extends TaggedError("S3Error")<{
   message: string;
   code?: string | undefined;
   key?: string | undefined;

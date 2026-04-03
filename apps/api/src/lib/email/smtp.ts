@@ -3,7 +3,7 @@ import { createTransport } from "nodemailer";
 import type { EmailTransport } from "@/api/lib/email/transport";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-export type SMTPTransportConfig = {
+type SMTPTransportConfig = {
   host: string;
   port: number;
   /** Omit for unauthenticated relays (e.g. MailHog in dev). */

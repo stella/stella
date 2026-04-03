@@ -8,7 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const deleteClauseParamsSchema = t.Object({
+const deleteClauseParamsSchema = t.Object({
   clauseId: tNanoid,
 });
 
@@ -18,7 +18,7 @@ type DeleteClauseProps = {
   clauseId: string;
 };
 
-export const deleteClauseHandler = async ({
+const deleteClauseHandler = async ({
   scopedDb,
   organizationId,
   clauseId,

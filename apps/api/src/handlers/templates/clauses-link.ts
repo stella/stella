@@ -8,7 +8,7 @@ import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
-export const linkTemplateClauseParamsSchema = t.Object({
+const linkTemplateClauseParamsSchema = t.Object({
   templateId: tNanoid,
 });
 

@@ -14,11 +14,8 @@ import {
 import { buildPerPage, getEntitySpans } from "@/lib/pdf/anonymization-helpers";
 import type {
   EntityOverlay,
-  EntitySpan,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
-
-export type { EntitySpan, EntityOverlay, FileAnonymization };
 
 const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   threshold: 0.4,

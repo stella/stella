@@ -214,7 +214,7 @@ export const getAuth = () => {
   return _auth;
 };
 
-export type MemberRole = keyof typeof roles;
+type MemberRole = keyof typeof roles;
 
 export const getSessionAndMemberRole = async (
   headers: Headers | Record<string, string>,
@@ -242,7 +242,7 @@ export const getSessionAndMemberRole = async (
 
 const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
 
-export type AccessibleWorkspace = {
+type AccessibleWorkspace = {
   id: SafeId<"workspace">;
   status: InferSelectModel<typeof workspaces>["status"];
 };
