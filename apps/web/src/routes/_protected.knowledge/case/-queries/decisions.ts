@@ -85,7 +85,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             language: h.language,
             // Search endpoint doesn't return languageGroupKey;
             // language grouping is only available via the list endpoint.
-            languageGroupKey: null as string | null,
+            languageGroupKey: null,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,
@@ -133,6 +133,9 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
       const facets: SearchFacets = null;
       return { ...response.data, facets };
     },
+    // SAFETY: TanStack Query needs the initial param typed as
+    // string | null; `null` alone infers `null`.
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });

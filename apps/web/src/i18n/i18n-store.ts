@@ -32,7 +32,7 @@ export const langMessages = {
 type SupportedLanguage = keyof typeof langMessages;
 
 // SAFETY: langMessages keys are SupportedLanguage; Object.keys preserves them
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
 export const supportedLanguages = Object.keys(
   langMessages,
 ) as SupportedLanguage[];

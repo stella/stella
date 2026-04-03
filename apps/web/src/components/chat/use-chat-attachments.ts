@@ -119,6 +119,7 @@ export const useChatAttachments = () => {
           // SAFETY: the Eden response matches
           // ProcessedAttachment since the endpoint
           // returns that exact shape.
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           const attachment = data as ProcessedAttachment;
 
           setPendingFiles((prev) =>

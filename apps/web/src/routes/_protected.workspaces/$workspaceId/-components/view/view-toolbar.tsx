@@ -54,7 +54,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       viewId: view.id,
       // SAFETY: callers pass subsets matching the current layout
       // discriminant; TS can't verify spread preserves a union.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       layout: { ...view.layout, ...changes } as ViewLayout,
     });
   };

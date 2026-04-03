@@ -230,7 +230,7 @@ export const EditFieldDialog = ({
                           type="single-select"
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"single-select">
                           }
                         />
@@ -250,7 +250,7 @@ export const EditFieldDialog = ({
                           type="multi-select"
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"multi-select">
                           }
                         />
@@ -275,7 +275,7 @@ export const EditFieldDialog = ({
                           type="date"
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                             (field.state.value as FieldFormValue<"date">) ?? ""
                           }
                         />
@@ -307,7 +307,7 @@ export const EditFieldDialog = ({
                             )}
                             type="number"
                             // SAFETY: guarded by fieldContent.type check
-                            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                             value={field.state.value as FieldFormValue<"int">}
                           />
                           <FieldError />

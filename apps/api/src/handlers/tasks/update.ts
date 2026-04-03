@@ -5,6 +5,7 @@ import { entities } from "@/api/db/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
+import { includes } from "@/api/lib/type-guards";
 
 export const updateTaskBodySchema = t.Object({
   taskId: tNanoid,
@@ -21,15 +22,12 @@ const updateTask = createHandler(
     body: updateTaskBodySchema,
   },
   async ({ workspaceId, body, scopedDb }) => {
-    if (
-      body.status !== undefined &&
-      !(TASK_STATUSES as readonly string[]).includes(body.status)
-    ) {
+    if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
       return status(400, { message: "Invalid task status" });
     }
     if (
       body.priority !== undefined &&
-      !(ENTITY_PRIORITIES as readonly string[]).includes(body.priority)
+      !includes(ENTITY_PRIORITIES, body.priority)
     ) {
       return status(400, { message: "Invalid task priority" });
     }

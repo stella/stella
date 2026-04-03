@@ -7,6 +7,7 @@
  */
 
 import type { WorkspaceFieldContent } from "@/lib/types";
+import { includesValue } from "@/lib/utils";
 
 export type CalendarDay = {
   /** ISO date string (YYYY-MM-DD) */
@@ -129,7 +130,7 @@ export const getEntityDate = (
 export const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
 
 export const isInternalDateProperty = (id: string) =>
-  (INTERNAL_DATE_IDS as readonly string[]).includes(id);
+  includesValue(INTERNAL_DATE_IDS, id);
 
 /**
  * Built-in task date pseudo-properties (`_due-date`, `_start-date`).
@@ -140,7 +141,7 @@ export const isInternalDateProperty = (id: string) =>
 export const TASK_DATE_IDS = ["_due-date", "_start-date"] as const;
 
 export const isTaskDateProperty = (id: string) =>
-  (TASK_DATE_IDS as readonly string[]).includes(id);
+  includesValue(TASK_DATE_IDS, id);
 
 /**
  * Localized weekday header labels (Mon–Sun, short).

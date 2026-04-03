@@ -71,7 +71,7 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
         {toasts.map((toast) => {
           const Icon = toast.type
             ? // SAFETY: toast.type matches TOAST_ICONS keys
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
             : null;
 
@@ -189,7 +189,7 @@ function AnchoredToasts() {
         {toasts.map((toast) => {
           const Icon = toast.type
             ? // SAFETY: toast.type matches TOAST_ICONS keys
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
             : null;
           const tooltipStyle = toast.data?.tooltipStyle ?? false;

@@ -72,7 +72,7 @@ export const decisionToMarkdown = (
   ast: unknown,
   maxLength = 60_000,
 ): string | null => {
-  /* oxlint-disable typescript/strict-boolean-expressions, typescript/no-unsafe-type-assertion -- ast is jsonb (unknown), runtime narrowing required */
+  /* eslint-disable typescript/consistent-type-assertions, typescript/strict-boolean-expressions, typescript/no-unsafe-type-assertion -- ast is jsonb (unknown), runtime narrowing required */
   if (
     !ast ||
     typeof ast !== "object" ||
@@ -83,7 +83,7 @@ export const decisionToMarkdown = (
   }
 
   const doc = ast as DocumentAst;
-  /* oxlint-enable typescript/strict-boolean-expressions, typescript/no-unsafe-type-assertion */
+  /* eslint-enable typescript/consistent-type-assertions, typescript/strict-boolean-expressions, typescript/no-unsafe-type-assertion */
   const parts: string[] = [];
 
   if (doc.metadata) {

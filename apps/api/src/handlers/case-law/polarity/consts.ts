@@ -1,3 +1,5 @@
+import { includes } from "@/api/lib/type-guards";
+
 /** Citation polarity values. */
 export const POLARITY = {
   POSITIVE: "positive",
@@ -45,10 +47,8 @@ export const POLARITY_WEIGHT: Record<Polarity, number> = {
 /**
  * Check if a string is a valid polarity value.
  */
-// SAFETY: POLARITY values are exhaustive; includes() narrows to Polarity
 export const isValidPolarity = (value: string): value is Polarity =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  Object.values(POLARITY).includes(value as Polarity);
+  includes(Object.values(POLARITY), value);
 
 /**
  * Build a regex pattern from a key phrase.

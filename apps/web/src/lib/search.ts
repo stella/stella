@@ -40,6 +40,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
       return response.data;
     },
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: params.query.length > 0,

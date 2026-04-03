@@ -120,12 +120,12 @@ export const getWorkflowActorConfig = <T extends OptionsType>(
       ...commonOptions,
     };
     // SAFETY: framework type erasure; options satisfy WorkflowActorReturn
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     return clientOptions as WorkflowActorReturn<T>;
   }
 
   const vanillaOptions: WorkflowActorReturn<"vanilla"> = [[key], commonOptions];
   // SAFETY: framework type erasure; vanillaOptions satisfies WorkflowActorReturn
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return vanillaOptions as WorkflowActorReturn<T>;
 };

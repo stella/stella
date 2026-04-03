@@ -23,10 +23,10 @@ type DefaultView = {
 const emptyLayout = (
   type: "overview" | "table" | "filesystem" | "kanban",
 ): ViewLayout => {
-  const base = {
-    filters: [] as ViewLayout["filters"],
-    sorts: [] as ViewLayout["sorts"],
-    hiddenProperties: [] as string[],
+  const base: Pick<ViewLayout, "filters" | "sorts" | "hiddenProperties"> = {
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
   };
 
   if (type === "table") {

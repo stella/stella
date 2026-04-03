@@ -23,7 +23,7 @@ const isToolField = (x: unknown): x is ToolField =>
   typeof x === "object" &&
   x !== null &&
   "value" in x &&
-  typeof (x as Record<string, unknown>).value === "string";
+  typeof x.value === "string";
 
 /** Extract a display name from a readEntity tool output.
  *  Prefers entity.name, falls back to the first file field's
@@ -215,7 +215,7 @@ export const createSourceInjectionTransform = (
       // SAFETY: chunk.output is typed as `unknown` by the AI
       // SDK. The tools always return JSON objects, so casting
       // to Record is sound after the typeof guard below.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       const output = chunk.output as Record<string, unknown> | null;
       if (!output || typeof output !== "object") {
         return;

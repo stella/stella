@@ -6,6 +6,7 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -172,7 +173,7 @@ export const czNsAdapter: SourceAdapter = {
         return null;
       }
 
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- Domino JSON API
+      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- Domino JSON API
       const json = (await response.json()) as DominoViewResponse;
       const raw = json["@toplevelentries"];
       if (!raw) {
@@ -259,7 +260,7 @@ export const czNsAdapter: SourceAdapter = {
 
               // Parse AST from the print page (rich HTML)
               // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
-              let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+              let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
               let fulltext = meta.fulltext;
 
               let sourceMetadata: Record<string, unknown> = {};

@@ -92,6 +92,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
       if (message.action === "selection-changed") {
         setMetadata((prev) => {
           if (!prev) {return prev;}
+          // eslint-disable-next-line typescript/consistent-type-assertions
           const selection =
             (message.payload as string) || undefined;
           return { ...prev, selection };
@@ -130,6 +131,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
         matterId: activeMatter.id,
         data: clipData,
       },
+    // eslint-disable-next-line typescript/consistent-type-assertions
     })) as SaveClipResponse | undefined;
 
     if (!response) {

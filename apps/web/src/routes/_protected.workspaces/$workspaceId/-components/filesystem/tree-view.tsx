@@ -113,7 +113,7 @@ const resolveExtraColumns = (
       cols.push({
         type: "metadata",
         // SAFETY: id from METADATA_IDS (internal property ids)
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         id: id as InternalPropertyId,
         label: metadataLabels[id] ?? id,
       });
@@ -427,7 +427,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           // Check if any entity in the drag has a parentId.
           // SAFETY: from our draggable getInitialData
           const entities =
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
             source.data.entities as { parentId: string | null }[] | undefined;
           const hasNested = entities
             ? entities.some((e) => e.parentId)
@@ -456,7 +456,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       onDrop: ({ source }) => {
         setIsRootDropTarget(false);
         // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         const entityIds = source.data.entityIds as string[];
         for (const entityId of entityIds) {
           moveEntityRefRoot.current.mutate(
@@ -493,10 +493,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       onClick={(e) => {
         // Clear selection when clicking empty background
         // (not inside a row).
-        // SAFETY: e.target is EventTarget, DOM click target is HTMLElement
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        const target = e.target as HTMLElement;
-        if (!target.closest("[data-entity-row]")) {
+        if (
+          e.target instanceof HTMLElement &&
+          !e.target.closest("[data-entity-row]")
+        ) {
           clearSelection();
         }
       }}
@@ -850,7 +850,7 @@ const FilesystemRow = ({
                 source.data.entityId !== node.entityId &&
                 // SAFETY: entityId is always a string; set by our own draggable getInitialData.
                 !ancestorIdsRef.current.has(
-                  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                   source.data.entityId as string,
                 ),
               getData: () => ({ entityId: node.entityId }),
@@ -876,7 +876,7 @@ const FilesystemRow = ({
                   autoExpandTimer.current = null;
                 }
                 // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
-                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                 const entityIds = source.data.entityIds as string[];
                 for (const entityId of entityIds) {
                   if (ancestorIdsRef.current.has(entityId)) {

@@ -353,7 +353,7 @@ function ComboboxChips({
       data-slot="combobox-chips"
       onMouseDown={(e) => {
         // SAFETY: DOM mouse event target is Element for UI interaction
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         const target = e.target as HTMLElement;
         const isChip = target.closest('[data-slot="combobox-chip"]');
         if (isChip || !chipsRef?.current) {
@@ -367,7 +367,7 @@ function ComboboxChips({
         }
       }}
       // SAFETY: chipsRef is HTMLDivElement from ComboboxPrimitive.Chips
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       ref={chipsRef as React.Ref<HTMLDivElement> | null}
       {...props}
     >

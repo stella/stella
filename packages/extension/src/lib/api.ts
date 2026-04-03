@@ -16,6 +16,7 @@ const request = async <T>(
     const token = await storage.getBearerToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      // eslint-disable-next-line typescript/consistent-type-assertions
       ...(init?.headers as Record<string, string>),
     };
     if (token) {
@@ -38,6 +39,7 @@ const request = async <T>(
     }
 
     // SAFETY: Response JSON shape matches T by API contract.
+    // eslint-disable-next-line typescript/consistent-type-assertions
     const data = (await res.json()) as T;
     return { ok: true, data };
   } catch (error) {

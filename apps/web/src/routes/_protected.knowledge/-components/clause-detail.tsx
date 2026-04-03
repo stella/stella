@@ -172,7 +172,7 @@ export const ClauseDetailView = ({
 
     // SAFETY: The API returns body as ClauseParagraph[]
     // but Eden types it as unknown due to JSONB.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const detail = data as unknown as ClauseDetail;
     setState({ kind: "ready", detail });
   }, [clauseId, t]);

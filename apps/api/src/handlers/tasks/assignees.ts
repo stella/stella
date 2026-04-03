@@ -8,6 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
+import { includes } from "@/api/lib/type-guards";
 
 export const addAssigneeBodySchema = t.Object({
   taskId: tNanoid,
@@ -31,7 +32,7 @@ type AssigneeProps<T> = {
 };
 
 const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
-  (TASK_ASSIGNEE_ROLES as readonly string[]).includes(value);
+  includes(TASK_ASSIGNEE_ROLES, value);
 
 export const addAssigneeHandler = async ({
   workspaceId,

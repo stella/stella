@@ -128,10 +128,12 @@ const parseAstMetadata = (raw: unknown): DocumentAstMetadata | null => {
   ) {
     return null;
   }
-  // Narrowed by `"metadata" in parsed` above.
+  // SAFETY: runtime-narrowed JSONB structure; `"metadata" in parsed`
+  // guarantees the key exists. Two casts bridge unknown to typed.
+  /* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
   const { metadata } = parsed as Record<string, unknown>;
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return (metadata ?? null) as DocumentAstMetadata | null;
+  /* eslint-enable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
 };
 
 /** Source-specific fields (excludes duplicates of AST metadata). */

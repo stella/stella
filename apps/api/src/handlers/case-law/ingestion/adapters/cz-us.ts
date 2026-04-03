@@ -7,6 +7,7 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -151,7 +152,7 @@ const parseDecisionPage = (
   const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
 
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
-  let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let resolvedFulltext = fulltext;
 
   try {

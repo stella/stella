@@ -56,6 +56,9 @@ const isDocumentAst = (val: unknown): val is DocumentAst =>
   typeof val === "object" &&
   val !== null &&
   "blocks" in val &&
+  // SAFETY: `"blocks" in val` narrows val to object with
+  // the blocks key; Record cast reads it for Array.isArray.
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   Array.isArray((val as Record<string, unknown>).blocks);
 
 type Decision = {

@@ -227,7 +227,7 @@ export const ChatEditor = ({
               typeof meta === "object" &&
               "active" in meta &&
               // SAFETY: validated shape above; plugin state has active: boolean
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               (meta as { active: boolean }).active
             );
           });

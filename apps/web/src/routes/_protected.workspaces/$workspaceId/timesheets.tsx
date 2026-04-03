@@ -156,7 +156,7 @@ function TimesheetsPage() {
       }
       // SAFETY: PDF endpoint returns binary; Eden types it
       // as unknown but the response body is an ArrayBuffer
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       const pdfData = response.data as unknown as ArrayBuffer;
       const blob = new Blob([pdfData], {
         type: "application/pdf",

@@ -5,6 +5,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
+import { includes } from "@/api/lib/type-guards";
 
 export const addAssigneeBodySchema = t.Object({
   taskId: tNanoid,
@@ -13,7 +14,7 @@ export const addAssigneeBodySchema = t.Object({
 });
 
 const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
-  (TASK_ASSIGNEE_ROLES as readonly string[]).includes(value);
+  includes(TASK_ASSIGNEE_ROLES, value);
 
 const addAssignee = createHandler(
   {

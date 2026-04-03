@@ -86,7 +86,7 @@ export const useTableStore = create<TableStore>()(
   persist(
     immer((set) => ({
       columnSizing: new Map<string, ColumnSizingState>(),
-      rowSelection: {} as Record<string, RowSelectionState>,
+      rowSelection: {},
 
       setColumnSizing: (viewId, updater) => {
         set((state) => {

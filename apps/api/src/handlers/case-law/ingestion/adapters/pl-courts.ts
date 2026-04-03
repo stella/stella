@@ -1,6 +1,6 @@
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -122,7 +122,7 @@ const parseItem = (item: SaosItem): IngestionResult | null => {
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
     // TODO: integrate court-specific parser for AST
-    documentAst: {} as EmptyAst,
+    documentAst: EMPTY_AST,
     sourceRaw: undefined,
     sourceRawContentType: "application/json",
   };
@@ -158,7 +158,7 @@ export const plCourtsAdapter: SourceAdapter = {
       // fields are optional so missing properties
       // degrade gracefully.
       return typeof json === "object" && json !== null
-        ? (json as SaosResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+        ? (json as SaosResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
         : {};
     },
 
@@ -169,6 +169,6 @@ export const plCourtsAdapter: SourceAdapter = {
 
     // SAFETY: items come from extractItems which returns
     // data.items (SaosItem[]); all fields are optional.
-    parseItem: async (raw) => await Promise.resolve(parseItem(raw as SaosItem)), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+    parseItem: async (raw) => await Promise.resolve(parseItem(raw as SaosItem)), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
   }),
 };

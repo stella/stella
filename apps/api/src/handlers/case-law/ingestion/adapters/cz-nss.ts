@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -327,7 +328,7 @@ const fetchDecisionContent = async (
           )?.toLowerCase(),
           sourceUrl: row.documentUrl,
           html,
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: detail is a parsed metadata object stored as jsonb
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- SAFETY: detail is a parsed metadata object stored as jsonb
           detailMetadata: detail as Record<string, unknown>,
         });
 
@@ -529,7 +530,7 @@ const rowToResult = (
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
-    documentAst: content.documentAst ?? ({} as EmptyAst),
+    documentAst: content.documentAst ?? EMPTY_AST,
     sourceRaw: content.sourceRaw,
     sourceRawContentType: "text/html",
   };

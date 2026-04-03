@@ -4,6 +4,7 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -118,7 +119,7 @@ const fetchDetail = async (
   }
   // SAFETY: structural check above confirms object; fields
   // are all optional so parseItem handles missing properties.
-  return json as SkDetailItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+  return json as SkDetailItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
 };
 
 /**
@@ -165,7 +166,7 @@ const parseItemWithDetail = async (
   // SAFETY: items come from extractItems which returns
   // data.rozhodnutieList (SkApiItem[]); all fields are
   // optional so missing properties degrade gracefully.
-  const item = raw as SkApiItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+  const item = raw as SkApiItem; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
 
   if (!item.spisovaZnacka || !item.sud?.nazov) {
     return null;
@@ -191,7 +192,7 @@ const parseItemWithDetail = async (
 
   // Parse PDF into structured AST using @libpdf/core
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
-  let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
 
   if (pdfBytes) {
@@ -282,7 +283,7 @@ export const skCourtsAdapter: SourceAdapter = {
       // fields are optional so missing properties
       // degrade gracefully.
       return typeof json === "object" && json !== null
-        ? (json as SkApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+        ? (json as SkApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
         : {};
     },
 

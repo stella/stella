@@ -99,7 +99,8 @@ ${context}`,
       return {
         // SAFETY: Valibot picklist at line 45 restricts to
         // valid Polarity subset ("positive" | "neutral" | "negative").
-        polarity: result.output.polarity as Polarity,
+        // The picklist subset is assignable to Polarity without cast
+        polarity: result.output.polarity,
         keyPhrase: result.output.keyPhrase,
         confidence: result.output.confidence,
       };

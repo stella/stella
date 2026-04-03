@@ -11,6 +11,7 @@ import { createHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
+import { includes } from "@/api/lib/type-guards";
 
 export const createTaskBodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
@@ -34,10 +35,10 @@ const createTask = createHandler(
     const taskStatus = body.status ?? "open";
     const taskPriority = body.priority ?? "none";
 
-    if (!(TASK_STATUSES as readonly string[]).includes(taskStatus)) {
+    if (!includes(TASK_STATUSES, taskStatus)) {
       return status(400, { message: "Invalid task status" });
     }
-    if (!(ENTITY_PRIORITIES as readonly string[]).includes(taskPriority)) {
+    if (!includes(ENTITY_PRIORITIES, taskPriority)) {
       return status(400, { message: "Invalid task priority" });
     }
 

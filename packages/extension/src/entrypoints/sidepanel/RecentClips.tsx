@@ -38,6 +38,7 @@ export const RecentClips = () => {
           changes["stella:recentClips"]?.newValue;
         if (Array.isArray(newValue)) {
           // SAFETY: chrome.storage returns untyped; we control writes.
+          // eslint-disable-next-line typescript/consistent-type-assertions
           setClips(newValue as RecentClip[]);
         }
       }

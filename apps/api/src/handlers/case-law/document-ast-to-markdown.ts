@@ -62,7 +62,7 @@ const blockToMarkdown = (block: Block): string => {
   // Unknown block type (e.g., legacy "ruling-item" from old data).
   // SAFETY: old JSONB data may contain block types removed from
   // the Block union; plainText exists on all historical types.
-  return (block as { plainText: string }).plainText; // oxlint-disable-line typescript/no-unsafe-type-assertion, typescript/no-unsafe-return
+  return (block as { plainText: string }).plainText; // eslint-disable-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion, typescript/no-unsafe-return
 };
 
 /**
