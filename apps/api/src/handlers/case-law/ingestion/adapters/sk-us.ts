@@ -24,6 +24,7 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -199,7 +200,7 @@ const parseDocument = async (
   const pdfBytes = await fetchPdfBytes(doc.documentId, signal);
 
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
-  let documentAst: DocumentAst | EmptyAst = {} as EmptyAst;
+  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
 
   if (pdfBytes) {
@@ -334,7 +335,7 @@ export const skUsAdapter: SourceAdapter = {
           return { decisions: [], nextCursor: null };
         }
 
-        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- search API response
+        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- search API response
         const data = (await response.json()) as SearchResponse;
         const decisions: IngestionResult[] = [];
 

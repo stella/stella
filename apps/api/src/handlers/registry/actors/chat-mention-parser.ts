@@ -46,7 +46,7 @@ export const parseMentions = (text: string): MentionRef[] => {
       }
     } else {
       // SAFETY: type is from validated prefix; MentionRef shape is constructed
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       refs.push({ type: type as MentionRef["type"], id: rawId } as MentionRef);
     }
   }

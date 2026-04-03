@@ -63,7 +63,7 @@ export const fillHandler = async ({
     );
   }
 
-  const parseResult = Result.try(() => JSON.parse(valuesJson) as unknown);
+  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
   if (Result.isError(parseResult)) {
     return new Response(
       JSON.stringify({
@@ -97,7 +97,7 @@ export const fillHandler = async ({
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const result = await fillTemplate(buffer, parsed as TemplateData);
 
   const fillStatus =

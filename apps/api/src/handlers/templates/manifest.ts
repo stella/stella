@@ -36,7 +36,7 @@ export const manifestHandler = async ({
   // (FormData auto-parsed by Elysia).
   let parsed: unknown = manifestJson;
   if (typeof manifestJson === "string") {
-    const parseResult = Result.try(() => JSON.parse(manifestJson) as unknown);
+    const parseResult = Result.try((): unknown => JSON.parse(manifestJson));
     if (Result.isError(parseResult)) {
       return new Response(
         JSON.stringify({
@@ -128,6 +128,7 @@ export const manifestHandler = async ({
     version: parsed.version,
     fields: parsed.fields,
     conditions: parsed.conditions,
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   } as TemplateManifest;
   // oxlint-enable typescript-eslint/no-unsafe-assignment
 

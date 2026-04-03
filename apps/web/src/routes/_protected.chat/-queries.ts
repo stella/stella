@@ -67,7 +67,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
 
       // SAFETY: messages from the actor are structurally
       // ChatMessage — narrowing adds typed tool parts.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       const messages = initialMessages as ChatMessage[];
       const chat = new Chat<ChatMessage>({
         messages,

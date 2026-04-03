@@ -7,6 +7,7 @@ import { entityLinks } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
+import { includes } from "@/api/lib/type-guards";
 
 export const createEntityLinkBodySchema = t.Object({
   sourceEntityId: tNanoid,
@@ -40,7 +41,7 @@ export const createEntityLinkHandler = async ({
   scopedDb,
 }: EntityLinkProps<CreateEntityLinkBody>) => {
   const linkType = body.linkType ?? "related";
-  if (!(ENTITY_LINK_TYPES as readonly string[]).includes(linkType)) {
+  if (!includes(ENTITY_LINK_TYPES, linkType)) {
     return status(400, { message: "Invalid link type" });
   }
 

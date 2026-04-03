@@ -47,6 +47,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
         // SAFETY: error shape from better-auth.
         const body = await res.json().catch(() => null);
         setError(
+          // eslint-disable-next-line typescript/consistent-type-assertions
           (body as { message?: string })?.message ??
             "Failed to send code",
         );
@@ -88,6 +89,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
         // SAFETY: error shape from better-auth.
         const body = await res.json().catch(() => null);
         setError(
+          // eslint-disable-next-line typescript/consistent-type-assertions
           (body as { message?: string })?.message ??
             "Invalid code",
         );
@@ -115,6 +117,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
 
       if (orgsRes.ok) {
         // SAFETY: better-auth Organization[].
+        // eslint-disable-next-line typescript/consistent-type-assertions
         let orgs = (await orgsRes.json()) as {
           id: string;
         }[];
@@ -143,6 +146,7 @@ export const SignIn = ({ onSuccess }: SignInProps) => {
           );
           if (createRes.ok) {
             // SAFETY: better-auth Organization.
+            // eslint-disable-next-line typescript/consistent-type-assertions
             const created =
               (await createRes.json()) as {
                 id: string;

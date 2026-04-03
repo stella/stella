@@ -223,14 +223,14 @@ type KindFilterChipProps = {
   onRemove: () => void;
 };
 
-const useKindLabels = () => {
+const useKindLabels = (): Record<string, string> => {
   const t = useTranslations();
   return {
     document: t("search.kinds.document"),
     folder: t("search.kinds.folder"),
     task: t("search.kinds.task"),
     message: t("search.kinds.message"),
-  } as Record<string, string>;
+  };
 };
 
 const KindFilterChip = ({
@@ -299,9 +299,9 @@ const BuiltinFilterChip = ({
 
   const resolveLabel = (val: string) =>
     isStatus
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         t(`tasks.statusValues.${val}` as "tasks.statusValues.open")
-      : // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      : // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         t(`tasks.priorityValues.${val}` as "tasks.priorityValues.none");
 
   const opOptions = [

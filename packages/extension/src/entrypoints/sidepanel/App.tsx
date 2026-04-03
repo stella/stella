@@ -61,6 +61,7 @@ export const App = () => {
       }
 
       // SAFETY: better-auth session response shape.
+      // eslint-disable-next-line typescript/consistent-type-assertions
       const data = (await res.json()) as {
         user: { name: string | null; email: string };
       };
@@ -155,6 +156,7 @@ const UserHeader = ({
     const handleClickOutside = (e: MouseEvent) => {
       if (
         menuRef.current &&
+        // eslint-disable-next-line typescript/consistent-type-assertions
         !menuRef.current.contains(e.target as Node)
       ) {
         setOpen(false);

@@ -15,6 +15,7 @@ export const storage = {
       KEYS.activeMatter,
     );
     // SAFETY: chrome.storage returns untyped values; we control writes.
+    // eslint-disable-next-line typescript/consistent-type-assertions
     return (result[KEYS.activeMatter] as Matter | undefined) ?? null;
   },
 
@@ -30,6 +31,7 @@ export const storage = {
     );
     return (
       // SAFETY: chrome.storage returns untyped values; we control writes.
+      // eslint-disable-next-line typescript/consistent-type-assertions
       (result[KEYS.recentClips] as RecentClip[] | undefined) ?? []
     );
   },
@@ -48,6 +50,7 @@ export const storage = {
     );
     return (
       // SAFETY: chrome.storage returns untyped values; we control writes.
+      // eslint-disable-next-line typescript/consistent-type-assertions
       (result[KEYS.offlineQueue] as QueuedClip[] | undefined) ?? []
     );
   },
@@ -77,6 +80,7 @@ export const storage = {
     );
     return (
       // SAFETY: chrome.storage returns untyped; we control writes.
+      // eslint-disable-next-line typescript/consistent-type-assertions
       (result[KEYS.bearerToken] as string | undefined) ?? null
     );
   },

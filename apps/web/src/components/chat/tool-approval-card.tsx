@@ -113,12 +113,14 @@ type UpdateSummaryProps = {
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   const qc = useQueryClient();
   // SAFETY: from validated update-entity-fields tool input
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const propName = (input.propertyName as string | undefined) ?? "field";
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: from validated tool input
+  // SAFETY: from validated tool input
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const entityName = input.entityName as string | undefined;
   const newVal = input.value;
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: from validated tool input
+  // SAFETY: from validated tool input
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const oldVal = input.oldValue as string | undefined;
 
   // Look up the property from cache for colors.
@@ -268,7 +270,7 @@ export const ToolApprovalCard = ({
   // SAFETY: input from validated tool part
   const input =
     "input" in part
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         (part.input as Record<string, unknown>)
       : null;
 

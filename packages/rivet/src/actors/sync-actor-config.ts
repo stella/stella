@@ -39,12 +39,12 @@ export const getSyncActorConfig = <T extends OptionsType>(
       ...commonOptions,
     };
     // SAFETY: framework type erasure; options satisfy SyncActorReturn
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     return clientOptions as SyncActorReturn<T>;
   }
 
   const vanillaOptions: SyncActorReturn<"vanilla"> = [[key], commonOptions];
   // SAFETY: framework type erasure; vanillaOptions satisfies SyncActorReturn
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return vanillaOptions as SyncActorReturn<T>;
 };

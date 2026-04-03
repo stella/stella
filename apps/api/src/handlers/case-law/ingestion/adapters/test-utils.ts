@@ -41,7 +41,7 @@ export const loadJsonFixture = async <T = unknown>(
   filename: string,
 ): Promise<T> => {
   const text = await loadFixture(filename);
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
   return JSON.parse(text) as T;
 };
 
@@ -110,7 +110,7 @@ export const mockFetchWithFixtures = async (
     })),
   );
 
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- mock signature matches fetch for test purposes
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- mock signature matches fetch for test purposes
   globalThis.fetch = mock(async (input: string | URL | Request) => {
     const url =
       typeof input === "string"

@@ -5,8 +5,8 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -172,7 +172,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
 
   // SAFETY: Cellar SPARQL always returns this shape for
   // SELECT queries with ?ecli, ?date, ?celex, ?type.
-  const json = (await response.json()) as SparqlResponse; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+  const json = (await response.json()) as SparqlResponse; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
@@ -369,7 +369,7 @@ export const euEcjAdapter: SourceAdapter = {
               rawHash: hashContent(raw),
               parserVersion: PARSER_VERSION,
               // TODO: integrate court-specific parser for AST
-              documentAst: {} as EmptyAst,
+              documentAst: EMPTY_AST,
               sourceRaw: undefined,
             });
           }

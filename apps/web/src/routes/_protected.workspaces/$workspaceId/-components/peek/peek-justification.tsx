@@ -91,7 +91,7 @@ export const PeekJustification = ({
             {/* SAFETY: html-react-parser's Element.children is
                 typed as ChildNode[] which is structurally
                 compatible with DOMNode[] */}
-            {/* oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion */}
+            {/* eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */}
             {domToReact(node.children as DOMNode[])}
           </PeekCitation>
         );

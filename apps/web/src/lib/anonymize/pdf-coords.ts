@@ -85,7 +85,7 @@ export const extractPDFText = async (
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pdfjs transform is typed as any[]
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- pdfjs transform is typed as any[]
       const transform = item.transform as number[];
       const x = transform.at(4) ?? 0;
       const y = transform.at(5) ?? 0;

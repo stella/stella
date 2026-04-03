@@ -64,7 +64,7 @@ export const fillByIdHandler = async ({
     return status(404, { message: "Template not found" });
   }
 
-  const parseResult = Result.try(() => JSON.parse(valuesJson) as unknown);
+  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
   if (Result.isError(parseResult)) {
     return status(400, {
       message: "Invalid JSON in 'values' field.",
@@ -105,7 +105,7 @@ export const fillByIdHandler = async ({
   // SAFETY: `parsed` is validated as a non-null, non-array object
   // with no null values. `fillTemplate` handles arbitrary value
   // shapes via `isTemplateData` discrimination internally.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const result = await fillTemplate(buffer, parsed as TemplateData);
 
   const fillStatus =

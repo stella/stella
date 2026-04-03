@@ -47,7 +47,7 @@ export async function runWorkflowAction<T extends keyof WorkflowActionSchemas>(
     : [input: WorkflowActionSchemas[T]]
 ): ReturnType<typeof c.schedule.after> {
   // SAFETY: args is [WorkflowActionSchemas[T]] when T extends non-void schema
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   await c.schedule.after(0, action, args[0] as WorkflowActionSchemas[T]);
 }
 

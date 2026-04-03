@@ -413,7 +413,7 @@ export const chatActor = actor({
       const isNew = !c.state.threads.has(threadId);
       const thread = getOrCreateThread(c.state.threads, threadId, message);
       // TODO: fix this
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       const connState = c.conn.state as UserActorConnState;
       const connScopedDb = getScopedDb(connState);
 
@@ -840,7 +840,7 @@ export const chatActor = actor({
       const rawWsId = thread.metadata.workspaceId;
       const ctx = thread.metadata.userContext;
       // SAFETY: same as sendMessages — RivetKit erases conn state type
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       const { organizationId } = c.conn.state as UserActorConnState;
       if (rawWsId) {
         const wsId = toSafeId<"workspace">(rawWsId);

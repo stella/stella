@@ -67,7 +67,7 @@ export const createActorProvider = <TName extends ActorName>() => {
 
     if (actor.isConnected) {
       // SAFETY: connection is non-null; narrow the type.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion, typescript/consistent-type-assertions
       return actor as unknown as SuspenseActorReturn<TName>;
     }
 

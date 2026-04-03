@@ -26,7 +26,7 @@ export const isClauseExportPayload = (
   }
 
   // SAFETY: value is object; any object is Record<string, unknown>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const obj = value as Record<string, unknown>;
   if (obj.version !== 1) {
     return false;
@@ -43,7 +43,7 @@ export const isClauseExportPayload = (
       return false;
     }
     // SAFETY: clause is object; any object is Record<string, unknown>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const c = clause as Record<string, unknown>;
     if (typeof c.title !== "string" || !c.title) {
       return false;

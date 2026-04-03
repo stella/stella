@@ -92,7 +92,7 @@ export const createEntityFromBuffer = async ({
       s3.write(s3Key, bytes),
       shouldConvert
         ? // SAFETY: Uint8Array.buffer is ArrayBuffer
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           convertToPdf(bytes.buffer as ArrayBuffer, fileName, mimeType)
         : Promise.resolve(null),
     ]);

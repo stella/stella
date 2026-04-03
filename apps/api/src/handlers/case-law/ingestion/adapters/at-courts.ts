@@ -3,8 +3,8 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -183,7 +183,7 @@ const parseRisItem = async (
   // SAFETY: items come from extractItems which returns
   // OgdDocumentReference[]; all fields are optional so
   // missing properties degrade gracefully.
-  const doc = raw as RisDocumentReference; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+  const doc = raw as RisDocumentReference; // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
 
   const meta = doc.Data?.Metadaten;
   const jud = meta?.Judikatur;
@@ -227,7 +227,7 @@ const parseRisItem = async (
     rawHash: hashContent(raw_),
     parserVersion: PARSER_VERSION,
     // TODO: integrate court-specific parser for AST
-    documentAst: {} as EmptyAst,
+    documentAst: EMPTY_AST,
     sourceRaw: undefined,
     sourceRawContentType: "text/html",
   };
@@ -263,7 +263,7 @@ export const atCourtsAdapter: SourceAdapter = {
       // fields are optional so missing properties
       // degrade gracefully.
       return typeof json === "object" && json !== null
-        ? (json as RisApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+        ? (json as RisApiResponse) // eslint-disable-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
         : {};
     },
 

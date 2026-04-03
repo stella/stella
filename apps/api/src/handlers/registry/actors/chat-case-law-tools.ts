@@ -267,7 +267,7 @@ export const createCaseLawTools = (scopedDb: ScopedDb) => ({
         return { error: "Decision not found" };
       }
 
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: length check above guarantees index 0 exists
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- SAFETY: length check above guarantees index 0 exists
       const row = result[0] as Record<string, unknown>;
       const fulltext = typeof row.fulltext === "string" ? row.fulltext : "";
       const truncated =

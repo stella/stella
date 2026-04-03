@@ -457,7 +457,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     if (groupByPropertyId === getInternalPropertyId("status")) {
       return (
         t(
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           `tasks.statusValues.${key}` as "tasks.statusValues.open",
         ) ?? key
       );

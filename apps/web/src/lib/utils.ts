@@ -28,9 +28,22 @@ export const stripUndefined = <T extends Record<string, unknown>>(
   }
   // SAFETY: result mirrors input with undefined-valued keys
   // removed; the mapped return type reflects this invariant.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return result as { [K in keyof T]: Exclude<T[K], undefined> };
 };
+
+/**
+ * Type-narrowing `.includes()` that avoids
+ * `as readonly string[]` at every call site.
+ */
+// SAFETY: Widening the array element type is sound
+// because `.includes()` only checks equality.
+export const includesValue = <T extends string>(
+  arr: readonly T[],
+  value: string,
+): value is T =>
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  (arr as readonly string[]).includes(value);
 
 export const shuffleArray = <T>(originalArray: T[]): T[] => {
   const array = [...originalArray];
@@ -40,9 +53,9 @@ export const shuffleArray = <T>(originalArray: T[]): T[] => {
 
     // SAFETY: i is in [1, array.length-1] and randomIndex
     // is in [0, i]; both always in bounds.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const a = array[i] as T;
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const b = array[randomIndex] as T;
     array[randomIndex] = a;
     array[i] = b;

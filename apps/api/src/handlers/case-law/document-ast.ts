@@ -117,7 +117,7 @@ export const isDocumentAst = (val: unknown): val is DocumentAst =>
   typeof val === "object" &&
   "version" in val &&
   "blocks" in val &&
-  Array.isArray((val as { blocks?: unknown }).blocks);
+  Array.isArray(val.blocks);
 
 /**
  * Check if a jsonb value is a DocumentAst with at least

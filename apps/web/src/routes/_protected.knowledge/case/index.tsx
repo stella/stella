@@ -29,18 +29,19 @@ function CaseLawIndex() {
       placeholderData: keepPreviousData,
     });
 
-  // SAFETY: Both list and search branches return the same
-  // Decision shape. TS can't unify Eden-inferred and
-  // hand-mapped types across the union.
+  // SAFETY: Both list and search branches return the same Decision shape.
   const decisions = useMemo(
-    () => (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
+    () =>
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
     [data],
   );
 
-  // SAFETY: facets shape matches SearchFacets; TS can't unify
-  // Eden-inferred type across the search/list union.
+  // SAFETY: facets shape matches SearchFacets across the union.
   const facets = useMemo(
-    () => (data?.pages.at(0)?.facets ?? null) as SearchFacets,
+    () =>
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      (data?.pages.at(0)?.facets ?? null) as SearchFacets,
     [data],
   );
 

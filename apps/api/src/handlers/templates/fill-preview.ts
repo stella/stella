@@ -13,6 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { s3 } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { containsNull } from "./fill";
 
@@ -46,7 +47,7 @@ export const fillPreviewHandler = async ({
     return status(404, { message: "Template not found" });
   }
 
-  const parseResult = Result.try(() => JSON.parse(valuesJson) as unknown);
+  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
   if (Result.isError(parseResult)) {
     return status(400, {
       message: "Invalid JSON in 'values' field.",
@@ -54,16 +55,13 @@ export const fillPreviewHandler = async ({
   }
 
   const parsed = parseResult.value;
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return status(400, {
       message: "'values' must be a JSON object (not null or array).",
     });
   }
 
-  // SAFETY: null, array, and non-object types are excluded
-  // by the guards above; the only remaining shape is an object.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const record = parsed as Record<string, unknown>;
+  const record = parsed;
   if (Object.values(record).some(containsNull)) {
     return status(400, {
       message: "'values' must not contain null values.",
@@ -89,7 +87,7 @@ export const fillPreviewHandler = async ({
   }
 
   // SAFETY: same as fillByIdHandler
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const result = await fillTemplate(buffer, record as TemplateData);
 
   // Extract text from the filled document

@@ -38,12 +38,12 @@ export const parseActorKey = <T extends AuthedActorKey = AuthedActorKey>(
     }
     // SAFETY: key is produced by actorKeyFactory via JSON.stringify(data) where data
     // conforms to AuthedActorKey; roundtrip yields the same shape.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion, typescript/consistent-type-assertions
     return JSON.parse(first) as T;
   }
 
   // SAFETY: same as above; key comes from our serialization.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion, typescript/consistent-type-assertions
   return JSON.parse(key) as T;
 };
 
@@ -53,7 +53,7 @@ export const actorKeyFactory = <T extends AuthedActorKey>() => {
       Object.keys(data)
         .toSorted()
         // SAFETY: keys come from Object.keys(data), so they are valid keyof T.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion, typescript/consistent-type-assertions
         .map((k) => [k, data[k as keyof T]]),
     );
     return JSON.stringify(sorted);

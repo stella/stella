@@ -490,7 +490,7 @@ const CreateRateEntryForm = ({
 
   const form = useForm({
     defaultValues: {
-      userId: "" as string,
+      userId: "",
       hourlyRate: "",
       effectiveFrom: today,
       effectiveTo: "",

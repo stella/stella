@@ -14,7 +14,12 @@ const context = {
     description:
       "Bounding box in format [ymin, xmin, ymax, xmax] " +
       "normalized to 0-1000 scale",
-    examples: [[120, 200, 350, 800]] as [number, number, number, number][],
+    examples: [[120, 200, 350, 800]] satisfies [
+      number,
+      number,
+      number,
+      number,
+    ][],
   },
   bBoxArray: {
     description: "Array of bounding boxes",

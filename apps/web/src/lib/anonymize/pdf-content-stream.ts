@@ -86,7 +86,7 @@ const getContentStreams = (
   }
 
   if (contents.type === "stream") {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- discriminated by type check
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- discriminated by type check
     return [contents as PdfStream];
   }
 
@@ -98,7 +98,7 @@ const getContentStreams = (
       if (item) {
         const resolved = item.type === "ref" ? ctx.resolve(item) : item;
         if (resolved?.type === "stream") {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- discriminated by type check
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- discriminated by type check
           streams.push(resolved as PdfStream);
         }
       }

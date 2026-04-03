@@ -83,7 +83,7 @@ export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
       });
       // SAFETY: messages from the actor are structurally
       // ChatMessage — narrowing adds typed tool parts.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       setMessages(latest as ChatMessage[]);
       await chat.resumeStream();
     }),

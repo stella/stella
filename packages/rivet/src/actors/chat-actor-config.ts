@@ -62,12 +62,12 @@ export const getChatActorConfig = <T extends OptionsType>(
       ...commonOptions,
     };
     // SAFETY: framework type erasure; clientOptions satisfies ChatActorReturn
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     return clientOptions as ChatActorReturn<T>;
   }
 
   const vanillaOptions: ChatActorReturn<"vanilla"> = [[key], commonOptions];
   // SAFETY: framework type erasure; vanillaOptions satisfies ChatActorReturn
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return vanillaOptions as ChatActorReturn<T>;
 };

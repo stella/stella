@@ -158,7 +158,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
     if (val !== null && typeof val === "object") {
       // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator
       const out: Record<string, unknown> = {};
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- val is a non-null object
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- val is a non-null object
       for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
         out[k] = deepSanitizeImpl(v, k);
       }
@@ -169,7 +169,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
 
   // SAFETY: deepSanitize only replaces string leaves;
   // the structural shape is preserved.
-  const deepSanitize = <T>(val: T): T => deepSanitizeImpl(val) as T; // oxlint-disable-line typescript/no-unsafe-type-assertion
+  const deepSanitize = <T>(val: T): T => deepSanitizeImpl(val) as T; // eslint-disable-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
 
   const sanitizedAst = deepSanitize(r.documentAst);
 

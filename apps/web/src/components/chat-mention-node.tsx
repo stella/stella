@@ -56,7 +56,7 @@ const CategoryIcon = ({
 
 export const ChatMentionNode = (props: NodeViewProps) => {
   // SAFETY: attrs from our own mention extension schema
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   const attrs = props.node.attrs as {
     id: string;
     label: string;

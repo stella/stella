@@ -133,7 +133,7 @@ export const WorkspaceBreadcrumb = ({
               const parsed: unknown = raw ? JSON.parse(raw) : null;
               const config: Record<string, unknown> =
                 typeof parsed === "object" && parsed !== null
-                  ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SAFETY: guarded by typeof/parsed check
+                  ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                     (parsed as Record<string, unknown>)
                   : {};
               config.clientFilter = workspace.client?.id ?? null;

@@ -92,7 +92,7 @@ const useEntityDropTarget = (workspaceId: string | undefined) => {
       onDrop: ({ source }) => {
         setIsDragOver(false);
         // SAFETY: entities is always set by our own draggable getInitialData.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         const entities = source.data.entities as {
           entityId: string;
           name: string;
@@ -544,7 +544,7 @@ const NewChat = ({
             if (textAttachments.length > 0 && "setAttachments" in chat) {
               // SAFETY: `setAttachments` is added by our custom rivet transport;
               // the `in` check above narrows at runtime but TS cannot infer.
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               const chatWithAttachments = chat as {
                 setAttachments: (a: ProcessedAttachment[]) => void;
               };
@@ -844,7 +844,7 @@ const ActiveThreadInner = ({
             if (textAttachments.length > 0 && "setAttachments" in chat) {
               // SAFETY: `setAttachments` is added by our custom rivet transport;
               // the `in` check above narrows at runtime but TS cannot infer.
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               const chatWithAttachments = chat as {
                 setAttachments: (a: ProcessedAttachment[]) => void;
               };

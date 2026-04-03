@@ -6,6 +6,7 @@ import {
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
@@ -139,7 +140,7 @@ const fetchFinaldoc = async (
   const empty: FinaldocResult = {
     fulltext: undefined,
     decisionType: undefined,
-    documentAst: {} as EmptyAst,
+    documentAst: EMPTY_AST,
     sourceRaw: undefined,
     richMetadata: {},
   };
@@ -159,7 +160,7 @@ const fetchFinaldoc = async (
       return empty;
     }
 
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- finaldoc API contract
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- finaldoc API contract
     const doc = (await response.json()) as CzRegionalFinaldoc;
     const sourceRaw = JSON.stringify(doc);
 
@@ -226,7 +227,7 @@ const fetchFinaldoc = async (
       return {
         fulltext: plainFulltext,
         decisionType,
-        documentAst: {} as EmptyAst,
+        documentAst: EMPTY_AST,
         sourceRaw,
         richMetadata,
       };
@@ -257,7 +258,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
       ecli: item.ecli,
       court: item.soud,
       decisionDate: item.datumVydani,
-      decisionType: undefined as string | undefined,
+      decisionType: undefined,
       author: item.autor,
       subjectOfProceeding: item.predmetRizeni,
       publishedDate: item.datumZverejneni,
@@ -267,7 +268,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
     // TODO: integrate court-specific parser for AST
-    documentAst: {} as EmptyAst,
+    documentAst: EMPTY_AST,
   };
 };
 
@@ -427,7 +428,7 @@ export const czRegionalAdapter: SourceAdapter = {
         }
 
         // SAFETY: response shape validated by optional fields in CzRegionalPageResponse
-        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
         const json = (await response.json()) as CzRegionalPageResponse;
         const items = json.items ?? [];
 

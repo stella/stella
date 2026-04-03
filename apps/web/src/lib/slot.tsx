@@ -22,6 +22,7 @@
 /* eslint-disable eslint-plugin-react/no-react-children */
 /* eslint-disable eslint-plugin-react/no-clone-element */
 /* eslint-disable typescript-eslint/no-unsafe-type-assertion */
+/* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
 
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 

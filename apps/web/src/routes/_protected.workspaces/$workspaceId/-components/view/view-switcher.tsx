@@ -332,7 +332,7 @@ const ViewTab = ({
           setIsDropTarget(false);
           // SAFETY: viewId from our draggable getInitialData
           onReorderRef.current(
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
             source.data.viewId as string,
             id,
           );

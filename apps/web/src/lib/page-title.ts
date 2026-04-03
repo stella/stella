@@ -10,7 +10,7 @@ export const pageTitle = (i18nKey: TranslationKey) => {
   // derived from the same Messages object but flatten with
   // different algorithms; TS cannot verify assignability at
   // ~1075 union members.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return `${t(i18nKey as Parameters<typeof t>[0])}${SUFFIX}`;
 };
 

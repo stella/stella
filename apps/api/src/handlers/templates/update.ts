@@ -63,7 +63,7 @@ const parseManifest = (json: string): TemplateManifest | null => {
   }
 
   // SAFETY: top-level shape validated above
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   return parsed as TemplateManifest;
 };
 

@@ -160,6 +160,7 @@ const PDFViewerContent = ({
             ...(invertColors && {
               filter: "invert(1) hue-rotate(180deg)",
             }),
+            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           } as CSSProperties
         }
       >

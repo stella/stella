@@ -48,7 +48,7 @@ export const StatusCell = ({ entity }: { entity: WorkspaceEntity }) => {
       <Icon className={cn("size-3.5", color)} />
       <span>
         {t(
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           `statusValues.${entity.status}` as "statusValues.open",
         )}
       </span>
@@ -89,7 +89,7 @@ export const PriorityCell = ({ entity }: { entity: WorkspaceEntity }) => {
       <Icon className={cn("size-3.5", color)} />
       <span>
         {t(
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           `priorityValues.${entity.priority}` as "priorityValues.none",
         )}
       </span>

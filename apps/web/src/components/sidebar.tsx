@@ -148,6 +148,7 @@ function SidebarProvider({
         style={
           // SAFETY: CSS custom properties are valid but
           // not in React's CSSProperties type defs.
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
@@ -203,6 +204,7 @@ function Sidebar({
           side={side}
           style={
             // SAFETY: CSS custom properties need CSSWithVars.
+            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as CSSWithVars
@@ -642,6 +644,7 @@ function SidebarMenuSkeleton({
         data-sidebar="menu-skeleton-text"
         style={
           // SAFETY: CSS custom properties need CSSWithVars.
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           {
             "--skeleton-width": width,
           } as CSSWithVars

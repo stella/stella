@@ -317,6 +317,8 @@ const CreateContactDialog = () => {
 
   const form = useForm({
     defaultValues: {
+      // SAFETY: widening literal for form discriminant union
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       type: "person" as "person" | "organization",
       displayName: "",
       firstName: "",

@@ -41,7 +41,7 @@ export const loadAdapterByKey = async (
   const mod = await loader();
   // SAFETY: dynamic import returns a module object; we
   // narrow via the type guard below.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions
   const entries = mod as Record<string, unknown>;
   return Object.values(entries).find(
     (v): v is SourceAdapter =>

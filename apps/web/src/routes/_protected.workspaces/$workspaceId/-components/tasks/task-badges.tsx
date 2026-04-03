@@ -73,7 +73,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
           title={
             entity.status
               ? t(
-                  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                   `statusValues.${entity.status}` as "statusValues.open",
                 )
               : undefined

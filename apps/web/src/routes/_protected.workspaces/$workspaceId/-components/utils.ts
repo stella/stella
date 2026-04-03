@@ -45,7 +45,7 @@ export const optionColorsMap: Record<OptionColor, ColorVariants> = {
 export const emptyColor: ColorVariants = optionVar("empty");
 
 // SAFETY: optionColorsMap keys are OptionColor
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
 export const optionColors = Object.keys(optionColorsMap) as OptionColor[];
 
 export const downloadFile = (blob: Blob, fileName: string) => {

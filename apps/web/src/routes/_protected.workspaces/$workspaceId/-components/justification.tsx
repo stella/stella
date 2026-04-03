@@ -46,7 +46,7 @@ export const Justification = ({ justification }: JustificationProps) => (
           >
             {domToReact(
               // SAFETY: html-react-parser DOMNode children
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
               node.children as DOMNode[],
             )}
           </Citation>
