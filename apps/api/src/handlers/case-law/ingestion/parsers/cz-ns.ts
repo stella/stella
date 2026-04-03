@@ -19,6 +19,11 @@ import type {
   Inline,
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_NAME_RE as SIGNATURE_RE,
+  CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+} from "./cz-patterns";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -436,6 +441,30 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
       return;
     }
 
+    // List elements: flush buffer and process children as
+    // block-level content. NS decisions use <ul> for quoted
+    // passages; without this, text after closing </ul> merges
+    // into the previous paragraph.
+    if (tag === "ul" || tag === "ol") {
+      flushBuffer();
+      // children() (elements only) avoids raw text nodes
+      // inside <ul> leaking into the preceding chunk.
+      $node.children().each((_, child) => {
+        processNode(child, parentCentered);
+      });
+      flushBuffer();
+      return;
+    }
+
+    if (tag === "li") {
+      flushBuffer();
+      $node.contents().each((_, child) => {
+        processNode(child, parentCentered);
+      });
+      flushBuffer();
+      return;
+    }
+
     if (tag === "br") {
       // Top-level <br> between inline content: keep in buffer
       // as a line break so the text flows naturally.
@@ -531,11 +560,6 @@ const SECTION_HEADING_RE =
 
 const RULING_ITEM_RE = /^([IVXLCDM]+\.)\s+/;
 
-const CLOSING_RE = /^V\s+\p{Lu}\p{Ll}+\s+(dne\s+)?\d/u;
-
-const SIGNATURE_RE = /^(JUDr\.|Mgr\.|doc\.|prof\.)\s+/;
-
-const PREDSEDA_RE = /^předsed[ay]\s+senátu$/i;
 
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
@@ -567,6 +591,20 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
     return false;
   }
 
+  // Never merge closing/signature blocks (either direction).
+  // Length guard: PREDSEDA_RE (CZ_JUDGE_TITLE_RE) is unanchored
+  // and would false-positive on body paragraphs mentioning
+  // judicial titles; real signature lines are always short.
+  const prevText = prev.plainText.trim();
+  const isClosingOrSig = (text: string): boolean =>
+    CLOSING_RE.test(text) ||
+    SIGNATURE_RE.test(text) ||
+    (text.length < 80 && PREDSEDA_RE.test(text));
+
+  if (isClosingOrSig(prevText) || isClosingOrSig(nextText)) {
+    return false;
+  }
+
   const firstChar = nextText.at(0);
   if (!firstChar) {
     return false;
@@ -579,7 +617,6 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
 
   // Very short fragment (continuation like "." or "se odmítá")
   if (nextText.length < 30) {
-    const prevText = prev.plainText.trim();
     if (!/[.!?:]\s*$/.test(prevText)) {
       return true;
     }
@@ -596,7 +633,10 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
   return false;
 };
 
-const mergeBlocks = (rawBlocks: Block[]): Block[] => {
+const mergeBlocks = (
+  rawBlocks: Block[],
+  makeBlockId: () => string,
+): Block[] => {
   if (rawBlocks.length === 0) {
     return rawBlocks;
   }
@@ -631,7 +671,7 @@ const mergeBlocks = (rawBlocks: Block[]): Block[] => {
     }
     if (
       SIGNATURE_RE.test(block.plainText) ||
-      PREDSEDA_RE.test(block.plainText)
+      (block.plainText.length < 80 && PREDSEDA_RE.test(block.plainText))
     ) {
       block.role = "signature";
       continue;
@@ -731,20 +771,17 @@ const mergeBlocks = (rawBlocks: Block[]): Block[] => {
 
 // ── Classification ────────────────────────────────────────
 
-let blockCounter = 0;
-
-const makeBlockId = (): string => {
-  blockCounter += 1;
-  return `b${blockCounter}`;
-};
-
 const makeAnchorId = (index: number): string => `p-${index}`;
 
 const classifyBlocks = (
   chunks: RawChunk[],
   relatedProceedingsTable: TableCell[][] | null,
 ): Block[] => {
-  blockCounter = 0;
+  let blockCounter = 0;
+  const makeBlockId = (): string => {
+    blockCounter += 1;
+    return `b${blockCounter}`;
+  };
   const blocks: Block[] = [];
   let blockIndex = 0;
 
@@ -863,5 +900,5 @@ const classifyBlocks = (
     });
   }
 
-  return mergeBlocks(blocks);
+  return mergeBlocks(blocks, makeBlockId);
 };

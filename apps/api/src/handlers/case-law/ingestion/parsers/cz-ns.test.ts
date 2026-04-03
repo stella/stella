@@ -325,19 +325,20 @@ describe("parseNsDecisionHtml", () => {
       expect(closing?.plainText).toContain("V Praze dne");
     });
 
-    test("closing block contains merged signature content", () => {
-      // The NS merge pass merges short continuation fragments
-      // (like judge name + "předseda senátu") into the closing
-      // block when they follow "V Praze dne..." without clear
-      // sentence boundaries.
+    test("signature blocks are separate from closing", () => {
       const input = baseInput(minimalPrintHtml);
       const { documentAst } = parseNsDecisionHtml(input);
 
       const closing = findByRole(documentAst.blocks, "closing");
       expect(closing).toBeDefined();
-      // Judge name and title merge into the closing block
-      expect(closing?.plainText).toContain("JUDr.");
-      expect(closing?.plainText).toContain("předseda senátu");
+      expect(closing?.plainText).not.toContain("JUDr.");
+
+      const sigs = findAllByRole(documentAst.blocks, "signature");
+      expect(sigs.length).toBeGreaterThan(0);
+      expect(sigs.some((s) => s.plainText.includes("JUDr."))).toBe(true);
+      expect(sigs.some((s) => s.plainText.includes("předseda senátu"))).toBe(
+        true,
+      );
     });
   });
 

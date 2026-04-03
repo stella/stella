@@ -409,11 +409,19 @@ function RightPanel({
     : RIGHT_PANEL_DEFAULT_WIDTH;
   const [width, setWidth] = useState(defaultWidth);
 
-  // Sync width when switching between decision and non-decision views
+  // Only reset width when the panel transitions from closed to open;
+  // if already open, keep whatever size the user chose. hasDecision
+  // is in the dep array for the linter but the wasJustOpened guard
+  // makes the extra run a no-op when navigating while already open.
   const hasDecision = Boolean(decisionId);
+  const prevOpen = useRef(open);
   useEffect(() => {
-    setWidth(hasDecision ? RIGHT_PANEL_MIN_WIDTH : RIGHT_PANEL_DEFAULT_WIDTH);
-  }, [hasDecision]);
+    const wasJustOpened = open && !prevOpen.current;
+    prevOpen.current = open;
+    if (wasJustOpened) {
+      setWidth(hasDecision ? RIGHT_PANEL_MIN_WIDTH : RIGHT_PANEL_DEFAULT_WIDTH);
+    }
+  }, [open, hasDecision]);
 
   const isDragging = useRef(false);
 

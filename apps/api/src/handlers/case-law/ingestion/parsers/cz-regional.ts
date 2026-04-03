@@ -77,7 +77,11 @@ type ParseRegionalOutput = {
 export const parseRegionalDecision = (
   input: ParseRegionalInput,
 ): ParseRegionalOutput => {
-  blockCounter = 0;
+  let blockCounter = 0;
+  const makeBlockId = (): string => {
+    blockCounter += 1;
+    return `b${blockCounter}`;
+  };
   const styleMap = new Map(input.styles.map((s) => [s.localId, s]));
 
   const blocks: Block[] = [];
@@ -176,6 +180,7 @@ export const parseRegionalDecision = (
         inlines,
         plainText,
         blockIndex,
+        makeBlockId,
       );
       blocks.push(block);
     }
@@ -256,13 +261,6 @@ export const parseRegionalDecision = (
 };
 
 // ── Helpers ────────────────────────────────────────────────
-
-let blockCounter = 0;
-
-const makeBlockId = (): string => {
-  blockCounter += 1;
-  return `b${blockCounter}`;
-};
 
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
@@ -377,6 +375,7 @@ const classifyJustificationParagraph = (
   inlines: Inline[],
   plainText: string,
   blockIndex: number,
+  makeBlockId: () => string,
 ): Block => {
   // Numbered paragraph: "1. ...", "2. ..."
   const numMatch = plainText.match(NUMBERED_PARA_RE);
@@ -429,8 +428,7 @@ const classifyJustificationParagraph = (
 
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
 
-const CLOSING_RE =
-  /^(?:V\s+)?\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d{1,2}\.\s*(?:\p{Ll}+\s+)?\d{4}/u;
-
-const SIGNATURE_RE =
-  /předsed(?:a|kyně)\s+senátu|samosoudce|samosoudkyně|soudce?\s+zpravodaj|v\.\s*r\.\s*$/i;
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";

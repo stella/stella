@@ -475,21 +475,12 @@ const NUMBERED_PARA_RE = /^\[(\d+)\]\s*/;
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
  * or just "City + date" pattern.
  */
-const CLOSING_RE =
-  /^(?:V\s+)?\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d{1,2}\.\s*(?:\p{Ll}+\s+)?\d{4}/u;
-
-/** Signature: judge title or "v. r." (vlastní rukou). */
-const SIGNATURE_RE =
-  /předsed(?:a|kyně)\s+senátu|soudce?\s+zpravodaj|v\.\s*r\.\s*$/i;
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";
 
 // ── Block classification ───────────────────────────────────
-
-let blockCounter = 0;
-
-const makeBlockId = (): string => {
-  blockCounter += 1;
-  return `b${blockCounter}`;
-};
 
 const makeAnchorId = (prefix: string, index: number): string =>
   `${prefix}-${index}`;
@@ -564,7 +555,11 @@ const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
 };
 
 const classifyChunks = (chunks: PChunk[]): Block[] => {
-  blockCounter = 0;
+  let blockCounter = 0;
+  const makeBlockId = (): string => {
+    blockCounter += 1;
+    return `b${blockCounter}`;
+  };
   const blocks: Block[] = [];
   let blockIndex = 0;
 
