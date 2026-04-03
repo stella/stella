@@ -41,24 +41,24 @@ export default defineBackground(() => {
         break;
       }
       case "save-clip": {
-        handleSaveClip(
+        void handleSaveClip(
           message.payload.matterId,
           message.payload.data,
         ).then(sendResponse);
         break;
       }
       case "get-matters": {
-        handleGetMatters().then(sendResponse);
+        void handleGetMatters().then(sendResponse);
         break;
       }
       case "set-active-matter": {
-        storage
+        void storage
           .setActiveMatter(message.payload.matter)
           .then(() => sendResponse({ ok: true }));
         break;
       }
       case "get-active-matter": {
-        storage.getActiveMatter().then((matter) => {
+        void storage.getActiveMatter().then((matter) => {
           const response: GetActiveMatterResponse = {
             matter,
           };
@@ -107,7 +107,7 @@ export default defineBackground(() => {
       sendResponse: (response: unknown) => void,
     ) => {
       if (message.action === "set-matter") {
-        storage
+        void storage
           .setActiveMatter(message.payload.matter)
           .then(() => sendResponse({ ok: true }));
         return true;
@@ -131,10 +131,7 @@ export default defineBackground(() => {
     matterId: string,
     data: Parameters<typeof stellaApi.createClip>[1],
   ): Promise<SaveClipResponse> => {
-    const result = await stellaApi.createClip(
-      matterId,
-      data,
-    );
+    const result = await stellaApi.createClip(matterId, data);
 
     if (result.ok) {
       const matter = await storage.getActiveMatter();
@@ -173,26 +170,24 @@ export default defineBackground(() => {
 
   // -- Matters fetching --
 
-  const handleGetMatters =
-    async (): Promise<GetMattersResponse> => {
-      const result = await stellaApi.getMatters();
-      if (result.ok) {
-        return { success: true, matters: result.data };
-      }
-      return { success: false, error: result.error };
-    };
+  const handleGetMatters = async (): Promise<GetMattersResponse> => {
+    const result = await stellaApi.getMatters();
+    if (result.ok) {
+      return { success: true, matters: result.data };
+    }
+    return { success: false, error: result.error };
+  };
 
   // -- Offline queue sync --
 
   const syncOfflineQueue = async () => {
     const queue = await storage.getOfflineQueue();
-    if (queue.length === 0) {return;}
+    if (queue.length === 0) {
+      return;
+    }
 
     for (const item of queue) {
-      const result = await stellaApi.createClip(
-        item.matterId,
-        item.data,
-      );
+      const result = await stellaApi.createClip(item.matterId, item.data);
       if (result.ok) {
         await storage.removeFromOfflineQueue(item.id);
         const matter = await storage.getActiveMatter();
@@ -220,16 +215,16 @@ export default defineBackground(() => {
   // Guard creation so the alarm isn't reset on every
   // service worker restart.
   const SYNC_ALARM = "sync-offline-queue";
-  chrome.alarms.get(SYNC_ALARM, (existing) => {
-    if (!existing) {
-      chrome.alarms.create(SYNC_ALARM, {
+  void chrome.alarms.get(SYNC_ALARM).then((existing) => {
+    if (existing === undefined) {
+      void chrome.alarms.create(SYNC_ALARM, {
         periodInMinutes: 1,
       });
     }
   });
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SYNC_ALARM) {
-      syncOfflineQueue();
+      void syncOfflineQueue();
     }
   });
 

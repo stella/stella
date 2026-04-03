@@ -34,6 +34,7 @@
 
     "unicorn/no-useless-undefined": "error",
     "unicorn/prefer-array-find": "error",
+    "unicorn/prefer-at": "error",
 
     "react/no-forward-ref": "error",
     "react/rules-of-hooks": "error",

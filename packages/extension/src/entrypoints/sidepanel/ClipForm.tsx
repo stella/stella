@@ -3,11 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@stella/ui/components/button";
 
 import type { SaveClipResponse } from "../../lib/messages";
-import type {
-  ClipData,
-  Matter,
-  PageMetadata,
-} from "../../types";
+import type { ClipData, Matter, PageMetadata } from "../../types";
 
 type ClipFormProps = {
   activeMatter: Matter | null;
@@ -21,8 +17,7 @@ type SaveState =
   | { type: "error"; message: string };
 
 export const ClipForm = ({ activeMatter }: ClipFormProps) => {
-  const [metadata, setMetadata] =
-    useState<PageMetadata | null>(null);
+  const [metadata, setMetadata] = useState<PageMetadata | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({
     type: "idle",
   });
@@ -33,17 +28,19 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
         { active: true, currentWindow: true },
         (tabs: chrome.tabs.Tab[]) => {
           const tab = tabs[0];
-          if (!tab?.id) {return;}
+          if (tab?.id === undefined) {
+            return;
+          }
 
           const favIconUrl = tab.favIconUrl ?? undefined;
 
           chrome.tabs.sendMessage(
             tab.id,
             { action: "get-page-metadata" },
-            (response: {
-              metadata?: PageMetadata;
-            }) => {
-              if (chrome.runtime.lastError) {return;}
+            (response: { metadata?: PageMetadata }) => {
+              if (chrome.runtime.lastError) {
+                return;
+              }
               if (response?.metadata) {
                 setMetadata({
                   ...response.metadata,
@@ -59,9 +56,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     fetchMetadata();
 
     // Re-fetch when the user switches tabs.
-    const tabListener = (
-      _activeInfo: chrome.tabs.TabActiveInfo,
-    ) => {
+    const tabListener = (_activeInfo: chrome.tabs.TabActiveInfo) => {
       setMetadata(null);
       // Small delay for the content script to inject.
       setTimeout(fetchMetadata, 300);
@@ -73,7 +68,9 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
       tabId: number,
       changeInfo: chrome.tabs.TabChangeInfo,
     ) => {
-      if (changeInfo.status !== "complete") {return;}
+      if (changeInfo.status !== "complete") {
+        return;
+      }
       chrome.tabs.query(
         { active: true, currentWindow: true },
         (tabs: chrome.tabs.Tab[]) => {
@@ -86,15 +83,14 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     chrome.tabs.onUpdated.addListener(navListener);
 
     // Update selection in real-time from content script.
-    const messageListener = (
-      message: { action: string; payload: unknown },
-    ) => {
+    const messageListener = (message: { action: string; payload: unknown }) => {
       if (message.action === "selection-changed") {
         setMetadata((prev) => {
-          if (!prev) {return prev;}
-          // eslint-disable-next-line typescript/consistent-type-assertions
+          if (!prev) {
+            return prev;
+          }
           const selection =
-            (message.payload as string) || undefined;
+            typeof message.payload === "string" ? message.payload : undefined;
           return { ...prev, selection };
         });
       }
@@ -104,42 +100,38 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     return () => {
       chrome.tabs.onActivated.removeListener(tabListener);
       chrome.tabs.onUpdated.removeListener(navListener);
-      chrome.runtime.onMessage.removeListener(
-        messageListener,
-      );
+      chrome.runtime.onMessage.removeListener(messageListener);
     };
   }, []);
 
   const handleSave = async () => {
-    if (!activeMatter || !metadata) {return;}
+    if (!activeMatter || !metadata) {
+      return;
+    }
 
     setSaveState({ type: "saving" });
 
     const clipData: ClipData = {
       title: metadata.title || metadata.url,
       url: metadata.url,
-      ...(metadata.selection
-        ? { snippet: metadata.selection }
-        : {}),
+      ...(metadata.selection ? { snippet: metadata.selection } : {}),
     };
 
     // SAFETY: chrome.runtime.sendMessage returns untyped;
     // we control the handler.
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     const response = (await chrome.runtime.sendMessage({
       action: "save-clip",
       payload: {
         matterId: activeMatter.id,
         data: clipData,
       },
-    // eslint-disable-next-line typescript/consistent-type-assertions
     })) as SaveClipResponse | undefined;
 
     if (!response) {
       setSaveState({
         type: "error",
-        message:
-          "Extension background unavailable. " +
-          "Please reload.",
+        message: "Extension background unavailable. Please reload.",
       });
       return;
     }
@@ -150,16 +142,10 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
         entityId: response.entityId,
       });
       // Reset after a brief delay.
-      setTimeout(
-        () => setSaveState({ type: "idle" }),
-        2000,
-      );
+      setTimeout(() => setSaveState({ type: "idle" }), 2000);
     } else if (response.queued) {
       setSaveState({ type: "queued" });
-      setTimeout(
-        () => setSaveState({ type: "idle" }),
-        3000,
-      );
+      setTimeout(() => setSaveState({ type: "idle" }), 3000);
     } else {
       setSaveState({
         type: "error",
@@ -171,25 +157,24 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
   if (!metadata) {
     return (
       <section className="mb-5">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
           Current page
         </h2>
-        <p className="py-6 text-center text-[13px] text-muted-foreground">
+        <p className="text-muted-foreground py-6 text-center text-[13px]">
           No page metadata available.
         </p>
       </section>
     );
   }
 
-  const canSave =
-    activeMatter !== null && saveState.type !== "saving";
+  const canSave = activeMatter !== null && saveState.type !== "saving";
 
   return (
     <section className="mb-5">
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
         Current page
       </h2>
-      <div className="mb-2 rounded-lg border border-border bg-card p-3">
+      <div className="border-border bg-card mb-2 rounded-lg border p-3">
         <div className="flex items-center gap-2">
           {metadata.favIconUrl ? (
             <img
@@ -200,20 +185,20 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
               className="size-4 shrink-0"
             />
           ) : (
-            <div className="size-4 shrink-0 rounded bg-muted" />
+            <div className="bg-muted size-4 shrink-0 rounded" />
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-foreground">
+            <div className="text-foreground truncate text-sm font-medium">
               {metadata.title}
             </div>
-            <div className="truncate text-xs text-muted-foreground">
+            <div className="text-muted-foreground truncate text-xs">
               {metadata.url}
             </div>
           </div>
         </div>
         {metadata.selection ? (
-          <div className="mt-2 line-clamp-3 text-xs text-muted-foreground">
-            "{metadata.selection}"
+          <div className="text-muted-foreground mt-2 line-clamp-3 text-xs">
+            &ldquo;{metadata.selection}&rdquo;
           </div>
         ) : null}
       </div>
@@ -228,22 +213,18 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
       </Button>
 
       {saveState.type === "success" ? (
-        <p className="mt-2 text-[13px] text-success">
-          Saved.
-        </p>
+        <p className="text-success mt-2 text-[13px]">Saved.</p>
       ) : null}
       {saveState.type === "queued" ? (
-        <p className="mt-2 text-[13px] text-success">
+        <p className="text-success mt-2 text-[13px]">
           Offline; queued for sync.
         </p>
       ) : null}
       {saveState.type === "error" ? (
-        <p className="mt-2 text-[13px] text-destructive">
-          {saveState.message}
-        </p>
+        <p className="text-destructive mt-2 text-[13px]">{saveState.message}</p>
       ) : null}
       {!activeMatter ? (
-        <p className="mt-2 text-[13px] text-destructive">
+        <p className="text-destructive mt-2 text-[13px]">
           Select a matter to save clips.
         </p>
       ) : null}

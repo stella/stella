@@ -1,13 +1,16 @@
-import type { PageMetadata } from "../types";
 import { runTranslators } from "../translators/registry";
+import type { PageMetadata } from "../types";
+
+type ContentMessage =
+  | { action: "capture-selection" }
+  | { action: "get-page-metadata" };
 
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_idle",
   main() {
     const extractPageMetadata = (): PageMetadata => {
-      const selection =
-        window.getSelection()?.toString().trim();
+      const selection = window.getSelection()?.toString().trim();
       return {
         url: window.location.href,
         title: document.title,
@@ -18,12 +21,9 @@ export default defineContentScript({
     /** Send initial page metadata to the service worker. */
     const sendMetadata = () => {
       const metadata = extractPageMetadata();
-      const translatorResult = runTranslators(
-        metadata.url,
-        document,
-      );
+      const translatorResult = runTranslators(metadata.url, document);
 
-      chrome.runtime.sendMessage({
+      void chrome.runtime.sendMessage({
         action: "page-metadata",
         payload: {
           ...metadata,
@@ -34,20 +34,16 @@ export default defineContentScript({
 
     /** Listen for requests from the side panel / service worker. */
     chrome.runtime.onMessage.addListener(
-      (message, _sender, sendResponse) => {
+      (message: ContentMessage, _sender, sendResponse) => {
         if (message.action === "capture-selection") {
-          const selection =
-            window.getSelection()?.toString().trim();
+          const selection = window.getSelection()?.toString().trim();
           sendResponse({ selection: selection ?? null });
           return true;
         }
 
         if (message.action === "get-page-metadata") {
           const metadata = extractPageMetadata();
-          const translatorResult = runTranslators(
-            metadata.url,
-            document,
-          );
+          const translatorResult = runTranslators(metadata.url, document);
           sendResponse({
             metadata: {
               ...metadata,
@@ -67,9 +63,8 @@ export default defineContentScript({
     document.addEventListener("selectionchange", () => {
       clearTimeout(selectionTimer);
       selectionTimer = setTimeout(() => {
-        const selection =
-          window.getSelection()?.toString().trim();
-        chrome.runtime.sendMessage({
+        const selection = window.getSelection()?.toString().trim();
+        void chrome.runtime.sendMessage({
           action: "selection-changed",
           payload: selection ?? null,
         });
