@@ -26,7 +26,7 @@ export type TransactionOf<TDatabase extends AnyDrizzle> = Parameters<
 
 export const createScopedDb = <TDatabase extends AnyDrizzle>(
   database: TDatabase,
-  workspaceIds: string[],
+  workspaceIds: SafeId<"workspace">[],
   organizationId: SafeId<"organization">,
 ) => {
   const wsIds = `{${workspaceIds.join(",")}}`;

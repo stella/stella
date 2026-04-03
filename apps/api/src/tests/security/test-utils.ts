@@ -93,7 +93,7 @@ export const releaseTestDb = async (): Promise<void> => {
 
 export const createScopedQuery = (testDb: TestDatabase) => {
   const scopedQuery = async <T>(
-    wsIds: string[],
+    wsIds: SafeId<"workspace">[],
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<T>,
   ) => await createScopedDb(testDb, wsIds, orgId)(fn);
@@ -109,7 +109,7 @@ export const createDryScopedQuery = (testDb: TestDatabase) => {
   const scopedQuery = createScopedQuery(testDb);
 
   const dryScopedQuery = async (
-    wsIds: string[],
+    wsIds: SafeId<"workspace">[],
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<void>,
   ): Promise<void> => {
