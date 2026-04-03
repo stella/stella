@@ -25,19 +25,9 @@
 }
 
 /* Paper-like background for the reader.
-   Dark mode: uses the card color (already paper-like).
-   Light mode: subtle warm tint for a document feel. */
+   Uses the semantic card token so it adapts to all
+   palette × theme combinations (neutral, nord, flexoki). */
 .reader-paper {
-  background-color: var(--color-card);
-}
-
-@media (prefers-color-scheme: light) {
-  .reader-paper {
-    background-color: #faf9f7;
-  }
-}
-
-:root.dark .reader-paper {
   background-color: var(--color-card);
 }
 

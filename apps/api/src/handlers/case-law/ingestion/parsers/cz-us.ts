@@ -478,24 +478,13 @@ const SECTION_ROMAN_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.?\s*$/;
 /** Numbered paragraph: "1. ...", "2. ..." */
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
 
-/** Closing: "V Brně dne ..." */
-const CLOSING_RE = /^V\s+\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d/u;
-
-/** Signature: judge title patterns. */
-const SIGNATURE_RE =
-  /předsed(?:a|kyně)\s+senátu|soudce?\s+zpravodaj|v\.\s*r\.\s*$/i;
-
-/** Judge name line (academic title prefix). */
-const JUDGE_NAME_RE = /^(JUDr\.|Mgr\.|doc\.|prof\.|PhDr\.)\s+/;
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";
 
 // ── Block classification ───────────────────────────────────
-
-let blockCounter = 0;
-
-const makeBlockId = (): string => {
-  blockCounter += 1;
-  return `b${blockCounter}`;
-};
 
 const makeAnchorId = (prefix: string, index: number): string =>
   `${prefix}-${index}`;
@@ -572,7 +561,11 @@ const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
  *   3. Odůvodnění zone (after "Odůvodnění:")
  */
 const classifyLines = (lines: ParsedLine[]): Block[] => {
-  blockCounter = 0;
+  let blockCounter = 0;
+  const makeBlockId = (): string => {
+    blockCounter += 1;
+    return `b${blockCounter}`;
+  };
   const blocks: Block[] = [];
   let blockIndex = 0;
 
