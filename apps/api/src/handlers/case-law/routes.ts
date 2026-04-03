@@ -9,6 +9,7 @@ import {
   searchDecisionsBodySchema,
   searchDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/search";
+import { getIngestionStatus } from "@/api/handlers/case-law/ingestion/status";
 import {
   createMatterLinkBodySchema,
   createMatterLinkHandler,
@@ -16,6 +17,7 @@ import {
 import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import {
+  ADMIN_BYPASS_ROLES,
   authMacro,
   permissionMacro,
   workspaceAccessMacro,
@@ -98,6 +100,25 @@ const caseLawMatterLinksRoute = new Elysia({
     },
   );
 
+/**
+ * Admin routes: authenticated + admin/owner role.
+ * Ingestion observability for operators.
+ */
+const caseLawAdminRoute = new Elysia({
+  prefix: "/case/admin",
+})
+  .use(authMacro)
+  .guard({ validateAuth: true })
+  .onBeforeHandle(({ memberRole, set }) => {
+    if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
+      set.status = 403;
+      return { error: "Forbidden" } as const;
+    }
+    return undefined;
+  })
+  .get("/ingestion/status", () => getIngestionStatus());
+
 export const caseLawRoute = new Elysia()
   .use(globalCaseLawRoute)
-  .use(caseLawMatterLinksRoute);
+  .use(caseLawMatterLinksRoute)
+  .use(caseLawAdminRoute);

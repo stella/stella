@@ -1564,6 +1564,61 @@ export const caseLawSearchDocuments = p.pgTable(
   // (Drizzle cannot express tsvector natively)
 );
 
+// ---------------------------------------------------------------------------
+// Case Law — Ingestion observability
+// ---------------------------------------------------------------------------
+
+export const caseLawIngestionEvents = p.pgTable(
+  "case_law_ingestion_events",
+  {
+    id: pUuid.primaryKey(),
+    sourceId: p
+      .uuid("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    status: p.varchar({ length: 16 }).notNull().$type<"completed" | "failed">(),
+    inserted: p.integer().notNull().default(0),
+    skipped: p.integer().notNull().default(0),
+    searchVectorFailures: p
+      .integer("search_vector_failures")
+      .notNull()
+      .default(0),
+    pagesProcessed: p.integer("pages_processed").notNull().default(0),
+    cursorBefore: p.text("cursor_before"),
+    cursorAfter: p.text("cursor_after"),
+    durationMs: p.integer("duration_ms").notNull(),
+    errorMessage: p.varchar("error_message", { length: 2048 }),
+    startedAt: p.timestamp("started_at").notNull(),
+    finishedAt: p.timestamp("finished_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
+    p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
+  ],
+);
+
+export const caseLawIngestionFailures = p.pgTable(
+  "case_law_ingestion_failures",
+  {
+    id: pUuid.primaryKey(),
+    sourceId: p
+      .uuid("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    language: p.varchar({ length: 8 }),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    errorMessage: p.varchar("error_message", { length: 2048 }).notNull(),
+    cursor: p.text(),
+    createdAt: p.timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
+    p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
+    p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1610,6 +1665,8 @@ export const relations = defineRelations(
     caseLawFtsConfigs,
     caseLawMatterLinks,
     caseLawSearchDocuments,
+    caseLawIngestionEvents,
+    caseLawIngestionFailures,
   },
   (r) => ({
     contacts: {
@@ -2089,6 +2146,18 @@ export const relations = defineRelations(
       decision: r.one.caseLawDecisions({
         from: r.caseLawSearchDocuments.decisionId,
         to: r.caseLawDecisions.id,
+      }),
+    },
+    caseLawIngestionEvents: {
+      source: r.one.caseLawSources({
+        from: r.caseLawIngestionEvents.sourceId,
+        to: r.caseLawSources.id,
+      }),
+    },
+    caseLawIngestionFailures: {
+      source: r.one.caseLawSources({
+        from: r.caseLawIngestionFailures.sourceId,
+        to: r.caseLawSources.id,
       }),
     },
   }),

@@ -5,6 +5,7 @@ import type { ScopedDb } from "@/api/db";
 import {
   caseLawCitations,
   caseLawDecisions,
+  caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
 import {
@@ -36,6 +37,7 @@ type PipelineResult = {
   inserted: number;
   skipped: number;
   searchVectorFailures: number;
+  pagesProcessed: number;
   nextCursor: string | null;
 };
 
@@ -424,17 +426,41 @@ export const runIngestionPipeline = async ({
           searchVectorFailures++;
         }
       } catch (error) {
+        const tag = errorTag(error);
+        const message = error instanceof Error ? error.message : String(error);
+
         logger.error("case_law.ingestion.decision_failed", {
           adapterKey: adapter.key,
           caseNumber: result.caseNumber,
           cursor: cursor ?? "",
-          "error.type": errorTag(error),
+          "error.type": tag,
         });
         captureError(error, {
           adapterKey: adapter.key,
           caseNumber: result.caseNumber,
           cursor: cursor ?? "",
         });
+
+        // Persist failure for later analysis
+        try {
+          await scopedDb((tx) =>
+            tx.insert(caseLawIngestionFailures).values({
+              sourceId: source.id,
+              caseNumber: result.caseNumber,
+              language: result.language,
+              errorType: tag.slice(0, 128),
+              errorMessage: message.slice(0, 2048),
+              cursor,
+            }),
+          );
+        } catch (failureLogError) {
+          // Don't let failure logging break the pipeline
+          captureError(failureLogError, {
+            sourceId: source.id,
+            caseNumber: result.caseNumber,
+          });
+        }
+
         skipped++;
       }
     }
@@ -466,6 +492,7 @@ export const runIngestionPipeline = async ({
     inserted,
     skipped,
     searchVectorFailures,
+    pagesProcessed,
     nextCursor: cursor,
   };
 };
