@@ -301,6 +301,14 @@
       "source": "Fuente",
       "statutes": "Applicable statutes",
       "viewOriginal": "Ver fuente"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning",
+        "holding": "Holding"
+      }
     }
   },
   "chat": {

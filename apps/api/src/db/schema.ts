@@ -25,6 +25,7 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import type { DecisionAnalysis } from "@/api/handlers/case-law/analysis/types";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
@@ -1368,6 +1369,13 @@ export const caseLawDecisions = p.pgTable(
     sections: p.jsonb().$type<DecisionSection[]>(),
     documentAst: p.jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     /**
+     * AI-generated structural analysis: hierarchical headings
+     * with annotations anchored to paragraph ranges. Generated
+     * on-demand on first open, persisted permanently.
+     * null = not yet generated.
+     */
+    analysis: p.jsonb().$type<DecisionAnalysis>(),
+    /**
      * Parser version that produced documentAst. Compared
      * against the adapter's current version on read; stale
      * ASTs are re-parsed lazily from sourceRaw in S3.
@@ -1583,7 +1591,6 @@ export const caseLawIngestionEvents = p.pgTable(
       .integer("search_vector_failures")
       .notNull()
       .default(0),
-    s3UploadFailures: p.integer("s3_upload_failures").notNull().default(0),
     pagesProcessed: p.integer("pages_processed").notNull().default(0),
     cursorBefore: p.text("cursor_before"),
     cursorAfter: p.text("cursor_after"),

@@ -301,6 +301,14 @@
       "source": "Źródło",
       "statutes": "Applicable statutes",
       "viewOriginal": "Zobacz źródło"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Stan faktyczny",
+        "procedural-history": "Przebieg postępowania",
+        "reasoning": "Uzasadnienie",
+        "holding": "Sentencja"
+      }
     }
   },
   "chat": {

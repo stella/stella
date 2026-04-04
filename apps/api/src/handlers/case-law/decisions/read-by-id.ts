@@ -21,6 +21,7 @@ export const readDecisionHandler = async (
         decisionDate: true,
         decisionType: true,
         documentAst: true,
+        analysis: true,
         sourceUrl: true,
         documentUrl: true,
         metadata: true,
