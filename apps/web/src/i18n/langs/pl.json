@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
     "continueWithEmail": "Kontynuuj",
+    "continueWithGoogle": "Kontynuuj przez Google",
+    "continueWithMicrosoft": "Kontynuuj przez Microsoft",
     "createFirstOrganization": "Utwórz swoją pierwszą organizację, aby rozpocząć",
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Przejdź do przestrzeni roboczych",
       "title": "Zaproszenie do organizacji"
     },
+    "lastUsed": "Ostatnio użyte",
+    "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNameLabel": "Nazwa organizacji",
     "organizationNamePlaceholder": "Moja organizacja",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
@@ -257,6 +261,14 @@
     "writeOff": "Umorz"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Stan faktyczny",
+        "holding": "Sentencja",
+        "procedural-history": "Przebieg postępowania",
+        "reasoning": "Uzasadnienie"
+      }
+    },
     "columns": {
       "caseNumber": "Sygnatura akt",
       "country": "Kraj",
@@ -301,14 +313,6 @@
       "source": "Źródło",
       "statutes": "Applicable statutes",
       "viewOriginal": "Zobacz źródło"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Stan faktyczny",
-        "procedural-history": "Przebieg postępowania",
-        "reasoning": "Uzasadnienie",
-        "holding": "Sentencja"
-      }
     }
   },
   "chat": {

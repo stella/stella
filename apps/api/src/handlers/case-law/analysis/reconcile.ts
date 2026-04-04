@@ -8,7 +8,11 @@
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 
-import type { AnalysisAnnotation, AnalysisHeading, DecisionAnalysis } from "./types";
+import type {
+  AnalysisAnnotation,
+  AnalysisHeading,
+  DecisionAnalysis,
+} from "./types";
 
 /**
  * Longest common substring length between two strings.
@@ -94,17 +98,14 @@ const reconcileAnnotation = (
     return null;
   }
 
-  // For endAnchorId, if start === end, keep them the same.
-  // Otherwise, try to find the end block near the start.
-  const newEnd =
-    annotation.startAnchorId === annotation.endAnchorId
-      ? newStart
-      : findBestMatch(annotation.textSnippet, blocks) ?? newStart;
-
+  // AnalysisAnnotation carries a single textSnippet, so after
+  // re-anchoring we collapse the span to the matched block.
+  // Multi-block spans can be rebuilt when the analysis is next
+  // regenerated.
   return {
     ...annotation,
     startAnchorId: newStart,
-    endAnchorId: newEnd,
+    endAnchorId: newStart,
   };
 };
 

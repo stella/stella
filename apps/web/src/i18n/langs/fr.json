@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Choisissez l'organisation dans laquelle vous souhaitez travailler",
     "continueWithEmail": "Continuer",
+    "continueWithGoogle": "Continuer avec Google",
+    "continueWithMicrosoft": "Continuer avec Microsoft",
     "createFirstOrganization": "Créez votre première organisation pour commencer",
     "createOrganization": "Créer une organisation",
     "createOrganizationButton": "Créer l'organisation",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Accéder aux dossiers",
       "title": "Invitation à l'organisation"
     },
+    "lastUsed": "Dernière utilisation",
+    "orSignInWithEmail": "ou connectez-vous avec l'e-mail",
     "organizationNameLabel": "Nom de l'organisation",
     "organizationNamePlaceholder": "Mon organisation",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
@@ -257,6 +261,14 @@
     "writeOff": "Abandon de créance"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Numéro d'affaire",
       "country": "Pays",
@@ -301,14 +313,6 @@
       "source": "Source",
       "statutes": "Applicable statutes",
       "viewOriginal": "Voir la source"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {

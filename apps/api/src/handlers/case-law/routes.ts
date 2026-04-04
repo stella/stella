@@ -56,8 +56,7 @@ const globalCaseLawRoute = new Elysia({
   )
   .get(
     "/decisions/:decisionId/analysis",
-    async (ctx) =>
-      await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
+    async (ctx) => await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
     { params: t.Object({ decisionId: tNanoid }) },
   )
   .get(
@@ -81,15 +80,12 @@ const globalCaseLawRoute = new Elysia({
         return { error: "not found" };
       }
 
-      const { getSystemPrompt } = await import(
-        "@/api/handlers/case-law/analysis/prompts/index"
-      );
-      const { formatDecisionForPrompt } = await import(
-        "@/api/handlers/case-law/analysis/prompts/base"
-      );
-      const { hasUsableAst } = await import(
-        "@/api/handlers/case-law/document-ast"
-      );
+      const { getSystemPrompt } =
+        await import("@/api/handlers/case-law/analysis/prompts/index");
+      const { formatDecisionForPrompt } =
+        await import("@/api/handlers/case-law/analysis/prompts/base");
+      const { hasUsableAst } =
+        await import("@/api/handlers/case-law/document-ast");
       const { getModelForRole } = await import("@/api/lib/ai-models");
 
       const model = getModelForRole("fast");
@@ -102,7 +98,9 @@ const globalCaseLawRoute = new Elysia({
 
       const systemPrompt = getSystemPrompt(decision.language);
       const ast = hasUsableAst(decision.documentAst)
-        ? (decision.documentAst as { blocks: { anchorId: string; plainText: string; type: string }[] })
+        ? (decision.documentAst as {
+            blocks: { anchorId: string; plainText: string; type: string }[];
+          })
         : null;
 
       const userMessage = ast

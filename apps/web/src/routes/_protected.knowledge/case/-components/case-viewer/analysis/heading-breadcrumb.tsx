@@ -5,18 +5,16 @@
  * open a dropdown listing all headings; click to scroll.
  */
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { ChevronDownIcon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import {
-  type AnalysisHeading,
-  formatCategoryLabel,
-  getCategoryVar,
-} from "./types";
+import { formatCategoryLabel, getCategoryVar } from "./types";
+import type { AnalysisHeading } from "./types";
 
 type HeadingBreadcrumbProps = {
   tree: AnalysisHeading[];
@@ -40,11 +38,15 @@ export const HeadingBreadcrumb = ({
   scrollContainerRef,
 }: HeadingBreadcrumbProps) => {
   const t = useTranslations();
-  const categoryLabel = (cat: string) =>
-    t.has(`caseLaw.analysis.categories.${cat}` as never)
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      ? (t(`caseLaw.analysis.categories.${cat}` as never) as string)
-      : formatCategoryLabel(cat);
+  const categoryLabel = (cat: string) => {
+    // SAFETY: caseLaw.analysis.categories is a dynamic i18n namespace;
+    // t.has() guards the lookup before falling back to the static
+    // formatter.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const key = `caseLaw.analysis.categories.${cat}` as never;
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    return t.has(key) ? t(key) : formatCategoryLabel(cat);
+  };
   const [currentHeading, setCurrentHeading] = useState<AnalysisHeading | null>(
     null,
   );
@@ -55,18 +57,24 @@ export const HeadingBreadcrumb = ({
 
   useEffect(() => {
     const sc = scrollContainerRef.current;
-    if (!sc || flatHeadings.length === 0) return;
+    if (!sc || flatHeadings.length === 0) {
+      return;
+    }
 
     const handleScroll = () => {
       const container = scrollContainerRef.current;
-      if (!container) return;
+      if (!container) {
+        return;
+      }
       let active: AnalysisHeading | null = null;
 
       for (const heading of flatHeadings) {
         const el = container.querySelector(
           `#${CSS.escape(heading.startAnchorId)}`,
         );
-        if (!el) continue;
+        if (!el) {
+          continue;
+        }
         const top =
           el.getBoundingClientRect().top -
           container.getBoundingClientRect().top;
@@ -84,12 +92,15 @@ export const HeadingBreadcrumb = ({
   }, [scrollContainerRef, flatHeadings]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
 
     const handleClick = (e: MouseEvent) => {
       if (
         wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
+        e.target instanceof Node &&
+        !wrapperRef.current.contains(e.target)
       ) {
         setIsOpen(false);
       }
@@ -106,11 +117,13 @@ export const HeadingBreadcrumb = ({
 
   const scrollToHeading = (heading: AnalysisHeading) => {
     const container = scrollContainerRef.current;
-    if (!container) return;
-    const el = container.querySelector(
-      `#${CSS.escape(heading.startAnchorId)}`,
-    );
-    if (!el) return;
+    if (!container) {
+      return;
+    }
+    const el = container.querySelector(`#${CSS.escape(heading.startAnchorId)}`);
+    if (!el) {
+      return;
+    }
     const offset =
       el.getBoundingClientRect().top -
       container.getBoundingClientRect().top +
@@ -119,7 +132,9 @@ export const HeadingBreadcrumb = ({
     setIsOpen(false);
   };
 
-  if (flatHeadings.length === 0) return null;
+  if (flatHeadings.length === 0) {
+    return null;
+  }
 
   return (
     <div className="relative w-full" ref={wrapperRef}>
@@ -134,14 +149,14 @@ export const HeadingBreadcrumb = ({
         {currentHeading ? (
           <>
             <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-white"
-              style={{ backgroundColor: `var(${getCategoryVar(currentHeading.category)})` }}
+              className="shrink-0 rounded px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-wider text-white uppercase"
+              style={{
+                backgroundColor: `var(${getCategoryVar(currentHeading.category)})`,
+              }}
             >
               {categoryLabel(currentHeading.category)}
             </span>
-            <span className="truncate font-medium">
-              {currentHeading.label}
-            </span>
+            <span className="truncate font-medium">{currentHeading.label}</span>
           </>
         ) : (
           <span className="text-muted-foreground text-xs">Sections</span>
@@ -157,7 +172,7 @@ export const HeadingBreadcrumb = ({
       {isOpen && (
         <div className="bg-popover border-border absolute bottom-full left-1/2 z-50 mb-1 w-80 -translate-x-1/2 overflow-hidden rounded-lg border shadow-lg">
           <div className="max-h-[400px] overflow-y-auto p-1">
-            <div className="text-muted-foreground flex items-center gap-1.5 px-3 py-1.5 text-[0.6rem] font-semibold uppercase tracking-wider">
+            <div className="text-muted-foreground flex items-center gap-1.5 px-3 py-1.5 text-[0.6rem] font-semibold tracking-wider uppercase">
               <SparklesIcon className="size-3" />
               AI Analysis
             </div>
@@ -175,8 +190,10 @@ export const HeadingBreadcrumb = ({
                 type="button"
               >
                 <span
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-white"
-                  style={{ backgroundColor: `var(${getCategoryVar(heading.category)})` }}
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[0.6rem] font-semibold tracking-wider text-white uppercase"
+                  style={{
+                    backgroundColor: `var(${getCategoryVar(heading.category)})`,
+                  }}
                 >
                   {categoryLabel(heading.category)}
                 </span>

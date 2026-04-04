@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
     "continueWithEmail": "Turpināt",
+    "continueWithGoogle": "Turpināt ar Google",
+    "continueWithMicrosoft": "Turpināt ar Microsoft",
     "createFirstOrganization": "Izveidojiet savu pirmo organizāciju, lai sāktu darbu",
     "createOrganization": "Izveidot organizāciju",
     "createOrganizationButton": "Izveidot organizāciju",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Doties uz lietām",
       "title": "Uzaicinājums organizācijā"
     },
+    "lastUsed": "Pēdējoreiz izmantots",
+    "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNameLabel": "Organizācijas nosaukums",
     "organizationNamePlaceholder": "Mana organizācija",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
@@ -257,6 +261,14 @@
     "writeOff": "Norakstīt"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Lietas numurs",
       "country": "Valsts",
@@ -301,14 +313,6 @@
       "source": "Avots",
       "statutes": "Applicable statutes",
       "viewOriginal": "Skatīt avotu"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {

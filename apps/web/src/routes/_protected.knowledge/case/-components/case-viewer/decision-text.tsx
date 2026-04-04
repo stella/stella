@@ -232,7 +232,11 @@ const renderBlocksWithHoldingZone = (
 
   // Group consecutive blocks by heading ID for continuous lines.
   // Same category but different heading = separate groups.
-  type Group = { cssVar: string | null; headingId: string | null; blocks: Block[] };
+  type Group = {
+    cssVar: string | null;
+    headingId: string | null;
+    blocks: Block[];
+  };
   const groups: Group[] = [];
 
   for (const block of blocks) {
@@ -250,7 +254,9 @@ const renderBlocksWithHoldingZone = (
   for (const group of groups) {
     const hasPrev = result.length > 0;
     const borderStyle = group.cssVar
-      ? { borderLeftColor: `color-mix(in srgb, var(${group.cssVar}) 25%, transparent)` }
+      ? {
+          borderLeftColor: `color-mix(in srgb, var(${group.cssVar}) 25%, transparent)`,
+        }
       : undefined;
 
     // Render all blocks in source order, wrapping in a section div
@@ -321,10 +327,7 @@ const EditorialSupplement = ({
 
 // ── Main component ────────────────────────────────────────
 
-export const DecisionText = ({
-  decision,
-  sectionMap,
-}: DecisionTextProps) => {
+export const DecisionText = ({ decision, sectionMap }: DecisionTextProps) => {
   const t = useTranslations();
 
   const rawAst = decision.documentAst;

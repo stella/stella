@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Vyberte organizaci, ve které chcete pracovat",
     "continueWithEmail": "Pokračovat",
+    "continueWithGoogle": "Pokračovat přes Google",
+    "continueWithMicrosoft": "Pokračovat přes Microsoft",
     "createFirstOrganization": "Vytvořte svou první organizaci",
     "createOrganization": "Vytvořit organizaci",
     "createOrganizationButton": "Vytvořit organizaci",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Přejít na spisy",
       "title": "Pozvánka do organizace"
     },
+    "lastUsed": "Naposledy použito",
+    "orSignInWithEmail": "nebo se přihlaste e-mailem",
     "organizationNameLabel": "Název organizace",
     "organizationNamePlaceholder": "Moje organizace",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
@@ -257,6 +261,14 @@
     "writeOff": "Odepsat"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Skutkový stav",
+        "holding": "Výrok",
+        "procedural-history": "Procesní historie",
+        "reasoning": "Právní posouzení"
+      }
+    },
     "columns": {
       "caseNumber": "Spisová značka",
       "country": "Stát",
@@ -301,14 +313,6 @@
       "source": "Zdroj",
       "statutes": "Dotčené předpisy",
       "viewOriginal": "Zobrazit zdroj"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Skutkový stav",
-        "procedural-history": "Procesní historie",
-        "reasoning": "Právní posouzení",
-        "holding": "Výrok"
-      }
     }
   },
   "chat": {

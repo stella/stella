@@ -80,12 +80,16 @@ type Messages = {
   "auth": {
     "chooseOrganization": "Choose which organization to work in";
     "continueWithEmail": "Continue";
+    "continueWithGoogle": "Continue with Google";
+    "continueWithMicrosoft": "Continue with Microsoft";
     "createFirstOrganization": "Create your first organization to get started";
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "enterTheCode": "Enter the code";
     "headline": "Clarity for every case.";
+    "lastUsed": "Last used";
+    "orSignInWithEmail": "or sign in with email";
     "invitation": {
       "declined": "Invitation declined";
       "declinedDescription": "You have declined this invitation. You can safely close this page.";
@@ -783,6 +787,7 @@ type Messages = {
       "configure": "Configure";
       "dataRegion": "Data region";
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.";
+      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
       "description": "Bring your own API key or configure data sovereignty region.";
       "overrideRoles": "Override roles";
       "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.";
@@ -806,7 +811,6 @@ type Messages = {
         "reasoning": "Reasoning (analysis)";
       };
       "title": "AI configuration";
-      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
     };
     "invitations": {
       "cancelInvitation": "Cancel invitation";

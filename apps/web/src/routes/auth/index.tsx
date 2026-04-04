@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useForm, useStore } from "@tanstack/react-form";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -8,7 +10,9 @@ import { Field, FieldError } from "@stella/ui/components/field";
 import { Form } from "@stella/ui/components/form";
 import { Input } from "@stella/ui/components/input";
 import { toastManager } from "@stella/ui/components/toast";
+import { cn } from "@stella/ui/lib/utils";
 
+import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
@@ -41,11 +45,47 @@ const formSchema = v.strictObject({
   email: emailSchema(),
 });
 
+const hasSocialProviders = env.VITE_AUTH_GOOGLE || env.VITE_AUTH_MICROSOFT;
+
 function LoginOrSignup() {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
+  const [socialLoading, setSocialLoading] = useState<
+    "google" | "microsoft" | null
+  >(null);
+  const lastMethod = authClient.getLastUsedLoginMethod();
+
+  const handleSocialSignIn = async (provider: "google" | "microsoft") => {
+    setSocialLoading(provider);
+    // Route the OAuth redirect through /auth/organization so the
+    // org-selection step threads `redirectTo` to the final page,
+    // matching the email OTP flow.
+    const callbackURL = new URL("/auth/organization", window.location.origin);
+    if (redirectTo) {
+      callbackURL.searchParams.set("redirectTo", redirectTo);
+    }
+    const { error } = await authClient.signIn.social({
+      provider,
+      callbackURL: callbackURL.toString(),
+    });
+
+    if (!error) {
+      // Navigation to the OAuth provider is in progress; leave the
+      // spinner on so users get feedback until the browser unloads.
+      return;
+    }
+
+    analytics.captureError(toAuthClientError(error));
+    if (error.status !== HTTP_TOO_MANY_REQUESTS) {
+      toastManager.add({
+        title: error.message ?? t("errors.actionFailed"),
+        type: "error",
+      });
+    }
+    setSocialLoading(null);
+  };
 
   const form = useForm({
     defaultValues: { email: "" },
@@ -87,7 +127,7 @@ function LoginOrSignup() {
     <div className="flex w-full max-w-md flex-col gap-8">
       <div className="flex flex-col gap-2">
         <h2 className="text-foreground text-[2rem] leading-[1.15] font-light tracking-tight">
-          {t("auth.signInWithEmail")}
+          {t("auth.signIn")}
         </h2>
         {isAcceptInvitationRedirect(redirectTo) && (
           <p className="text-muted-foreground text-sm">
@@ -95,6 +135,58 @@ function LoginOrSignup() {
           </p>
         )}
       </div>
+
+      {hasSocialProviders && (
+        <div className="flex flex-col gap-3">
+          {env.VITE_AUTH_GOOGLE && (
+            <SocialButton
+              icon={<GoogleIcon />}
+              label={t("auth.continueWithGoogle")}
+              lastUsedLabel={t("auth.lastUsed")}
+              lastUsed={lastMethod === "google"}
+              loading={socialLoading === "google"}
+              disabled={socialLoading !== null}
+              onClick={() => {
+                handleSocialSignIn("google").catch((error: unknown) => {
+                  setSocialLoading(null);
+                  analytics.captureError(
+                    error instanceof Error ? error : new Error(String(error)),
+                  );
+                });
+              }}
+            />
+          )}
+          {env.VITE_AUTH_MICROSOFT && (
+            <SocialButton
+              icon={<MicrosoftIcon />}
+              label={t("auth.continueWithMicrosoft")}
+              lastUsedLabel={t("auth.lastUsed")}
+              lastUsed={lastMethod === "microsoft"}
+              loading={socialLoading === "microsoft"}
+              disabled={socialLoading !== null}
+              onClick={() => {
+                handleSocialSignIn("microsoft").catch((error: unknown) => {
+                  setSocialLoading(null);
+                  analytics.captureError(
+                    error instanceof Error ? error : new Error(String(error)),
+                  );
+                });
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {hasSocialProviders && (
+        <div className="flex items-center gap-3">
+          <div className="bg-border h-px flex-1" />
+          <span className="text-muted-foreground text-xs">
+            {t("auth.orSignInWithEmail")}
+          </span>
+          <div className="bg-border h-px flex-1" />
+        </div>
+      )}
+
       <Form
         errors={formErrors}
         onSubmit={(e) => {
@@ -107,7 +199,7 @@ function LoginOrSignup() {
           {(field) => (
             <Field name={field.name}>
               <Input
-                autoFocus
+                autoFocus={!hasSocialProviders}
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder={t("auth.emailPlaceholder")}
@@ -119,9 +211,20 @@ function LoginOrSignup() {
             </Field>
           )}
         </form.Field>
-        <form.Subscribe selector={(s) => s.isSubmitting}>
-          {(isSubmitting) => (
-            <Button className="w-full" loading={isSubmitting} type="submit">
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            canSubmit: s.canSubmit,
+            email: s.values.email,
+          })}
+        >
+          {({ isSubmitting, canSubmit, email }) => (
+            <Button
+              className="w-full"
+              disabled={!canSubmit || email.trim().length === 0}
+              loading={isSubmitting}
+              type="submit"
+            >
               {t("auth.continueWithEmail")}
             </Button>
           )}
@@ -152,5 +255,91 @@ function LoginOrSignup() {
         })}
       </p>
     </div>
+  );
+}
+
+function SocialButton({
+  icon,
+  label,
+  lastUsedLabel,
+  lastUsed,
+  loading,
+  disabled,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  lastUsedLabel: string;
+  lastUsed: boolean;
+  loading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="relative">
+      <Button
+        className={cn(
+          "w-full",
+          lastUsed && "border-primary/40 shadow-primary/8 shadow-sm",
+        )}
+        disabled={disabled}
+        loading={loading}
+        onClick={onClick}
+        size="lg"
+        variant="outline"
+      >
+        {icon}
+        {label}
+      </Button>
+      {lastUsed && (
+        <span className="bg-primary text-primary-foreground absolute -top-2 right-3 rounded-full px-2 py-0.5 text-[10px] font-medium">
+          {lastUsedLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+function MicrosoftIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      viewBox="0 0 21 21"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect fill="#F25022" height="9" width="9" x="1" y="1" />
+      <rect fill="#7FBA00" height="9" width="9" x="11" y="1" />
+      <rect fill="#00A4EF" height="9" width="9" x="1" y="11" />
+      <rect fill="#FFB900" height="9" width="9" x="11" y="11" />
+    </svg>
   );
 }

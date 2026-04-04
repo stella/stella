@@ -20,10 +20,7 @@ type AnalysisState =
   | { status: "error"; message: string };
 
 const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
-  typeof val === "object" &&
-  val !== null &&
-  "version" in val &&
-  "tree" in val;
+  typeof val === "object" && val !== null && "version" in val && "tree" in val;
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -51,7 +48,9 @@ export const useDecisionAnalysis = (
     if (prevDecisionId.current !== decisionId) {
       prevDecisionId.current = decisionId;
       abortRef.current?.abort();
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+      }
 
       if (
         isDecisionAnalysis(existingAnalysis) &&
@@ -77,7 +76,9 @@ export const useDecisionAnalysis = (
   useEffect(
     () => () => {
       abortRef.current?.abort();
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+      }
     },
     [],
   );
@@ -97,12 +98,15 @@ export const useDecisionAnalysis = (
 
     const data: unknown = await response.json();
 
-    if (
-      typeof data === "object" &&
-      data !== null &&
-      "status" in data
-    ) {
-      const obj = data as { status: string; analysis?: unknown; error?: string };
+    if (typeof data === "object" && data !== null && "status" in data) {
+      // SAFETY: guarded by the `"status" in data` check above;
+      // each branch revalidates the payload before use.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      const obj = data as {
+        status: string;
+        analysis?: unknown;
+        error?: string;
+      };
 
       if (obj.status === "done" && isDecisionAnalysis(obj.analysis)) {
         if (pollRef.current) {
@@ -119,6 +123,9 @@ export const useDecisionAnalysis = (
       }
 
       if (obj.status === "generating") {
+        // SAFETY: partial results are optional on "generating" responses;
+        // we only read `.tree` with a nullish fallback below.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
         const partial = obj.analysis as DecisionAnalysis | undefined;
         setState({
           status: "generating",
@@ -154,7 +161,9 @@ export const useDecisionAnalysis = (
   }, [decisionId, queryClient]);
 
   const generate = useCallback(async () => {
-    if (state.status === "generating") return;
+    if (state.status === "generating") {
+      return;
+    }
 
     setState({ status: "generating", tree: [] });
 
@@ -163,20 +172,22 @@ export const useDecisionAnalysis = (
 
       // Only poll if the first fetch didn't already resolve
       if (!resolved) {
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(async () => {
-          try {
-            await fetchAnalysis();
-          } catch {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+        }
+        pollRef.current = setInterval(() => {
+          void fetchAnalysis().catch(() => {
             // Ignore poll errors; will retry on next interval
-          }
+          });
         }, POLL_INTERVAL_MS);
       }
-    } catch (err) {
-      if (abortRef.current?.signal.aborted) return;
+    } catch (error) {
+      if (abortRef.current?.signal.aborted) {
+        return;
+      }
       setState({
         status: "error",
-        message: err instanceof Error ? err.message : "Unknown error",
+        message: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }, [state.status, fetchAnalysis]);

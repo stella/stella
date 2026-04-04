@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
     "continueWithEmail": "Tovább",
+    "continueWithGoogle": "Folytatás Google-lel",
+    "continueWithMicrosoft": "Folytatás Microsofttal",
     "createFirstOrganization": "Hozza létre első szervezetét a kezdéshez",
     "createOrganization": "Szervezet létrehozása",
     "createOrganizationButton": "Szervezet létrehozása",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Ügyekhez",
       "title": "Szervezeti meghívó"
     },
+    "lastUsed": "Legutóbb használt",
+    "orSignInWithEmail": "vagy jelentkezz be e-maillel",
     "organizationNameLabel": "Szervezet neve",
     "organizationNamePlaceholder": "Szervezetem",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
@@ -257,6 +261,14 @@
     "writeOff": "Leírás"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Ügyszám",
       "country": "Ország",
@@ -301,14 +313,6 @@
       "source": "Forrás",
       "statutes": "Applicable statutes",
       "viewOriginal": "Forrás megtekintése"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {

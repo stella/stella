@@ -1,7 +1,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
-import { bearer, emailOTP, organization } from "better-auth/plugins";
+import {
+  bearer,
+  emailOTP,
+  lastLoginMethod,
+  organization,
+} from "better-auth/plugins";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
@@ -152,8 +157,28 @@ const createAuth = () =>
       schema: authSchema,
       transaction: true,
     }),
+    socialProviders: {
+      ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: env.GOOGLE_AUTH_CLIENT_ID,
+              clientSecret: env.GOOGLE_AUTH_CLIENT_SECRET,
+            },
+          }
+        : {}),
+      ...(env.MICROSOFT_AUTH_CLIENT_ID && env.MICROSOFT_AUTH_CLIENT_SECRET
+        ? {
+            microsoft: {
+              clientId: env.MICROSOFT_AUTH_CLIENT_ID,
+              clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
+              tenantId: env.MICROSOFT_AUTH_TENANT_ID ?? "common",
+            },
+          }
+        : {}),
+    },
     plugins: [
       bearer(),
+      lastLoginMethod(),
       emailOTP({
         async sendVerificationOTP({ email, otp, type }, ctx) {
           if (env.isDev) {

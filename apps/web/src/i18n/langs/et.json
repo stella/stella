@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
     "continueWithEmail": "Jätka",
+    "continueWithGoogle": "Jätka Google'iga",
+    "continueWithMicrosoft": "Jätka Microsoftiga",
     "createFirstOrganization": "Alustamiseks looge oma esimene organisatsioon",
     "createOrganization": "Loo organisatsioon",
     "createOrganizationButton": "Loo organisatsioon",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Mine toimikutesse",
       "title": "Kutse organisatsiooni"
     },
+    "lastUsed": "Viimati kasutatud",
+    "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNameLabel": "Organisatsiooni nimi",
     "organizationNamePlaceholder": "Minu organisatsioon",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
@@ -257,6 +261,14 @@
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Kohtuasja number",
       "country": "Riik",
@@ -301,14 +313,6 @@
       "source": "Allikas",
       "statutes": "Applicable statutes",
       "viewOriginal": "Vaata allikat"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {

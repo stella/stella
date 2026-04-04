@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Choose which organization to work in",
     "continueWithEmail": "Continue",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithMicrosoft": "Continue with Microsoft",
     "createFirstOrganization": "Create your first organization to get started",
     "createOrganization": "Create an organization",
     "createOrganizationButton": "Create organization",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Go to matters",
       "title": "Organization invitation"
     },
+    "lastUsed": "Last used",
+    "orSignInWithEmail": "or sign in with email",
     "organizationNameLabel": "Organization name",
     "organizationNamePlaceholder": "My Organization",
     "rateLimitExceeded": "Too many attempts. Please try again later.",
@@ -257,6 +261,14 @@
     "writeOff": "Write off"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Case number",
       "country": "Country",
@@ -301,14 +313,6 @@
       "source": "Source",
       "statutes": "Applicable statutes",
       "viewOriginal": "View source"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {
