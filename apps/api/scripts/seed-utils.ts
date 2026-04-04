@@ -5,8 +5,6 @@
  * both `seed-dev.ts` and `seed-templates.ts`.
  */
 
-import { createHash } from "node:crypto";
-
 import { toSafeId } from "@/api/lib/branded-types";
 
 // ─── Constants ──────────────────────────────────────────
@@ -36,7 +34,7 @@ export const pickAuthor = (index: number): string => {
 // ─── Deterministic ID generator ─────────────────────────
 
 export const seedId = (label: string): string => {
-  const hash = createHash("sha256").update(label).digest("hex");
+  const hash = new Bun.CryptoHasher("sha256").update(label).digest("hex");
   return hash.slice(0, 21);
 };
 

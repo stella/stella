@@ -260,7 +260,6 @@
         "@react-email/preview-server": "5.2.8",
         "@stella/scripts": "workspace:*",
         "@stella/typescript-config": "workspace:*",
-        "@types/node": "catalog:react19",
         "@types/react": "catalog:react19",
         "react-email": "5.2.8",
         "typescript": "catalog:",
@@ -285,7 +284,6 @@
       },
       "devDependencies": {
         "@stella/typescript-config": "workspace:*",
-        "@types/node": "catalog:react19",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "tailwindcss": "catalog:",

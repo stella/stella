@@ -19,7 +19,6 @@
  */
 
 import { eq } from "drizzle-orm";
-import { createHmac } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -351,7 +350,7 @@ async function seed() {
   // "{token}.{hmac_base64}" where HMAC is SHA-256 with the
   // BETTER_AUTH_SECRET. We replicate this so getSignedCookie()
   // can verify and extract the token.
-  const signature = createHmac("sha256", env.BETTER_AUTH_SECRET)
+  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
     .update(SESSION_TOKEN)
     .digest("base64");
   const signedCookieValue = `${SESSION_TOKEN}.${signature}`;
