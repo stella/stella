@@ -301,6 +301,14 @@
       "source": "Zdroj",
       "statutes": "Applicable statutes",
       "viewOriginal": "Zobraziť zdroj"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Skutkový stav",
+        "procedural-history": "Procesná história",
+        "reasoning": "Právne posúdenie",
+        "holding": "Výrok"
+      }
     }
   },
   "chat": {

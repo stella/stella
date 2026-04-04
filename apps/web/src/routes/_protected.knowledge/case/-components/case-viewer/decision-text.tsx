@@ -72,6 +72,8 @@ type Decision = {
 
 type DecisionTextProps = {
   decision: Decision;
+  /** Map from anchorId to section info (cssVar + headingId). */
+  sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
 };
 
 // ── Inline renderer ───────────────────────────────────────
@@ -222,36 +224,58 @@ const FulltextFallback = ({ text }: { text: string }) => {
 const isHoldingBlock = (b: Block): boolean =>
   b.type === "paragraph" && b.role === "holding";
 
-const renderBlocksWithHoldingZone = (blocks: Block[]): ReactNode[] => {
+const renderBlocksWithHoldingZone = (
+  blocks: Block[],
+  sectionMap?: Map<string, { cssVar: string; headingId: string }>,
+): ReactNode[] => {
   const result: ReactNode[] = [];
-  let holdingGroup: Block[] = [];
 
-  const flushHolding = () => {
-    if (holdingGroup.length === 0) {
-      return;
-    }
-    result.push(
-      <div
-        className="border-foreground/15 my-4 border-l-2 pl-4 font-[520]"
-        key={`holding-${holdingGroup.at(0)?.id}`}
-      >
-        {holdingGroup.map((b) => (
-          <BlockRenderer block={b} key={b.id} />
-        ))}
-      </div>,
-    );
-    holdingGroup = [];
-  };
+  // Group consecutive blocks by heading ID for continuous lines.
+  // Same category but different heading = separate groups.
+  type Group = { cssVar: string | null; headingId: string | null; blocks: Block[] };
+  const groups: Group[] = [];
 
   for (const block of blocks) {
-    if (isHoldingBlock(block)) {
-      holdingGroup.push(block);
+    const info = sectionMap?.get(block.anchorId) ?? null;
+    const cssVar = info?.cssVar ?? null;
+    const headingId = info?.headingId ?? null;
+    const last = groups.at(-1);
+    if (last && last.headingId === headingId && last.cssVar === cssVar) {
+      last.blocks.push(block);
     } else {
-      flushHolding();
-      result.push(<BlockRenderer block={block} key={block.id} />);
+      groups.push({ cssVar, headingId, blocks: [block] });
     }
   }
-  flushHolding();
+
+  for (const group of groups) {
+    const hasPrev = result.length > 0;
+    const borderStyle = group.cssVar
+      ? { borderLeftColor: `color-mix(in srgb, var(${group.cssVar}) 25%, transparent)` }
+      : undefined;
+
+    // Render all blocks in source order, wrapping in a section div
+    result.push(
+      <div
+        className={cn(
+          "border-l-2 pl-3",
+          !group.cssVar && "border-l-transparent",
+          hasPrev && "mt-1.5",
+        )}
+        key={`section-${group.blocks.at(0)?.id}`}
+        style={borderStyle}
+      >
+        {group.blocks.map((b) =>
+          isHoldingBlock(b) ? (
+            <div className="font-[520]" key={b.id}>
+              <BlockRenderer block={b} />
+            </div>
+          ) : (
+            <BlockRenderer block={b} key={b.id} />
+          ),
+        )}
+      </div>,
+    );
+  }
 
   return result;
 };
@@ -297,7 +321,10 @@ const EditorialSupplement = ({
 
 // ── Main component ────────────────────────────────────────
 
-export const DecisionText = ({ decision }: DecisionTextProps) => {
+export const DecisionText = ({
+  decision,
+  sectionMap,
+}: DecisionTextProps) => {
   const t = useTranslations();
 
   const rawAst = decision.documentAst;
@@ -346,6 +373,7 @@ export const DecisionText = ({ decision }: DecisionTextProps) => {
                 b.plainText.toUpperCase() === "JMÉNEM REPUBLIKY"
               ),
           ),
+          sectionMap,
         )}
       </article>
     );

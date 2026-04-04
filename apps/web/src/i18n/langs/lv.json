@@ -301,6 +301,14 @@
       "source": "Avots",
       "statutes": "Applicable statutes",
       "viewOriginal": "Skatīt avotu"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning",
+        "holding": "Holding"
+      }
     }
   },
   "chat": {

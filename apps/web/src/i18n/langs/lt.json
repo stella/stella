@@ -301,6 +301,14 @@
       "source": "Šaltinis",
       "statutes": "Applicable statutes",
       "viewOriginal": "Žiūrėti šaltinį"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning",
+        "holding": "Holding"
+      }
     }
   },
   "chat": {

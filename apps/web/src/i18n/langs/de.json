@@ -301,6 +301,14 @@
       "source": "Quelle",
       "statutes": "Applicable statutes",
       "viewOriginal": "Quelle anzeigen"
+    },
+    "analysis": {
+      "categories": {
+        "facts": "Sachverhalt",
+        "procedural-history": "Verfahrensgang",
+        "reasoning": "Begründung",
+        "holding": "Spruch"
+      }
     }
   },
   "chat": {

@@ -1,5 +1,6 @@
 import Elysia, { t } from "elysia";
 
+import { generateAnalysis } from "@/api/handlers/case-law/analysis/generate";
 import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
@@ -52,6 +53,71 @@ const globalCaseLawRoute = new Elysia({
     {
       body: searchDecisionsBodySchema,
     },
+  )
+  .get(
+    "/decisions/:decisionId/analysis",
+    async (ctx) =>
+      await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
+    { params: t.Object({ decisionId: tNanoid }) },
+  )
+  .get(
+    "/decisions/:decisionId/analysis/debug",
+    async (ctx) => {
+      const { decisionId } = ctx.params;
+      const decision = await ctx.scopedDb((tx) =>
+        tx.query.caseLawDecisions.findFirst({
+          where: { id: decisionId },
+          columns: {
+            id: true,
+            language: true,
+            court: true,
+            country: true,
+            decisionType: true,
+            documentAst: true,
+          },
+        }),
+      );
+      if (!decision) {
+        return { error: "not found" };
+      }
+
+      const { getSystemPrompt } = await import(
+        "@/api/handlers/case-law/analysis/prompts/index"
+      );
+      const { formatDecisionForPrompt } = await import(
+        "@/api/handlers/case-law/analysis/prompts/base"
+      );
+      const { hasUsableAst } = await import(
+        "@/api/handlers/case-law/document-ast"
+      );
+      const { getModelForRole } = await import("@/api/lib/ai-models");
+
+      const model = getModelForRole("fast");
+      const modelId =
+        typeof model === "string"
+          ? model
+          : "modelId" in model
+            ? String(model.modelId)
+            : "unknown";
+
+      const systemPrompt = getSystemPrompt(decision.language);
+      const ast = hasUsableAst(decision.documentAst)
+        ? (decision.documentAst as { blocks: { anchorId: string; plainText: string; type: string }[] })
+        : null;
+
+      const userMessage = ast
+        ? `Court: ${decision.court}\nCountry: ${decision.country}\nType: ${decision.decisionType ?? "unknown"}\n\n${formatDecisionForPrompt(ast.blocks)}`
+        : null;
+
+      return {
+        model: modelId,
+        systemPromptLength: systemPrompt.length,
+        systemPrompt,
+        userMessageLength: userMessage?.length ?? 0,
+        userMessage,
+      };
+    },
+    { params: t.Object({ decisionId: tNanoid }) },
   );
 
 /**

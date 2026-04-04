@@ -344,10 +344,15 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
         segments.at(-1)?.push(node);
         continue;
       }
-      // Whitespace-only text nodes don't reset the
-      // line-break counter (they sit between <br> tags
-      // in Domino HTML).
+      // Whitespace-only text nodes between <br> tags don't
+      // reset the line-break counter. But outside a br
+      // sequence they must be kept (e.g., space between
+      // two <b> tags: "nemá" + " " + "právo").
       if (node.type === "text" && !node.text.trim()) {
+        if (consecutiveBr > 0) {
+          continue;
+        }
+        segments.at(-1)?.push(node);
         continue;
       }
       consecutiveBr = 0;

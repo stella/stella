@@ -41,3 +41,41 @@ article h3 + h3 {
 article .reader-signature + .reader-signature {
   margin-top: 0;
 }
+
+/* Highlight flash when clicking an annotation to scroll. */
+@keyframes reader-highlight {
+  0% {
+    background-color: var(--color-primary / 0.08);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+article [data-highlight] {
+  animation: reader-highlight 1.5s ease-out;
+}
+
+/* Always show scrollbar in the decision reader scroll container.
+   Thin, subtle track that doesn't compete with the text. */
+.reader-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.reader-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reader-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.reader-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.reader-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+}
