@@ -20,6 +20,12 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import {
+  DANGEROUS_CHARS,
+  sanitizeMetadata,
+  stripDangerousChars,
+} from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
@@ -75,23 +81,6 @@ type ProcessResult = {
  *
  * Applied once in the pipeline so adapters don't repeat this.
  */
-// Constructed at runtime to avoid no-control-regex lint rule.
-// Matches null bytes, BOM, C0 control chars (except HT/LF/CR),
-// zero-width chars, word joiner, and interlinear annotations.
-const DANGEROUS_CHARS = new RegExp(
-  "[" +
-    "\x00" + // null byte
-    "\uFEFF\uFFFE" + // BOM variants
-    "\u0000-\u0008" + // C0 before HT
-    "\u000B\u000C" + // VT, FF
-    "\u000E-\u001F" + // C0 after CR
-    "\u200B-\u200D" + // zero-width chars
-    "\u2060" + // word joiner
-    "\uFFF9-\uFFFB" + // interlinear annotations
-    "]",
-  "g",
-);
-
 /**
  * Collapse spaced-out letters used for emphasis in court PDFs.
  *
@@ -129,27 +118,7 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // \u00A0 (nbsp) comes from PDF text extraction (@libpdf/core)
   // and prevents the browser from wrapping at word boundaries.
   const strip = (s: string | undefined): string | undefined =>
-    s?.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
-
-  // Recursively strip null bytes from metadata values
-  const sanitizeMetadata = (
-    obj: Record<string, unknown>,
-  ): Record<string, unknown> => {
-    // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- sanitizer accumulator, not a DB update
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(obj)) {
-      if (typeof v === "string") {
-        out[k] = v.replace(DANGEROUS_CHARS, "");
-      } else if (Array.isArray(v)) {
-        out[k] = v.map((item: unknown) =>
-          typeof item === "string" ? item.replace(DANGEROUS_CHARS, "") : item,
-        );
-      } else {
-        out[k] = v;
-      }
-    }
-    return out;
-  };
+    s ? stripDangerousChars(s) : undefined;
 
   // Recursively sanitize all strings in documentAst.
   // JSON.stringify escapes control chars to \uXXXX sequences
@@ -237,6 +206,7 @@ const processDecision = async (
       },
       columns: {
         id: true,
+        metadata: true,
         sourceHash: true,
         sourceRawS3Key: true,
         sourceRawContentType: true,
@@ -244,7 +214,15 @@ const processDecision = async (
     }),
   );
 
-  if (existing?.sourceHash === result.rawHash) {
+  if (
+    existing &&
+    shouldSkipRefresh({
+      existingMetadata: existing.metadata,
+      existingSourceHash: existing.sourceHash,
+      incomingMetadata: result.metadata,
+      incomingRawHash: result.rawHash,
+    })
+  ) {
     return {
       inserted: false,
       searchVectorFailed: false,

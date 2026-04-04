@@ -1,5 +1,4 @@
 import { UserError } from "rivetkit";
-import type { ActionContextOf, ActorContext } from "rivetkit";
 import * as v from "valibot";
 
 import {
@@ -9,10 +8,8 @@ import {
 import { parseWorkflowActorKey } from "@stella/rivet/actors/workflow-actor-config";
 import { userErrors } from "@stella/rivet/errors";
 import type { UserErrorCode } from "@stella/rivet/errors";
-import type { ActorEvent } from "@stella/rivet/types";
 
 import type { ScopedDb } from "@/api/db";
-import type { ActorsUnion } from "@/api/handlers/registry";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { identify } from "@/api/lib/analytics";
@@ -27,6 +24,11 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 
+export {
+  broadcastEvent,
+  resetActorState,
+} from "@/api/handlers/registry/runtime-utils";
+
 export const createUserError = (
   errorCode: UserErrorCode,
   config?: { cause?: unknown; metadata?: unknown },
@@ -36,21 +38,6 @@ export const createUserError = (
     cause: config?.cause,
     metadata: config?.metadata,
   });
-
-type AnyActorContext = ActorContext<
-  unknown,
-  unknown,
-  unknown,
-  unknown,
-  unknown,
-  undefined
->;
-
-/** Context with a broadcast method. Accepts any actor context (including chat). */
-type BroadcastCapableContext = Pick<AnyActorContext, "broadcast">;
-
-export const broadcastEvent = (c: BroadcastCapableContext, event: ActorEvent) =>
-  c.broadcast(event.name, event.data);
 
 export type GlobalActorConnState = {
   authToken: string;
@@ -229,16 +216,4 @@ export const validateActorInput = <T>(
 export const parseBrandedWorkflowActorKey = (key: string | string[]) => {
   const parsed = parseWorkflowActorKey(key);
   return brandValidatedWorkflowActorKey(parsed);
-};
-
-export const resetActorState = <TContext extends ActionContextOf<ActorsUnion>>(
-  c: TContext,
-  defaultState: TContext["state"],
-) => {
-  for (const key in defaultState) {
-    if (Object.hasOwn(defaultState, key)) {
-      // @ts-expect-error - this is valid
-      c.state[key] = defaultState[key];
-    }
-  }
 };
