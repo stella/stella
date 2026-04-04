@@ -6,15 +6,14 @@
  * nested under their parent heading.
  */
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { ChevronRightIcon, SparklesIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import {
-  type AnalysisHeading,
-} from "./types";
+import type { AnalysisHeading } from "./types";
 
 type NavigationPanelProps = {
   tree: AnalysisHeading[];
@@ -22,9 +21,7 @@ type NavigationPanelProps = {
 };
 
 /** Flatten headings for scroll tracking. */
-const flattenHeadings = (
-  headings: AnalysisHeading[],
-): AnalysisHeading[] => {
+const flattenHeadings = (headings: AnalysisHeading[]): AnalysisHeading[] => {
   const result: AnalysisHeading[] = [];
   for (const h of headings) {
     result.push(h);
@@ -33,13 +30,14 @@ const flattenHeadings = (
   return result;
 };
 
-const scrollToAnchor = (
-  anchorId: string,
-  container: HTMLElement | null,
-) => {
-  if (!container) return;
-  const el = container.querySelector(`#${CSS.escape(anchorId)}`);
-  if (!el) return;
+const scrollToAnchor = (anchorId: string, container: HTMLElement | null) => {
+  if (!container) {
+    return;
+  }
+  const el = container.querySelector<HTMLElement>(`#${CSS.escape(anchorId)}`);
+  if (!el) {
+    return;
+  }
   const offset =
     el.getBoundingClientRect().top -
     container.getBoundingClientRect().top +
@@ -47,10 +45,10 @@ const scrollToAnchor = (
   container.scrollTo({ top: offset, behavior: "instant" });
 
   // Trigger CSS highlight animation
-  el.removeAttribute("data-highlight");
+  delete el.dataset.highlight;
   // Force reflow so removing and re-adding triggers the animation
-  void (el as HTMLElement).offsetWidth;
-  el.setAttribute("data-highlight", "");
+  void el.offsetWidth;
+  el.dataset.highlight = "";
 };
 
 const HeadingNode = ({
@@ -80,7 +78,9 @@ const HeadingNode = ({
         )}
         data-heading-id={heading.id}
         onClick={() => {
-          if (hasChildren) setExpanded(!expanded);
+          if (hasChildren) {
+            setExpanded(!expanded);
+          }
           scrollToAnchor(heading.startAnchorId, scrollContainerRef.current);
         }}
         style={{ paddingInlineStart: `${depth * 12 + 8}px` }}
@@ -94,9 +94,7 @@ const HeadingNode = ({
             )}
           />
         )}
-        <span className="font-medium leading-tight">
-          {heading.label}
-        </span>
+        <span className="leading-tight font-medium">{heading.label}</span>
       </button>
 
       {expanded && (
@@ -105,7 +103,12 @@ const HeadingNode = ({
             <button
               className="hover:bg-muted/40 text-muted-foreground w-full rounded px-2 py-1 text-left text-[0.7rem] leading-relaxed"
               key={annotation.id}
-              onClick={() => scrollToAnchor(annotation.startAnchorId, scrollContainerRef.current)}
+              onClick={() =>
+                scrollToAnchor(
+                  annotation.startAnchorId,
+                  scrollContainerRef.current,
+                )
+              }
               style={{
                 paddingInlineStart: `${(depth + 1) * 12 + 8}px`,
               }}
@@ -141,11 +144,15 @@ export const NavigationPanel = ({
   // Track which heading is in view based on scroll position
   useEffect(() => {
     const sc = scrollContainerRef.current;
-    if (!sc || flat.length === 0) return;
+    if (!sc || flat.length === 0) {
+      return;
+    }
 
     const handleScroll = () => {
       const container = scrollContainerRef.current;
-      if (!container) return;
+      if (!container) {
+        return;
+      }
       let active: AnalysisHeading | null = null;
       const threshold = container.clientHeight / 3;
 
@@ -153,10 +160,15 @@ export const NavigationPanel = ({
         const el = container.querySelector(
           `#${CSS.escape(heading.startAnchorId)}`,
         );
-        if (!el) continue;
-        const top = el.getBoundingClientRect().top -
+        if (!el) {
+          continue;
+        }
+        const top =
+          el.getBoundingClientRect().top -
           container.getBoundingClientRect().top;
-        if (top <= threshold) active = heading;
+        if (top <= threshold) {
+          active = heading;
+        }
       }
 
       const newId = active?.id ?? null;
@@ -176,11 +188,13 @@ export const NavigationPanel = ({
     return () => sc.removeEventListener("scroll", handleScroll);
   }, [scrollContainerRef, flat]);
 
-  if (tree.length === 0) return null;
+  if (tree.length === 0) {
+    return null;
+  }
 
   return (
     <nav className="flex flex-col gap-0.5" ref={navRef}>
-      <div className="text-muted-foreground mb-1 flex items-center gap-1.5 px-2 text-[0.65rem] font-semibold uppercase tracking-wider">
+      <div className="text-muted-foreground mb-1 flex items-center gap-1.5 px-2 text-[0.65rem] font-semibold tracking-wider uppercase">
         <SparklesIcon className="size-3" />
         AI Analysis
       </div>

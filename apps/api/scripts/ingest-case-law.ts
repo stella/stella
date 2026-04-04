@@ -197,7 +197,6 @@ const main = async () => {
           inserted: result?.inserted ?? 0,
           skipped: result?.skipped ?? 0,
           searchVectorFailures: result?.searchVectorFailures ?? 0,
-          s3UploadFailures: result?.s3UploadFailures ?? 0,
           pagesProcessed: result?.pagesProcessed ?? 0,
           cursorBefore,
           // When the pipeline failed (result is null), cursor did not advance.

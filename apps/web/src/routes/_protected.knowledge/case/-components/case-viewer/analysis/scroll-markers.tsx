@@ -7,7 +7,8 @@
  * naturally (no overflow on this element).
  */
 
-import { type RefObject, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { RefObject } from "react";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -36,16 +37,22 @@ export const ScrollMarkers = ({
 
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
-    if (!sc || headings.length === 0) return;
+    if (!sc || headings.length === 0) {
+      return;
+    }
 
     const scrollHeight = sc.scrollHeight;
-    if (scrollHeight <= 0) return;
+    if (scrollHeight <= 0) {
+      return;
+    }
 
     const result: Positioned[] = [];
 
     for (const h of headings) {
       const el = sc.querySelector(`#${CSS.escape(h.startAnchorId)}`);
-      if (!el) continue;
+      if (!el) {
+        continue;
+      }
 
       const absTop =
         el.getBoundingClientRect().top -
@@ -64,7 +71,9 @@ export const ScrollMarkers = ({
 
   useEffect(() => {
     const sc = scrollContainerRef.current;
-    if (!sc) return;
+    if (!sc) {
+      return;
+    }
     recalc();
     const observer = new ResizeObserver(recalc);
     observer.observe(sc);
@@ -74,28 +83,36 @@ export const ScrollMarkers = ({
   const scrollTo = useCallback(
     (anchorId: string) => {
       const sc = scrollContainerRef.current;
-      if (!sc) return;
-      const el = sc.querySelector(`#${CSS.escape(anchorId)}`);
-      if (!el) return;
+      if (!sc) {
+        return;
+      }
+      const el = sc.querySelector<HTMLElement>(`#${CSS.escape(anchorId)}`);
+      if (!el) {
+        return;
+      }
       const offset =
         el.getBoundingClientRect().top -
         sc.getBoundingClientRect().top +
         sc.scrollTop;
       sc.scrollTo({ top: offset, behavior: "instant" });
-      el.removeAttribute("data-highlight");
-      void (el as HTMLElement).offsetWidth;
-      el.setAttribute("data-highlight", "");
+      delete el.dataset.highlight;
+      void el.offsetWidth;
+      el.dataset.highlight = "";
     },
     [scrollContainerRef],
   );
 
-  if (markers.length === 0) return null;
+  if (markers.length === 0) {
+    return null;
+  }
 
   return (
     <div
       className={cn(
         "absolute top-0 right-0 bottom-0 z-20 max-lg:hidden",
-        active ? "w-36 transition-[width] duration-150" : "w-5 transition-[width] duration-150",
+        active
+          ? "w-36 transition-[width] duration-150"
+          : "w-5 transition-[width] duration-150",
       )}
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
@@ -114,7 +131,7 @@ export const ScrollMarkers = ({
           {/* Pill label */}
           <span
             className={cn(
-              "max-w-32 truncate rounded-full px-2.5 py-1 text-[0.65rem] font-semibold leading-none shadow-sm",
+              "max-w-32 truncate rounded-full px-2.5 py-1 text-[0.65rem] leading-none font-semibold shadow-sm",
               active
                 ? "opacity-90 transition-opacity duration-100"
                 : "pointer-events-none opacity-0 transition-opacity duration-300",

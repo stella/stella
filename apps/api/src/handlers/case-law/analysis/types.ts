@@ -86,17 +86,13 @@ export type AnalysisGenerating = {
   startedAt: string;
 };
 
-export const isAnalysisGenerating = (
-  val: unknown,
-): val is AnalysisGenerating =>
+export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   typeof val === "object" &&
   val !== null &&
   "status" in val &&
   (val as Record<string, unknown>).status === "generating";
 
-export const isDecisionAnalysis = (
-  val: unknown,
-): val is DecisionAnalysis =>
+export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
   typeof val === "object" &&
   val !== null &&
   "version" in val &&

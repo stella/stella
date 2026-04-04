@@ -11,6 +11,11 @@ import { Output, streamText } from "ai";
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
+// SAFETY: rootDb is used only inside runGeneration, which runs in
+// a fire-and-forget background task after the request scope has
+// ended. scopedDb is request-tied and would double-stringify the
+// JSONB analysis payload in this context.
+// eslint-disable-next-line no-restricted-imports
 import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -27,19 +32,6 @@ import {
 } from "./types";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
-
-const assignIds = (
-  headings: Array<Omit<AnalysisHeading, "children"> & { children?: AnalysisHeading[] }>,
-): AnalysisHeading[] =>
-  headings.map((h) => ({
-    ...h,
-    id: crypto.randomUUID(),
-    annotations: h.annotations.map((a) => ({
-      ...a,
-      id: crypto.randomUUID(),
-    })),
-    children: assignIds(h.children ?? []),
-  }));
 
 /**
  * Run the AI generation in the background. Updates the DB
@@ -71,7 +63,6 @@ ${decisionText}`;
       : "modelId" in model
         ? String(model.modelId)
         : "unknown";
-
 
   try {
     const result = streamText({
@@ -133,14 +124,15 @@ ${decisionText}`;
       .update(caseLawDecisions)
       .set({ analysis })
       .where(eq(caseLawDecisions.id, decisionId));
-
   } catch {
-
     await rootDb
       .update(caseLawDecisions)
       .set({ analysis: null })
       .where(eq(caseLawDecisions.id, decisionId))
-      .catch(() => {});
+      .catch(() => {
+        // Best-effort sentinel cleanup; swallow to avoid
+        // losing the original failure from the outer catch.
+      });
   }
 };
 
@@ -169,7 +161,9 @@ export const generateAnalysis = async (
 
   // Return cached analysis (complete or partial with progress)
   if (isDecisionAnalysis(decision.analysis)) {
-    const analysis = decision.analysis as DecisionAnalysis & { status?: string };
+    const analysis = decision.analysis as DecisionAnalysis & {
+      status?: string;
+    };
     // Partial result still generating — return as generating with tree
     if (analysis.status === "generating") {
       return { status: "generating", analysis: decision.analysis };
@@ -192,9 +186,8 @@ export const generateAnalysis = async (
     return { status: "error", error: "Decision has no parseable AST" };
   }
 
-  // SAFETY: hasUsableAst narrows to DocumentAst
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const ast = decision.documentAst as DocumentAst;
+  // hasUsableAst narrows to DocumentAst.
+  const ast = decision.documentAst;
 
   // Set sentinel atomically (WHERE analysis IS NULL prevents TOCTOU race)
   const [updated] = await rootDb
@@ -220,7 +213,7 @@ export const generateAnalysis = async (
   }
 
   // Fire-and-forget generation
-  runGeneration(decisionId, ast, decision);
+  void runGeneration(decisionId, ast, decision);
 
   return { status: "generating" };
 };

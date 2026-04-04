@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
     "continueWithEmail": "Tęsti",
+    "continueWithGoogle": "Tęsti su Google",
+    "continueWithMicrosoft": "Tęsti su Microsoft",
     "createFirstOrganization": "Sukurkite savo pirmąją organizaciją",
     "createOrganization": "Sukurti organizaciją",
     "createOrganizationButton": "Sukurti organizaciją",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Eiti į bylas",
       "title": "Kvietimas į organizaciją"
     },
+    "lastUsed": "Paskutinį kartą naudotas",
+    "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNameLabel": "Organizacijos pavadinimas",
     "organizationNamePlaceholder": "Mano organizacija",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
@@ -257,6 +261,14 @@
     "writeOff": "Nurašyti"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts",
+        "holding": "Holding",
+        "procedural-history": "Procedural history",
+        "reasoning": "Reasoning"
+      }
+    },
     "columns": {
       "caseNumber": "Bylos numeris",
       "country": "Valstybė",
@@ -301,14 +313,6 @@
       "source": "Šaltinis",
       "statutes": "Applicable statutes",
       "viewOriginal": "Žiūrėti šaltinį"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Facts",
-        "procedural-history": "Procedural history",
-        "reasoning": "Reasoning",
-        "holding": "Holding"
-      }
     }
   },
   "chat": {

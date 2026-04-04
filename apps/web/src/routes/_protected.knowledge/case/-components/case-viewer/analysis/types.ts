@@ -62,7 +62,9 @@ const CORE_CATEGORY_VAR: Record<string, string> = {
 const hashString = (s: string): number => {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    // djb2-style hash: bitwise ops are the correct tool here.
+    // eslint-disable-next-line no-bitwise, unicorn/prefer-math-trunc
+    h = ((h << 5) - h + (s.codePointAt(i) ?? 0)) | 0;
   }
   return Math.abs(h);
 };
@@ -70,22 +72,21 @@ const hashString = (s: string): number => {
 /** Get the CSS variable name for a category's color. */
 export const getCategoryVar = (category: string): string => {
   const fixed = CORE_CATEGORY_VAR[category];
-  if (fixed) return fixed;
+  if (fixed) {
+    return fixed;
+  }
   const idx = hashString(category) % OPTION_VARS.length;
-  return OPTION_VARS[idx]!;
+  // idx is in [0, length); indexing is safe.
+  return OPTION_VARS[idx] ?? OPTION_VARS[0] ?? "";
 };
 
 /** Inline style for using a category color. */
-export const categoryColorStyle = (
-  category: string,
-): React.CSSProperties => ({
+export const categoryColorStyle = (category: string): React.CSSProperties => ({
   borderLeftColor: `var(${getCategoryVar(category)})`,
 });
 
 /** Inline style for subtle line (low opacity). */
-export const categoryLineStyle = (
-  category: string,
-): React.CSSProperties => ({
+export const categoryLineStyle = (category: string): React.CSSProperties => ({
   borderLeftColor: `color-mix(in srgb, var(${getCategoryVar(category)}) 25%, transparent)`,
 });
 
@@ -106,9 +107,8 @@ export const formatCategoryLabel = (category: string): string =>
   category.replace(/-/g, " ");
 
 /** Get the i18n message key for a core category, or null. */
-export const getCategoryI18nKey = (
-  category: string,
-): string | null => CATEGORY_I18N[category] ?? null;
+export const getCategoryI18nKey = (category: string): string | null =>
+  CATEGORY_I18N[category] ?? null;
 
 /**
  * Flatten the heading tree into a list of all annotations

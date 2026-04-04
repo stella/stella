@@ -77,6 +77,8 @@
   "auth": {
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
     "continueWithEmail": "Weiter",
+    "continueWithGoogle": "Weiter mit Google",
+    "continueWithMicrosoft": "Weiter mit Microsoft",
     "createFirstOrganization": "Erstellen Sie Ihre erste Organisation",
     "createOrganization": "Organisation erstellen",
     "createOrganizationButton": "Organisation erstellen",
@@ -90,6 +92,8 @@
       "goToWorkspaces": "Zu Akten",
       "title": "Einladung zur Organisation"
     },
+    "lastUsed": "Zuletzt verwendet",
+    "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNameLabel": "Organisationsname",
     "organizationNamePlaceholder": "Meine Organisation",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
@@ -257,6 +261,14 @@
     "writeOff": "Abschreiben"
   },
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Sachverhalt",
+        "holding": "Spruch",
+        "procedural-history": "Verfahrensgang",
+        "reasoning": "Begründung"
+      }
+    },
     "columns": {
       "caseNumber": "Aktenzeichen",
       "country": "Land",
@@ -301,14 +313,6 @@
       "source": "Quelle",
       "statutes": "Applicable statutes",
       "viewOriginal": "Quelle anzeigen"
-    },
-    "analysis": {
-      "categories": {
-        "facts": "Sachverhalt",
-        "procedural-history": "Verfahrensgang",
-        "reasoning": "Begründung",
-        "holding": "Spruch"
-      }
     }
   },
   "chat": {

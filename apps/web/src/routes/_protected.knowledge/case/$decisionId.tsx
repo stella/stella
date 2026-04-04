@@ -92,15 +92,20 @@ function DecisionViewer() {
     (analysisState.status === "generating" && analysisState.tree.length > 0);
   const isAnalyzing =
     analysisState.status === "generating" && analysisState.tree.length === 0;
-  const analysisTree =
-    analysisState.status === "done"
-      ? analysisState.analysis.tree
-      : analysisState.status === "generating"
-        ? analysisState.tree
-        : [];
+  const analysisTree = useMemo(() => {
+    if (analysisState.status === "done") {
+      return analysisState.analysis.tree;
+    }
+    if (analysisState.status === "generating") {
+      return analysisState.tree;
+    }
+    return [];
+  }, [analysisState]);
 
   const sectionMap = useMemo(() => {
-    if (analysisTree.length === 0 || !ast) return undefined;
+    if (analysisTree.length === 0 || !ast) {
+      return;
+    }
     const anchorIds = ast.blocks.map((b) => b.anchorId);
     return buildSectionMap(analysisTree, anchorIds);
   }, [ast, analysisTree]);
@@ -159,7 +164,7 @@ function DecisionViewer() {
   // Auto-trigger generation when the decision has an AST but no analysis
   useEffect(() => {
     if (ast && analysisState.status === "idle") {
-      generate();
+      void generate();
     }
   }, [ast, analysisState.status, generate]);
 
@@ -181,81 +186,80 @@ function DecisionViewer() {
         )}
 
         {/* ── Scrollable content ────────────────────────────── */}
-        <div
-          className="reader-scroll h-full overflow-y-auto"
-          ref={mainRef}
-        >
+        <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+          <div
+            className="grid max-lg:!grid-cols-[1fr]"
+            style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
+          >
+            {/* Left: margin notes with resize handle */}
+            <aside className="relative max-lg:hidden">
+              {hasAnalysis && marginItems.length > 0 && (
+                <MarginNotes items={marginItems} scrollContainerRef={mainRef} />
+              )}
+              {isAnalyzing && (
+                <div className="px-2 pt-8">
+                  <AnalysisLoader />
+                </div>
+              )}
+              {analysisState.status === "error" && (
+                <div className="flex flex-col items-center gap-3 pt-12">
+                  <button
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                    onClick={generate}
+                    type="button"
+                  >
+                    <SparklesIcon className="size-3" />
+                    Retry
+                  </button>
+                </div>
+              )}
 
-        <div
-          className="grid max-lg:!grid-cols-[1fr]"
-          style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
-        >
-          {/* Left: margin notes with resize handle */}
-          <aside className="relative max-lg:hidden">
-            {hasAnalysis && marginItems.length > 0 && (
-              <MarginNotes
-                items={marginItems}
-                scrollContainerRef={mainRef}
-              />
-            )}
-            {isAnalyzing && (
-              <div className="px-2 pt-8">
-                <AnalysisLoader />
+              {/* AI label */}
+              <div className="text-muted-foreground/40 sticky bottom-3 flex items-center gap-1 px-2 pt-4">
+                <SparklesIcon className="size-3" />
+                <span className="text-[0.6rem] font-medium tracking-wider uppercase">
+                  AI
+                </span>
               </div>
-            )}
-            {analysisState.status === "error" && (
-              <div className="flex flex-col items-center gap-3 pt-12">
-                <button
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                  onClick={generate}
-                  type="button"
-                >
-                  <SparklesIcon className="size-3" />
-                  Retry
-                </button>
+
+              {/* Resize handle with grip dots */}
+              <div
+                className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -right-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  isDragging.current = true;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!isDragging.current) {
+                    return;
+                  }
+                  const aside = e.currentTarget.parentElement;
+                  if (!aside) {
+                    return;
+                  }
+                  const newWidth =
+                    e.clientX - aside.getBoundingClientRect().left;
+                  setPanelWidth(Math.min(400, Math.max(120, newWidth)));
+                }}
+                onPointerUp={() => {
+                  isDragging.current = false;
+                }}
+              >
+                {/* iOS-style grip dots */}
+                <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
+                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                </div>
               </div>
-            )}
+            </aside>
 
-            {/* AI label */}
-            <div className="text-muted-foreground/40 sticky bottom-3 flex items-center gap-1 px-2 pt-4">
-              <SparklesIcon className="size-3" />
-              <span className="text-[0.6rem] font-medium tracking-wider uppercase">AI</span>
-            </div>
-
-            {/* Resize handle with grip dots */}
-            <div
-              className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -right-px z-10 flex w-2 cursor-col-resize items-center justify-center"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                isDragging.current = true;
-                e.currentTarget.setPointerCapture(e.pointerId);
-              }}
-              onPointerMove={(e) => {
-                if (!isDragging.current) return;
-                const aside = e.currentTarget.parentElement;
-                if (!aside) return;
-                const newWidth = e.clientX - aside.getBoundingClientRect().left;
-                setPanelWidth(Math.min(400, Math.max(120, newWidth)));
-              }}
-              onPointerUp={() => {
-                isDragging.current = false;
-              }}
-            >
-              {/* iOS-style grip dots */}
-              <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
-                <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-              </div>
-            </div>
-          </aside>
-
-          {/* Decision text */}
-          <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-            <DecisionText decision={decision} sectionMap={sectionMap} />
-          </main>
-        </div>
-
+            {/* Decision text */}
+            <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
+              <DecisionText decision={decision} sectionMap={sectionMap} />
+            </main>
+          </div>
         </div>
       </div>
     </div>

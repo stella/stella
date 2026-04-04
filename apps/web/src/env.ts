@@ -9,6 +9,11 @@ export const env = createEnv({
     VITE_API_URL: v.pipe(v.string(), v.url()),
     VITE_RIVET_ENDPOINT: v.pipe(v.string(), v.url()),
     VITE_RIVET_NAMESPACE: v.string(),
+    VITE_AUTH_GOOGLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
+    VITE_AUTH_MICROSOFT: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
   },
 
   runtimeEnv: import.meta.env,

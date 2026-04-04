@@ -93,6 +93,15 @@ export const env = createEnv({
       v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/i)),
     ),
     EXTENSION_ORIGIN: v.optional(v.string()),
+
+    // Social login — Google
+    GOOGLE_AUTH_CLIENT_ID: v.optional(v.string()),
+    GOOGLE_AUTH_CLIENT_SECRET: v.optional(v.string()),
+
+    // Social login — Microsoft
+    MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
+    MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
+    MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,
