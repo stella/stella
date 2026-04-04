@@ -112,7 +112,7 @@ export const ExpenseForm = ({
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label>{t("billing.matter")}</Label>
+        <Label>{t("common.matter")}</Label>
         <form.Field name="matterId">
           {(field) => (
             <MatterCombobox
@@ -168,7 +168,7 @@ export const ExpenseForm = ({
 
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label>{t("billing.expenses.amount")}</Label>
+          <Label>{t("billing.amount")}</Label>
           <form.Field name="amount">
             {(field) => (
               <Input

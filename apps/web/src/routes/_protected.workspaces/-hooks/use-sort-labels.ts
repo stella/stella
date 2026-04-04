@@ -5,7 +5,7 @@ import type { MattersSortKey } from "@/routes/_protected.workspaces/-types";
 export const useSortLabels = (): Record<MattersSortKey, string> => {
   const t = useTranslations();
   return {
-    name: t("billing.matter"),
+    name: t("common.matter"),
     reference: t("common.reference"),
     entityCount: t("workspaces.overview.totalItems"),
     lastActivityAt: t("workspaces.lastActive", { time: "" }).trim(),

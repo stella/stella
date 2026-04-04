@@ -36,7 +36,7 @@ export const SummaryCards = ({
       value: `${data.utilization}%`,
     },
     {
-      label: t("entryCount"),
+      label: t("entries"),
       value: data.entryCount.toLocaleString(),
     },
   ];

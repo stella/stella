@@ -302,7 +302,7 @@ const InvoiceDetail = ({
               <thead>
                 <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
-                    {t("billing.matter")}
+                    {t("common.matter")}
                   </th>
                   <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
@@ -373,7 +373,7 @@ const InvoiceDetail = ({
               <thead>
                 <tr className="text-muted-foreground border-b text-start">
                   <th className="px-4 py-2 font-medium">
-                    {t("billing.matter")}
+                    {t("common.matter")}
                   </th>
                   <th className="px-4 py-2 font-medium">{t("common.date")}</th>
                   <th className="px-4 py-2 font-medium">
@@ -466,6 +466,7 @@ const InvoiceActions = ({
   onDelete: () => void;
 }) => {
   const t = useTranslations("billing.invoices");
+  const rootT = useTranslations();
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
   const canDeleteInvoice = usePermissions({ invoice: ["delete"] });
 
@@ -496,7 +497,7 @@ const InvoiceActions = ({
             >
               <Button size="sm" variant="destructive">
                 <Trash2Icon className="size-3.5" />
-                {t("delete")}
+                {rootT("common.delete")}
               </Button>
             </ConfirmAction>
           )}
@@ -522,7 +523,7 @@ const InvoiceActions = ({
               variant="ghost"
             >
               <UndoIcon className="size-3.5" />
-              {t("revertToDraft")}
+              {rootT("billing.revertToDraft")}
             </Button>
           )}
           {canUpdateInvoice && (

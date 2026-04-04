@@ -68,7 +68,7 @@ export const AppBreadcrumbs = () => {
       ),
       [serializeKey(["/knowledge/clauses"])]: () => (
         <BreadcrumbLink to="/knowledge/clauses">
-          {t("navigation.clauses")}
+          {t("common.clauses")}
         </BreadcrumbLink>
       ),
       [serializeKey(["/contacts/$contactId"])]: (params) => (
@@ -76,14 +76,14 @@ export const AppBreadcrumbs = () => {
       ),
       [serializeKey(["/knowledge/case/"])]: () => (
         <BreadcrumbLink to="/knowledge/case">
-          {t("navigation.caseLaw")}
+          {t("common.caseLaw")}
         </BreadcrumbLink>
       ),
       [serializeKey(["/knowledge/case/$decisionId"])]: (params) => (
         <CaseLawBreadcrumb {...params} />
       ),
       [serializeKey(["/organization"])]: () => (
-        <BreadcrumbItem>{t("navigation.organization")}</BreadcrumbItem>
+        <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>
       ),
       [serializeKey(["/organization/members"])]: () => (
         <BreadcrumbLink to="/organization/members">
@@ -100,7 +100,7 @@ export const AppBreadcrumbs = () => {
       ),
       [serializeKey(["/account/sessions"])]: () => (
         <BreadcrumbLink to="/account/sessions">
-          {t("navigation.sessions")}
+          {t("common.sessions")}
         </BreadcrumbLink>
       ),
       [serializeKey(["/account/settings"])]: () => (

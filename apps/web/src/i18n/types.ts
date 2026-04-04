@@ -1,4 +1,5 @@
-import type Messages from "@/i18n/langs/messages.gen";
-import type { FlattenKeys } from "@/types/helpers";
+import type { getTranslator } from "@/i18n/i18n-store";
 
-export type TranslationKey = FlattenKeys<Messages>;
+type AppTranslator = ReturnType<typeof getTranslator>;
+
+export type TranslationKey = Parameters<AppTranslator>[0];

@@ -12,8 +12,30 @@ import fr from "@/i18n/langs/fr.json";
 import hu from "@/i18n/langs/hu.json";
 import lt from "@/i18n/langs/lt.json";
 import lv from "@/i18n/langs/lv.json";
+import type Messages from "@/i18n/langs/messages.gen";
 import pl from "@/i18n/langs/pl.json";
 import sk from "@/i18n/langs/sk.json";
+
+type LocalizedMessages<T> = {
+  [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
+};
+
+export const supportedLanguages = [
+  "en",
+  "cs",
+  "de",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "sk",
+] as const;
+
+export type SupportedLanguage = (typeof supportedLanguages)[number];
+type LocaleMessages = LocalizedMessages<Messages>;
 
 export const langMessages = {
   en,
@@ -27,15 +49,7 @@ export const langMessages = {
   lv,
   pl,
   sk,
-} as const;
-
-type SupportedLanguage = keyof typeof langMessages;
-
-// SAFETY: langMessages keys are SupportedLanguage; Object.keys preserves them
-// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-export const supportedLanguages = Object.keys(
-  langMessages,
-) as SupportedLanguage[];
+} as const satisfies Record<SupportedLanguage, LocaleMessages>;
 
 export const LANG_ENDONYMS = {
   en: "English",

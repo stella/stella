@@ -6,7 +6,6 @@ import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
 import { IntlProvider } from "use-intl";
-import type { AbstractIntlMessages } from "use-intl";
 
 import { ToastProvider } from "@stella/ui/components/toast";
 import { TooltipProvider } from "@stella/ui/components/tooltip";
@@ -18,6 +17,7 @@ import {
 } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { langMessages, useI18nStore } from "@/i18n/i18n-store";
+import type Messages from "@/i18n/langs/messages.gen";
 import { AnalyticsProvider } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
@@ -27,12 +27,16 @@ enableMapSet();
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const lang = useI18nStore((s) => s.lang);
-  const messages: AbstractIntlMessages = langMessages[lang];
 
   return (
     <IntlProvider
       locale={lang}
-      messages={messages}
+      // SAFETY: locale JSON files are shape-checked in i18n-store.ts;
+      // this cast is only at the provider boundary because use-intl's
+      // Messages type preserves English literal message values while
+      // translated locale JSONs necessarily contain different strings.
+      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      messages={langMessages[lang] as Messages}
       timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >
       {children}

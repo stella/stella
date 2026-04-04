@@ -13,8 +13,6 @@ type Messages = {
       "noOtherSessions": "No other active sessions";
       "revokeOtherSessions": "Sign out other devices";
       "revokeOtherSessionsConfirm": "This will end all sessions except your current one.";
-      "revokeSession": "Sign out";
-      "title": "Sessions";
       "unknownDevice": "Unknown device";
     };
     "settings": {
@@ -28,7 +26,6 @@ type Messages = {
     "billedAmount": "Billed amount";
     "billedHours": "Billed hours";
     "entries": "Entries";
-    "entryCount": "Entries";
     "hoursByMatter": "Hours by matter";
     "hoursByPeriod": "Hours by period";
     "hoursByUser": "Hours by user";
@@ -36,11 +33,9 @@ type Messages = {
     "last30Days": "Last 30 days";
     "last7Days": "Last 7 days";
     "last90Days": "Last 90 days";
-    "matter": "Matter";
     "noData": "No data for this period";
     "revenueByPeriod": "Revenue by period";
     "thisMonth": "This month";
-    "title": "Analytics";
     "totalHours": "Total hours";
     "utilization": "Utilization";
   };
@@ -48,7 +43,6 @@ type Messages = {
     "addEntity": "Add entity";
     "checkAnonymization": "Check anonymization";
     "closeAddForm": "Close add form";
-    "confirm": "Confirm";
     "confirmAll": "Confirm all";
     "entities": "Entities";
     "entityType": "Entity type";
@@ -82,14 +76,9 @@ type Messages = {
     "continueWithEmail": "Continue";
     "continueWithGoogle": "Continue with Google";
     "continueWithMicrosoft": "Continue with Microsoft";
-    "createFirstOrganization": "Create your first organization to get started";
-    "createOrganization": "Create an organization";
-    "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "enterTheCode": "Enter the code";
     "headline": "Clarity for every case.";
-    "lastUsed": "Last used";
-    "orSignInWithEmail": "or sign in with email";
     "invitation": {
       "declined": "Invitation declined";
       "declinedDescription": "You have declined this invitation. You can safely close this page.";
@@ -97,16 +86,14 @@ type Messages = {
       "goToWorkspaces": "Go to matters";
       "title": "Organization invitation";
     };
-    "organizationNameLabel": "Organization name";
-    "organizationNamePlaceholder": "My Organization";
+    "lastUsed": "Last used";
+    "orSignInWithEmail": "or sign in with email";
+    "organizationNamePlaceholder": "My organization";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
-    "signInWithEmail": "Sign in with e-mail";
-    "signOut": "Sign Out";
-    "slugLabel": "Slug";
-    "slugPlaceholder": "my-organization";
+    "signInWithEmail": "Sign in with email";
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "weSentCodeTo": "We sent a code to {email}";
   };
@@ -138,7 +125,6 @@ type Messages = {
     "editEntry": "Edit entry";
     "elapsed": "Elapsed";
     "expenses": {
-      "amount": "Amount";
       "categories": {
         "courier": "Courier";
         "expert_witness": "Expert witness";
@@ -152,7 +138,6 @@ type Messages = {
       "invoiceDescription": "Invoice description";
       "markup": "Markup (%)";
       "noExpenses": "No expenses for this period";
-      "title": "Expenses";
     };
     "export": "Export";
     "exportCSV": "Export CSV";
@@ -172,7 +157,6 @@ type Messages = {
       "confirmDelete": "This will permanently delete this draft invoice and unlink all entries. This action cannot be undone.";
       "confirmVoid": "Voiding this invoice will unlink all time entries and expenses, reverting them to their previous status.";
       "createInvoice": "Create invoice";
-      "delete": "Delete";
       "dueDate": "Due date";
       "editInvoice": "Edit invoice";
       "finalize": "Finalize";
@@ -186,7 +170,6 @@ type Messages = {
       "noInvoices": "No invoices yet";
       "paidAt": "Paid at";
       "removeEntries": "Remove entries";
-      "revertToDraft": "Revert to draft";
       "send": "Send";
       "statuses": {
         "draft": "Draft";
@@ -195,7 +178,6 @@ type Messages = {
         "sent": "Sent";
         "void": "Void";
       };
-      "title": "Invoices";
       "totalAmount": "Total amount";
       "totalEntries": "{count, plural, one {# entry} other {# entries}}";
       "void": "Void";
@@ -203,7 +185,6 @@ type Messages = {
     "loading": "Loading...";
     "markBillableSelected": "Mark billable";
     "markNonBillableSelected": "Mark non-billable";
-    "matter": "Matter";
     "matterRequired": "Please select a matter";
     "narrative": "Narrative";
     "narrativePlaceholder": "Describe the work performed...";
@@ -241,7 +222,6 @@ type Messages = {
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
     "split": {
       "addSplit": "Add split";
-      "matter": "Matter";
       "percentValue": "{value}%";
       "percentage": "Percentage";
       "splitEntry": "Split entry";
@@ -264,6 +244,14 @@ type Messages = {
     "writeOff": "Write off";
   };
   "caseLaw": {
+    "analysis": {
+      "categories": {
+        "facts": "Facts";
+        "holding": "Holding";
+        "procedural-history": "Procedural history";
+        "reasoning": "Reasoning";
+      };
+    };
     "columns": {
       "caseNumber": "Case number";
       "country": "Country";
@@ -295,7 +283,6 @@ type Messages = {
       "neverSynced": "Never synced";
       "title": "Sources";
     };
-    "title": "Case Law";
     "viewer": {
       "abstract": "Abstract";
       "citedBy": "Cited by";
@@ -428,7 +415,6 @@ type Messages = {
     "syncFailed": "Failed to sync";
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
-    "title": "Clauses";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
     "unlinkClause": "Unlink";
@@ -452,8 +438,11 @@ type Messages = {
     "actions": "Actions";
     "add": "Add";
     "all": "All";
+    "analytics": "Analytics";
     "cancel": "Cancel";
+    "caseLaw": "Case Law";
     "category": "Category";
+    "clauses": "Clauses";
     "columns": "Columns";
     "comingSoon": "Coming soon";
     "confirm": "Confirm";
@@ -480,13 +469,16 @@ type Messages = {
     "empty": "Empty";
     "enterKey": "↵";
     "error": "Error";
+    "expenses": "Expenses";
     "filter": "Filter";
     "invite": "Invite";
+    "invoices": "Invoices";
     "kind": "Kind";
     "language": "Language";
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
+    "matter": "Matter";
     "matters": "Matters";
     "metadata": "Metadata";
     "name": "Name";
@@ -495,6 +487,8 @@ type Messages = {
     "noResults": "No results";
     "notes": "Notes";
     "open": "Open";
+    "organization": "Organization";
+    "organizationName": "Organization name";
     "pin": "Pin";
     "print": "Print";
     "properties": "Properties";
@@ -509,8 +503,10 @@ type Messages = {
     "saveChanges": "Save changes";
     "search": "Search...";
     "selectARole": "Select a role";
+    "sessions": "Sessions";
     "settings": "Settings";
     "showMore": "Show more";
+    "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
@@ -520,6 +516,8 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unpin": "Unpin";
     "uploadFiles": "Upload files";
+    "urlIdentifier": "Slug";
+    "urlIdentifierPlaceholder": "my-organization";
     "user": "User";
     "verify": "Verify";
   };
@@ -578,7 +576,6 @@ type Messages = {
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "organizationName": "Organization name";
       "originatingAttorney": "Originating attorney";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
@@ -711,29 +708,22 @@ type Messages = {
   "navigation": {
     "account": "Account";
     "agents": "Agents";
-    "analytics": "Analytics";
     "calendar": "Calendar";
-    "caseLaw": "Case Law";
     "chat": "Chat";
     "chatAlreadyOpen": "Chat is already open";
-    "clauses": "Clauses";
     "clients": "Clients";
     "contacts": "Contacts";
-    "expenses": "Expenses";
     "inbox": "Inbox";
     "invitations": "Invitations";
-    "invoices": "Invoices";
     "knowledge": "Knowledge";
     "members": "Members";
     "myTodos": "My tasks";
     "newMatter": "New matter";
-    "organization": "Organization";
     "pinned": "Pinned";
     "recents": "Recents";
     "search": "Search";
     "searchEmptyState": "Start typing to search documents, matters, and more.";
     "searchPlaceholder": "Search across all workspaces...";
-    "sessions": "Sessions";
     "shortcutCategories": {
       "navigation": "Navigation";
     };
@@ -865,7 +855,6 @@ type Messages = {
     };
     "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
-    "title": "Organization";
   };
   "rightPanel": {
     "addConditional": "Add conditional";

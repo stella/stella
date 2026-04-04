@@ -48,7 +48,7 @@ function CaseLawIndex() {
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{t("caseLaw.title")}</h1>
+        <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
       </div>
 
       <DecisionFilters

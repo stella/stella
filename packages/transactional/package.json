@@ -13,8 +13,8 @@
     "export": "email export",
     "start": "email start -p 3002",
     "typecheck": "tsgo --noEmit",
-    "typegen": "i18n-typegen i18n/langs",
-    "i18n:check": "i18n-check i18n/langs",
+    "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
+    "i18n:check": "bun ../scripts/src/i18n-check.ts i18n/langs",
     "lint": "bun --bun oxlint --type-aware",
     "lint:fix": "bun --bun oxlint --type-aware --fix",
     "format": "oxfmt ."

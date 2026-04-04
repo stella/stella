@@ -180,7 +180,7 @@ function ContactDetailPage() {
             <EditableRow
               contact={contact}
               field="organizationName"
-              label={t("contacts.fields.organizationName")}
+              label={t("common.organizationName")}
               value={contact.organizationName}
             />
           )}

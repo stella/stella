@@ -491,9 +491,7 @@ const CreateContactDialog = () => {
               <form.Field name="organizationName">
                 {(field) => (
                   <Field name={field.name}>
-                    <FieldLabel>
-                      {t("contacts.fields.organizationName")}
-                    </FieldLabel>
+                    <FieldLabel>{t("common.organizationName")}</FieldLabel>
                     <Input
                       autoFocus
                       onBlur={field.handleBlur}

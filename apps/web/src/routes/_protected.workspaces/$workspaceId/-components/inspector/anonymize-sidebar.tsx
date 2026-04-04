@@ -125,7 +125,7 @@ const AnonymizeSidebarAddEntityForm = ({
           type="submit"
           variant="default"
         >
-          {t("anonymize.confirm")}
+          {t("common.confirm")}
         </Button>
       </div>
     </form>
