@@ -30,8 +30,17 @@ import {
   useEntitiesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import {
+  justificationsOptions,
+  workflowOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+import {
+  getWeekStart,
+  toISODate,
+} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // v.object: validateSearch receives the full URL search params
@@ -46,6 +55,76 @@ export const Route = createFileRoute(
 )({
   component: RouteComponent,
   validateSearch: searchSchema,
+  loaderDeps: ({ search }) => ({ page: search.page ?? 1 }),
+  loader: async ({ context, params, deps }) => {
+    const { workspaceId, viewId } = params;
+    const qc = context.queryClient;
+    const organizationId = context.user.activeOrganizationId;
+
+    // Views are cached by the parent workspace route loader.
+    const views = await qc.ensureQueryData(
+      viewsOptions({
+        key: { workspaceId },
+        context: { organizationId, authToken: context.authToken },
+      }),
+    );
+
+    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    if (!activeView) {
+      return;
+    }
+
+    // Overview layouts render stats/activity from overviewOptions
+    // (already prefetched by the parent loader) plus time-entries
+    // and members for the Time & Team widget. Fire-and-forget the
+    // sidebar queries so they load in parallel with render.
+    if (activeView.layout.type === "overview") {
+      const weekStart = getWeekStart();
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const prevWeekStart = new Date(weekStart);
+      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      const prevWeekEnd = new Date(weekStart);
+      prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
+
+      void qc.prefetchQuery(
+        timeEntriesOptions(workspaceId, {
+          dateFrom: toISODate(weekStart),
+          dateTo: toISODate(weekEnd),
+        }),
+      );
+      void qc.prefetchQuery(
+        timeEntriesOptions(workspaceId, {
+          dateFrom: toISODate(prevWeekStart),
+          dateTo: toISODate(prevWeekEnd),
+        }),
+      );
+      void qc.prefetchQuery(workspaceMembersOptions(workspaceId));
+      return;
+    }
+
+    const entities = await qc.ensureQueryData(
+      entitiesOptions({
+        workspaceId,
+        filters: activeView.layout.filters,
+        sorts: activeView.layout.sorts,
+        page: deps.page,
+      }),
+    );
+
+    // Justifications are rendered via `useSyncJustifications` as a
+    // non-suspense query, so prefetch fire-and-forget — a transient
+    // failure here must not abort navigation. The sorted (and
+    // deduped) entityId array is load-bearing for cache-key
+    // stability: it must match the key built in
+    // `useSyncJustifications` via `normalizeEntityIds`.
+    if (entities.entities.length > 0) {
+      const entityIds = [
+        ...new Set(entities.entities.map((entity) => entity.entityId)),
+      ].toSorted();
+      void qc.prefetchQuery(justificationsOptions({ workspaceId, entityIds }));
+    }
+  },
 });
 
 const viewsEvent = createEventHandler<Actors["views"]>();
@@ -98,12 +177,6 @@ function ViewsRoute() {
   const { data: activeView } = useSuspenseQuery({
     ...viewsQueryOptions,
     select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
-  });
-  useSyncTable({
-    workspaceId,
-    filters: activeView?.layout.filters ?? [],
-    sorts: activeView?.layout.sorts ?? [],
-    page,
   });
   const pruneStaleViews = useTableStore((s) => s.pruneStaleViews);
   const workflowActor = useWorkflowActor(workspaceId);
@@ -248,12 +321,57 @@ function ViewsRoute() {
     return null;
   }
 
+  // Overview layouts render stats/activity from overviewOptions
+  // and don't need entities or properties, so we render a
+  // minimal frame that skips the entities suspense.
+  if (activeView.layout.type === "overview") {
+    return <OverviewFrame activeView={activeView} workspaceId={workspaceId} />;
+  }
+
   return (
     <ViewContent
       activeView={activeView}
       page={page}
       workspaceId={workspaceId}
     />
+  );
+}
+
+type OverviewFrameProps = {
+  activeView: WorkspaceView;
+  workspaceId: string;
+};
+
+function OverviewFrame({ activeView, workspaceId }: OverviewFrameProps) {
+  const navigate = Route.useNavigate();
+
+  return (
+    <>
+      <div
+        className={cn(
+          "flex min-w-0 items-center justify-between border-b",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        <ViewSwitcher
+          activeViewId={activeView.id}
+          // eslint-disable-next-line typescript/no-misused-promises
+          onViewChange={async (viewId) => {
+            await navigate({
+              to: ".",
+              params: { workspaceId, viewId },
+              search: { page: undefined },
+            });
+          }}
+          workspaceId={workspaceId}
+        />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex-1 overflow-auto">
+          <Outlet />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -266,6 +384,8 @@ type ViewContentProps = {
 function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
   const navigate = Route.useNavigate();
   const { filters, sorts } = activeView.layout;
+
+  useSyncTable({ workspaceId, filters, sorts, page });
 
   const { data } = useSuspenseQuery(
     useEntitiesOptions({
@@ -308,15 +428,13 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
           }}
           workspaceId={workspaceId}
         />
-        {activeView.layout.type !== "overview" && (
-          <ViewToolbar view={activeView} workspaceId={workspaceId} />
-        )}
+        <ViewToolbar view={activeView} workspaceId={workspaceId} />
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
-        {totalPages > 1 && activeView.layout.type !== "overview" && (
+        {totalPages > 1 && (
           <EntityPagination
             onPageChange={setPage}
             page={page}

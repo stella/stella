@@ -61,6 +61,10 @@ import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
+  getWeekStart,
+  toISODate,
+} from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import {
   overviewOptions,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
@@ -70,20 +74,6 @@ type OverviewViewProps = {
 };
 
 // ── Helpers ───────────────────────────────────────────────
-
-/** Monday of the current ISO week. */
-const getWeekStart = () => {
-  const now = new Date();
-  const day = now.getDay();
-  // Shift Sunday (0) to 7 so Monday is always day 1
-  const diff = (day === 0 ? 7 : day) - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
-};
-
-const toISODate = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Get the single-letter day abbreviation for a given

@@ -210,6 +210,26 @@ export const formatRelativeTime = (
   });
 };
 
+/** Monday of the current ISO week (local time). */
+export const getWeekStart = (): Date => {
+  const now = new Date();
+  const day = now.getDay();
+  // Shift Sunday (0) to 7 so Monday is always day 1
+  const diff = (day === 0 ? 7 : day) - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+};
+
+/** Format a Date as `YYYY-MM-DD` in local time (not UTC). */
+export const toISODate = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 export const formatFullTimestamp = (
   isoString: string | null | undefined,
   locale?: string,
