@@ -125,6 +125,20 @@ export default defineBackground(() => {
     error.includes("aborted") ||
     error.includes("The operation was aborted");
 
+  const reportAsyncError = (error: unknown) => {
+    const normalizedError =
+      error instanceof Error ? error : new Error(String(error));
+
+    if (typeof globalThis.reportError === "function") {
+      globalThis.reportError(normalizedError);
+      return;
+    }
+
+    queueMicrotask(() => {
+      throw normalizedError;
+    });
+  };
+
   // -- Save clip logic --
 
   const handleSaveClip = async (
@@ -232,5 +246,5 @@ export default defineBackground(() => {
 
   chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch(console.error);
+    .catch(reportAsyncError);
 });

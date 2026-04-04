@@ -3,8 +3,7 @@
     "stella-docs": {
       "type": "stdio",
       "command": "bun",
-      "args": ["run", "stella-docs.ts"],
-      "cwd": ".claude/mcp"
+      "args": ["run", ".claude/mcp/stella-docs.ts"]
     }
   }
 }

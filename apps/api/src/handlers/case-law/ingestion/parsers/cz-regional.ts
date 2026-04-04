@@ -27,6 +27,11 @@ import {
   validateAndLog,
 } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";
+
 // ── Types for the finaldoc JSON ────────────────────────────
 
 type TextSpan = {
@@ -427,8 +432,3 @@ const classifyJustificationParagraph = (
 // ── Patterns ───────────────────────────────────────────────
 
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
-
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";

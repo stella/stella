@@ -19,6 +19,7 @@ import type {
   Inline,
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
+
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
@@ -560,7 +561,6 @@ const SECTION_HEADING_RE =
 
 const RULING_ITEM_RE = /^([IVXLCDM]+\.)\s+/;
 
-
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
   if (DECISION_TITLE_RE.test(trimmed)) {
@@ -616,10 +616,8 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
   }
 
   // Very short fragment (continuation like "." or "se odmítá")
-  if (nextText.length < 30) {
-    if (!/[.!?:]\s*$/.test(prevText)) {
-      return true;
-    }
+  if (nextText.length < 30 && !/[.!?:]\s*$/.test(prevText)) {
+    return true;
   }
 
   // Starts with lowercase = continuation
