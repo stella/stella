@@ -14,10 +14,11 @@ export const useSyncTable = (activeView: UseSyncTableProps) => {
     select: (data) => data.entities.map((entity) => entity.entityId),
   });
 
-  useQuery({
-    ...propertiesOptions(workspaceId),
-    refetchOnMount: true,
-  });
+  // propertiesOptions sets refetchOnMount: false and the query
+  // has a 5-minute staleTime. Real-time invalidation is handled
+  // by the workflow actor events in $viewId.route.tsx, so we
+  // just subscribe to the cached query here.
+  useQuery(propertiesOptions(workspaceId));
 
   useSyncJustifications(entityIds);
 };

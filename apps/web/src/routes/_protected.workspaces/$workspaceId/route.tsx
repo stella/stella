@@ -8,13 +8,9 @@ import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import {
-  justificationsOptions,
-  workflowOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   overviewOptions,
@@ -30,7 +26,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
     const organizationId = user.activeOrganizationId;
 
-    const [workspace, views] = await Promise.all([
+    const [workspace] = await Promise.all([
       qc.ensureQueryData(workspaceOptions(wsId)),
       qc.ensureQueryData(
         viewsOptions({
@@ -45,36 +41,11 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
         }),
       ),
       qc.ensureQueryData(overviewOptions(wsId)),
+      qc.ensureQueryData(propertiesOptions(wsId)),
       cause === "enter"
         ? api.workspaces({ workspaceId: wsId }).active.post()
         : Promise.resolve(),
     ]);
-
-    const firstView = views.at(0);
-    if (firstView) {
-      const firstPageEntities = await qc.ensureQueryData(
-        entitiesOptions({
-          workspaceId: wsId,
-          filters: firstView.layout.filters,
-          sorts: firstView.layout.sorts,
-          page: 1,
-        }),
-      );
-
-      await Promise.all([
-        qc.ensureQueryData(propertiesOptions(wsId)),
-        firstPageEntities.entities.length > 0
-          ? qc.ensureQueryData(
-              justificationsOptions({
-                workspaceId: wsId,
-                entityIds: firstPageEntities.entities
-                  .map((entity) => entity.entityId)
-                  .toSorted(),
-              }),
-            )
-          : Promise.resolve(),
-      ]);
-    }
 
     return workspace;
   },

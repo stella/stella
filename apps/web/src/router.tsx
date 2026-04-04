@@ -62,7 +62,13 @@ export function getRouter() {
     defaultNotFoundComponent: DefaultNotFoundComponent,
     defaultErrorComponent: DefaultErrorComponent,
     defaultPendingComponent: DefaultPendingComponent,
-    defaultPendingMs: 0,
+    // Don't flash the pending spinner on fast navigations. Routes
+    // that resolve in under 200ms never show a loading state; when
+    // the spinner does appear, keep it visible for at least 500ms
+    // to avoid flicker when the loader completes just after the
+    // threshold.
+    defaultPendingMs: 200,
+    defaultPendingMinMs: 500,
     Wrap: ({ children }) => (
       <AnalyticsProvider>
         <I18nProvider>
