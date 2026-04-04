@@ -56,6 +56,12 @@ import {
   validateAndLog,
 } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";
+
 // ── Public API ─────────────────────────────────────────────
 
 export type ParseUsDecisionInput = {
@@ -477,12 +483,6 @@ const SECTION_ROMAN_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.?\s*$/;
 
 /** Numbered paragraph: "1. ...", "2. ..." */
 const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
-
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";
 
 // ── Block classification ───────────────────────────────────
 

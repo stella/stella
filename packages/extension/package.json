@@ -9,8 +9,8 @@
     "zip": "wxt zip",
     "prepare": "wxt prepare",
     "typecheck": "wxt prepare && tsgo --noEmit",
-    "lint": "bun --bun oxlint --type-aware",
-    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "lint": "wxt prepare && bun --bun oxlint --type-aware",
+    "lint:fix": "wxt prepare && bun --bun oxlint --type-aware --fix",
     "format": "oxfmt ."
   },
   "dependencies": {

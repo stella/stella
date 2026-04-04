@@ -33,6 +33,11 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
+import {
+  CZ_CLOSING_RE as CLOSING_RE,
+  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+} from "./cz-patterns";
+
 // ── Public API ─────────────────────────────────────────────
 
 export type ParseNssDecisionInput = {
@@ -475,11 +480,6 @@ const NUMBERED_PARA_RE = /^\[(\d+)\]\s*/;
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
  * or just "City + date" pattern.
  */
-import {
-  CZ_CLOSING_RE as CLOSING_RE,
-  CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
-} from "./cz-patterns";
-
 // ── Block classification ───────────────────────────────────
 
 const makeAnchorId = (prefix: string, index: number): string =>

@@ -33,11 +33,9 @@ type SourceDef = {
 const HEARTBEAT_PATH = "/tmp/ingestion.lock";
 
 const writeHeartbeat = () => {
-  try {
-    Bun.write(HEARTBEAT_PATH, new Date().toISOString());
-  } catch {
+  void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
     // Non-fatal; health check will notice staleness
-  }
+  });
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a

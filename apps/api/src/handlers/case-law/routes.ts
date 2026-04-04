@@ -114,9 +114,9 @@ const caseLawAdminRoute = new Elysia({
       set.status = 403;
       return { error: "Forbidden" } as const;
     }
-    return undefined;
+    return;
   })
-  .get("/ingestion/status", () => getIngestionStatus());
+  .get("/ingestion/status",  async (ctx) => getIngestionStatus(ctx.scopedDb));
 
 export const caseLawRoute = new Elysia()
   .use(globalCaseLawRoute)
