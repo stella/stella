@@ -120,7 +120,7 @@ export const SplitEntryDialog = ({
           {splits.map((split, index) => (
             <div className="flex items-end gap-2" key={split.key}>
               <div className="flex-1">
-                <Label>{t("billing.split.matter")}</Label>
+                <Label>{t("common.matter")}</Label>
                 <MatterCombobox
                   onChange={(val) => updateSplit(index, "matterId", val)}
                   value={split.matterId}

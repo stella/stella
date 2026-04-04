@@ -22,6 +22,10 @@
       "dependsOn": ["transit"],
       "outputs": [".cache/tsbuildinfo.json"]
     },
+    "@stella/landing#typecheck": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
     "lint": {
       "dependsOn": ["transit"]
     },

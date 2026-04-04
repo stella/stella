@@ -43,7 +43,7 @@ function InvoicesPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h1 className="text-sm font-medium">{t("billing.invoices.title")}</h1>
+        <h1 className="text-sm font-medium">{t("common.invoices")}</h1>
         {canCreateInvoice && (
           <Link
             params={{ workspaceId }}

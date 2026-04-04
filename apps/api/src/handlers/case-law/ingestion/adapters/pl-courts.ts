@@ -596,7 +596,10 @@ export const plCourtsAdapter: SourceAdapter = {
             signal,
             AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
           ]),
-          headers: { Accept: "application/json", "User-Agent": INGESTION_USER_AGENT },
+          headers: {
+            Accept: "application/json",
+            "User-Agent": INGESTION_USER_AGENT,
+          },
         },
       );
 

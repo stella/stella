@@ -61,7 +61,7 @@ function Sessions() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-lg font-semibold">{t("account.sessions.title")}</h2>
+        <h2 className="text-lg font-semibold">{t("common.sessions")}</h2>
         <p className="text-muted-foreground text-sm">
           {t("account.sessions.description")}
         </p>
@@ -172,7 +172,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
       size="xs"
       variant="ghost"
     >
-      {t("account.sessions.revokeSession")}
+      {t("common.signOut")}
     </Button>
   );
 };

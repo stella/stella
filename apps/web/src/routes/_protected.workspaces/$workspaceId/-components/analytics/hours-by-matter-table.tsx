@@ -17,6 +17,7 @@ export const HoursByMatterTable = ({
   dateTo,
 }: HoursByMatterTableProps) => {
   const t = useTranslations("analytics");
+  const rootT = useTranslations();
   const { data } = useSuspenseQuery(
     hoursByMatterOptions(workspaceId, {
       dateFrom,
@@ -36,7 +37,7 @@ export const HoursByMatterTable = ({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-start">
-                <th className="pb-2 font-medium">{t("matter")}</th>
+                <th className="pb-2 font-medium">{rootT("common.matter")}</th>
                 <th className="pb-2 text-right font-medium">
                   {t("totalHours")}
                 </th>

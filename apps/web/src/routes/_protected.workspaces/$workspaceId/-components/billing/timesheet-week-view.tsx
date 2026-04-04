@@ -138,7 +138,7 @@ export const TimesheetWeekView = ({
         <thead>
           <tr>
             <th className="bg-background sticky start-0 z-10 px-3 py-2 text-start font-medium">
-              {t("billing.matter")}
+              {t("common.matter")}
             </th>
             {days.map((day) => {
               const d = new Date(`${day}T00:00:00`);

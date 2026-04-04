@@ -34,7 +34,7 @@ const LoadingFallback = () => (
 );
 
 function AnalyticsPage() {
-  const t = useTranslations("analytics");
+  const rootT = useTranslations();
   const workspaceId = Route.useParams({ select: (p) => p.workspaceId });
   const defaults = getDefaultRange();
   const [dateFrom, setDateFrom] = useState(defaults.dateFrom);
@@ -43,7 +43,7 @@ function AnalyticsPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-lg font-semibold">{t("title")}</h1>
+        <h1 className="text-lg font-semibold">{rootT("common.analytics")}</h1>
         <DateRangeFilter
           dateFrom={dateFrom}
           dateTo={dateTo}

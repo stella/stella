@@ -1525,7 +1525,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   }}
                 >
                   <MonitorSmartphoneIcon />
-                  {t("navigation.sessions")}
+                  {t("common.sessions")}
                 </MenuItem>
                 {isDev && <DevSidebarGroup />}
                 <MenuSeparator />
@@ -1534,7 +1534,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   onClick={() => signOut.mutate()}
                 >
                   <LogOutIcon />
-                  {t("auth.signOut")}
+                  {t("common.signOut")}
                 </MenuItem>
               </MenuPopup>
             </Menu>

@@ -147,7 +147,7 @@ export const TimeEntryForm = ({
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label>{t("billing.matter")}</Label>
+        <Label>{t("common.matter")}</Label>
         <form.Field name="matterId">
           {(field) => (
             <MatterCombobox

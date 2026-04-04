@@ -84,7 +84,7 @@ const searchSchema = v.strictObject({
 
 export const Route = createFileRoute("/_protected/organization")({
   head: () => ({
-    meta: [{ title: pageTitle("navigation.organization") }],
+    meta: [{ title: pageTitle("common.organization") }],
   }),
   beforeLoad: async ({ context }) => {
     const role = await context.queryClient.ensureQueryData(roleOptions);
@@ -240,7 +240,7 @@ const SettingsDialog = () => {
             <form.Field name="name">
               {(field) => (
                 <Field name={field.name}>
-                  <FieldLabel>{t("auth.organizationNameLabel")}</FieldLabel>
+                  <FieldLabel>{t("common.organizationName")}</FieldLabel>
                   <Input
                     autoFocus
                     onBlur={field.handleBlur}
@@ -260,11 +260,11 @@ const SettingsDialog = () => {
             <form.Field name="slug">
               {(field) => (
                 <Field name={field.name}>
-                  <FieldLabel>{t("auth.slugLabel")}</FieldLabel>
+                  <FieldLabel>{t("common.urlIdentifier")}</FieldLabel>
                   <Input
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder={t("auth.slugPlaceholder")}
+                    placeholder={t("common.urlIdentifierPlaceholder")}
                     required
                     value={field.state.value}
                   />
