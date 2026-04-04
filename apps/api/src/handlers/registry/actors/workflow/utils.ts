@@ -11,7 +11,10 @@ import type { workflowActor } from "@/api/handlers/registry/actors/workflow/acto
 import type { PropertyBatch } from "@/api/handlers/registry/actors/workflow/get-execution-plan";
 import { defaultWorkflowState } from "@/api/handlers/registry/actors/workflow/schema";
 import type { WorkflowActionSchemas } from "@/api/handlers/registry/actors/workflow/schema";
-import { broadcastEvent, resetActorState } from "@/api/handlers/registry/utils";
+import {
+  broadcastEvent,
+  resetActorState,
+} from "@/api/handlers/registry/runtime-utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { captureActorError } from "@/api/lib/errors/actions";
 import type { CaptureActorErrorProps } from "@/api/lib/errors/actions";

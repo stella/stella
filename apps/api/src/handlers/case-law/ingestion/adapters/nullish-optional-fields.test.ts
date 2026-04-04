@@ -177,18 +177,18 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.sourceRaw).toContain('"verdictText":"Vyrok"');
   });
 
-  test("PL Courts accepts null optional objects on otherwise valid items", async () => {
+  test("PL Courts accepts null optional detail fields and maps local decision type", async () => {
     mockFetchWithBodies([
       {
-        pattern: "/api/search/judgments",
+        pattern: "/api/dump/judgments",
         body: JSON.stringify({
           items: [
             {
               id: 1,
               courtType: "COMMON",
               courtCases: [{ caseNumber: "II AKa 10/24" }],
-              judgmentType: "WYROK",
-              judgmentDate: "2024-01-02",
+              judgmentType: "SENTENCE",
+              judgmentDate: "3024-01-02",
               judges: null,
               keywords: null,
               division: null,
@@ -196,7 +196,47 @@ describe("case-law adapter nullish optionals", () => {
               ecli: "ECLI:PL:TEST",
             },
           ],
-          info: { totalResults: 1 },
+        }),
+      },
+      {
+        pattern: "/api/judgments/1",
+        body: JSON.stringify({
+          data: {
+            id: 1,
+            courtType: "COMMON",
+            courtCases: [{ caseNumber: "II AKa 10/24" }],
+            judgmentType: "SENTENCE",
+            judgmentDate: "3024-01-02",
+            textContent:
+              "<p>Sygn. akt II AKa 10/24</p><h2>WYROK</h2>" +
+              "<p>Dnia 2 stycznia 2024 r.</p><h2>UZASADNIENIE</h2>" +
+              "<p>Treść uzasadnienia.</p>",
+            keywords: null,
+            division: {
+              id: 11,
+              name: "II Wydział Karny",
+              court: {
+                id: 22,
+                name: "Sąd Apelacyjny w Krakowie",
+              },
+            },
+            source: {
+              judgmentUrl: "https://orzeczenia.ms.gov.pl/example",
+              judgmentId: "judgment-1",
+            },
+            ecli: "ECLI:PL:TEST",
+            courtReporters: null,
+            decision: null,
+            summary: null,
+            legalBases: null,
+            referencedRegulations: null,
+            referencedCourtCases: null,
+            receiptDate: null,
+            meansOfAppeal: null,
+            judgmentResult: null,
+            lowerCourtJudgments: null,
+            dissentingOpinions: [],
+          },
         }),
       },
     ]);
@@ -206,7 +246,356 @@ describe("case-law adapter nullish optionals", () => {
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("II AKa 10/24");
-    expect(decision?.court).toBe("Common Court");
+    expect(decision?.court).toBe("Sąd Apelacyjny w Krakowie");
+    expect(decision?.decisionType).toBe("wyrok");
+    expect(decision?.decisionDate).toBe("2024-01-02");
+    expect(decision?.metadata).toMatchObject({
+      dissentingOpinions: [],
+    });
+    expect(decision?.sourceRaw).toContain('"dumpItem"');
+    expect(decision?.sourceRaw).toContain('"detail"');
+  });
+
+  test("PL Courts localizes fallback court names when detail court is missing", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/api/dump/judgments",
+        body: JSON.stringify({
+          items: [
+            {
+              id: 2,
+              courtType: "CONSTITUTIONAL_TRIBUNAL",
+              courtCases: [{ caseNumber: "U 1/86" }],
+              judgmentType: "DECISION",
+              judgmentDate: "1986-01-03",
+            },
+          ],
+        }),
+      },
+      {
+        pattern: "/api/judgments/2",
+        body: JSON.stringify({
+          data: {
+            id: 2,
+            courtType: "CONSTITUTIONAL_TRIBUNAL",
+            courtCases: [{ caseNumber: "U 1/86" }],
+            judgmentType: "DECISION",
+            judgmentDate: "1986-01-03",
+            textContent:
+              "Postanowienie\n\nSygn. akt U 1/86\n\npostanawia:\n\numorzyć postępowanie.",
+          },
+        }),
+      },
+    ]);
+
+    const result = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    const decision = result.unwrap().decisions[0];
+    expect(decision?.court).toBe("Trybunał Konstytucyjny");
+    expect(decision?.decisionType).toBe("postanowienie");
+  });
+
+  test("PL Courts falls back to the dump item when a detail request times out", async () => {
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+
+        if (url.includes("/api/dump/judgments")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 3,
+                  courtType: "COMMON",
+                  courtCases: [{ caseNumber: "III K 3/24" }],
+                  judgmentType: "DECISION",
+                  judgmentDate: "2024-04-03",
+                  textContent:
+                    "Postanowienie\n\nSygn. akt III K 3/24\n\npostanawia:\n\nutrzymać w mocy.",
+                },
+              ],
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        if (url.includes("/api/judgments/3")) {
+          throw new DOMException("Timed out", "TimeoutError");
+        }
+
+        return new Response("Not found", { status: 404 });
+      },
+      {
+        preconnect: originalFetch.preconnect.bind(originalFetch),
+      },
+    ) as typeof fetch;
+
+    const result = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    const decision = result.unwrap().decisions[0];
+    expect(decision?.caseNumber).toBe("III K 3/24");
+    expect(decision?.court).toBe("Sąd powszechny");
+    expect(decision?.decisionType).toBe("postanowienie");
+    expect(decision?.sourceRaw).toContain('"detail":null');
+  });
+
+  test("PL Courts falls back to dump identity fields when detail is sparse", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/api/dump/judgments",
+        body: JSON.stringify({
+          items: [
+            {
+              id: 4,
+              courtType: "COMMON",
+              courtCases: [{ caseNumber: "IV Ka 4/24" }],
+              judgmentType: "DECISION",
+              judgmentDate: "2024-04-04",
+              keywords: ["dump-keyword"],
+              division: {
+                id: 41,
+                name: "IV Wydział Karny Odwoławczy",
+                court: {
+                  id: 42,
+                  name: "Sąd Okręgowy w Gliwicach",
+                },
+              },
+            },
+          ],
+        }),
+      },
+      {
+        pattern: "/api/judgments/4",
+        body: JSON.stringify({
+          data: {
+            id: 4,
+            courtType: "COMMON",
+            courtCases: null,
+            division: null,
+            judgmentType: null,
+            judgmentDate: null,
+            keywords: null,
+            textContent:
+              "Postanowienie\n\nSygn. akt IV Ka 4/24\n\npostanawia:\n\nuchylić zaskarżone postanowienie.",
+          },
+        }),
+      },
+    ]);
+
+    const result = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    const decision = result.unwrap().decisions[0];
+    expect(decision?.caseNumber).toBe("IV Ka 4/24");
+    expect(decision?.court).toBe("Sąd Okręgowy w Gliwicach");
+    expect(decision?.decisionType).toBe("postanowienie");
+    expect(decision?.metadata).toMatchObject({
+      courtCases: [{ caseNumber: "IV Ka 4/24" }],
+      keywords: ["dump-keyword"],
+    });
+  });
+
+  test("PL Courts keeps rawHash stable when detail fetch availability changes", async () => {
+    let detailMode: "ok" | "timeout" = "ok";
+
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+
+        if (url.includes("/api/dump/judgments")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 5,
+                  courtType: "COMMON",
+                  courtCases: [{ caseNumber: "V K 5/24" }],
+                  judgmentType: "DECISION",
+                  judgmentDate: "2024-05-05",
+                  textContent:
+                    "Postanowienie\n\nSygn. akt V K 5/24\n\npostanawia:\n\noddalić wniosek.",
+                },
+              ],
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        if (url.includes("/api/judgments/5")) {
+          if (detailMode === "timeout") {
+            throw new DOMException("Timed out", "TimeoutError");
+          }
+
+          return new Response(
+            JSON.stringify({
+              data: {
+                id: 5,
+                courtType: "COMMON",
+                courtCases: [{ caseNumber: "V K 5/24" }],
+                judgmentType: "DECISION",
+                judgmentDate: "2024-05-05",
+                textContent:
+                  "<p>Sygn. akt V K 5/24</p><p>Postanowienie oddalające wniosek.</p>",
+              },
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        return new Response("Not found", { status: 404 });
+      },
+      {
+        preconnect: originalFetch.preconnect.bind(originalFetch),
+      },
+    ) as typeof fetch;
+
+    const first = await plCourtsAdapter.fetchPage(null, {});
+    detailMode = "timeout";
+    const second = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(first.isOk()).toBe(true);
+    expect(second.isOk()).toBe(true);
+    expect(first.unwrap().decisions[0]?.rawHash).toBe(
+      second.unwrap().decisions[0]?.rawHash,
+    );
+  });
+
+  test("PL Courts falls back to the dump item when detail JSON is malformed", async () => {
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+
+        if (url.includes("/api/dump/judgments")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 6,
+                  courtType: "COMMON",
+                  courtCases: [{ caseNumber: "VI K 6/24" }],
+                  judgmentType: "DECISION",
+                  judgmentDate: "2024-06-06",
+                  textContent:
+                    "Postanowienie\n\nSygn. akt VI K 6/24\n\npostanawia:\n\numarzyć postępowanie.",
+                },
+              ],
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        if (url.includes("/api/judgments/6")) {
+          return new Response("{broken", {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response("Not found", { status: 404 });
+      },
+      {
+        preconnect: originalFetch.preconnect.bind(originalFetch),
+      },
+    ) as typeof fetch;
+
+    const result = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    const decision = result.unwrap().decisions[0];
+    expect(decision?.caseNumber).toBe("VI K 6/24");
+    expect(decision?.sourceRaw).toContain('"detail":null');
+  });
+
+  test("PL Courts sends the shared ingestion User-Agent on detail requests", async () => {
+    let detailUserAgent: string | null = null;
+
+    globalThis.fetch = Object.assign(
+      async (
+        input: string | URL | Request,
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+
+        if (url.includes("/api/dump/judgments")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 7,
+                  courtType: "COMMON",
+                  courtCases: [{ caseNumber: "VII K 7/24" }],
+                  judgmentType: "DECISION",
+                  judgmentDate: "2024-07-07",
+                  textContent: "Postanowienie\n\nSygn. akt VII K 7/24",
+                },
+              ],
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        if (url.includes("/api/judgments/7")) {
+          detailUserAgent = new Headers(init?.headers).get("User-Agent");
+
+          return new Response(
+            JSON.stringify({
+              data: {
+                id: 7,
+                courtType: "COMMON",
+                courtCases: [{ caseNumber: "VII K 7/24" }],
+                judgmentType: "DECISION",
+                judgmentDate: "2024-07-07",
+                textContent: "<p>Sygn. akt VII K 7/24</p>",
+              },
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        return new Response("Not found", { status: 404 });
+      },
+      {
+        preconnect: originalFetch.preconnect.bind(originalFetch),
+      },
+    ) as typeof fetch;
+
+    const result = await plCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    expect(detailUserAgent).toBeTruthy();
   });
 
   test("SK Courts accepts null detail optionals without losing the decision", async () => {
@@ -255,5 +644,9 @@ describe("case-law adapter nullish optionals", () => {
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("1Cdo/1/2024");
     expect(decision?.ecli).toBe("ECLI:SK:TEST");
+  });
+
+  test("PL Courts uses the extended page timeout budget for sequential detail fetches", () => {
+    expect(plCourtsAdapter.pageTimeoutMs).toBe(280_000);
   });
 });

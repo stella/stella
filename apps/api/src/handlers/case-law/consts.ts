@@ -18,7 +18,7 @@ export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
  * changes. Stale decisions (parserVersion < PARSER_VERSION)
  * are re-parsed lazily from sourceRaw on next user access.
  */
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 
 /** Maximum number of pages to sync per invocation. */
 export const MAX_SYNC_PAGES = 100;

@@ -34,6 +34,7 @@ with the richest structure:
 | CZ-NSS      | `/Text/{id}` (UTF-16LE plain)             | `/DokumentOriginal/Html/{id}` (Aspose HTML)                            | HTML preserves paragraphs, bold, headings      |
 | CZ-ÚS       | `DocContent` table cell (crammed HTML)    | `docContentHidden` hidden field (RTF)                                  | RTF has `\par` paragraph breaks; HTML has none |
 | CZ-Regional | `verdictText`/`justificationText` (plain) | `header[]`/`verdict[]`/`justification[]` (structured JSON with styles) | JSON preserves anonymization spans             |
+| PL-SAOS     | `/api/search/judgments` list items        | `/api/dump/judgments` + `/api/judgments/{id}`                          | Detail API has rich HTML, citations, metadata  |
 
 Before writing a new adapter, spend time exploring the court's
 website. Check hidden fields, print views, API variants,

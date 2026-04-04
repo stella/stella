@@ -182,7 +182,10 @@ const caseLawAdminRoute = new Elysia({
     }
     return;
   })
-  .get("/ingestion/status",  async (ctx) => getIngestionStatus(ctx.scopedDb));
+  .get(
+    "/ingestion/status",
+    async (ctx) => await getIngestionStatus(ctx.scopedDb),
+  );
 
 export const caseLawRoute = new Elysia()
   .use(globalCaseLawRoute)
