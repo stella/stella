@@ -23,6 +23,10 @@ const SOURCES: Record<string, string> = {
   Oxlint: "https://oxc.rs/llms.txt",
 };
 
+const HOST_ALIASES: Record<string, string[]> = {
+  "bun.sh": ["bun.com", "www.bun.com"],
+};
+
 const DOC_FETCH_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESULTS = 3;
 const MAX_RESULTS_LIMIT = 10;
@@ -75,7 +79,10 @@ server.tool(
 );
 
 const ALLOWED_HOSTS = new Set(
-  Object.values(SOURCES).map((u) => new URL(u).hostname),
+  Object.values(SOURCES).flatMap((u) => {
+    const host = new URL(u).hostname;
+    return [host, ...(HOST_ALIASES[host] ?? [])];
+  }),
 );
 
 const normalizeText = (value: string) =>

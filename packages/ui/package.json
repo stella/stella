@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
-    "@types/node": "catalog:react19",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
