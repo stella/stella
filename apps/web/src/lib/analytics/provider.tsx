@@ -33,10 +33,15 @@ export const AnalyticsProvider = ({ children }: PropsWithChildren) => {
     host: env.VITE_POSTHOG_HOST,
     key: env.VITE_POSTHOG_KEY,
   };
+  if (valueRef.current === null) {
+    const shouldEnablePostHog =
+      hasPostHogConfig(posthogConfig) &&
+      (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
 
-  valueRef.current ??= hasPostHogConfig(posthogConfig)
-    ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
-    : { analytics: noopAnalytics, client: null };
+    valueRef.current = shouldEnablePostHog
+      ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
+      : { analytics: noopAnalytics, client: null };
+  }
   const value = valueRef.current;
 
   useLayoutEffect(() => {

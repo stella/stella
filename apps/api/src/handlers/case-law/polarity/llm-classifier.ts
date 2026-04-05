@@ -14,6 +14,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { getModelForRole } from "@/api/lib/ai-models";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 import type { Polarity } from "./consts";
@@ -65,8 +66,16 @@ export const classifyWithLLM = async (
   citationText: string,
   language: string,
   abortSignal?: AbortSignal,
-): Promise<Result<ClassificationResult, WorkflowIntegrationError>> =>
-  await Result.tryPromise({
+): Promise<Result<ClassificationResult, WorkflowIntegrationError>> => {
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    feature: "case-law.polarity",
+    properties: {
+      language,
+    },
+    traceId: crypto.randomUUID(),
+  });
+
+  return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("fast"),
@@ -94,6 +103,7 @@ ${context}`,
         abortSignal: abortSignal
           ? AbortSignal.any([abortSignal, AbortSignal.timeout(15_000)])
           : AbortSignal.timeout(15_000),
+        ...aiAnalytics.stepCallbacks,
       });
 
       return {
@@ -105,9 +115,13 @@ ${context}`,
         confidence: result.output.confidence,
       };
     },
-    catch: (error) =>
-      new WorkflowIntegrationError({
+    catch: (error) => {
+      aiAnalytics.captureError(error);
+
+      return new WorkflowIntegrationError({
         message: "Citation polarity LLM classification failed",
         cause: error,
-      }),
+      });
+    },
   });
+};

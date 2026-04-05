@@ -7,29 +7,34 @@ import {
 } from "@opentelemetry/sdk-logs";
 
 import { env } from "@/api/env";
+import { shouldEnablePostHog } from "@/api/lib/analytics/config";
 
 const POSTHOG_LOGS_PATH = "/i/v1/logs";
 
-const loggerProvider =
-  env.POSTHOG_HOST && env.POSTHOG_KEY
-    ? new LoggerProvider({
-        resource: resourceFromAttributes({
-          "service.name": "stella-api",
-          "service.namespace": "stella",
-          "deployment.environment": env.isDev ? "development" : "production",
-        }),
-        processors: [
-          new BatchLogRecordProcessor(
-            new OTLPLogExporter({
-              url: new URL(POSTHOG_LOGS_PATH, env.POSTHOG_HOST).toString(),
-              headers: {
-                Authorization: `Bearer ${env.POSTHOG_KEY}`,
-              },
-            }),
-          ),
-        ],
-      })
-    : null;
+const loggerProvider = shouldEnablePostHog({
+  isDev: env.isDev,
+  key: env.POSTHOG_KEY,
+  host: env.POSTHOG_HOST,
+  localDebug: env.POSTHOG_LOCAL_DEBUG,
+})
+  ? new LoggerProvider({
+      resource: resourceFromAttributes({
+        "service.name": "stella-api",
+        "service.namespace": "stella",
+        "deployment.environment": env.isDev ? "development" : "production",
+      }),
+      processors: [
+        new BatchLogRecordProcessor(
+          new OTLPLogExporter({
+            url: new URL(POSTHOG_LOGS_PATH, env.POSTHOG_HOST).toString(),
+            headers: {
+              Authorization: `Bearer ${env.POSTHOG_KEY}`,
+            },
+          }),
+        ),
+      ],
+    })
+  : null;
 
 if (loggerProvider) {
   logs.setGlobalLoggerProvider(loggerProvider);

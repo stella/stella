@@ -10,6 +10,8 @@ import {
 } from "@/api/handlers/registry/actors/b-box/ai-prompts";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 type GenerateBBoxDataProps = {
@@ -18,6 +20,10 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  justificationId: string;
+  organizationId: SafeId<"organization">;
+  pageNumber: number;
+  workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
 };
 
@@ -27,11 +33,27 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  justificationId,
+  organizationId,
+  pageNumber,
+  workspaceId,
   orgAIConfig,
 }: GenerateBBoxDataProps): Promise<
   Result<[number, number, number, number][], WorkflowIntegrationError>
-> =>
-  await Result.tryPromise({
+> => {
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    feature: "bbox.generate",
+    properties: {
+      justification_id: justificationId,
+      organization_id: organizationId,
+      page_number: pageNumber,
+      workspace_id: workspaceId,
+    },
+    sessionId: justificationId,
+    traceId: crypto.randomUUID(),
+  });
+
+  return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("pdf", orgAIConfig),
@@ -66,13 +88,18 @@ export const generateBBoxData = async ({
           } satisfies GoogleGenerativeAIProviderOptions,
         },
         abortSignal,
+        ...aiAnalytics.stepCallbacks,
       });
 
       return result.output;
     },
-    catch: (error) =>
-      new WorkflowIntegrationError({
+    catch: (error) => {
+      aiAnalytics.captureError(error);
+
+      return new WorkflowIntegrationError({
         message: "BBox AI generation failed",
         cause: error,
-      }),
+      });
+    },
   });
+};

@@ -1,6 +1,7 @@
 import { CancelledError } from "@tanstack/react-query";
 import { posthog } from "posthog-js";
 
+import { env } from "@/env";
 import type { Analytics } from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
 
@@ -15,11 +16,12 @@ export const createPostHogAnalytics = (
   key: string,
   host: string,
 ): { analytics: Analytics; client: typeof posthog | undefined } => {
+  const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
   const client = posthog.init(key, {
-    opt_out_capturing_by_default: import.meta.env.DEV,
+    opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
     api_host: host,
     defaults: "2025-05-24",
-    autocapture: false,
+    autocapture: localDebugEnabled,
     capture_exceptions: true,
     rageclick: true,
     capture_dead_clicks: true,
@@ -28,13 +30,13 @@ export const createPostHogAnalytics = (
     capture_heatmaps: true,
     capture_performance: true,
     capture_pageview: true,
-    disable_session_recording: import.meta.env.DEV,
+    disable_session_recording: import.meta.env.DEV && !localDebugEnabled,
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: "*",
     },
     before_send: (event) => {
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
       }
       return event;

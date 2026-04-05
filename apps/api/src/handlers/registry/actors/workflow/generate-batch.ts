@@ -173,12 +173,15 @@ export const generateBatch = async ({
 
     const output = yield* Result.await(
       generateWorkflowData({
+        entityVersionId,
         files: preparedFiles,
         properties: inputProperties,
         filenames,
         textInputs,
         abortSignal,
+        organizationId,
         orgAIConfig: orgAIConfig ?? null,
+        workspaceId,
       }),
     );
 

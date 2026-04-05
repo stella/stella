@@ -21,6 +21,8 @@ import { caseLawDecisions } from "@/api/db/schema";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { getModelForRole } from "@/api/lib/ai-models";
+import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 
 import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
@@ -63,6 +65,14 @@ ${decisionText}`;
       : "modelId" in model
         ? String(model.modelId)
         : "unknown";
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    feature: "case-law.analysis",
+    properties: {
+      decision_id: decisionId,
+    },
+    sessionId: decisionId,
+    traceId: crypto.randomUUID(),
+  });
 
   try {
     const result = streamText({
@@ -73,6 +83,10 @@ ${decisionText}`;
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
       abortSignal: AbortSignal.timeout(120_000),
+      ...aiAnalytics.stepCallbacks,
+      ...(aiAnalytics.onStreamError
+        ? { onError: aiAnalytics.onStreamError }
+        : {}),
     });
 
     // Assign stable IDs at push time so they don't change across persists
@@ -124,7 +138,9 @@ ${decisionText}`;
       .update(caseLawDecisions)
       .set({ analysis })
       .where(eq(caseLawDecisions.id, decisionId));
-  } catch {
+  } catch (error) {
+    captureError(error, { decisionId });
+    aiAnalytics.captureError(error);
     await rootDb
       .update(caseLawDecisions)
       .set({ analysis: null })
