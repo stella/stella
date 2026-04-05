@@ -53,6 +53,7 @@ import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { roleOptions } from "@/routes/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
+import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -300,7 +301,10 @@ function ProtectedContent({
             </>
           )}
           {activeDecisionId && (
-            <DecisionMetadataSheet decisionId={activeDecisionId} />
+            <>
+              <CaseSearchTrigger />
+              <DecisionMetadataSheet decisionId={activeDecisionId} />
+            </>
           )}
           {!rightOpen && !isOnChatRoute && (
             <>

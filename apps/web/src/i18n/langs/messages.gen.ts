@@ -493,6 +493,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
+    "previous": "Previous";
     "print": "Print";
     "properties": "Properties";
     "reconnecting": "Reconnecting…";
@@ -504,6 +505,7 @@ type Messages = {
     "save": "Save";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
+    "scrollToTop": "Scroll to top";
     "search": "Search...";
     "selectARole": "Select a role";
     "sessions": "Sessions";

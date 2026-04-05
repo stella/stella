@@ -25,10 +25,19 @@
 }
 
 /* Paper-like background for the reader.
-   Uses the semantic card token so it adapts to all
-   palette × theme combinations (neutral, nord, flexoki). */
+   Starts from the semantic card token so it adapts to all
+   palette × theme combinations (neutral, nord, flexoki) and
+   blends in a touch of the foreground so the paper stays
+   visually distinct from its surface even in the neutral
+   palette, where --card and --background both resolve to
+   white. Nord/Flexoki already separate card from background
+   and the extra blend here is effectively imperceptible. */
 .reader-paper {
-  background-color: var(--color-card);
+  background-color: color-mix(
+    in srgb,
+    var(--color-card) 99%,
+    var(--color-foreground)
+  );
 }
 
 /* Collapse gap between consecutive h3 sub-headings

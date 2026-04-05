@@ -21,6 +21,16 @@ void mock.module("@/api/db/scoped", () => ({
   // eslint-disable-next-line no-empty-function
   createScopedDb: () => async () => {},
 }));
+void mock.module("@/api/lib/root-scoped-db", () => ({
+  // eslint-disable-next-line no-empty-function
+  createRootScopedDb: () => async () => {},
+}));
+void mock.module("@/api/handlers/registry/utils", () => ({
+  // eslint-disable-next-line no-empty-function
+  broadcastEvent: () => {},
+  // eslint-disable-next-line no-empty-function
+  resetActorState: () => {},
+}));
 
 const { evaluateCondition, prepareBatch } =
   await import("@/api/handlers/registry/actors/workflow/utils");

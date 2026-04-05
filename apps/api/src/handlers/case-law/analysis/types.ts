@@ -57,7 +57,13 @@ export const analysisAnnotationSchema = v.object({
   summary: v.pipe(v.string(), v.minLength(1)),
   startAnchorId: v.string(),
   endAnchorId: v.string(),
-  textSnippet: v.pipe(v.string(), v.maxLength(200)),
+  // No length constraint: the prompt asks for short snippets,
+  // but models routinely over-shoot — and ai-sdk's array output
+  // silently drops any element whose nested validation fails,
+  // which would collapse the whole heading (and any sibling
+  // headings scanned in the same stream). Accept what the model
+  // gives us; the UI truncates for display.
+  textSnippet: v.string(),
 });
 
 // Flat heading schema for AI output (no recursive children).
