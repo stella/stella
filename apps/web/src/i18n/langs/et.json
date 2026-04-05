@@ -73,6 +73,9 @@
     "continueWithEmail": "Jätka",
     "continueWithGoogle": "Jätka Google'iga",
     "continueWithMicrosoft": "Jätka Microsoftiga",
+    "createFirstOrganization": "Alustamiseks looge oma esimene organisatsioon",
+    "createOrganization": "Loo organisatsioon",
+    "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
     "enterTheCode": "Sisestage kood",
     "headline": "Selgus igas asjas.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "verify": "Kinnita"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Esineb osapoolena ka {count, plural, one {# teises toimikus} other {# teises toimikus}}",

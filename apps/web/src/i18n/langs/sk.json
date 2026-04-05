@@ -73,6 +73,9 @@
     "continueWithEmail": "Pokračovať",
     "continueWithGoogle": "Pokračovať cez Google",
     "continueWithMicrosoft": "Pokračovať cez Microsoft",
+    "createFirstOrganization": "Vytvorte svoju prvú organizáciu",
+    "createOrganization": "Vytvoriť organizáciu",
+    "createOrganizationButton": "Vytvoriť organizáciu",
     "emailPlaceholder": "vy@example.com",
     "enterTheCode": "Zadajte kód",
     "headline": "Jasno v každom prípade.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "moja-organizacia",
     "user": "Používateľ",
     "verify": "Overiť"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",

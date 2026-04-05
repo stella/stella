@@ -1,15 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
-
-// Stub env before importing ai-models.ts, which reads env at
-// module level for MODEL_OVERRIDES.
-void mock.module("@/api/env", () => ({
-  env: {
-    AI_MODEL_FAST: undefined,
-    AI_MODEL_CHAT: undefined,
-    AI_MODEL_REASONING: undefined,
-    AI_MODEL_PDF: undefined,
-  },
-}));
+import { describe, expect, test } from "bun:test";
 
 const { REGIONAL_PROVIDERS, supportsRegion } =
   await import("@/api/lib/ai-models");

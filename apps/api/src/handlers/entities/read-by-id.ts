@@ -15,7 +15,7 @@ type ReadEntityByIdHandlerProps = {
   entityId: string;
 };
 
-const readEntityByIdHandler = async ({
+export const readEntityByIdHandler = async ({
   scopedDb,
   workspaceId,
   entityId,

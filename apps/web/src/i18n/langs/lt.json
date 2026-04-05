@@ -73,6 +73,9 @@
     "continueWithEmail": "Tęsti",
     "continueWithGoogle": "Tęsti su Google",
     "continueWithMicrosoft": "Tęsti su Microsoft",
+    "createFirstOrganization": "Sukurkite savo pirmąją organizaciją",
+    "createOrganization": "Sukurti organizaciją",
+    "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "enterTheCode": "Įveskite kodą",
     "headline": "Aiškumas kiekvienai bylai.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "verify": "Patvirtinti"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",

@@ -4,6 +4,7 @@ import type { PropsWithChildren } from "react";
 import { PostHogProvider } from "@posthog/react";
 
 import { env } from "@/env";
+import { hasPostHogConfig } from "@/lib/analytics/config";
 import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
@@ -28,10 +29,14 @@ type AnalyticsValue = {
 
 export const AnalyticsProvider = ({ children }: PropsWithChildren) => {
   const valueRef = useRef<AnalyticsValue | null>(null);
-  valueRef.current ??=
-    env.VITE_POSTHOG_KEY && env.VITE_POSTHOG_HOST
-      ? createPostHogAnalytics(env.VITE_POSTHOG_KEY, env.VITE_POSTHOG_HOST)
-      : { analytics: noopAnalytics, client: null };
+  const posthogConfig = {
+    host: env.VITE_POSTHOG_HOST,
+    key: env.VITE_POSTHOG_KEY,
+  };
+
+  valueRef.current ??= hasPostHogConfig(posthogConfig)
+    ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
+    : { analytics: noopAnalytics, client: null };
   const value = valueRef.current;
 
   useLayoutEffect(() => {

@@ -1,9 +1,12 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
+import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import {
   bearer,
   emailOTP,
+  jwt,
   lastLoginMethod,
   organization,
 } from "better-auth/plugins";
@@ -25,10 +28,22 @@ import { identify } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
+import {
+  getMcpResourceUrl,
+  MCP_OAUTH_SCOPES,
+  MCP_RESOURCE_SCOPES,
+} from "@/api/mcp/constants";
+
+/** Access token lifetime in seconds (15 minutes). */
+const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
+
+/** Refresh token lifetime in seconds (30 days). */
+const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -53,17 +68,39 @@ const validateTimezoneId = (timezoneId: unknown): void => {
   }
 };
 
+const getSessionActiveOrganizationId = (
+  session: unknown,
+): string | undefined => {
+  if (typeof session !== "object" || session === null) {
+    return undefined;
+  }
+
+  if (!("activeOrganizationId" in session)) {
+    return undefined;
+  }
+
+  const value = session.activeOrganizationId;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+};
+
+const isMcpResourceScope = (
+  scope: string,
+): scope is (typeof MCP_RESOURCE_SCOPES)[number] =>
+  (MCP_RESOURCE_SCOPES as readonly string[]).includes(scope);
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `db`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-const createAuth = () =>
-  betterAuth({
+const createAuth = () => {
+  const auth = betterAuth({
     trustedOrigins: [
       env.FRONTEND_URL,
       ...(env.isDev ? ["chrome-extension://*"] : []),
+      ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
     ],
+    disabledPaths: ["/token"],
     user: {
       additionalFields: {
         timezoneId: {
@@ -76,6 +113,7 @@ const createAuth = () =>
     session: {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
+      storeSessionInDatabase: true,
     },
     advanced: {
       useSecureCookies: !env.isDev,
@@ -178,6 +216,7 @@ const createAuth = () =>
     },
     plugins: [
       bearer(),
+      jwt(),
       lastLoginMethod(),
       emailOTP({
         async sendVerificationOTP({ email, otp, type }, ctx) {
@@ -226,8 +265,75 @@ const createAuth = () =>
           });
         },
       }),
+      // SAFETY: The oauth-provider plugin's generated OpenAPI metadata
+      // is still slightly too wide for Better Auth's plugin type here.
+      // The runtime plugin value is valid for betterAuth().
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      oauthProvider({
+        loginPage: "/auth",
+        consentPage: "/consent",
+        scopes: [...MCP_OAUTH_SCOPES],
+        validAudiences: [getMcpResourceUrl()],
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+        refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+        clientReference: ({ session }) =>
+          getSessionActiveOrganizationId(session),
+        postLogin: {
+          page: "/auth/organization",
+          shouldRedirect: async ({
+            headers,
+            scopes,
+            session,
+          }): Promise<boolean> => {
+            const needsOrganization = scopes.some(isMcpResourceScope);
+            if (!needsOrganization) {
+              return false;
+            }
+
+            const organizations: { id: string }[] =
+              await auth.api.listOrganizations({
+                headers,
+              });
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
+
+            return (
+              organizations.length !== 1 ||
+              organizations.at(0)?.id !== activeOrganizationId
+            );
+          },
+          consentReferenceId: ({ scopes, session }) => {
+            const needsOrganization = scopes.some(isMcpResourceScope);
+            if (!needsOrganization) {
+              return;
+            }
+
+            const activeOrganizationId =
+              getSessionActiveOrganizationId(session);
+            if (!activeOrganizationId) {
+              throw new APIError("BAD_REQUEST", {
+                error: "set_organization",
+                message:
+                  "An organization must be selected before granting Stella MCP access",
+              });
+            }
+
+            return activeOrganizationId;
+          },
+        },
+        customAccessTokenClaims: ({ referenceId }) => ({
+          org_id: referenceId,
+        }),
+        silenceWarnings: {
+          oauthAuthServerConfig: true,
+        },
+      }) as BetterAuthPlugin,
     ],
   });
+  return auth;
+};
 
 let _auth: ReturnType<typeof createAuth> | undefined;
 
@@ -239,7 +345,7 @@ export const getAuth = () => {
   return _auth;
 };
 
-type MemberRole = keyof typeof roles;
+export type MemberRole = keyof typeof roles;
 
 export const getSessionAndMemberRole = async (
   headers: Headers | Record<string, string>,

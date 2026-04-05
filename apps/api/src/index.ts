@@ -4,6 +4,8 @@ import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
 import { analyticsRoute } from "@/api/handlers/analytics/routes";
+import { authMetadataRoute } from "@/api/handlers/auth/routes";
+import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
@@ -19,6 +21,7 @@ import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
@@ -36,6 +39,7 @@ import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
+import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -141,6 +145,7 @@ const api = new Elysia()
         const origins: (string | RegExp)[] = [env.FRONTEND_URL];
         if (env.isDev) {
           origins.push(/^chrome-extension:\/\//);
+          origins.push(...DEV_INSPECTOR_ORIGINS);
         }
         if (env.EXTENSION_ORIGIN) {
           origins.push(env.EXTENSION_ORIGIN);
@@ -149,7 +154,12 @@ const api = new Elysia()
       })(),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization", SESSION_ID_HEADER],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "MCP-Protocol-Version",
+        SESSION_ID_HEADER,
+      ],
       exposeHeaders: ["set-auth-token"],
     }),
   )
@@ -243,8 +253,11 @@ const api = new Elysia()
       });
     }
   })
+  .use(authUiRoute)
+  .use(authMetadataRoute)
   .use(healthRoute)
   .use(verifyRoute)
+  .use(mcpRoute)
   .mount(getAuth().handler)
   .group("/v1", (app) =>
     app
