@@ -44,6 +44,8 @@
     "@stella/rivet": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/transactional": "workspace:*",
+    "@stll/anonymize-data": "^0.0.4",
+    "@stll/anonymize-wasm": "^0.1.4",
     "@t3-oss/env-core": "catalog:",
     "ai": "^6.0.141",
     "better-auth": "catalog:",

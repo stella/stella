@@ -1,10 +1,11 @@
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import type { McpMode } from "@/api/mcp/constants";
 import {
+  getMcpResourceScopes,
   getMcpProtectedResourceMetadataUrl,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
-  MCP_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 
 export const createMcpMetadataHeaders = () =>
@@ -25,12 +26,12 @@ export const createMcpCorsHeaders = () =>
     "Access-Control-Max-Age": "86400",
   });
 
-export const getMcpProtectedResourceMetadata = () => ({
-  resource: getMcpResourceUrl(),
+export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
+  resource: getMcpResourceUrl(mode),
   authorization_servers: [getAuthIssuerUrl()],
-  scopes_supported: [...MCP_RESOURCE_SCOPES],
+  scopes_supported: [...getMcpResourceScopes(mode)],
   bearer_methods_supported: ["header"],
 });
 
-export const getMcpWwwAuthenticateHeader = () =>
-  `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl()}"`;
+export const getMcpWwwAuthenticateHeader = (mode: McpMode = "default") =>
+  `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl(mode)}"`;

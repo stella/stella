@@ -18,6 +18,16 @@ describe("extractMcpSession", () => {
     });
   });
 
+  test("uses the anonymized MCP resource audience for anonymized verification", () => {
+    expect(getMcpAccessTokenVerificationOptions("anonymized")).toEqual({
+      jwksUrl: `${getAuthIssuerUrl()}/jwks`,
+      verifyOptions: {
+        audience: getMcpResourceUrl("anonymized"),
+        issuer: getAuthIssuerUrl(),
+      },
+    });
+  });
+
   test("builds an MCP session from OAuth resource token claims", () => {
     expect(
       extractMcpSession({

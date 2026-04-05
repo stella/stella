@@ -98,6 +98,7 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(401);
     expect(await response.text()).toBe("Invalid or expired token");
     expect(captureErrorMock).toHaveBeenCalledWith(error, {
+      mode: "default",
       phase: "transport",
       source: "mcp",
     });
