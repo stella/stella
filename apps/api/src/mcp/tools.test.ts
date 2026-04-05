@@ -4,6 +4,7 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 
+const anonymizeTextFieldsMock = mock();
 const captureErrorMock = mock();
 const identifyMock = mock();
 const searchAcrossMattersExecute = mock();
@@ -15,6 +16,10 @@ const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/, "");
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
   identify: identifyMock,
+}));
+
+void mock.module("@/api/mcp/anonymization", () => ({
+  anonymizeTextFields: anonymizeTextFieldsMock,
 }));
 
 void mock.module("@/api/handlers/registry/actors/chat-tools", () => ({
@@ -105,6 +110,7 @@ const createContext = ({
 
 describe("OpenAI-compatible MCP tools", () => {
   beforeEach(() => {
+    anonymizeTextFieldsMock.mockReset();
     captureErrorMock.mockReset();
     identifyMock.mockReset();
     searchAcrossMattersExecute.mockReset();
@@ -126,6 +132,13 @@ describe("OpenAI-compatible MCP tools", () => {
       },
       required: ["query"],
     });
+  });
+
+  test("lists only search and fetch for anonymized mode", () => {
+    expect(listMcpTools("anonymized").map((tool) => tool.name)).toEqual([
+      "search",
+      "fetch",
+    ]);
   });
 
   test("returns only fetchable documents with canonical document URLs", async () => {
@@ -253,6 +266,280 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     ]);
     expect(readEntityByIdHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("search anonymizes titles in anonymized mode", async () => {
+    searchAcrossMattersExecute.mockResolvedValue({
+      hits: [
+        {
+          entityId: "entity_1",
+          workspaceId: "ws_1",
+          name: "John Smith SPA",
+        },
+      ],
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[PERSON_1] SPA"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { query: "john smith" },
+      context: createContext({
+        scopedDb: createScopedDb([
+          {
+            entityId: "entity_1",
+            fieldId: "field_1",
+            workspaceId: "ws_1",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "search",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      results: [
+        {
+          id: "entity_1",
+          title: "[PERSON_1] SPA",
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+        },
+      ],
+    });
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledWith({
+      fields: ["John Smith SPA"],
+      workspaceId: "ws_1",
+    });
+  });
+
+  test("search preserves empty anonymized output instead of leaking the original title", async () => {
+    searchAcrossMattersExecute.mockResolvedValue({
+      hits: [
+        {
+          entityId: "entity_1",
+          workspaceId: "ws_1",
+          name: "John Smith",
+        },
+      ],
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: [""],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { query: "john smith" },
+      context: createContext({
+        scopedDb: createScopedDb([
+          {
+            entityId: "entity_1",
+            fieldId: "field_1",
+            workspaceId: "ws_1",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "search",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      results: [
+        {
+          id: "entity_1",
+          title: "",
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+        },
+      ],
+    });
+  });
+
+  test("search uses a generic placeholder when anonymized fields are unexpectedly missing", async () => {
+    searchAcrossMattersExecute.mockResolvedValue({
+      hits: [
+        {
+          entityId: "entity_1",
+          workspaceId: "ws_1",
+          name: "John Smith",
+        },
+      ],
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { query: "john smith" },
+      context: createContext({
+        scopedDb: createScopedDb([
+          {
+            entityId: "entity_1",
+            fieldId: "field_1",
+            workspaceId: "ws_1",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "search",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      results: [
+        {
+          id: "entity_1",
+          title: "[REDACTED]",
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+        },
+      ],
+    });
+  });
+
+  test("fetch anonymizes title and text in anonymized mode", async () => {
+    readContentAcrossMattersExecute.mockResolvedValue({
+      charCount: 321,
+      name: "John Smith SPA",
+      text: "John Smith signed the agreement",
+      truncated: false,
+      workspaceId: "ws_1",
+    });
+    readEntityByIdHandlerMock.mockResolvedValue({
+      entityId: "entity_1",
+      fields: [
+        {
+          id: "field_1",
+          content: {
+            type: "file",
+          },
+        },
+      ],
+      kind: "document",
+      name: "John Smith SPA",
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 2,
+      fields: ["[PERSON_1] SPA", "[PERSON_1] signed the agreement"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { id: "entity_1" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "fetch",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      id: "entity_1",
+      title: "[PERSON_1] SPA",
+      text: "[PERSON_1] signed the agreement",
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      metadata: {
+        anonymized: true,
+        anonymizedEntityCount: 2,
+        charCount: 321,
+        source: "stella",
+        truncated: false,
+        workspaceId: "ws_1",
+      },
+    });
+  });
+
+  test("fetch preserves empty anonymized output instead of leaking original content", async () => {
+    readContentAcrossMattersExecute.mockResolvedValue({
+      charCount: 42,
+      name: "John Smith",
+      text: "John Smith",
+      truncated: false,
+      workspaceId: "ws_1",
+    });
+    readEntityByIdHandlerMock.mockResolvedValue({
+      entityId: "entity_1",
+      fields: [
+        {
+          id: "field_1",
+          content: {
+            type: "file",
+          },
+        },
+      ],
+      kind: "document",
+      name: "John Smith",
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["", ""],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { id: "entity_1" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "fetch",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      id: "entity_1",
+      title: "",
+      text: "",
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      metadata: {
+        anonymized: true,
+        anonymizedEntityCount: 1,
+        charCount: 42,
+        source: "stella",
+        truncated: false,
+        workspaceId: "ws_1",
+      },
+    });
+  });
+
+  test("fetch uses generic placeholders when anonymized fields are unexpectedly missing", async () => {
+    readContentAcrossMattersExecute.mockResolvedValue({
+      charCount: 42,
+      name: "John Smith",
+      text: "John Smith",
+      truncated: false,
+      workspaceId: "ws_1",
+    });
+    readEntityByIdHandlerMock.mockResolvedValue({
+      entityId: "entity_1",
+      fields: [
+        {
+          id: "field_1",
+          content: {
+            type: "file",
+          },
+        },
+      ],
+      kind: "document",
+      name: "John Smith",
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { id: "entity_1" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "fetch",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      id: "entity_1",
+      title: "[REDACTED]",
+      text: "[REDACTED]",
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      metadata: {
+        anonymized: true,
+        anonymizedEntityCount: 1,
+        charCount: 42,
+        source: "stella",
+        truncated: false,
+        workspaceId: "ws_1",
+      },
+    });
   });
 
   test("tool failures return a generic MCP error and capture the original exception", async () => {

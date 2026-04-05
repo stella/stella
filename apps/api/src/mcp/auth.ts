@@ -2,6 +2,7 @@ import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resourc
 import type { JWTPayload } from "jose";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import type { McpMode } from "@/api/mcp/constants";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
@@ -23,10 +24,12 @@ const getVerifyAccessToken = () => {
   return verifyAccessToken;
 };
 
-export const getMcpAccessTokenVerificationOptions = () => ({
+export const getMcpAccessTokenVerificationOptions = (
+  mode: McpMode = "default",
+) => ({
   jwksUrl: getAuthEndpointUrl("jwks"),
   verifyOptions: {
-    audience: getMcpResourceUrl(),
+    audience: getMcpResourceUrl(mode),
     issuer: getAuthIssuerUrl(),
   },
 });
@@ -55,11 +58,12 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
 
 export const authenticateMcpRequest = async (
   bearerToken: string,
+  mode: McpMode = "default",
 ): Promise<McpSession> => {
   try {
     const payload = await getVerifyAccessToken()(
       bearerToken,
-      getMcpAccessTokenVerificationOptions(),
+      getMcpAccessTokenVerificationOptions(mode),
     );
 
     return extractMcpSession(payload);

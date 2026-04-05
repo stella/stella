@@ -524,6 +524,21 @@ type Messages = {
     "user": "User";
     "verify": "Verify";
   };
+  "consent": {
+    "allow": "Allow";
+    "defaultClientName": "An application";
+    "deny": "Deny";
+    "description": "{clientName} wants to access your stella workspace";
+    "error": "Something went wrong. Please try again.";
+    "organization": "Organization";
+    "permissions": "This will allow the application to:";
+    "scopeProfile": "Access your profile information";
+    "scopeRead": "Read your documents, matters, and contacts";
+    "scopeReadAnonymized": "Read anonymized versions of your documents and matters";
+    "scopeSearch": "Search your documents and matters";
+    "scopeSearchAnonymized": "Search anonymized versions of your documents and matters";
+    "title": "Authorize access";
+  };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
     "attorneys": {
@@ -608,19 +623,6 @@ type Messages = {
       "organization": "Organization";
       "person": "Person";
     };
-  };
-  "consent": {
-    "allow": "Allow";
-    "defaultClientName": "An application";
-    "deny": "Deny";
-    "description": "{clientName} wants to access your Stella workspace";
-    "error": "Something went wrong. Please try again.";
-    "organization": "Organization";
-    "permissions": "This will allow the application to:";
-    "scopeProfile": "Access your profile information";
-    "scopeRead": "Read your documents, matters, and contacts";
-    "scopeSearch": "Search your documents and matters";
-    "title": "Authorize access";
   };
   "errors": {
     "actionFailed": "Action failed";

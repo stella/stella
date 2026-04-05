@@ -35,8 +35,8 @@ import { extractLangFromRequest } from "@/api/lib/locale";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import {
   getMcpResourceUrl,
+  MCP_ALL_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
-  MCP_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 
 /** Access token lifetime in seconds (15 minutes). */
@@ -85,8 +85,8 @@ const getSessionActiveOrganizationId = (
 
 const isMcpResourceScope = (
   scope: string,
-): scope is (typeof MCP_RESOURCE_SCOPES)[number] =>
-  (MCP_RESOURCE_SCOPES as readonly string[]).includes(scope);
+): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
+  (MCP_ALL_RESOURCE_SCOPES as readonly string[]).includes(scope);
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `db`. Deferring to
@@ -273,7 +273,7 @@ const createAuth = () => {
         loginPage: "/auth",
         consentPage: "/consent",
         scopes: [...MCP_OAUTH_SCOPES],
-        validAudiences: [getMcpResourceUrl()],
+        validAudiences: [getMcpResourceUrl(), getMcpResourceUrl("anonymized")],
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
@@ -316,7 +316,7 @@ const createAuth = () => {
               throw new APIError("BAD_REQUEST", {
                 error: "set_organization",
                 message:
-                  "An organization must be selected before granting Stella MCP access",
+                  "An organization must be selected before granting stella MCP access",
               });
             }
 

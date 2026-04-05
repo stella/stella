@@ -1,6 +1,8 @@
 import Elysia from "elysia";
 
 import {
+  MCP_ANONYMIZED_DISCOVERY_PATH,
+  MCP_ANONYMIZED_HTTP_PATH,
   MCP_DISCOVERY_PATH,
   MCP_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
@@ -39,6 +41,21 @@ export const mcpRoute = new Elysia()
     });
     return getMcpProtectedResourceMetadata();
   })
+  .options(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
+    applyHeaders({
+      headers: createMcpMetadataHeaders(),
+      set,
+    });
+    set.status = 204;
+    return "";
+  })
+  .get(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
+    applyHeaders({
+      headers: createMcpMetadataHeaders(),
+      set,
+    });
+    return getMcpProtectedResourceMetadata("anonymized");
+  })
   .options(MCP_DISCOVERY_PATH, ({ set }) => {
     applyHeaders({
       headers: createMcpMetadataHeaders(),
@@ -69,4 +86,24 @@ export const mcpRoute = new Elysia()
   .delete(
     MCP_HTTP_PATH,
     async ({ request }) => await handleMcpHttpRequest(request),
+  )
+  .options(
+    MCP_ANONYMIZED_HTTP_PATH,
+    async ({ request }) =>
+      await handleMcpHttpRequest(request, { mode: "anonymized" }),
+  )
+  .get(
+    MCP_ANONYMIZED_HTTP_PATH,
+    async ({ request }) =>
+      await handleMcpHttpRequest(request, { mode: "anonymized" }),
+  )
+  .post(
+    MCP_ANONYMIZED_HTTP_PATH,
+    async ({ request }) =>
+      await handleMcpHttpRequest(request, { mode: "anonymized" }),
+  )
+  .delete(
+    MCP_ANONYMIZED_HTTP_PATH,
+    async ({ request }) =>
+      await handleMcpHttpRequest(request, { mode: "anonymized" }),
   );

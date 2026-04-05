@@ -8,6 +8,7 @@ import {
 import { captureError } from "@/api/lib/analytics";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import type { McpSession } from "@/api/mcp/auth";
+import type { McpMode } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
@@ -24,6 +25,8 @@ import {
 } from "@/api/mcp/tools";
 
 const MCP_SERVER_VERSION = "0.1.0";
+const getMcpServerName = (mode: McpMode) =>
+  mode === "anonymized" ? "stella (anonymized)" : "stella";
 
 const extractBearerToken = (request: Request): string | undefined => {
   const header = request.headers.get("authorization");
@@ -52,13 +55,15 @@ const withMcpCors = (response: Response) => {
 
 const accessDeniedResponse = ({
   message,
+  mode,
   status,
 }: {
   message: string;
+  mode: McpMode;
   status: 401 | 403;
 }) => {
   const headers = createMcpCorsHeaders();
-  headers.set("WWW-Authenticate", getMcpWwwAuthenticateHeader());
+  headers.set("WWW-Authenticate", getMcpWwwAuthenticateHeader(mode));
 
   return new Response(message, {
     headers,
@@ -66,24 +71,30 @@ const accessDeniedResponse = ({
   });
 };
 
-const createMcpServer = async ({ session }: { session: McpSession }) => {
+const createMcpServer = async ({
+  mode,
+  session,
+}: {
+  mode: McpMode;
+  session: McpSession;
+}) => {
   const context = await resolveMcpSessionContext(session);
 
   // The low-level Server API accepts JSON Schema directly, which keeps the
   // MCP surface independent from the AI SDK tool generics used elsewhere.
   // eslint-disable-next-line typescript-eslint/no-deprecated
   const server = new Server(
-    { name: "stella", version: MCP_SERVER_VERSION },
+    { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
     { capabilities: { tools: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: listMcpTools(),
+    tools: listMcpTools(mode),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const toolName = request.params.name;
-    const definition = getMcpToolDefinition(toolName);
+    const definition = getMcpToolDefinition(toolName, mode);
     if (!definition) {
       return {
         content: [{ type: "text" as const, text: `Unknown tool: ${toolName}` }],
@@ -106,6 +117,7 @@ const createMcpServer = async ({ session }: { session: McpSession }) => {
     return await handleMcpToolCall({
       args: request.params.arguments ?? {},
       context,
+      mode,
       toolName,
     });
   });
@@ -115,6 +127,7 @@ const createMcpServer = async ({ session }: { session: McpSession }) => {
 
 export const handleMcpHttpRequest = async (
   request: Request,
+  { mode = "default" }: { mode?: McpMode } = {},
 ): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -127,6 +140,7 @@ export const handleMcpHttpRequest = async (
   if (!token) {
     return accessDeniedResponse({
       message: "Missing Authorization header",
+      mode,
       status: 401,
     });
   }
@@ -135,8 +149,8 @@ export const handleMcpHttpRequest = async (
   let transport: WebStandardStreamableHTTPServerTransport | undefined;
 
   try {
-    const session = await authenticateMcpRequest(token);
-    server = await createMcpServer({ session });
+    const session = await authenticateMcpRequest(token, mode);
+    server = await createMcpServer({ mode, session });
     transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
     });
@@ -156,6 +170,7 @@ export const handleMcpHttpRequest = async (
     if (error instanceof McpOrganizationAccessError) {
       return accessDeniedResponse({
         message: "Forbidden",
+        mode,
         status: 403,
       });
     }
@@ -163,12 +178,14 @@ export const handleMcpHttpRequest = async (
     if (!(error instanceof McpAuthenticationError)) {
       captureError(error, {
         phase: "transport",
+        mode,
         source: "mcp",
       });
     }
 
     return accessDeniedResponse({
       message: "Invalid or expired token",
+      mode,
       status: 401,
     });
   } finally {
