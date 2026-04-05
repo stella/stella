@@ -14,7 +14,7 @@
   "dependencies": {
     "@astrojs/sitemap": "^3.7.2",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^6.1.1",
+    "astro": "^6.1.2",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {

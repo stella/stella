@@ -1,7 +1,9 @@
 services:
   postgres:
     profiles: [dev]
-    image: postgres:17.8
+    # Keep dev aligned with infra. After 17 -> 18, recreate local
+    # pgdata with `bun --cwd apps/api run docker:reset-dev`.
+    image: postgres:18.3
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
