@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as AuthRouteRouteImport } from './routes/auth/route'
@@ -51,6 +52,11 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from '.
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdPdfRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.pdf'
 
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProtectedRoute = ProtectedRouteImport.update({
   id: '/_protected',
   getParentRoute: () => rootRouteImport,
@@ -284,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
+  '/consent': typeof ConsentRoute
   '/account': typeof ProtectedAccountRouteRouteWithChildren
   '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/dev': typeof ProtectedDevRouteRoute
@@ -325,6 +332,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRouteRoute
+  '/consent': typeof ConsentRoute
   '/account': typeof ProtectedAccountRouteRouteWithChildren
   '/dev': typeof ProtectedDevRouteRoute
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
   '/_protected': typeof ProtectedRouteWithChildren
+  '/consent': typeof ConsentRoute
   '/_protected/account': typeof ProtectedAccountRouteRouteWithChildren
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/dev': typeof ProtectedDevRouteRoute
@@ -408,6 +417,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/onboarding'
+    | '/consent'
     | '/account'
     | '/chat'
     | '/dev'
@@ -449,6 +459,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/onboarding'
+    | '/consent'
     | '/account'
     | '/dev'
     | '/organization'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/onboarding'
     | '/_protected'
+    | '/consent'
     | '/_protected/account'
     | '/_protected/chat'
     | '/_protected/dev'
@@ -531,10 +543,18 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRoute
   ProtectedRoute: typeof ProtectedRouteWithChildren
+  ConsentRoute: typeof ConsentRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_protected': {
       id: '/_protected'
       path: ''
@@ -1029,6 +1049,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRoute,
   ProtectedRoute: ProtectedRouteWithChildren,
+  ConsentRoute: ConsentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

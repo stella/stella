@@ -73,6 +73,9 @@
     "continueWithEmail": "Pokračovat",
     "continueWithGoogle": "Pokračovat přes Google",
     "continueWithMicrosoft": "Pokračovat přes Microsoft",
+    "createFirstOrganization": "Vytvořte svou první organizaci",
+    "createOrganization": "Vytvořit organizaci",
+    "createOrganizationButton": "Vytvořit organizaci",
     "emailPlaceholder": "you@example.com",
     "enterTheCode": "Zadejte kód",
     "headline": "Jasno v každém případě.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "verify": "Ověřit"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Také vystupuje jako strana v {count, plural, one {# dalším spisu} few {# dalších spisech} other {# dalších spisech}}",

@@ -76,6 +76,9 @@ type Messages = {
     "continueWithEmail": "Continue";
     "continueWithGoogle": "Continue with Google";
     "continueWithMicrosoft": "Continue with Microsoft";
+    "createFirstOrganization": "Create your first organization to get started";
+    "createOrganization": "Create an organization";
+    "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
     "enterTheCode": "Enter the code";
     "headline": "Clarity for every case.";
@@ -605,6 +608,19 @@ type Messages = {
       "organization": "Organization";
       "person": "Person";
     };
+  };
+  "consent": {
+    "allow": "Allow";
+    "defaultClientName": "An application";
+    "deny": "Deny";
+    "description": "{clientName} wants to access your Stella workspace";
+    "error": "Something went wrong. Please try again.";
+    "organization": "Organization";
+    "permissions": "This will allow the application to:";
+    "scopeProfile": "Access your profile information";
+    "scopeRead": "Read your documents, matters, and contacts";
+    "scopeSearch": "Search your documents and matters";
+    "title": "Authorize access";
   };
   "errors": {
     "actionFailed": "Action failed";

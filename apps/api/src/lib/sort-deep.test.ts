@@ -16,6 +16,22 @@ import { sortDeep } from "./sort-deep";
  */
 
 const jsonArbitrary = fc.jsonValue();
+const normalizeJsonValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(normalizeJsonValue);
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [
+        key,
+        normalizeJsonValue(entryValue),
+      ]),
+    );
+  }
+
+  return value;
+};
 
 describe("sortDeep", () => {
   test("idempotent: sorting twice yields the same result", () => {
@@ -74,7 +90,10 @@ describe("sortDeep", () => {
     fc.assert(
       fc.property(jsonArbitrary, (input) => {
         const sorted = sortDeep(input);
-        expect(sorted).toStrictEqual(input);
+        // Rebuild objects from entries so prototype quirks
+        // (for example "__proto__" keys) do not affect the
+        // structural comparison.
+        expect(normalizeJsonValue(sorted)).toEqual(normalizeJsonValue(input));
       }),
     );
   });

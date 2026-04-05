@@ -73,6 +73,9 @@
     "continueWithEmail": "Tovább",
     "continueWithGoogle": "Folytatás Google-lel",
     "continueWithMicrosoft": "Folytatás Microsofttal",
+    "createFirstOrganization": "Hozza létre első szervezetét a kezdéshez",
+    "createOrganization": "Szervezet létrehozása",
+    "createOrganizationButton": "Szervezet létrehozása",
     "emailPlaceholder": "te@example.com",
     "enterTheCode": "Adja meg a kódot",
     "headline": "Tisztán látás minden ügyben.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
     "verify": "Ellenőrzés"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Félként is megjelenik {count, plural, one {# másik ügyben} other {# másik ügyben}}",

@@ -73,6 +73,9 @@
     "continueWithEmail": "Continuer",
     "continueWithGoogle": "Continuer avec Google",
     "continueWithMicrosoft": "Continuer avec Microsoft",
+    "createFirstOrganization": "Créez votre première organisation pour commencer",
+    "createOrganization": "Créer une organisation",
+    "createOrganizationButton": "Créer l'organisation",
     "emailPlaceholder": "vous@example.com",
     "enterTheCode": "Saisissez le code",
     "headline": "La clarté pour chaque affaire.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "verify": "Vérifier"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",

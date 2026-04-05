@@ -21,6 +21,7 @@
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
     "@base-ui/react": "catalog:",
+    "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/eden": "^1.4.8",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.8.1",

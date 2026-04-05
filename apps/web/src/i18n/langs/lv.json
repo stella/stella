@@ -73,6 +73,9 @@
     "continueWithEmail": "Turpināt",
     "continueWithGoogle": "Turpināt ar Google",
     "continueWithMicrosoft": "Turpināt ar Microsoft",
+    "createFirstOrganization": "Izveidojiet savu pirmo organizāciju, lai sāktu darbu",
+    "createOrganization": "Izveidot organizāciju",
+    "createOrganizationButton": "Izveidot organizāciju",
     "emailPlaceholder": "jus@example.com",
     "enterTheCode": "Ievadiet kodu",
     "headline": "Skaidrība ikvienā lietā.",
@@ -517,6 +520,19 @@
     "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
     "verify": "Verificēt"
+  },
+  "consent": {
+    "allow": "Allow",
+    "defaultClientName": "An application",
+    "deny": "Deny",
+    "description": "{clientName} wants to access your Stella workspace",
+    "error": "Something went wrong. Please try again.",
+    "organization": "Organization",
+    "permissions": "This will allow the application to:",
+    "scopeProfile": "Access your profile information",
+    "scopeRead": "Read your documents, matters, and contacts",
+    "scopeSearch": "Search your documents and matters",
+    "title": "Authorize access"
   },
   "contacts": {
     "alsoPartyIn": "Ir arī puse {count, plural, zero {# citās lietās} one {# citā lietā} other {# citās lietās}}",
