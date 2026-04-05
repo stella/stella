@@ -15,6 +15,8 @@ import type { BatchProperty } from "@/api/handlers/registry/actors/workflow/get-
 import type { JustificationFilenames } from "@/api/handlers/registry/actors/workflow/parse-justifications";
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
 type WorkflowFile = {
@@ -28,6 +30,9 @@ type GenerateWorkflowDataProps = {
   filenames: JustificationFilenames;
   textInputs: TextInput[];
   abortSignal: AbortSignal;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
 };
 
@@ -42,6 +47,9 @@ export const generateWorkflowData = async ({
   filenames,
   textInputs,
   abortSignal,
+  entityVersionId,
+  organizationId,
+  workspaceId,
   orgAIConfig,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
@@ -70,6 +78,18 @@ export const generateWorkflowData = async ({
     text: buildPromptsMessage(properties),
   });
 
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    feature: "workflow.generate-batch",
+    properties: {
+      entity_version_id: entityVersionId,
+      organization_id: organizationId,
+      property_count: properties.length,
+      workspace_id: workspaceId,
+    },
+    sessionId: entityVersionId,
+    traceId: crypto.randomUUID(),
+  });
+
   return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
@@ -78,14 +98,18 @@ export const generateWorkflowData = async ({
         output: Output.object({ schema: valibotSchema(schema) }),
         system: WORKFLOW_SYSTEM_PROMPT,
         abortSignal,
+        ...aiAnalytics.stepCallbacks,
       });
 
       return result.output;
     },
-    catch: (error) =>
-      new WorkflowIntegrationError({
+    catch: (error) => {
+      aiAnalytics.captureError(error);
+
+      return new WorkflowIntegrationError({
         message: "Workflow AI generation failed",
         cause: error,
-      }),
+      });
+    },
   });
 };

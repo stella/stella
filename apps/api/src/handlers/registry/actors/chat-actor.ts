@@ -47,6 +47,7 @@ import type { UserActorConnState } from "@/api/handlers/registry/utils";
 import { isOrgAIConfig } from "@/api/lib/ai-config-crypto";
 import { getModelById, getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { isRecord } from "@/api/lib/type-guards";
@@ -720,6 +721,18 @@ export const chatActor = actor({
           }));
 
           const modelMessages = await convertToModelMessages(cleanMessages);
+          const aiAnalytics = createAIAnalyticsCallbacks({
+            distinctId: connState.userId,
+            feature: "chat.actor",
+            properties: {
+              organization_id: connState.organizationId,
+              ...(validatedWsId ? { workspace_id: validatedWsId } : {}),
+              ...(decisionId ? { decision_id: decisionId } : {}),
+              ...(modelId ? { model_override: true } : {}),
+            },
+            sessionId: threadId,
+            traceId: crypto.randomUUID(),
+          });
 
           const stream = streamText({
             model:
@@ -731,6 +744,10 @@ export const chatActor = actor({
             stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("askUser")],
             messages: modelMessages,
             abortSignal: runSignal,
+            ...aiAnalytics.stepCallbacks,
+            ...(aiAnalytics.onStreamError
+              ? { onError: aiAnalytics.onStreamError }
+              : {}),
           });
 
           // Messages before the window — preserved in thread

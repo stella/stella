@@ -6,6 +6,10 @@ export const env = createEnv({
   client: {
     VITE_POSTHOG_KEY: v.optional(v.string()),
     VITE_POSTHOG_HOST: v.optional(v.string()),
+    VITE_POSTHOG_LOCAL_DEBUG: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
     VITE_API_URL: v.pipe(v.string(), v.url()),
     VITE_RIVET_ENDPOINT: v.pipe(v.string(), v.url()),
     VITE_RIVET_NAMESPACE: v.string(),

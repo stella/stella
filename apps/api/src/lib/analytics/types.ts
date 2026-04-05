@@ -1,7 +1,7 @@
 type CaptureParams = {
   distinctId: string;
   event: string;
-  properties?: Record<string, string>;
+  properties?: Record<string, unknown>;
 };
 
 type IdentifyParams = {

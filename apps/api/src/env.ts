@@ -13,6 +13,14 @@ export const env = createEnv({
     S3_REGION: v.string(),
     POSTHOG_KEY: v.optional(v.string()),
     POSTHOG_HOST: v.optional(v.string()),
+    POSTHOG_LOCAL_DEBUG: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
+    POSTHOG_LOCAL_DEBUG_AI_CONTENT: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
     AI_PROVIDER: v.optional(
       v.picklist([
         "google",

@@ -69,7 +69,10 @@ export const bBoxActor = actor({
             async (pageNumber) =>
               await generateFn({
                 abortSignal: c.abortSignal,
+                justificationId,
+                organizationId,
                 orgAIConfig: c.conn.state.orgAIConfig,
+                workspaceId,
                 data: {
                   pdf: preparedData.pdf,
                   pageNumber,

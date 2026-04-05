@@ -14,7 +14,10 @@ import type { BoundingBox } from "@/api/types";
 
 export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;
+  justificationId: string;
+  organizationId: SafeId<"organization">;
   orgAIConfig?: OrgAIConfig | null;
+  workspaceId: SafeId<"workspace">;
   data: {
     prompt: string;
     fieldContent: string;

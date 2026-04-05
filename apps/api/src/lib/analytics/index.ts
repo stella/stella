@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import { shouldEnablePostHog } from "@/api/lib/analytics/config";
 import { noopAnalytics } from "@/api/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/api/lib/analytics/posthog";
 import type { Analytics } from "@/api/lib/analytics/types";
@@ -6,24 +7,27 @@ import { errorTag, logDevError } from "@/api/lib/errors/utils";
 
 let analytics: Analytics | null = null;
 
+export const isLocalPostHogDebugEnabled = (): boolean =>
+  env.isDev && env.POSTHOG_LOCAL_DEBUG;
+
 export const getAnalytics = (): Analytics => {
   if (analytics) {
     return analytics;
   }
 
-  // A key of just "phc_" is the placeholder used to disable
-  // PostHog in local dev (the env var must be non-empty to
-  // pass validation, but a bare prefix has no project).
   const key = env.POSTHOG_KEY;
   const host = env.POSTHOG_HOST;
-  const hasRealKey =
-    key !== undefined &&
-    key !== "" &&
-    key !== "phc_" &&
-    host !== undefined &&
-    host !== "";
-
-  analytics = hasRealKey ? createPostHogAnalytics(key, host) : noopAnalytics;
+  analytics =
+    shouldEnablePostHog({
+      isDev: env.isDev,
+      key,
+      host,
+      localDebug: env.POSTHOG_LOCAL_DEBUG,
+    }) &&
+    key &&
+    host
+      ? createPostHogAnalytics(key, host)
+      : noopAnalytics;
 
   return analytics;
 };
