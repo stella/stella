@@ -21,7 +21,12 @@ export const sortDeep = (data: unknown): unknown => {
   if (isPlainObject(data)) {
     const sorted: JsonObject = {};
     for (const key of Object.keys(data).toSorted()) {
-      sorted[key] = sortDeep(data[key]);
+      Object.defineProperty(sorted, key, {
+        value: sortDeep(data[key]),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     return sorted;
   }

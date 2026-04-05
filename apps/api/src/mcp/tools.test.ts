@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -7,6 +7,16 @@ import type { McpRequestContext } from "@/api/mcp/context";
 const anonymizeTextFieldsMock = mock();
 const captureErrorMock = mock();
 const identifyMock = mock();
+const analyticsCaptureMock = mock();
+const analyticsIdentifyMock = mock();
+const analyticsFlushMock = mock(async function flushAnalyticsMock() {
+  return;
+});
+const getAnalyticsMock = mock(() => ({
+  capture: analyticsCaptureMock,
+  identify: analyticsIdentifyMock,
+  flush: analyticsFlushMock,
+}));
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
@@ -15,6 +25,7 @@ const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/, "");
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
+  getAnalytics: getAnalyticsMock,
   identify: identifyMock,
 }));
 
@@ -117,6 +128,10 @@ describe("OpenAI-compatible MCP tools", () => {
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
     readEntityByIdHandlerMock.mockReset();
+  });
+
+  afterAll(() => {
+    mock.restore();
   });
 
   test("advertises the exact search compatibility input schema", () => {

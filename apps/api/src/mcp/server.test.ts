@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
   McpAuthenticationError,
@@ -7,10 +7,23 @@ import {
 
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
+const identifyMock = mock();
+const analyticsCaptureMock = mock();
+const analyticsIdentifyMock = mock();
+const analyticsFlushMock = mock(async function flushAnalyticsMock() {
+  return;
+});
+const getAnalyticsMock = mock(() => ({
+  capture: analyticsCaptureMock,
+  identify: analyticsIdentifyMock,
+  flush: analyticsFlushMock,
+}));
 const resolveMcpSessionContextMock = mock();
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
+  getAnalytics: getAnalyticsMock,
+  identify: identifyMock,
 }));
 
 void mock.module("@/api/mcp/auth", () => ({
@@ -28,6 +41,10 @@ describe("handleMcpHttpRequest", () => {
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
     resolveMcpSessionContextMock.mockReset();
+  });
+
+  afterAll(() => {
+    mock.restore();
   });
 
   test("returns a generic 401 for token validation failures", async () => {

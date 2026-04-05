@@ -16,6 +16,9 @@ import { sortDeep } from "./sort-deep";
  */
 
 const jsonArbitrary = fc.jsonValue();
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const normalizeJsonValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(normalizeJsonValue);
@@ -159,5 +162,20 @@ describe("sortDeep", () => {
 
   test("returns empty array as-is", () => {
     expect(sortDeep([])).toEqual([]);
+  });
+
+  test("preserves own __proto__ keys from parsed JSON objects", () => {
+    const input: unknown = JSON.parse('{"__proto__":"","b":2,"a":1}');
+    if (!isRecord(input)) {
+      throw new Error("Expected parsed JSON object");
+    }
+
+    const result = sortDeep(input);
+    if (!isRecord(result)) {
+      throw new Error("Expected sorted object");
+    }
+
+    expect(Object.keys(result)).toEqual(["__proto__", "a", "b"]);
+    expect(JSON.stringify(result)).toBe('{"__proto__":"","a":1,"b":2}');
   });
 });
