@@ -16,6 +16,21 @@ export default defineConfig({
   build: {
     target: "es2025",
   },
+  optimizeDeps: {
+    // @stll/*-wasm packages load their .wasm binaries via
+    // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
+    // optimizer would rewrite that URL into .vite/deps/, where the .wasm
+    // binary doesn't exist and the dev server falls back to index.html —
+    // producing a WASM CompileError. Excluding them keeps the original
+    // module paths intact so the relative URL resolves.
+    exclude: [
+      "@stll/anonymize-wasm",
+      "@stll/text-search-wasm",
+      "@stll/aho-corasick-wasm",
+      "@stll/fuzzy-search-wasm",
+      "@stll/regex-set-wasm",
+    ],
+  },
   resolve: {
     tsconfigPaths: true,
   },

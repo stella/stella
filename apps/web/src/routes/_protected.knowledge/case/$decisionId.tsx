@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 
+import { useCaseSearchStore } from "@/lib/case-search-store";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
 import { ScrollMarkers } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers";
 import { buildSectionMap } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
@@ -67,7 +69,6 @@ function DecisionViewer() {
     [decision.documentAst],
   );
 
-  // Set document title to case number
   useEffect(() => {
     const prev = document.title;
     document.title = `${decision.caseNumber} | stella`;
@@ -79,8 +80,15 @@ function DecisionViewer() {
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
   const isDragging = useRef(false);
-
-  // ── AI analysis ───────────────────────────────────────────
+  const { searchOpen, searchQuery, activeMatchIndex, setMatchCount } =
+    useCaseSearchStore(
+      useShallow((s) => ({
+        searchOpen: s.isOpen,
+        searchQuery: s.query,
+        activeMatchIndex: s.activeMatchIndex,
+        setMatchCount: s.setMatchCount,
+      })),
+    );
 
   const { state: analysisState, generate } = useDecisionAnalysis(
     decisionId,
@@ -108,11 +116,11 @@ function DecisionViewer() {
     }
     const anchorIds = ast.blocks.map((b) => b.anchorId);
     return buildSectionMap(analysisTree, anchorIds);
-  }, [ast, analysisTree]);
+  }, [analysisTree, ast]);
 
   const marginItems = useMemo(
     () =>
-      analysisTree.flatMap((h) => {
+      analysisTree.flatMap((heading) => {
         type Item = {
           kind: "card" | "annotation";
           id: string;
@@ -121,77 +129,80 @@ function DecisionViewer() {
           category: string;
           startAnchorId: string;
         };
-        const items: Item[] = [];
 
-        const first = h.annotations.at(0);
+        const items: Item[] = [];
+        const first = heading.annotations.at(0);
+
         if (first) {
-          // Merge heading + first annotation into one card
           items.push({
             kind: "card",
             id: first.id,
-            heading: h.label,
+            heading: heading.label,
             text: first.summary,
-            category: h.category,
+            category: heading.category,
             startAnchorId: first.startAnchorId,
           });
-          // Remaining annotations as standalone
-          for (const a of h.annotations.slice(1)) {
+
+          for (const annotation of heading.annotations.slice(1)) {
             items.push({
               kind: "annotation",
-              id: a.id,
-              text: a.summary,
-              category: h.category,
-              startAnchorId: a.startAnchorId,
+              id: annotation.id,
+              text: annotation.summary,
+              category: heading.category,
+              startAnchorId: annotation.startAnchorId,
             });
           }
-        } else {
-          // Heading-only (no annotations)
-          items.push({
-            kind: "card",
-            id: `h-${h.id}`,
-            heading: h.label,
-            text: "",
-            category: h.category,
-            startAnchorId: h.startAnchorId,
-          });
+
+          return items;
         }
+
+        items.push({
+          kind: "card",
+          id: `h-${heading.id}`,
+          heading: heading.label,
+          text: "",
+          category: heading.category,
+          startAnchorId: heading.startAnchorId,
+        });
 
         return items;
       }),
     [analysisTree],
   );
 
-  // Auto-trigger generation when the decision has an AST but no analysis
   useEffect(() => {
     if (ast && analysisState.status === "idle") {
       void generate();
     }
-  }, [ast, analysisState.status, generate]);
+  }, [analysisState.status, ast, generate]);
+
+  // Reset search state on decision change so the header toolbar
+  // is closed and matches from the previous decision are cleared.
+  const reset = useCaseSearchStore((s) => s.reset);
+  useEffect(() => {
+    reset();
+  }, [decisionId, reset]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* ── Scroll area wrapper (relative for overlay markers) ── */}
       <div className="relative min-h-0 flex-1">
-        {/* Scrollbar heading markers (overlaid, not scrolling) */}
         {hasAnalysis && analysisTree.length > 0 && (
           <ScrollMarkers
-            headings={analysisTree.map((h) => ({
-              id: h.id,
-              label: h.label,
-              startAnchorId: h.startAnchorId,
-              category: h.category,
+            headings={analysisTree.map((heading) => ({
+              id: heading.id,
+              label: heading.label,
+              startAnchorId: heading.startAnchorId,
+              category: heading.category,
             }))}
             scrollContainerRef={mainRef}
           />
         )}
 
-        {/* ── Scrollable content ────────────────────────────── */}
         <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
           <div
             className="grid max-lg:!grid-cols-[1fr]"
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
-            {/* Left: margin notes with resize handle */}
             <aside className="relative max-lg:hidden">
               {hasAnalysis && marginItems.length > 0 && (
                 <MarginNotes items={marginItems} scrollContainerRef={mainRef} />
@@ -214,7 +225,6 @@ function DecisionViewer() {
                 </div>
               )}
 
-              {/* AI label */}
               <div className="text-muted-foreground/40 sticky bottom-3 flex items-center gap-1 px-2 pt-4">
                 <SparklesIcon className="size-3" />
                 <span className="text-[0.6rem] font-medium tracking-wider uppercase">
@@ -222,31 +232,31 @@ function DecisionViewer() {
                 </span>
               </div>
 
-              {/* Resize handle with grip dots */}
               <div
                 className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -right-px z-10 flex w-2 cursor-col-resize items-center justify-center"
-                onPointerDown={(e) => {
-                  e.preventDefault();
+                onPointerDown={(event) => {
+                  event.preventDefault();
                   isDragging.current = true;
-                  e.currentTarget.setPointerCapture(e.pointerId);
+                  event.currentTarget.setPointerCapture(event.pointerId);
                 }}
-                onPointerMove={(e) => {
+                onPointerMove={(event) => {
                   if (!isDragging.current) {
                     return;
                   }
-                  const aside = e.currentTarget.parentElement;
+
+                  const aside = event.currentTarget.parentElement;
                   if (!aside) {
                     return;
                   }
+
                   const newWidth =
-                    e.clientX - aside.getBoundingClientRect().left;
+                    event.clientX - aside.getBoundingClientRect().left;
                   setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                 }}
                 onPointerUp={() => {
                   isDragging.current = false;
                 }}
               >
-                {/* iOS-style grip dots */}
                 <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
                   <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
                   <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
@@ -255,9 +265,14 @@ function DecisionViewer() {
               </div>
             </aside>
 
-            {/* Decision text */}
             <main className="reader-paper min-w-0 px-4 py-8 max-sm:px-3">
-              <DecisionText decision={decision} sectionMap={sectionMap} />
+              <DecisionText
+                activeMatchIndex={activeMatchIndex}
+                decision={decision}
+                onMatchCountChange={setMatchCount}
+                searchQuery={searchOpen ? searchQuery : ""}
+                sectionMap={sectionMap}
+              />
             </main>
           </div>
         </div>
@@ -266,7 +281,6 @@ function DecisionViewer() {
   );
 }
 
-/** Skeleton loader shown in the left sidebar while analysis generates. */
 function AnalysisLoader() {
   return (
     <div className="flex flex-col gap-4 px-2 pt-4">
@@ -276,19 +290,21 @@ function AnalysisLoader() {
           Analyzing...
         </span>
       </div>
-      {/* Skeleton heading lines */}
-      {[0.6, 0.8, 0.5, 0.7, 0.45, 0.65].map((w, i) => (
-        <div key={i} className="flex flex-col gap-1.5">
+      {[0.6, 0.8, 0.5, 0.7, 0.45, 0.65].map((width, index) => (
+        <div className="flex flex-col gap-1.5" key={index}>
           <div
             className="bg-muted/60 h-2.5 animate-pulse rounded"
-            style={{ width: `${w * 100}%`, animationDelay: `${i * 150}ms` }}
+            style={{
+              width: `${width * 100}%`,
+              animationDelay: `${index * 150}ms`,
+            }}
           />
-          {i % 2 === 0 && (
+          {index % 2 === 0 && (
             <div
               className="bg-muted/30 ml-3 h-2 animate-pulse rounded"
               style={{
-                width: `${w * 70}%`,
-                animationDelay: `${i * 150 + 75}ms`,
+                width: `${width * 70}%`,
+                animationDelay: `${index * 150 + 75}ms`,
               }}
             />
           )}

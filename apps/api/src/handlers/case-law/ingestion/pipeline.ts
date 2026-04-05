@@ -113,7 +113,7 @@ const collapseSpacedLetters = (text: string): string =>
     text.replace(SPACED_WORD, (match) => match.replace(/ /g, "")),
   );
 
-const sanitizeResult = (r: IngestionResult): IngestionResult => {
+export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // Strip dangerous chars and normalize non-breaking spaces.
   // \u00A0 (nbsp) comes from PDF text extraction (@libpdf/core)
   // and prevents the browser from wrapping at word boundaries.
@@ -126,8 +126,12 @@ const sanitizeResult = (r: IngestionResult): IngestionResult => {
   const deepSanitizeImpl = (val: unknown, key?: string): unknown => {
     if (typeof val === "string") {
       const stripped = val.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
-      // Collapse spaced-out letters in plainText fields
-      // so search indexes match normal word queries.
+      // Collapse spaced-out letters in plainText only (used for
+      // the DB full-text search index). Inline text is left
+      // verbatim so the reader displays exactly what the court
+      // wrote — letter-spacing and all. The frontend normalizer
+      // performs the same collapse at query time with a position
+      // map, keeping highlight offsets aligned.
       return key === "plainText" ? collapseSpacedLetters(stripped) : stripped;
     }
     if (Array.isArray(val)) {

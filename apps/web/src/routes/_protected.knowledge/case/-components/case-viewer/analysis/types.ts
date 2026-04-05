@@ -127,6 +127,106 @@ export type SectionInfo = { cssVar: string; headingId: string };
 /**
  * Build a map from anchorId to section info.
  */
+// Defensive clamp thresholds. When the AI produces a heading
+// whose range runs from the first to (nearly) the last block —
+// swallowing the whole decision — treat it as a hallucination
+// and collapse it to just its first block. Triggering requires
+// all three conditions: spans at least this many blocks, covers
+// at least this fraction of the decision, and actually crosses
+// at least one sibling heading's range.
+const RUNAWAY_MIN_BLOCKS = 5;
+const RUNAWAY_MIN_COVERAGE = 0.5;
+
+type HeadingRange = { start: number; end: number };
+
+/**
+ * Collect all ranges AND map each candidate to the set of its
+ * descendant ranges. The runaway detector then compares a
+ * candidate only against non-descendant ranges so a legitimate
+ * parent that spans its own children is never flagged as
+ * swallowing them. `children` is empty today but the API
+ * surface allows nested headings, so we future-proof here.
+ */
+const rangeKey = (r: HeadingRange): string => `${r.start}:${r.end}`;
+
+/**
+ * Collect all heading ranges across the tree, keeping track of
+ * each node's own descendant ranges keyed by "start:end". The
+ * runaway detector compares a candidate only against
+ * non-descendant ranges so a legitimate parent that spans its
+ * own children is never flagged as swallowing them. `children`
+ * is empty in today's analyses but the type allows nesting.
+ */
+const collectRanges = (
+  nodes: AnalysisHeading[],
+  idxMap: Map<string, number>,
+): { all: HeadingRange[]; descendantsByKey: Map<string, Set<string>> } => {
+  const all: HeadingRange[] = [];
+  const descendantsByKey = new Map<string, Set<string>>();
+
+  const walk = (subtree: AnalysisHeading[]): string[] => {
+    const subKeys: string[] = [];
+    for (const node of subtree) {
+      const start = idxMap.get(node.startAnchorId);
+      const end = idxMap.get(node.endAnchorId);
+      let nodeKey: string | null = null;
+      if (start !== undefined && end !== undefined) {
+        const range = { start, end };
+        nodeKey = rangeKey(range);
+        all.push(range);
+        subKeys.push(nodeKey);
+      }
+      const childKeys = walk(node.children);
+      if (nodeKey) {
+        descendantsByKey.set(nodeKey, new Set(childKeys));
+        subKeys.push(...childKeys);
+      }
+    }
+    return subKeys;
+  };
+
+  walk(nodes);
+  return { all, descendantsByKey };
+};
+
+const crossesAnotherRange = (
+  candidate: HeadingRange,
+  all: HeadingRange[],
+  descendants: Set<string>,
+): boolean => {
+  const candidateKey = rangeKey(candidate);
+  for (const other of all) {
+    const otherKey = rangeKey(other);
+    if (otherKey === candidateKey || descendants.has(otherKey)) {
+      continue;
+    }
+    const overlaps =
+      other.start <= candidate.end && other.end >= candidate.start;
+    if (!overlaps) {
+      continue;
+    }
+    const candidateContainsOther =
+      candidate.start <= other.start && candidate.end >= other.end;
+    const otherContainsCandidate =
+      other.start <= candidate.start && other.end >= candidate.end;
+    if (otherContainsCandidate) {
+      // Candidate is nested inside `other` — legitimate (just
+      // a narrower range), not a runaway signal.
+      continue;
+    }
+    if (!candidateContainsOther) {
+      // Partial overlap that crosses `other`'s boundary — a
+      // real signal that the candidate span is wrong.
+      return true;
+    }
+    if (other.start > candidate.start || other.end < candidate.end) {
+      // Candidate strictly swallows `other` — runaway.
+      return true;
+    }
+  }
+  return false;
+};
+
 export const buildSectionMap = (
   headings: AnalysisHeading[],
   allAnchorIds: string[],
@@ -134,13 +234,27 @@ export const buildSectionMap = (
   const map = new Map<string, SectionInfo>();
   const idxMap = new Map(allAnchorIds.map((id, i) => [id, i]));
 
+  const { all: allRanges, descendantsByKey } = collectRanges(headings, idxMap);
+
   const walk = (nodes: AnalysisHeading[]) => {
     for (const node of nodes) {
       const start = idxMap.get(node.startAnchorId);
       const end = idxMap.get(node.endAnchorId);
       if (start !== undefined && end !== undefined) {
         const cssVar = getCategoryVar(node.category);
-        for (let i = start; i <= end; i++) {
+        const blockCount = end - start + 1;
+        const coverage =
+          allAnchorIds.length > 0 ? blockCount / allAnchorIds.length : 0;
+        const candidate = { start, end };
+        const ownDescendants =
+          descendantsByKey.get(rangeKey(candidate)) ?? new Set<string>();
+        const effectiveEnd =
+          blockCount >= RUNAWAY_MIN_BLOCKS &&
+          coverage >= RUNAWAY_MIN_COVERAGE &&
+          crossesAnotherRange(candidate, allRanges, ownDescendants)
+            ? start
+            : end;
+        for (let i = start; i <= effectiveEnd; i++) {
           const anchorId = allAnchorIds[i];
           if (anchorId && !map.has(anchorId)) {
             map.set(anchorId, { cssVar, headingId: node.id });

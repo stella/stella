@@ -20,9 +20,9 @@ import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { getModelForRole } from "@/api/lib/ai-models";
 
 import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
@@ -139,7 +139,10 @@ ${decisionText}`;
       .set({ analysis })
       .where(eq(caseLawDecisions.id, decisionId));
   } catch (error) {
-    captureError(error, { decisionId });
+    captureError(error, {
+      source: "case-law-analysis",
+      decisionId,
+    });
     aiAnalytics.captureError(error);
     await rootDb
       .update(caseLawDecisions)
