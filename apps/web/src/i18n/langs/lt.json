@@ -1237,6 +1237,7 @@
       "zoomIn": "Priartinti",
       "zoomOut": "Nutolinti"
     },
+    "possibleDuplicates": "Galimi dublikatai",
     "properties": {
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",

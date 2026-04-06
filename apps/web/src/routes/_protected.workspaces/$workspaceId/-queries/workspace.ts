@@ -2,10 +2,10 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useParams, useRouteContext } from "@tanstack/react-router";
 
 import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
+import { withTimeout } from "@stella/rivet/timeout";
 
 import { api, rivet } from "@/lib/api";
-import { authClient } from "@/lib/auth";
-import { APIError, toAPIError, toAuthClientError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
@@ -31,38 +31,22 @@ export const workspaceKeys = {
   ],
 };
 
-type WorkflowOptionsProps = {
-  workspaceId: string;
-  organizationId: string;
-};
+type WorkflowOptionsInput = QueryOptionsInput<
+  { workspaceId: string },
+  { organizationId: string; authToken: string }
+>;
 
-export const workflowOptions = ({
-  workspaceId,
-  organizationId,
-}: WorkflowOptionsProps) =>
+const WORKFLOW_STATUS_TIMEOUT_MS = 10_000;
+
+export const workflowOptions = ({ key, context }: WorkflowOptionsInput) =>
   queryOptions({
-    queryKey: workspaceKeys.workflow(workspaceId),
+    queryKey: workspaceKeys.workflow(key.workspaceId),
     queryFn: async ({ signal }) => {
-      const sessionData = await authClient.getSession();
-
-      if (sessionData.error) {
-        throw toAuthClientError(sessionData.error);
-      }
-
-      const authToken = sessionData.data?.session.token;
-
-      if (!authToken) {
-        throw new APIError({
-          status: 401,
-          message: "Workflow query called without a valid session",
-        });
-      }
-
       const actorConfig = getWorkflowActorConfig({
         type: "vanilla",
-        organizationId,
-        authToken,
-        workspaceId,
+        organizationId: context.organizationId,
+        authToken: context.authToken,
+        workspaceId: key.workspaceId,
       });
 
       const handle = rivet.workflow.getOrCreate(actorConfig[0], {
@@ -70,14 +54,22 @@ export const workflowOptions = ({
         signal,
       });
 
-      return handle.getWorkflowStatus();
+      return await withTimeout({
+        signal,
+        timeoutMs: WORKFLOW_STATUS_TIMEOUT_MS,
+        timeoutMessage: "Workflow actor timed out",
+        run: async () => await handle.getWorkflowStatus(),
+      });
     },
   });
 
 export const useIsWorkflowRunning = () => {
-  const organizationId = useRouteContext({
+  const { authToken, organizationId } = useRouteContext({
     from: "/_protected/workspaces/$workspaceId",
-    select: (ctx) => ctx.user?.activeOrganizationId,
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user?.activeOrganizationId,
+    }),
   });
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",
@@ -86,8 +78,8 @@ export const useIsWorkflowRunning = () => {
 
   const { data } = useQuery({
     ...workflowOptions({
-      workspaceId,
-      organizationId,
+      key: { workspaceId },
+      context: { organizationId, authToken },
     }),
     select: (d) => d.running,
   });

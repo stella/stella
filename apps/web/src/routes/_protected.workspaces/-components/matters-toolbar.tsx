@@ -32,13 +32,12 @@ import {
   PopoverTrigger,
 } from "@stella/ui/components/popover";
 import { Separator } from "@stella/ui/components/separator";
-import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
-import { useCreateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
   MattersColumnId,
   MattersSortKey,
@@ -217,89 +216,20 @@ export const MattersToolbar = ({
 
 const CreateMatterPopover = () => {
   const t = useTranslations();
-  const createWorkspace = useCreateWorkspace();
   const canCreate = usePermissions({ workspace: ["create"] });
   const { data } = useSuspenseQuery(workspacesOptions);
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   const isLimitReached = data.workspaces.length >= data.workspacesCountLimit;
   if (isLimitReached || !canCreate) {
     return null;
   }
 
-  const handleCreate = () => {
-    const trimmed = name.trim();
-    createWorkspace.mutate(trimmed.length > 0 ? { name: trimmed } : undefined, {
-      onSuccess: () => {
-        setOpen(false);
-        setName("");
-      },
-      onError: () => {
-        toastManager.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
-      },
-    });
-  };
-
   return (
-    <Popover
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) {
-          setName("");
-        }
-      }}
-      open={open}
-    >
-      <PopoverTrigger
-        render={<Button disabled={createWorkspace.isPending} size="xs" />}
-      >
-        <PlusIcon />
-        {t("workspaces.newMatter")}
-      </PopoverTrigger>
-      <PopoverPopup align="end" className="w-72" sideOffset={4}>
-        <div className="flex flex-col gap-3 p-1">
-          <Input
-            autoFocus
-            onChange={(e) => setName(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleCreate();
-              }
-              if (e.key === "Escape") {
-                setOpen(false);
-                setName("");
-              }
-            }}
-            placeholder={t("workspaces.defaultName")}
-            value={name}
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              onClick={() => {
-                setOpen(false);
-                setName("");
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={createWorkspace.isPending}
-              onClick={handleCreate}
-              size="sm"
-            >
-              {t("workspaces.createNewWorkspace")}
-            </Button>
-          </div>
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <Button onClick={() => openCreateMatter()} size="xs">
+      <PlusIcon />
+      {t("workspaces.newMatter")}
+    </Button>
   );
 };
 

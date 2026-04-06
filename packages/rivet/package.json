@@ -7,7 +7,8 @@
     "./consts": "./src/consts.ts",
     "./actors/*": "./src/actors/*.ts",
     "./types": "./src/types.ts",
-    "./errors": "./src/errors.ts"
+    "./errors": "./src/errors.ts",
+    "./timeout": "./src/timeout.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

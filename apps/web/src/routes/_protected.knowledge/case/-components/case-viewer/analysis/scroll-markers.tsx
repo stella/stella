@@ -145,7 +145,7 @@ export const ScrollMarkers = ({
                 while its siblings stay compact and unobtrusive. */}
             <span
               className={cn(
-                "truncate rounded-full px-2.5 py-1 text-[0.65rem] font-semibold leading-none shadow-sm transition-[max-width,opacity,font-size] duration-150",
+                "truncate rounded-full px-2.5 py-1 text-[0.65rem] leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
                 isHovered ? "max-w-72 text-[0.7rem] opacity-100" : "max-w-52",
                 active
                   ? isHovered

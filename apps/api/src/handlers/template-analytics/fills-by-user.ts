@@ -34,12 +34,13 @@ export const fillsByUserHandler = async ({
       .select({
         userId: templateFills.userId,
         userName: sql<string>`coalesce(${user.name}, 'Unknown')`,
+        userImage: user.image,
         count: sql<number>`count(*)::int`,
       })
       .from(templateFills)
       .leftJoin(user, eq(templateFills.userId, user.id))
       .where(and(...conditions))
-      .groupBy(templateFills.userId, user.name)
+      .groupBy(templateFills.userId, user.name, user.image)
       .orderBy(sql`count(*) desc`)
       .limit(LIMITS.analyticsFillsByUserLimit),
   );

@@ -14,7 +14,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { produce } from "immer";
-import { SearchIcon, SettingsIcon, UserPlusIcon } from "lucide-react";
+import { SearchIcon, SettingsIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -53,18 +53,12 @@ import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
-import {
-  emailSchema,
-  optionalSearchStringSchema,
-  toFormErrors,
-} from "@/lib/schema";
+import { ensureCriticalQueryData } from "@/lib/react-query";
+import { optionalSearchStringSchema, toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
 import { AIConfigSection } from "@/routes/_protected.organization/-ai-config-section";
-import {
-  getRoles,
-  managementRoles,
-  rolePriority,
-} from "@/routes/_protected.organization/-consts";
+import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
+import { managementRoles } from "@/routes/_protected.organization/-consts";
 import {
   organizationKeys,
   organizationOptions,
@@ -87,7 +81,10 @@ export const Route = createFileRoute("/_protected/organization")({
     meta: [{ title: pageTitle("common.organization") }],
   }),
   beforeLoad: async ({ context }) => {
-    const role = await context.queryClient.ensureQueryData(roleOptions);
+    const role = await ensureCriticalQueryData(
+      context.queryClient,
+      roleOptions,
+    );
 
     if (!managementRoles.includes(role)) {
       throw redirect({ to: "/workspaces", replace: true });
@@ -114,7 +111,7 @@ function MembersLayout() {
   }, 300);
 
   return (
-    <div className="flex flex-1 flex-col gap-4 border-t p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
       <div className="flex items-center gap-2">
         <InputGroup className="me-auto max-w-sm flex-1">
           <InputGroupInput
@@ -131,7 +128,7 @@ function MembersLayout() {
           </InputGroupAddon>
         </InputGroup>
         <SettingsDialog />
-        <InviteDialog />
+        <InviteMemberDialog />
       </div>
       <MatterNumberingSection />
       <AIConfigSection />
@@ -500,166 +497,5 @@ const MatterNumberingSection = () => {
         </Button>
       </div>
     </div>
-  );
-};
-
-const inviteSchema = v.strictObject({
-  email: emailSchema(),
-  role: v.picklist(["owner", "admin", "member"]),
-});
-
-const defaultValues: v.InferInput<typeof inviteSchema> = {
-  email: "",
-  role: "member",
-};
-
-const InviteDialog = () => {
-  const t = useTranslations();
-  const [isOpen, setIsOpen] = useState(false);
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
-  const { data: currentUserRole } = useSuspenseQuery(roleOptions);
-
-  const roles = getRoles(t);
-
-  const form = useForm({
-    defaultValues,
-    validators: { onDynamic: inviteSchema },
-    onSubmit: async ({ value }) => {
-      const parseResult = v.safeParse(inviteSchema, value);
-      if (!parseResult.success) {
-        return;
-      }
-      const parsedValue = parseResult.output;
-      const result = await authClient.organization.inviteMember({
-        email: parsedValue.email,
-        role: parsedValue.role,
-      });
-
-      if (result.error) {
-        analytics.captureError(toAuthClientError(result.error));
-        toastManager.add({
-          title: result.error.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
-      toastManager.add({ title: t("success.invitationSent"), type: "success" });
-      setIsOpen(false);
-    },
-  });
-
-  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
-
-  return (
-    <Dialog
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
-          form.reset();
-        }
-      }}
-      open={isOpen}
-    >
-      <DialogTrigger
-        onClick={() => setIsOpen(true)}
-        render={<Button size="sm" />}
-      >
-        <UserPlusIcon />
-        {t("common.invite")}
-      </DialogTrigger>
-      <DialogPopup>
-        <Form
-          className="gap-0"
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            // eslint-disable-next-line typescript/no-floating-promises
-            form.handleSubmit();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {t("organization.invitations.inviteMember")}
-            </DialogTitle>
-            <DialogDescription>
-              {t("organization.invitations.inviteMemberDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel className="flex flex-col gap-4">
-            <form.Field name="email">
-              {(field) => (
-                <Field name={field.name}>
-                  <FieldLabel>
-                    {t("organization.invitations.emailAddressLabel")}
-                  </FieldLabel>
-                  <Input
-                    autoFocus
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder={t(
-                      "organization.invitations.emailAddressPlaceholder",
-                    )}
-                    required
-                    type="email"
-                    value={field.state.value}
-                  />
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-            <form.Field name="role">
-              {(field) => (
-                <Field name={field.name}>
-                  <FieldLabel>{t("common.role")}</FieldLabel>
-                  <Select
-                    items={roles}
-                    onValueChange={(val) => {
-                      if (val) {
-                        field.handleChange(val);
-                      }
-                    }}
-                    value={field.state.value}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("common.selectARole")} />
-                    </SelectTrigger>
-                    <SelectPopup alignItemWithTrigger={false}>
-                      {roles.map((item) => (
-                        <SelectItem
-                          disabled={
-                            rolePriority[item.value] <
-                            rolePriority[currentUserRole]
-                          }
-                          key={item.value}
-                          value={item.value}
-                        >
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              {t("common.cancel")}
-            </DialogClose>
-            <form.Subscribe selector={(s) => s.isSubmitting}>
-              {(isSubmitting) => (
-                <Button loading={isSubmitting} type="submit">
-                  {t("organization.invitations.sendInvitation")}
-                </Button>
-              )}
-            </form.Subscribe>
-          </DialogFooter>
-        </Form>
-      </DialogPopup>
-    </Dialog>
   );
 };

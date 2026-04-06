@@ -7,11 +7,12 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // Hardcoded in English: these are persisted in the DB and shared
 // across all organization members regardless of their locale.
-const DEFAULT_WORKSPACE_NAME = "Untitled";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
-  name?: string | undefined;
+  clientId: string;
+  memberUserIds?: string[];
+  name: string;
 };
 
 export const useCreateWorkspace = () => {
@@ -19,22 +20,33 @@ export const useCreateWorkspace = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (vars?: CreateWorkspaceVars) => {
+    mutationFn: async (vars: CreateWorkspaceVars) => {
+      const id = crypto.randomUUID();
       const response = await api.workspaces.put({
         queryKey: workspacesKeys.all,
-        id: crypto.randomUUID(),
-        name: vars?.name || DEFAULT_WORKSPACE_NAME,
+        id,
+        clientId: vars.clientId,
+        ...(vars.memberUserIds && vars.memberUserIds.length > 0
+          ? { memberUserIds: vars.memberUserIds }
+          : {}),
+        name: vars.name,
         filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
       });
 
       if (response.error) {
         throw toAPIError(response.error);
       }
+
+      return { id };
     },
     onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
+      });
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.navigation(),
       });
     },
     onError: (error) => {
@@ -46,7 +58,7 @@ export const useCreateWorkspace = () => {
 type UpdateWorkspaceVars = {
   workspaceId: string;
   name?: string;
-  clientId?: string | null;
+  clientId?: string;
   reference?: string;
   color?: string | null;
 };

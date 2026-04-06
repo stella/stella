@@ -3,8 +3,13 @@ import { useEffect } from "react";
 import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
+import {
+  ensureCriticalQueryData,
+  prefetchNonCriticalQuery,
+} from "@/lib/react-query";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -26,22 +31,28 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
     const organizationId = user.activeOrganizationId;
 
+    void prefetchNonCriticalQuery(
+      qc,
+      workflowOptions({
+        key: { workspaceId: wsId },
+        context: { organizationId, authToken },
+      }),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+    );
+
     const [workspace] = await Promise.all([
-      qc.ensureQueryData(workspaceOptions(wsId)),
-      qc.ensureQueryData(
+      ensureCriticalQueryData(qc, workspaceOptions(wsId)),
+      ensureCriticalQueryData(
+        qc,
         viewsOptions({
           key: { workspaceId: wsId },
           context: { organizationId, authToken },
         }),
       ),
-      qc.ensureQueryData(
-        workflowOptions({
-          workspaceId: wsId,
-          organizationId,
-        }),
-      ),
-      qc.ensureQueryData(overviewOptions(wsId)),
-      qc.ensureQueryData(propertiesOptions(wsId)),
+      ensureCriticalQueryData(qc, overviewOptions(wsId)),
+      ensureCriticalQueryData(qc, propertiesOptions(wsId)),
       cause === "enter"
         ? api.workspaces({ workspaceId: wsId }).active.post()
         : Promise.resolve(),

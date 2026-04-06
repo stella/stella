@@ -77,10 +77,7 @@ function RouteComponent() {
     return sortDesc ? -cmp : cmp;
   });
 
-  const groups =
-    groupBy === "client"
-      ? groupByClient(sorted, t("workspaces.parties.noClient"))
-      : null;
+  const groups = groupBy === "client" ? groupByClient(sorted) : null;
 
   const displayed = groups ? groups.flatMap((g) => g.workspaces) : sorted;
 

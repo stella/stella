@@ -1177,6 +1177,7 @@ type Messages = {
     "noGrouping": "None";
     "noItems": "No items yet";
     "noMatters": "No matters yet. Create your first matter to get started.";
+    "possibleDuplicates": "Possible duplicates";
     "operators": {
       "containsEvery": "Contains every";
       "equals": "Equals";

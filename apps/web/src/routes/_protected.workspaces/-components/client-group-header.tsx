@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "@stella/ui/lib/utils";
 
 type ClientGroupHeaderProps = {
-  clientId: string | null;
+  clientId: string;
   clientName: string;
   matterCount: number;
 };
@@ -22,17 +22,13 @@ export const ClientGroupHeader = ({
     )}
   >
     <h3 className="text-sm font-semibold">
-      {clientId ? (
-        <Link
-          className="hover:underline"
-          params={{ contactId: clientId }}
-          to="/contacts/$contactId"
-        >
-          {clientName}
-        </Link>
-      ) : (
-        clientName
-      )}
+      <Link
+        className="hover:underline"
+        params={{ contactId: clientId }}
+        to="/contacts/$contactId"
+      >
+        {clientName}
+      </Link>
     </h3>
     <span
       className={cn(

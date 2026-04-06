@@ -64,17 +64,20 @@ const readRateEntries = createHandler(
       userIds.size > 0
         ? await scopedDb((tx) =>
             tx
-              .select({ id: user.id, name: user.name })
+              .select({ id: user.id, image: user.image, name: user.name })
               .from(user)
               .where(inArray(user.id, [...userIds])),
           )
         : [];
 
-    const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
+    const userMap = new Map(
+      usersResult.map((u) => [u.id, { image: u.image, name: u.name }]),
+    );
 
     return rows.map((row) => ({
       ...row,
-      userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
+      userImage: row.userId ? (userMap.get(row.userId)?.image ?? null) : null,
+      userName: row.userId ? (userMap.get(row.userId)?.name ?? null) : null,
       createdAt: row.createdAt.toISOString(),
     }));
   },

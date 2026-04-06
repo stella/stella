@@ -1237,6 +1237,7 @@
       "zoomIn": "Tuvināt",
       "zoomOut": "Tālināt"
     },
+    "possibleDuplicates": "Iespējamie dublikāti",
     "properties": {
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",

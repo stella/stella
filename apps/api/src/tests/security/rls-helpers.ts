@@ -267,10 +267,38 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     },
   ]);
 
+  await db.insert(contacts).values([
+    {
+      id: ids.contactA,
+      organizationId: ids.orgA,
+      type: "person" as const,
+      displayName: "Contact A",
+    },
+    {
+      id: ids.contactA2,
+      organizationId: ids.orgA,
+      type: "person" as const,
+      displayName: "Contact A2",
+    },
+    {
+      id: ids.contactB,
+      organizationId: ids.orgB,
+      type: "person" as const,
+      displayName: "Contact B",
+    },
+    {
+      id: ids.contactB2,
+      organizationId: ids.orgB,
+      type: "person" as const,
+      displayName: "Contact B2",
+    },
+  ]);
+
   await db.insert(workspaces).values([
     {
       id: ids.wsA1,
       organizationId: ids.orgA,
+      clientId: ids.contactA,
       name: "WS A1",
       reference: "REF-A1",
       status: "active" as const,
@@ -278,6 +306,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     {
       id: ids.wsA2,
       organizationId: ids.orgA,
+      clientId: ids.contactA2,
       name: "WS A2",
       reference: "REF-A2",
       status: "active" as const,
@@ -285,6 +314,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     {
       id: ids.wsB1,
       organizationId: ids.orgB,
+      clientId: ids.contactB,
       name: "WS B1",
       reference: "REF-B1",
       status: "active" as const,
@@ -423,33 +453,6 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.docCounterB1,
       workspaceId: ids.wsB1,
       lastValue: 0,
-    },
-  ]);
-
-  await db.insert(contacts).values([
-    {
-      id: ids.contactA,
-      organizationId: ids.orgA,
-      type: "person" as const,
-      displayName: "Contact A",
-    },
-    {
-      id: ids.contactA2,
-      organizationId: ids.orgA,
-      type: "person" as const,
-      displayName: "Contact A2",
-    },
-    {
-      id: ids.contactB,
-      organizationId: ids.orgB,
-      type: "person" as const,
-      displayName: "Contact B",
-    },
-    {
-      id: ids.contactB2,
-      organizationId: ids.orgB,
-      type: "person" as const,
-      displayName: "Contact B2",
     },
   ]);
 

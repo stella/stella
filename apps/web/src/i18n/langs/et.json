@@ -1237,6 +1237,7 @@
       "zoomIn": "Suumi sisse",
       "zoomOut": "Suumi välja"
     },
+    "possibleDuplicates": "Võimalikud duplikaadid",
     "properties": {
       "addInputProperty": "Lisage vähemalt üks sisestusomadus, kasutades \"@\"",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",

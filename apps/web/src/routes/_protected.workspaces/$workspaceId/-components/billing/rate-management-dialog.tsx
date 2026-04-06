@@ -19,6 +19,7 @@ import {
 } from "@stella/ui/components/select";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { UserIdentity } from "@/components/user-avatar";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
   useCreateRateEntry,
@@ -421,15 +422,35 @@ const RateEntriesView = ({
               key={entry.id}
             >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">
-                    {entry.userName ?? t("billing.rates.defaultRate")}
-                  </span>
-                  <span className="text-sm tabular-nums">
-                    {formatCurrency(entry.hourlyRate, table?.currency ?? "USD")}
-                    {t("billing.rates.perHour")}
-                  </span>
-                </div>
+                {entry.userId ? (
+                  <div className="flex items-center gap-2">
+                    <UserIdentity
+                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      image={entry.userImage}
+                      name={entry.userName}
+                    />
+                    <span className="text-sm tabular-nums">
+                      {formatCurrency(
+                        entry.hourlyRate,
+                        table?.currency ?? "USD",
+                      )}
+                      {t("billing.rates.perHour")}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {t("billing.rates.defaultRate")}
+                    </span>
+                    <span className="text-sm tabular-nums">
+                      {formatCurrency(
+                        entry.hourlyRate,
+                        table?.currency ?? "USD",
+                      )}
+                      {t("billing.rates.perHour")}
+                    </span>
+                  </div>
+                )}
                 <span className="text-muted-foreground text-xs">
                   {entry.effectiveFrom}
                   {entry.effectiveTo
@@ -465,7 +486,7 @@ const RateEntriesView = ({
 type Member = {
   id: string;
   userId: string;
-  user: { name: string; email: string };
+  user: { email: string; image?: string | null | undefined; name: string };
 };
 
 const CreateRateEntryForm = ({
@@ -530,7 +551,31 @@ const CreateRateEntryForm = ({
               value={field.state.value}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t("billing.rates.defaultRate")} />
+                <SelectValue placeholder={t("billing.rates.defaultRate")}>
+                  {(current) => {
+                    if (typeof current !== "string" || current.length === 0) {
+                      return t("billing.rates.defaultRate");
+                    }
+
+                    const selectedMember = members.find(
+                      (member) => member.userId === current,
+                    );
+
+                    if (!selectedMember) {
+                      return t("billing.rates.defaultRate");
+                    }
+
+                    return (
+                      <UserIdentity
+                        avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                        className="min-w-0"
+                        image={selectedMember.user.image}
+                        name={selectedMember.user.name}
+                        secondaryText={selectedMember.user.email}
+                      />
+                    );
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectPopup>
                 <SelectItem value="">
@@ -538,7 +583,13 @@ const CreateRateEntryForm = ({
                 </SelectItem>
                 {members.map((member) => (
                   <SelectItem key={member.userId} value={member.userId}>
-                    {member.user.name}
+                    <UserIdentity
+                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      className="min-w-0"
+                      image={member.user.image}
+                      name={member.user.name}
+                      secondaryText={member.user.email}
+                    />
                   </SelectItem>
                 ))}
               </SelectPopup>

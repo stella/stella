@@ -8,6 +8,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test",
     "typecheck": "tsgo --noEmit",
     "lint": "bun --bun oxlint --type-aware",
     "lint:fix": "bun --bun oxlint --type-aware --fix",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
     "typescript": "catalog:"
   }
 }

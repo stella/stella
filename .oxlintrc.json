@@ -13,6 +13,7 @@
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/require-router-select.ts",
+    "./.oxlint-plugins/no-raw-route-query-client.ts",
   ],
 
   "rules": {
@@ -229,6 +230,12 @@
         // translate-x, tab indicators, DOCX/PDF coordinates
         "no-physical-properties/no-physical-properties": "off",
       },
+    },
+    {
+      "files": ["apps/web/src/routes/**/*.{ts,tsx}"],
+      "rules": {
+        "no-raw-route-query-client/no-raw-route-query-client": "error"
+      }
     },
     {
       "files": ["apps/api/src/handlers/**/*.ts"],

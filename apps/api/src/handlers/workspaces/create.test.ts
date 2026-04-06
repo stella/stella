@@ -1,0 +1,98 @@
+import { describe, expect, test } from "bun:test";
+
+import type { SafeId } from "@/api/lib/branded-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+import createWorkspaces from "./create";
+
+const createContext = ({
+  body,
+  scopedDb,
+}: {
+  body: Parameters<typeof createWorkspaces.handler>[0]["body"];
+  scopedDb: Parameters<typeof createWorkspaces.handler>[0]["scopedDb"];
+}): Parameters<typeof createWorkspaces.handler>[0] =>
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
+  ({
+    body,
+    scopedDb,
+    memberRole: { role: "owner" },
+    orgAIConfig: null,
+    session: {
+      activeOrganizationId:
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
+        "org_test123" as SafeId<"organization">,
+      token: "token",
+    },
+    user: {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
+      id: "user_test123" as SafeId<"user">,
+    },
+  }) as Parameters<typeof createWorkspaces.handler>[0];
+
+describe("createWorkspaces", () => {
+  test("rejects teammate user IDs outside the active organization", async () => {
+    const validTeamMemberId = "user_valid_member";
+    const countSelect = {
+      from: () => ({
+        where: async () => [{ total: 0 }],
+      }),
+    };
+    const clientSelect = {
+      from: () => ({
+        where: () => ({
+          for: () => ({
+            limit: async () => [{ id: crypto.randomUUID() }],
+          }),
+        }),
+      }),
+    };
+    const membersSelect = {
+      from: () => ({
+        where: () => ({
+          for: async () => [{ userId: validTeamMemberId }],
+        }),
+      }),
+    };
+
+    const { getCallCount, scopedDb } = createScopedDbMock({
+      select: (fields: Record<string, unknown>) => {
+        if ("total" in fields) {
+          return countSelect;
+        }
+
+        if ("id" in fields) {
+          return clientSelect;
+        }
+
+        return membersSelect;
+      },
+      query: {
+        organizationSettings: {
+          findFirst: async () => null,
+        },
+      },
+    });
+
+    const result = await createWorkspaces.handler(
+      createContext({
+        body: {
+          id: crypto.randomUUID(),
+          clientId: crypto.randomUUID(),
+          memberUserIds: [validTeamMemberId, "user_outside_org"],
+          name: "Litigation intake",
+          filePropertyName: "Documents",
+        },
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: {
+        message: "Some users are not members of this organization",
+      },
+    });
+    expect(getCallCount()).toBe(1);
+  });
+});

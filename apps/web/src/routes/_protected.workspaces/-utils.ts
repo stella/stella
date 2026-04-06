@@ -18,20 +18,22 @@ export const getUniqueClientsFromWorkspace = (
   );
 };
 
-export const groupByClient = (
-  workspaces: Workspace[],
-  noClientLabel: string,
-): WorkspaceGroup[] => {
-  const groups = new Map<string | null, WorkspaceGroup>();
+export const groupByClient = (workspaces: Workspace[]): WorkspaceGroup[] => {
+  const groups = new Map<string, WorkspaceGroup>();
 
   for (const ws of workspaces) {
-    const key = ws.client?.id ?? null;
+    const client = ws.client;
+    if (!client) {
+      continue;
+    }
+
+    const key = client.id;
     let group = groups.get(key);
     if (!group) {
       group = {
-        groupId: key ?? ws.id,
+        groupId: key,
         clientId: key,
-        clientName: ws.client?.displayName ?? noClientLabel,
+        clientName: client.displayName,
         workspaces: [],
       };
       groups.set(key, group);
@@ -40,15 +42,7 @@ export const groupByClient = (
   }
 
   const result = [...groups.values()];
-  result.sort((a, b) => {
-    if (a.clientId === null) {
-      return 1;
-    }
-    if (b.clientId === null) {
-      return -1;
-    }
-    return a.clientName.localeCompare(b.clientName);
-  });
+  result.sort((a, b) => a.clientName.localeCompare(b.clientName));
 
   return result;
 };

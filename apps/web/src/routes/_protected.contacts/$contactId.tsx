@@ -7,6 +7,7 @@ import {
   BuildingIcon,
   LayersIcon,
   MailIcon,
+  PlusIcon,
   PhoneIcon,
   UserIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 import { Skeleton } from "@stella/ui/components/skeleton";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getMatterSwatch, MATTER_SWATCHES } from "@/lib/matter-colors";
 import {
@@ -42,6 +44,7 @@ import {
   contactsKeys,
 } from "@/routes/_protected.contacts/-queries";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
@@ -64,7 +67,9 @@ function ContactDetailPage() {
   const queryClient = useQueryClient();
   const { data: contact } = useSuspenseQuery(contactOptions(contactId));
   const deleteContact = useDeleteContact();
+  const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const handleDelete = () => {
@@ -82,9 +87,10 @@ function ContactDetailPage() {
           });
           await navigate({ to: "/contacts" });
         },
-        onError: () => {
+        onError: (error) => {
           toastManager.add({
-            title: t("errors.actionFailed"),
+            title:
+              error instanceof Error ? error.message : t("errors.actionFailed"),
             type: "error",
           });
         },
@@ -120,8 +126,24 @@ function ContactDetailPage() {
             {t(`contacts.type.${contact.type}`)}
           </span>
         </div>
-        {canDeleteContact && (
-          <div className="ms-auto">
+        <div className="ms-auto flex items-center gap-2">
+          {canCreateMatter && (
+            <Button
+              onClick={() =>
+                openCreateMatter({
+                  id: contact.id,
+                  displayName: contact.displayName,
+                  type: contact.type,
+                })
+              }
+              size="sm"
+              variant="outline"
+            >
+              <PlusIcon className="size-4" />
+              {t("workspaces.newMatter")}
+            </Button>
+          )}
+          {canDeleteContact && (
             <Button
               disabled={deleteContact.isPending}
               onClick={() => setIsDeleteOpen(true)}
@@ -130,8 +152,8 @@ function ContactDetailPage() {
             >
               {t("contacts.deleteContact")}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -374,15 +396,17 @@ function ContactDetailPage() {
             </h2>
             <div className="space-y-2 text-sm">
               {contact.originatingAttorney && (
-                <InfoRow
+                <UserInfoRow
+                  image={contact.originatingAttorney.image}
                   label={t("contacts.attorneys.originating")}
-                  value={contact.originatingAttorney.name}
+                  name={contact.originatingAttorney.name}
                 />
               )}
               {contact.responsibleAttorney && (
-                <InfoRow
+                <UserInfoRow
+                  image={contact.responsibleAttorney.image}
                   label={t("contacts.attorneys.responsible")}
-                  value={contact.responsibleAttorney.name}
+                  name={contact.responsibleAttorney.name}
                 />
               )}
             </div>
@@ -475,6 +499,26 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline gap-2">
     <span className="text-muted-foreground w-32 shrink-0">{label}</span>
     <span className="min-w-0 break-all">{value}</span>
+  </div>
+);
+
+const UserInfoRow = ({
+  image,
+  label,
+  name,
+}: {
+  image?: string | null | undefined;
+  label: string;
+  name: string;
+}) => (
+  <div className="flex items-start gap-2">
+    <span className="text-muted-foreground w-32 shrink-0">{label}</span>
+    <UserIdentity
+      avatarClassName="size-8 shrink-0 text-[0.625rem]"
+      className="min-w-0"
+      image={image}
+      name={name}
+    />
   </div>
 );
 

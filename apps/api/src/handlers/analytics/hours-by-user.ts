@@ -31,13 +31,14 @@ export const hoursByUserHandler = async ({
       .select({
         userId: timeEntries.userId,
         userName: sql<string>`coalesce(${user.name}, 'Unknown')`,
+        userImage: user.image,
         totalMinutes: sql<number>`coalesce(sum(${timeEntries.durationMinutes}), 0)::int`,
         count: sql<number>`count(*)::int`,
       })
       .from(timeEntries)
       .leftJoin(user, eq(timeEntries.userId, user.id))
       .where(and(...conditions))
-      .groupBy(timeEntries.userId, user.name)
+      .groupBy(timeEntries.userId, user.name, user.image)
       .orderBy(sql`sum(${timeEntries.durationMinutes}) desc`)
       .limit(100),
   );

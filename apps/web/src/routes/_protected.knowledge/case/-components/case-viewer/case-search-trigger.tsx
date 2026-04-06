@@ -7,8 +7,8 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
 import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stella/ui/components/button";
 import { Input } from "@stella/ui/components/input";

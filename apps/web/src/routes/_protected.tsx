@@ -51,12 +51,14 @@ import { getCourtColor } from "@/lib/court-colors";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { prefetchNonCriticalQuery } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
 import {
@@ -95,11 +97,13 @@ export const Route = createFileRoute("/_protected")({
     // cache hit instead of a serial round-trip after child loaders.
     // staleTime: Infinity → only fetch on cold cache, not every
     // navigation. Errors surface to the user via useSuspenseQuery.
-    void context.queryClient
-      .ensureQueryData({ ...roleOptions, staleTime: Infinity })
-      .catch((error: unknown) => {
+    void prefetchNonCriticalQuery(
+      context.queryClient,
+      { ...roleOptions, staleTime: Infinity },
+      (error: unknown) => {
         getAnalytics().captureError(error);
-      });
+      },
+    );
 
     return {
       authToken: context.session.token,
@@ -176,6 +180,7 @@ function ProtectedComponent() {
     <SidebarProvider>
       <ChatMentionProviders>
         <AppSidebar role={role} />
+        <CreateMatterDialog />
         <ProtectedContent
           decisionId={activeDecisionId}
           isOnChatRoute={isOnChatRoute}

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
+import { withTimeout } from "@stella/rivet/timeout";
 
 import { rivet } from "@/lib/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -27,20 +28,11 @@ export const viewsOptions = ({ key, context }: ViewsOptionsInput) =>
 
       const actor = rivet.views.getOrCreate(...actorConfig);
 
-      // Timeout prevents the loader from hanging
-      // indefinitely if the actor fails to respond.
-      const timeout = AbortSignal.timeout(10_000);
-      const combined = AbortSignal.any([signal, timeout]);
-
-      return await new Promise<Awaited<ReturnType<typeof actor.getViews>>>(
-        (resolve, reject) => {
-          combined.addEventListener(
-            "abort",
-            () => reject(new Error("Views actor timed out")),
-            { once: true },
-          );
-          actor.getViews().then(resolve).catch(reject);
-        },
-      );
+      return await withTimeout({
+        signal,
+        timeoutMs: 10_000,
+        timeoutMessage: "Views actor timed out",
+        run: async () => await actor.getViews(),
+      });
     },
   });

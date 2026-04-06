@@ -8,10 +8,9 @@ import {
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 import { panic } from "better-result";
 
+import { buildFieldMarkers } from "@/api/mcp/field-markers";
+
 const EMPTY_GAZETTEER_ENTRIES: GazetteerEntry[] = [];
-const FIELD_MARKER_PREFIX = "[[[__stella_mcp_anonymized_field_";
-const FIELD_MARKER_SUFFIX = "__]]]";
-const MAX_MARKER_NAMESPACE_ATTEMPTS = 4;
 
 const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   threshold: 0.4,
@@ -26,41 +25,6 @@ const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId,
 });
-
-const getFieldMarker = ({
-  index,
-  markerNamespace,
-}: {
-  index: number;
-  markerNamespace: string;
-}) => `${FIELD_MARKER_PREFIX}${markerNamespace}_${index}${FIELD_MARKER_SUFFIX}`;
-
-const buildFieldMarkers = ({
-  fieldCount,
-  fields,
-}: {
-  fieldCount: number;
-  fields: string[];
-}) => {
-  for (let attempt = 0; attempt < MAX_MARKER_NAMESPACE_ATTEMPTS; attempt += 1) {
-    const markerNamespace = crypto.randomUUID();
-    const markers = Array.from({ length: fieldCount }, (_, index) =>
-      getFieldMarker({
-        index,
-        markerNamespace,
-      }),
-    );
-    const hasCollision = markers.some((marker) =>
-      fields.some((field) => field.includes(marker)),
-    );
-
-    if (!hasCollision) {
-      return markers;
-    }
-  }
-
-  panic("Unable to generate collision-free anonymized field markers");
-};
 
 const splitRedactedFields = ({
   markers,

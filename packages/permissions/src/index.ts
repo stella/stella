@@ -8,6 +8,11 @@ import { createAccessControl } from "better-auth/plugins/access";
  * these actions per resource.
  */
 export const statements = {
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+  team: ["create", "update", "delete"],
+  ac: ["create", "read", "update", "delete"],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -36,6 +41,11 @@ export type PermissionInput = RequireAtLeastOne<Partial<PermissionMap>>;
 export const ac = createAccessControl(statements);
 
 const memberAc = ac.newRole({
+  organization: [],
+  member: [],
+  invitation: [],
+  team: [],
+  ac: ["read"],
   workspace: ["read", "create", "update", "delete"],
   contact: ["create", "update", "delete"],
   invoice: ["create", "update", "delete"],
@@ -53,6 +63,11 @@ const memberAc = ac.newRole({
 
 export const roles = {
   owner: ac.newRole({
+    organization: ["update", "delete"],
+    member: ["create", "update", "delete"],
+    invitation: ["create", "cancel"],
+    team: ["create", "update", "delete"],
+    ac: ["create", "read", "update", "delete"],
     workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
@@ -68,6 +83,11 @@ export const roles = {
     organizationSettings: ["update"],
   }),
   admin: ac.newRole({
+    organization: ["update"],
+    member: ["create", "update", "delete"],
+    invitation: ["create", "cancel"],
+    team: ["create", "update", "delete"],
+    ac: ["create", "read", "update", "delete"],
     workspace: ["read", "create", "update", "delete"],
     contact: ["create", "update", "delete"],
     invoice: ["create", "update", "delete"],
@@ -84,6 +104,11 @@ export const roles = {
   }),
   member: memberAc,
   intern: ac.newRole({
+    organization: [],
+    member: [],
+    invitation: [],
+    team: [],
+    ac: [],
     workspace: ["read"],
     contact: [],
     invoice: [],
@@ -99,6 +124,11 @@ export const roles = {
     organizationSettings: [],
   }),
   external: ac.newRole({
+    organization: [],
+    member: [],
+    invitation: [],
+    team: [],
+    ac: [],
     workspace: ["read"],
     contact: [],
     invoice: [],

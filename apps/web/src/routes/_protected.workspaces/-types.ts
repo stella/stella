@@ -24,7 +24,7 @@ export type MattersColumnId =
 
 export type WorkspaceGroup = {
   groupId: string;
-  clientId: string | null;
+  clientId: string;
   clientName: string;
   workspaces: Workspace[];
 };

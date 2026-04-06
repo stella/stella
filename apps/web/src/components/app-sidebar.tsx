@@ -102,6 +102,7 @@ import {
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import {
   LANG_ENDONYMS,
@@ -127,7 +128,6 @@ import {
   timeEntriesKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import {
-  useCreateWorkspace,
   useDeleteWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
@@ -135,6 +135,7 @@ import {
   workspacesKeys,
   workspacesNavigationOptions,
 } from "@/routes/_protected.workspaces/-queries";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 const isDev = import.meta.env.DEV;
 const RECENTS_LIMIT = 5;
@@ -767,9 +768,11 @@ const MatterItem = ({
 };
 
 const SidebarContextArea = ({
+  canCreateWorkspace,
   onCreateWorkspace,
   children,
 }: {
+  canCreateWorkspace: boolean;
   onCreateWorkspace: () => void;
   children?: React.ReactNode;
 }) => {
@@ -807,10 +810,12 @@ const SidebarContextArea = ({
           render={<span className="sr-only" />}
         />
         <MenuPopup anchor={ctxAnchor ?? undefined}>
-          <MenuItem onClick={onCreateWorkspace}>
-            <PlusIcon />
-            {t("navigation.newMatter")}
-          </MenuItem>
+          {canCreateWorkspace && (
+            <MenuItem onClick={onCreateWorkspace}>
+              <PlusIcon />
+              {t("navigation.newMatter")}
+            </MenuItem>
+          )}
         </MenuPopup>
       </Menu>
     </div>
@@ -824,8 +829,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = routeApi.useNavigate();
-  const createWorkspace = useCreateWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
+  const canCreateMatter = usePermissions({ workspace: ["create"] });
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const { theme, setTheme, palette, setPalette } = useTheme();
@@ -860,17 +866,10 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     workspaceMatch?.params.workspaceId ?? workspaces?.at(0)?.id;
 
   const handleCreateWorkspace = () => {
-    if (createWorkspace.isPending) {
+    if (!canCreateMatter) {
       return;
     }
-    createWorkspace.mutate(undefined, {
-      onError: () => {
-        toastManager.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
-      },
-    });
+    openCreateMatter();
   };
 
   const handleDeleteWorkspace = (workspaceId: string) => {
@@ -1229,7 +1228,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 </SidebarMenuButton>
                 {showNavBadges ? (
                   <NavBadge digit={3} />
-                ) : (
+                ) : canCreateMatter ? (
                   <SidebarMenuAction
                     onClick={handleCreateWorkspace}
                     showOnHover
@@ -1237,7 +1236,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   >
                     <PlusIcon />
                   </SidebarMenuAction>
-                )}
+                ) : null}
               </SidebarMenuItem>
             </NavContextMenu>
             <NavContextMenu config={fixedNavTargets[3].contextMenu}>
@@ -1303,7 +1302,10 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
         <SidebarSeparator />
 
         {/* Right-click anywhere below to create a new matter */}
-        <SidebarContextArea onCreateWorkspace={handleCreateWorkspace}>
+        <SidebarContextArea
+          canCreateWorkspace={canCreateMatter}
+          onCreateWorkspace={handleCreateWorkspace}
+        >
           {/* Pinned */}
           {pinned.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
