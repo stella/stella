@@ -8,6 +8,7 @@ import deleteEntities from "@/api/handlers/entities/delete";
 import downloadZip from "@/api/handlers/entities/download-zip";
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import moveEntity from "@/api/handlers/entities/move";
+import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
@@ -48,6 +49,9 @@ export const entitiesRoute = new Elysia({
   .post("/upload", uploadEntity.handler, {
     body: uploadEntity.config.body,
     invalidateQuery: true,
+  })
+  .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
+    body: openDesktopEditSession.config.body,
   })
   .post("/clip", clipEndpoint.handler, {
     ...clipEndpoint.config,

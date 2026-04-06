@@ -605,6 +605,79 @@ export const entityVersions = p.pgTable(
   ],
 );
 
+export const desktopEditSessionStatusEnum = p.pgEnum(
+  "desktop_edit_session_status",
+  ["open", "finalized", "cancelled"],
+);
+
+export const desktopEditSessions = p.pgTable(
+  "desktop_edit_sessions",
+  {
+    id: pUuid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: p.uuid("entity_id").notNull(),
+    propertyId: p.uuid("property_id").notNull(),
+    baseVersionId: p
+      .uuid("base_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    finalizedVersionId: p
+      .uuid("finalized_version_id")
+      .references(() => entityVersions.id, { onDelete: "set null" }),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: desktopEditSessionStatusEnum().notNull().default("open"),
+    fileName: p.varchar("file_name", { length: 256 }).notNull(),
+    checkpointFileId: p.uuid("checkpoint_file_id").notNull(),
+    checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
+    checkpointSizeBytes: p.integer("checkpoint_size_bytes"),
+    checkpointScanWarnings: p
+      .jsonb("checkpoint_scan_warnings")
+      .$type<string[] | null>(),
+    checkpointUpdatedAt: p.timestamp("checkpoint_updated_at"),
+    sessionTokenHash: p.varchar("session_token_hash", { length: 64 }).notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    closedAt: p.timestamp("closed_at"),
+  },
+  (table) => [
+    p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
+    p.index("desktop_edit_sessions_entity_id_idx").on(table.entityId),
+    p.index("desktop_edit_sessions_property_id_idx").on(table.propertyId),
+    p
+      .index("desktop_edit_sessions_base_version_id_idx")
+      .on(table.baseVersionId),
+    p
+      .uniqueIndex("desktop_edit_sessions_session_token_hash_uidx")
+      .on(table.sessionTokenHash),
+    p
+      .uniqueIndex("desktop_edit_sessions_open_uidx")
+      .on(table.createdBy, table.entityId, table.propertyId)
+      .where(sql`${table.status} = 'open'`),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
 export const fields = p.pgTable(
   "fields",
   {
@@ -1643,6 +1716,7 @@ export const relations = defineRelations(
     taskAssignees,
     entityLinks,
     entityVersions,
+    desktopEditSessions,
     fields,
     justifications,
     templates,
@@ -1820,6 +1894,10 @@ export const relations = defineRelations(
         from: r.entities.id,
         to: r.entityVersions.entityId,
       }),
+      desktopEditSessions: r.many.desktopEditSessions({
+        from: r.entities.id,
+        to: r.desktopEditSessions.entityId,
+      }),
       currentVersion: r.one.entityVersions({
         from: r.entities.currentVersionId,
         to: r.entityVersions.id,
@@ -1885,6 +1963,34 @@ export const relations = defineRelations(
       fields: r.many.fields({
         from: r.entityVersions.id,
         to: r.fields.entityVersionId,
+      }),
+    },
+    desktopEditSessions: {
+      workspace: r.one.workspaces({
+        from: r.desktopEditSessions.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.desktopEditSessions.entityId,
+        to: r.entities.id,
+      }),
+      property: r.one.properties({
+        from: r.desktopEditSessions.propertyId,
+        to: r.properties.id,
+      }),
+      baseVersion: r.one.entityVersions({
+        from: r.desktopEditSessions.baseVersionId,
+        to: r.entityVersions.id,
+        alias: "desktopEditSessionBaseVersion",
+      }),
+      finalizedVersion: r.one.entityVersions({
+        from: r.desktopEditSessions.finalizedVersionId,
+        to: r.entityVersions.id,
+        alias: "desktopEditSessionFinalizedVersion",
+      }),
+      createdByUser: r.one.user({
+        from: r.desktopEditSessions.createdBy,
+        to: r.user.id,
       }),
     },
     fields: {

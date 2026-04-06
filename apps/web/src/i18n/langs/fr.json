@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
       "defaultPropertyName": "Documents",
+      "desktopEdit": {
+        "action": "Modifier dans l’app de bureau",
+        "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
+        "authRequiredTitle": "Votre session a expiré",
+        "openedDescription": "Word ouvrira la copie locale gérée. stella desktop synchronise des points de contrôle cachés en arrière-plan, puis crée une seule nouvelle révision à la fin de la modification.",
+        "openedTitle": "Ouvert dans stella desktop",
+        "opening": "Ouverture...",
+        "unavailableDescription": "Lancez stella desktop et laissez-le ouvert avant d’utiliser l’édition sur le bureau.",
+        "unavailableTitle": "stella desktop n’est pas disponible."
+      },
       "downloadAsZip": "Télécharger en .zip",
       "maxEntitiesReached": "Nombre maximal d'entités atteint",
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",

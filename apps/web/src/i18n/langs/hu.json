@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
       "defaultPropertyName": "Dokumentumok",
+      "desktopEdit": {
+        "action": "Szerkesztés az asztali alkalmazásban",
+        "authRequiredDescription": "Frissítsd a stella felületét, és jelentkezz be újra, mielőtt az asztali szerkesztést használod.",
+        "authRequiredTitle": "A munkamenet lejárt",
+        "openedDescription": "A Word megnyitja a kezelt helyi másolatot. A stella desktop a háttérben szinkronizálja a rejtett ellenőrzőpontokat, majd a szerkesztés végén egy új verziót hoz létre.",
+        "openedTitle": "Megnyitva a stella desktop alkalmazásban",
+        "opening": "Megnyitás...",
+        "unavailableDescription": "Az asztali szerkesztés használata előtt indítsd el a stella desktop alkalmazást, és hagyd futni.",
+        "unavailableTitle": "A stella desktop nem érhető el."
+      },
       "downloadAsZip": ".zip fájl letöltése",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",

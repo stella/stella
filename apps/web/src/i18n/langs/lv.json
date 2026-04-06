@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",
       "defaultPropertyName": "Dokumenti",
+      "desktopEdit": {
+        "action": "Rediģēt datora lietotnē",
+        "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
+        "authRequiredTitle": "Sesija ir beigusies",
+        "openedDescription": "Word atvērs pārvaldīto lokālo kopiju. stella desktop fonā sinhronizē slēptos kontrolpunktus un pēc rediģēšanas pabeigšanas izveido vienu jaunu redakciju.",
+        "openedTitle": "Atvērts lietotnē stella desktop",
+        "opening": "Atver...",
+        "unavailableDescription": "Pirms rediģēšanas datora lietotnē palaidiet stella desktop un atstājiet to ieslēgtu.",
+        "unavailableTitle": "stella desktop nav pieejams."
+      },
       "downloadAsZip": "Lejupielādēt .zip failu",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",

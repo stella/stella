@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
       "defaultPropertyName": "Dokumenty",
+      "desktopEdit": {
+        "action": "Upravit v desktopu",
+        "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
+        "authRequiredTitle": "Relace vypršela",
+        "openedDescription": "Word otevře spravovanou lokální kopii. stella desktop průběžně synchronizuje skryté kontrolní body a po dokončení vytvoří jednu novou revizi.",
+        "openedTitle": "Otevřeno ve stella desktop",
+        "opening": "Otevírání...",
+        "unavailableDescription": "Před použitím desktopových úprav spusťte stella desktop a nechte ho běžet.",
+        "unavailableTitle": "stella desktop není k dispozici."
+      },
       "downloadAsZip": "Stáhnout .zip soubor",
       "maxEntitiesReached": "Dosažen maximální počet entit",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",

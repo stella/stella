@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
       "defaultPropertyName": "Dokumente",
+      "desktopEdit": {
+        "action": "Im Desktop bearbeiten",
+        "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
+        "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
+        "openedDescription": "Word öffnet die verwaltete lokale Kopie. stella desktop synchronisiert versteckte Zwischenstände im Hintergrund und erstellt nach Abschluss genau eine neue Revision.",
+        "openedTitle": "In stella desktop geöffnet",
+        "opening": "Wird geöffnet...",
+        "unavailableDescription": "Starten Sie stella desktop und lassen Sie die App geöffnet, bevor Sie die Desktop-Bearbeitung verwenden.",
+        "unavailableTitle": "stella desktop ist nicht verfügbar."
+      },
       "downloadAsZip": "Als .zip herunterladen",
       "maxEntitiesReached": "Maximale Anzahl an Entitäten erreicht",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",

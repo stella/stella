@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Añada una propiedad de archivo para subir archivos",
       "defaultPropertyName": "Documentos",
+      "desktopEdit": {
+        "action": "Editar en la app de escritorio",
+        "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
+        "authRequiredTitle": "La sesión caducó",
+        "openedDescription": "Word abrirá la copia local administrada. stella desktop sincroniza puntos de control ocultos en segundo plano y crea una sola revisión nueva cuando terminas de editar.",
+        "openedTitle": "Abierto en stella desktop",
+        "opening": "Abriendo...",
+        "unavailableDescription": "Inicia stella desktop y mantenlo abierto antes de usar la edición de escritorio.",
+        "unavailableTitle": "stella desktop no está disponible."
+      },
       "downloadAsZip": "Descargar archivo .zip",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",

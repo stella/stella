@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Pridėkite failo savybę norėdami įkelti failus",
       "defaultPropertyName": "Dokumentai",
+      "desktopEdit": {
+        "action": "Redaguoti darbalaukio programoje",
+        "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
+        "authRequiredTitle": "Sesija baigėsi",
+        "openedDescription": "Word atidarys valdomą vietinę kopiją. stella desktop fone sinchronizuoja paslėptus kontrolinius taškus ir baigus redaguoti sukuria vieną naują versiją.",
+        "openedTitle": "Atidaryta programoje stella desktop",
+        "opening": "Atidaroma...",
+        "unavailableDescription": "Prieš redaguodami darbalaukyje paleiskite stella desktop ir palikite ją veikti.",
+        "unavailableTitle": "stella desktop nepasiekiama."
+      },
       "downloadAsZip": "Atsisiųsti .zip failą",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
