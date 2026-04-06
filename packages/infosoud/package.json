@@ -1,0 +1,63 @@
+{
+  "name": "infosoud",
+  "version": "0.1.0",
+  "description": "Czech court case lookup SDK and CLI for infosoud.gov.cz",
+  "keywords": [
+    "court",
+    "czech",
+    "infosoud",
+    "justice",
+    "legal",
+    "scraper"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/infosoud",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/infosoud"
+  },
+  "bin": {
+    "infosoud": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "PUBLISHING.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "extract:codes": "bun scripts/extract-codes.ts",
+    "extract:codes:check": "bun scripts/extract-codes.ts --check",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "release:check": "bun run lint && bun run typecheck && bun run test && bun run build && bun run pack:dry-run",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

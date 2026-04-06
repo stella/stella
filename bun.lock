@@ -202,6 +202,18 @@
         "wxt": "^0.20.20",
       },
     },
+    "packages/infosoud": {
+      "name": "infosoud",
+      "version": "0.1.0",
+      "bin": {
+        "infosoud": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/permissions": {
       "name": "@stella/permissions",
       "version": "0.0.0",
@@ -2437,6 +2449,8 @@
     "immer": ["immer@11.1.4", "", {}, "sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw=="],
 
     "import-meta-resolve": ["import-meta-resolve@4.2.0", "", {}, "sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg=="],
+
+    "infosoud": ["infosoud@workspace:packages/infosoud"],
 
     "inherits": ["inherits@2.0.4", "", {}, "sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ=="],
 
