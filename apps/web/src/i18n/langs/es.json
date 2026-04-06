@@ -1237,6 +1237,7 @@
       "zoomIn": "Acercar",
       "zoomOut": "Alejar"
     },
+    "possibleDuplicates": "Posibles duplicados",
     "properties": {
       "addInputProperty": "Añada al menos una propiedad de entrada usando \"@\"",
       "addPromptForBetterResults": "Añada una instrucción para mejores resultados",

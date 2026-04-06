@@ -1237,6 +1237,7 @@
       "zoomIn": "Powiększ",
       "zoomOut": "Pomniejsz"
     },
+    "possibleDuplicates": "Możliwe duplikaty",
     "properties": {
       "addInputProperty": "Dodaj co najmniej jedną właściwość wejściową za pomocą \"@\"",
       "addPromptForBetterResults": "Dodaj prompt, aby uzyskać lepsze wyniki",

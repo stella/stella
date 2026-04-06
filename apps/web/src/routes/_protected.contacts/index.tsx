@@ -216,9 +216,10 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
             type: "success",
           });
         },
-        onError: () => {
+        onError: (error) => {
           toastManager.add({
-            title: t("errors.actionFailed"),
+            title:
+              error instanceof Error ? error.message : t("errors.actionFailed"),
             type: "error",
           });
         },

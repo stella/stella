@@ -494,11 +494,7 @@ const BlockRenderer = ({
     // need their own alignment; every other paragraph — including
     // intro, argumentation and unroled body text — defaults to
     // justified reading layout.
-    const nonJustifiedRoles = new Set([
-      "case-number",
-      "closing",
-      "signature",
-    ]);
+    const nonJustifiedRoles = new Set(["case-number", "closing", "signature"]);
     const shouldJustify =
       !isRomanNumeralDivider &&
       (block.role === undefined || !nonJustifiedRoles.has(block.role));

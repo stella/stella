@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { UserIdentity } from "@/components/user-avatar";
 import { hoursByUserOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/analytics";
 
 import { formatHours } from "./utils";
@@ -47,7 +48,13 @@ export const HoursByUserTable = ({
             <tbody>
               {data.map((row) => (
                 <tr className="border-b last:border-0" key={row.userId}>
-                  <td className="py-2">{row.userName}</td>
+                  <td className="py-2">
+                    <UserIdentity
+                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      image={row.userImage}
+                      name={row.userName}
+                    />
+                  </td>
                   <td className="py-2 text-right tabular-nums">
                     {formatHours(row.totalMinutes)}
                   </td>

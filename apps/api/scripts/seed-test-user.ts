@@ -18,7 +18,7 @@
  * session expiry without duplicating data.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -26,80 +26,26 @@ import { member, organization, session, user } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { env } from "@/api/env";
 
+import {
+  ALL_TEST_USER_IDS,
+  DEFAULT_ORG_ID,
+  DEFAULT_TEST_USER_COLLEAGUE_COUNT,
+  DEFAULT_USER_ID,
+  getSeedColleagues,
+} from "./seed-utils";
+
 const TEST_USER = {
-  id: "test-user-stella-dev",
+  id: DEFAULT_USER_ID,
   name: "Test User",
   email: "test@stella.dev",
 } as const;
 
-const COLLEAGUES = [
-  {
-    id: "test-user-alice-johnson",
-    memberId: "test-member-alice-johnson",
-    name: "Alice Johnson",
-    email: "alice@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=alice&backgroundColor=b6e3f4",
-  },
-  {
-    id: "test-user-bob-martinez",
-    memberId: "test-member-bob-martinez",
-    name: "Bob Martinez",
-    email: "bob@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=bob&backgroundColor=d1d4f9",
-  },
-  {
-    id: "test-user-clara-novak",
-    memberId: "test-member-clara-novak",
-    name: "Clara Novak",
-    email: "clara@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=clara&backgroundColor=ffd5dc",
-  },
-  {
-    id: "test-user-david-kim",
-    memberId: "test-member-david-kim",
-    name: "David Kim",
-    email: "david@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=david&backgroundColor=c0aede",
-  },
-  {
-    id: "test-user-eva-schmidt",
-    memberId: "test-member-eva-schmidt",
-    name: "Eva Schmidt",
-    email: "eva@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=eva&backgroundColor=b6e3f4",
-  },
-  {
-    id: "test-user-frank-horvat",
-    memberId: "test-member-frank-horvat",
-    name: "Frank Horvát",
-    email: "frank@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=frank&backgroundColor=d1d4f9",
-  },
-  {
-    id: "test-user-greta-jones",
-    memberId: "test-member-greta-jones",
-    name: "Greta Jones",
-    email: "greta@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=greta&backgroundColor=ffd5dc",
-  },
-] as const;
+const COLLEAGUES = getSeedColleagues(DEFAULT_TEST_USER_COLLEAGUE_COUNT);
 
 const TEST_ORG = {
-  id: "test-org-stella-dev",
+  id: DEFAULT_ORG_ID,
   name: "Test Firm",
   slug: "test-firm",
-} as const;
-
-const TEST_MEMBER = {
-  id: "test-member-stella-dev",
-  role: "owner",
 } as const;
 
 // Token that Playwright will send as a cookie.
@@ -112,6 +58,164 @@ const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
 const now = new Date();
 
+const DEFAULT_MEMBER_ROLE = "member" as const;
+const OWNER_MEMBER_ROLE = "owner" as const;
+
+const getSeedOrganizationIdentity = (organizationId: string) => {
+  if (organizationId === TEST_ORG.id) {
+    return TEST_ORG;
+  }
+
+  return {
+    id: organizationId,
+    name: `Seed Organization ${organizationId.slice(0, 8)}`,
+    slug: `seed-org-${organizationId.toLowerCase()}`,
+  };
+};
+
+const buildMemberId = (organizationId: string, userId: string): string => {
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(`${organizationId}:${userId}`)
+    .digest("hex");
+  return `seed-member-${hash.slice(0, 24)}`;
+};
+
+const ensureUserExists = async ({
+  id,
+  name,
+  email,
+  image,
+}: {
+  id: string;
+  name: string;
+  email: string;
+  image?: string;
+}) => {
+  if (
+    await db.query.user.findFirst({
+      where: { id },
+      columns: { id: true },
+    })
+  ) {
+    return;
+  }
+
+  await db.insert(user).values({
+    id,
+    name,
+    email,
+    image,
+    emailVerified: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+};
+
+export const ensureOrganizationExists = async (organizationId: string) => {
+  if (
+    await db.query.organization.findFirst({
+      where: { id: organizationId },
+      columns: { id: true },
+    })
+  ) {
+    return;
+  }
+
+  const org = getSeedOrganizationIdentity(organizationId);
+
+  await db.insert(organization).values({
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    createdAt: now,
+  });
+};
+
+export const ensureMembershipExists = async ({
+  organizationId,
+  userId,
+  role,
+}: {
+  organizationId: string;
+  userId: string;
+  role: typeof DEFAULT_MEMBER_ROLE | typeof OWNER_MEMBER_ROLE;
+}) => {
+  const existingMembership = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    )
+    .limit(1);
+
+  if (existingMembership.length > 0) {
+    return;
+  }
+
+  await db.insert(member).values({
+    id: buildMemberId(organizationId, userId),
+    organizationId,
+    userId,
+    role,
+    createdAt: now,
+  });
+};
+
+export async function ensureSeedColleagueUsers({
+  colleagueCount = DEFAULT_TEST_USER_COLLEAGUE_COUNT,
+}: {
+  colleagueCount?: number;
+} = {}) {
+  for (const colleague of getSeedColleagues(colleagueCount)) {
+    await ensureUserExists(colleague);
+  }
+}
+
+export async function ensureSeedColleaguesInOrganization({
+  organizationId,
+  colleagueCount = 3,
+}: {
+  organizationId: string;
+  colleagueCount?: number;
+}) {
+  await ensureSeedColleagueUsers({ colleagueCount });
+
+  for (const colleague of getSeedColleagues(colleagueCount)) {
+    await ensureMembershipExists({
+      organizationId,
+      userId: colleague.id,
+      role: DEFAULT_MEMBER_ROLE,
+    });
+  }
+}
+
+export async function ensurePrimarySeedUserInOrganization({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId: string;
+}) {
+  await ensureOrganizationExists(organizationId);
+
+  const existingUser = await db.query.user.findFirst({
+    where: { id: userId },
+    columns: { id: true },
+  });
+
+  if (!existingUser) {
+    throw new Error(
+      `Primary seed user ${userId} does not exist; sign in first or run db:seed-test-user`,
+    );
+  }
+
+  await ensureMembershipExists({
+    organizationId,
+    userId,
+    role: OWNER_MEMBER_ROLE,
+  });
+}
+
 /**
  * Ensure all test users and their memberships exist.
  *
@@ -120,91 +224,21 @@ const now = new Date();
  * never hits FK violations on `entities.created_by`.
  */
 export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
-  const ts = new Date();
+  await ensureUserExists(TEST_USER);
+  await ensureOrganizationExists(organizationId);
+  await ensureMembershipExists({
+    organizationId,
+    userId: TEST_USER.id,
+    role: OWNER_MEMBER_ROLE,
+  });
+  await ensureSeedColleagueUsers();
 
-  // --- primary user ---
-  if (
-    !(await db.query.user.findFirst({
-      where: { id: TEST_USER.id },
-      columns: { id: true },
-    }))
-  ) {
-    await db.insert(user).values({
-      id: TEST_USER.id,
-      name: TEST_USER.name,
-      email: TEST_USER.email,
-      emailVerified: true,
-      createdAt: ts,
-      updatedAt: ts,
-    });
-  }
-
-  // --- colleague users ---
   for (const colleague of COLLEAGUES) {
-    if (
-      !(await db.query.user.findFirst({
-        where: { id: colleague.id },
-        columns: { id: true },
-      }))
-    ) {
-      await db.insert(user).values({
-        id: colleague.id,
-        name: colleague.name,
-        email: colleague.email,
-        image: colleague.image,
-        emailVerified: true,
-        createdAt: ts,
-        updatedAt: ts,
-      });
-    }
-  }
-
-  // --- org ---
-  if (
-    !(await db.query.organization.findFirst({
-      where: { id: organizationId },
-      columns: { id: true },
-    }))
-  ) {
-    await db.insert(organization).values({
-      id: organizationId,
-      name: TEST_ORG.name,
-      slug: TEST_ORG.slug,
-      createdAt: ts,
-    });
-  }
-
-  // --- memberships ---
-  if (
-    !(await db.query.member.findFirst({
-      where: { id: TEST_MEMBER.id },
-      columns: { id: true },
-    }))
-  ) {
-    await db.insert(member).values({
-      id: TEST_MEMBER.id,
+    await ensureMembershipExists({
       organizationId,
-      userId: TEST_USER.id,
-      role: TEST_MEMBER.role,
-      createdAt: ts,
+      userId: colleague.id,
+      role: DEFAULT_MEMBER_ROLE,
     });
-  }
-
-  for (const colleague of COLLEAGUES) {
-    if (
-      !(await db.query.member.findFirst({
-        where: { id: colleague.memberId },
-        columns: { id: true },
-      }))
-    ) {
-      await db.insert(member).values({
-        id: colleague.memberId,
-        organizationId,
-        userId: colleague.id,
-        role: "member",
-        createdAt: ts,
-      });
-    }
   }
 }
 
@@ -214,106 +248,42 @@ async function seed() {
     process.exit(1);
   }
 
-  // --- user ---
-  const existingUser = await db.query.user.findFirst({
-    where: { id: TEST_USER.id },
+  const existingUsers = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(inArray(user.id, ALL_TEST_USER_IDS));
+  const existingUserIds = new Set(
+    existingUsers.map((existingUser) => existingUser.id),
+  );
+  const orgExistedBeforeSeed = !!(await db.query.organization.findFirst({
+    where: { id: TEST_ORG.id },
     columns: { id: true },
-  });
+  }));
 
-  if (existingUser) {
+  await ensureTestUsers();
+
+  if (existingUserIds.has(TEST_USER.id)) {
     console.log("Test user already exists:", TEST_USER.email);
   } else {
-    await db.insert(user).values({
-      id: TEST_USER.id,
-      name: TEST_USER.name,
-      email: TEST_USER.email,
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    });
     console.log("Created test user:", TEST_USER.email);
   }
 
-  // --- colleague users ---
   for (const colleague of COLLEAGUES) {
-    const existing = await db.query.user.findFirst({
-      where: { id: colleague.id },
-      columns: { id: true },
-    });
-
-    if (existing) {
+    if (existingUserIds.has(colleague.id)) {
       console.log("Colleague already exists:", colleague.email);
-    } else {
-      await db.insert(user).values({
-        id: colleague.id,
-        name: colleague.name,
-        email: colleague.email,
-        image: colleague.image,
-        emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
-      });
-      console.log("Created colleague:", colleague.email);
+      continue;
     }
+
+    console.log("Created colleague:", colleague.email);
   }
 
-  // --- organization ---
-  const existingOrg = await db.query.organization.findFirst({
-    where: { id: TEST_ORG.id },
-    columns: { id: true },
-  });
-
-  if (existingOrg) {
+  if (orgExistedBeforeSeed) {
     console.log("Test organization already exists:", TEST_ORG.name);
   } else {
-    await db.insert(organization).values({
-      id: TEST_ORG.id,
-      name: TEST_ORG.name,
-      slug: TEST_ORG.slug,
-      createdAt: now,
-    });
     console.log("Created test organization:", TEST_ORG.name);
   }
 
-  // --- membership ---
-  const existingMember = await db.query.member.findFirst({
-    where: { id: TEST_MEMBER.id },
-    columns: { id: true },
-  });
-
-  if (existingMember) {
-    console.log("Test membership already exists");
-  } else {
-    await db.insert(member).values({
-      id: TEST_MEMBER.id,
-      organizationId: TEST_ORG.id,
-      userId: TEST_USER.id,
-      role: TEST_MEMBER.role,
-      createdAt: now,
-    });
-    console.log("Created test membership (owner)");
-  }
-
-  // --- colleague memberships ---
-  for (const colleague of COLLEAGUES) {
-    const existing = await db.query.member.findFirst({
-      where: { id: colleague.memberId },
-      columns: { id: true },
-    });
-
-    if (existing) {
-      console.log("Colleague membership already exists:", colleague.name);
-    } else {
-      await db.insert(member).values({
-        id: colleague.memberId,
-        organizationId: TEST_ORG.id,
-        userId: colleague.id,
-        role: "member",
-        createdAt: now,
-      });
-      console.log("Created colleague membership:", colleague.name);
-    }
-  }
+  console.log("Ensured memberships for test organization users");
 
   // --- session (always refresh expiry) ---
   const existingSession = await db.query.session.findFirst({

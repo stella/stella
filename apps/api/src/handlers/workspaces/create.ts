@@ -1,9 +1,11 @@
 import { panic } from "better-result";
-import { and, count, eq, ilike, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
+  contacts,
   matterCounters,
   properties,
   workspaceMembers,
@@ -26,6 +28,12 @@ const config = {
   permissions: { workspace: ["create"] },
   body: t.Object({
     id: tNanoid,
+    clientId: tNanoid,
+    memberUserIds: t.Optional(
+      t.Array(t.String({ maxLength: 128 }), {
+        maxItems: LIMITS.workspaceMembersCount - 1,
+      }),
+    ),
     name: tDefaultVarchar,
     filePropertyName: tDefaultVarchar,
   }),
@@ -36,27 +44,74 @@ const createWorkspaces = createRootHandler(
   async ({ scopedDb, session, user, body }) =>
     await scopedDb(async (tx) => {
       const organizationId = session.activeOrganizationId;
+      const requestedMemberUserIds =
+        body.memberUserIds === undefined
+          ? []
+          : Array.from(new Set(body.memberUserIds));
+      const workspaceMemberUserIds = Array.from(
+        new Set([user.id, ...requestedMemberUserIds]),
+      );
 
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
-      const [countResult, duplicatedNames, settings] = await Promise.all([
-        tx.select({ total: count() }).from(workspaces).where(orgFilter),
-        tx
-          .select({ name: workspaces.name })
-          .from(workspaces)
-          .where(
-            and(orgFilter, ilike(workspaces.name, `${escapeLike(body.name)}%`)),
-          ),
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: organizationId } },
-          columns: {
-            matterNumberPattern: true,
-            matterNumberPadding: true,
-          },
-        }),
-      ]);
+      const [countResult, duplicatedNames, settings, client, orgMembers] =
+        await Promise.all([
+          tx.select({ total: count() }).from(workspaces).where(orgFilter),
+          tx
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(
+              and(
+                orgFilter,
+                ilike(workspaces.name, `${escapeLike(body.name)}%`),
+              ),
+            ),
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              matterNumberPattern: true,
+              matterNumberPadding: true,
+            },
+          }),
+          tx
+            .select({ id: contacts.id })
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.id, body.clientId),
+                eq(contacts.organizationId, organizationId),
+              ),
+            )
+            .for("update")
+            .limit(1)
+            .then((rows) => rows.at(0) ?? null),
+          requestedMemberUserIds.length > 0
+            ? tx
+                .select({ userId: member.userId })
+                .from(member)
+                .where(
+                  and(
+                    eq(member.organizationId, organizationId),
+                    inArray(member.userId, requestedMemberUserIds),
+                  ),
+                )
+                .for("update")
+            : Promise.resolve([]),
+        ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
+
+      if (!client) {
+        return status(404, {
+          message: "Client not found",
+        });
+      }
+
+      if (orgMembers.length !== requestedMemberUserIds.length) {
+        return status(400, {
+          message: "Some users are not members of this organization",
+        });
+      }
 
       if (activeCount >= LIMITS.workspacesCount) {
         return status(400, {
@@ -108,6 +163,7 @@ const createWorkspaces = createRootHandler(
       await tx.insert(workspaces).values({
         id: body.id,
         organizationId,
+        clientId: body.clientId,
         name: newName,
         reference,
       });
@@ -129,10 +185,12 @@ const createWorkspaces = createRootHandler(
 
       const workspaceId = brandPersistedWorkspaceId(body.id);
 
-      await tx.insert(workspaceMembers).values({
-        workspaceId,
-        userId: user.id,
-      });
+      await tx.insert(workspaceMembers).values(
+        workspaceMemberUserIds.map((userId) => ({
+          workspaceId,
+          userId,
+        })),
+      );
 
       await tx.insert(properties).values([
         {
@@ -145,7 +203,9 @@ const createWorkspaces = createRootHandler(
         },
       ]);
 
-      return;
+      return {
+        id: body.id,
+      };
     }),
 );
 

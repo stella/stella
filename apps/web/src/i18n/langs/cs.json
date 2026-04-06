@@ -1237,6 +1237,7 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out"
     },
+    "possibleDuplicates": "Možné duplicity",
     "properties": {
       "addInputProperty": "Přidejte alespoň jednu vstupní vlastnost pomocí \"@\"",
       "addPromptForBetterResults": "Přidejte prompt pro lepší výsledky",

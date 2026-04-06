@@ -1237,6 +1237,7 @@
       "zoomIn": "Nagyítás",
       "zoomOut": "Kicsinyítés"
     },
+    "possibleDuplicates": "Lehetséges duplikátumok",
     "properties": {
       "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",

@@ -46,6 +46,7 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
+import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
@@ -104,7 +105,14 @@ function Members() {
         <TableBody>
           {filtered.map((member) => (
             <TableRow className="group" key={member.id}>
-              <TableCell>{member.user.email}</TableCell>
+              <TableCell>
+                <UserIdentity
+                  avatarClassName="size-8 shrink-0 text-[0.625rem]"
+                  image={member.user.image}
+                  name={member.user.name}
+                  secondaryText={member.user.email}
+                />
+              </TableCell>
               <TableCell>{t(`organization.roles.${member.role}`)}</TableCell>
               <TableCell>{formatDate(member.createdAt)}</TableCell>
               <TableCell className="text-end">

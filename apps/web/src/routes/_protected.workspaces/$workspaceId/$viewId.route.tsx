@@ -9,8 +9,13 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { DefaultPendingComponent } from "@/components/route-components";
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { Actors } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import {
+  ensureCriticalQueryData,
+  prefetchNonCriticalQuery,
+} from "@/lib/react-query";
 import { createEventHandler, eventHandler } from "@/lib/rivet";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { WorkspaceView } from "@/lib/types";
@@ -56,28 +61,24 @@ export const Route = createFileRoute(
   component: RouteComponent,
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({ page: search.page ?? 1 }),
-  loader: async ({ context, params, deps }) => {
+  loader: async ({ context, deps, params }) => {
     const { workspaceId, viewId } = params;
-    const qc = context.queryClient;
-    const organizationId = context.user.activeOrganizationId;
+    const { authToken, queryClient, user } = context;
+    const organizationId = user.activeOrganizationId;
 
-    // Views are cached by the parent workspace route loader.
-    const views = await qc.ensureQueryData(
+    const views = await ensureCriticalQueryData(
+      queryClient,
       viewsOptions({
         key: { workspaceId },
-        context: { organizationId, authToken: context.authToken },
+        context: { organizationId, authToken },
       }),
     );
-
     const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+
     if (!activeView) {
       return;
     }
 
-    // Overview layouts render stats/activity from overviewOptions
-    // (already prefetched by the parent loader) plus time-entries
-    // and members for the Time & Team widget. Fire-and-forget the
-    // sidebar queries so they load in parallel with render.
     if (activeView.layout.type === "overview") {
       const weekStart = getWeekStart();
       const weekEnd = new Date(weekStart);
@@ -87,23 +88,38 @@ export const Route = createFileRoute(
       const prevWeekEnd = new Date(weekStart);
       prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
-      void qc.prefetchQuery(
+      void prefetchNonCriticalQuery(
+        queryClient,
         timeEntriesOptions(workspaceId, {
           dateFrom: toISODate(weekStart),
           dateTo: toISODate(weekEnd),
         }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
       );
-      void qc.prefetchQuery(
+      void prefetchNonCriticalQuery(
+        queryClient,
         timeEntriesOptions(workspaceId, {
           dateFrom: toISODate(prevWeekStart),
           dateTo: toISODate(prevWeekEnd),
         }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
       );
-      void qc.prefetchQuery(workspaceMembersOptions(workspaceId));
+      void prefetchNonCriticalQuery(
+        queryClient,
+        workspaceMembersOptions(workspaceId),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      );
       return;
     }
 
-    const entities = await qc.ensureQueryData(
+    const entities = await ensureCriticalQueryData(
+      queryClient,
       entitiesOptions({
         workspaceId,
         filters: activeView.layout.filters,
@@ -112,18 +128,21 @@ export const Route = createFileRoute(
       }),
     );
 
-    // Justifications are rendered via `useSyncJustifications` as a
-    // non-suspense query, so prefetch fire-and-forget — a transient
-    // failure here must not abort navigation. The sorted (and
-    // deduped) entityId array is load-bearing for cache-key
-    // stability: it must match the key built in
-    // `useSyncJustifications` via `normalizeEntityIds`.
-    if (entities.entities.length > 0) {
-      const entityIds = [
-        ...new Set(entities.entities.map((entity) => entity.entityId)),
-      ].toSorted();
-      void qc.prefetchQuery(justificationsOptions({ workspaceId, entityIds }));
+    if (entities.entities.length === 0) {
+      return;
     }
+
+    const entityIds = [
+      ...new Set(entities.entities.map((entity) => entity.entityId)),
+    ].toSorted();
+
+    void prefetchNonCriticalQuery(
+      queryClient,
+      justificationsOptions({ workspaceId, entityIds }),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+    );
   },
 });
 
@@ -182,8 +201,11 @@ function ViewsRoute() {
   const workflowActor = useWorkflowActor(workspaceId);
 
   const workflowQueryKey = workflowOptions({
-    workspaceId,
-    organizationId: viewsContext.organizationId,
+    key: { workspaceId },
+    context: {
+      organizationId: viewsContext.organizationId,
+      authToken: viewsContext.authToken,
+    },
   }).queryKey;
 
   const invalidateQueries = async () =>
@@ -321,15 +343,14 @@ function ViewsRoute() {
     return null;
   }
 
-  // Overview layouts render stats/activity from overviewOptions
-  // and don't need entities or properties, so we render a
-  // minimal frame that skips the entities suspense.
   if (activeView.layout.type === "overview") {
-    return <OverviewFrame activeView={activeView} workspaceId={workspaceId} />;
+    return (
+      <OverviewViewContent activeView={activeView} workspaceId={workspaceId} />
+    );
   }
 
   return (
-    <ViewContent
+    <EntityViewContent
       activeView={activeView}
       page={page}
       workspaceId={workspaceId}
@@ -337,66 +358,63 @@ function ViewsRoute() {
   );
 }
 
-type OverviewFrameProps = {
-  activeView: WorkspaceView;
-  workspaceId: string;
-};
-
-function OverviewFrame({ activeView, workspaceId }: OverviewFrameProps) {
-  const navigate = Route.useNavigate();
-
-  return (
-    <>
-      <div
-        className={cn(
-          "flex min-w-0 items-center justify-between border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <ViewSwitcher
-          activeViewId={activeView.id}
-          // eslint-disable-next-line typescript/no-misused-promises
-          onViewChange={async (viewId) => {
-            await navigate({
-              to: ".",
-              params: { workspaceId, viewId },
-              search: { page: undefined },
-            });
-          }}
-          workspaceId={workspaceId}
-        />
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto">
-          <Outlet />
-        </div>
-      </div>
-    </>
-  );
-}
-
 type ViewContentProps = {
   activeView: WorkspaceView;
-  page: number;
   workspaceId: string;
 };
 
-function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
-  const navigate = Route.useNavigate();
-  const { filters, sorts } = activeView.layout;
+type EntityViewContentProps = ViewContentProps & {
+  page: number;
+};
 
-  useSyncTable({ workspaceId, filters, sorts, page });
+function OverviewViewContent({ activeView, workspaceId }: ViewContentProps) {
+  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
+}
+
+function EntityViewContent({
+  activeView,
+  page,
+  workspaceId,
+}: EntityViewContentProps) {
+  useSyncTable({
+    workspaceId,
+    filters: activeView.layout.filters ?? [],
+    sorts: activeView.layout.sorts ?? [],
+    page,
+  });
 
   const { data } = useSuspenseQuery(
     useEntitiesOptions({
       workspaceId,
-      filters,
-      sorts,
+      filters: activeView.layout.filters,
+      sorts: activeView.layout.sorts,
       page,
     }),
   );
-
   const totalPages = Math.ceil(data.totalCount / data.pageSize);
+
+  return (
+    <ViewShell
+      activeView={activeView}
+      page={page}
+      totalPages={totalPages}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+type ViewShellProps = ViewContentProps & {
+  page?: number;
+  totalPages?: number;
+};
+
+function ViewShell({
+  activeView,
+  page,
+  totalPages,
+  workspaceId,
+}: ViewShellProps) {
+  const navigate = Route.useNavigate();
 
   const setPage = (newPage: number) => {
     // eslint-disable-next-line typescript/no-floating-promises
@@ -428,13 +446,15 @@ function ViewContent({ activeView, page, workspaceId }: ViewContentProps) {
           }}
           workspaceId={workspaceId}
         />
-        <ViewToolbar view={activeView} workspaceId={workspaceId} />
+        {activeView.layout.type !== "overview" && (
+          <ViewToolbar view={activeView} workspaceId={workspaceId} />
+        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
-        {totalPages > 1 && (
+        {page !== undefined && totalPages !== undefined && totalPages > 1 && (
           <EntityPagination
             onPageChange={setPage}
             page={page}

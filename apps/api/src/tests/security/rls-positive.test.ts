@@ -431,6 +431,7 @@ describe("workspaces table — correct scope", () => {
       await tx.insert(workspaces).values({
         id: toSafeId<"workspace">(crypto.randomUUID()),
         organizationId: ids.orgA,
+        clientId: ids.contactA,
         name: "RLS Insert Test",
         reference: "REF-INS",
         status: "active" as const,

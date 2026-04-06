@@ -6,6 +6,7 @@ import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useCaseSearchStore } from "@/lib/case-search-store";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
 import { ScrollMarkers } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers";
 import { buildSectionMap } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
@@ -24,7 +25,10 @@ const extractId = (param: string): string => {
 
 export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
   loader: async ({ context: { queryClient }, params: { decisionId } }) =>
-    await queryClient.ensureQueryData(decisionOptions(extractId(decisionId))),
+    await ensureCriticalQueryData(
+      queryClient,
+      decisionOptions(extractId(decisionId)),
+    ),
   component: DecisionViewer,
 });
 

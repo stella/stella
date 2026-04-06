@@ -12,6 +12,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { sessionOptions } from "@/routes/-queries";
 
 const isDev = import.meta.env.DEV;
@@ -30,9 +31,10 @@ export const Route = createRootRouteWithContext<{
     meta: [{ title: "stella" }],
   }),
   beforeLoad: async ({ context }) => {
-    const sessionData = await context.queryClient
-      .ensureQueryData(sessionOptions)
-      .catch(() => null);
+    const sessionData = await ensureCriticalQueryData(
+      context.queryClient,
+      sessionOptions,
+    ).catch(() => null);
 
     return {
       session: sessionData?.session ?? null,

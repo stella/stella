@@ -6,6 +6,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   BuildingIcon,
   PlusIcon,
@@ -130,29 +131,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     );
   };
 
-  const handleRemoveClient = () => {
-    updateWorkspace.mutate(
-      { workspaceId, clientId: null },
-      {
-        onSuccess: () => {
-          toastManager.add({
-            title: t("success.clientUpdated"),
-            type: "success",
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: workspacesKeys.byId(workspaceId),
-          });
-        },
-        onError: () => {
-          toastManager.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        },
-      },
-    );
-  };
+  const client = workspace.client ?? panic("Workspace has no client");
 
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
@@ -161,50 +140,27 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
         <h3 className="text-muted-foreground mb-3 text-sm font-medium">
           {t("workspaces.parties.client")}
         </h3>
-        {workspace.client ? (
-          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-            {workspace.client.type === "person" ? (
-              <UserIcon className="text-muted-foreground size-4" />
-            ) : (
-              <BuildingIcon className="text-muted-foreground size-4" />
-            )}
-            <Link
-              className="text-sm font-medium hover:underline"
-              params={{ contactId: workspace.client.id }}
-              to="/contacts/$contactId"
-            >
-              {workspace.client.displayName}
-            </Link>
-            <Button
-              aria-label={t("workspaces.parties.removeClient")}
-              className="ms-auto"
-              onClick={handleRemoveClient}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <XIcon className="size-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-muted-foreground text-sm">
-              {t("workspaces.parties.noClient")}
-            </p>
-            <ContactPicker
-              onCreate={handleCreateAndSetClient}
-              onSelect={handleSetClient}
-            />
-          </div>
-        )}
-        {workspace.client && (
-          <div className="mt-2">
-            <ContactPicker
-              onCreate={handleCreateAndSetClient}
-              onSelect={handleSetClient}
-              placeholder={t("workspaces.parties.changeClient")}
-            />
-          </div>
-        )}
+        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+          {client.type === "person" ? (
+            <UserIcon className="text-muted-foreground size-4" />
+          ) : (
+            <BuildingIcon className="text-muted-foreground size-4" />
+          )}
+          <Link
+            className="text-sm font-medium hover:underline"
+            params={{ contactId: client.id }}
+            to="/contacts/$contactId"
+          >
+            {client.displayName}
+          </Link>
+        </div>
+        <div className="mt-2">
+          <ContactPicker
+            onCreate={handleCreateAndSetClient}
+            onSelect={handleSetClient}
+            placeholder={t("workspaces.parties.changeClient")}
+          />
+        </div>
       </section>
 
       {/* Parties sub-section */}

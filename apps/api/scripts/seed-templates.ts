@@ -41,7 +41,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { s3 } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
-import { DEFAULT_ORG_ID, pickAuthor, seedId } from "./seed-utils";
+import {
+  ALL_TEST_USER_IDS,
+  DEFAULT_ORG_ID,
+  pickAuthor,
+  seedId,
+} from "./seed-utils";
 
 // ─── Clause body helpers ────────────────────────────────
 
@@ -2179,8 +2184,10 @@ const TEMPLATE_CLAUSE_LINKS: TemplateClauseLinkSeed[] = [
 
 export async function seedTemplates(
   organizationId?: SafeId<"organization">,
+  authorIds: readonly string[] = ALL_TEST_USER_IDS,
 ): Promise<void> {
   const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
+  const scopedSeedId = (label: string) => seedId(`${ORG_ID}:${label}`);
 
   console.log("  Templates & clauses:");
 
@@ -2189,7 +2196,7 @@ export async function seedTemplates(
     await db
       .insert(clauseCategories)
       .values({
-        id: seedId(cat.label),
+        id: scopedSeedId(cat.label),
         organizationId: ORG_ID,
         name: cat.name,
         description: cat.description,
@@ -2202,22 +2209,22 @@ export async function seedTemplates(
   // ── 2. Clauses + clause versions (v1) ──────────────
   let variantCount = 0;
   for (const [i, c] of CLAUSES.entries()) {
-    const clauseId = seedId(c.label);
-    const versionId = seedId(`${c.label}-v1`);
+    const clauseId = scopedSeedId(c.label);
+    const versionId = scopedSeedId(`${c.label}-v1`);
 
     await db
       .insert(clauses)
       .values({
         id: clauseId,
         organizationId: ORG_ID,
-        categoryId: seedId(c.catLabel),
+        categoryId: scopedSeedId(c.catLabel),
         title: c.title,
         description: c.description,
         usageNotes: c.usageNotes,
         language: "en",
         body: c.body,
         currentVersion: 1,
-        createdBy: pickAuthor(i),
+        createdBy: pickAuthor(authorIds, i),
       })
       .onConflictDoNothing();
 
@@ -2238,7 +2245,7 @@ export async function seedTemplates(
         await db
           .insert(clauseVariants)
           .values({
-            id: seedId(`${c.label}-var-${vi}`),
+            id: scopedSeedId(`${c.label}-var-${vi}`),
             organizationId: ORG_ID,
             clauseId,
             label: v.label,
@@ -2257,7 +2264,7 @@ export async function seedTemplates(
     await db
       .insert(templateCategories)
       .values({
-        id: seedId(cat.label),
+        id: scopedSeedId(cat.label),
         organizationId: ORG_ID,
         name: cat.name,
         description: cat.description,
@@ -2269,8 +2276,8 @@ export async function seedTemplates(
 
   // ── 5. Templates → S3 → template versions (v1) ─────
   for (const [i, t] of TEMPLATES.entries()) {
-    const templateId = seedId(t.label);
-    const versionId = seedId(`${t.label}-v1`);
+    const templateId = scopedSeedId(t.label);
+    const versionId = scopedSeedId(`${t.label}-v1`);
 
     // Build manifest
     const manifest: TemplateManifest = {
@@ -2297,7 +2304,7 @@ export async function seedTemplates(
       .values({
         id: templateId,
         organizationId: ORG_ID,
-        categoryId: seedId(t.catLabel),
+        categoryId: scopedSeedId(t.catLabel),
         name: t.name,
         fileName: t.fileName,
         s3Key,
@@ -2305,7 +2312,7 @@ export async function seedTemplates(
         manifest,
         fieldCount: t.fields.length,
         currentVersion: 1,
-        createdBy: pickAuthor(i),
+        createdBy: pickAuthor(authorIds, i),
       })
       .onConflictDoNothing();
 
@@ -2323,7 +2330,7 @@ export async function seedTemplates(
         s3Key: versionS3Key,
         manifest,
         fieldCount: t.fields.length,
-        createdBy: pickAuthor(i),
+        createdBy: pickAuthor(authorIds, i),
       })
       .onConflictDoNothing();
   }
@@ -2331,8 +2338,8 @@ export async function seedTemplates(
 
   // ── 6. Template-clause links ────────────────────────
   for (const link of TEMPLATE_CLAUSE_LINKS) {
-    const templateId = seedId(link.templateLabel);
-    const clauseId = seedId(link.clauseLabel);
+    const templateId = scopedSeedId(link.templateLabel);
+    const clauseId = scopedSeedId(link.clauseLabel);
 
     // Find variant ID if specified
     let clauseVariantId: string | undefined;
@@ -2343,7 +2350,7 @@ export async function seedTemplates(
           (v) => v.label === link.variantLabel,
         );
         if (vi !== -1) {
-          clauseVariantId = seedId(`${link.clauseLabel}-var-${vi}`);
+          clauseVariantId = scopedSeedId(`${link.clauseLabel}-var-${vi}`);
         }
       }
     }
@@ -2351,7 +2358,7 @@ export async function seedTemplates(
     await db
       .insert(templateClauses)
       .values({
-        id: seedId(`link-${link.templateLabel}-${link.slotName}`),
+        id: scopedSeedId(`link-${link.templateLabel}-${link.slotName}`),
         organizationId: ORG_ID,
         templateId,
         clauseId,

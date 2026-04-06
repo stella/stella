@@ -774,7 +774,7 @@ const VerticalTab = ({
             "text-muted-foreground hover:bg-accent hover:text-foreground",
             TOOLBAR_ROW_HEIGHT,
             active &&
-              "bg-background text-foreground before:bg-primary before:inset-s-0 before:absolute before:inset-y-0 before:w-0.5",
+              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5",
           )}
           onAuxClick={(e) => {
             if (e.button === 1) {

@@ -8,7 +8,7 @@ import type {
 import { env } from "@/api/env";
 import { errorTag } from "@/api/lib/errors/utils";
 
-import { getAnalytics, isLocalPostHogDebugEnabled } from "./index";
+import { getAnalytics } from "./index";
 import type { Analytics } from "./types";
 
 type AnalyticsPrimitive = boolean | number | string;
@@ -38,6 +38,8 @@ const MAX_STRING_LENGTH = 2000;
 const TRUNCATION_MARKER = " [truncated]";
 const ONE_SECOND_MS = 1000;
 const noop = () => void 0;
+const isLocalPostHogDebugEnabled = (): boolean =>
+  env.isDev && env.POSTHOG_LOCAL_DEBUG;
 
 const truncateString = (value: string): string => {
   if (value.length <= MAX_STRING_LENGTH) {

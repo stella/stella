@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
@@ -46,6 +47,8 @@ type ContactPickerProps = {
   type?: "person" | "organization" | undefined;
   placeholder?: string;
   autoFocus?: boolean;
+  invalid?: boolean;
+  inputRef?: React.Ref<HTMLInputElement>;
 };
 
 const searchContacts = async (q: string, type?: "person" | "organization") => {
@@ -70,6 +73,8 @@ export const ContactPicker = ({
   type,
   placeholder,
   autoFocus,
+  invalid = false,
+  inputRef,
 }: ContactPickerProps) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
@@ -122,8 +127,10 @@ export const ContactPicker = ({
       value={null}
     >
       <ComboboxInput
+        aria-invalid={invalid}
         autoFocus={autoFocus}
         placeholder={placeholder ?? t("workspaces.parties.searchContacts")}
+        ref={inputRef ?? null}
         showTrigger={false}
         startAddon={<SearchIcon />}
         value={query}

@@ -1,0 +1,239 @@
+import { useState } from "react";
+import type { ComponentProps } from "react";
+
+import { useForm, useStore } from "@tanstack/react-form";
+import { useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
+import { UserPlusIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { Button } from "@stella/ui/components/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+  DialogTrigger,
+} from "@stella/ui/components/dialog";
+import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
+import { Form } from "@stella/ui/components/form";
+import { Input } from "@stella/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stella/ui/components/select";
+import { toastManager } from "@stella/ui/components/toast";
+
+import { emailSchema, toFormErrors } from "@/lib/schema";
+import { roleOptions } from "@/routes/-queries";
+import {
+  getRoles,
+  managementRoles,
+  rolePriority,
+} from "@/routes/_protected.organization/-consts";
+import { useInviteMember } from "@/routes/_protected.organization/-mutations";
+
+type InviteMemberDialogProps = {
+  buttonLabel?: string;
+  buttonSize?: ComponentProps<typeof Button>["size"];
+  buttonVariant?: ComponentProps<typeof Button>["variant"];
+  description?: string;
+  onInvited?: () => void;
+  showIcon?: boolean;
+};
+
+const inviteSchema = v.strictObject({
+  email: emailSchema(),
+  role: v.picklist(["owner", "admin", "member"]),
+});
+
+const defaultValues: v.InferInput<typeof inviteSchema> = {
+  email: "",
+  role: "member",
+};
+
+export const useCanInviteMembers = () => {
+  const { data: currentUserRole } = useQuery({
+    ...roleOptions,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  return currentUserRole ? managementRoles.includes(currentUserRole) : false;
+};
+
+export const InviteMemberDialog = ({
+  buttonLabel,
+  buttonSize = "sm",
+  buttonVariant = "outline",
+  description,
+  onInvited,
+  showIcon = true,
+}: InviteMemberDialogProps) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(false);
+  const inviteMember = useInviteMember();
+  const { data: currentUserRole } = useQuery({
+    ...roleOptions,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const roles = getRoles(t);
+
+  const form = useForm({
+    defaultValues,
+    validators: { onDynamic: inviteSchema },
+    onSubmit: async ({ value }) => {
+      const parseResult = v.safeParse(inviteSchema, value);
+      if (!parseResult.success) {
+        return;
+      }
+
+      const parsedValue = parseResult.output;
+      const inviteResult = await Result.tryPromise(
+        async () =>
+          await inviteMember.mutateAsync({
+            email: parsedValue.email,
+            role: parsedValue.role,
+          }),
+      );
+
+      if (Result.isError(inviteResult)) {
+        return;
+      }
+
+      toastManager.add({
+        title: t("success.invitationSent"),
+        type: "success",
+      });
+      setIsOpen(false);
+      onInvited?.();
+    },
+  });
+
+  const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
+
+  if (
+    currentUserRole === undefined ||
+    !managementRoles.includes(currentUserRole)
+  ) {
+    return null;
+  }
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
+          form.reset();
+        }
+      }}
+      open={isOpen}
+    >
+      <DialogTrigger
+        render={<Button size={buttonSize} variant={buttonVariant} />}
+      >
+        {showIcon ? <UserPlusIcon className="size-4" /> : null}
+        {buttonLabel ?? t("common.invite")}
+      </DialogTrigger>
+      <DialogPopup>
+        <Form
+          className="gap-0"
+          errors={formErrors}
+          onSubmit={(e) => {
+            e.preventDefault();
+            // eslint-disable-next-line typescript/no-floating-promises
+            form.handleSubmit();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t("organization.invitations.inviteMember")}
+            </DialogTitle>
+            <DialogDescription>
+              {description ??
+                t("organization.invitations.inviteMemberDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="flex flex-col gap-4">
+            <form.Field name="email">
+              {(field) => (
+                <Field name={field.name}>
+                  <FieldLabel>
+                    {t("organization.invitations.emailAddressLabel")}
+                  </FieldLabel>
+                  <Input
+                    autoFocus
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    placeholder={t(
+                      "organization.invitations.emailAddressPlaceholder",
+                    )}
+                    required
+                    type="email"
+                    value={field.state.value}
+                  />
+                  <FieldError />
+                </Field>
+              )}
+            </form.Field>
+
+            <form.Field name="role">
+              {(field) => (
+                <Field name={field.name}>
+                  <FieldLabel>{t("common.role")}</FieldLabel>
+                  <Select
+                    items={roles}
+                    onValueChange={(val) => {
+                      if (val) {
+                        field.handleChange(val);
+                      }
+                    }}
+                    value={field.state.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("common.selectARole")} />
+                    </SelectTrigger>
+                    <SelectPopup alignItemWithTrigger={false}>
+                      {roles.map((item) => (
+                        <SelectItem
+                          disabled={
+                            rolePriority[item.value] <
+                            rolePriority[currentUserRole]
+                          }
+                          key={item.value}
+                          value={item.value}
+                        >
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                  <FieldError />
+                </Field>
+              )}
+            </form.Field>
+          </DialogPanel>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("common.cancel")}
+            </DialogClose>
+            <form.Subscribe selector={(s) => s.isSubmitting}>
+              {(isSubmitting) => (
+                <Button loading={isSubmitting} type="submit">
+                  {t("organization.invitations.sendInvitation")}
+                </Button>
+              )}
+            </form.Subscribe>
+          </DialogFooter>
+        </Form>
+      </DialogPopup>
+    </Dialog>
+  );
+};

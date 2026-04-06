@@ -47,10 +47,16 @@ import { s3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
 import { seedTemplates } from "./seed-templates";
-import { ensureTestUsers } from "./seed-test-user";
 import {
-  ALL_USER_IDS,
+  ensureSeedColleaguesInOrganization,
+  ensurePrimarySeedUserInOrganization,
+  ensureTestUsers,
+} from "./seed-test-user";
+import {
   at,
+  buildSeedUserIds,
+  buildSeedUserRates,
+  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_ORG_ID,
   DEFAULT_USER_ID,
   pickAuthor,
@@ -2311,19 +2317,13 @@ type RateEntrySeed = {
   effectiveFrom: string;
 };
 
-/** Tiered hourly rates (CZK) by user seniority */
-const USER_RATES: Record<string, number> = {
-  "test-user-stella-dev": 6500,
-  "test-user-alice-johnson": 4500,
-  "test-user-bob-martinez": 2500,
-  "test-user-clara-novak": 4500,
-  "test-user-david-kim": 6500,
-  "test-user-eva-schmidt": 3500,
-  "test-user-frank-horvat": 2500,
-  "test-user-greta-jones": 5500,
-};
-
-const buildRateTables = (): {
+const buildRateTables = ({
+  userIds,
+  userRates,
+}: {
+  userIds: readonly string[];
+  userRates: Record<string, number>;
+}): {
   tables: RateTableSeed[];
   entries: RateEntrySeed[];
 } => {
@@ -2338,14 +2338,14 @@ const buildRateTables = (): {
       name: "Default Rate Table",
       currency: "CZK",
     });
-    for (let ui = 0; ui < ALL_USER_IDS.length; ui++) {
-      const userId = at(ALL_USER_IDS, ui);
+    for (let ui = 0; ui < userIds.length; ui++) {
+      const userId = at(userIds, ui);
       entries.push({
         id: seedId(`rate-entry-${wsIndex}-${ui}`),
         workspaceId: ws.id,
         rateTableId: tableId,
         userId,
-        hourlyRate: USER_RATES[userId] ?? 4000,
+        hourlyRate: userRates[userId] ?? 4000,
         effectiveFrom: "2024-01-01",
       });
     }
@@ -2429,6 +2429,8 @@ const WS_LABELS = [
 
 const buildExtendedTimeEntries = (
   invoiceIds: string[],
+  userIds: readonly string[],
+  userRates: Record<string, number>,
 ): ExtendedTimeEntrySeed[] => {
   const entries: ExtendedTimeEntrySeed[] = [];
   const TARGET = 500;
@@ -2438,9 +2440,9 @@ const buildExtendedTimeEntries = (
     const ws = at(seedWorkspaces, wsIndex);
     const wsLabel = at(WS_LABELS, wsIndex);
     const matterId = seedId(`${wsLabel}-doc-1`);
-    const userIndex = i % ALL_USER_IDS.length;
-    const userId = at(ALL_USER_IDS, userIndex);
-    const rate = USER_RATES[userId] ?? 4000;
+    const userIndex = i % userIds.length;
+    const userId = at(userIds, userIndex);
+    const rate = userRates[userId] ?? 4000;
 
     // Spread across 90 days (Dec 2024 – Feb 2025)
     const dayOffset = i % 90;
@@ -2536,7 +2538,7 @@ const EXPENSE_DESCRIPTIONS = [
   "Postage for certified mail",
 ];
 
-const buildExpenses = (): ExpenseSeed[] => {
+const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
   const expenseSeeds: ExpenseSeed[] = [];
   const TARGET = 50;
 
@@ -2545,7 +2547,7 @@ const buildExpenses = (): ExpenseSeed[] => {
     const ws = at(seedWorkspaces, wsIndex);
     const wsLabel = at(WS_LABELS, wsIndex);
     const matterId = seedId(`${wsLabel}-doc-1`);
-    const userId = pickAuthor(i);
+    const userId = pickAuthor(userIds, i);
     const dayOffset = (i * 3) % 90;
     const date = new Date(2024, 11, 1 + dayOffset);
     const dateStr = date.toISOString().slice(0, 10);
@@ -2897,14 +2899,30 @@ export async function seed(organizationId?: string, userId?: string) {
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
   const USER_ID = userId ?? DEFAULT_USER_ID;
   const toWs = (id: string) => toSafeId<"workspace">(id);
+  const seedUserIds = buildSeedUserIds({
+    primaryUserId: USER_ID,
+    colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
+  });
+  const seedUserRates = buildSeedUserRates(seedUserIds);
 
   if (process.env.NODE_ENV === "production") {
     throw new Error("Refusing to run in production.");
   }
 
-  // Ensure all test users + memberships exist so entity
-  // FK constraints on created_by are satisfied.
-  await ensureTestUsers(ORG_ID);
+  // Ensure referenced users exist in the target org before
+  // seeding matters, billing, and analytics data.
+  if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
+    await ensureTestUsers(ORG_ID);
+  } else {
+    await ensurePrimarySeedUserInOrganization({
+      organizationId: ORG_ID,
+      userId: USER_ID,
+    });
+    await ensureSeedColleaguesInOrganization({
+      organizationId: ORG_ID,
+      colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
+    });
+  }
 
   console.log("Seeding development data...\n");
 
@@ -3072,7 +3090,7 @@ export async function seed(organizationId?: string, userId?: string) {
         workspaceId: toWs(e.workspaceId),
         kind: e.kind,
         parentId: e.parentId,
-        createdBy: pickAuthor(ei),
+        createdBy: pickAuthor(seedUserIds, ei),
       })
       .onConflictDoNothing();
 
@@ -3323,7 +3341,10 @@ export async function seed(organizationId?: string, userId?: string) {
   console.log(`  Billing codes: ${billingCodeSeeds.length}`);
 
   // 10. Rate tables + entries
-  const { tables: rateTableSeeds, entries: rateEntrySeeds } = buildRateTables();
+  const { tables: rateTableSeeds, entries: rateEntrySeeds } = buildRateTables({
+    userIds: seedUserIds,
+    userRates: seedUserRates,
+  });
   for (const rt of rateTableSeeds) {
     await db
       .insert(rateTables)
@@ -3377,7 +3398,11 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 12. Extended time entries (~500)
   const invoiceIds = invoiceSeeds.map((inv) => inv.id);
-  const extTimeEntries = buildExtendedTimeEntries(invoiceIds);
+  const extTimeEntries = buildExtendedTimeEntries(
+    invoiceIds,
+    seedUserIds,
+    seedUserRates,
+  );
   for (const te of extTimeEntries) {
     await db
       .insert(timeEntries)
@@ -3405,7 +3430,7 @@ export async function seed(organizationId?: string, userId?: string) {
   console.log(`  Time entries: ${extTimeEntries.length}`);
 
   // 13. Expenses (~50)
-  const expenseSeeds = buildExpenses();
+  const expenseSeeds = buildExpenses(seedUserIds);
   for (const exp of expenseSeeds) {
     await db
       .insert(expenses)
@@ -3428,7 +3453,7 @@ export async function seed(organizationId?: string, userId?: string) {
   console.log(`  Expenses: ${expenseSeeds.length}`);
 
   // 14. Templates & clauses (knowledge base)
-  await seedTemplates(ORG_ID);
+  await seedTemplates(ORG_ID, seedUserIds);
 
   console.log("\nDone. Dev data seeded successfully.");
 }

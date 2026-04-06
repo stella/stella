@@ -1078,6 +1078,7 @@ describe("workspaces table — wrong scope", () => {
         tx.insert(workspaces).values({
           id: toSafeId<"workspace">(crypto.randomUUID()),
           organizationId: ids.orgB,
+          clientId: ids.contactB,
           name: "Bad Workspace",
           reference: "REF-BAD",
           status: "active" as const,

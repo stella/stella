@@ -1,17 +1,55 @@
 import { describe, expect, test } from "bun:test";
-import { resolveConfig } from "vite";
+import type { PluginOption } from "vite";
+
+import config from "./vite.config";
 
 describe("vite config", () => {
-  test("resolves with plugins loaded", async () => {
-    const config = await resolveConfig(
-      { configFile: `${import.meta.dirname}/vite.config.ts` },
-      "build",
-    );
+  test("includes the expected plugins", async () => {
+    const plugins = await collectNamedPlugins(config.plugins ?? []);
 
-    expect(config.plugins.length).toBeGreaterThan(0);
+    expect(plugins.length).toBeGreaterThan(0);
 
-    const pluginNames = config.plugins.map((p) => p.name);
+    const pluginNames = plugins.map((plugin) => plugin.name);
     expect(pluginNames).toContain("vite:react-babel");
     expect(pluginNames).toContain("@rolldown/plugin-babel");
   });
 });
+
+const collectNamedPlugins = async (
+  options: PluginOption[],
+): Promise<{ name: string }[]> => {
+  const plugins: { name: string }[] = [];
+
+  for (const option of options) {
+    if (option === false || option === null || option === undefined) {
+      continue;
+    }
+
+    const resolved = await option;
+
+    if (Array.isArray(resolved)) {
+      plugins.push(...(await collectNamedPlugins(resolved)));
+      continue;
+    }
+
+    if (!hasName(resolved)) {
+      continue;
+    }
+
+    plugins.push(resolved);
+  }
+
+  return plugins;
+};
+
+const hasName = (value: unknown): value is { name: string } => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  if (!("name" in value)) {
+    return false;
+  }
+
+  return typeof value.name === "string";
+};

@@ -249,17 +249,13 @@ const MattersTableGroup = ({
       <TableRow>
         <TableCell className="font-semibold" colSpan={columns.length}>
           <span className="inline-flex items-center gap-2">
-            {group.clientId ? (
-              <Link
-                className="hover:underline"
-                params={{ contactId: group.clientId }}
-                to="/contacts/$contactId"
-              >
-                {group.clientName}
-              </Link>
-            ) : (
-              group.clientName
-            )}
+            <Link
+              className="hover:underline"
+              params={{ contactId: group.clientId }}
+              to="/contacts/$contactId"
+            >
+              {group.clientName}
+            </Link>
             <span
               className={cn(
                 "bg-muted rounded-full px-1.5 py-0.5",

@@ -5,7 +5,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { PlusIcon, TrashIcon, UserIcon } from "lucide-react";
+import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
@@ -29,6 +29,7 @@ import {
 } from "@stella/ui/components/select";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
@@ -129,17 +130,13 @@ const MemberRow = ({
 
   return (
     <li className="flex items-center gap-2 rounded-md border px-3 py-2">
-      <UserIcon className="text-muted-foreground size-4" />
-      <div className="flex flex-col">
-        <span className="text-sm font-medium">
-          {member.user?.name ?? member.userId}
-        </span>
-        {member.user?.email && (
-          <span className="text-muted-foreground text-xs">
-            {member.user.email}
-          </span>
-        )}
-      </div>
+      <UserIdentity
+        avatarClassName="size-8 shrink-0 text-[0.625rem]"
+        className="min-w-0 flex-1"
+        image={member.user?.image}
+        name={member.user?.name ?? member.userId}
+        secondaryText={member.user?.email ?? null}
+      />
       {canUpdate && membersCount > 1 && (
         <Dialog>
           <DialogTrigger
@@ -201,7 +198,9 @@ const AddMemberDialog = ({ workspaceId }: AddMemberDialogProps) => {
   );
 
   const memberItems = availableMembers.map((m) => ({
-    label: `${m.user.name} (${m.user.email})`,
+    email: m.user.email,
+    image: m.user.image,
+    name: m.user.name,
     value: m.userId,
   }));
 
@@ -257,23 +256,37 @@ const AddMemberDialog = ({ workspaceId }: AddMemberDialogProps) => {
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
-          <Select
-            items={memberItems}
-            onValueChange={setSelectedUserId}
-            value={selectedUserId}
-          >
+          <Select onValueChange={setSelectedUserId} value={selectedUserId}>
             <SelectTrigger>
               <SelectValue>
                 {(current) => {
                   const found = memberItems.find((m) => m.value === current);
-                  return found?.label ?? t("workspaces.members.selectMember");
+                  if (!found) {
+                    return t("workspaces.members.selectMember");
+                  }
+
+                  return (
+                    <UserIdentity
+                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      className="min-w-0"
+                      image={found.image}
+                      name={found.name}
+                      secondaryText={found.email}
+                    />
+                  );
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
               {memberItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
-                  {item.label}
+                  <UserIdentity
+                    avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                    className="min-w-0"
+                    image={item.image}
+                    name={item.name}
+                    secondaryText={item.email}
+                  />
                 </SelectItem>
               ))}
             </SelectPopup>
