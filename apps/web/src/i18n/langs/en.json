@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",
       "defaultPropertyName": "Documents",
+      "desktopEdit": {
+        "action": "Edit in desktop",
+        "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
+        "authRequiredTitle": "Your session expired",
+        "openedDescription": "Word will open the managed local copy. stella desktop keeps hidden checkpoints in sync, then creates one new revision when editing finishes.",
+        "openedTitle": "Opened in stella desktop",
+        "opening": "Opening...",
+        "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.",
+        "unavailableTitle": "stella desktop is not available."
+      },
       "downloadAsZip": "Download as ZIP",
       "maxEntitiesReached": "Max entities count reached",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",

@@ -1,0 +1,35 @@
+{
+  "name": "desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && electrobun build",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "dev": "bun run scripts/dev.ts",
+    "dev:app": "electrobun dev --watch",
+    "dev:view": "vite --host 127.0.0.1 --port 5177 --strictPort",
+    "format": "oxfmt -c ../../.oxfmtrc.json .",
+    "lint": "bun --bun oxlint --type-aware",
+    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@stella/ui": "workspace:*",
+    "electrobun": "1.16.0",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "@vitejs/plugin-react": "^6.0.0",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

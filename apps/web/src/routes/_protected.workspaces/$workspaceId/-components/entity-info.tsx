@@ -1,7 +1,9 @@
+import { useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { produce } from "immer";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, LaptopIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -10,7 +12,16 @@ import {
   AccordionTrigger,
 } from "@stella/ui/components/accordion";
 import { Button } from "@stella/ui/components/button";
+import { toastManager } from "@stella/ui/components/toast";
 
+import { env } from "@/env";
+import { getFreshLinkedAccount } from "@/lib/auth-session";
+import { DOCX_MIME } from "@/lib/consts";
+import {
+  DesktopBridgeUnavailableError,
+  openDocxInDesktop,
+} from "@/lib/desktop-bridge";
+import { isUnauthorizedError } from "@/lib/errors";
 import type { EntityField } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
@@ -32,8 +43,14 @@ export const EntityFileInfo = ({
   fields,
   scrollContainerRef,
 }: EntityFileInfoProps) => {
+  const t = useTranslations();
+  const [isOpeningInDesktop, setIsOpeningInDesktop] = useState(false);
   const field = fields.find((f) => f.content.type === "file");
   const activeView = useActiveView();
+  const workspaceId = useParams({
+    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    select: (params) => params.workspaceId,
+  });
   const { data: navData } = useSuspenseQuery({
     ...useEntitiesOptions(activeView),
     select: (data) => {
@@ -60,10 +77,73 @@ export const EntityFileInfo = ({
     return null;
   }
 
+  const isDocx = field.content.mimeType === DOCX_MIME;
+
   return (
     <div className="bg-popover mb-1.5 grid min-h-10 grid-cols-[1fr_auto] items-center gap-0.5 border-b ps-3 pe-1">
       <span className="truncate font-medium">{field.content.fileName}</span>
-      <div>
+      <div className="flex items-center gap-1">
+        {isDocx ? (
+          <Button
+            // eslint-disable-next-line typescript/no-misused-promises
+            onClick={async () => {
+              setIsOpeningInDesktop(true);
+              try {
+                const linkedAccount = await getFreshLinkedAccount();
+
+                await openDocxInDesktop({
+                  apiBaseUrl: env.VITE_API_URL,
+                  entityId,
+                  linkedAccount,
+                  propertyId: field.propertyId,
+                  workspaceId,
+                });
+
+                toastManager.add({
+                  description: t(
+                    "workspaces.files.desktopEdit.openedDescription",
+                  ),
+                  title: t("workspaces.files.desktopEdit.openedTitle"),
+                  type: "success",
+                });
+              } catch (error) {
+                if (error instanceof Error && isUnauthorizedError(error)) {
+                  toastManager.add({
+                    description: t(
+                      "workspaces.files.desktopEdit.authRequiredDescription",
+                    ),
+                    title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+                    type: "error",
+                  });
+                  return;
+                }
+
+                toastManager.add({
+                  description: t(
+                    "workspaces.files.desktopEdit.unavailableDescription",
+                  ),
+                  title:
+                    error instanceof DesktopBridgeUnavailableError
+                      ? t("workspaces.files.desktopEdit.unavailableTitle")
+                      : error instanceof Error
+                        ? error.message
+                        : t("workspaces.files.desktopEdit.unavailableTitle"),
+                  type: "error",
+                });
+              } finally {
+                setIsOpeningInDesktop(false);
+              }
+            }}
+            disabled={isOpeningInDesktop}
+            size="sm"
+            variant="outline"
+          >
+            <LaptopIcon />
+            {isOpeningInDesktop
+              ? t("workspaces.files.desktopEdit.opening")
+              : t("workspaces.files.desktopEdit.action")}
+          </Button>
+        ) : null}
         <Button
           disabled={!prevFile}
           // eslint-disable-next-line typescript/no-misused-promises

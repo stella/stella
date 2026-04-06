@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
       "defaultPropertyName": "Dokumenty",
+      "desktopEdit": {
+        "action": "Edytuj w aplikacji desktopowej",
+        "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
+        "authRequiredTitle": "Sesja wygasła",
+        "openedDescription": "Word otworzy zarządzaną lokalną kopię. stella desktop synchronizuje w tle ukryte punkty kontrolne, a po zakończeniu edycji tworzy jedną nową wersję.",
+        "openedTitle": "Otwarto w stella desktop",
+        "opening": "Otwieranie...",
+        "unavailableDescription": "Przed użyciem edycji na komputerze uruchom stella desktop i pozostaw go włączonego.",
+        "unavailableTitle": "stella desktop jest niedostępny."
+      },
       "downloadAsZip": "Pobierz plik .zip",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę encji",
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",

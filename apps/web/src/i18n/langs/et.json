@@ -1119,6 +1119,16 @@
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
       "defaultPropertyName": "Dokumendid",
+      "desktopEdit": {
+        "action": "Muuda töölauarakenduses",
+        "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
+        "authRequiredTitle": "Seanss on aegunud",
+        "openedDescription": "Word avab hallatud kohaliku koopia. stella desktop sünkroonib taustal peidetud kontrollpunkte ja loob redigeerimise lõpus ühe uue versiooni.",
+        "openedTitle": "Avatud rakenduses stella desktop",
+        "opening": "Avamine...",
+        "unavailableDescription": "Käivita stella desktop ja hoia see töös enne töölaual redigeerimise kasutamist.",
+        "unavailableTitle": "stella desktop pole saadaval."
+      },
       "downloadAsZip": "Laadi alla .zip-fail",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",

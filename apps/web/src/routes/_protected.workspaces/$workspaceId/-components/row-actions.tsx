@@ -6,6 +6,7 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileOutputIcon,
+  LaptopIcon,
   MessageSquareIcon,
   PencilIcon,
   ScanEyeIcon,
@@ -34,9 +35,16 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
+import { env } from "@/env";
 import { api } from "@/lib/api";
+import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
-import { ClientOperationError } from "@/lib/errors";
+import { DOCX_MIME } from "@/lib/consts";
+import {
+  DesktopBridgeUnavailableError,
+  openDocxInDesktop,
+} from "@/lib/desktop-bridge";
+import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -84,6 +92,7 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const canOpenInDesktop = !isBulk && file?.mimeType === DOCX_MIME;
 
   // Derive a default open handler when the caller doesn't
   // provide one. Tasks open in the inspector; displayable
@@ -156,6 +165,52 @@ export const RowActions = ({
       mimeType: file.mimeType,
       workspaceId,
     });
+  };
+
+  const handleOpenInDesktop = async () => {
+    if (!file || file.mimeType !== DOCX_MIME) {
+      return;
+    }
+
+    try {
+      const linkedAccount = await getFreshLinkedAccount();
+
+      await openDocxInDesktop({
+        apiBaseUrl: env.VITE_API_URL,
+        entityId: file.entityId,
+        linkedAccount,
+        propertyId: file.propertyId,
+        workspaceId,
+      });
+
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.openedDescription"),
+        title: t("workspaces.files.desktopEdit.openedTitle"),
+        type: "success",
+      });
+    } catch (error) {
+      if (error instanceof Error && isUnauthorizedError(error)) {
+        toastManager.add({
+          description: t(
+            "workspaces.files.desktopEdit.authRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        title:
+          error instanceof DesktopBridgeUnavailableError
+            ? t("workspaces.files.desktopEdit.unavailableTitle")
+            : error instanceof Error
+              ? error.message
+              : t("workspaces.files.desktopEdit.unavailableTitle"),
+        type: "error",
+      });
+    }
   };
 
   const handleChatAbout = () => {
@@ -256,6 +311,13 @@ export const RowActions = ({
           <MenuItem onClick={onRename}>
             <PencilIcon />
             {t("common.rename")}
+          </MenuItem>
+        )}
+        {canOpenInDesktop && (
+          // eslint-disable-next-line typescript/no-misused-promises
+          <MenuItem onClick={handleOpenInDesktop}>
+            <LaptopIcon />
+            {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
         <MenuItem onClick={handleChatAbout}>

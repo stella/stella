@@ -15,6 +15,7 @@ import {
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { devRoute } from "@/api/handlers/dev/routes";
+import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
@@ -276,6 +277,7 @@ const api = new Elysia()
       .use(workspacesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
+      .use(desktopEditSessionsRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)
       .use(templatesRoute)
