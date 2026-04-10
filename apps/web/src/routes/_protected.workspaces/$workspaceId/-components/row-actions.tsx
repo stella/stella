@@ -33,12 +33,12 @@ import {
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 
+import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { DOCX_MIME } from "@/lib/consts";
 import {
   DesktopBridgeUnavailableError,
@@ -88,6 +88,7 @@ export const RowActions = ({
 }: RowActionsProps) => {
   const t = useTranslations();
   const deleteEntities = useDeleteEntities();
+  const requestChatAbout = useRequestChatAbout(workspaceId);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
@@ -223,10 +224,9 @@ export const RowActions = ({
         category: "entity" as const,
         kind: e.kind,
         mimeType: f?.mimeType ?? null,
-        workspaceId,
       };
     });
-    useChatPanelStore.getState().requestChatAbout(mentions);
+    requestChatAbout(mentions);
   };
 
   const handleDuplicate = async () => {

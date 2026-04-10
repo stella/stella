@@ -67,9 +67,7 @@ describe("parseSpisZn", () => {
   });
 
   test("rejects trailing uppercase court-name tails that are not real court codes", () => {
-    expect(() => parseSpisZn("4 T 21/2025 MELNIK")).toThrow(
-      InfoSoudParseError,
-    );
+    expect(() => parseSpisZn("4 T 21/2025 MELNIK")).toThrow(InfoSoudParseError);
   });
 });
 

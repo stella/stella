@@ -128,7 +128,7 @@ export const generateBatch = async ({
   scopedDb,
   orgAIConfig,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  await Result.gen(async function* generateBatchGen() {
+  await Result.gen(async function* () {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,

@@ -132,10 +132,16 @@ describe("branded types", () => {
         fakeDb,
         [toSafeId<"workspace">("ws_test")],
         toSafeId<"organization">("org_test"),
+        toSafeId<"user">("user_test"),
       );
 
-      // @ts-expect-error - plain strings must not satisfy the RLS workspace boundary
-      createScopedDb(fakeDb, ["ws_test"], toSafeId<"organization">("org_test"));
+      createScopedDb(
+        fakeDb,
+        // @ts-expect-error - plain strings must not satisfy the RLS workspace boundary
+        ["ws_test"],
+        toSafeId<"organization">("org_test"),
+        toSafeId<"user">("user_test"),
+      );
     });
   });
 });

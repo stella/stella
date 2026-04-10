@@ -342,15 +342,21 @@
     "thinking": "Premýšľam...",
     "threads": "Konverzácie",
     "tool": {
-      "askUser": "Upresňujúce otázky",
-      "createDocument": "Vytvoriť dokument",
+      "ask-user": "Asking for clarification",
+      "create-document": "Vytvoriť dokument",
       "displayDocument": "Zobrazenie dokumentu",
-      "listEntities": "Výpis entít",
-      "readContent": "Čítanie obsahu",
-      "readEntity": "Čítanie entity",
+      "list-entities": "Výpis entít",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Čítanie obsahu",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Čítanie entity",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Hľadanie v texte dokumentov",
+      "search-matter": "Hľadanie v spise",
       "searchCaseLaw": "Vyhľadávanie v judikatúre",
-      "searchMatter": "Hľadanie v spise",
-      "updateEntityFields": "Aktualizovať metadáta"
+      "update-entity-fields": "Aktualizovať metadáta"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo"

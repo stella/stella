@@ -19,6 +19,7 @@ import {
   parseRequiredString,
   stringProp,
   textResult,
+  toolThrownErrorToMcpResult,
 } from "@/api/mcp/tool-utils";
 
 type CompatToolName = "fetch" | "search";
@@ -357,17 +358,26 @@ const handleCompatSearchTool: McpToolHandler = async ({
   }
 
   const executeSearchAcrossMatters =
-    getOrgTools(context).searchAcrossMatters.execute;
+    getOrgTools(context)["search-across-matters"].execute;
   if (!executeSearchAcrossMatters) {
     return errorResult("Tool is not executable");
   }
 
   const limit = DEFAULT_COMPAT_SEARCH_LIMIT;
   const compatLimit = Math.min(limit * 2, MAX_SEARCH_LIMIT);
-  const result = await executeSearchAcrossMatters(
-    { limit: compatLimit, query },
-    MCP_TOOL_EXECUTION_OPTIONS,
-  );
+  let result: Awaited<ReturnType<typeof executeSearchAcrossMatters>>;
+  try {
+    result = await executeSearchAcrossMatters(
+      { limit: compatLimit, query },
+      MCP_TOOL_EXECUTION_OPTIONS,
+    );
+  } catch (error) {
+    const mapped = toolThrownErrorToMcpResult(error);
+    if (mapped) {
+      return mapped;
+    }
+    throw error;
+  }
   if (hasErrorMessage(result)) {
     return errorResult(result.error);
   }
@@ -406,15 +416,24 @@ const handleCompatFetchTool: McpToolHandler = async ({
   }
 
   const executeReadContentAcrossMatters =
-    getOrgTools(context).readContentAcrossMatters.execute;
+    getOrgTools(context)["read-content-across-matters"].execute;
   if (!executeReadContentAcrossMatters) {
     return errorResult("Tool is not executable");
   }
 
-  const result = await executeReadContentAcrossMatters(
-    { entityId },
-    MCP_TOOL_EXECUTION_OPTIONS,
-  );
+  let result: Awaited<ReturnType<typeof executeReadContentAcrossMatters>>;
+  try {
+    result = await executeReadContentAcrossMatters(
+      { entityId },
+      MCP_TOOL_EXECUTION_OPTIONS,
+    );
+  } catch (error) {
+    const mapped = toolThrownErrorToMcpResult(error);
+    if (mapped) {
+      return mapped;
+    }
+    throw error;
+  }
   if (hasErrorMessage(result)) {
     return errorResult(result.error);
   }

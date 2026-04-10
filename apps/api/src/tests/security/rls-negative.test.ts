@@ -5,6 +5,8 @@ import { stella } from "@/api/db/rls";
 import {
   billingCodes,
   caseLawMatterLinks,
+  chatMessages,
+  chatThreads,
   clauseCategories,
   clauses,
   clauseVariants,
@@ -109,6 +111,33 @@ describe("organization SELECT — wrong scope", () => {
       expect(c).toBe(0);
     });
   }
+});
+
+describe("chat SELECT — wrong user or workspace", () => {
+  test("different user in the same workspace sees zero rows", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(chatThreads, eq(chatThreads.id, ids.chatThreadWorkspaceB1)),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
+  test("same user in an inaccessible workspace sees zero rows", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageWorkspaceA2),
+        ),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
 });
 
 // ════════════════════════════════════════════════════════
@@ -1074,7 +1103,7 @@ describe("workspaces table — wrong scope", () => {
 
   test("INSERT workspace with wrong org → policy violation", async () => {
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(() =>
+      tryCatch(async () =>
         tx.insert(workspaces).values({
           id: toSafeId<"workspace">(crypto.randomUUID()),
           organizationId: ids.orgB,
@@ -1227,7 +1256,7 @@ describe("scope reassignment via UPDATE", () => {
     // when no explicit WITH CHECK is set. The updated row's
     // workspace_id would not match the session wsIds.
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(() =>
+      tryCatch(async () =>
         tx
           .update(entities)
           .set({ workspaceId: ids.wsB1 })
@@ -1241,7 +1270,7 @@ describe("scope reassignment via UPDATE", () => {
   test("UPDATE workspace id to foreign workspace → policy violation", async () => {
     // USING defaults as WITH CHECK; the new id must be in wsIds.
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(() =>
+      tryCatch(async () =>
         tx
           .update(workspaces)
           .set({ id: ids.wsB1 })
@@ -1282,5 +1311,55 @@ describe("unset session variables", () => {
       return tx.$count(contacts);
     });
     expect(c).toBe(0);
+  });
+});
+
+describe("chat mutations — wrong user", () => {
+  test("insert with mismatched user_id is rejected", async () => {
+    const error = await tryCatch(async () =>
+      dryScopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
+          await tx.insert(chatThreads).values({
+            id: crypto.randomUUID(),
+            userId: ids.userB1,
+            title: "forbidden",
+            workspaceId: ids.wsA1,
+          });
+        },
+        ids.userA1,
+      ),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  });
+
+  test("update on another user's row affects zero rows", async () => {
+    const rows = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .update(chatMessages)
+          .set({ content: { version: 1 as const, data: [] } })
+          .where(eq(chatMessages.id, ids.chatMessageWorkspaceB1))
+          .returning({ id: chatMessages.id }),
+      ids.userA1,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  test("delete on another user's row affects zero rows", async () => {
+    const rows = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .delete(chatThreads)
+          .where(eq(chatThreads.id, ids.chatThreadWorkspaceB1))
+          .returning({ id: chatThreads.id }),
+      ids.userA1,
+    );
+    expect(rows).toHaveLength(0);
   });
 });

@@ -1,137 +1,170 @@
 import { Chat } from "@ai-sdk/react";
-import type { QueryClient } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
-import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
 import { panic } from "better-result";
-import type { ActorConn } from "rivetkit/client";
+import { v7 as uuidv7 } from "uuid";
 
-import { getChatActorConfig } from "@stella/rivet/actors/chat-actor-config";
-
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
-import type {
-  ActiveFileContext,
-  ProcessedAttachment,
-  UserContext,
-} from "@/lib/ai-sdk/rivet-transport";
-import { RivetChatTransport } from "@/lib/ai-sdk/rivet-transport";
-import type { ChatActor } from "@/lib/api";
-import { rivet } from "@/lib/api";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { env } from "@/env";
+import { api } from "@/lib/api";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
+import { APIError, toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
-import { sessionOptions } from "@/routes/-queries";
+import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
-type ChatActorConnection = ActorConn<ChatActor>;
+type ActiveFileContext = {
+  entityId: string;
+  fileName: string;
+};
 
-export const chatKeys = {
-  all: ["chat"],
-  thread: (threadId: string) => [...chatKeys.all, "thread", threadId],
-  threads: ["chat", "threads"],
-  workspaceThreads: (workspaceId: string) => [
-    ...chatKeys.all,
-    "threads",
-    workspaceId,
-  ],
+type ChatThreadKey = ChatThreadRef;
+
+type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
+
+type ChatThreadOptionsContext = {
+  allowMissingThread?: boolean | undefined;
+  getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
+  getUserContext?: (() => ChatUserContext) | undefined;
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<
-  { threadId: string },
-  {
-    connection: ChatActorConnection;
-    workspaceId?: string | undefined;
-    decisionId?: string | undefined;
-    getModelId?: (() => string | null) | undefined;
-    userContext?: UserContext | undefined;
-    getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
-  }
+  ChatThreadKey,
+  ChatThreadOptionsContext
 >;
+
+export const chatKeys = {
+  all: ["chat"],
+  groupedThreads: () => [...chatKeys.all, "threads", "grouped"],
+  thread: (key: ChatThreadKey) =>
+    key.scope === "global"
+      ? [...chatKeys.all, "thread", key.scope, key.threadId]
+      : [...chatKeys.all, "thread", key.scope, key.workspaceId, key.threadId],
+};
+
+const fetchThreadMessages = async (
+  key: ChatThreadKey,
+  {
+    allowMissingThread = false,
+  }: {
+    allowMissingThread?: boolean | undefined;
+  } = {},
+): Promise<PersistedChatMessage[]> => {
+  const response = await api.chat
+    .threads({ threadId: key.threadId })
+    .messages.get({
+      query: key.scope === "workspace" ? { workspaceId: key.workspaceId } : {},
+    });
+
+  if (response.error) {
+    const error = toAPIError(response.error);
+
+    if (allowMissingThread && APIError.is(error) && error.status === 404) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return response.data;
+};
+
+const fetchGroupedChatThreads = async () => {
+  const response = await api.chat.threads.get();
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data;
+};
+
+const getChatApiPath = () => `${env.VITE_API_URL}/v1/chat`;
+
+const buildSendRequestBody = ({
+  context,
+  key,
+  messages,
+}: {
+  context: ChatThreadOptionsContext | undefined;
+  key: ChatThreadKey;
+  messages: PersistedChatMessage[];
+}) => {
+  const message = messages.at(-1);
+  if (!message) {
+    panic("Missing chat message");
+  }
+
+  const body: {
+    activeFile?: ActiveFileContext | undefined;
+    message: PersistedChatMessage;
+    threadId: string;
+    userContext?: ChatUserContext | undefined;
+    workspaceId?: string | undefined;
+  } = {
+    message,
+    threadId: key.threadId,
+  };
+
+  if (key.scope === "workspace") {
+    body.workspaceId = key.workspaceId;
+  }
+
+  const userContext = context?.getUserContext?.();
+  if (userContext) {
+    body.userContext = userContext;
+  }
+
+  const activeFile = context?.getActiveFile?.();
+  if (activeFile) {
+    body.activeFile = activeFile;
+  }
+
+  return body;
+};
 
 export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.thread(key.threadId),
+    queryKey: chatKeys.thread(key),
     queryFn: async () => {
-      const initialMessages = await context.connection.getMessages({
-        threadId: key.threadId,
+      const messages = await fetchThreadMessages(key, {
+        allowMissingThread: context?.allowMissingThread,
       });
 
-      const transport = new RivetChatTransport({
-        connection: context.connection,
-        threadId: key.threadId,
-        workspaceId: context.workspaceId,
-        decisionId: context.decisionId,
-        getModelId: context.getModelId,
-        userContext: context.userContext,
-        getActiveFile: context.getActiveFile,
-      });
-
-      // SAFETY: messages from the actor are structurally
-      // ChatMessage — narrowing adds typed tool parts.
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const messages = initialMessages as ChatMessage[];
-      const chat = new Chat<ChatMessage>({
+      return new Chat<PersistedChatMessage>({
+        generateId: uuidv7,
         messages,
-        transport,
+        transport: new DefaultChatTransport({
+          api: getChatApiPath(),
+          credentials: "include",
+          prepareSendMessagesRequest: ({ messages: nextMessages }) => ({
+            body: buildSendRequestBody({
+              context,
+              key,
+              messages: nextMessages,
+            }),
+          }),
+        }),
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,
       });
-
-      return Object.assign(chat, {
-        /** Queue attachments for the next message. */
-        setAttachments: (atts: ProcessedAttachment[]) => {
-          transport.pendingAttachments = atts;
-        },
-      });
     },
   });
 
-export const chatThreadsOptions = (queryClient: QueryClient) =>
+export const groupedChatThreadsOptions = () =>
   queryOptions({
-    queryKey: chatKeys.threads,
-    queryFn: async () => {
-      const sessionData = await queryClient.ensureQueryData(sessionOptions);
-
-      if (!sessionData?.session.activeOrganizationId) {
-        panic("No active organization");
-      }
-
-      const actorConfig = getChatActorConfig({
-        type: "vanilla",
-        organizationId: sessionData.session.activeOrganizationId,
-        userId: sessionData.session.userId,
-        authToken: sessionData.session.token,
-      });
-
-      const handle = rivet.chat.getOrCreate(...actorConfig);
-
-      return handle.getThreads();
-    },
+    queryKey: chatKeys.groupedThreads(),
+    queryFn: async (): Promise<GroupedChatThreads> =>
+      await fetchGroupedChatThreads(),
   });
 
-export const chatWorkspaceThreadsOptions = (
-  workspaceId: string,
-  queryClient: QueryClient,
-) =>
-  queryOptions({
-    staleTime: STALE_TIME.FIVETEEN.MINUTES,
-    gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.workspaceThreads(workspaceId),
-    queryFn: async () => {
-      const sessionData = await queryClient.ensureQueryData(sessionOptions);
-
-      if (!sessionData?.session.activeOrganizationId) {
-        panic("No active organization");
-      }
-
-      const actorConfig = getChatActorConfig({
-        type: "vanilla",
-        organizationId: sessionData.session.activeOrganizationId,
-        userId: sessionData.session.userId,
-        authToken: sessionData.session.token,
-      });
-
-      const handle = rivet.chat.getOrCreate(...actorConfig);
-
-      return handle.getThreadsByWorkspace({ workspaceId });
-    },
+export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
+  await queryClient.invalidateQueries({
+    queryKey: chatKeys.groupedThreads(),
   });

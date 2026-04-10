@@ -1,8 +1,9 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ToolExecutionOptions } from "ai";
+import { TaggedError } from "better-result";
 
 import { env } from "@/api/env";
-import { createOrgTools } from "@/api/handlers/registry/actors/chat-tools";
+import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 
@@ -55,6 +56,16 @@ export const hasErrorMessage = (value: unknown): value is { error: string } => {
   }
 
   return typeof value.error === "string" && value.error.length > 0;
+};
+
+/** Map errors thrown from chat tool `execute` into MCP tool results. */
+export const toolThrownErrorToMcpResult = (
+  err: unknown,
+): CallToolResult | null => {
+  if (TaggedError.is(err)) {
+    return errorResult(err.message);
+  }
+  return null;
 };
 
 export const parseRequiredString = (
@@ -164,11 +175,19 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
     return errorResult("Tool is not executable");
   }
 
-  const result = await tool.execute(args, MCP_TOOL_EXECUTION_OPTIONS);
-  if (hasErrorMessage(result)) {
-    return errorResult(result.error);
+  try {
+    const result = await tool.execute(args, MCP_TOOL_EXECUTION_OPTIONS);
+    if (hasErrorMessage(result)) {
+      return errorResult(result.error);
+    }
+    return textResult(result);
+  } catch (error) {
+    const mapped = toolThrownErrorToMcpResult(error);
+    if (mapped) {
+      return mapped;
+    }
+    throw error;
   }
-  return textResult(result);
 };
 
 export const normalizeTextField = ({

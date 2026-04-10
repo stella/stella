@@ -3118,8 +3118,8 @@ export async function seed(organizationId?: string, userId?: string) {
   //
   //    Content is defined ONCE in `documentTexts` and flows to:
   //      - PDF/DOCX file on S3 (preview)
-  //      - `extracted_content` table (AI readContent tool)
-  //      - `search_documents` table (AI searchMatter tool)
+  //      - `extracted_content` table (AI read-content tool)
+  //      - `search_documents` table (AI search-matter tool)
   //      - `fields` table (file field + status/date/notes)
   const IV_BYTES = 12;
   let fileCount = 0;

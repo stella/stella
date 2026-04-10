@@ -342,15 +342,21 @@
     "thinking": "Gondolkodom...",
     "threads": "Beszélgetések",
     "tool": {
-      "askUser": "Pontosító kérdések",
-      "createDocument": "Dokumentum létrehozása",
+      "ask-user": "Asking for clarification",
+      "create-document": "Dokumentum létrehozása",
       "displayDocument": "Dokumentum megtekintése",
-      "listEntities": "Elemek listázva",
-      "readContent": "Tartalom olvasva",
-      "readEntity": "Elem olvasva",
+      "list-entities": "Elemek listázva",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Tartalom olvasva",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Elem olvasva",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Dokumentum szöveg keresése",
+      "search-matter": "Ügy keresve",
       "searchCaseLaw": "Joggyakorlat keresése",
-      "searchMatter": "Ügy keresve",
-      "updateEntityFields": "Metaadatok frissítése"
+      "update-entity-fields": "Metaadatok frissítése"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen"

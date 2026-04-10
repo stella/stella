@@ -18,7 +18,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 
-type AskUserPart = ToolUIPart<Pick<ChatUITools, "askUser">>;
+type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 
 type AskUserCardProps = {
   part: AskUserPart;
@@ -109,7 +109,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
       <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
         <div className="flex items-center gap-2 px-3 py-2">
           <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
-          <span className="font-medium">{t("chat.tool.askUser")}</span>
+          <span className="font-medium">{t("chat.tool.ask-user")}</span>
           {isLoading && (
             <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
           )}
@@ -130,7 +130,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2">
         <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="font-medium">{t("chat.tool.askUser")}</span>
+        <span className="font-medium">{t("chat.tool.ask-user")}</span>
         {(isDone || submitted) && (
           <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}

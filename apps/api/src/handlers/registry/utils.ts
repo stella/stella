@@ -42,6 +42,7 @@ export const createUserError = (
 export type GlobalActorConnState = {
   authToken: string;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
 };
@@ -57,6 +58,7 @@ type ActorConnState = GlobalActorConnState & {
 export const getScopedDb = (connState: GlobalActorConnState): ScopedDb =>
   createRootScopedDb({
     organizationId: connState.organizationId,
+    userId: connState.userId,
     workspaceIds: connState.accessibleWorkspaceIds,
   });
 
@@ -120,12 +122,18 @@ export const validateGlobalActorSession = async (
   key: string[],
   params: unknown,
 ): Promise<GlobalActorConnState> => {
-  const { authToken, organizationId, accessibleWorkspaceIds, orgAIConfig } =
-    await validateActorAuth(key, params);
+  const {
+    authToken,
+    organizationId,
+    sessionUserId,
+    accessibleWorkspaceIds,
+    orgAIConfig,
+  } = await validateActorAuth(key, params);
 
   return {
     authToken,
     organizationId,
+    userId: sessionUserId,
     accessibleWorkspaceIds,
     orgAIConfig,
   };
@@ -168,6 +176,7 @@ export const validateActorSession = async (
   const {
     authToken,
     organizationId,
+    sessionUserId,
     parsedKey,
     accessibleWorkspaces,
     accessibleWorkspaceIds,
@@ -189,6 +198,7 @@ export const validateActorSession = async (
   return {
     authToken,
     organizationId,
+    userId: sessionUserId,
     workspaceId: ws.id,
     accessibleWorkspaceIds,
     orgAIConfig,

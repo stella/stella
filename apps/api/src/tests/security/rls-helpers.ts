@@ -8,6 +8,8 @@ import {
   caseLawDecisions,
   caseLawMatterLinks,
   caseLawSources,
+  chatMessages,
+  chatThreads,
   clauseCategories,
   clauses,
   clauseVariants,
@@ -55,10 +57,10 @@ const orgId = () => toSafeId<"organization">(tid());
 export const createTestIds = () => ({
   orgA: orgId(),
   orgB: orgId(),
-  userA1: tid(),
-  userA2: tid(),
-  userB1: tid(),
-  userAdmin: tid(),
+  userA1: toSafeId<"user">(tid()),
+  userA2: toSafeId<"user">(tid()),
+  userB1: toSafeId<"user">(tid()),
+  userAdmin: toSafeId<"user">(tid()),
   wsA1: wsId(),
   wsA2: wsId(),
   wsB1: wsId(),
@@ -108,6 +110,14 @@ export const createTestIds = () => ({
   caseLawDecisionB: tid(),
   caseLawMatterLinkA1: tid(),
   caseLawMatterLinkB1: tid(),
+  chatThreadGlobalA1: tid(),
+  chatThreadWorkspaceA1: tid(),
+  chatThreadWorkspaceA2: tid(),
+  chatThreadWorkspaceB1: tid(),
+  chatMessageGlobalA1: tid(),
+  chatMessageWorkspaceA1: tid(),
+  chatMessageWorkspaceA2: tid(),
+  chatMessageWorkspaceB1: tid(),
   // Additional properties for dependencies
   propertyA1dep: tid(),
   propertyB1dep: tid(),
@@ -770,6 +780,73 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       decisionId: ids.caseLawDecisionB,
       workspaceId: ids.wsB1,
       linkedBy: ids.userB1,
+    },
+  ]);
+
+  await db.insert(chatThreads).values([
+    {
+      id: ids.chatThreadGlobalA1,
+      userId: ids.userA1,
+      title: "Global thread A1",
+      workspaceId: null,
+    },
+    {
+      id: ids.chatThreadWorkspaceA1,
+      userId: ids.userA1,
+      title: "Workspace thread A1",
+      workspaceId: ids.wsA1,
+    },
+    {
+      id: ids.chatThreadWorkspaceA2,
+      userId: ids.userA1,
+      title: "Workspace thread A2",
+      workspaceId: ids.wsA2,
+    },
+    {
+      id: ids.chatThreadWorkspaceB1,
+      userId: ids.userB1,
+      title: "Workspace thread B1",
+      workspaceId: ids.wsA1,
+    },
+  ]);
+
+  const chatContent = (text: string) => ({
+    version: 1 as const,
+    data: [{ type: "text" as const, text }],
+  });
+
+  await db.insert(chatMessages).values([
+    {
+      id: ids.chatMessageGlobalA1,
+      threadId: ids.chatThreadGlobalA1,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "user",
+      content: chatContent("global"),
+    },
+    {
+      id: ids.chatMessageWorkspaceA1,
+      threadId: ids.chatThreadWorkspaceA1,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+      role: "user",
+      content: chatContent("workspace-a1"),
+    },
+    {
+      id: ids.chatMessageWorkspaceA2,
+      threadId: ids.chatThreadWorkspaceA2,
+      userId: ids.userA1,
+      workspaceId: ids.wsA2,
+      role: "user",
+      content: chatContent("workspace-a2"),
+    },
+    {
+      id: ids.chatMessageWorkspaceB1,
+      threadId: ids.chatThreadWorkspaceB1,
+      userId: ids.userB1,
+      workspaceId: ids.wsA1,
+      role: "user",
+      content: chatContent("workspace-b1"),
     },
   ]);
 

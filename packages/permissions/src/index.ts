@@ -25,6 +25,8 @@ export const statements = {
   property: ["create", "update", "delete"],
   billingCode: ["create", "update", "delete"],
   rate: ["create", "update", "delete"],
+  // todo: add better permissions for chat
+  chat: ["create", "delete"],
   organizationSettings: ["update"],
 } as const;
 
@@ -58,6 +60,7 @@ const memberAc = ac.newRole({
   property: ["create", "update", "delete"],
   billingCode: ["create", "update", "delete"],
   rate: ["create", "update", "delete"],
+  chat: ["create", "delete"],
   organizationSettings: [],
 });
 
@@ -80,6 +83,7 @@ export const roles = {
     property: ["create", "update", "delete"],
     billingCode: ["create", "update", "delete"],
     rate: ["create", "update", "delete"],
+    chat: ["create", "delete"],
     organizationSettings: ["update"],
   }),
   admin: ac.newRole({
@@ -100,6 +104,7 @@ export const roles = {
     property: ["create", "update", "delete"],
     billingCode: ["create", "update", "delete"],
     rate: ["create", "update", "delete"],
+    chat: ["create", "delete"],
     organizationSettings: ["update"],
   }),
   member: memberAc,
@@ -121,6 +126,7 @@ export const roles = {
     property: [],
     billingCode: [],
     rate: [],
+    chat: ["create", "delete"],
     organizationSettings: [],
   }),
   external: ac.newRole({
@@ -141,6 +147,7 @@ export const roles = {
     property: [],
     billingCode: [],
     rate: [],
+    chat: [],
     organizationSettings: [],
   }),
 };

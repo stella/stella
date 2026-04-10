@@ -3,20 +3,30 @@ import { useState } from "react";
 import { getToolName } from "ai";
 import {
   ChevronDownIcon,
+  CircleHelpIcon,
   FileTextIcon,
   LandmarkIcon,
+  LayoutTemplateIcon,
   ListIcon,
   SearchIcon,
+  UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
 const TOOL_ICONS: Record<string, typeof SearchIcon> = {
-  searchMatter: SearchIcon,
-  listEntities: ListIcon,
-  readEntity: FileTextIcon,
-  readContent: FileTextIcon,
+  "ask-user": CircleHelpIcon,
+  "read-clause": FileTextIcon,
+  "list-templates": LayoutTemplateIcon,
+  "read-contact": UserIcon,
+  "read-content-across-matters": FileTextIcon,
+  "search-across-matters": SearchIcon,
+  "search-matter": SearchIcon,
+  "list-entities": ListIcon,
+  "read-entity": FileTextIcon,
+  "read-content": FileTextIcon,
+  "search-content": SearchIcon,
   searchCaseLaw: LandmarkIcon,
 };
 
@@ -33,12 +43,18 @@ export const ToolCallCard = ({
   const name = getToolName(part);
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
   const toolLabels: Record<string, string> = {
-    searchMatter: t("chat.tool.searchMatter"),
-    listEntities: t("chat.tool.listEntities"),
-    readEntity: t("chat.tool.readEntity"),
-    readContent: t("chat.tool.readContent"),
+    "ask-user": t("chat.tool.ask-user"),
+    "list-templates": t("chat.tool.list-templates"),
+    "read-clause": t("chat.tool.read-clause"),
+    "read-contact": t("chat.tool.read-contact"),
+    "read-content-across-matters": t("chat.tool.read-content-across-matters"),
+    "search-across-matters": t("chat.tool.search-across-matters"),
+    "search-matter": t("chat.tool.search-matter"),
+    "list-entities": t("chat.tool.list-entities"),
+    "read-entity": t("chat.tool.read-entity"),
+    "read-content": t("chat.tool.read-content"),
+    "search-content": t("chat.tool.search-content"),
     searchCaseLaw: t("chat.tool.searchCaseLaw"),
-    displayDocument: t("chat.tool.displayDocument"),
   };
   const label = toolLabels[name] ?? name;
 

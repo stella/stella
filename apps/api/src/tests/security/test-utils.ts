@@ -8,6 +8,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const allSchema = {
@@ -40,6 +41,8 @@ const createTestDb = async (): Promise<TestDatabase> => {
 
   return testDb;
 };
+
+const DEFAULT_TEST_USER_ID = toSafeId<"user">("user_test");
 
 // ── Shared PGlite singleton ─────────────────────────────
 //
@@ -89,7 +92,8 @@ export const createScopedQuery = (testDb: TestDatabase) => {
     wsIds: SafeId<"workspace">[],
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<T>,
-  ) => await createScopedDb(testDb, wsIds, orgId)(fn);
+    userId: SafeId<"user"> = DEFAULT_TEST_USER_ID,
+  ) => await createScopedDb(testDb, wsIds, orgId, userId)(fn);
 
   return scopedQuery;
 };
@@ -105,12 +109,18 @@ export const createDryScopedQuery = (testDb: TestDatabase) => {
     wsIds: SafeId<"workspace">[],
     orgId: SafeId<"organization">,
     fn: (tx: TestDatabaseTransaction) => Promise<void>,
+    userId: SafeId<"user"> = DEFAULT_TEST_USER_ID,
   ): Promise<void> => {
     try {
-      await scopedQuery(wsIds, orgId, async (tx) => {
-        await fn(tx);
-        tx.rollback();
-      });
+      await scopedQuery(
+        wsIds,
+        orgId,
+        async (tx) => {
+          await fn(tx);
+          tx.rollback();
+        },
+        userId,
+      );
     } catch (error) {
       if (error instanceof TransactionRollbackError) {
         return;

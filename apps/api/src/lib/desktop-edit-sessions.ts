@@ -5,6 +5,7 @@ import { db } from "@/api/db/root";
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type AuthorizedDesktopEditSession = {
   organizationId: SafeId<"organization">;
@@ -49,6 +50,7 @@ export const authorizeDesktopEditSession = async ({
 
   const rows = await db
     .select({
+      createdBy: desktopEditSessions.createdBy,
       organizationId: workspaces.organizationId,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
       workspaceId: desktopEditSessions.workspaceId,
@@ -77,6 +79,7 @@ export const authorizeDesktopEditSession = async ({
       organizationId: session.organizationId,
       scopedDb: createRootScopedDb({
         organizationId: session.organizationId,
+        userId: brandPersistedUserId(session.createdBy),
         workspaceIds: [session.workspaceId],
       }),
       workspaceId: session.workspaceId,

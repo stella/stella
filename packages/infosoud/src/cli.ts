@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { InfoSoudClient } from "./client.js";
 import { resolveCliLookupInput } from "./cli-input.js";
+import { InfoSoudClient } from "./client.js";
 import { isCourtCode, resolveCourtCodeAlias } from "./courts.js";
 import {
   formatCaseSummary,
@@ -168,10 +168,9 @@ const main = async (): Promise<void> => {
       parsedSpisZn.courtCode !== undefined &&
       !courtArg &&
       courtReference === parsedSpisZn.courtCode;
-    const resolvedCourtCode =
-      usesEmbeddedCourtCode
-        ? parsedSpisZn.courtCode
-        : await resolveCourtReference(client, courtReference);
+    const resolvedCourtCode = usesEmbeddedCourtCode
+      ? parsedSpisZn.courtCode
+      : await resolveCourtReference(client, courtReference);
 
     if (flags.hearings) {
       const result = await client.searchHearings({

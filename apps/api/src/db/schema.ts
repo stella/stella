@@ -6,9 +6,11 @@ import { customType } from "drizzle-orm/pg-core";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
+  chatPolicies,
   organizationCheck,
   orgPolicies,
   stella,
+  userPolicies,
   workspaceIdCheck,
   wsPolicies,
 } from "@/api/db/rls";
@@ -29,6 +31,10 @@ import type { DecisionAnalysis } from "@/api/handlers/case-law/analysis/types";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
+import type {
+  ChatMessageRole,
+  PersistedChatMessageContent,
+} from "@/api/handlers/chat/types";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1700,6 +1706,114 @@ export const caseLawIngestionFailures = p.pgTable(
   ],
 );
 
+// -- Chat --
+
+export const chatThreads = p.pgTable(
+  "chat_threads",
+  {
+    id: pUuid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: p.varchar({ length: 255 }).notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .index("chat_threads_workspace_user_idx")
+      .on(table.workspaceId, table.userId),
+    p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    ...chatPolicies(),
+  ],
+);
+
+export const chatMessages = p.pgTable(
+  "chat_messages",
+  {
+    id: pUuid.primaryKey(),
+    threadId: p
+      .uuid("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, {
+        onDelete: "cascade",
+      }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
+    content: p.jsonb().notNull().$type<PersistedChatMessageContent>(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("chat_messages_thread_created_idx")
+      .on(table.threadId, table.createdAt),
+    p
+      .index("chat_messages_user_workspace_created_idx")
+      .on(table.userId, table.workspaceId, table.createdAt),
+    ...chatPolicies(),
+  ],
+);
+
+// -- User Files (private user-owned uploads) --
+
+export const userFiles = p.pgTable(
+  "user_files",
+  {
+    id: pUuid.primaryKey(),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    fileName: p.varchar("file_name", { length: 512 }).notNull(),
+    mimeType: p.varchar("mime_type", { length: 255 }).notNull(),
+    sizeBytes: p.integer("size_bytes").notNull(),
+    sha256Hex: p.varchar("sha256_hex", { length: 64 }).notNull(),
+    s3Key: p.text("s3_key").notNull(),
+    threadId: p
+      .uuid("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, {
+        onDelete: "restrict",
+      }),
+    scanWarnings: p.text("scan_warnings").array(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.index("user_files_user_created_idx").on(table.userId, table.createdAt),
+    p
+      .index("user_files_thread_created_idx")
+      .on(table.threadId, table.createdAt),
+    p.index("user_files_user_hash_idx").on(table.userId, table.sha256Hex),
+    p.index("user_files_s3_key_idx").on(table.s3Key),
+    ...userPolicies(),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1749,6 +1863,9 @@ export const relations = defineRelations(
     caseLawSearchDocuments,
     caseLawIngestionEvents,
     caseLawIngestionFailures,
+    chatThreads,
+    chatMessages,
+    userFiles,
   },
   (r) => ({
     contacts: {
@@ -1791,6 +1908,16 @@ export const relations = defineRelations(
         from: r.contactRelationships.relatedContactId,
         to: r.contacts.id,
         alias: "contactRelRelated",
+      }),
+    },
+    userFiles: {
+      user: r.one.user({
+        from: r.userFiles.userId,
+        to: r.user.id,
+      }),
+      thread: r.one.chatThreads({
+        from: r.userFiles.threadId,
+        to: r.chatThreads.id,
       }),
     },
     workspaces: {
@@ -2272,6 +2399,30 @@ export const relations = defineRelations(
       source: r.one.caseLawSources({
         from: r.caseLawIngestionFailures.sourceId,
         to: r.caseLawSources.id,
+      }),
+    },
+    chatThreads: {
+      workspace: r.one.workspaces({
+        from: r.chatThreads.workspaceId,
+        to: r.workspaces.id,
+      }),
+      messages: r.many.chatMessages({
+        from: r.chatThreads.id,
+        to: r.chatMessages.threadId,
+      }),
+      userFiles: r.many.userFiles({
+        from: r.chatThreads.id,
+        to: r.userFiles.threadId,
+      }),
+    },
+    chatMessages: {
+      thread: r.one.chatThreads({
+        from: r.chatMessages.threadId,
+        to: r.chatThreads.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.chatMessages.workspaceId,
+        to: r.workspaces.id,
       }),
     },
   }),

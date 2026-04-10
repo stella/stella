@@ -33,15 +33,15 @@ void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
 }));
 
-void mock.module("@/api/handlers/registry/actors/chat-tools", () => ({
+void mock.module("@/api/handlers/chat/tools/org-tools", () => ({
   createOrgTools: () => ({
-    searchAcrossMatters: {
+    "search-across-matters": {
       execute: searchAcrossMattersExecute,
     },
-    readContentAcrossMatters: {
+    "read-content-across-matters": {
       execute: readContentAcrossMattersExecute,
     },
-    readContact: {
+    "read-contact": {
       execute: readContactExecute,
     },
   }),

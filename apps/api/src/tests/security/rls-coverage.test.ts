@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { SETTING_ORGANIZATION_ID, SETTING_WORKSPACE_IDS } from "@/api/db/rls";
+import {
+  SETTING_ORGANIZATION_ID,
+  SETTING_USER_ID,
+  SETTING_WORKSPACE_IDS,
+} from "@/api/db/rls";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -93,6 +97,43 @@ describe("policy coverage", () => {
         expect(expr).toContain("organization_id");
         expect(expr).toContain(SETTING_ORGANIZATION_ID);
       }
+    }
+  });
+
+  test("chat tables have user + optional workspace policies", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+
+    for (const table of ["chat_threads", "chat_messages"]) {
+      const tablePolicies = policies.filter((p) => p.table_name === table);
+      const cmds = new Set(tablePolicies.map((p) => p.command));
+      expect(cmds).toContain("r");
+      expect(cmds).toContain("a");
+      expect(cmds).toContain("w");
+      expect(cmds).toContain("d");
+
+      for (const pol of tablePolicies) {
+        const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
+        expect(expr).toContain("user_id");
+        expect(expr).toContain(SETTING_USER_ID);
+        expect(expr).toContain("workspace_id IS NULL");
+        expect(expr).toContain(SETTING_WORKSPACE_IDS);
+      }
+    }
+  });
+
+  test("user_files has user policies", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter((p) => p.table_name === "user_files");
+    const cmds = new Set(tablePolicies.map((p) => p.command));
+    expect(cmds).toContain("r");
+    expect(cmds).toContain("a");
+    expect(cmds).toContain("w");
+    expect(cmds).toContain("d");
+
+    for (const pol of tablePolicies) {
+      const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
     }
   });
 });

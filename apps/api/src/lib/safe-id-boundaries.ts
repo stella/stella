@@ -26,6 +26,9 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const brandPersistedUserId = (userId: string): SafeId<"user"> =>
+  toSafeId<"user">(userId);
+
 export const brandValidatedWorkflowActorKey = ({
   organizationId,
   workspaceId,

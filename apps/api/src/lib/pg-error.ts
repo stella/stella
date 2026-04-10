@@ -22,8 +22,15 @@ export const isPgError = (error: unknown, code: string): boolean =>
   hasPgCause(error.cause) &&
   error.cause.code === code;
 
+export const getPgErrorCode = (error: unknown): string | undefined =>
+  error instanceof DrizzleQueryError && hasPgCause(error.cause)
+    ? error.cause.code
+    : undefined;
+
 export const PG_ERROR = {
+  DEADLOCK_DETECTED: "40P01",
   FOREIGN_KEY_VIOLATION: "23503",
+  SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",
   INSUFFICIENT_PRIVILEGE: "42501",
 } as const;

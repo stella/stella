@@ -140,19 +140,6 @@ export type ExtractedDocument = {
   view: RevisionView;
 };
 
-/**
- * A DOCX document extracted with all three revision views
- * for chat context. Used by the chat file attachment flow.
- */
-export type ChatExtractedDocument = {
-  /** Accepted text (all changes applied). */
-  simple: string;
-  /** Original text (all changes rejected). */
-  original: string;
-  /** Inline tracked-changes markup. */
-  trackedChanges: string;
-};
-
 // ── Template data model (extended) ───────────────────────
 
 export type TemplateDataValue =

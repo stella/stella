@@ -1,12 +1,6 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import {
-  ContactIcon,
-  FileTextIcon,
-  FolderIcon,
-  LayersIcon,
-  ScrollTextIcon,
-} from "lucide-react";
+import { FileTextIcon, FolderIcon, LayersIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
@@ -15,6 +9,7 @@ import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const cls = "size-3 shrink-0";
+const CHAT_MENTION_LABEL_MAX_WIDTH_CLASS = "max-w-48";
 
 const CategoryIcon = ({
   category,
@@ -34,15 +29,6 @@ const CategoryIcon = ({
     return (
       <LayersIcon className={cls} style={{ color: getMatterColor(attrId) }} />
     );
-  }
-  if (category === "contact") {
-    return <ContactIcon className={cls} />;
-  }
-  if (category === "template") {
-    return <FileTextIcon className={cls} />;
-  }
-  if (category === "clause") {
-    return <ScrollTextIcon className={cls} />;
   }
 
   if (attrKind === "folder") {
@@ -69,7 +55,7 @@ export const ChatMentionNode = (props: NodeViewProps) => {
     <NodeViewWrapper className="inline">
       <span
         className={cn(
-          "inline-flex items-center gap-0.5",
+          "inline-flex max-w-full items-center gap-0.5",
           "bg-accent rounded px-1 py-0.5",
           "text-accent-foreground text-xs font-medium",
         )}
@@ -80,7 +66,9 @@ export const ChatMentionNode = (props: NodeViewProps) => {
           attrMimeType={attrs.mimeType}
           category={attrs.category ?? "entity"}
         />
-        {attrs.label}
+        <span className={cn("truncate", CHAT_MENTION_LABEL_MAX_WIDTH_CLASS)}>
+          {attrs.label}
+        </span>
       </span>
     </NodeViewWrapper>
   );

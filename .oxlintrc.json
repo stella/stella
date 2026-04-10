@@ -77,6 +77,7 @@
     "complexity": "off",
     // func-style: Stella uses both declarations and expressions
     "func-style": "off",
+    "func-names": "off",
 
     // TypeScript
     "typescript/no-inferrable-types": "off",
@@ -93,6 +94,10 @@
     "unicorn/no-immediate-mutation": "off",
     "unicorn/prefer-ternary": "off",
     "unicorn/no-array-reduce": "off",
+    // no-array-sort: false positives when the chain already yields a new array
+    // (e.g. .map() then .sort()); switching to toSorted() would add another copy
+    // and extra memory for no benefit in those cases.
+    "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
     "unicorn/no-await-expression-member": "off",
     "unicorn/no-nested-ternary": "off",

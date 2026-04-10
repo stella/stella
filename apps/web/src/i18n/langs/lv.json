@@ -342,15 +342,21 @@
     "thinking": "Domāju...",
     "threads": "Sarunas",
     "tool": {
-      "askUser": "Precizējoši jautājumi",
-      "createDocument": "Izveidot dokumentu",
+      "ask-user": "Asking for clarification",
+      "create-document": "Izveidot dokumentu",
       "displayDocument": "Dokumenta skatīšana",
-      "listEntities": "Listed entities",
-      "readContent": "Read content",
-      "readEntity": "Read entity",
+      "list-entities": "Listed entities",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Read content",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Read entity",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Searching document text",
+      "search-matter": "Searched matter",
       "searchCaseLaw": "Meklē tiesu praksē",
-      "searchMatter": "Searched matter",
-      "updateEntityFields": "Atjaunināt lauku"
+      "update-entity-fields": "Atjaunināt lauku"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu"

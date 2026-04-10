@@ -1,16 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
-  ContactIcon,
   FileTextIcon,
   FolderIcon,
   LandmarkIcon,
   LayersIcon,
-  ScrollTextIcon,
 } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import type { MentionCategory } from "@/components/chat-mention-extension";
+import type { MentionCategory } from "@/components/chat/chat-mention-href";
+import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -18,27 +17,6 @@ import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
-
-/** Hash prefix → category mapping. */
-const HASH_PREFIXES: { prefix: string; category: MentionCategory }[] = [
-  { prefix: "#stella-entity=", category: "entity" },
-  { prefix: "#stella-workspace=", category: "workspace" },
-  { prefix: "#stella-contact=", category: "contact" },
-  { prefix: "#stella-template=", category: "template" },
-  { prefix: "#stella-clause=", category: "clause" },
-];
-
-/** Parse a href into category + id, or null if not a stella link. */
-const parseStellaMentionHref = (
-  href: string,
-): { category: MentionCategory; id: string } | null => {
-  for (const { prefix, category } of HASH_PREFIXES) {
-    if (href.startsWith(prefix)) {
-      return { category, id: href.slice(prefix.length) };
-    }
-  }
-  return null;
-};
 
 /** Open the entity's file in the inspector panel. */
 export const openEntityInInspector = (
@@ -93,9 +71,6 @@ const CATEGORY_ICON: Record<
   React.ComponentType<{ className?: string }>
 > = {
   workspace: LayersIcon,
-  contact: ContactIcon,
-  template: FileTextIcon,
-  clause: ScrollTextIcon,
 };
 
 /** Renders `#stella-*=` and `#stella-decision=` links as
@@ -182,7 +157,6 @@ export const EntityLink = ({
       });
       return;
     }
-    // Phase 2: contact, template, clause navigation
   };
 
   const icon =

@@ -202,11 +202,7 @@ const openDesktopEditSessionHandler = async ({
   const sessionToken = createDesktopEditSessionToken();
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
 
-  const runOpenSession = async ({
-    allowInsert,
-  }: {
-    allowInsert: boolean;
-  }) =>
+  const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
     await scopedDb(async (tx) => {
       const existingSession = await readExistingOpenDesktopEditSession({
         entityId,

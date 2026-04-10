@@ -165,7 +165,7 @@ export const prepareJustificationData = async (
   justificationId: string,
   scopedDb: ScopedDb,
 ) =>
-  await Result.gen(async function* prepareJustificationDataGen() {
+  await Result.gen(async function* () {
     const data = await scopedDb((tx) =>
       tx.query.justifications.findFirst({
         where: { id: justificationId },
