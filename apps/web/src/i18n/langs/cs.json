@@ -342,15 +342,21 @@
     "thinking": "Přemýšlím...",
     "threads": "Konverzace",
     "tool": {
-      "askUser": "Upřesňuji dotaz",
-      "createDocument": "Vytvářím dokument",
+      "ask-user": "Asking for clarification",
+      "create-document": "Vytvářím dokument",
       "displayDocument": "Zobrazuji dokument",
-      "listEntities": "Procházím dokumenty",
-      "readContent": "Čtu obsah",
-      "readEntity": "Čtu detail dokumentu",
+      "list-entities": "Procházím dokumenty",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Čtu obsah",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Čtu detail dokumentu",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Prohledávám text dokumentů",
+      "search-matter": "Prohledávám spis",
       "searchCaseLaw": "Hledám v judikatuře",
-      "searchMatter": "Prohledávám spis",
-      "updateEntityFields": "Aktualizuji metadata"
+      "update-entity-fields": "Aktualizuji metadata"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo"

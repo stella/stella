@@ -324,7 +324,9 @@ export const finalizeDesktopEditSessionHandler = async ({
       if (conversionResult && Result.isError(conversionResult)) {
         captureError(conversionResult.error, {
           mimeType: DOCX_MIME_TYPE,
-          scanWarnings: JSON.stringify(editSession.checkpointScanWarnings ?? []),
+          scanWarnings: JSON.stringify(
+            editSession.checkpointScanWarnings ?? [],
+          ),
           sizeBytes: String(storedBytes.byteLength),
         });
 

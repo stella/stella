@@ -1,16 +1,19 @@
+import { useEffectEvent, useRef } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import { v7 as uuidv7 } from "uuid";
 
-import { ChatEditor } from "@/components/mentionable-prompt-input";
-import { GLOBAL_MENTION_CONTEXT } from "@/lib/chat-mention-context";
-import { useDevStore } from "@/lib/dev-store";
+import { useChatEditor } from "@/components/chat-editor-provider";
+import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
-
-const getModelId = () => useDevStore.getState().chatModelId;
+import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
+import {
+  chatThreadOptions,
+  invalidateGroupedChatThreads,
+} from "@/routes/_protected.chat/-queries";
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,
@@ -20,8 +23,12 @@ function ChatIndex() {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { connection } = useSuspenseChatActor();
   const userContext = useChatUserContext();
+  const getUserContext = useEffectEvent(() => userContext);
+  const threadIdRef = useRef(uuidv7());
+  const controller = useChatEditor({
+    threadRef: { scope: "global", threadId: threadIdRef.current },
+  });
 
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
@@ -33,30 +40,25 @@ function ChatIndex() {
           {t("chat.greeting")}
         </h1>
         <div className="w-full">
-          <ChatEditor
+          <ChatInputSurface
             autoFocus
-            className="min-h-16 rounded-lg border px-3 py-2"
-            mentionContext={GLOBAL_MENTION_CONTEXT}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onSubmit={async (text) => {
-              const threadId = crypto.randomUUID();
+            controller={controller}
+            onSubmit={async (draft) => {
               const chat = await queryClient.ensureQueryData(
                 chatThreadOptions({
-                  key: { threadId },
+                  key: { scope: "global", threadId: threadIdRef.current },
                   context: {
-                    connection,
-                    userContext,
-                    getModelId,
+                    allowMissingThread: true,
+                    getUserContext,
                   },
                 }),
               );
 
-              // eslint-disable-next-line typescript/no-floating-promises
-              chat.sendMessage({ text });
-
+              await chat.sendMessage(await buildChatRequestMessage(draft));
+              await invalidateGroupedChatThreads(queryClient);
               await navigate({
                 to: "/chat/$threadId",
-                params: { threadId },
+                params: { threadId: threadIdRef.current },
               });
             }}
           />

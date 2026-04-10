@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { getToolName } from "ai";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -13,6 +12,11 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
+import type {
+  ApprovalToolName,
+  ApprovalToolPart,
+  ChatUITools,
+} from "@/components/chat/chat-ui-tools";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import {
@@ -24,6 +28,9 @@ import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-que
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument" +
   ".wordprocessingml.document";
+
+type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
+type CreateDocumentInput = ChatUITools["create-document"]["input"];
 
 /** Guess a mime type from a file name extension. */
 const mimeFromName = (name: string): string => {
@@ -58,19 +65,22 @@ const mimeFromName = (name: string): string => {
   }
 };
 
-const getApprovalId = (part: ToolPart): string | null => {
-  if (
-    "approval" in part &&
-    typeof part.approval === "object" &&
-    part.approval !== null &&
-    "id" in part.approval
-  ) {
-    return part.approval.id;
+const getApprovalId = (part: ApprovalToolPart): string | null => {
+  switch (part.state) {
+    case "input-available":
+    case "input-streaming":
+      return null;
+    case "approval-requested":
+    case "approval-responded":
+    case "output-denied":
+      return part.approval.id;
+    case "output-available":
+    case "output-error":
+      return part.approval?.id ?? null;
+    default:
+      return null;
   }
-  return null;
 };
-
-type ToolPart = Parameters<typeof getToolName>[0];
 
 // -- Select badge (colored chip matching table UX) --
 
@@ -106,22 +116,16 @@ const SelectBadge = ({ value, property }: SelectBadgeProps) => {
 // -- Update summary (rich rendering) --
 
 type UpdateSummaryProps = {
-  input: Record<string, unknown>;
+  input: UpdateEntityFieldsInput;
   workspaceId?: string | undefined;
 };
 
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   const qc = useQueryClient();
-  // SAFETY: from validated update-entity-fields tool input
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const propName = (input.propertyName as string | undefined) ?? "field";
-  // SAFETY: from validated tool input
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const entityName = input.entityName as string | undefined;
+  const propName = input.propertyName ?? "field";
+  const entityName = input.entityName;
   const newVal = input.value;
-  // SAFETY: from validated tool input
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  const oldVal = input.oldValue as string | undefined;
+  const oldVal = input.oldValue;
 
   // Look up the property from cache for colors.
   let property: WorkspaceProperty | undefined;
@@ -200,13 +204,11 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
 // -- Create document summary --
 
 type CreateSummaryProps = {
-  input: Record<string, unknown>;
+  input: CreateDocumentInput;
 };
 
 const CreateSummary = ({ input }: CreateSummaryProps) => {
-  const rawName = input.name;
-  const name =
-    typeof rawName === "string" ? `${rawName}.docx` : "document.docx";
+  const name = `${input.name}.docx`;
   return (
     <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
       <DocumentIcon className="size-3.5 shrink-0" mimeType={DOCX_MIME} />
@@ -218,11 +220,11 @@ const CreateSummary = ({ input }: CreateSummaryProps) => {
 // -- Main card --
 
 type ToolApprovalCardProps = {
-  part: ToolPart;
-  onApprove: (id: string) => void;
-  onDeny: (id: string) => void;
-  onAlwaysAllow: (toolName: string) => void;
-  autoApprovedTools: ReadonlySet<string>;
+  part: ApprovalToolPart;
+  onApprove: (id: string) => void | PromiseLike<void>;
+  onDeny: (id: string) => void | PromiseLike<void>;
+  onAlwaysAllow: (toolName: ApprovalToolName) => void;
+  autoApprovedTools: ReadonlySet<ApprovalToolName>;
   workspaceId?: string | undefined;
 };
 
@@ -235,17 +237,17 @@ export const ToolApprovalCard = ({
   workspaceId,
 }: ToolApprovalCardProps) => {
   const t = useTranslations();
-  const name = getToolName(part);
+  const name: ApprovalToolName =
+    part.type === "tool-create-document"
+      ? "create-document"
+      : "update-entity-fields";
   const autoApproveRef = useRef(false);
   const [responded, setResponded] = useState(false);
 
   const isApprovalRequested = part.state === "approval-requested";
   const isApprovalResponded = part.state === "approval-responded";
   const isApproved = part.state === "output-available";
-  const isDenied =
-    part.state === "output-error" &&
-    "errorText" in part &&
-    part.errorText === "denied";
+  const isDenied = part.state === "output-denied";
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
 
@@ -267,18 +269,11 @@ export const ToolApprovalCard = ({
     onApprove(id);
   }, [isApprovalRequested, autoApprovedTools, name, part, onApprove]);
 
-  // SAFETY: input from validated tool part
-  const input =
-    "input" in part
-      ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        (part.input as Record<string, unknown>)
-      : null;
-
-  const toolLabels: Record<string, string> = {
-    updateEntityFields: t("chat.tool.updateEntityFields"),
-    createDocument: t("chat.tool.createDocument"),
+  const toolLabels: Record<ApprovalToolName, string> = {
+    "update-entity-fields": t("chat.tool.update-entity-fields"),
+    "create-document": t("chat.tool.create-document"),
   };
-  const label = toolLabels[name] ?? name;
+  const label = toolLabels[name];
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
 
@@ -307,10 +302,14 @@ export const ToolApprovalCard = ({
       </div>
 
       {/* Rich summary */}
-      {input && name === "updateEntityFields" && (
-        <UpdateSummary input={input} workspaceId={workspaceId} />
-      )}
-      {input && name === "createDocument" && <CreateSummary input={input} />}
+      {part.type === "tool-update-entity-fields" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <UpdateSummary input={part.input} workspaceId={workspaceId} />
+        )}
+      {part.type === "tool-create-document" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && <CreateSummary input={part.input} />}
 
       {/* Actions */}
       {approvalId && !isProcessing && (

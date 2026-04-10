@@ -6,6 +6,7 @@ export const stella = p.pgRole("stella").existing();
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
+export const SETTING_USER_ID = "app.user_id";
 
 /** Workspace IDs array from session.
  *  Wrapped in `(SELECT ...)` so the planner evaluates
@@ -25,6 +26,16 @@ export const organizationCheck = sql`organization_id =
   (SELECT current_setting(
     '${sql.raw(SETTING_ORGANIZATION_ID)}', true
   ))`;
+
+const userCheck = sql`user_id =
+  (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))`;
+
+const chatScopeCheck = sql`(
+  ${userCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck})
+)`;
 
 export const wsPolicies = () => [
   p.pgPolicy("workspace_select", {
@@ -69,5 +80,51 @@ export const orgPolicies = () => [
     for: "delete",
     to: stella,
     using: organizationCheck,
+  }),
+];
+
+export const userPolicies = () => [
+  p.pgPolicy("user_select", {
+    for: "select",
+    to: stella,
+    using: userCheck,
+  }),
+  p.pgPolicy("user_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: userCheck,
+  }),
+  p.pgPolicy("user_update", {
+    for: "update",
+    to: stella,
+    using: userCheck,
+  }),
+  p.pgPolicy("user_delete", {
+    for: "delete",
+    to: stella,
+    using: userCheck,
+  }),
+];
+
+export const chatPolicies = () => [
+  p.pgPolicy("chat_select", {
+    for: "select",
+    to: stella,
+    using: chatScopeCheck,
+  }),
+  p.pgPolicy("chat_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatScopeCheck,
+  }),
+  p.pgPolicy("chat_update", {
+    for: "update",
+    to: stella,
+    using: chatScopeCheck,
+  }),
+  p.pgPolicy("chat_delete", {
+    for: "delete",
+    to: stella,
+    using: chatScopeCheck,
   }),
 ];

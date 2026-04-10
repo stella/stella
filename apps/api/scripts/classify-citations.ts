@@ -95,8 +95,14 @@ const seedRules = async () => {
 
 const main = async () => {
   const args = parseArgs();
+  const scriptUserId = toSafeId<"user">("script_case_law");
   // SAFETY: CLI script operates on global case law data (no tenant).
-  const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
+  const scopedDb = createScopedDb(
+    db,
+    [],
+    toSafeId<"organization">(""),
+    scriptUserId,
+  );
 
   if (args.seed) {
     await seedRules();

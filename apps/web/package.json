@@ -82,6 +82,7 @@
     "streamdown": "^2.4.0",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:",
+    "uuid": "^13.0.0",
     "valibot": "catalog:",
     "vite": "catalog:",
     "zustand": "^5.0.11"

@@ -54,7 +54,9 @@ export const AttachmentChips = ({ files, onRemove }: AttachmentChipsProps) => {
           <span className="max-w-[120px] truncate">
             {file.status === "uploading"
               ? t("chat.extractingContent")
-              : file.filename}
+              : file.status === "error"
+                ? (file.errorMessage ?? t("chat.uploadFailed"))
+                : file.filename}
           </span>
           <Button
             className="size-4 p-0"

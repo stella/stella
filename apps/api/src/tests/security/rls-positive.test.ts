@@ -4,6 +4,8 @@ import { eq, getTableName } from "drizzle-orm";
 import {
   billingCodes,
   caseLawMatterLinks,
+  chatMessages,
+  chatThreads,
   clauseCategories,
   clauses,
   clauseVariants,
@@ -106,6 +108,33 @@ describe("organization SELECT — correct scope", () => {
       expect(c).toBeGreaterThan(0);
     });
   }
+});
+
+describe("chat SELECT — correct user and workspace", () => {
+  test("global thread is visible to its owner", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(chatThreads, eq(chatThreads.id, ids.chatThreadGlobalA1)),
+      ids.userA1,
+    );
+    expect(c).toBe(1);
+  });
+
+  test("workspace thread is visible to its owner in an allowed workspace", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageWorkspaceA1),
+        ),
+      ids.userA1,
+    );
+    expect(c).toBe(1);
+  });
 });
 
 // ════════════════════════════════════════════════════════

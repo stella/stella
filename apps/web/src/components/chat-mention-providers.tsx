@@ -1,13 +1,15 @@
 import { createContext, useContext, useMemo } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 
 import type {
   ChatMentionOption,
   MentionCategory,
 } from "@/components/chat-mention-extension";
-import { api } from "@/lib/api";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type MentionProviders = {
   getItems: (categories: MentionCategory[]) => ChatMentionOption[];
@@ -16,86 +18,48 @@ type MentionProviders = {
 const MentionProvidersContext = createContext<MentionProviders>({
   getItems: () => [],
 });
+const protectedRouteApi = getRouteApi("/_protected");
 
 export const useMentionProviders = () => useContext(MentionProvidersContext);
 
-const contactsMentionOptions = {
-  queryKey: ["mentions", "contacts"],
-  queryFn: async () => {
-    const res = await api.contacts.get({
-      query: { limit: 30 },
-    });
-    if (res.error) {
-      return [];
-    }
-    return res.data.items.map(
-      (c): ChatMentionOption => ({
-        id: c.id,
-        label: c.displayName,
-        category: "contact",
-        kind: c.type,
-        mimeType: null,
-      }),
-    );
-  },
-  staleTime: 60_000,
-};
-
-const templatesMentionOptions = {
-  queryKey: ["mentions", "templates"],
-  queryFn: async () => {
-    const res = await api.templates.get();
-    if (res.error) {
-      return [];
-    }
-    return res.data.templates.map(
-      (t): ChatMentionOption => ({
-        id: t.id,
-        label: t.name,
-        category: "template" as const,
-        kind: "template",
-        mimeType: null,
-      }),
-    );
-  },
-  staleTime: 60_000,
-};
-
-const clausesMentionOptions = {
-  queryKey: ["mentions", "clauses"],
-  queryFn: async () => {
-    const res = await api.clauses.get({
-      query: { limit: 50 },
-    });
-    if (res.error) {
-      return [];
-    }
-    return res.data.clauses.map(
-      (c): ChatMentionOption => ({
-        id: c.id,
-        label: c.title,
-        category: "clause" as const,
-        kind: "clause",
-        mimeType: null,
-      }),
-    );
-  },
-  staleTime: 60_000,
-};
-
-/** Provides org-level mention sources (workspaces, contacts,
- *  templates, clauses) to any ChatEditor below. */
+/** Provides org-level mention sources to any ChatEditor below. */
 export const ChatMentionProviders = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
-  const { data: workspacesData } = useQuery(workspacesOptions);
-  const { data: contacts } = useQuery(contactsMentionOptions);
-  const { data: templates } = useQuery(templatesMentionOptions);
-  const { data: clauses } = useQuery(clausesMentionOptions);
-
+  const queryClient = useQueryClient();
+  const routeContext = protectedRouteApi.useRouteContext({
+    select: (ctx) => ({
+      authToken: ctx.authToken,
+      organizationId: ctx.user.activeOrganizationId,
+    }),
+  });
+  const { data: workspacesData } = useQuery(workspacesNavigationOptions);
   const workspaces = workspacesData?.workspaces;
+  const { data: firstViewIdsByWorkspaceId } = useQuery({
+    queryKey: [
+      "chat-mention-workspace-views",
+      (workspaces ?? []).map((workspace) => workspace.id),
+    ],
+    queryFn: async () => {
+      const viewEntries = await Promise.all(
+        (workspaces ?? []).map(async (workspace) => {
+          const views = await queryClient.ensureQueryData(
+            viewsOptions({
+              key: { workspaceId: workspace.id },
+              context: routeContext,
+            }),
+          );
+
+          return [workspace.id, views.at(0)?.id ?? null] as const;
+        }),
+      );
+
+      return Object.fromEntries(viewEntries);
+    },
+    enabled: workspaces !== undefined && workspaces.length > 0,
+  });
 
   const value = useMemo<MentionProviders>(
     () => ({
@@ -103,33 +67,18 @@ export const ChatMentionProviders = ({
         const items: ChatMentionOption[] = [];
 
         if (categories.includes("workspace") && workspaces) {
-          for (const ws of workspaces) {
-            items.push({
-              id: ws.id,
-              label: ws.name,
-              category: "workspace",
-              kind: "workspace",
-              mimeType: null,
-            });
-          }
-        }
-
-        if (categories.includes("contact") && contacts) {
-          items.push(...contacts);
-        }
-
-        if (categories.includes("template") && templates) {
-          items.push(...templates);
-        }
-
-        if (categories.includes("clause") && clauses) {
-          items.push(...clauses);
+          items.push(
+            ...buildWorkspaceMentionOptions({
+              firstViewIdsByWorkspaceId,
+              workspaces,
+            }),
+          );
         }
 
         return items;
       },
     }),
-    [workspaces, contacts, templates, clauses],
+    [firstViewIdsByWorkspaceId, workspaces],
   );
 
   return (

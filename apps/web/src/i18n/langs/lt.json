@@ -342,15 +342,21 @@
     "thinking": "Galvoju...",
     "threads": "Pokalbiai",
     "tool": {
-      "askUser": "Patikslinantys klausimai",
-      "createDocument": "Sukurti dokumentą",
+      "ask-user": "Asking for clarification",
+      "create-document": "Sukurti dokumentą",
       "displayDocument": "Dokumento peržiūra",
-      "listEntities": "Listed entities",
-      "readContent": "Read content",
-      "readEntity": "Read entity",
+      "list-entities": "Listed entities",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Read content",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Read entity",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Searching document text",
+      "search-matter": "Searched matter",
       "searchCaseLaw": "Ieškoma teismų praktikoje",
-      "searchMatter": "Searched matter",
-      "updateEntityFields": "Atnaujinti lauką"
+      "update-entity-fields": "Atnaujinti lauką"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo"

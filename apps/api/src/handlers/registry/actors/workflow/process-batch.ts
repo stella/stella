@@ -38,6 +38,7 @@ export const processBatchAction = async (
     const { organizationId, workspaceId } = parseBrandedWorkflowActorKey(c.key);
     const scopedDb = createRootScopedDb({
       organizationId,
+      userId: c.conn.state.userId,
       workspaceIds: [workspaceId],
     });
 

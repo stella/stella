@@ -342,15 +342,21 @@
     "thinking": "Denke nach...",
     "threads": "Konversationen",
     "tool": {
-      "askUser": "Rückfragen",
-      "createDocument": "Dokument erstellen",
+      "ask-user": "Asking for clarification",
+      "create-document": "Dokument erstellen",
       "displayDocument": "Dokument anzeigen",
-      "listEntities": "Einträge aufgelistet",
-      "readContent": "Inhalt gelesen",
-      "readEntity": "Eintrag gelesen",
+      "list-entities": "Einträge aufgelistet",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Inhalt gelesen",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Eintrag gelesen",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Dokumenttext durchsuchen",
+      "search-matter": "Akte durchsucht",
       "searchCaseLaw": "Rechtsprechung durchsuchen",
-      "searchMatter": "Akte durchsucht",
-      "updateEntityFields": "Metadaten aktualisieren"
+      "update-entity-fields": "Metadaten aktualisieren"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden"

@@ -1,41 +1,43 @@
-import { useCallback, useMemo, useState } from "react";
+import { createElement, useCallback, useMemo, useState } from "react";
+import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { isToolUIPart } from "ai";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
-import { EntityLink } from "@/components/chat/entity-link";
-import type { ChatActor } from "@/lib/api";
-import { eventHandlerV2 } from "@/lib/rivet";
-import { useSuspenseChatActor } from "@/routes/_protected.chat/-hooks/chat-actor-provider";
-
-// Type-level helper; no reactive state, safe at module scope.
-const chatEvent = eventHandlerV2<ChatActor>();
+import type {
+  ApprovalToolName,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { invalidateGroupedChatThreads } from "@/routes/_protected.chat/-queries";
 
 type UseChatSessionOptions = {
-  chat: Chat<ChatMessage>;
-  threadId: string;
+  chat: Chat<PersistedChatMessage>;
 };
 
-export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
-  const actor = useSuspenseChatActor();
-
+export const useChatSession = ({ chat }: UseChatSessionOptions) => {
+  const queryClient = useQueryClient();
   const [autoApprovedTools, setAutoApprovedTools] = useState(
-    () => new Set<string>(),
+    () => new Set<ApprovalToolName>(),
   );
 
   const {
     messages,
-    sendMessage,
-    setMessages,
+    sendMessage: sendChatMessage,
     stop,
     status,
     addToolApprovalResponse,
-  } = useChat({
-    chat,
-    resume: true,
-  });
+  } = useChat({ chat });
+
+  const sendMessage = useCallback(
+    async (message: Parameters<typeof sendChatMessage>[0]) => {
+      await sendChatMessage(message);
+      await invalidateGroupedChatThreads(queryClient);
+    },
+    [queryClient, sendChatMessage],
+  );
 
   const handleApprove = useCallback(
     (id: string) => addToolApprovalResponse({ id, approved: true }),
@@ -46,15 +48,22 @@ export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
     [addToolApprovalResponse],
   );
   const handleAlwaysAllow = useCallback(
-    (toolName: string) =>
+    (toolName: ApprovalToolName) =>
       setAutoApprovedTools((prev) => new Set(prev).add(toolName)),
     [],
   );
 
-  // Stable Streamdown overrides for mention links.
-  const streamdownComponents = useMemo(() => ({ a: EntityLink }), []);
+  const streamdownComponents = useMemo(
+    () => ({
+      a: (props: ComponentProps<"a">) =>
+        createElement(StreamdownMentionLink, {
+          ...props,
+          interactive: true,
+        }),
+    }),
+    [],
+  );
 
-  // Dim non-approval messages when an approval is pending.
   const approvalPendingMessageId = useMemo(() => {
     for (const msg of messages) {
       if (msg.role !== "assistant") {
@@ -68,26 +77,6 @@ export const useChatSession = ({ chat, threadId }: UseChatSessionOptions) => {
     }
     return null;
   }, [messages]);
-
-  // When another connection starts streaming for this
-  // thread, stop any local stream, sync messages, and
-  // resume so this tab picks up the in-progress generation.
-  actor.useEvent(
-    ...chatEvent("stream-started", async (data) => {
-      if (data.threadId !== threadId || data.chatId === chat.id) {
-        return;
-      }
-      await stop();
-      const latest = await actor.connection.getMessages({
-        threadId,
-      });
-      // SAFETY: messages from the actor are structurally
-      // ChatMessage — narrowing adds typed tool parts.
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      setMessages(latest as ChatMessage[]);
-      await chat.resumeStream();
-    }),
-  );
 
   const isGenerating = status === "submitted" || status === "streaming";
 

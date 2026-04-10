@@ -49,6 +49,11 @@
               },
               {
                 "name": "@/api/db",
+                "importNames": ["createSafeDb"],
+                "message": "Handlers must not construct safe DB instances from the root db module. Use ctx.safeDb instead."
+              },
+              {
+                "name": "@/api/db",
                 "importNames": ["db"],
                 // Defensive: `db` is not currently exported from
                 // `@/api/db`, but this guards against accidental
@@ -58,11 +63,6 @@
               {
                 "name": "@/api/db/root",
                 "message": "Handlers must not import the root db module. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper."
-              },
-              {
-                "name": "ai",
-                "importNames": ["tool"],
-                "message": "Use defineTool from chat-tools.ts instead of tool() directly. defineTool automatically wraps execute with safeExecute."
               }
             ]
           }

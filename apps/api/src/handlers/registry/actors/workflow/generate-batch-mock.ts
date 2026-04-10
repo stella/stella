@@ -52,7 +52,7 @@ export const generateBatchMock = async ({
   entityVersionId,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
-  await Result.gen(async function* generateBatchMockGen() {
+  await Result.gen(async function* () {
     const inputFields = await fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,

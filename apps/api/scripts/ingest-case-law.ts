@@ -137,6 +137,7 @@ const filterKey = process.argv[2];
 
 const main = async () => {
   writeHeartbeat();
+  const scriptUserId = toSafeId<"user">("script_case_law");
 
   const toRun = filterKey
     ? SOURCES.filter((s) => s.adapterKey === filterKey)
@@ -165,7 +166,12 @@ const main = async () => {
 
       // SAFETY: CLI script operates on global case law
       // data (no tenant).
-      const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
+      const scopedDb = createScopedDb(
+        db,
+        [],
+        toSafeId<"organization">(""),
+        scriptUserId,
+      );
 
       let status: "completed" | "failed" = "completed";
       let errorMessage: string | null = null;

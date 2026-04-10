@@ -10,15 +10,17 @@ import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-conf
 import type { ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import {
+  chatThreads,
   entities,
   entityVersions,
   fields,
   properties,
   propertyDependencies,
+  userFiles,
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { deleteS3Objects } from "@/api/handlers/files/utils";
+import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
 import { rivet } from "@/api/handlers/registry";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -139,36 +141,73 @@ const deleteWorkspace = createHandler(
       // Query file metadata from fields.content JSONB.
       // Workspace is sealed by status: "deleting", so no
       // concurrent uploads can insert new files.
-      const fileRefs = await scopedDb(async (tx) => {
+      const [fileRefs, chatFileRefs] = await scopedDb(async (tx) => {
         const workspaceEntityVersionIds = tx
           .select({ id: entityVersions.id })
           .from(entityVersions)
           .innerJoin(entities, eq(entityVersions.entityId, entities.id))
           .where(eq(entities.workspaceId, workspaceId));
 
-        const fieldRows = await tx
+        const fileRefsPromise = tx
           .select({ content: fields.content })
           .from(fields)
-          .where(inArray(fields.entityVersionId, workspaceEntityVersionIds));
+          .where(inArray(fields.entityVersionId, workspaceEntityVersionIds))
+          .then((fieldRows) =>
+            fieldRows.flatMap((row) => extractFileRefs(row.content)),
+          );
 
-        return fieldRows.flatMap((row) => extractFileRefs(row.content));
+        const chatFileRefsPromise = tx
+          .select({
+            id: userFiles.id,
+            s3Key: userFiles.s3Key,
+          })
+          .from(userFiles)
+          .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
+          .where(eq(chatThreads.workspaceId, workspaceId));
+
+        return await Promise.all([fileRefsPromise, chatFileRefsPromise]);
       });
 
       // Delete S3 objects outside any transaction.
       // On retry, already-deleted S3 objects are no-ops.
+      const s3Deletes: Promise<void>[] = [];
+
       if (fileRefs.length > 0) {
-        Result.unwrap(
-          await deleteS3Objects({
+        s3Deletes.push(
+          deleteS3Objects({
             fileRows: fileRefs,
             organizationId,
             workspaceId,
-          }),
+          }).then((result) => Result.unwrap(result)),
         );
       }
+
+      if (chatFileRefs.length > 0) {
+        s3Deletes.push(
+          deleteS3Keys(chatFileRefs.map((file) => file.s3Key)).then((result) =>
+            Result.unwrap(result),
+          ),
+        );
+      }
+
+      await Promise.all(s3Deletes);
 
       // All S3 objects are gone. Delete DB records in a
       // single transaction.
       await scopedDb(async (tx) => {
+        if (chatFileRefs.length > 0) {
+          await tx.delete(userFiles).where(
+            inArray(
+              userFiles.id,
+              chatFileRefs.map((file) => file.id),
+            ),
+          );
+        }
+
+        await tx
+          .delete(chatThreads)
+          .where(eq(chatThreads.workspaceId, workspaceId));
+
         // Delete property dependencies (restrict FK prevents
         // cascade, so explicit cleanup is needed).
         const workspacePropertyIds = tx

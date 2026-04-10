@@ -342,15 +342,21 @@
     "thinking": "Myślę...",
     "threads": "Rozmowy",
     "tool": {
-      "askUser": "Pytania wyjaśniające",
-      "createDocument": "Utwórz dokument",
+      "ask-user": "Asking for clarification",
+      "create-document": "Utwórz dokument",
       "displayDocument": "Wyświetlanie dokumentu",
-      "listEntities": "Wylistowano elementy",
-      "readContent": "Odczytano treść",
-      "readEntity": "Odczytano element",
+      "list-entities": "Wylistowano elementy",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Odczytano treść",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Odczytano element",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Przeszukiwanie tekstu dokumentów",
+      "search-matter": "Przeszukano sprawę",
       "searchCaseLaw": "Przeszukiwanie orzecznictwa",
-      "searchMatter": "Przeszukano sprawę",
-      "updateEntityFields": "Zaktualizuj metadane"
+      "update-entity-fields": "Zaktualizuj metadane"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się"

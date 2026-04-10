@@ -118,7 +118,11 @@ describe("timeline helpers", () => {
         typOrganizace: "os",
         typUdalosti: "NAR_JED",
       },
-      event: createEvent({ date: "15.04.2025", eventType: "NAR_JED", order: 1 }),
+      event: createEvent({
+        date: "15.04.2025",
+        eventType: "NAR_JED",
+        order: 1,
+      }),
     });
 
     expect(

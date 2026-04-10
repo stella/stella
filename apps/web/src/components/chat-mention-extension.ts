@@ -9,35 +9,24 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
 import { ChatMentionList } from "@/components/chat-mention-list";
 import { ChatMentionNode } from "@/components/chat-mention-node";
+import type { MentionCategory } from "@/components/chat/chat-mention-href";
 
-export type MentionCategory =
-  | "entity"
-  | "workspace"
-  | "contact"
-  | "template"
-  | "clause";
+export type { MentionCategory } from "@/components/chat/chat-mention-href";
 
 export type ChatMentionOption = {
   id: string;
   label: string;
   category: MentionCategory;
-  /** Entity kind (document, folder, etc.) or contact type. */
+  /** Entity kind (document, folder, etc.) or workspace. */
   kind: string;
   mimeType: string | null;
+  sourceViewId?: string;
   /** Set when the entity comes from a different workspace
-   *  (e.g. drill-down). Encoded into the mention link so the
-   *  backend can activate tools for that workspace. */
+   *  (e.g. drill-down). Serialized into the mention node so the
+   *  backend can recover workspace context while keeping model-facing
+   *  markdown clean. */
   sourceWorkspaceId?: string;
 };
-
-/** Map category to the hash prefix used in serialized links. */
-export const MENTION_HASH_PREFIX = {
-  entity: "#stella-entity=",
-  workspace: "#stella-workspace=",
-  contact: "#stella-contact=",
-  template: "#stella-template=",
-  clause: "#stella-clause=",
-} as const satisfies Record<MentionCategory, string>;
 
 export const ChatMention = MentionExtension.extend({
   addAttributes() {
@@ -91,6 +80,9 @@ const MAX_TOTAL_SUGGESTIONS = 15;
 
 export const createChatSuggestion = (
   getItems: () => ChatMentionOption[],
+  loadWorkspaceEntities: (
+    workspace: ChatMentionOption,
+  ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
   items: ({ query }) => {
@@ -135,7 +127,10 @@ export const createChatSuggestion = (
         }
 
         component = new ReactRenderer(ChatMentionList, {
-          props,
+          props: {
+            ...props,
+            loadWorkspaceEntities,
+          },
           editor: props.editor,
         });
       },

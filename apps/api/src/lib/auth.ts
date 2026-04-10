@@ -18,7 +18,7 @@ import Elysia, { t } from "elysia";
 import { ac, roles } from "@stella/permissions";
 import type { PermissionInput } from "@stella/permissions";
 
-import { createScopedDb } from "@/api/db";
+import { createSafeDb, createScopedDb } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
@@ -373,7 +373,7 @@ export const getSessionAndMemberRole = async (
 
 export const ADMIN_BYPASS_ROLES: MemberRole[] = ["owner", "admin"];
 
-type AccessibleWorkspace = {
+export type AccessibleWorkspace = {
   id: SafeId<"workspace">;
   status: InferSelectModel<typeof workspaces>["status"];
 };
@@ -402,8 +402,8 @@ export const resolveAccessibleWorkspaces = async (
     });
 
     return accessibleWorkspaces.map((workspace) => ({
-      ...workspace,
       id: toSafeId<"workspace">(workspace.id),
+      status: workspace.status,
     }));
   }
 
@@ -482,6 +482,13 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         db,
         accessibleWorkspaces.map((w) => w.id),
         activeOrganizationId,
+        userId,
+      );
+      const safeDb = createSafeDb(
+        db,
+        accessibleWorkspaces.map((w) => w.id),
+        activeOrganizationId,
+        userId,
       );
 
       return {
@@ -494,6 +501,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         },
         accessibleWorkspaces,
         scopedDb,
+        safeDb,
         memberRole,
         orgAIConfig,
       };

@@ -392,7 +392,7 @@ export class DesktopSessionManager {
       await this.syncLinkedAccount(request.linkedAccount);
       const existingLocalSessionId = this.sessionIdsByKey.get(key);
       const existingLocalSession = existingLocalSessionId
-        ? this.sessions.get(existingLocalSessionId) ?? null
+        ? (this.sessions.get(existingLocalSessionId) ?? null)
         : null;
       const shouldReuseExistingLocalCopy =
         existingLocalSession !== null &&
@@ -404,8 +404,11 @@ export class DesktopSessionManager {
         });
 
       if (shouldReuseExistingLocalCopy && existingLocalSession !== null) {
-        existingLocalSession.apiBaseUrl = normalizeApiBaseUrl(request.apiBaseUrl);
-        existingLocalSession.baseVersionNumber = remoteSession.baseVersionNumber;
+        existingLocalSession.apiBaseUrl = normalizeApiBaseUrl(
+          request.apiBaseUrl,
+        );
+        existingLocalSession.baseVersionNumber =
+          remoteSession.baseVersionNumber;
         existingLocalSession.fileName = managedFileName;
         existingLocalSession.lastCheckpointAt = remoteSession.lastCheckpointAt;
         existingLocalSession.lastError = null;
@@ -464,7 +467,9 @@ export class DesktopSessionManager {
         id: remoteSession.sessionId,
         key,
         lastCheckpointAt: remoteSession.lastCheckpointAt,
-        lastCheckpointSha: remoteSession.resumedFromCheckpoint ? localSha : null,
+        lastCheckpointSha: remoteSession.resumedFromCheckpoint
+          ? localSha
+          : null,
         lastError: null,
         lastLocalSha: localSha,
         pendingFinalize: false,

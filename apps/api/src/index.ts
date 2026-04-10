@@ -36,6 +36,7 @@ import {
   templatesRoute,
 } from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
+import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureError, getAnalytics } from "@/api/lib/analytics";
@@ -296,6 +297,7 @@ const api = new Elysia()
       .use(templateAnalyticsRoute)
       .use(caseLawRoute)
       .use(chatRoute)
+      .use(userFilesRoute)
       .use(tasksRoute)
       .use(myTasksRoute)
       .use(devRoute)

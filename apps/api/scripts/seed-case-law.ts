@@ -841,6 +841,7 @@ async function seed() {
   // --- decisions ---
   let insertedCount = 0;
   let skippedCount = 0;
+  const scriptUserId = toSafeId<"user">("script_case_law");
 
   for (const d of decisions) {
     const existing = await db.query.caseLawDecisions.findFirst({
@@ -873,7 +874,12 @@ async function seed() {
     });
 
     // SAFETY: CLI script operates on global case law data (no tenant).
-    const scopedDb = createScopedDb(db, [], toSafeId<"organization">(""));
+    const scopedDb = createScopedDb(
+      db,
+      [],
+      toSafeId<"organization">(""),
+      scriptUserId,
+    );
     await indexDecision(d.id, scopedDb);
 
     insertedCount++;

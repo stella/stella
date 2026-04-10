@@ -81,7 +81,12 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
     memberRole,
     organizationId,
-    scopedDb: createScopedDb(db, accessibleWorkspaceIds, organizationId),
+    scopedDb: createScopedDb(
+      db,
+      accessibleWorkspaceIds,
+      organizationId,
+      userId,
+    ),
     userId,
   };
 };

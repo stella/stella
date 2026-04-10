@@ -1,38 +1,25 @@
 import { useNavigate } from "@tanstack/react-router";
-import {
-  ContactIcon,
-  FileTextIcon,
-  LayersIcon,
-  ScrollTextIcon,
-} from "lucide-react";
+import { LayersIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import type { MentionCategory } from "@/components/chat-mention-extension";
-import { MENTION_HASH_PREFIX } from "@/components/chat-mention-extension";
+import type { MentionCategory } from "@/components/chat/chat-mention-href";
+import {
+  CHAT_MENTION_CATEGORY_PATTERN,
+  isMentionCategory,
+} from "@/components/chat/chat-mention-href";
 import {
   EntityMentionIcon,
   openEntityInInspector,
 } from "@/components/chat/entity-link";
 
-const isMentionCategory = (value: string): value is MentionCategory =>
-  value in MENTION_HASH_PREFIX;
-
 /** Matches all stella mention link formats:
  *  `[Label](#stella-entity=ID)`,
  *  `[Label](#stella-workspace=ID)`, etc. */
-const MENTION_RE =
-  /\[([^\]]+)\]\(#stella-(entity|workspace|contact|template|clause)=([^)]+)\)/g;
-
-const CATEGORY_ICON: Record<
-  Exclude<MentionCategory, "entity">,
-  React.ComponentType<{ className?: string }>
-> = {
-  workspace: LayersIcon,
-  contact: ContactIcon,
-  template: FileTextIcon,
-  clause: ScrollTextIcon,
-};
+const MENTION_RE = new RegExp(
+  String.raw`\[([^\]]+)\]\(#stella-(${CHAT_MENTION_CATEGORY_PATTERN})=([^)]+)\)`,
+  "g",
+);
 
 /** Strip optional `WS_ID:` prefix from cross-workspace entity IDs. */
 const stripWsPrefix = (id: string) => {
@@ -58,22 +45,20 @@ const MentionChip = ({
       return;
     }
     if (category === "workspace") {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      navigate({ to: "/workspaces/$workspaceId", params: { workspaceId: id } });
+      void navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: id },
+      });
       return;
     }
-    // Phase 2: contact, template, clause navigation
   };
 
-  const icon =
-    category === "entity" ? (
-      <EntityMentionIcon entityId={entityId} />
-    ) : (
-      (() => {
-        const Icon = CATEGORY_ICON[category];
-        return <Icon className="inline size-3 shrink-0" />;
-      })()
-    );
+  let icon: React.ReactNode = null;
+  if (category === "entity") {
+    icon = <EntityMentionIcon entityId={entityId} />;
+  } else if (category === "workspace") {
+    icon = <LayersIcon className="inline size-3 shrink-0" />;
+  }
 
   return (
     <button

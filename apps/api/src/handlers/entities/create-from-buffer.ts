@@ -21,19 +21,26 @@ type CreateEntityFromBufferInput = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  /** Raw file content (Buffer or ArrayBuffer). */
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
 };
 
-type CreateEntityFromBufferResult =
-  | { success: true; entityId: string; fileName: string }
-  | { success: false; error: string };
-
 class EntityLimitError extends TaggedError("EntityLimitError")<{
   message: string;
 }>() {}
+
+class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
+  message: string;
+}>() {}
+
+export type CreateEntityFromBufferResult = Result<
+  {
+    entityId: string;
+    fileName: string;
+  },
+  EntityLimitError | MissingFilePropertyError
+>;
 
 /**
  * Create a new entity from a raw file buffer. Handles S3
@@ -73,7 +80,11 @@ export const createEntityFromBuffer = async ({
   const fileProperty = wsProperties.find((p) => p.content.type === "file");
 
   if (!fileProperty) {
-    return { success: false, error: "No file property found" };
+    return Result.err(
+      new MissingFilePropertyError({
+        message: "No file property found",
+      }),
+    );
   }
 
   // Track S3 keys for cleanup before any uploads.
@@ -88,12 +99,13 @@ export const createEntityFromBuffer = async ({
     // Upload source file and convert to PDF in parallel.
     const shouldConvert = isConvertibleMimeType(mimeType);
 
-    const [, pdfResult] = await Promise.all([
-      s3.write(s3Key, bytes),
+    const [pdfResult] = await Promise.all([
       shouldConvert
         ? convertToPdf(bytes.slice().buffer, fileName, mimeType)
         : Promise.resolve(null),
+      s3.write(s3Key, bytes),
     ]);
+
     if (pdfResult && Result.isOk(pdfResult)) {
       pdfFileId = crypto.randomUUID();
       const pdfKey = createFileKey({
@@ -168,7 +180,7 @@ export const createEntityFromBuffer = async ({
     await Promise.all(s3Keys.map(async (k) => await s3.delete(k)));
 
     if (EntityLimitError.is(error)) {
-      return { success: false, error: error.message };
+      return Result.err(error);
     }
 
     throw error;
@@ -176,5 +188,5 @@ export const createEntityFromBuffer = async ({
 
   processExtraction(entityId).catch(captureError);
 
-  return { success: true, entityId, fileName };
+  return Result.ok({ entityId, fileName });
 };

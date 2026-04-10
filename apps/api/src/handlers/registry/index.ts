@@ -3,7 +3,6 @@ import { createClient } from "rivetkit/client";
 import type { ExtractActorsFromRegistry } from "rivetkit/client";
 
 import { bBoxActor } from "@/api/handlers/registry/actors/b-box/actor";
-import { chatActor } from "@/api/handlers/registry/actors/chat-actor";
 import { syncActor } from "@/api/handlers/registry/actors/sync-actor";
 import { viewsActor } from "@/api/handlers/registry/actors/views/actor";
 import { workflowActor } from "@/api/handlers/registry/actors/workflow/actor";
@@ -29,7 +28,6 @@ export const registry = setup({
     workflow: workflowActor,
     sync: syncActor,
     bBox: bBoxActor,
-    chat: chatActor,
     views: viewsActor,
   },
   serveManager: true,

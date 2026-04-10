@@ -1,8 +1,10 @@
 services:
   postgres:
     profiles: [dev]
-    # Keep dev aligned with infra. After 17 -> 18, recreate local
-    # pgdata with `bun --cwd apps/api run docker:reset-dev`.
+    # Keep dev aligned with infra. Postgres 18 expects the volume
+    # mounted at /var/lib/postgresql, not /var/lib/postgresql/data.
+    # After switching from the old layout, recreate local pgdata with
+    # `bun run --cwd apps/api docker:reset-dev`.
     image: postgres:18.3
     environment:
       POSTGRES_USER: postgres
@@ -11,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

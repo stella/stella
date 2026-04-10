@@ -253,7 +253,7 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
 
   return await invokeAiTool({
     args: { limit, query },
-    tool: getOrgTools(context).searchAcrossMatters,
+    tool: getOrgTools(context)["search-across-matters"],
   });
 };
 
@@ -268,7 +268,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
 
   return await invokeAiTool({
     args: { entityId },
-    tool: getOrgTools(context).readContentAcrossMatters,
+    tool: getOrgTools(context)["read-content-across-matters"],
   });
 };
 
@@ -280,7 +280,7 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
 
   return await invokeAiTool({
     args: { contactId },
-    tool: getOrgTools(context).readContact,
+    tool: getOrgTools(context)["read-contact"],
   });
 };
 

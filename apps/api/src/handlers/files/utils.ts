@@ -30,7 +30,7 @@ const fileExtensionMap: Record<string, string> = {
   "application/rtf": "rtf",
 };
 
-const getFileExtension = (mimeType: string): string =>
+export const getFileExtension = (mimeType: string): string =>
   fileExtensionMap[mimeType] ?? "bin";
 
 type CreateFileKeyProps = {
@@ -47,6 +47,19 @@ export const createFileKey = ({
   mimeType,
 }: CreateFileKeyProps) =>
   `${organizationId}/${workspaceId}/${fileId}.${getFileExtension(mimeType)}`;
+
+type CreateUserFileKeyProps = {
+  fileId: string;
+  mimeType: string;
+  userId: SafeId<"user">;
+};
+
+export const createUserFileKey = ({
+  fileId,
+  mimeType,
+  userId,
+}: CreateUserFileKeyProps) =>
+  `${userId}/${fileId}.${getFileExtension(mimeType)}`;
 
 /**
  * Concurrency limit for individual s3.delete() calls. Bun's
@@ -82,8 +95,16 @@ export const deleteS3Objects = async ({
     }),
   );
 
-  for (let i = 0; i < keys.length; i += S3_DELETE_CONCURRENCY) {
-    const chunk = keys.slice(i, i + S3_DELETE_CONCURRENCY);
+  return await deleteS3Keys(keys);
+};
+
+export const deleteS3Keys = async (
+  keys: string[],
+): Promise<Result<void, S3Error>> => {
+  const dedupedKeys = keys.filter((key, index) => keys.indexOf(key) === index);
+
+  for (let i = 0; i < dedupedKeys.length; i += S3_DELETE_CONCURRENCY) {
+    const chunk = dedupedKeys.slice(i, i + S3_DELETE_CONCURRENCY);
 
     const result = await Result.tryPromise(
       async () =>

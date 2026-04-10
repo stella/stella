@@ -1,17 +1,24 @@
 import Elysia from "elysia";
 
-import { authMacro } from "@/api/lib/auth";
-
-import {
-  uploadContextFileBodySchema,
-  uploadContextFileHandler,
-} from "./upload-context-file";
+import deleteThread from "@/api/handlers/chat/delete-thread";
+import getMessages from "@/api/handlers/chat/get-messages";
+import getThreads from "@/api/handlers/chat/get-threads";
+import sendMessage from "@/api/handlers/chat/send-message";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const chatRoute = new Elysia({ prefix: "/chat" })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post(
-    "/upload-context-file",
-    async ({ body: { file } }) => await uploadContextFileHandler({ file }),
-    { body: uploadContextFileBodySchema },
-  );
+  .post("/", sendMessage.handler, {
+    body: sendMessage.config.body,
+  })
+  .get("/threads", getThreads.handler)
+  .delete("/threads/:threadId", deleteThread.handler, {
+    params: deleteThread.config.params,
+    query: deleteThread.config.query,
+  })
+  .get("/threads/:threadId/messages", getMessages.handler, {
+    params: getMessages.config.params,
+    query: getMessages.config.query,
+  });

@@ -342,15 +342,21 @@
     "thinking": "Mõtlen...",
     "threads": "Vestlused",
     "tool": {
-      "askUser": "Täpsustavad küsimused",
-      "createDocument": "Loo dokument",
+      "ask-user": "Asking for clarification",
+      "create-document": "Loo dokument",
       "displayDocument": "Dokumendi kuvamine",
-      "listEntities": "Listed entities",
-      "readContent": "Read content",
-      "readEntity": "Read entity",
+      "list-entities": "Listed entities",
+      "list-templates": "Listing templates",
+      "read-clause": "Reading clause",
+      "read-contact": "Reading contact",
+      "read-content": "Read content",
+      "read-content-across-matters": "Reading document from another matter",
+      "read-entity": "Read entity",
+      "search-across-matters": "Searching across matters",
+      "search-content": "Searching document text",
+      "search-matter": "Searched matter",
       "searchCaseLaw": "Kohtupraktika otsing",
-      "searchMatter": "Searched matter",
-      "updateEntityFields": "Uuenda välja"
+      "update-entity-fields": "Uuenda välja"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus"

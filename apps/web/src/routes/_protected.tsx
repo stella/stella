@@ -35,6 +35,7 @@ import { Separator } from "@stella/ui/components/separator";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
+import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
@@ -53,6 +54,7 @@ import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchNonCriticalQuery } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
+import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
@@ -65,7 +67,6 @@ import {
   workspaceOptions,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
-
 const LazyTemplateAssistantPanel = lazy(
   async () =>
     await import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
@@ -124,37 +125,31 @@ export const Route = createFileRoute("/_protected")({
 function ProtectedComponent() {
   useSyncQueries();
   const { data: role } = useSuspenseQuery(roleOptions);
-  const [rightOpen, setRightOpen] = useState(false);
 
   const chatMatch = useMatch({
     from: "/_protected/chat",
     shouldThrow: false,
   });
   const isOnChatRoute = !!chatMatch;
+  const rightOpen = useChatPanelStore((state) => state.isOpen);
+  const setRightOpen = useChatPanelStore((state) => state.setOpen);
+  const toggleRightOpen = useChatPanelStore((state) => state.toggle);
 
   const toggleRight = useCallback(() => {
     if (isOnChatRoute) {
       return;
     }
-    setRightOpen((o) => !o);
-  }, [isOnChatRoute]);
+    toggleRightOpen();
+  }, [isOnChatRoute, toggleRightOpen]);
 
   // Auto-close when navigating to /chat.
   useEffect(() => {
     if (isOnChatRoute && rightOpen) {
       setRightOpen(false);
     }
-  }, [isOnChatRoute, rightOpen]);
+  }, [isOnChatRoute, rightOpen, setRightOpen]);
 
   useHotkey(HOTKEYS.TOGGLE_CHAT, toggleRight);
-
-  // Open panel when a component requests "chat about this".
-  const chatRequestSeq = useChatPanelStore((s) => s.requestSeq);
-  useEffect(() => {
-    if (chatRequestSeq > 0 && !isOnChatRoute) {
-      setRightOpen(true);
-    }
-  }, [chatRequestSeq, isOnChatRoute]);
 
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
@@ -179,24 +174,34 @@ function ProtectedComponent() {
   return (
     <SidebarProvider>
       <ChatMentionProviders>
-        <AppSidebar role={role} />
-        <CreateMatterDialog />
-        <ProtectedContent
-          decisionId={activeDecisionId}
-          isOnChatRoute={isOnChatRoute}
-          rightOpen={rightOpen}
-          toggleRight={toggleRight}
-        />
-        <RightPanel
-          decisionId={activeDecisionId}
-          onToggle={toggleRight}
-          open={rightOpen}
-          workspaceId={activeWorkspaceId}
-        />
-        <ShortcutHintsOverlay />
+        <ChatEditorProvider>
+          <GlobalChatMentionRegistration />
+          <AppSidebar role={role} />
+          <CreateMatterDialog />
+          <ProtectedContent
+            decisionId={activeDecisionId}
+            isOnChatRoute={isOnChatRoute}
+            rightOpen={rightOpen}
+            toggleRight={toggleRight}
+          />
+          <RightPanel
+            decisionId={activeDecisionId}
+            isOnChatRoute={isOnChatRoute}
+            onToggle={toggleRight}
+            open={rightOpen}
+            workspaceId={activeWorkspaceId}
+          />
+          <ShortcutHintsOverlay />
+        </ChatEditorProvider>
       </ChatMentionProviders>
     </SidebarProvider>
   );
+}
+
+function GlobalChatMentionRegistration() {
+  useGlobalChatMentionRegistration();
+
+  return null;
 }
 
 type ProtectedContentProps = {
@@ -398,6 +403,7 @@ const RIGHT_PANEL_MIN_WIDTH = 280;
 const RIGHT_PANEL_MAX_WIDTH = 640;
 
 type RightPanelProps = {
+  isOnChatRoute: boolean;
   open: boolean;
   onToggle: () => void;
   workspaceId?: string | undefined;
@@ -405,6 +411,7 @@ type RightPanelProps = {
 };
 
 function RightPanel({
+  isOnChatRoute,
   open,
   onToggle,
   workspaceId,
@@ -532,13 +539,15 @@ function RightPanel({
                 )}
                 {decisionId && <DecisionContextBadge decisionId={decisionId} />}
               </div>
-              <Suspense>
-                <LazyRightPanelChat
-                  decisionId={decisionId}
-                  key={workspaceId ?? decisionId}
-                  workspaceId={workspaceId}
-                />
-              </Suspense>
+              {!isOnChatRoute && (
+                <Suspense>
+                  <LazyRightPanelChat
+                    key={workspaceId ?? "global"}
+                    open={open}
+                    workspaceId={workspaceId}
+                  />
+                </Suspense>
+              )}
             </>
           )}
         </div>

@@ -1,5 +1,41 @@
 import { TaggedError } from "better-result";
 
+export type HandlerErrorStatusCode = 400 | 403 | 404 | 422 | 500;
+
+export type HandlerErrorProps<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> = {
+  status: TStatus;
+  message: string;
+  cause?: unknown;
+};
+
+// TaggedError(...) cannot reference the class type parameter in the base
+// expression, so the base uses the wide props type and the subclass narrows
+// `status` back down for callers.
+export class HandlerError<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> extends TaggedError("HandlerError")<HandlerErrorProps>() {
+  declare status: TStatus;
+
+  constructor(props: HandlerErrorProps<TStatus>) {
+    super(props);
+    this.status = props.status;
+  }
+}
+
+export class DatabaseError extends TaggedError("DatabaseError")<{
+  code?: string | undefined;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+export class DatabaseRlsError extends TaggedError("DatabaseRlsError")<{
+  code?: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
 export class Unreachable extends TaggedError("Unreachable")<{
   message: string;
 }>() {}
@@ -32,6 +68,11 @@ export class HealthCheckError extends TaggedError("HealthCheckError")<{
 export class WorkflowValidationError extends TaggedError(
   "WorkflowValidationError",
 )<{
+  message: string;
+}>() {}
+
+/** Chat tool execution failure. */
+export class ChatToolError extends TaggedError("ChatToolError")<{
   message: string;
 }>() {}
 
