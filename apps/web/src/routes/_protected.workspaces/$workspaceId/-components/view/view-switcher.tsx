@@ -6,7 +6,6 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import {
   CalendarIcon,
   CopyIcon,
@@ -154,19 +153,7 @@ export const ViewSwitcher = ({
 }: ViewSwitcherProps) => {
   const t = useTranslations();
   const canCreateView = usePermissions({ view: ["create"] });
-  const viewsContext = useRouteContext({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
-  const { data: views } = useSuspenseQuery(
-    viewsOptions({
-      key: { workspaceId },
-      context: viewsContext,
-    }),
-  );
+  const { data: views } = useSuspenseQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
 

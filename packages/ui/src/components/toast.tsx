@@ -7,6 +7,7 @@ import {
   InfoIcon,
   LoaderCircleIcon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react";
 
 import { buttonVariants } from "@stella/ui/components/button";
@@ -159,6 +160,12 @@ function Toasts({ position = "bottom-right" }: { position: ToastPosition }) {
                     {toast.actionProps.children}
                   </Toast.Action>
                 )}
+                <Toast.Close
+                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors"
+                  data-slot="toast-close"
+                >
+                  <XIcon className="size-4" />
+                </Toast.Close>
               </Toast.Content>
             </Toast.Root>
           );

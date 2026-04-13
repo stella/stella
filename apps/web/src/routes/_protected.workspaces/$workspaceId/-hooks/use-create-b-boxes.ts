@@ -1,95 +1,98 @@
 import { useCallback, useRef } from "react";
 
-import { useIsMutating, useMutation } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { eventHandler } from "@/lib/rivet";
+import { api } from "@/lib/api";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useBBoxActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-b-box-actor";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type UseCreateBBoxesProps = {
   justification: WorkspaceJustification;
 };
 
-const createBBoxesMutationKey = "create-bounding-boxes";
+const CREATE_BBOXES_MUTATION_KEY = "create-bounding-boxes";
 
 export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",
     select: (s) => s.workspaceId,
   });
-  const setPendingBoundingBoxId = useWorkspaceStore(
-    (s) => s.setPendingBoundingBoxId,
-  );
   const pendingMutationsCount = useIsMutating({
-    mutationKey: [createBBoxesMutationKey],
+    mutationKey: [CREATE_BBOXES_MUTATION_KEY],
   });
-  const bBoxActor = useBBoxActor(workspaceId);
-
-  bBoxActor.useEvent(
-    ...eventHandler("b-box-status", (event) => {
-      setPendingBoundingBoxId(
-        justification.id,
-        event.status === "pending" ? "add" : "remove",
-      );
-    }),
-  );
+  const inflightRef = useRef(new Set<string>());
 
   const mutation = useMutation({
     scope: {
       id: justification.id,
     },
-    mutationKey: [createBBoxesMutationKey],
+    mutationKey: [CREATE_BBOXES_MUTATION_KEY],
     mutationFn: async () => {
-      const store = useWorkspaceStore.getState();
-
       if (
         justification.boundingBoxes ||
-        store.pendingBoundingBoxIds.has(justification.id)
+        inflightRef.current.has(justification.id)
       ) {
         return;
       }
 
-      setPendingBoundingBoxId(justification.id, "add");
+      inflightRef.current.add(justification.id);
 
-      await bBoxActor.handle?.generateBBoxes({
+      const response = await api
+        .workspaces({ workspaceId })
+        ["bounding-boxes"].post({
+          queryKey: workspaceKeys.justifications(workspaceId),
+          justificationId: justification.id,
+        });
+
+      if (response.error) {
+        throw new Error("Failed to generate bounding boxes");
+      }
+
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
-        justificationId: justification.id,
       });
     },
-
     onSettled: () => {
-      setPendingBoundingBoxId(justification.id, "remove");
+      inflightRef.current.delete(justification.id);
     },
     onError: (error) => {
       analytics.captureError(error);
     },
   });
 
-  // Use a ref so the callback identity is stable — avoids
-  // re-triggering effects that depend on this function.
+  // Refs keep callback identity stable — avoids re-triggering
+  // effects in PeekJustification that list this as a dependency.
   const pendingRef = useRef(pendingMutationsCount);
   pendingRef.current = pendingMutationsCount;
+  const mutateRef = useRef(mutation.mutate);
+  mutateRef.current = mutation.mutate;
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useCallback(() => {
     if (pendingRef.current > 0) {
       return;
     }
 
-    mutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mutation.mutate]);
+    mutateRef.current();
+  }, []);
 };
 
 export const useIsCreatingBBoxes = () => {
-  const justificationId = useWorkspaceStore((s) => s.activeJustification?.id);
-  const isPending = useWorkspaceStore((s) =>
-    justificationId ? s.pendingBoundingBoxIds.has(justificationId) : false,
-  );
+  const count = useIsMutating({
+    mutationKey: [CREATE_BBOXES_MUTATION_KEY],
+  });
 
-  return isPending;
+  return count > 0;
 };

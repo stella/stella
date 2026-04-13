@@ -82,9 +82,5 @@ export const entitiesRoute = new Elysia({
   .get("/summaries", readEntitySummaries.handler, {
     query: readEntitySummaries.config.query,
   })
-  .get("/zip/:entityId", downloadZip.handler, {
-    params: downloadZip.config.params,
-  })
-  .get("/entity/:entityId", readEntityById.handler, {
-    params: readEntityById.config.params,
-  });
+  .get("/zip/:entityId", downloadZip.handler)
+  .get("/entity/:entityId", readEntityById.handler);

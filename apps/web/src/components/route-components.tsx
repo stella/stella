@@ -125,21 +125,15 @@ export const DefaultErrorComponent = ({
     return () => clearTimeout(timer);
   }, [networkError, retryErroredQueries]);
 
-  // CancelledError is benign — React Query throws it when a
-  // suspense query unmounts during route transitions. Defer
-  // the reset so React can re-render without the error.
-  useEffect(() => {
-    if (!isCancelledError) {
-      return;
-    }
-    const id = requestAnimationFrame(() => reset());
-    return () => cancelAnimationFrame(id);
-  }, [isCancelledError, reset]);
-
   const t = useTranslations();
 
+  // CancelledError is benign — React Query throws it when a
+  // suspense query unmounts during route transitions or when
+  // sidebar preloads race with the current route. Return early
+  // to avoid showing the error screen; the route will recover
+  // on the next render cycle.
   if (isCancelledError) {
-    return <DefaultPendingComponent className={className} />;
+    return null;
   }
 
   if (showUnauthorizedError) {

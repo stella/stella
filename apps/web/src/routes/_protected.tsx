@@ -45,7 +45,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
-import { useSyncQueries } from "@/hooks/use-sync-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { getCourtColor } from "@/lib/court-colors";
@@ -123,7 +122,6 @@ export const Route = createFileRoute("/_protected")({
 });
 
 function ProtectedComponent() {
-  useSyncQueries();
   const { data: role } = useSuspenseQuery(roleOptions);
 
   const chatMatch = useMatch({

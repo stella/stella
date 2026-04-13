@@ -41,6 +41,7 @@ export const env = createEnv({
     ANTHROPIC_API_KEY: v.optional(v.string()),
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
+    REDIS_URL: v.pipe(v.string(), v.url()),
     isDev: v.optional(v.boolean(), process.env.NODE_ENV !== "production"),
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),

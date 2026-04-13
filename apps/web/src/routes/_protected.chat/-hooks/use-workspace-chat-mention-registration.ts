@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -15,24 +14,13 @@ import {
 
 const getWorkspaceMentionExtensionId = (workspaceId: string) =>
   `workspace-chat:entity-mentions:${workspaceId}`;
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const useWorkspaceChatMentionRegistration = (
   workspaceId: string,
   viewId?: string,
 ) => {
   const { registerExtension } = useChatEditorExtensions();
-  const routeContext = protectedRouteApi.useRouteContext({
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
   const { data: activeView } = useQuery({
-    ...viewsOptions({
-      key: { workspaceId },
-      context: routeContext,
-    }),
+    ...viewsOptions(workspaceId),
     select: (data) =>
       data.find((view) => view.id === viewId) ?? data.at(0) ?? null,
   });

@@ -22,7 +22,6 @@ import { Form } from "@stella/ui/components/form";
 import { Input } from "@stella/ui/components/input";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
@@ -30,7 +29,7 @@ import type {
   WorkspacePropertyOption,
 } from "@/lib/types";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
-import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpsertField } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
@@ -134,11 +133,10 @@ export const EditFieldDialog = ({
   className,
 }: EditFieldDialogProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const [isOpen, setIsOpen] = useState(false);
   const isWorkflowRunning = useIsWorkflowRunning();
   const upsertField = useUpsertField();
-  const workflowActor = useWorkflowActor(workspaceId);
+  const startWorkflow = useStartWorkflow();
   const form = useForm({
     defaultValues: getDefaultValues(fieldContent),
     validationLogic: revalidateLogic(),
@@ -162,13 +160,9 @@ export const EditFieldDialog = ({
               return;
             }
 
-            workflowActor.connection
-              ?.startWorkflow({
-                workspaceId,
-                entityIds: [entityId],
-                entityIdsOrder: [],
-              })
-              .catch((error: unknown) => analytics.captureError(error));
+            void startWorkflow({
+              entityIds: [entityId],
+            });
           },
           onSettled: () => {
             setIsOpen(false);

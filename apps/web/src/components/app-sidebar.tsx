@@ -506,12 +506,16 @@ const MATTER_DRAG_TYPE = "stella/pinned-matter-id";
 
 const MatterItem = ({
   workspace: ws,
-  isPinned,
+  isPinned: _isPinnedProp,
   onTogglePin,
   onDelete,
   onReorder,
   navBadge,
 }: MatterItemProps) => {
+  // Read pin state directly from the store so the menu label
+  // updates immediately after toggling (the prop may be stale
+  // while the popover is open).
+  const isPinned = usePinnedStore((s) => s.isPinned(ws.id));
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
   const [isRenaming, setIsRenaming] = useState(false);

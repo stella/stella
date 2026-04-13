@@ -1,11 +1,5 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import { status } from "elysia";
-import { ActorError } from "rivetkit/errors";
-
-import { getBBoxActorConfig } from "@stella/rivet/actors/b-box-actor-config";
-import { getViewsActorConfig } from "@stella/rivet/actors/views-actor-config";
-import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
 
 import type { ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
@@ -21,33 +15,10 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
-import { rivet } from "@/api/handlers/registry";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-const isActorNotFound = (error: unknown): boolean =>
-  error instanceof ActorError && error.code === "not_found";
-
-type DestroyResult = { success: true } | { success: false };
-
-/**
- * Attempt to destroy an actor. If the actor doesn't exist,
- * treat it as a successful no-op.
- */
-const safeDestroy = async (
-  actorCall: () => Promise<DestroyResult>,
-): Promise<DestroyResult> => {
-  try {
-    return await actorCall();
-  } catch (error) {
-    if (isActorNotFound(error)) {
-      return { success: true };
-    }
-    throw error;
-  }
-};
 
 const changeWorkspaceStatus = async (
   scopedDb: ScopedDb,
@@ -89,53 +60,9 @@ const deleteWorkspace = createHandler(
   config,
   async ({ scopedDb, workspaceId, session }) => {
     const organizationId = session.activeOrganizationId;
-    const authToken = session.token;
 
     try {
-      // Destroy actors while workspace is still active;
-      // actor connection validation rejects non-active
-      // workspaces.
-      const workflowActorConfig = getWorkflowActorConfig({
-        type: "vanilla",
-        authToken,
-        organizationId,
-        workspaceId,
-      });
-
-      const bBoxActorConfig = getBBoxActorConfig({
-        type: "vanilla",
-        authToken,
-        organizationId,
-        workspaceId,
-      });
-
-      const viewsActorConfig = getViewsActorConfig({
-        type: "vanilla",
-        authToken,
-        organizationId,
-        workspaceId,
-      });
-
-      const workflowActor = rivet.workflow.get(...workflowActorConfig);
-      const bBoxActor = rivet.bBox.get(...bBoxActorConfig);
-      const viewsActorHandle = rivet.views.get(...viewsActorConfig);
-
-      const [workflowDestroy, bBoxDestroy, viewsDestroy] = await Promise.all([
-        safeDestroy(async () => await workflowActor.destroy()),
-        safeDestroy(async () => await bBoxActor.destroy()),
-        safeDestroy(async () => await viewsActorHandle.destroy()),
-      ]);
-
-      if (
-        !workflowDestroy.success ||
-        !bBoxDestroy.success ||
-        !viewsDestroy.success
-      ) {
-        // TODO: log this error
-        return status(500);
-      }
-
-      // Seal workspace: no new uploads or actor connections.
+      // Seal workspace: no new uploads.
       await changeWorkspaceStatus(scopedDb, workspaceId, "deleting");
 
       // Query file metadata from fields.content JSONB.

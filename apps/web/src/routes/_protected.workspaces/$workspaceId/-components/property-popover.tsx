@@ -17,7 +17,6 @@ import { Popover, PopoverPopup } from "@stella/ui/components/popover";
 import { Separator } from "@stella/ui/components/separator";
 import { toastManager } from "@stella/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { requiredTrimmedStringSchema, toFormErrors } from "@/lib/schema";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
@@ -39,7 +38,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
-import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -50,22 +49,19 @@ const getVString = (t: Translator) =>
 
 const getDependencyCondition = (t: Translator) => {
   const vStr = getVString(t);
-  return v.intersect([
+  return v.variant("type", [
     v.strictObject({
       version: v.literal(1),
+      type: v.literal("string"),
+      operator: v.picklist(["eq"]),
+      value: vStr,
     }),
-    v.variant("type", [
-      v.strictObject({
-        type: v.literal("string"),
-        operator: v.picklist(["eq"]),
-        value: vStr,
-      }),
-      v.strictObject({
-        type: v.literal("string-array"),
-        operator: v.picklist(["contains-every"]),
-        value: v.pipe(v.array(vStr), v.nonEmpty()),
-      }),
-    ]),
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("string-array"),
+      operator: v.picklist(["contains-every"]),
+      value: v.pipe(v.array(vStr), v.nonEmpty()),
+    }),
   ]);
 };
 
@@ -94,47 +90,47 @@ const manualInputTool = v.strictObject({
 
 const getPropertyFormSchema = (t: Translator) => {
   const vStr = getVString(t);
-  return v.intersect([
+  return v.variant("type", [
     v.strictObject({
       version: v.literal(1),
+      type: v.literal("file"),
+      tool: manualInputTool,
+      name: vStr,
     }),
-    v.variant("type", [
-      v.strictObject({
-        type: v.literal("file"),
-        tool: manualInputTool,
-        name: vStr,
-      }),
-      v.strictObject({
-        type: v.literal("text"),
-        tool: v.union([getAiModelTool(t), manualInputTool]),
-        name: vStr,
-      }),
-      v.strictObject({
-        type: v.picklist(["single-select", "multi-select"]),
-        tool: v.union([getAiModelTool(t), manualInputTool]),
-        name: vStr,
-        options: v.pipe(
-          v.array(
-            v.strictObject({
-              color: v.custom<OptionColor>((data) => typeof data === "string"),
-              value: v.string(),
-            }),
-          ),
-          v.nonEmpty(t("common.required")),
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("text"),
+      tool: v.union([getAiModelTool(t), manualInputTool]),
+      name: vStr,
+    }),
+    v.strictObject({
+      version: v.literal(1),
+      type: v.picklist(["single-select", "multi-select"]),
+      tool: v.union([getAiModelTool(t), manualInputTool]),
+      name: vStr,
+      options: v.pipe(
+        v.array(
+          v.strictObject({
+            color: v.custom<OptionColor>((data) => typeof data === "string"),
+            value: v.string(),
+          }),
         ),
-        fallback: v.nullable(v.string()),
-      }),
-      v.strictObject({
-        type: v.literal("date"),
-        tool: v.union([getAiModelTool(t), manualInputTool]),
-        name: vStr,
-      }),
-      v.strictObject({
-        type: v.literal("int"),
-        tool: v.union([getAiModelTool(t), manualInputTool]),
-        name: vStr,
-      }),
-    ]),
+        v.nonEmpty(t("common.required")),
+      ),
+      fallback: v.nullable(v.string()),
+    }),
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("date"),
+      tool: v.union([getAiModelTool(t), manualInputTool]),
+      name: vStr,
+    }),
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("int"),
+      tool: v.union([getAiModelTool(t), manualInputTool]),
+      name: vStr,
+    }),
   ]);
 };
 
@@ -194,13 +190,12 @@ type PropertyPopoverProps = {
 
 export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const { workspaceId, id, name, content } = property;
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const isWorkflowRunning = useIsWorkflowRunning();
   const updateProperty = useUpdateProperty();
-  const workflowActor = useWorkflowActor(workspaceId);
+  const startWorkflow = useStartWorkflow();
   const activeView = useActiveView();
   const { data: entityData } = useSuspenseQuery(useEntitiesOptions(activeView));
   const form = useForm({
@@ -231,16 +226,9 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
               return;
             }
 
-            // Auto-run workflow for non-folder entities when
-            // an AI property is configured or updated.
-            // Empty entityIds tells the worker to process all
-            // entities in the workspace.
-            workflowActor.connection
-              ?.startWorkflow({
-                workspaceId,
-                entityIdsOrder: entityData.entities.map((e) => e.entityId),
-              })
-              .catch((error: unknown) => analytics.captureError(error));
+            void startWorkflow({
+              entityIdsOrder: entityData.entities.map((e) => e.entityId),
+            });
           },
           onError: () => {
             toastManager.add({
@@ -315,7 +303,6 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
       <PopoverPopup
         align="start"
         className="min-w-80 overflow-clip *:data-[slot=popover-viewport]:p-0!"
-        initialFocus={false}
       >
         <Form className="bg-muted/72" errors={formErrors}>
           <form.Field

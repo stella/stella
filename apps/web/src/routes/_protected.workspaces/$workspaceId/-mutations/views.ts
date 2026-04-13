@@ -1,8 +1,10 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import type { ViewLayout, ViewLayoutType } from "@/lib/types";
-import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
+import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 type CreateViewVars = {
   id: string;
@@ -12,11 +14,22 @@ type CreateViewVars = {
 
 export const useCreateView = (workspaceId: string) => {
   const analytics = useAnalytics();
-  const actor = useViewsActor(workspaceId);
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: CreateViewVars) =>
-      await actor.handle?.createView(body),
+    mutationFn: async (body: CreateViewVars) => {
+      const response = await api.views({ workspaceId }).put(body);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -31,11 +44,25 @@ type UpdateViewVars = {
 
 export const useUpdateView = (workspaceId: string) => {
   const analytics = useAnalytics();
-  const actor = useViewsActor(workspaceId);
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: UpdateViewVars) =>
-      await actor.handle?.updateView(body),
+    mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
+      const response = await api
+        .views({ workspaceId })
+        .view({ viewId })
+        .post(body);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -49,11 +76,25 @@ type ConvertViewVars = {
 
 export const useConvertView = (workspaceId: string) => {
   const analytics = useAnalytics();
-  const actor = useViewsActor(workspaceId);
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ viewId, targetType }: ConvertViewVars) =>
-      await actor.handle?.convertView({ viewId, targetType }),
+    mutationFn: async ({ viewId, targetType }: ConvertViewVars) => {
+      const response = await api
+        .views({ workspaceId })
+        .view({ viewId })
+        .convert.post({ targetType });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -66,11 +107,24 @@ type ReorderViewsVars = {
 
 export const useReorderViews = (workspaceId: string) => {
   const analytics = useAnalytics();
-  const actor = useViewsActor(workspaceId);
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ viewIds }: ReorderViewsVars) =>
-      await actor.handle?.reorderViews({ viewIds }),
+    mutationFn: async ({ viewIds }: ReorderViewsVars) => {
+      const response = await api
+        .views({ workspaceId })
+        .reorder.post({ viewIds });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },
@@ -83,11 +137,25 @@ type DeleteViewVars = {
 
 export const useDeleteView = (workspaceId: string) => {
   const analytics = useAnalytics();
-  const actor = useViewsActor(workspaceId);
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ viewId }: DeleteViewVars) =>
-      await actor.handle?.deleteView({ viewId }),
+    mutationFn: async ({ viewId }: DeleteViewVars) => {
+      const response = await api
+        .views({ workspaceId })
+        .view({ viewId })
+        .delete();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
+    },
     onError: (error) => {
       analytics.captureError(error);
     },

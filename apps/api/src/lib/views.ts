@@ -1,7 +1,4 @@
-import type {
-  ViewLayout,
-  ViewLayoutType,
-} from "@/api/handlers/registry/actors/views/schema";
+import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
 
 /**
  * Layouts that every workspace must have exactly one of.

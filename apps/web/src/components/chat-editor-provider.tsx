@@ -11,7 +11,6 @@ import {
 import type React from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -68,7 +67,6 @@ export const CHAT_FILE_INPUT_ACCEPT =
   ".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.csv,.md";
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
-const protectedRouteApi = getRouteApi("/_protected");
 
 type ChatDraftAttachmentBase = {
   file: File;
@@ -328,12 +326,6 @@ export const useChatEditor = ({
 }): ChatEditorController => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const routeContext = protectedRouteApi.useRouteContext({
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
@@ -376,10 +368,7 @@ export const useChatEditor = ({
       }
 
       const views = await queryClient.ensureQueryData(
-        viewsOptions({
-          key: { workspaceId: workspace.id },
-          context: routeContext,
-        }),
+        viewsOptions(workspace.id),
       );
       const activeView =
         views.find((view) => view.id === workspace.sourceViewId) ?? null;
@@ -411,7 +400,7 @@ export const useChatEditor = ({
         };
       });
     },
-    [queryClient, routeContext],
+    [queryClient],
   );
 
   const handleEditorUpdate = useEffectEvent((nextEditor: Editor) => {

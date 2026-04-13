@@ -26,7 +26,6 @@ import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
-import { registry } from "@/api/handlers/registry";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
@@ -38,6 +37,8 @@ import {
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
+import { viewsRoute } from "@/api/handlers/views/routes";
+import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
@@ -55,10 +56,10 @@ import {
   scopedGenerator,
 } from "@/api/lib/rate-limit";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { initWorkflowWorker } from "@/api/lib/workflow-queue";
 
-// RivetKit manager on port 6420, no basePath (see registry/index.ts).
-// In production, ALB strips /api/rivet prefix when proxying to 6420.
-registry.startRunner();
+// BullMQ workflow worker for AI extraction.
+initWorkflowWorker();
 
 const HEALTH_PATH = "/health";
 const SESSION_ID_HEADER = "x-posthog-session-id";
@@ -275,6 +276,7 @@ const api = new Elysia()
             /\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
         }),
       )
+      .use(workspaceEventsRoute)
       .use(workspacesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
@@ -298,6 +300,7 @@ const api = new Elysia()
       .use(caseLawRoute)
       .use(chatRoute)
       .use(userFilesRoute)
+      .use(viewsRoute)
       .use(tasksRoute)
       .use(myTasksRoute)
       .use(devRoute)

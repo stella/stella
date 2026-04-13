@@ -32,7 +32,7 @@ import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useWorkflowActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workflow-actor";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
   useCreateEntities,
   useDeleteEntities,
@@ -66,7 +66,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
   const deleteEntities = useDeleteEntities();
-  const workflowActor = useWorkflowActor(workspaceId);
+  const startWorkflow = useStartWorkflow();
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
   const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
 
@@ -214,19 +214,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             if (entity?.kind === "folder") {
               return;
             }
-            workflowActor.connection
-              ?.startWorkflow({
-                workspaceId,
-                entityIds: [entityId],
-                entityIdsOrder: [],
-              })
-              .catch((error: unknown) => {
-                analytics.captureError(error);
-                toastManager.add({
-                  title: t("errors.failedToStartWorkflow"),
-                  type: "error",
-                });
-              });
+            void startWorkflow({ entityIds: [entityId] });
           },
         },
       );

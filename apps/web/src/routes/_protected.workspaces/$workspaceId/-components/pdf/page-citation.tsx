@@ -33,9 +33,7 @@ export const PageCitation = ({
   const justification = useWorkspaceStore((s) => s.activeJustification);
   const boundingBoxes = useWorkspaceStore(
     useShallow((s) => s.justifications.find((j) => j.id === justification?.id)),
-  )?.boundingBoxes?.boxes.filter(
-    (b) => b.pageNumber === justification?.pageNumber,
-  );
+  )?.boundingBoxes?.boxes.filter((b) => b.pageNumber === pageNumber);
   const [scrollTo, setScrollTo] = usePDFStore(
     useShallow((s) => [s.scrollTo, s.setScrollTo]),
   );
@@ -47,7 +45,7 @@ export const PageCitation = ({
     scrolledRef.current = null;
   }
 
-  if (!justification || justification.pageNumber !== pageNumber) {
+  if (!justification || !boundingBoxes || boundingBoxes.length === 0) {
     return null;
   }
 

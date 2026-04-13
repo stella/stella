@@ -195,7 +195,10 @@ export const CalendarDayCell = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger render={<span className="sr-only" />} />
+          <MenuTrigger
+            nativeButton={false}
+            render={<span className="sr-only" />}
+          />
           <MenuPopup anchor={ctxAnchor ?? undefined}>
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />

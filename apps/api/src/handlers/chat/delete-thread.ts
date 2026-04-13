@@ -3,8 +3,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { defaultDatabaseRetry } from "@/api/db";
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { chatThreads, userFiles } from "@/api/db/schema";
+import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
