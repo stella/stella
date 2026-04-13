@@ -25,11 +25,8 @@
     "@elysiajs/eden": "^1.4.8",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.8.2",
-    "@rivetkit/framework-base": "catalog:rivet",
-    "@rivetkit/react": "catalog:rivet",
     "@stella/api": "workspace:*",
     "@stella/permissions": "workspace:*",
-    "@stella/rivet": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/ui": "workspace:*",
     "@stll/anonymize-data": "^0.0.4",
@@ -78,7 +75,6 @@
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.8.0",
     "recharts": "^3.7.0",
-    "rivetkit": "catalog:rivet",
     "streamdown": "^2.4.0",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:",
@@ -100,7 +96,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
-    "react-grab": "^0.1.29",
+    "react-grab": "0.1.31",
     "typescript": "catalog:"
   }
 }

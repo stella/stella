@@ -10,6 +10,7 @@ import {
   ensureCriticalQueryData,
   prefetchNonCriticalQuery,
 } from "@/lib/react-query";
+import { useWorkspaceSSE } from "@/lib/sse";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -27,36 +28,28 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   loader: async ({ context, params, cause }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
-    const { authToken, user } = context;
-
-    const organizationId = user.activeOrganizationId;
 
     void prefetchNonCriticalQuery(
       qc,
-      workflowOptions({
-        key: { workspaceId: wsId },
-        context: { organizationId, authToken },
-      }),
+      workflowOptions({ key: { workspaceId: wsId } }),
       (error: unknown) => {
         getAnalytics().captureError(error);
       },
     );
 
+    // Only block on workspace name (breadcrumb). Everything else
+    // is prefetched — components use useSuspenseQuery which resolves
+    // from cache or shows granular loading states.
     const [workspace] = await Promise.all([
       ensureCriticalQueryData(qc, workspaceOptions(wsId)),
-      ensureCriticalQueryData(
-        qc,
-        viewsOptions({
-          key: { workspaceId: wsId },
-          context: { organizationId, authToken },
-        }),
-      ),
-      ensureCriticalQueryData(qc, overviewOptions(wsId)),
-      ensureCriticalQueryData(qc, propertiesOptions(wsId)),
       cause === "enter"
         ? api.workspaces({ workspaceId: wsId }).active.post()
         : Promise.resolve(),
     ]);
+
+    void qc.prefetchQuery(viewsOptions(wsId));
+    void qc.prefetchQuery(overviewOptions(wsId));
+    void qc.prefetchQuery(propertiesOptions(wsId));
 
     return workspace;
   },
@@ -75,6 +68,14 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
+
+  const authToken = Route.useRouteContext({
+    select: (ctx) => ctx.authToken,
+  });
+
+  // Subscribe to workspace SSE events for real-time query
+  // invalidation (replaces the Rivet sync actor for this workspace).
+  useWorkspaceSSE(workspaceId, authToken);
 
   // Clean up inspector tabs when the workspace changes so
   // stale IDs from the previous workspace don't cause

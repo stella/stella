@@ -38,6 +38,7 @@ import type {
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ViewLayout } from "@/api/lib/views-schema";
 
 /** Metadata stored on link entities created by the web clipper. */
 export type LinkMetadata = {
@@ -1814,6 +1815,28 @@ export const userFiles = p.pgTable(
   ],
 );
 
+// -- Workspace Views --
+
+export const workspaceViews = p.pgTable(
+  "workspace_views",
+  {
+    id: pUuid.primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 256 }).notNull(),
+    layout: p.jsonb().$type<ViewLayout>().notNull(),
+    position: p.integer().notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("workspace_views_workspace_position_idx")
+      .on(table.workspaceId, table.position),
+    ...wsPolicies(),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
@@ -1866,6 +1889,7 @@ export const relations = defineRelations(
     chatThreads,
     chatMessages,
     userFiles,
+    workspaceViews,
   },
   (r) => ({
     contacts: {
@@ -1956,6 +1980,10 @@ export const relations = defineRelations(
       members: r.many.workspaceMembers({
         from: r.workspaces.id,
         to: r.workspaceMembers.workspaceId,
+      }),
+      views: r.many.workspaceViews({
+        from: r.workspaces.id,
+        to: r.workspaceViews.workspaceId,
       }),
     },
     workspaceMembers: {
@@ -2422,6 +2450,12 @@ export const relations = defineRelations(
       }),
       workspace: r.one.workspaces({
         from: r.chatMessages.workspaceId,
+        to: r.workspaces.id,
+      }),
+    },
+    workspaceViews: {
+      workspace: r.one.workspaces({
+        from: r.workspaceViews.workspaceId,
         to: r.workspaces.id,
       }),
     },

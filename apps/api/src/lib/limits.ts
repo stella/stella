@@ -104,8 +104,9 @@ export const AUTH_RATE_LIMIT_MAX_WINDOW = Math.max(
  * per duration window.
  */
 export const API_RATE_LIMITS = {
-  /** REST API: 100 req/min. */
-  api: { duration: 60_000, max: 100 },
+  /** REST API: 1000 req/min per IP. Covers normal navigation
+   *  (5-10 requests per page load × frequent workspace switching). */
+  api: { duration: 60_000, max: 1000 },
   /** File uploads: 500 req/min (separate budget). */
   upload: { duration: 60_000, max: 500 },
 } as const;

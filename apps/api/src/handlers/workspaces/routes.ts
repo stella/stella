@@ -2,6 +2,7 @@ import Elysia, { t } from "elysia";
 
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
+import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
 import readWorkspaces from "@/api/handlers/workspaces/read";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
@@ -11,6 +12,7 @@ import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
 import updateWorkspace from "@/api/handlers/workspaces/update-by-id";
+import workflowStart from "@/api/handlers/workspaces/workflow-start";
 import createWorkspaceContact from "@/api/handlers/workspaces/workspace-contacts-create";
 import deleteWorkspaceContact from "@/api/handlers/workspaces/workspace-contacts-delete";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -54,13 +56,12 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         )
         .get(
           "/workflow",
-          async (ctx) =>
-            await readWorkflowHandler({
-              workspaceId: ctx.workspaceId,
-              organizationId: ctx.session.activeOrganizationId,
-              authToken: ctx.session.token,
-            }),
+          async (ctx) => await readWorkflowHandler(ctx.workspaceId),
         )
+        .post("/workflow/start", workflowStart.handler, {
+          body: workflowStart.config.body,
+          permissions: workflowStart.config.permissions,
+        })
         .post(
           "/justifications/query",
           async (ctx) =>
@@ -78,6 +79,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             }),
           },
         )
+        .post("/bounding-boxes", generateBoundingBoxes.handler, {
+          body: generateBoundingBoxes.config.body,
+          invalidateQuery: true,
+        })
         .get(
           "/overview",
           async (ctx) =>

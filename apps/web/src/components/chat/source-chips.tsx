@@ -25,9 +25,7 @@ type SourceChipsProps = {
   workspaceId?: string | undefined;
 };
 
-const isSourceDocumentPart = (
-  part: ChatPart,
-): part is SourceDocumentPart =>
+const isSourceDocumentPart = (part: ChatPart): part is SourceDocumentPart =>
   isDataUIPart<UIDataTypes & { "stella-source-document": ChatSourceDocument }>(
     part,
   ) && part.type === "data-stella-source-document";

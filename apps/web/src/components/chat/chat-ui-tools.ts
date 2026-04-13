@@ -18,9 +18,7 @@ export type ApprovalToolPart = Extract<
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 
 /** Check if a tool part has an approval field (approval flow). */
-export const isApprovalPart = (
-  part: ChatPart,
-): part is ApprovalToolPart => {
+export const isApprovalPart = (part: ChatPart): part is ApprovalToolPart => {
   if (!isToolUIPart(part)) {
     return false;
   }

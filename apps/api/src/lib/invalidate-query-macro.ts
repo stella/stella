@@ -1,9 +1,7 @@
-import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { invalidateQueryAction } from "@/api/handlers/registry/actions";
-import { captureError } from "@/api/lib/analytics";
 import { authMacro } from "@/api/lib/auth";
+import { broadcast, broadcastToOrganization } from "@/api/lib/sse";
 
 const queryKeySchema = t.Array(t.String({ minLength: 1 }), { minItems: 1 });
 
@@ -11,25 +9,30 @@ const invalidateQueryBodySchema = t.Object({
   queryKey: queryKeySchema,
 });
 
+const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
+
 export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
   .use(authMacro)
   .macro("invalidateQuery", {
     validateAuth: true,
     body: invalidateQueryBodySchema,
-    afterHandle: async (ctx) => {
-      const result = await invalidateQueryAction({
-        organizationId: ctx.session.activeOrganizationId,
-        authToken: ctx.session.token,
-        queryKey: ctx.body.queryKey,
-      });
-
-      if (Result.isError(result)) {
-        captureError(result.error, {
-          queryKey: ctx.body.queryKey.join("/"),
-        });
-        return ctx.status(500);
+    afterHandle: (ctx) => {
+      if (ctx.session === null || ctx.session === undefined) {
+        return;
       }
 
-      return;
+      const event = {
+        type: INVALIDATE_QUERY_EVENT_TYPE,
+        data: ctx.body.queryKey,
+      };
+
+      const workspaceId =
+        "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
+
+      if (workspaceId) {
+        broadcast(workspaceId, event);
+      } else {
+        broadcastToOrganization(ctx.session.activeOrganizationId, event);
+      }
     },
   });

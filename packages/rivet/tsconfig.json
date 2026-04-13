@@ -1,9 +1,0 @@
-{
-  "extends": "@stella/typescript-config/base.json",
-  "compilerOptions": {
-    "lib": ["ESNext"],
-    "types": ["vite/client"]
-  },
-  "include": ["src"],
-  "exclude": ["node_modules"]
-}

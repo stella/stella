@@ -59,12 +59,6 @@ export const indexDecision = async (
 
   const fts = await resolveFtsConfig(decision.language);
 
-  // Build the tsvector expression with optional unaccent.
-  // Always use 'simple' regconfig for indexing to match the
-  // 'simple' regconfig used in search queries. The FTS config
-  // table currently only controls unaccent behavior. Full
-  // language-aware stemming requires updating all search paths
-  // (chat tool + API endpoint) in sync.
   const textExpr = fts.useUnaccent
     ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
     : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;

@@ -2,21 +2,23 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import type { PropsWithChildren } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  LoaderCircleIcon,
   ScanEyeIcon,
-  SparklesIcon,
   SquareCheckIcon,
   XIcon,
 } from "lucide-react";
@@ -30,6 +32,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientTelemetryError } from "@/lib/errors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
@@ -58,6 +61,7 @@ import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-co
 import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type InspectorPanelProps = {
@@ -382,9 +386,25 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           >
             <MeasuredPdfProvider
               active={isActive}
-              fallback={{ suspense: <PeekSuspenseFallback /> }}
+              fallback={{
+                suspense: <PeekSuspenseFallback />,
+                error: (
+                  <InspectorPdfErrorFallback
+                    onClose={() => {
+                      clearAnonymization(tab.id);
+                      closeTab(tab.id);
+                    }}
+                  />
+                ),
+              }}
               fieldId={tab.id}
               initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              onError={() => {
+                toastManager.add({
+                  title: t("errors.actionFailed"),
+                  type: "error",
+                });
+              }}
             >
               {/* Context bar: filename + controls */}
               <div
@@ -501,6 +521,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     <JustificationBar
                       activeTab={tab}
                       fieldId={tab.justificationFieldId}
+                      isActiveTab={isActive}
                       workspaceId={workspaceId}
                     />
                   </Suspense>
@@ -531,6 +552,7 @@ type MeasuredPdfProviderProps = PropsWithChildren<{
   fallback?: PDFPageFallback | undefined;
   fieldId: string;
   initialScaleOffset: number;
+  onError?: ((error: Error) => void) | undefined;
 }>;
 
 const MeasuredPdfProvider = ({
@@ -539,6 +561,7 @@ const MeasuredPdfProvider = ({
   fallback,
   fieldId,
   initialScaleOffset,
+  onError,
 }: MeasuredPdfProviderProps) => {
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -588,10 +611,38 @@ const MeasuredPdfProvider = ({
           initialScaleOffset={initialScaleOffset}
           startPage={1}
           fallback={fallback}
+          onError={onError}
         >
           {children}
         </PDFProvider>
       )}
+    </div>
+  );
+};
+
+// ── Error fallback ────────────────────────────────
+
+const InspectorPdfErrorFallback = ({ onClose }: { onClose: () => void }) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex h-full flex-col">
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-end border-b px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        <Button onClick={onClose} size="icon-xs" variant="ghost">
+          <XIcon className="size-3.5" />
+        </Button>
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertTriangleIcon className="text-muted-foreground/40 size-8" />
+        <p className="text-muted-foreground text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
+      </div>
     </div>
   );
 };
@@ -601,10 +652,12 @@ const MeasuredPdfProvider = ({
 const JustificationBar = ({
   activeTab,
   fieldId,
+  isActiveTab,
   workspaceId,
 }: {
   activeTab: PdfTab;
   fieldId: string;
+  isActiveTab: boolean;
   workspaceId: string;
 }) => {
   const t = useTranslations();
@@ -642,75 +695,226 @@ const JustificationBar = ({
   }, [entity, justification, properties]);
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
-  const prev = currentIdx > 0 ? slots[currentIdx - 1] : null;
-  const next =
+  const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
+  const nextSlot =
     currentIdx !== -1 && currentIdx < slots.length - 1
       ? slots[currentIdx + 1]
       : null;
+
+  const [isExpanded, setIsExpanded] = useState(false);
+  const setActiveJustification = useWorkspaceStore(
+    (s) => s.setActiveJustification,
+  );
+
+  // Eagerly generate bboxes when the justification bar mounts.
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const [isGeneratingBoxes, setIsGeneratingBoxes] = useState(false);
+  const setScrollTo = usePDFStore((s) => s.setScrollTo);
+  const pages = usePDFStore((s) => s.pages);
+
+  const justificationId = justification?.id;
+  const boundingBoxes = justification?.boundingBoxes;
+
+  useEffect(() => {
+    if (!justificationId || !isActiveTab || boundingBoxes) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsGeneratingBoxes(true);
+
+    void (async () => {
+      try {
+        const response = await api
+          .workspaces({ workspaceId })
+          ["bounding-boxes"].post({
+            justificationId,
+            queryKey: workspaceKeys.justifications(workspaceId),
+          });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.error) {
+          await queryClient.invalidateQueries({
+            queryKey: workspaceKeys.justifications(workspaceId),
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          analytics.captureError(error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsGeneratingBoxes(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    justificationId,
+    boundingBoxes,
+    isActiveTab,
+    workspaceId,
+    queryClient,
+    analytics,
+  ]);
+
+  // Scroll to the first bbox page when boxes become available.
+  // Use a ref for `pages` so viewport/zoom changes don't re-trigger
+  // the scroll (the effect should run once when boxes appear).
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+
+  useEffect(() => {
+    if (!boundingBoxes || !isActiveTab) {
+      return;
+    }
+
+    const firstBox = boundingBoxes.boxes
+      .toSorted((a, b) => a.pageNumber - b.pageNumber)
+      .at(0);
+
+    if (!firstBox) {
+      return;
+    }
+
+    const pageIds = [...pagesRef.current.keys()];
+    const pageId = pageIds[firstBox.pageNumber - 1];
+    if (pageId && justificationId) {
+      setScrollTo({
+        pageId,
+        target: { kind: "justification", id: justificationId },
+      });
+    }
+  }, [boundingBoxes, justificationId, isActiveTab, setScrollTo]);
+
+  // Sync activeJustification before paint so PageCitation can
+  // render bboxes without waiting for PeekJustification's effect.
+  // Only set for the ACTIVE tab — inactive tabs stay mounted but
+  // hidden, and their effects must not overwrite the active tab's
+  // justification.
+  useLayoutEffect(() => {
+    if (justificationId && isActiveTab) {
+      setActiveJustification({ id: justificationId, pageNumber: 1 });
+    }
+    return () => {
+      if (isActiveTab) {
+        setActiveJustification(null);
+      }
+    };
+  }, [justificationId, isActiveTab, setActiveJustification]);
 
   if (!justification) {
     return null;
   }
 
+  const currentSlot = currentIdx !== -1 ? slots[currentIdx] : undefined;
+  const propertyName = currentSlot?.property.name;
+
+  const shortAnswer = (() => {
+    if (!currentSlot) {
+      return null;
+    }
+    // entity.fields is Record<propertyId, WorkspaceField>
+    const field = Object.values(entity.fields).find(
+      (f) => f.id === currentSlot.fieldId,
+    );
+    if (!field) {
+      return null;
+    }
+    const c = field.content;
+    if ("value" in c) {
+      const v = c.value;
+      if (Array.isArray(v)) {
+        return v.join(", ");
+      }
+      return v !== null && v !== undefined ? String(v) : null;
+    }
+    return null;
+  })();
+
   return (
-    <div
-      className={cn(
-        "bg-muted/30 flex shrink-0 items-center justify-between border-b px-3",
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <div className="flex flex-1 items-center gap-2 overflow-hidden text-xs">
-        <SparklesIcon className="size-3.5 shrink-0 text-amber-500" />
-        <div className="truncate">
-          <span className="font-semibold">{t("workspaces.pdf.evidence")}:</span>{" "}
+    <div className="bg-muted/30 flex shrink-0 flex-col border-b px-3">
+      <div
+        className={cn("flex items-center justify-between", TOOLBAR_ROW_HEIGHT)}
+      >
+        <button
+          className="flex flex-1 cursor-pointer items-center gap-2 overflow-hidden text-left text-xs"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          type="button"
+        >
+          <div className="flex items-center gap-1.5 truncate">
+            {isGeneratingBoxes && (
+              <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+            )}
+            {propertyName && (
+              <span className="text-muted-foreground">{propertyName}: </span>
+            )}
+            <span className="font-medium">
+              {shortAnswer ?? t("workspaces.pdf.evidence")}
+            </span>
+          </div>
+        </button>
+
+        <div className="flex shrink-0 items-center gap-1 ps-4">
+          <Button
+            disabled={!prevSlot}
+            onClick={() =>
+              prevSlot &&
+              openPdf({
+                id: activeTab.id,
+                entityId: activeTab.entityId,
+                label: activeTab.label,
+                workspaceId: activeTab.workspaceId,
+                justificationFieldId: prevSlot.fieldId,
+                propertyId: prevSlot.property.id,
+              })
+            }
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronLeftIcon className="size-3.5" />
+          </Button>
+          <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
+            {currentIdx + 1} / {slots.length}
+          </span>
+          <Button
+            disabled={!nextSlot}
+            onClick={() =>
+              nextSlot &&
+              openPdf({
+                id: activeTab.id,
+                entityId: activeTab.entityId,
+                label: activeTab.label,
+                workspaceId: activeTab.workspaceId,
+                justificationFieldId: nextSlot.fieldId,
+                propertyId: nextSlot.property.id,
+              })
+            }
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronRightIcon className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      {isExpanded && (
+        <div className="max-h-40 overflow-y-auto pb-2 text-xs">
+          <p className="text-muted-foreground mb-1 font-semibold">
+            {t("workspaces.pdf.evidence")}:
+          </p>
           <PeekJustification
             activeFileFieldId={activeTab.id}
             justification={justification}
           />
         </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1 ps-4">
-        <Button
-          disabled={!prev}
-          onClick={() =>
-            prev &&
-            openPdf({
-              id: activeTab.id,
-              entityId: activeTab.entityId,
-              label: activeTab.label,
-              workspaceId: activeTab.workspaceId,
-              justificationFieldId: prev.fieldId,
-              propertyId: prev.property.id,
-            })
-          }
-          size="icon-xs"
-          variant="ghost"
-        >
-          <ChevronLeftIcon className="size-3.5" />
-        </Button>
-        <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
-          {currentIdx + 1} / {slots.length}
-        </span>
-        <Button
-          disabled={!next}
-          onClick={() =>
-            next &&
-            openPdf({
-              id: activeTab.id,
-              entityId: activeTab.entityId,
-              label: activeTab.label,
-              workspaceId: activeTab.workspaceId,
-              justificationFieldId: next.fieldId,
-              propertyId: next.property.id,
-            })
-          }
-          size="icon-xs"
-          variant="ghost"
-        >
-          <ChevronRightIcon className="size-3.5" />
-        </Button>
-      </div>
+      )}
     </div>
   );
 };

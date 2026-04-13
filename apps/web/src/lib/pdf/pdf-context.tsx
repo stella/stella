@@ -545,6 +545,7 @@ type PDFProviderProps = PropsWithChildren<{
   initialScaleOffset?: number | undefined;
   fitToWidth?: number | undefined;
   fallback?: PDFPageFallback | undefined;
+  onError?: ((error: Error) => void) | undefined;
 }>;
 
 export const PDFProvider = ({
@@ -554,6 +555,7 @@ export const PDFProvider = ({
   fitToWidth,
   children,
   fallback,
+  onError,
 }: PDFProviderProps) => {
   const [{ store, destroy }] = useState(() =>
     createPDFStore({
@@ -580,7 +582,7 @@ export const PDFProvider = ({
 
   return (
     <PDFStoreContext value={store}>
-      <PDFErrorBoundary fallback={fallback?.error}>
+      <PDFErrorBoundary fallback={fallback?.error} onError={onError}>
         <Suspense fallback={fallback?.suspense}>{children}</Suspense>
       </PDFErrorBoundary>
     </PDFStoreContext>

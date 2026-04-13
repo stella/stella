@@ -1,7 +1,6 @@
 import { createContext, useContext, useMemo } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 
 import type {
   ChatMentionOption,
@@ -18,7 +17,6 @@ type MentionProviders = {
 const MentionProvidersContext = createContext<MentionProviders>({
   getItems: () => [],
 });
-const protectedRouteApi = getRouteApi("/_protected");
 
 export const useMentionProviders = () => useContext(MentionProvidersContext);
 
@@ -29,12 +27,6 @@ export const ChatMentionProviders = ({
   children: React.ReactNode;
 }) => {
   const queryClient = useQueryClient();
-  const routeContext = protectedRouteApi.useRouteContext({
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
   const { data: workspacesData } = useQuery(workspacesNavigationOptions);
   const workspaces = workspacesData?.workspaces;
   const { data: firstViewIdsByWorkspaceId } = useQuery({
@@ -46,10 +38,7 @@ export const ChatMentionProviders = ({
       const viewEntries = await Promise.all(
         (workspaces ?? []).map(async (workspace) => {
           const views = await queryClient.ensureQueryData(
-            viewsOptions({
-              key: { workspaceId: workspace.id },
-              context: routeContext,
-            }),
+            viewsOptions(workspace.id),
           );
 
           return [workspace.id, views.at(0)?.id ?? null] as const;

@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import DOMPurify from "dompurify";
 import parse, { domToReact, Element } from "html-react-parser";
 import type { DOMNode } from "html-react-parser";
-import { useShallow } from "zustand/react/shallow";
 
 import { cn } from "@stella/ui/lib/utils";
 
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type PeekJustificationProps = {
@@ -27,12 +25,15 @@ export const PeekJustification = ({
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
-  const createBoundingBoxes = useCreateBBoxes({
-    justification,
-  });
-  const [pages, setScrollTo] = usePDFStore(
-    useShallow((s) => [s.pages, s.setScrollTo]),
-  );
+  const pages = usePDFStore((s) => s.pages);
+  const setScrollTo = usePDFStore((s) => s.setScrollTo);
+
+  // Keep a ref so the effect and click handler can read the
+  // latest pages without depending on the Map reference (which
+  // changes on every viewport recalculation and would cause an
+  // infinite effect loop).
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
 
   const handleCitationClick = useCallback(
     (_fieldId: string, pageNumber: number) => {
@@ -40,7 +41,7 @@ export const PeekJustification = ({
         id: justification.id,
         pageNumber,
       });
-      const pageIds = [...pages.keys()];
+      const pageIds = [...pagesRef.current.keys()];
       const pageId = pageIds[pageNumber - 1];
       if (pageId !== undefined) {
         setScrollTo({
@@ -49,7 +50,7 @@ export const PeekJustification = ({
         });
       }
     },
-    [justification.id, pages, setActiveJustification, setScrollTo],
+    [justification.id, setActiveJustification, setScrollTo],
   );
 
   // Parse once so we can extract the first cited page
@@ -101,17 +102,15 @@ export const PeekJustification = ({
     return { parsed: result, firstPage: fp };
   }, [justification.htmlContent, activeFileFieldId, handleCitationClick]);
 
-  // Eagerly generate bounding boxes, activate the
-  // justification, and scroll to the first cited page.
+  // Activate the justification and scroll to the first cited page
+  // when expanded. Bbox generation is handled by JustificationBar.
   useEffect(() => {
-    createBoundingBoxes();
-
     if (firstPage !== null) {
       setActiveJustification({
         id: justification.id,
         pageNumber: firstPage,
       });
-      const pageIds = [...pages.keys()];
+      const pageIds = [...pagesRef.current.keys()];
       const pageId = pageIds[firstPage - 1];
       if (pageId !== undefined) {
         setScrollTo({
@@ -120,14 +119,7 @@ export const PeekJustification = ({
         });
       }
     }
-  }, [
-    justification.id,
-    createBoundingBoxes,
-    firstPage,
-    pages,
-    setActiveJustification,
-    setScrollTo,
-  ]);
+  }, [justification.id, firstPage, setActiveJustification, setScrollTo]);
 
   // Clear active justification on unmount.
   useEffect(() => () => setActiveJustification(null), [setActiveJustification]);

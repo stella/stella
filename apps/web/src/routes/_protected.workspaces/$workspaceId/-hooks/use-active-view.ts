@@ -12,17 +12,8 @@ export const useActiveView = () => {
   const page = viewRoute.useSearch({
     select: (s) => s.page ?? 1,
   });
-  const viewsContext = viewRoute.useRouteContext({
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
   const { data: activeView } = useSuspenseQuery({
-    ...viewsOptions({
-      key: { workspaceId },
-      context: viewsContext,
-    }),
+    ...viewsOptions(workspaceId),
     select: (data) => data.find((v) => v.id === viewId) ?? data.at(0),
   });
 

@@ -7,6 +7,7 @@ import { ClientTelemetryError } from "@/lib/errors";
 type PDFErrorBoundaryProps = {
   fallback: ReactNode;
   children: ReactNode;
+  onError?: ((error: Error) => void) | undefined;
 };
 
 type PDFErrorBoundaryState = {
@@ -34,6 +35,7 @@ export class PDFErrorBoundary extends Component<
         cause: error,
       }),
     );
+    this.props.onError?.(error);
   }
 
   // oxlint-disable-next-line typescript-eslint/promise-function-async

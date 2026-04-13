@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
+import type { ViewFilterCondition } from "@/api/lib/views-schema";
 
 import {
   applyFilters,

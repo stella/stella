@@ -13,7 +13,7 @@ import { useShallow } from "zustand/shallow";
 
 import type { WorkspaceView } from "@/lib/types";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useViewsActor } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-views-actor";
+import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const EMPTY_ROW_SELECTION: RowSelectionState = {};
@@ -27,7 +27,7 @@ type UseTableStateProps = {
 
 export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const viewId = view.id;
-  const viewsActor = useViewsActor(workspaceId);
+  const updateView = useUpdateView(workspaceId);
 
   const storedColumnSizing = useTableStore(
     useShallow((s) => s.columnSizing.get(viewId) ?? {}),
@@ -61,8 +61,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
 
   const onSortingChange: OnChangeFn<SortingState> = (updater) => {
     const data = typeof updater === "function" ? updater(sorting) : updater;
-    // eslint-disable-next-line typescript/no-floating-promises
-    viewsActor.handle?.updateView({
+    updateView.mutate({
       viewId,
       layout: {
         ...view.layout,
@@ -81,10 +80,10 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
-    // eslint-disable-next-line typescript/no-floating-promises
-    viewsActor.handle?.updateView({
+    const pinned = (data.left ?? []).filter((id) => id !== selectColId);
+    updateView.mutate({
       viewId,
-      layout: { ...view.layout, columnPinning: data.left ?? [] },
+      layout: { ...view.layout, columnPinning: pinned },
     });
   };
 
@@ -106,8 +105,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
       .filter(([, visible]) => !visible)
       .map(([id]) => id);
 
-    // eslint-disable-next-line typescript/no-floating-promises
-    viewsActor.handle?.updateView({
+    updateView.mutate({
       viewId,
       layout: { ...view.layout, hiddenProperties },
     });

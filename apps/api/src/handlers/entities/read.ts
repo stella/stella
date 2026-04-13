@@ -6,7 +6,6 @@ import type { ScopedDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
 import { createHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,6 +14,7 @@ import {
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
 import { LIMITS } from "@/api/lib/limits";
+import type { ViewFilterCondition } from "@/api/lib/views-schema";
 
 const viewFilterConditionSchema = t.Union([
   t.Object({

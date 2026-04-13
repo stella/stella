@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import type { ViewFilterCondition } from "@/api/handlers/registry/actors/views/schema";
+import type { ViewFilterCondition } from "@/api/lib/views-schema";
 
 // -- Types --
 

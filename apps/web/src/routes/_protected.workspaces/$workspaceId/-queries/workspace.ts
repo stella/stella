@@ -1,10 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { useParams, useRouteContext } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 
-import { getWorkflowActorConfig } from "@stella/rivet/actors/workflow-actor-config";
-import { withTimeout } from "@stella/rivet/timeout";
-
-import { api, rivet } from "@/lib/api";
+import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
@@ -31,56 +28,36 @@ export const workspaceKeys = {
   ],
 };
 
-type WorkflowOptionsInput = QueryOptionsInput<
-  { workspaceId: string },
-  { organizationId: string; authToken: string }
->;
+type WorkflowKey = { workspaceId: string };
 
-const WORKFLOW_STATUS_TIMEOUT_MS = 10_000;
+const WORKFLOW_DEFAULT_STATUS = { running: false } as const;
 
-export const workflowOptions = ({ key, context }: WorkflowOptionsInput) =>
+export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
   queryOptions({
     queryKey: workspaceKeys.workflow(key.workspaceId),
     queryFn: async ({ signal }) => {
-      const actorConfig = getWorkflowActorConfig({
-        type: "vanilla",
-        organizationId: context.organizationId,
-        authToken: context.authToken,
-        workspaceId: key.workspaceId,
-      });
+      const response = await api
+        .workspaces({ workspaceId: key.workspaceId })
+        .workflow.get({ fetch: { signal } });
 
-      const handle = rivet.workflow.getOrCreate(actorConfig[0], {
-        ...actorConfig[1],
-        signal,
-      });
+      if (response.error) {
+        // Workflow actor may be unavailable (cold start, timeout).
+        // Return safe default instead of crashing the page.
+        return WORKFLOW_DEFAULT_STATUS;
+      }
 
-      return await withTimeout({
-        signal,
-        timeoutMs: WORKFLOW_STATUS_TIMEOUT_MS,
-        timeoutMessage: "Workflow actor timed out",
-        run: async () => await handle.getWorkflowStatus(),
-      });
+      return response.data;
     },
   });
 
 export const useIsWorkflowRunning = () => {
-  const { authToken, organizationId } = useRouteContext({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user?.activeOrganizationId,
-    }),
-  });
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",
     select: (s) => s.workspaceId,
   });
 
   const { data } = useQuery({
-    ...workflowOptions({
-      key: { workspaceId },
-      context: { organizationId, authToken },
-    }),
+    ...workflowOptions({ key: { workspaceId } }),
     select: (d) => d.running,
   });
 

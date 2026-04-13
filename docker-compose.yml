@@ -51,6 +51,17 @@ services:
       mc mb local/stella --ignore-existing
       "
 
+  valkey:
+    profiles: [dev]
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   gotenberg:
     profiles: [dev]
     image: gotenberg/gotenberg:8

@@ -8,7 +8,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   CalendarClockIcon,
   CheckCircle2Icon,
@@ -96,16 +96,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
-  const viewsContext = useRouteContext({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (ctx) => ({
-      authToken: ctx.authToken,
-      organizationId: ctx.user.activeOrganizationId,
-    }),
-  });
-  const { data: views } = useQuery(
-    viewsOptions({ key: { workspaceId }, context: viewsContext }),
-  );
+  const { data: views } = useQuery(viewsOptions(workspaceId));
   const findViewByType = useCallback(
     (type: string) => views?.find((v) => v.layout.type === type),
     [views],

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORTS=(3000 3001 3002 6420)
+PORTS=(3000 3001 3002)
 
 echo "==> Killing processes on ports ${PORTS[*]}..."
 for port in "${PORTS[@]}"; do
