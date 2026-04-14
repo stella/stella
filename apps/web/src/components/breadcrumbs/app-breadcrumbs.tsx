@@ -1,6 +1,6 @@
 import { Fragment, useId, useMemo } from "react";
 
-import { useMatches } from "@tanstack/react-router";
+import { Link, useMatches } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -40,7 +40,17 @@ export const AppBreadcrumbs = () => {
   > = useMemo(
     () => ({
       [serializeKey(["/workspaces/"])]: () => (
-        <BreadcrumbLink to="/workspaces">{t("common.matters")}</BreadcrumbLink>
+        <BreadcrumbItem className="min-w-8 shrink">
+          <Link
+            activeOptions={{ exact: true, includeSearch: false }}
+            activeProps={{ className: "text-foreground font-semibold" }}
+            className="hover:text-foreground min-w-0 truncate transition-colors"
+            title={t("common.matters")}
+            to="/workspaces"
+          >
+            {t("common.matters")}
+          </Link>
+        </BreadcrumbItem>
       ),
       [serializeKey(["/workspaces/$workspaceId"])]: (params) => (
         <WorkspaceBreadcrumb {...params} />
@@ -140,7 +150,7 @@ export const AppBreadcrumbs = () => {
   }, [matches, breadcrumbMap]);
 
   return (
-    <Breadcrumb className="min-w-0 max-lg:hidden">
+    <Breadcrumb className="min-w-0">
       <BreadcrumbList className="flex-nowrap overflow-hidden">
         {breadcrumbs.map((breadcrumb, index) => (
           <Fragment
@@ -149,7 +159,7 @@ export const AppBreadcrumbs = () => {
               index
             }`}
           >
-            {index !== 0 && <BreadcrumbSeparator />}
+            {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}
             {breadcrumb}
           </Fragment>
         ))}
