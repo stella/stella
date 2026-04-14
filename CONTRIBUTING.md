@@ -11,6 +11,14 @@ writing code, your help is welcome.
 3. (Optional) Set up Claude Code docs server: `bun run setup:mcp`
 4. Start the dev environment: `bun run dev`
 
+`bun run dev` now prepares the local stack for the current checkout,
+including worktree-aware `.env` linking and automatic port offsets when
+the default ports are already taken. Use `bun run dev:web` or
+`bun run dev:api` for a focused loop, `bun run dev:desktop` to launch the
+desktop app alongside web and API, or `bun run dev:all` for the raw
+Turborepo fan-out. Web-facing modes auto-open the app in your browser;
+pass `-- --no-browser` to skip that.
+
 See the [README](README.md) for the full tech stack and project
 structure.
 

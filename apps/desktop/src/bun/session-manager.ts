@@ -5,6 +5,7 @@ import type { FSWatcher } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
+import { resolveDesktopBridgePort } from "../dev-config";
 import type {
   AppSnapshot,
   DesktopNotificationPreferences,
@@ -14,7 +15,7 @@ import type {
   OpenDocxRequest,
   OpenDocxResponse,
 } from "../shared/rpc";
-import { DOCX_MIME_TYPE, STELLA_DESKTOP_BRIDGE_PORT } from "../shared/rpc";
+import { DOCX_MIME_TYPE } from "../shared/rpc";
 import type {
   PersistedDesktopSession,
   SessionStoreLoadIssue,
@@ -85,6 +86,7 @@ const SESSION_STORE_PATH = join(
   Utils.paths.userData,
   "desktop-edit-sessions.json",
 );
+const DESKTOP_BRIDGE_PORT = resolveDesktopBridgePort();
 const SUPPORT_EMAIL = "hello@stll.app";
 const SUPPORT_ROOT = Utils.paths.userData;
 const WORD_LOCK_PREFIX = "~$";
@@ -369,7 +371,7 @@ export class DesktopSessionManager {
       .toSorted((left, right) => left.fileName.localeCompare(right.fileName));
 
     return {
-      bridgePort: STELLA_DESKTOP_BRIDGE_PORT,
+      bridgePort: DESKTOP_BRIDGE_PORT,
       linkedAccount: this.linkedAccount,
       notificationPreferences: this.notificationPreferences,
       runningSince: this.runningSince,
@@ -1276,7 +1278,7 @@ export class DesktopSessionManager {
         platform: process.platform,
       },
       app: {
-        bridgePort: STELLA_DESKTOP_BRIDGE_PORT,
+        bridgePort: DESKTOP_BRIDGE_PORT,
         runningSince: this.runningSince,
         supportRoot: SUPPORT_ROOT,
         temporaryWorkingCopiesRoot: LOCAL_EDIT_ROOT,

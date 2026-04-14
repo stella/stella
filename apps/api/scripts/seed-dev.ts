@@ -3289,7 +3289,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(`  Fields: ${allFields.length}`);
 
-  // 7b. Ensure tsv column exists (not in Drizzle schema)
+  // 7b. Ensure the search GIN index exists on fresh dev databases
   await db.execute(sql`
     ALTER TABLE search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector

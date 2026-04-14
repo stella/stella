@@ -832,6 +832,7 @@ export const searchDocuments = p.pgTable(
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
+    tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
@@ -839,6 +840,7 @@ export const searchDocuments = p.pgTable(
     p
       .index("search_documents_org_workspace_idx")
       .on(table.organizationId, table.workspaceId),
+    p.index("search_documents_tsv_idx").using("gin", table.tsv),
   ],
 );
 
@@ -1646,10 +1648,10 @@ export const caseLawSearchDocuments = p.pgTable(
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
     regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
+    tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
-  // tsv column + GIN index added via apply-search-migration.ts
-  // (Drizzle cannot express tsvector natively)
+  (table) => [p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv)],
 );
 
 // ---------------------------------------------------------------------------
