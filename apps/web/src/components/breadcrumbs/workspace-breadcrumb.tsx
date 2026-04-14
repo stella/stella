@@ -124,9 +124,9 @@ export const WorkspaceBreadcrumb = ({
 
   const clientSegment = workspace.client ? (
     <>
-      <BreadcrumbItem>
+      <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground max-w-48 truncate transition-colors"
+          className="hover:text-foreground min-w-0 truncate transition-colors"
           onClick={() => {
             try {
               const raw = localStorage.getItem("matters_overview_config");
@@ -145,12 +145,13 @@ export const WorkspaceBreadcrumb = ({
               // localStorage may throw in private browsing
             }
           }}
+          title={workspace.client.displayName}
           to="/workspaces"
         >
           {workspace.client.displayName}
         </Link>
       </BreadcrumbItem>
-      <BreadcrumbSeparator />
+      <BreadcrumbSeparator className="shrink-0" />
     </>
   ) : null;
 
@@ -175,7 +176,7 @@ export const WorkspaceBreadcrumb = ({
     />
   ) : workspace.reference ? (
     <button
-      className="text-muted-foreground/60 hover:text-muted-foreground cursor-text text-sm"
+      className="text-muted-foreground/60 hover:text-muted-foreground shrink-0 cursor-text text-sm"
       onClick={() => {
         if (!match) {
           return;
@@ -218,18 +219,30 @@ export const WorkspaceBreadcrumb = ({
     <>
       {clientSegment}
       {colorPicker}
-      <BreadcrumbLink
-        onClick={() => {
-          if (!match) {
-            return;
-          }
+      <BreadcrumbItem className="shrink-0">
+        <Link
+          activeOptions={{ exact: true, includeSearch: false }}
+          activeProps={{ className: "text-foreground font-semibold" }}
+          className="hover:text-foreground max-w-80 truncate transition-colors"
+          title={displayName}
+          onClick={() => {
+            if (!match) {
+              return;
+            }
 
-          setIsEditing(true);
-        }}
-        to="/workspaces/$workspaceId"
-      >
-        {displayName}
-      </BreadcrumbLink>
+            setIsEditing(true);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setValue(displayName);
+            setIsEditing(true);
+          }}
+          params={{ workspaceId }}
+          to="/workspaces/$workspaceId"
+        >
+          {displayName}
+        </Link>
+      </BreadcrumbItem>
       {referenceSegment}
     </>
   );
