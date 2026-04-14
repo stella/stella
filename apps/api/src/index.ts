@@ -62,9 +62,24 @@ import { initWorkflowWorker } from "@/api/lib/workflow-queue";
 initWorkflowWorker();
 
 const HEALTH_PATH = "/health";
+const DEFAULT_API_PORT = 3001;
 const SESSION_ID_HEADER = "x-posthog-session-id";
 const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/;
+
+const getApiPort = () => {
+  const rawPort = process.env["STELLA_API_PORT"];
+  if (!rawPort) {
+    return DEFAULT_API_PORT;
+  }
+
+  const parsedPort = Number.parseInt(rawPort, 10);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65_535) {
+    return DEFAULT_API_PORT;
+  }
+
+  return parsedPort;
+};
 
 const getRequestPath = (request: Request): string =>
   new URL(request.url).pathname;
@@ -309,4 +324,4 @@ const api = new Elysia()
 
 export default api;
 
-api.listen(3001);
+api.listen(getApiPort());

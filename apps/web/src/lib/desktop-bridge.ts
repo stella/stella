@@ -1,7 +1,8 @@
+import { env } from "@/env";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
-const DESKTOP_BRIDGE_PORT = 45_901;
+const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 
 export class DesktopBridgeUnavailableError extends Error {

@@ -1,0 +1,452 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+
+import {
+  checkPortAvailabilityOnHosts,
+  createApiEnv,
+  createDesktopEnv,
+  createWebEnv,
+  ensureWorktreeEnvLinks,
+  findFirstAvailableOffset,
+  isWorktreeCheckout,
+  parseArgs,
+  portsForOffset,
+  requiredPortsForMode,
+  resolveMainRootFromCommonDir,
+  resolveOffset,
+  shouldAutoOpenBrowser,
+} from "./dev-runner";
+
+const tempDirs: string[] = [];
+
+const createTempDir = () => {
+  const dir = mkdtempSync(resolve(tmpdir(), "stella-dev-runner-"));
+  tempDirs.push(dir);
+  return dir;
+};
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { force: true, recursive: true });
+  }
+});
+
+describe("parseArgs", () => {
+  test("uses dev mode by default", () => {
+    expect(parseArgs([])).toEqual({
+      devInstance: undefined,
+      dryRun: false,
+      mode: "dev",
+      noBrowser: false,
+      portOffset: undefined,
+      skipDbPush: false,
+      skipInstall: false,
+    });
+  });
+
+  test("parses mode and flags", () => {
+    expect(
+      parseArgs([
+        "dev:desktop",
+        "--skip-install",
+        "--skip-db-push",
+        "--port-offset",
+        "8",
+        "--dev-instance",
+        "worktree-a",
+        "--dry-run",
+        "--no-browser",
+      ]),
+    ).toEqual({
+      devInstance: "worktree-a",
+      dryRun: true,
+      mode: "dev:desktop",
+      noBrowser: true,
+      portOffset: 8,
+      skipDbPush: true,
+      skipInstall: true,
+    });
+  });
+});
+
+describe("resolveOffset", () => {
+  test("uses explicit port offset when provided", () => {
+    expect(
+      resolveOffset({
+        branchName: "feature/dev-runner",
+        devInstance: undefined,
+        isWorktree: true,
+        portOffset: 12,
+        worktreeName: "stella-dev-runner",
+      }),
+    ).toEqual({
+      offset: 12,
+      source: "STELLA_PORT_OFFSET=12",
+    });
+  });
+
+  test("rejects explicit offsets above the maximum valid port range", () => {
+    expect(() =>
+      resolveOffset({
+        branchName: "feature/dev-runner",
+        devInstance: undefined,
+        isWorktree: true,
+        portOffset: 19_635,
+        worktreeName: "stella-dev-runner",
+      }),
+    ).toThrow("STELLA_PORT_OFFSET must be an integer between 0 and 19634");
+  });
+
+  test("rejects numeric dev instances above the maximum valid port range", () => {
+    expect(() =>
+      resolveOffset({
+        branchName: "feature/dev-runner",
+        devInstance: "19635",
+        isWorktree: true,
+        portOffset: undefined,
+        worktreeName: "stella-dev-runner",
+      }),
+    ).toThrow(
+      "numeric STELLA_DEV_INSTANCE must be an integer between 0 and 19634",
+    );
+  });
+
+  test("uses default ports for the main checkout", () => {
+    expect(
+      resolveOffset({
+        branchName: "main",
+        devInstance: undefined,
+        isWorktree: false,
+        portOffset: undefined,
+        worktreeName: "stella-1",
+      }),
+    ).toEqual({
+      offset: 0,
+      source: "default ports",
+    });
+  });
+
+  test("hashes worktree identity when no explicit override exists", () => {
+    const resolved = resolveOffset({
+      branchName: "codex/dev-runner-bootstrap",
+      devInstance: undefined,
+      isWorktree: true,
+      portOffset: undefined,
+      worktreeName: "stella-1-dev-runner-bootstrap",
+    });
+
+    expect(resolved.offset).toBeGreaterThan(0);
+    expect(resolved.source).toContain("hashed worktree=");
+  });
+});
+
+describe("portsForOffset", () => {
+  test("keeps the API, web, and desktop ports in sync", () => {
+    expect(portsForOffset(0)).toEqual({
+      api: 3001,
+      desktopBridge: 45_901,
+      desktopView: 5177,
+      web: 3000,
+    });
+    expect(portsForOffset(24)).toEqual({
+      api: 3025,
+      desktopBridge: 45_925,
+      desktopView: 5201,
+      web: 3024,
+    });
+  });
+});
+
+describe("requiredPortsForMode", () => {
+  test("uses only the relevant ports for each mode", () => {
+    const ports = portsForOffset(5);
+
+    expect(requiredPortsForMode("dev:web", ports)).toEqual([3005]);
+    expect(requiredPortsForMode("dev:api", ports)).toEqual([3006]);
+    expect(requiredPortsForMode("dev", ports)).toEqual([3006, 3005]);
+    expect(requiredPortsForMode("dev:desktop", ports)).toEqual([
+      3006, 3005, 5182, 45_906,
+    ]);
+  });
+});
+
+describe("checkPortAvailabilityOnHosts", () => {
+  test("requires every host probe to pass", async () => {
+    const checkedPorts: { host: string; port: number }[] = [];
+
+    const available = await checkPortAvailabilityOnHosts(
+      3000,
+      ["127.0.0.1", "0.0.0.0"],
+      async (port, host) => {
+        checkedPorts.push({ host, port });
+        return host !== "0.0.0.0";
+      },
+    );
+
+    expect(available).toBe(false);
+    expect(checkedPorts).toEqual([
+      { host: "127.0.0.1", port: 3000 },
+      { host: "0.0.0.0", port: 3000 },
+    ]);
+  });
+});
+
+describe("findFirstAvailableOffset", () => {
+  test("returns the starting offset when the requested ports are free", async () => {
+    const offset = await findFirstAvailableOffset({
+      checkReusableApiPort: async () => true,
+      checkPortAvailability: async () => true,
+      mode: "dev",
+      startOffset: 0,
+    });
+
+    expect(offset).toBe(0);
+  });
+
+  test("advances until both web and API ports are free", async () => {
+    const takenPorts = new Set([3000, 3001, 3002, 3003]);
+
+    const offset = await findFirstAvailableOffset({
+      checkReusableApiPort: async () => true,
+      checkPortAvailability: async (port) => !takenPorts.has(port),
+      mode: "dev",
+      startOffset: 0,
+    });
+
+    expect(offset).toBe(4);
+  });
+
+  test("checks the web port and its companion API port in web-only mode", async () => {
+    const seenPorts: number[] = [];
+
+    const offset = await findFirstAvailableOffset({
+      checkReusableApiPort: async () => true,
+      checkPortAvailability: async (port) => {
+        seenPorts.push(port);
+        return true;
+      },
+      mode: "dev:web",
+      startOffset: 3,
+    });
+
+    expect(offset).toBe(3);
+    expect(seenPorts).toEqual([3003, 3004]);
+  });
+
+  test("skips web-only offsets whose companion API port is occupied by another service", async () => {
+    const offset = await findFirstAvailableOffset({
+      checkReusableApiPort: async (apiPort) => apiPort !== 3001,
+      checkPortAvailability: async (port) => port !== 3001,
+      mode: "dev:web",
+      startOffset: 0,
+    });
+
+    expect(offset).toBe(2);
+  });
+
+  test("requires desktop view and bridge ports in desktop mode", async () => {
+    const takenPorts = new Set([3000, 3001, 5177, 45_901]);
+
+    const offset = await findFirstAvailableOffset({
+      checkReusableApiPort: async () => true,
+      checkPortAvailability: async (port) => !takenPorts.has(port),
+      mode: "dev:desktop",
+      startOffset: 0,
+    });
+
+    expect(offset).toBe(2);
+  });
+});
+
+describe("worktree helpers", () => {
+  test("detects linked worktrees by the .git file", () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+
+    mkdirSync(resolve(mainRoot, ".git"), { recursive: true });
+    writeFileSync(
+      resolve(worktreeRoot, ".git"),
+      "gitdir: /tmp/example/.git/worktrees/linked-worktree\n",
+    );
+
+    expect(isWorktreeCheckout(mainRoot)).toBe(false);
+    expect(isWorktreeCheckout(worktreeRoot)).toBe(true);
+  });
+
+  test("resolves the main root from the common git dir", () => {
+    expect(resolveMainRootFromCommonDir("/repo/.git")).toBe("/repo");
+  });
+
+  test("symlinks missing env files from the main worktree", () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+
+    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(resolve(worktreeRoot, "apps/web"), { recursive: true });
+
+    writeFileSync(resolve(mainRoot, "apps/api/.env"), "API=1\n");
+    writeFileSync(resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+
+    const createdLinks = ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(createdLinks).toBe(2);
+    expect(
+      Bun.file(resolve(worktreeRoot, "apps/api/.env")).size,
+    ).toBeGreaterThan(0);
+    expect(
+      Bun.file(resolve(worktreeRoot, "apps/web/.env")).size,
+    ).toBeGreaterThan(0);
+  });
+
+  test("bootstraps missing env files from .env.example in the main checkout", () => {
+    const mainRoot = createTempDir();
+
+    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
+
+    writeFileSync(resolve(mainRoot, "apps/api/.env.example"), "API=1\n");
+    writeFileSync(resolve(mainRoot, "apps/web/.env.example"), "WEB=1\n");
+
+    const createdLinks = ensureWorktreeEnvLinks({
+      currentRoot: mainRoot,
+      isWorktree: false,
+      mainRoot,
+    });
+
+    expect(createdLinks).toBe(2);
+    expect(Bun.file(resolve(mainRoot, "apps/api/.env")).size).toBe(
+      "API=1\n".length,
+    );
+    expect(Bun.file(resolve(mainRoot, "apps/web/.env")).size).toBe(
+      "WEB=1\n".length,
+    );
+  });
+
+  test("leaves pre-existing env files untouched", () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+
+    mkdirSync(resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(resolve(worktreeRoot, "apps/web"), { recursive: true });
+
+    writeFileSync(resolve(mainRoot, "apps/api/.env"), "API=1\n");
+    writeFileSync(resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+    writeFileSync(resolve(worktreeRoot, "apps/api/.env"), "LOCAL=1\n");
+
+    const createdLinks = ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(createdLinks).toBe(1);
+    expect(Bun.file(resolve(worktreeRoot, "apps/api/.env")).size).toBe(
+      "LOCAL=1\n".length,
+    );
+  });
+});
+
+describe("dev env factories", () => {
+  test("threads computed ports into the API env", () => {
+    expect(
+      createApiEnv({
+        baseEnv: { KEEP_ME: "1" },
+        ports: {
+          api: 3101,
+          desktopBridge: 45_999,
+          desktopView: 5199,
+          web: 3100,
+        },
+      }),
+    ).toMatchObject({
+      BETTER_AUTH_URL: "http://localhost:3101",
+      FRONTEND_URL: "http://localhost:3100",
+      KEEP_ME: "1",
+      STELLA_API_PORT: "3101",
+      STELLA_WEB_PORT: "3100",
+    });
+  });
+
+  test("threads computed ports into the web env", () => {
+    expect(
+      createWebEnv({
+        baseEnv: { KEEP_ME: "1" },
+        ports: {
+          api: 3101,
+          desktopBridge: 45_999,
+          desktopView: 5199,
+          web: 3100,
+        },
+      }),
+    ).toMatchObject({
+      KEEP_ME: "1",
+      STELLA_API_PORT: "3101",
+      STELLA_WEB_PORT: "3100",
+      VITE_API_URL: "http://localhost:3101",
+      VITE_DESKTOP_BRIDGE_PORT: "45999",
+    });
+  });
+
+  test("threads computed ports into the desktop env", () => {
+    expect(
+      createDesktopEnv({
+        baseEnv: { KEEP_ME: "1" },
+        ports: {
+          api: 3101,
+          desktopBridge: 45_999,
+          desktopView: 5199,
+          web: 3100,
+        },
+      }),
+    ).toMatchObject({
+      KEEP_ME: "1",
+      STELLA_API_PORT: "3101",
+      STELLA_DESKTOP_BRIDGE_PORT: "45999",
+      STELLA_DESKTOP_VIEW_PORT: "5199",
+      STELLA_WEB_PORT: "3100",
+    });
+  });
+});
+
+describe("browser behavior", () => {
+  test("auto-opens only when the mode includes the web app", () => {
+    expect(
+      shouldAutoOpenBrowser({
+        ci: "",
+        mode: "dev",
+        noBrowser: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoOpenBrowser({
+        ci: "",
+        mode: "dev:desktop",
+        noBrowser: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoOpenBrowser({
+        ci: "",
+        mode: "dev:api",
+        noBrowser: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoOpenBrowser({
+        ci: "",
+        mode: "dev:web",
+        noBrowser: true,
+      }),
+    ).toBe(false);
+  });
+});

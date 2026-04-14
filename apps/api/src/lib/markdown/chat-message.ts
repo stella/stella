@@ -17,6 +17,7 @@ const ALLOWED_TAGS = new Set([
   "code",
   "del",
   "em",
+  "entity-mention",
   "i",
   "li",
   "ol",
@@ -32,6 +33,12 @@ const ALLOWED_TAGS = new Set([
 
 const ALLOWED_ATTRS: Record<string, Set<string>> = {
   a: new Set(["href"]),
+  "entity-mention": new Set([
+    "data-category",
+    "data-id",
+    "data-label",
+    "data-source-workspace-id",
+  ]),
 };
 
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);

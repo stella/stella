@@ -11,6 +11,17 @@ export const env = createEnv({
       "false",
     ),
     VITE_API_URL: v.pipe(v.string(), v.url()),
+    VITE_DESKTOP_BRIDGE_PORT: v.optional(
+      v.pipe(
+        v.string(),
+        v.digits(),
+        v.transform(Number),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(65_535),
+      ),
+      "45901",
+    ),
     VITE_AUTH_GOOGLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     VITE_AUTH_MICROSOFT: v.optional(
       v.pipe(v.string(), v.parseBoolean()),

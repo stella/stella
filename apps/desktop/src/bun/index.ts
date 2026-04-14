@@ -8,12 +8,17 @@ import {
   Utils,
 } from "electrobun/bun";
 
+import {
+  resolveDesktopAllowedOrigins,
+  resolveDesktopBridgePort,
+  resolveDesktopViewPort,
+} from "../dev-config";
 import type { AppSnapshot, DesktopRPC, OpenDocxRequest } from "../shared/rpc";
-import { STELLA_DESKTOP_BRIDGE_PORT } from "../shared/rpc";
 import { DesktopSessionManager } from "./session-manager";
 
-const DEV_SERVER_PORT = 5177;
-const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+const DEV_SERVER_PORT = resolveDesktopViewPort();
+const DEV_SERVER_URL = `http://127.0.0.1:${String(DEV_SERVER_PORT)}`;
+const DESKTOP_BRIDGE_PORT = resolveDesktopBridgePort();
 const isMac = process.platform === "darwin";
 const DEFAULT_TAB = "general";
 const OPEN_SESSION_ACTION_PREFIX = "session-open:";
@@ -30,17 +35,7 @@ const OPEN_EDIT_ROOT_ACTION = "open-edit-root";
 const OPEN_PREFERENCES_ACTION = "open-preferences";
 const OPEN_SUPPORT_ROOT_ACTION = "open-support-root";
 const QUIT_ACTION = "quit";
-const DEFAULT_ALLOWED_BRIDGE_ORIGINS = [
-  "http://127.0.0.1:3000",
-  "http://localhost:3000",
-] as const;
-const bridgeAllowedOrigins = new Set([
-  ...DEFAULT_ALLOWED_BRIDGE_ORIGINS,
-  ...(process.env["STELLA_DESKTOP_ALLOWED_ORIGINS"] ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0),
-]);
+const bridgeAllowedOrigins = resolveDesktopAllowedOrigins();
 
 type PreferencesTab = "general" | "notifications" | "about";
 
@@ -631,7 +626,7 @@ Bun.serve({
       return jsonResponse(
         200,
         {
-          bridgePort: STELLA_DESKTOP_BRIDGE_PORT,
+          bridgePort: DESKTOP_BRIDGE_PORT,
           ok: true,
         },
         origin,
@@ -705,5 +700,5 @@ Bun.serve({
     }
   },
   hostname: "127.0.0.1",
-  port: STELLA_DESKTOP_BRIDGE_PORT,
+  port: DESKTOP_BRIDGE_PORT,
 });

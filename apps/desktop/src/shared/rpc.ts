@@ -1,4 +1,4 @@
-export const STELLA_DESKTOP_BRIDGE_PORT = 45_901;
+export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
