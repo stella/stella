@@ -1,5 +1,5 @@
 {
-  "name": "infosoud",
+  "name": "@stella/infosoud",
   "version": "0.1.0",
   "description": "Czech court case lookup SDK and CLI for infosoud.gov.cz",
   "keywords": [
