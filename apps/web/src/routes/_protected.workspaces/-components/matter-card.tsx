@@ -11,11 +11,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stella/ui/components/avatar";
 import { Button } from "@stella/ui/components/button";
 import {
   Menu,
@@ -31,7 +26,6 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import { useI18nStore } from "@/i18n/i18n-store";
-import { getInitials } from "@/lib/get-initials";
 import { getMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -47,7 +41,7 @@ type OverviewData = NonNullable<
   >
 >;
 
-const MAX_VISIBLE_CONTRIBUTORS = 4;
+const DAY_MS = 86_400_000;
 
 type MatterCardProps = {
   workspace: Workspace;
@@ -75,15 +69,14 @@ export const MatterCard = ({
     enabled: previewEnabled,
   });
 
-  const displayable = workspace.contributors.filter((c) => Boolean(c.userName));
-  const visibleContributors = displayable.slice(0, MAX_VISIBLE_CONTRIBUTORS);
-  const overflow = displayable.length - MAX_VISIBLE_CONTRIBUTORS;
-
   const hasPreviewContent =
     !!preview &&
     (preview.documentCount > 0 ||
       preview.taskCount > 0 ||
       preview.recentEntities.length > 0);
+
+  const recencyClass = getRecencyClass(workspace.lastActivityAt);
+  const deadline = getDeadlineInfo(workspace.nextDeadline, lang);
 
   return (
     <PreviewCard
@@ -96,40 +89,39 @@ export const MatterCard = ({
       <PreviewCardTrigger
         delay={400}
         render={
-          <Link
+          <div
             className={cn(
-              "group bg-card hover:bg-accent/50 relative flex flex-col justify-between overflow-hidden rounded-xl border px-3 py-2.5 transition-colors",
+              "group bg-card hover:bg-accent/50 relative flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
               focused && "ring-primary ring-2",
             )}
-            params={{ workspaceId: workspace.id }}
             style={{
               borderInlineStartWidth: 3,
               borderInlineStartColor: getMatterColor(workspace.id),
             }}
-            to="/workspaces/$workspaceId"
           />
         }
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">{workspace.name}</h2>
-            {!hideClientName && workspace.client && (
-              <Link
-                className="text-muted-foreground hover:text-foreground truncate text-xs hover:underline"
-                onClick={(e) => e.stopPropagation()}
-                params={{ contactId: workspace.client.id }}
-                to="/contacts/$contactId"
-              >
-                {workspace.client.displayName}
-              </Link>
-            )}
-          </div>
-
+        {/* Line 1: name + reference + menu */}
+        <div className="flex items-center gap-2">
+          <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+            <Link
+              className="after:absolute after:inset-0"
+              params={{ workspaceId: workspace.id }}
+              to="/workspaces/$workspaceId"
+            >
+              {workspace.name}
+            </Link>
+          </h2>
+          {workspace.reference && (
+            <span className="text-muted-foreground shrink-0 font-mono text-xs">
+              {workspace.reference}
+            </span>
+          )}
           <Menu>
             <MenuTrigger
               render={
                 <Button
-                  className="size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="relative z-10 -mr-1.5 size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -164,31 +156,45 @@ export const MatterCard = ({
           </Menu>
         </div>
 
-        <Contributors
-          overflow={overflow}
-          visibleContributors={visibleContributors}
-        />
+        {/* Line 1.5: client name (flat view only) */}
+        {!hideClientName && (
+          <Link
+            className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
+            onClick={(e) => e.stopPropagation()}
+            params={{ contactId: workspace.client.id }}
+            to="/contacts/$contactId"
+          >
+            {workspace.client.displayName}
+          </Link>
+        )}
 
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          {workspace.reference && (
-            <>
-              <span className="font-mono">{workspace.reference}</span>
-              <span>·</span>
-            </>
-          )}
-          <span>
-            {workspace.entityCount > 0
-              ? t("workspaces.entitiesCount", { count: workspace.entityCount })
-              : t("workspaces.noItems")}
-          </span>
-          <span>·</span>
+        {/* Line 2: tasks/items + deadline (left) | last active (right) */}
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <div className="text-muted-foreground flex items-center gap-1.5">
+            <span>
+              {workspace.openTaskCount > 0
+                ? t("workspaces.tasksCount", { count: workspace.openTaskCount })
+                : workspace.entityCount > 0
+                  ? t("workspaces.entitiesCount", {
+                      count: workspace.entityCount,
+                    })
+                  : t("workspaces.noItems")}
+            </span>
+            {deadline && (
+              <>
+                <span>·</span>
+                <span className={deadline.className}>{deadline.label}</span>
+              </>
+            )}
+          </div>
           <span
+            className={cn("shrink-0", recencyClass)}
             title={new Date(workspace.lastActivityAt).toLocaleString(lang, {
               dateStyle: "full",
               timeStyle: "medium",
             })}
           >
-            {t("workspaces.lastActive", { time: lastActivityAt })}
+            {lastActivityAt}
           </span>
         </div>
       </PreviewCardTrigger>
@@ -200,49 +206,44 @@ export const MatterCard = ({
   );
 };
 
-type ContributorsProps = {
-  visibleContributors: Workspace["contributors"];
-  overflow: number;
+/** Color-code recency: today = foreground, this week = muted, older = faded. */
+const getRecencyClass = (date: Date | string): string => {
+  const age = Date.now() - new Date(date).getTime();
+  if (age < DAY_MS) {
+    return "text-foreground text-xs";
+  }
+  if (age < 7 * DAY_MS) {
+    return "text-muted-foreground text-xs";
+  }
+  return "text-muted-foreground/50 text-xs";
 };
 
-const Contributors = ({ visibleContributors, overflow }: ContributorsProps) => {
-  if (visibleContributors.length === 0) {
+type DeadlineInfo = { label: string; className: string };
+
+/** Format deadline with urgency color. Returns null if no deadline. */
+const getDeadlineInfo = (
+  deadline: string | null,
+  lang: string,
+): DeadlineInfo | null => {
+  if (!deadline) {
     return null;
   }
 
-  return (
-    <div className="flex items-center py-0.5">
-      {visibleContributors.map((c, i) => (
-        <PreviewCard key={c.userId}>
-          <PreviewCardTrigger
-            delay={200}
-            render={(props) => (
-              <span
-                {...props}
-                className={cn("inline-block rounded-full", i > 0 && "-ms-1")}
-                onPointerEnter={(e) => e.stopPropagation()}
-              />
-            )}
-          >
-            <Avatar className="ring-background size-5 ring-1">
-              {c.userImage && <AvatarImage src={c.userImage} />}
-              <AvatarFallback className="text-[0.5rem]">
-                {getInitials(c.userName)}
-              </AvatarFallback>
-            </Avatar>
-          </PreviewCardTrigger>
-          <PreviewCardPopup className="p-2 text-xs" sideOffset={4}>
-            {c.userName}
-          </PreviewCardPopup>
-        </PreviewCard>
-      ))}
-      {overflow > 0 && (
-        <span className="text-muted-foreground ms-1 text-[0.625rem]">
-          {`+${overflow}`}
-        </span>
-      )}
-    </div>
-  );
+  const dueDate = new Date(`${deadline}T23:59:59`);
+  const now = Date.now();
+  const diff = dueDate.getTime() - now;
+  const label = formatRelativeTime(new Date(`${deadline}T00:00:00`), lang);
+
+  if (diff < 0) {
+    return { label, className: "text-destructive font-medium" };
+  }
+  if (diff < 2 * DAY_MS) {
+    return { label, className: "text-warning font-medium" };
+  }
+  if (diff < 7 * DAY_MS) {
+    return { label, className: "text-foreground" };
+  }
+  return { label, className: "text-muted-foreground" };
 };
 
 type PreviewPopupContentProps = {

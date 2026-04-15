@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
 import { useShallow } from "zustand/shallow";
 
 import { Frame } from "@stella/ui/components/frame";
@@ -39,12 +39,16 @@ type MattersTableProps = {
   workspaces: Workspace[];
   groups: WorkspaceGroup[] | null;
   focusIndex: number;
+  collapsedGroups: string[];
+  onToggleGroup: (groupId: string) => void;
 };
 
 export const MattersTable = ({
   workspaces,
   groups,
   focusIndex,
+  collapsedGroups,
+  onToggleGroup,
 }: MattersTableProps) => {
   const update = useConfigStore((s) => s.updateMatters);
 
@@ -93,10 +97,12 @@ export const MattersTable = ({
           {groups && groups.length > 0
             ? groups.map((group) => (
                 <MattersTableGroup
+                  collapsed={collapsedGroups.includes(group.groupId)}
                   columns={columns}
                   focusIndex={focusIndex}
                   group={group}
                   key={group.groupId}
+                  onToggle={() => onToggleGroup(group.groupId)}
                   workspaces={workspaces}
                 />
               ))
@@ -228,6 +234,8 @@ type MattersTableGroupProps = {
   workspaces: Workspace[];
   columns: ColumnDef[];
   focusIndex: number;
+  collapsed: boolean;
+  onToggle: () => void;
 };
 
 const MattersTableGroup = ({
@@ -235,6 +243,8 @@ const MattersTableGroup = ({
   workspaces,
   columns,
   focusIndex,
+  collapsed,
+  onToggle,
 }: MattersTableGroupProps) => {
   const firstWs = group.workspaces.at(0);
 
@@ -246,11 +256,18 @@ const MattersTableGroup = ({
 
   return (
     <>
-      <TableRow>
+      <TableRow className="cursor-pointer" onClick={onToggle}>
         <TableCell className="font-semibold" colSpan={columns.length}>
           <span className="inline-flex items-center gap-2">
+            <ChevronRightIcon
+              className={cn(
+                "text-muted-foreground size-3.5 shrink-0 transition-transform",
+                !collapsed && "rotate-90",
+              )}
+            />
             <Link
               className="hover:underline"
+              onClick={(e) => e.stopPropagation()}
               params={{ contactId: group.clientId }}
               to="/contacts/$contactId"
             >
@@ -267,15 +284,16 @@ const MattersTableGroup = ({
           </span>
         </TableCell>
       </TableRow>
-      {group.workspaces.map((ws, i) => (
-        <MattersTableRow
-          columns={columns}
-          focusIndex={focusIndex}
-          globalIndex={baseIndex + i}
-          key={ws.id}
-          workspace={ws}
-        />
-      ))}
+      {!collapsed &&
+        group.workspaces.map((ws, i) => (
+          <MattersTableRow
+            columns={columns}
+            focusIndex={focusIndex}
+            globalIndex={baseIndex + i}
+            key={ws.id}
+            workspace={ws}
+          />
+        ))}
     </>
   );
 };

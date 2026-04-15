@@ -9,9 +9,7 @@ export const getUniqueClientsFromWorkspace = (
 ): { id: string; displayName: string }[] => {
   const map = new Map<string, { id: string; displayName: string }>();
   for (const ws of workspaces) {
-    if (ws.client) {
-      map.set(ws.client.id, ws.client);
-    }
+    map.set(ws.client.id, ws.client);
   }
   return Array.from(map.values()).toSorted((a, b) =>
     a.displayName.localeCompare(b.displayName),
@@ -22,11 +20,7 @@ export const groupByClient = (workspaces: Workspace[]): WorkspaceGroup[] => {
   const groups = new Map<string, WorkspaceGroup>();
 
   for (const ws of workspaces) {
-    const client = ws.client;
-    if (!client) {
-      continue;
-    }
-
+    const { client } = ws;
     const key = client.id;
     let group = groups.get(key);
     if (!group) {
@@ -34,6 +28,7 @@ export const groupByClient = (workspaces: Workspace[]): WorkspaceGroup[] => {
         groupId: key,
         clientId: key,
         clientName: client.displayName,
+        responsibleAttorneyName: client.responsibleAttorneyName,
         workspaces: [],
       };
       groups.set(key, group);

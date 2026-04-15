@@ -8,6 +8,9 @@ import type {
 } from "@/routes/_protected.workspaces/-types";
 import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
 type ViewMode = "grid" | "table";
 type MattersGroupBy = "none" | "client";
 
@@ -18,21 +21,24 @@ type MattersConfig = {
   groupBy: MattersGroupBy;
   hiddenColumns: MattersColumnId[];
   clientFilter: string | null;
+  collapsedGroups: string[];
 };
 
 const DEFAULT_MATTERS: MattersConfig = {
   viewMode: "grid",
   sortKey: "lastActivityAt",
   sortDesc: true,
-  groupBy: "none",
+  groupBy: "client",
   hiddenColumns: [],
   clientFilter: null,
+  collapsedGroups: [],
 };
 
 type ConfigState = {
   matters: MattersConfig;
   updateMatters: (patch: Partial<MattersConfig>) => void;
   toggleMattersColumn: (id: MattersColumnId) => void;
+  toggleGroupCollapsed: (groupId: string) => void;
 };
 
 export const useConfigStore = create<ConfigState>()(
@@ -44,6 +50,15 @@ export const useConfigStore = create<ConfigState>()(
         set((s) => ({
           matters: { ...s.matters, ...patch },
         })),
+
+      toggleGroupCollapsed: (groupId) =>
+        set((s) => {
+          const current = s.matters.collapsedGroups ?? [];
+          const next = current.includes(groupId)
+            ? current.filter((id) => id !== groupId)
+            : [...current, groupId];
+          return { matters: { ...s.matters, collapsedGroups: next } };
+        }),
 
       toggleMattersColumn: (id) =>
         set((s) => {
@@ -66,6 +81,16 @@ export const useConfigStore = create<ConfigState>()(
       name: getStorageKey("config"),
       version: 1,
       migrate: () => null,
+      merge: (persisted, current) => {
+        if (!isRecord(persisted)) {
+          return current;
+        }
+        const prev = isRecord(persisted.matters) ? persisted.matters : {};
+        return {
+          ...current,
+          matters: { ...DEFAULT_MATTERS, ...prev },
+        };
+      },
     },
   ),
 );
