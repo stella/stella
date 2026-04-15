@@ -1,4 +1,4 @@
-# Publishing `infosoud`
+# Publishing `@stella/infosoud`
 
 This package is published from `packages/infosoud`, not from the monorepo root.
 
@@ -27,7 +27,7 @@ This runs:
 4. If the package already exists on npm, check the currently published version:
 
 ```sh
-npm view infosoud version
+npm view @stella/infosoud version
 ```
 
 5. Publish from the package directory:

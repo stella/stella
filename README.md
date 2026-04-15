@@ -87,5 +87,12 @@ Dual-licensed:
 
 ## Development
 
+- Workspace layout:
+  `apps/*` contains runnable applications, `packages/*` contains shared or
+  publishable packages, and every workspace package uses the `@stella/<name>`
+  naming convention.
 - [Stella Web App](/apps/web/README.md)
+- [Stella Desktop App](/apps/desktop/README.md)
+- [Stella Landing Site](/apps/landing/README.md)
 - [Stella API](/apps/api/README.md)
+- [InfoSoud SDK](/packages/infosoud/README.md)

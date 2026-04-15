@@ -5,6 +5,7 @@ Electrobun companion app for managed DOCX editing from stella.
 ### Local development
 
 ```bash
+bun --filter @stella/desktop dev
 bun --cwd apps/desktop run dev
 bun run dev:desktop
 ```

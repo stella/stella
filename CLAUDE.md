@@ -20,6 +20,15 @@ marks, citation styles, legal terminology) when relevant.
 **Monorepo:** `apps/api` (Elysia backend, Bun), `apps/web` (React + Vite frontend),
 shared packages in `packages/`. Use Glob/Grep to explore.
 
+## Workspace Layout
+
+- `apps/*` contains runnable applications only.
+- `packages/*` contains shared or publishable packages only.
+- Every direct child of `apps/` and `packages/` must be a workspace package named
+  `@stella/<directory>`.
+- Use scoped workspace filters in commands, for example
+  `bun --filter @stella/web dev`.
+
 ## Commands
 
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |

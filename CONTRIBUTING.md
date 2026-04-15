@@ -45,6 +45,15 @@ and may not load reliably. To try it:
 If the LSP tool doesn't appear after restart, use Glob/Grep
 to explore the codebase.
 
+## Workspace Layout
+
+- `apps/*` contains runnable applications only.
+- `packages/*` contains shared or publishable packages only.
+- Every direct child of `apps/` and `packages/` is a workspace package named
+  `@stella/<directory>`.
+- Use scoped workspace filters in commands, for example
+  `bun --filter @stella/web dev`.
+
 ## Development Workflow
 
 1. Create a branch from `main` for your changes.
