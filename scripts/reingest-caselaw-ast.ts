@@ -29,7 +29,7 @@ type DecisionRow = {
 };
 
 const extractUnid = (url: string): string | null => {
-  const match = url.match(/WebSearch\/([A-F0-9]+)/i);
+  const match = /WebSearch\/([A-F0-9]+)/i.exec(url);
   return match?.[1] ?? null;
 };
 

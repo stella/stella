@@ -93,7 +93,7 @@ const globalCaseLawRoute = new Elysia({
         typeof model === "string"
           ? model
           : "modelId" in model
-            ? String(model.modelId)
+            ? model.modelId
             : "unknown";
 
       const systemPrompt = getSystemPrompt(decision.language);
@@ -178,7 +178,7 @@ const caseLawAdminRoute = new Elysia({
       set.status = 403;
       return { error: "Forbidden" } as const;
     }
-    return;
+    return undefined;
   })
   .get(
     "/ingestion/status",

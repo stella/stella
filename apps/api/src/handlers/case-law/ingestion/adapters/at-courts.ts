@@ -281,7 +281,7 @@ const toArray = (val: string | string[] | undefined | null): string[] => {
 const findHtmlUrl = (doc: RisDocumentReference): string | undefined => {
   const raw = doc.Data?.Dokumentliste?.ContentReference?.Urls?.ContentUrl;
   if (!raw) {
-    return;
+    return undefined;
   }
   const urls = Array.isArray(raw) ? raw : [raw];
   return toOptionalValue(urls.find((u) => u.DataType === "Html")?.Url);
@@ -320,7 +320,7 @@ const fetchFulltext = async (
     if (error instanceof DOMException) {
       throw error;
     }
-    return;
+    return undefined;
   }
 };
 
@@ -329,7 +329,7 @@ const extractEntscheidungsart = (
   justiz: RisJustiz | null | undefined,
 ): string | undefined => {
   if (!justiz?.Entscheidungstexte?.item) {
-    return;
+    return undefined;
   }
   const items = Array.isArray(justiz.Entscheidungstexte.item)
     ? justiz.Entscheidungstexte.item

@@ -295,7 +295,7 @@ const ViewTab = ({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return combine(
       ...(canUpdateView

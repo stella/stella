@@ -55,7 +55,7 @@ export const toFormErrors = (
   }
 
   if (errorsMap.size === 0) {
-    return;
+    return undefined;
   }
 
   return Object.fromEntries(errorsMap);

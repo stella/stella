@@ -31,7 +31,7 @@ export const MatterCombobox = ({
     <Combobox
       onValueChange={(val) => {
         if (val) {
-          onChange(String(val));
+          onChange(val);
         }
       }}
       value={value || null}

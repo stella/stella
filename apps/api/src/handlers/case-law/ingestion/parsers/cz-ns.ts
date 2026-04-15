@@ -76,7 +76,7 @@ export const parseNsDecisionHtml = (
 // ── Metadata extraction ────────────────────────────────────
 
 const parseDominoDate = (raw: string): string | null => {
-  const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
   if (!match) {
     return null;
   }
@@ -695,10 +695,9 @@ const mergeBlocks = (
     if (firstPara.type === "paragraph") {
       const text = firstPara.plainText;
       // Check for embedded title
-      const titleMatch = text.match(
-        /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/,
-      );
-      const caseMatch = text.match(/(\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/);
+      const titleMatch =
+        /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/.exec(text);
+      const caseMatch = /(\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/.exec(text);
 
       if (titleMatch && caseMatch) {
         // Replace the merged block with case-number + title

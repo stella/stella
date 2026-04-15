@@ -261,5 +261,5 @@ export const deleteCategoryHandler = async ({
       );
   });
 
-  return;
+  return undefined;
 };

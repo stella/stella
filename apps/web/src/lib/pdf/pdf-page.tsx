@@ -107,7 +107,7 @@ const PDFPageContent = ({ pageId, renderPromise }: PDFPageContentProps) => {
       <div
         ref={(el) => {
           if (!el) {
-            return;
+            return undefined;
           }
 
           el.append(rendered.canvas);
@@ -125,7 +125,7 @@ const PDFPageContent = ({ pageId, renderPromise }: PDFPageContentProps) => {
       <div
         ref={(el) => {
           if (!el) {
-            return;
+            return undefined;
           }
 
           rendered.textLayerDiv.setAttribute(TEXT_LAYER_ATTRIBUTE, pageId);

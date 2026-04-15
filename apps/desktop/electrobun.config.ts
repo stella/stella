@@ -1,6 +1,6 @@
 import type { ElectrobunConfig } from "electrobun";
 
-const releaseBaseUrl = process.env["STELLA_DESKTOP_RELEASE_BASE_URL"];
+const releaseBaseUrl = process.env.STELLA_DESKTOP_RELEASE_BASE_URL;
 
 export default {
   app: {

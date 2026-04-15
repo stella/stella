@@ -98,7 +98,7 @@ export const ToolCallCard = ({
       )}
       {hasError && "errorText" in part && (
         <div className="text-destructive border-t px-2 py-1.5">
-          {String(part.errorText)}
+          {part.errorText}
         </div>
       )}
     </div>

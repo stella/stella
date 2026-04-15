@@ -383,7 +383,7 @@ const classifyJustificationParagraph = (
   makeBlockId: () => string,
 ): Block => {
   // Numbered paragraph: "1. ...", "2. ..."
-  const numMatch = plainText.match(NUMBERED_PARA_RE);
+  const numMatch = NUMBERED_PARA_RE.exec(plainText);
   if (numMatch) {
     const text = plainText.slice(numMatch[0].length).trim();
     return {

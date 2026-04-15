@@ -237,7 +237,7 @@ export const redactPdf = async (
         // If still too wide at MIN size, abbreviate
         if (!fitsAtSize(displayText, size)) {
           // [CZECH_BIRTH_NUMBER_1] → [CZE_B_N_1]
-          const m = displayText.match(/^\[(.+?)(?:_(\d+))?\]$/);
+          const m = /^\[(.+?)(?:_(\d+))?\]$/.exec(displayText);
           if (m) {
             const label = m[1] ?? "";
             const suffix = m[2] ?? "";

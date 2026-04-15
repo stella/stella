@@ -193,7 +193,7 @@ const SidebarTimerBadge = ({ workspaceId }: SidebarTimerBadgeProps) => {
   useEffect(() => {
     if (!activeTimer?.timerStartedAt) {
       setTimerSeconds(0);
-      return;
+      return undefined;
     }
 
     const startMs = new Date(activeTimer.timerStartedAt).getTime();
@@ -350,7 +350,7 @@ const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
           <Combobox
             onValueChange={(val) => {
               if (val) {
-                setSelectedMatterId(String(val));
+                setSelectedMatterId(val);
               }
             }}
             value={selectedMatterId || null}
@@ -537,7 +537,7 @@ const MatterItem = ({
   useEffect(() => {
     const el = dropRef.current;
     if (!el || !canDrag) {
-      return;
+      return undefined;
     }
     return combine(
       draggable({
@@ -1127,7 +1127,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
 
   useEffect(() => {
     if (!showNavBadges) {
-      return;
+      return undefined;
     }
 
     const handler = (e: KeyboardEvent) => {

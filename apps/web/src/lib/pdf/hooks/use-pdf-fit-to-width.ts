@@ -46,12 +46,12 @@ export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
     }
 
     if (fitToWidth === undefined || scaleOffset !== 0) {
-      return;
+      return undefined;
     }
 
     const container = containerRef.current;
     if (!container) {
-      return;
+      return undefined;
     }
 
     // Observe the ScrollArea viewport (the visible area),

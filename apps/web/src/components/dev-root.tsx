@@ -17,7 +17,7 @@ export default function DevRoot() {
     const el = document.querySelector<HTMLElement>("rivetkit-devtools");
     if (el) {
       setElement(el);
-      return;
+      return undefined;
     }
 
     const observer = new MutationObserver((_, obs) => {

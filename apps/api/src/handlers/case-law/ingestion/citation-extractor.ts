@@ -49,19 +49,19 @@ const stripPrefix = (text: string): string => {
   const trimmed = text.trim();
 
   // Czech: "sp. zn. 21 Cdo 1234/2020"
-  const spZn = trimmed.match(/^sp\.\s*zn\.\s*(.+)/i);
+  const spZn = /^sp\.\s*zn\.\s*(.+)/i.exec(trimmed);
   if (spZn?.[1]) {
     return spZn[1].trim();
   }
 
   // Czech: "č. j. 5 As 123/2020" or "č.j. 5 As 123/2020"
-  const cj = trimmed.match(/^[čc]\.\s*j\.\s*(.+)/i);
+  const cj = /^[čc]\.\s*j\.\s*(.+)/i.exec(trimmed);
   if (cj?.[1]) {
     return cj[1].trim();
   }
 
   // Polish: "sygn. akt II CSK 123/20"
-  const sygn = trimmed.match(/^sygn\.\s*(?:akt\s+)?(.+)/i);
+  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/i.exec(trimmed);
   if (sygn?.[1]) {
     return sygn[1].trim();
   }

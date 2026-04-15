@@ -9,7 +9,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
  * accidentally identify as the upstream project.
  */
 export const INGESTION_USER_AGENT =
-  process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
+  process.env.INGESTION_USER_AGENT ?? "Mozilla/5.0 (compatible)";
 
 const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
 
@@ -94,9 +94,9 @@ export const stripHtml = (html: string): string =>
  * Accepts "D. M. YYYY" (CZ) and "DD.MM.YYYY" (SK).
  */
 export const parseCeDate = (dateStr: string): string | undefined => {
-  const m = dateStr.trim().match(CE_DATE_PATTERN);
+  const m = CE_DATE_PATTERN.exec(dateStr.trim());
   if (!m?.[1] || !m[2] || !m[3]) {
-    return;
+    return undefined;
   }
   const day = m[1].padStart(2, "0");
   const month = m[2].padStart(2, "0");

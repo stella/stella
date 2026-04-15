@@ -33,15 +33,15 @@ export const loadAdapterByKey = async (
   key: string,
 ): Promise<SourceAdapter | undefined> => {
   if (!(key in ADAPTER_MODULES)) {
-    return;
+    return undefined;
   }
   const loader = ADAPTER_MODULES[key];
   if (!loader) {
-    return;
+    return undefined;
   }
   const mod = await loader();
   if (!isRecord(mod)) {
-    return;
+    return undefined;
   }
   return Object.values(mod).find(
     (v): v is SourceAdapter =>

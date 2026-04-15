@@ -140,7 +140,7 @@ export const loadPDF = async ({
   });
 
   if (Result.isError(documentResult)) {
-    return documentResult;
+    return Result.err(documentResult.error);
   }
 
   const document = documentResult.value;

@@ -68,7 +68,7 @@ const deleteContactById = createRootHandler(
         throw error;
       }
 
-      return;
+      return undefined;
     }),
 );
 

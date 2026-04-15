@@ -34,7 +34,7 @@ const initialState: ThemeProviderState = {
   resolvedTheme: "light",
 };
 
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+const ThemeProviderContext = createContext(initialState);
 
 const PALETTE_PREFIX = "palette-";
 

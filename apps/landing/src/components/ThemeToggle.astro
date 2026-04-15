@@ -21,8 +21,8 @@
 </style>
 
 <script is:inline>
-  document.getElementById("theme-toggle").addEventListener("click", function() {
-    var d = document.documentElement.classList;
+  document.querySelector("#theme-toggle").addEventListener("click", function() {
+    const d = document.documentElement.classList;
     if (d.contains("dark")) {
       d.remove("dark");
       localStorage.setItem("theme", "light");

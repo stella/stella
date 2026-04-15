@@ -1,5 +1,5 @@
 import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
-import type { HeldKey, Hotkey } from "@tanstack/react-hotkeys";
+import type { IndividualKey, Hotkey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -12,9 +12,11 @@ export const HOTKEYS = {
   SELECT_ALL: "Mod+A",
 } as const satisfies Record<string, Hotkey>;
 
-export const MOD_KEY: HeldKey = detectPlatform() === "mac" ? "Meta" : "Control";
+export const MOD_KEY: IndividualKey =
+  detectPlatform() === "mac" ? "Meta" : "Control";
 
-export const NAV_KEY: HeldKey = detectPlatform() === "mac" ? "Control" : "Alt";
+export const NAV_KEY: IndividualKey =
+  detectPlatform() === "mac" ? "Control" : "Alt";
 
 export type ShortcutContext = "global" | "workspace" | "pdf";
 

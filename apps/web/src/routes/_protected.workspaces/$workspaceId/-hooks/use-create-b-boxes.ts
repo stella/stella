@@ -40,7 +40,7 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
         justification.boundingBoxes ||
         inflightRef.current.has(justification.id)
       ) {
-        return;
+        return undefined;
       }
 
       inflightRef.current.add(justification.id);

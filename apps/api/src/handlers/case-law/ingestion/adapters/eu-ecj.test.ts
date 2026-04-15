@@ -74,7 +74,7 @@ describe("euEcjAdapter.fetchPage", () => {
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
       globalThis.fetch = mock((url: string) => {
-        const urlStr = String(url);
+        const urlStr = url;
 
         if (urlStr.includes("sparql")) {
           return Promise.resolve(
@@ -183,7 +183,7 @@ describe("euEcjAdapter.fetchPage", () => {
 
   test("skips languages without fulltext", async () => {
     globalThis.fetch = mock((url: string) => {
-      const urlStr = String(url);
+      const urlStr = url;
 
       if (urlStr.includes("sparql")) {
         const fixture = {
@@ -229,7 +229,7 @@ describe("euEcjAdapter.fetchPage", () => {
 
   test("no decisions when all languages 404", async () => {
     globalThis.fetch = mock((url: string) => {
-      const urlStr = String(url);
+      const urlStr = url;
 
       if (urlStr.includes("sparql")) {
         const fixture = {
@@ -261,7 +261,7 @@ describe("euEcjAdapter.fetchPage", () => {
 
   test("language appears in URLs", async () => {
     globalThis.fetch = mock((url: string) => {
-      const urlStr = String(url);
+      const urlStr = url;
 
       if (urlStr.includes("sparql")) {
         const fixture = {

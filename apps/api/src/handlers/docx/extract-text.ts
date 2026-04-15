@@ -193,7 +193,7 @@ const extractParagraphsFromContainer = (
       }
     }
 
-    const dm = text.match(DIRECTIVE_RE);
+    const dm = DIRECTIVE_RE.exec(text);
     if (dm) {
       entry.isDirective = true;
       const tag = dm[1];

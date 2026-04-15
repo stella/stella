@@ -43,7 +43,7 @@ export const TimesheetDayView = ({
   const t = useTranslations();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState(new Set<string>());
 
   const userId = useRouteContext({
     from: "/_protected",

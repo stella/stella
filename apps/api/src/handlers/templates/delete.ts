@@ -65,7 +65,7 @@ const deleteTemplateHandler = async ({
     s3.delete(key).catch(captureError);
   }
 
-  return;
+  return undefined;
 };
 
 const config = {

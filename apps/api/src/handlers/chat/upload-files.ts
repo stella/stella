@@ -151,7 +151,7 @@ export const hydrateFilePart = async ({
       type: "file",
       filename: toDocxTextFilename({ filename: fileName }),
       mediaType: TEXT_PLAIN_MIME_TYPE,
-      url: toDataUrl(Buffer.from(text, "utf8"), TEXT_PLAIN_MIME_TYPE),
+      url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
     });
   });
 

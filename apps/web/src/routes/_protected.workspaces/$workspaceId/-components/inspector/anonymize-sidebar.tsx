@@ -41,7 +41,7 @@ const AnonymizeSidebarAddEntityForm = ({
   const t = useTranslations();
   const searchInputId = useId();
   const [addText, setAddText] = useState("");
-  const [addLabel, setAddLabel] = useState<string>(labelOptions[0] ?? "person");
+  const [addLabel, setAddLabel] = useState(labelOptions[0] ?? "person");
   const [noMatches, setNoMatches] = useState(false);
 
   const handleAdd = () => {

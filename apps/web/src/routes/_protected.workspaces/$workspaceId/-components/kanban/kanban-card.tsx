@@ -73,7 +73,7 @@ export const KanbanCard = ({
   useEffect(() => {
     const el = dragRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return draggable({
       element: el,

@@ -710,7 +710,7 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
     // Section headings in Odůvodnění: standalone Roman
     // numeral possibly followed by a title on the next line
     if (inOduvodneni) {
-      const romanMatch = plainText.match(SECTION_ROMAN_RE);
+      const romanMatch = SECTION_ROMAN_RE.exec(plainText);
       if (romanMatch) {
         // Check if next non-empty line is a short title
         const nextNonEmpty = findNextNonEmpty(lines, i + 1);
@@ -754,7 +754,7 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
     }
 
     // Numbered paragraphs: "1. ...", "2. ..."
-    const numMatch = plainText.match(NUMBERED_PARA_RE);
+    const numMatch = NUMBERED_PARA_RE.exec(plainText);
     if (numMatch) {
       const strippedText = plainText.slice(numMatch[0].length).trim();
       const strippedInlines = stripInlinePrefix(inlines, numMatch[0].length);

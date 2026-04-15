@@ -116,7 +116,7 @@ function DecisionViewer() {
 
   const sectionMap = useMemo(() => {
     if (analysisTree.length === 0 || !ast) {
-      return;
+      return undefined;
     }
     const anchorIds = ast.blocks.map((b) => b.anchorId);
     return buildSectionMap(analysisTree, anchorIds);

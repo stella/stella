@@ -33,8 +33,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     useShallow((s) => s.columnSizing.get(viewId) ?? {}),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
-  const [columnSizing, setColumnSizing] =
-    useState<ColumnSizingState>(storedColumnSizing);
+  const [columnSizing, setColumnSizing] = useState(storedColumnSizing);
 
   const debouncedSetStoredColumnSizing = useDebouncedCallback(
     (data: ColumnSizingState) => {

@@ -338,7 +338,7 @@ const parseDecisionDateFromContent = (
   }
 
   const text = stripHtml(content);
-  const match = text.match(POLISH_DATE_RE);
+  const match = POLISH_DATE_RE.exec(text);
   const day = match?.[1]?.padStart(2, "0");
   const monthName = match?.[2]?.toLocaleLowerCase("pl-PL");
   const year = match?.[3];

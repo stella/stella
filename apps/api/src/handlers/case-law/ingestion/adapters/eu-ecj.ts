@@ -223,7 +223,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
  *      "62023TJ0201" → "T-201/23"
  */
 export const celexToCaseNumber = (celex: string): string => {
-  const match = celex.match(/^6(\d{4})(CJ|TJ|CC|CO|TO|FJ)(\d+)/);
+  const match = /^6(\d{4})(CJ|TJ|CC|CO|TO|FJ)(\d+)/.exec(celex);
   if (!match) {
     return celex;
   }
@@ -267,7 +267,7 @@ const fetchFulltext = async (
     });
 
     if (!response.ok) {
-      return;
+      return undefined;
     }
 
     const html = await response.text();
@@ -275,14 +275,13 @@ const fetchFulltext = async (
     // Extract the main content div. Greedy match captures
     // everything up to the outermost </div> before <!--,
     // avoiding early termination on inner div comments.
-    const bodyMatch = html.match(
-      /<div[^>]*id="TexteOnly"[^>]*>([\s\S]*)<\/div>\s*<!--/i,
-    );
+    const bodyMatch =
+      /<div[^>]*id="TexteOnly"[^>]*>([\s\S]*)<\/div>\s*<!--/i.exec(html);
     if (!bodyMatch) {
       // Fallback: extract <body> content
-      const fallback = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+      const fallback = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
       if (!fallback?.[1]) {
-        return;
+        return undefined;
       }
       const text = stripHtml(fallback[1])
         // eslint-disable-next-line no-control-regex -- strip control chars for PG
@@ -306,7 +305,7 @@ const fetchFulltext = async (
         }),
       );
     }
-    return;
+    return undefined;
   }
 };
 

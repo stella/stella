@@ -30,7 +30,7 @@ export const useStartWorkflow = () => {
 
       if (response.error) {
         analytics.captureError(new Error("Failed to start workflow"));
-        return;
+        return undefined;
       }
 
       // Invalidate workflow status so UI shows "running"
@@ -41,7 +41,7 @@ export const useStartWorkflow = () => {
       return response.data;
     } catch (error) {
       analytics.captureError(error);
-      return;
+      return undefined;
     }
   };
 };

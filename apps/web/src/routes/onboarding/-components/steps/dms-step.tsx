@@ -27,7 +27,7 @@ type DmsStepProps = {
 export const DmsStep = ({ onNext, onSelectionChange }: DmsStepProps) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState(new Set<string>());
 
   const filtered = useMemo(() => {
     if (!query.trim()) {

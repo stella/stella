@@ -58,7 +58,7 @@ export const HeadingBreadcrumb = ({
   useEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc || flatHeadings.length === 0) {
-      return;
+      return undefined;
     }
 
     const handleScroll = () => {
@@ -93,7 +93,7 @@ export const HeadingBreadcrumb = ({
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return undefined;
     }
 
     const handleClick = (e: MouseEvent) => {

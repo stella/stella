@@ -305,7 +305,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   useEffect(() => {
     const el = pdfContentRef.current;
     if (!el || activeTab?.type !== "pdf") {
-      return;
+      return undefined;
     }
 
     const onWheel = (e: WheelEvent) => {
@@ -568,12 +568,12 @@ const MeasuredPdfProvider = ({
 
   useEffect(() => {
     if (!active || initialFitWidth !== undefined) {
-      return;
+      return undefined;
     }
 
     const container = containerRef.current;
     if (!container) {
-      return;
+      return undefined;
     }
 
     const updateWidth = (width: number) => {
@@ -718,7 +718,7 @@ const JustificationBar = ({
 
   useEffect(() => {
     if (!justificationId || !isActiveTab || boundingBoxes) {
-      return;
+      return undefined;
     }
 
     let cancelled = false;

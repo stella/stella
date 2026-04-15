@@ -32,7 +32,7 @@ export const DropZone = ({ workspaceId, children }: DropZoneProps) => {
   useEffect(() => {
     const el = dropRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return dropTargetForExternal({
       element: el,

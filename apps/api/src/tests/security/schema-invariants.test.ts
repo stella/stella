@@ -30,7 +30,7 @@ const extractCheckValues = (
       Array.isArray(chunk.value)
     ) {
       const str = String(chunk.value[0] ?? "");
-      const match = str.match(/IN\s*\(([^)]+)\)/i);
+      const match = /IN\s*\(([^)]+)\)/i.exec(str);
       if (match?.[1]) {
         inList = match[1];
         break;

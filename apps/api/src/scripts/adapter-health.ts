@@ -160,7 +160,7 @@ const parseWindowArg = (args: string[]): number => {
   if (!raw) {
     return 24;
   }
-  const match = raw.match(/^(\d+)\s*h$/i);
+  const match = /^(\d+)\s*h$/i.exec(raw);
   if (match?.[1]) {
     return Number.parseInt(match[1], 10);
   }
@@ -341,13 +341,13 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
   const countMap = new Map<string, number>(
     decisionCounts.map((r: { sourceId: string; total: number }) => [
       r.sourceId,
-      Number(r.total),
+      r.total,
     ]),
   );
   const growthMap = new Map<string, number>(
     growthCounts.map((r: { sourceId: string; inserted: number }) => [
       r.sourceId,
-      Number(r.inserted),
+      r.inserted,
     ]),
   );
 
@@ -359,9 +359,9 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       notIndexed: 0,
     };
     if (row.isIndexed) {
-      entry.indexed = Number(row.cnt);
+      entry.indexed = row.cnt;
     } else {
-      entry.notIndexed = Number(row.cnt);
+      entry.notIndexed = row.cnt;
     }
     searchMap.set(row.sourceId, entry);
   }
@@ -371,7 +371,7 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     citationRows.map(
       (r: { sourceId: string; total: number; resolved: number }) => [
         r.sourceId,
-        { total: Number(r.total), resolved: Number(r.resolved) },
+        { total: r.total, resolved: r.resolved },
       ],
     ),
   );

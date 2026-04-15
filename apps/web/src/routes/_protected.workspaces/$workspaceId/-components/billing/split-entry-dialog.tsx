@@ -36,7 +36,7 @@ export const SplitEntryDialog = ({
   const t = useTranslations();
   const splitMutation = useSplitTimeEntry();
 
-  const [splits, setSplits] = useState<SplitLine[]>([
+  const [splits, setSplits] = useState([
     { key: ++splitKeyCounter, matterId: "", percentage: 50 },
     { key: ++splitKeyCounter, matterId: "", percentage: 50 },
   ]);

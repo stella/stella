@@ -10,7 +10,7 @@ const YARA_DIR = join(import.meta.dir, "yara");
 
 const compiled = compile(
   [...new Bun.Glob("*.yar").scanSync(YARA_DIR)]
-    .map((f) => readFileSync(join(YARA_DIR, f), "utf8"))
+    .map((f) => readFileSync(join(YARA_DIR, f), "utf-8"))
     .join("\n"),
 );
 

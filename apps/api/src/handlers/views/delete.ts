@@ -67,7 +67,7 @@ const deleteView = createHandler(
       data: ["views", workspaceId],
     });
 
-    return;
+    return undefined;
   },
 );
 

@@ -202,11 +202,11 @@ const isSearchResponse = (value: unknown): value is SearchResponse =>
  */
 const parseApiDate = (raw: string | undefined): string | undefined => {
   if (!raw) {
-    return;
+    return undefined;
   }
-  const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(raw);
   if (!match?.[1] || !match[2] || !match[3]) {
-    return;
+    return undefined;
   }
   return `${match[3]}-${match[1]}-${match[2]}`;
 };

@@ -103,7 +103,7 @@ const resolveVersion = async (
     );
 
     if (!clause) {
-      return;
+      return undefined;
     }
 
     return scopedDb((tx) =>
@@ -159,7 +159,7 @@ const resolveVersion = async (
   );
 
   if (!clause) {
-    return;
+    return undefined;
   }
 
   return scopedDb((tx) =>

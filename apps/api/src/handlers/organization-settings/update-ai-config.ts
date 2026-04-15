@@ -221,7 +221,7 @@ const validateProviderKey = async (
   });
 
   if (result.isErr()) {
-    return { valid: false, error: String(result.error) };
+    return { valid: false, error: result.error };
   }
   return { valid: true };
 };

@@ -267,5 +267,5 @@ export const deleteVariantHandler = async ({
       ),
   );
 
-  return;
+  return undefined;
 };

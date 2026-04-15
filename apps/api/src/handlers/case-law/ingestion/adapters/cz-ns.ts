@@ -136,7 +136,7 @@ const JUDGE_RE =
   /(?:JUDr\.|Mgr\.|doc\.|prof\.)\s+[\p{L}\s,.-]+?(?=\s*předsed[ay]\s+senátu)/iu;
 
 const extractJudge = (text: string): string | undefined => {
-  const match = text.match(JUDGE_RE);
+  const match = JUDGE_RE.exec(text);
   if (!match) {
     return undefined;
   }

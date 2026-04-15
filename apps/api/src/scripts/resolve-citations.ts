@@ -47,13 +47,13 @@ const normalizeCitation = (
   }
 
   // Czech: "sp. zn. 33 Cdo 2178/2018" → "33 Cdo 2178/2018"
-  const spZn = trimmed.match(/^sp\.\s*zn\.\s*(.+)/i);
+  const spZn = /^sp\.\s*zn\.\s*(.+)/i.exec(trimmed);
   if (spZn?.[1]) {
     return { caseNumber: spZn[1].trim() };
   }
 
   // Czech file number: "č. j. 5 As 123/2020" → "5 As 123/2020"
-  const cj = trimmed.match(/^[čc]\.\s*j\.\s*(.+)/i);
+  const cj = /^[čc]\.\s*j\.\s*(.+)/i.exec(trimmed);
   if (cj?.[1]) {
     return { caseNumber: cj[1].trim() };
   }
@@ -64,7 +64,7 @@ const normalizeCitation = (
   }
 
   // Polish: "sygn. akt II CSK 123/20" → "II CSK 123/20"
-  const sygn = trimmed.match(/^sygn\.\s*(?:akt\s+)?(.+)/i);
+  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/i.exec(trimmed);
   if (sygn?.[1]) {
     return { caseNumber: sygn[1].trim() };
   }

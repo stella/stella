@@ -63,7 +63,7 @@ ${decisionText}`;
     typeof model === "string"
       ? model
       : "modelId" in model
-        ? String(model.modelId)
+        ? model.modelId
         : "unknown";
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.analysis",

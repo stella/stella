@@ -34,11 +34,12 @@
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
 
-    "unicorn/no-useless-undefined": "error",
+    // Disabled: conflicts with typescript/consistent-return, which requires
+    // explicit `return undefined` on all code paths
+    "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-at": "error",
 
-    "react/no-forward-ref": "error",
     "react/rules-of-hooks": "error",
 
     "import/no-cycle": "error",
@@ -81,6 +82,12 @@
 
     // TypeScript
     "typescript/no-inferrable-types": "off",
+    "typescript/consistent-return": "error",
+    "typescript/dot-notation": "error",
+    // Too noisy for existing class-based code; low signal
+    "typescript/prefer-readonly": "off",
+    "typescript/no-unnecessary-type-conversion": "error",
+    "typescript/no-unnecessary-type-arguments": "error",
 
     // Unicorn
     "unicorn/switch-case-braces": "off",
@@ -108,6 +115,8 @@
     "react_perf/jsx-no-new-function-as-prop": "off",
 
     // React
+    // False positives on legitimate patterns (prefixed setters, read-only destructuring)
+    "react/hook-use-state": "off",
     "react/no-array-index-key": "off",
     "react/no-children-prop": "off",
     "react/no-danger": "off",
@@ -291,6 +300,8 @@
         // physical properties in snapshots / a11y checks
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
+        // We use bun:test, not vitest; the vitest plugin's global-import rule is a false positive.
+        "vitest/prefer-importing-vitest-globals": "off",
       },
     },
   ],

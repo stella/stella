@@ -39,11 +39,11 @@ const getNestedValue = (
 
   for (const part of parts) {
     if (typeof current === "string" || !(part in current)) {
-      return;
+      return undefined;
     }
     const next: string | NestedMessages | undefined = current[part];
     if (next === undefined) {
-      return;
+      return undefined;
     }
     current = next;
   }

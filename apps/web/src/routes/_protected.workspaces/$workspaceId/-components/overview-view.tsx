@@ -844,7 +844,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   useEffect(() => {
     const el = rowRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return draggable({
       element: el,

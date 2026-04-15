@@ -3,10 +3,9 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
-const APP_ROOT = fileURLToPath(new URL(".", import.meta.url));
+const APP_ROOT = import.meta.dirname;
 
 export default defineConfig({
   root: APP_ROOT,

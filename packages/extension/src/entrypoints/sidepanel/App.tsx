@@ -136,7 +136,7 @@ const UserHeader = ({ user, initials, onSignOut }: UserHeaderProps) => {
 
   useEffect(() => {
     if (!open) {
-      return;
+      return undefined;
     }
     const handleClickOutside = (e: MouseEvent) => {
       if (

@@ -77,7 +77,7 @@ export const CalendarEntityChip = ({
   useEffect(() => {
     const el = dragRef.current;
     if (!el || !isEditable) {
-      return;
+      return undefined;
     }
     return draggable({
       element: el,

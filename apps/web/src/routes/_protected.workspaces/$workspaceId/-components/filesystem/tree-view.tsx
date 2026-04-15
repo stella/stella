@@ -168,7 +168,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const renameEntity = useRenameEntity();
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState(new Set<string>());
 
   const handleSelect = useCallback((entityId: string, meta: boolean) => {
     setSelectedIds((prev) => {
@@ -326,7 +326,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   // Expanded folders state: starts with all folders expanded.
   const allFolderIds = useMemo(() => collectFolderIds(data), [data]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(allFolderIds);
+  const [expandedIds, setExpandedIds] = useState(allFolderIds);
   const allExpanded =
     allFolderIds.size > 0 &&
     [...allFolderIds].every((id) => expandedIds.has(id));
@@ -446,7 +446,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   useEffect(() => {
     const el = rootBarRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return dropTargetForElements({
       element: el,
@@ -781,7 +781,7 @@ const FilesystemRow = ({
   useEffect(() => {
     const el = rowRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     const cleanup = combine(
       draggable({
@@ -1022,7 +1022,7 @@ const FilesystemRow = ({
         })
         .filter((x) => x !== null);
       if (navigables.length === 0) {
-        return;
+        return undefined;
       }
       return () => {
         const store = useInspectorStore.getState();
@@ -1044,7 +1044,7 @@ const FilesystemRow = ({
           workspaceId,
         });
     }
-    return;
+    return undefined;
   })();
 
   const bulkEntities = isBulkSelected

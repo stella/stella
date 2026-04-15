@@ -55,7 +55,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   useEffect(() => {
     if (!isRunning || !activeTimer?.timerStartedAt) {
       setElapsed(0);
-      return;
+      return undefined;
     }
 
     const startedAt = new Date(activeTimer.timerStartedAt).getTime();

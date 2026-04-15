@@ -86,7 +86,7 @@ export const useStickToBottom = () => {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
 
     let lastScrollTop = el.scrollTop;
@@ -147,7 +147,7 @@ export const useStickToBottom = () => {
   useEffect(() => {
     const content = contentRef.current;
     if (!content) {
-      return;
+      return undefined;
     }
 
     const observer = new ResizeObserver(() => {

@@ -53,7 +53,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <!-- Theme: resolve before first paint to prevent flash -->
     <script is:inline>
       (function() {
-        var t = localStorage.getItem("theme");
+        const t = localStorage.getItem("theme");
         if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
           document.documentElement.classList.add("dark");
         }

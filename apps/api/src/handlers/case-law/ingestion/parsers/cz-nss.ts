@@ -432,7 +432,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 };
 
 const parseFontSize = (style: string): number => {
-  const match = style.match(/font-size:\s*(\d+)pt/);
+  const match = /font-size:\s*(\d+)pt/.exec(style);
   return match ? Number(match[1]) : 12;
 };
 
@@ -682,7 +682,7 @@ const classifyChunks = (chunks: PChunk[]): Block[] => {
       });
 
       // The rest is the poučení text
-      const pouceniMatch = plainText.match(POUCENI_INLINE_RE);
+      const pouceniMatch = POUCENI_INLINE_RE.exec(plainText);
       if (pouceniMatch) {
         const rest = plainText.slice(pouceniMatch[0].length).trim();
         if (rest) {
@@ -820,7 +820,7 @@ const classifyChunks = (chunks: PChunk[]): Block[] => {
     }
 
     // Numbered paragraphs: [1], [2], ...
-    const numMatch = plainText.match(NUMBERED_PARA_RE);
+    const numMatch = NUMBERED_PARA_RE.exec(plainText);
     if (numMatch) {
       const strippedText = plainText.slice(numMatch[0].length).trim();
       const strippedInlines = stripInlinePrefix(inlines, numMatch[0].length);

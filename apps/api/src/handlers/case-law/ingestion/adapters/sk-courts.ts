@@ -155,7 +155,7 @@ const isSkApiResponse = (value: unknown): value is SkApiResponse =>
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
 const parseSkDate = (raw: string | null | undefined): string | undefined => {
   if (!raw) {
-    return;
+    return undefined;
   }
   const result = parseCeDate(raw);
   if (!result) {

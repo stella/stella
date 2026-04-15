@@ -32,7 +32,7 @@ const DEFAULT_MAX_RESULTS = 3;
 const MAX_RESULTS_LIMIT = 10;
 const DEFAULT_MAX_CHUNKS = 3;
 const MAX_CHUNKS_LIMIT = 8;
-const MAX_CHUNK_CHARS = 1_600;
+const MAX_CHUNK_CHARS = 1600;
 const DEFAULT_HEADING = "Introduction";
 
 const server = new McpServer({
@@ -366,7 +366,7 @@ const parseIndexEntries = ({
       continue;
     }
 
-    const headingMatch = trimmedLine.match(/^(#{2,6})\s+(.*)$/u);
+    const headingMatch = /^(#{2,6})\s+(.*)$/u.exec(trimmedLine);
     if (headingMatch) {
       const level = headingMatch[1]?.length ?? 1;
       const heading = stripMarkdownFormatting(
@@ -422,7 +422,7 @@ const parseIndexEntries = ({
 };
 
 const splitIntoChunks = (pageText: string) => {
-  const chunks: Array<{ heading: string; text: string }> = [];
+  const chunks: { heading: string; text: string }[] = [];
   const lines = normalizeText(pageText).split("\n");
 
   let heading = DEFAULT_HEADING;
@@ -479,7 +479,7 @@ const splitIntoChunks = (pageText: string) => {
   };
 
   for (const line of lines) {
-    const headingMatch = line.match(/^#{1,6}\s+(.*)$/);
+    const headingMatch = /^#{1,6}\s+(.*)$/.exec(line);
     if (!headingMatch) {
       sectionLines.push(line);
       continue;

@@ -307,7 +307,7 @@ const createAuth = () => {
           consentReferenceId: ({ scopes, session }) => {
             const needsOrganization = scopes.some(isMcpResourceScope);
             if (!needsOrganization) {
-              return;
+              return undefined;
             }
 
             const activeOrganizationId =
@@ -581,7 +581,7 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
         return ctx.status(403);
       }
 
-      return;
+      return undefined;
     },
   }),
 });

@@ -38,5 +38,5 @@ export const buildFieldMarkers = ({
     }
   }
 
-  panic("Unable to generate collision-free anonymized field markers");
+  return panic("Unable to generate collision-free anonymized field markers");
 };

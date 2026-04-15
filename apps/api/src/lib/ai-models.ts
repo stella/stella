@@ -120,7 +120,7 @@ const resolveProvider = (): AIProvider => {
     return "anthropic";
   }
 
-  panic(
+  return panic(
     "No AI provider configured. Set AI_PROVIDER or " +
       "provide at least one API key: " +
       "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
@@ -238,7 +238,7 @@ const createModelFactory = (
       // Exhaustive check: if a new provider is added to
       // AIProvider but not handled above, this errors at
       // compile time.
-      panic(provider);
+      return panic(provider);
   }
 };
 

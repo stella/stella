@@ -153,7 +153,7 @@ export const KanbanColumn = ({
     const el = columnRef.current;
     const handle = dragHandleRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
 
     const cleanups = [

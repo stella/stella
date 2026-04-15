@@ -191,13 +191,13 @@ const getSelectPropertyColor = (
     property.content.type === "date" ||
     property.content.type === "int"
   ) {
-    return;
+    return undefined;
   }
 
   const color = property.content.options.find((o) => o.value === option)?.color;
 
   if (!color) {
-    return;
+    return undefined;
   }
 
   return optionColorsMap[color];

@@ -365,7 +365,7 @@ describe("validateAst", () => {
 
       const result = validateAst(html, blocks);
 
-      expect(result.stats.blockTypeCounts["heading"]).toBe(1);
+      expect(result.stats.blockTypeCounts.heading).toBe(1);
       expect(result.stats.blockTypeCounts["paragraph-closing"]).toBe(1);
       expect(result.stats.blockTypeCounts["paragraph-signature"]).toBe(1);
     });

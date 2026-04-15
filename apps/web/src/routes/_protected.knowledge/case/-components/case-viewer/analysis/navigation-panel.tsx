@@ -145,7 +145,7 @@ export const NavigationPanel = ({
   useEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc || flat.length === 0) {
-      return;
+      return undefined;
     }
 
     const handleScroll = () => {

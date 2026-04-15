@@ -134,7 +134,7 @@ const buildConditionMapFromRanges = (
    *  so `and` joining doesn't change precedence. */
   const currentFullCondition = (): string | undefined => {
     if (stack.length === 0) {
-      return;
+      return undefined;
     }
     let result: string | undefined;
     for (const frame of stack) {
