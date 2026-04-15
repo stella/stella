@@ -85,7 +85,7 @@ export const CalendarDayCell = ({
   useEffect(() => {
     const el = dropRef.current;
     if (!el || !isEditable) {
-      return;
+      return undefined;
     }
     return dropTargetForElements({
       element: el,

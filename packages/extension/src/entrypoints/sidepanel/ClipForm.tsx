@@ -56,7 +56,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     fetchMetadata();
 
     // Re-fetch when the user switches tabs.
-    const tabListener = (_activeInfo: chrome.tabs.TabActiveInfo) => {
+    const tabListener = (_activeInfo: chrome.tabs.OnActivatedInfo) => {
       setMetadata(null);
       // Small delay for the content script to inject.
       setTimeout(fetchMetadata, 300);
@@ -66,7 +66,7 @@ export const ClipForm = ({ activeMatter }: ClipFormProps) => {
     // Re-fetch when the active tab navigates.
     const navListener = (
       tabId: number,
-      changeInfo: chrome.tabs.TabChangeInfo,
+      changeInfo: chrome.tabs.OnUpdatedInfo,
     ) => {
       if (changeInfo.status !== "complete") {
         return;

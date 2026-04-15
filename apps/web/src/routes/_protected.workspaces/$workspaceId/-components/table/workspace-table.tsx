@@ -222,7 +222,7 @@ const DraggableRow = ({
   useEffect(() => {
     const el = rowRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
 
     return draggable({

@@ -34,7 +34,7 @@ const USER_MENTION_TAG_RE =
   /<entity-mention\b([^>]*?)\s*(?:\/>|><\/entity-mention>)/gi;
 
 const getMentionTagAttr = (attrs: string, name: string) => {
-  const match = attrs.match(new RegExp(`${name}="([^"]+)"`, "i"));
+  const match = new RegExp(`${name}="([^"]+)"`, "i").exec(attrs);
   return match?.[1] ?? null;
 };
 

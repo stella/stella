@@ -75,5 +75,5 @@ export const jsonValueLiteral = <
     return sql.raw(`'${value}'`);
   }
 
-  panic("JSON field value literal must be a string or number");
+  return panic("JSON field value literal must be a string or number");
 };

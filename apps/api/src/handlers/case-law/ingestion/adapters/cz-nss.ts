@@ -104,7 +104,7 @@ const extractAntiforgeryToken = (html: string): string | undefined =>
  */
 const extractCurrParams = (html: string): string | undefined => {
   // currParams is passed to the JavaScript pagination function
-  const match = html.match(/currParams\s*[:=]\s*["']([^"']+)["']/);
+  const match = /currParams\s*[:=]\s*["']([^"']+)["']/.exec(html);
   if (match?.[1]) {
     try {
       return decodeURIComponent(match[1]);
@@ -222,9 +222,10 @@ const parseResultRows = (html: string): ParsedRow[] => {
 
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
-    const citMatch = block.match(
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^",]+?)(?:-\d+)?[",]/i,
-    );
+    const citMatch =
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^",]+?)(?:-\d+)?[",]/i.exec(
+        block,
+      );
     const caseNumber = citMatch?.[1]?.trim();
     if (!caseNumber || caseNumber.length > 100) {
       // Skip malformed or overly long case numbers
@@ -237,7 +238,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const detailMatch = block.match(/href="\/DokumentDetail\/Index\/(\d+)"/);
+    const detailMatch = /href="\/DokumentDetail\/Index\/(\d+)"/.exec(block);
     const documentId = detailMatch?.[1];
     const documentUrl = documentId
       ? `${BASE_URL}/DokumentDetail/Index/${documentId}`

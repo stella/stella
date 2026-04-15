@@ -114,7 +114,7 @@ const upsertField = createHandler(
           .where(eq(entities.id, body.entityId));
       });
       reindex();
-      return;
+      return undefined;
     }
 
     await scopedDb(async (tx) => {
@@ -140,7 +140,7 @@ const upsertField = createHandler(
         .where(eq(entities.id, body.entityId));
     });
     reindex();
-    return;
+    return undefined;
   },
 );
 

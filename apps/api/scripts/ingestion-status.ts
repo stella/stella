@@ -110,8 +110,8 @@ for (const source of sources) {
     .limit(3);
 
   const total = totalRow?.total ?? 0;
-  const lastHour = Number(hourRow?.inserted ?? 0);
-  const last24h = Number(dayRow?.inserted ?? 0);
+  const lastHour = hourRow?.inserted ?? 0;
+  const last24h = dayRow?.inserted ?? 0;
   const failCount = failRow?.total ?? 0;
   const enabledStr = source.enabled ? "" : " [DISABLED]";
 

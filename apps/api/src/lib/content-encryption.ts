@@ -70,7 +70,7 @@ export const encryptContent = async (
 
   if (!masterKey) {
     return {
-      ciphertext: Buffer.from(plaintext, "utf8"),
+      ciphertext: Buffer.from(plaintext, "utf-8"),
       iv: Buffer.alloc(IV_BYTES),
     };
   }
@@ -114,7 +114,7 @@ export const decryptContent = async (
   // survive key rotation without silent data loss.
   const isPlaintext = iv.every((b) => b === 0);
   if (isPlaintext) {
-    return ciphertext.toString("utf8");
+    return ciphertext.toString("utf-8");
   }
 
   const masterKey = getMasterKey();

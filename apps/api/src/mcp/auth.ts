@@ -40,12 +40,12 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
     throw new Error("Token missing sub claim");
   }
 
-  const rawOrganizationId = payload["org_id"];
+  const rawOrganizationId = payload.org_id;
   if (typeof rawOrganizationId !== "string" || rawOrganizationId.length === 0) {
     throw new Error("Token missing org_id claim");
   }
 
-  const rawScopes = payload["scope"];
+  const rawScopes = payload.scope;
   const scopes =
     typeof rawScopes === "string" ? rawScopes.split(" ").filter(Boolean) : [];
 

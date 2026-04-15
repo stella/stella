@@ -110,7 +110,7 @@ const getDefaultValues = (
     };
   }
 
-  panic("Invalid field content type");
+  return panic("Invalid field content type");
 };
 
 type EditFieldDialogProps = {

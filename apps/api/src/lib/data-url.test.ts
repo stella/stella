@@ -6,7 +6,7 @@ import { toDataUrl, parseDataUrl, validateDataUrl } from "@/api/lib/data-url";
 describe("data URL helpers", () => {
   test("builds and parses a valid base64 data URL", () => {
     const url = toDataUrl(
-      new Uint8Array(Buffer.from("hello", "utf8")),
+      new Uint8Array(Buffer.from("hello", "utf-8")),
       "text/plain",
     );
     const result = parseDataUrl({

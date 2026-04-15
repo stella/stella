@@ -74,7 +74,7 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
   const pattern = new RegExp(`id="${labelId}"[^>]*>([\\s\\S]*?)</span>`, "i");
   const match = html.match(pattern);
   if (!match?.[1]) {
-    return;
+    return undefined;
   }
   return stripHtml(match[1]).trim() || undefined;
 };
@@ -84,7 +84,7 @@ const parseRegistrySign = (
   raw: string,
 ): { caseNumber: string; decisionDate?: string | undefined } | null => {
   // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011"
-  const match = raw.match(REGISTRY_SIGN_PATTERN);
+  const match = REGISTRY_SIGN_PATTERN.exec(raw);
   if (!match?.[1] || !match[2]) {
     return null;
   }
@@ -97,9 +97,9 @@ const parseRegistrySign = (
 
 /** Extract fulltext body from DocContent table. */
 const extractFulltext = (html: string): string | undefined => {
-  const match = html.match(DOC_CONTENT_PATTERN);
+  const match = DOC_CONTENT_PATTERN.exec(html);
   if (!match?.[1]) {
-    return;
+    return undefined;
   }
 
   const text = stripHtml(match[1]);
@@ -108,7 +108,7 @@ const extractFulltext = (html: string): string | undefined => {
 
 /** Extract the rapporteur judge name from the body. */
 const extractJudge = (html: string): string | undefined => {
-  const match = html.match(JUDGE_PATTERN);
+  const match = JUDGE_PATTERN.exec(html);
   return match?.[1] ? stripHtml(match[1]) : undefined;
 };
 

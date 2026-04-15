@@ -463,7 +463,7 @@ const main = async (): Promise<void> => {
   const nextContents = renderCatalogFile(catalog);
 
   if (options.check) {
-    const currentContents = await readFile(OUTPUT_PATH, "utf8");
+    const currentContents = await readFile(OUTPUT_PATH, "utf-8");
     if (currentContents !== nextContents) {
       throw new Error(
         `Code catalog is stale. Refresh it with: bun scripts/extract-codes.ts`,

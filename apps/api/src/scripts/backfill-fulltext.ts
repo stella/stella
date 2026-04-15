@@ -73,7 +73,7 @@ const fetchCzSupremeAdminFulltext = async (
   documentUrl: string,
 ): Promise<string | undefined> => {
   // Extract document ID from URL like .../DokumentDetail/Index/744029
-  const idMatch = documentUrl.match(/\/(\d+)$/);
+  const idMatch = /\/(\d+)$/.exec(documentUrl);
   if (!idMatch?.[1]) {
     return undefined;
   }

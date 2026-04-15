@@ -123,8 +123,8 @@ export const getIngestionStatus = async (
         enabled: source.enabled,
         syncCursor: source.syncCursor,
         totalDecisions: totalRow?.total ?? 0,
-        insertedLastHour: Number(hourRow?.inserted ?? 0),
-        inserted24h: Number(dayRow?.inserted ?? 0),
+        insertedLastHour: hourRow?.inserted ?? 0,
+        inserted24h: dayRow?.inserted ?? 0,
         failures24h: failRow?.total ?? 0,
         lastEvent: lastEvent
           ? {

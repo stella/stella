@@ -37,15 +37,16 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const citMatch = block.match(
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i,
-    );
+    const citMatch =
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i.exec(
+        block,
+      );
     const caseNumber = citMatch?.[1]?.trim();
     if (!caseNumber) {
       continue;
     }
 
-    const detailMatch = block.match(/href="(\/DokumentDetail\/Index\/\d+)"/);
+    const detailMatch = /href="(\/DokumentDetail\/Index\/\d+)"/.exec(block);
     const documentUrl = detailMatch?.[1]
       ? `${BASE_URL}${detailMatch[1]}`
       : undefined;

@@ -69,7 +69,7 @@ const updateView = createHandler(
     }
 
     if (Object.keys(updates).length === 0) {
-      return;
+      return undefined;
     }
 
     await scopedDb((tx) =>
@@ -89,7 +89,7 @@ const updateView = createHandler(
       data: ["views", workspaceId],
     });
 
-    return;
+    return undefined;
   },
 );
 

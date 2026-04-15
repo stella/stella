@@ -488,7 +488,7 @@ export const useChatEditor = ({
 
   useEffect(() => {
     if (editor === null) {
-      return;
+      return undefined;
     }
 
     syncEditorPlugins(editor);
@@ -556,7 +556,7 @@ export const useChatEditor = ({
 
   useEffect(() => {
     if (editor === null) {
-      return;
+      return undefined;
     }
 
     return registerActiveEditor({

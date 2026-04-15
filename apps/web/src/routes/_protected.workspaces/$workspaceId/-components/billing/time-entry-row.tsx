@@ -78,7 +78,7 @@ export const TimeEntryRow = ({
         {onSelect && (
           <Checkbox
             checked={selected ?? false}
-            onCheckedChange={(checked) => onSelect(entry.id, Boolean(checked))}
+            onCheckedChange={(checked) => onSelect(entry.id, checked)}
           />
         )}
 

@@ -22,7 +22,7 @@ type DecodedCursor = {
 
 const decodeCursor = (cursor: string): DecodedCursor | null => {
   try {
-    const decoded = Buffer.from(cursor, "base64").toString("utf8");
+    const decoded = Buffer.from(cursor, "base64").toString("utf-8");
     const [displayName, id] = decoded.split("\0");
     if (!displayName || !id) {
       return null;
@@ -34,7 +34,7 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
 };
 
 const encodeCursor = (displayName: string, id: string): string =>
-  Buffer.from(`${displayName}\0${id}`, "utf8").toString("base64");
+  Buffer.from(`${displayName}\0${id}`, "utf-8").toString("base64");
 
 const readContacts = createRootHandler(
   {

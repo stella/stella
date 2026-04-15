@@ -861,7 +861,7 @@ export class InfoSoudClient {
     query?: URLSearchParams | undefined;
   }): string | undefined {
     if (!this.#cacheConfig.enabled) {
-      return;
+      return undefined;
     }
 
     return JSON.stringify([
@@ -875,7 +875,7 @@ export class InfoSoudClient {
 
   #buildDerivedCacheKey(key: string): string | undefined {
     if (!this.#cacheConfig.enabled) {
-      return;
+      return undefined;
     }
 
     return `derived:${key}`;

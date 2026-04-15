@@ -280,5 +280,5 @@ export const deleteTemplateCategoryHandler = async ({
       );
   });
 
-  return;
+  return undefined;
 };

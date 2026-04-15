@@ -55,7 +55,7 @@ const deleteClauseHandler = async ({
       ),
   );
 
-  return;
+  return undefined;
 };
 
 const config = {

@@ -151,14 +151,6 @@ class JustificationDataError extends TaggedError("JustificationDataError")<{
   justificationId: string;
 }>() {}
 
-type PreparedJustificationData = {
-  prompt: string;
-  fieldContent: string;
-  justificationText: string;
-  pageNumbers: number[];
-  pdf: PDF;
-};
-
 export const prepareJustificationData = async (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
@@ -244,7 +236,7 @@ export const prepareJustificationData = async (
     const fileBuffer = await s3.file(fileKey).arrayBuffer();
     const pdf = await PDF.load(new Uint8Array(fileBuffer));
 
-    return Result.ok<PreparedJustificationData>({
+    return Result.ok({
       prompt: tool.prompt,
       fieldContent,
       justificationText,

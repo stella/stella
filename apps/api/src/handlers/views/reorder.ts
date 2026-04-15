@@ -64,7 +64,7 @@ const reorderViews = createHandler(
       data: ["views", workspaceId],
     });
 
-    return;
+    return undefined;
   },
 );
 

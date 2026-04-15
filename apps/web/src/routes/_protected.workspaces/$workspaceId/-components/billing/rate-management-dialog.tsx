@@ -295,9 +295,7 @@ const CreateRateTableForm = ({
           <div className="flex items-center gap-2">
             <Checkbox
               checked={field.state.value}
-              onCheckedChange={(checked) =>
-                field.handleChange(Boolean(checked))
-              }
+              onCheckedChange={(checked) => field.handleChange(checked)}
             />
             <Label>{t("billing.rates.setAsDefault")}</Label>
           </div>

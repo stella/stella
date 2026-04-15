@@ -76,7 +76,7 @@ export const scanBlockDirectives = (
 
   for (const [i, p] of paragraphs.entries()) {
     const text = paragraphText(p);
-    const match = text.match(DIRECTIVE_RE);
+    const match = DIRECTIVE_RE.exec(text);
     if (!match) {
       continue;
     }

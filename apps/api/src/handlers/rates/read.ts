@@ -52,7 +52,7 @@ const readRateTables = createHandler(
       );
 
       for (const row of counts) {
-        entryCounts.set(row.rateTableId, Number(row.count));
+        entryCounts.set(row.rateTableId, row.count);
       }
     }
 

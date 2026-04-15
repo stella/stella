@@ -68,7 +68,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const deleteEntities = useDeleteEntities();
   const startWorkflow = useStartWorkflow();
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
-  const [hiddenGroups, setHiddenGroups] = useState<Set<string>>(new Set());
+  const [hiddenGroups, setHiddenGroups] = useState(new Set());
 
   const handleCreate = async (kind: EntityKind) => {
     if (kind === "task") {
@@ -509,7 +509,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) {
-      return;
+      return undefined;
     }
     return combine(
       autoScrollForElements({

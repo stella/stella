@@ -28,7 +28,7 @@ export const usePageVisibility = ({
 }: UsePageVisibilityProps) => {
   const updateVisiblePages = usePDFStore((s) => s.updateVisiblePages);
 
-  const visiblePageRatiosRef = useRef<Map<string, number>>(new Map());
+  const visiblePageRatiosRef = useRef(new Map<string, number>());
   const lastReportedPageRef = useRef<number | null>(null);
 
   const onPageChangedEvent = useEffectEvent((page: number) => {
@@ -41,7 +41,7 @@ export const usePageVisibility = ({
   useEffect(() => {
     const container = containerRef.current;
     if (!container || pageIds.length === 0) {
-      return;
+      return undefined;
     }
 
     const observer = new IntersectionObserver(

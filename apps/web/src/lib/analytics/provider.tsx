@@ -9,7 +9,7 @@ import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
 
-const AnalyticsContext = createContext<Analytics>(noopAnalytics);
+const AnalyticsContext = createContext(noopAnalytics);
 let globalAnalytics: Analytics = noopAnalytics;
 
 export const useAnalytics = () => use(AnalyticsContext);

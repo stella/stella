@@ -45,7 +45,7 @@ export const LinkClauseDialog = ({
   onLinked,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
   const [slotName, setSlotName] = useState("");

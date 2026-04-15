@@ -23,18 +23,15 @@ const parseOrigins = (value: string | undefined) =>
     .filter((origin) => origin.length > 0);
 
 const resolveWebPort = (env: NodeJS.ProcessEnv = process.env) =>
-  parsePort(env["STELLA_WEB_PORT"], DEFAULT_WEB_PORT);
+  parsePort(env.STELLA_WEB_PORT, DEFAULT_WEB_PORT);
 
 export const resolveDesktopBridgePort = (
   env: NodeJS.ProcessEnv = process.env,
 ) =>
-  parsePort(
-    env["STELLA_DESKTOP_BRIDGE_PORT"],
-    DEFAULT_STELLA_DESKTOP_BRIDGE_PORT,
-  );
+  parsePort(env.STELLA_DESKTOP_BRIDGE_PORT, DEFAULT_STELLA_DESKTOP_BRIDGE_PORT);
 
 export const resolveDesktopViewPort = (env: NodeJS.ProcessEnv = process.env) =>
-  parsePort(env["STELLA_DESKTOP_VIEW_PORT"], DEFAULT_DESKTOP_VIEW_PORT);
+  parsePort(env.STELLA_DESKTOP_VIEW_PORT, DEFAULT_DESKTOP_VIEW_PORT);
 
 export const resolveDesktopAllowedOrigins = (
   env: NodeJS.ProcessEnv = process.env,
@@ -44,6 +41,6 @@ export const resolveDesktopAllowedOrigins = (
   return new Set([
     `http://127.0.0.1:${String(webPort)}`,
     `http://localhost:${String(webPort)}`,
-    ...parseOrigins(env["STELLA_DESKTOP_ALLOWED_ORIGINS"]),
+    ...parseOrigins(env.STELLA_DESKTOP_ALLOWED_ORIGINS),
   ]);
 };

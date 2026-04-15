@@ -64,7 +64,7 @@ const composeRefs =
         }
       };
     }
-    return;
+    return undefined;
   };
 
 const Slot = ({
@@ -104,22 +104,22 @@ const Slot = ({
   // deprecated and triggers console warnings in dev).
   // SAFETY: childProps is typed as Record<string, unknown>;
   // React guarantees ref is either a Ref or undefined.
-  const childRef = childProps["ref"] as React.Ref<unknown> | undefined;
+  const childRef = childProps.ref as React.Ref<unknown> | undefined;
   if (parentRef || childRef) {
-    mergedProps["ref"] = composeRefs(parentRef, childRef);
+    mergedProps.ref = composeRefs(parentRef, childRef);
   }
 
   // Merge className via cn()
-  const childClassName = childProps["className"];
+  const childClassName = childProps.className;
   if (className || typeof childClassName === "string") {
     // SAFETY: guarded by the typeof check above.
-    mergedProps["className"] = cn(className, childClassName as string);
+    mergedProps.className = cn(className, childClassName as string);
   }
 
   // Merge style objects
-  const childStyle = childProps["style"];
+  const childStyle = childProps.style;
   if (style || (typeof childStyle === "object" && childStyle !== null)) {
-    mergedProps["style"] = {
+    mergedProps.style = {
       ...style,
       // SAFETY: guarded by the typeof === "object" check
       // above; CSSProperties is the only object-typed

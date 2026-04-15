@@ -29,7 +29,7 @@ const readWorkspacePackage = (
 ): WorkspacePackageReadResult => {
   let packageJson: unknown;
   try {
-    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
   } catch {
     return {
       name: undefined,
@@ -44,7 +44,7 @@ const readWorkspacePackage = (
     };
   }
 
-  const maybeName = packageJson["name"];
+  const maybeName = packageJson.name;
   return {
     name: typeof maybeName === "string" ? maybeName : undefined,
     parseFailed: false,

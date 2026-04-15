@@ -215,7 +215,7 @@ const updateProperty = createHandler(
       }
     });
 
-    return;
+    return undefined;
   },
 );
 

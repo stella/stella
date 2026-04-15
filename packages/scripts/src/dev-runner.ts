@@ -603,7 +603,7 @@ export const createDesktopEnv = ({
 });
 
 export const shouldAutoOpenBrowser = ({
-  ci = process.env["CI"],
+  ci = process.env.CI,
   mode,
   noBrowser,
 }: {
@@ -628,7 +628,7 @@ const stripAppEnvKeys = ({
     return { ...baseEnv };
   }
 
-  const envFile = readFileSync(envFilePath, "utf8");
+  const envFile = readFileSync(envFilePath, "utf-8");
   const envKeys = new Set<string>();
 
   for (const line of envFile.split(/\r?\n/u)) {
@@ -716,11 +716,11 @@ const validateApiHealth = (response: Response, bodyText: string) => {
   }
 
   const payload = readJson(bodyText);
-  if (!isRecord(payload) || payload["status"] !== "ok") {
+  if (!isRecord(payload) || payload.status !== "ok") {
     return "expected JSON body with status=ok";
   }
 
-  return;
+  return undefined;
 };
 
 const validateWebHtml = (response: Response, bodyText: string) => {
@@ -750,15 +750,15 @@ const validateDesktopBridgeHealth =
     }
 
     const payload = readJson(bodyText);
-    if (!isRecord(payload) || payload["ok"] !== true) {
+    if (!isRecord(payload) || payload.ok !== true) {
       return "expected desktop bridge health payload with ok=true";
     }
 
-    if (payload["bridgePort"] !== expectedPort) {
+    if (payload.bridgePort !== expectedPort) {
       return `expected bridgePort=${String(expectedPort)}`;
     }
 
-    return;
+    return undefined;
   };
 
 const waitForHttpReadiness = async ({
@@ -1020,7 +1020,7 @@ const browserCommandForUrl = (url: string) => {
     return ["cmd", "/c", "start", "", url];
   }
 
-  return;
+  return undefined;
 };
 
 const openBrowser = (url: string) => {
@@ -1154,12 +1154,12 @@ const main = async () => {
 
   const initialOffset = resolveOffset({
     branchName: gitContext.branchName,
-    devInstance: parsedArgs.devInstance ?? process.env["STELLA_DEV_INSTANCE"],
+    devInstance: parsedArgs.devInstance ?? process.env.STELLA_DEV_INSTANCE,
     isWorktree: gitContext.isWorktree,
     portOffset:
       parsedArgs.portOffset ??
-      (process.env["STELLA_PORT_OFFSET"]
-        ? Number.parseInt(process.env["STELLA_PORT_OFFSET"], 10)
+      (process.env.STELLA_PORT_OFFSET
+        ? Number.parseInt(process.env.STELLA_PORT_OFFSET, 10)
         : undefined),
     worktreeName: basename(gitContext.currentRoot),
   });

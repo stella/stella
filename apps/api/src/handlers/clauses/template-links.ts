@@ -286,7 +286,7 @@ export const unlinkClauseHandler = async ({
       ),
   );
 
-  return;
+  return undefined;
 };
 
 // ── Sync to latest version ──────────────────────────

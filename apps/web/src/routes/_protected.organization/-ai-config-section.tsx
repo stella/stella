@@ -77,7 +77,7 @@ export const AIConfigSection = () => {
     config?.configured ? (config.baseURL ?? "") : "",
   );
   const [region, setRegion] = useState<RegionValue>(initialRegion);
-  const [overrideRoles, setOverrideRoles] = useState<RoleValue[]>(initialRoles);
+  const [overrideRoles, setOverrideRoles] = useState(initialRoles);
 
   // Sync form state when the config query resolves after
   // initial render (useState initializers only run once).

@@ -267,7 +267,7 @@ const NotificationRow = ({
           disabled={disabled}
           id={inputId}
           onCheckedChange={(nextChecked) => {
-            onCheckedChange(Boolean(nextChecked));
+            onCheckedChange(nextChecked);
           }}
         />
         <span className="min-w-0 flex-1">

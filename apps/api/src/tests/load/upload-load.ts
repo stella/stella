@@ -111,7 +111,7 @@ const authenticate = async (
   }
 
   // Extract the session cookie name and value
-  const match = setCookie.match(/^(better-auth[^=]*)=([^;]+)/);
+  const match = /^(better-auth[^=]*)=([^;]+)/.exec(setCookie);
   if (!match) {
     throw new Error("Could not parse session cookie");
   }

@@ -3215,7 +3215,7 @@ export async function seed(organizationId?: string, userId?: string) {
             entityId: entity.entityId,
             organizationId: ecOrgId,
             workspaceId: toWs(entity.workspaceId),
-            ciphertext: Buffer.from(docText, "utf8"),
+            ciphertext: Buffer.from(docText, "utf-8"),
             iv: Buffer.alloc(IV_BYTES),
             charCount: docText.length,
             language: null,

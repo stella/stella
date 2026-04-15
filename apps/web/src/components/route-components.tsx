@@ -117,7 +117,7 @@ export const DefaultErrorComponent = ({
   useEffect(() => {
     if (!networkError || networkRetryCount >= AUTO_RETRY_LIMIT) {
       setIsAutoRetrying(false);
-      return;
+      return undefined;
     }
     networkRetryCount += 1;
     setIsAutoRetrying(true);

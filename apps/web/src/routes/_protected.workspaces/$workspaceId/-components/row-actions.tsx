@@ -115,7 +115,7 @@ export const RowActions = ({
             workspaceId,
           });
       }
-      return;
+      return undefined;
     })();
 
   const hasPdfConversion =

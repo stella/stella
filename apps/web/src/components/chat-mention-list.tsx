@@ -141,7 +141,7 @@ export const ChatMentionList = forwardRef<
       setDrillDownItems([]);
       setEntitiesLoading(false);
       setEntitiesError(false);
-      return;
+      return undefined;
     }
 
     let cancelled = false;

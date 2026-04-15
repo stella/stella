@@ -113,7 +113,7 @@ const normalizeDecisionTitle = (
   decisionType: string | undefined,
 ): string | undefined => {
   if (!decisionType) {
-    return;
+    return undefined;
   }
 
   const key = decisionType.toLocaleLowerCase("pl-PL");

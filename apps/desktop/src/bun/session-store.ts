@@ -137,7 +137,7 @@ export const loadSessionStore = async (
   } satisfies LoadedSessionStore;
 
   try {
-    const raw = await readFile(storePath, "utf8");
+    const raw = await readFile(storePath, "utf-8");
     const parsed: unknown = JSON.parse(raw);
 
     if (!isSessionStorePayload(parsed)) {
@@ -189,7 +189,7 @@ export const persistSessionStore = async ({
     sessions,
   };
 
-  await writeFile(tempPath, JSON.stringify(payload, null, 2), "utf8");
+  await writeFile(tempPath, JSON.stringify(payload, null, 2), "utf-8");
   await chmod(tempPath, 0o600).catch((_error: unknown) => null);
   await rename(tempPath, storePath);
   await chmod(storePath, 0o600).catch((_error: unknown) => null);

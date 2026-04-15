@@ -219,7 +219,7 @@ const readInput = async (args: Args): Promise<string> => {
       "  bun apps/api/scripts/classify-local.ts --file decision.txt\n" +
       "  cat decision.txt | bun apps/api/scripts/classify-local.ts --stdin",
   );
-  process.exit(1);
+  return process.exit(1);
 };
 
 const main = async () => {

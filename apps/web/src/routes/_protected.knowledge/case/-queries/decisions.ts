@@ -42,7 +42,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
 
       if (search) {
         const cursor = pageParam ?? undefined;
-        const response = await api["case"].decisions.search.post(
+        const response = await api.case.decisions.search.post(
           {
             query: search,
             limit: DEFAULT_PAGE_SIZE,
@@ -97,7 +97,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         };
       }
 
-      const response = await api["case"].decisions.get({
+      const response = await api.case.decisions.get({
         query: {
           limit: DEFAULT_PAGE_SIZE,
           ...(pageParam !== null && { cursor: pageParam }),
@@ -144,7 +144,7 @@ export const decisionOptions = (decisionId: string) =>
   queryOptions({
     queryKey: caseLawDecisionKeys.byId(decisionId),
     queryFn: async ({ signal }) => {
-      const response = await api["case"]
+      const response = await api.case
         .decisions({ decisionId })
         .get({ fetch: { signal } });
 

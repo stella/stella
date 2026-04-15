@@ -16,8 +16,8 @@ const MONOLINGUAL_COUNTRIES = new Set(["CZE", "SVK", "POL", "AUT"]);
  */
 const humanizeSourceUrl = (url: string): string => {
   // Regional courts: API endpoint → public page
-  const finaldocMatch = url.match(
-    /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/,
+  const finaldocMatch = /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/.exec(
+    url,
   );
   if (finaldocMatch) {
     return `https://rozhodnuti.justice.cz/rozhodnuti/${finaldocMatch[1]}`;

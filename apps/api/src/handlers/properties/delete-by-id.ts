@@ -65,7 +65,7 @@ const deleteProperty = createHandler(
       throw error;
     }
 
-    return;
+    return undefined;
   },
 );
 

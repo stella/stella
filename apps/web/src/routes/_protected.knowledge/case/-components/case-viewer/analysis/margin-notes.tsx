@@ -35,7 +35,7 @@ export const MarginNotes = ({
 }: MarginNotesProps) => {
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const heights = useRef<Map<string, number>>(new Map());
+  const heights = useRef(new Map<string, number>());
 
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
@@ -86,7 +86,7 @@ export const MarginNotes = ({
   useEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
-      return;
+      return undefined;
     }
     recalc();
     sc.addEventListener("scroll", recalc, { passive: true });

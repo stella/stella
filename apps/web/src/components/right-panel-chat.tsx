@@ -275,6 +275,7 @@ const EmptyThreadPanel = ({
   workspaceId?: string | undefined;
 }) => {
   const t = useTranslations();
+  // eslint-disable-next-line typescript/no-unnecessary-type-arguments
   const draftThreadRef = useRef<ChatThreadRef>(
     workspaceId
       ? {
@@ -500,7 +501,7 @@ const useEntityDropTarget = (workspaceId: string | undefined) => {
   useEffect(() => {
     const element = containerRef.current;
     if (!element || !workspaceId) {
-      return;
+      return undefined;
     }
 
     return dropTargetForElements({
@@ -571,17 +572,17 @@ const getSidebarActiveFile = (
   workspaceId: string | undefined,
 ): ActiveFileContext | undefined => {
   if (!workspaceId) {
-    return;
+    return undefined;
   }
 
   const { activeId, tabs } = useInspectorStore.getState();
   const activeTab = tabs.find((tab) => tab.id === activeId);
   if (!activeTab || activeTab.type !== "pdf") {
-    return;
+    return undefined;
   }
 
   if (activeTab.workspaceId !== workspaceId) {
-    return;
+    return undefined;
   }
 
   return {
