@@ -89,6 +89,64 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+const createReadDecisionResult = () => ({
+  analysis: null,
+  caseNumber: "29 Cdo 123/2024",
+  citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
+  citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+  country: "CZE",
+  court: "Nejvyšší soud",
+  decisionDate: new Date("2024-02-01T00:00:00.000Z"),
+  decisionType: "judgment",
+  documentAst: {
+    blocks: [
+      {
+        anchorId: "a-1",
+        id: "b-1",
+        inlines: [],
+        level: 1,
+        plainText: "29 Cdo 123/2024",
+        type: "heading",
+      },
+      {
+        anchorId: "a-2",
+        id: "b-2",
+        inlines: [],
+        plainText: "The court dismissed the appeal.",
+        type: "paragraph",
+      },
+    ],
+    metadata: {
+      caseNumber: "29 Cdo 123/2024",
+      court: "Nejvyšší soud",
+      decisionDate: "2024-02-01",
+      decisionType: "judgment",
+      ecli: null,
+      keywords: [],
+      statutes: [],
+    },
+    source: {
+      documentId: "doc-1",
+      printUrl: "https://example.test/print",
+      system: "test",
+      webUrl: "https://example.test/web",
+    },
+    version: 1,
+  },
+  documentUrl: "https://example.test/document.pdf",
+  ecli: null,
+  fulltext: null,
+  id: "dec_123",
+  language: "cs",
+  metadata: { panel: "29 Cdo" },
+  source: {
+    adapterKey: "cz-ns",
+    id: "src_1",
+    name: "Nejvyšší soud",
+  },
+  sourceUrl: "https://example.test/decision",
+});
+
 const createSelectBuilder = (rows: unknown[]) => {
   const builder = {
     from: () => builder,
@@ -223,11 +281,22 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
-  test("lists only search and fetch for anonymized mode", () => {
+  test("lists shared case-law tools in anonymized mode", () => {
     expect(listMcpTools("anonymized").map((tool) => tool.name)).toEqual([
       "search",
       "fetch",
+      "search_case_law",
+      "read_case_law_decision",
     ]);
+  });
+
+  test("remaps case-law tools to anonymized scopes", () => {
+    expect(getMcpToolDefinition("search_case_law", "anonymized")?.scope).toBe(
+      "stella:search_anonymized",
+    );
+    expect(
+      getMcpToolDefinition("read_case_law_decision", "anonymized")?.scope,
+    ).toBe("stella:read_anonymized");
   });
 
   test("returns only fetchable documents with canonical document URLs", async () => {
@@ -410,6 +479,63 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("search_case_law returns the same payload in anonymized mode", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: {
+        country: [{ count: 1, value: "CZE" }],
+      },
+      hits: [
+        {
+          caseNumber: "29 Cdo 123/2024",
+          citationCount: 7,
+          country: "CZE",
+          court: "Nejvyšší soud",
+          decisionDate: "2024-02-01",
+          decisionId: "dec_123",
+          decisionType: "judgment",
+          ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          headline: "Relevant <mark>holding</mark>",
+          language: "cs",
+          sourceUrl: "https://example.test/decision",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const result = await handleMcpToolCall({
+      args: { query: "shareholder dispute" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "search_case_law",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      facets: {
+        country: [{ count: 1, value: "CZE" }],
+      },
+      nextCursor: null,
+      results: [
+        {
+          appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+          caseNumber: "29 Cdo 123/2024",
+          citationCount: 7,
+          country: "CZE",
+          court: "Nejvyšší soud",
+          decisionDate: "2024-02-01",
+          decisionId: "dec_123",
+          decisionType: "judgment",
+          ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          language: "cs",
+          snippet: "Relevant <mark>holding</mark>",
+          sourceUrl: "https://example.test/decision",
+        },
+      ],
+      totalCount: 1,
+    });
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
   test("search_case_law rejects invalid ISO dates", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -433,63 +559,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("read_case_law_decision derives plain text from the AST fallback", async () => {
-    readDecisionHandlerMock.mockResolvedValue({
-      analysis: null,
-      caseNumber: "29 Cdo 123/2024",
-      citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
-      citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
-      country: "CZE",
-      court: "Nejvyšší soud",
-      decisionDate: new Date("2024-02-01T00:00:00.000Z"),
-      decisionType: "judgment",
-      documentAst: {
-        blocks: [
-          {
-            anchorId: "a-1",
-            id: "b-1",
-            inlines: [],
-            level: 1,
-            plainText: "29 Cdo 123/2024",
-            type: "heading",
-          },
-          {
-            anchorId: "a-2",
-            id: "b-2",
-            inlines: [],
-            plainText: "The court dismissed the appeal.",
-            type: "paragraph",
-          },
-        ],
-        metadata: {
-          caseNumber: "29 Cdo 123/2024",
-          court: "Nejvyšší soud",
-          decisionDate: "2024-02-01",
-          decisionType: "judgment",
-          ecli: null,
-          keywords: [],
-          statutes: [],
-        },
-        source: {
-          documentId: "doc-1",
-          printUrl: "https://example.test/print",
-          system: "test",
-          webUrl: "https://example.test/web",
-        },
-        version: 1,
-      },
-      documentUrl: "https://example.test/document.pdf",
-      ecli: null,
-      fulltext: null,
-      id: "dec_123",
-      language: "cs",
-      metadata: { panel: "29 Cdo" },
-      source: {
-        adapterKey: "cz-ns",
-        id: "src_1",
-        name: "Nejvyšší soud",
-      },
-      sourceUrl: "https://example.test/decision",
-    });
+    readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
     const context = createContext();
     const result = await handleMcpToolCall({
@@ -530,6 +600,46 @@ describe("OpenAI-compatible MCP tools", () => {
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
       },
     });
+  });
+
+  test("read_case_law_decision returns the same payload in anonymized mode", async () => {
+    readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+
+    const result = await handleMcpToolCall({
+      args: { decision_id: "dec_123" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "read_case_law_decision",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      decision: {
+        analysis: null,
+        appUrl: `${APP_BASE_URL}/knowledge/case/29-cdo-123-2024--dec_123`,
+        caseNumber: "29 Cdo 123/2024",
+        citationsFrom: [{ citationText: "29 Odo 1/2001", id: "c_1" }],
+        citationsFromTotal: 1,
+        citationsTo: [{ citationText: "31 Cdo 2/2025", id: "c_2" }],
+        citationsToTotal: 1,
+        country: "CZE",
+        court: "Nejvyšší soud",
+        decisionDate: "2024-02-01",
+        decisionId: "dec_123",
+        decisionType: "judgment",
+        documentUrl: "https://example.test/document.pdf",
+        ecli: null,
+        language: "cs",
+        metadata: { panel: "29 Cdo" },
+        source: {
+          adapterKey: "cz-ns",
+          id: "src_1",
+          name: "Nejvyšší soud",
+        },
+        sourceUrl: "https://example.test/decision",
+        text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
+      },
+    });
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {
