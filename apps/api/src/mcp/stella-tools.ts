@@ -1,9 +1,13 @@
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
+import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
+  buildCaseLawDecisionUrl,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -24,9 +28,13 @@ import {
 type StellaToolName =
   | "get_matter_overview"
   | "list_matters"
+  | "read_case_law_decision"
   | "read_contact"
   | "read_content_across_matters"
+  | "search_case_law"
   | "search_across_matters";
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const STELLA_TOOL_DEFINITIONS = [
   {
@@ -84,6 +92,40 @@ export const STELLA_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true },
     description:
+      "Search the shared case-law corpus. Supports free-text search plus " +
+      "optional filters such as court, country, language, date range, and " +
+      "decision type.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: stringProp("Search query"),
+        limit: intProp("Max results to return", {
+          min: 1,
+          max: MAX_SEARCH_LIMIT,
+        }),
+        cursor: stringProp(
+          "Opaque cursor from a previous search_case_law call",
+        ),
+        court: stringProp("Filter by court name"),
+        country: stringProp("Filter by country code"),
+        language: stringProp("Filter by language code"),
+        decision_type: stringProp("Filter by decision type"),
+        source_id: stringProp("Filter by source ID"),
+        date_from: stringProp(
+          "Filter decisions from this ISO date (YYYY-MM-DD)",
+        ),
+        date_to: stringProp(
+          "Filter decisions up to this ISO date (YYYY-MM-DD)",
+        ),
+      },
+      required: ["query"],
+    },
+    name: "search_case_law",
+    scope: "stella:search",
+  },
+  {
+    annotations: { readOnlyHint: true },
+    description:
       "Read extracted text from a document found anywhere in your accessible " +
       "matters. Use after search_across_matters.",
     inputSchema: {
@@ -94,6 +136,21 @@ export const STELLA_TOOL_DEFINITIONS = [
       required: ["entity_id"],
     },
     name: "read_content_across_matters",
+    scope: "stella:read",
+  },
+  {
+    annotations: { readOnlyHint: true },
+    description:
+      "Read a single case-law decision by its decision ID. Returns metadata, " +
+      "plain text, citation links, and source URLs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        decision_id: stringProp("Case-law decision ID"),
+      },
+      required: ["decision_id"],
+    },
+    name: "read_case_law_decision",
     scope: "stella:read",
   },
   {
@@ -257,6 +314,136 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   });
 };
 
+const parseOptionalStringArg = ({
+  args,
+  key,
+}: {
+  args: Record<string, unknown>;
+  key: string;
+}): string | undefined | ReturnType<typeof errorResult> => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return errorResult(`Invalid parameter: ${key}. Expected a string`);
+  }
+  return value;
+};
+
+const parseOptionalDateArg = ({
+  args,
+  key,
+}: {
+  args: Record<string, unknown>;
+  key: string;
+}): string | undefined | ReturnType<typeof errorResult> => {
+  const value = parseOptionalStringArg({ args, key });
+  if (typeof value !== "string") {
+    return value;
+  }
+  if (!ISO_DATE_PATTERN.test(value)) {
+    return errorResult(
+      `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`,
+    );
+  }
+  const parsed = new Date(value);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    return errorResult(
+      `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`,
+    );
+  }
+  return value;
+};
+
+const isToolErrorResult = (
+  value: unknown,
+): value is ReturnType<typeof errorResult> =>
+  typeof value === "object" &&
+  value !== null &&
+  "isError" in value &&
+  value.isError === true;
+
+const getResultMessage = (value: unknown): string | null => {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  if ("message" in value && typeof value.message === "string") {
+    return value.message;
+  }
+
+  if (
+    "response" in value &&
+    typeof value.response === "object" &&
+    value.response !== null &&
+    "message" in value.response &&
+    typeof value.response.message === "string"
+  ) {
+    return value.response.message;
+  }
+
+  return null;
+};
+
+type SearchCaseLawSuccess = Extract<
+  Awaited<ReturnType<typeof searchDecisionsHandler>>,
+  { hits: unknown[] }
+>;
+
+const isSearchCaseLawSuccess = (
+  value: Awaited<ReturnType<typeof searchDecisionsHandler>>,
+): value is SearchCaseLawSuccess =>
+  typeof value === "object" &&
+  value !== null &&
+  "hits" in value &&
+  Array.isArray(value.hits);
+
+type ReadCaseLawDecisionSuccess = Extract<
+  Awaited<ReturnType<typeof readDecisionHandler>>,
+  { caseNumber: string; citationsFrom: unknown[]; citationsTo: unknown[] }
+>;
+
+const isReadCaseLawDecisionSuccess = (
+  value: Awaited<ReturnType<typeof readDecisionHandler>>,
+): value is ReadCaseLawDecisionSuccess =>
+  typeof value === "object" &&
+  value !== null &&
+  "caseNumber" in value &&
+  typeof value.caseNumber === "string" &&
+  "citationsFrom" in value &&
+  Array.isArray(value.citationsFrom) &&
+  "citationsTo" in value &&
+  Array.isArray(value.citationsTo);
+
+const toPlainDecisionText = (decision: {
+  documentAst: unknown;
+  fulltext: string | null;
+}) => {
+  if (typeof decision.fulltext === "string" && decision.fulltext.length > 0) {
+    return decision.fulltext;
+  }
+  if (!hasUsableAst(decision.documentAst)) {
+    return null;
+  }
+  return decision.documentAst.blocks
+    .map((block) => block.plainText)
+    .join("\n\n");
+};
+
+const toIsoDateString = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  return null;
+};
+
 const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   args,
   context,
@@ -269,6 +456,155 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   return await invokeAiTool({
     args: { entityId },
     tool: getOrgTools(context)["read-content-across-matters"],
+  });
+};
+
+const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
+  const query = parseRequiredString(args, "query");
+  if (typeof query !== "string") {
+    return query;
+  }
+
+  const limit = parseOptionalLimit({
+    args,
+    defaultValue: DEFAULT_SEARCH_LIMIT,
+    key: "limit",
+    max: MAX_SEARCH_LIMIT,
+  });
+  if (typeof limit !== "number") {
+    return limit;
+  }
+
+  const cursor = parseOptionalStringArg({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+  const court = parseOptionalStringArg({ args, key: "court" });
+  if (isToolErrorResult(court)) {
+    return court;
+  }
+  const country = parseOptionalStringArg({ args, key: "country" });
+  if (isToolErrorResult(country)) {
+    return country;
+  }
+  const language = parseOptionalStringArg({ args, key: "language" });
+  if (isToolErrorResult(language)) {
+    return language;
+  }
+  const decisionType = parseOptionalStringArg({
+    args,
+    key: "decision_type",
+  });
+  if (isToolErrorResult(decisionType)) {
+    return decisionType;
+  }
+  const sourceId = parseOptionalStringArg({ args, key: "source_id" });
+  if (isToolErrorResult(sourceId)) {
+    return sourceId;
+  }
+  const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
+  if (isToolErrorResult(dateFrom)) {
+    return dateFrom;
+  }
+  const dateTo = parseOptionalDateArg({ args, key: "date_to" });
+  if (isToolErrorResult(dateTo)) {
+    return dateTo;
+  }
+
+  const result = await searchDecisionsHandler(
+    {
+      query,
+      limit,
+      ...(cursor === undefined ? {} : { cursor }),
+      ...(court === undefined ? {} : { court }),
+      ...(country === undefined ? {} : { country }),
+      ...(language === undefined ? {} : { language }),
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(sourceId === undefined ? {} : { sourceId }),
+      ...(dateFrom === undefined ? {} : { dateFrom }),
+      ...(dateTo === undefined ? {} : { dateTo }),
+    },
+    context.scopedDb,
+  );
+
+  const resultMessage = getResultMessage(result);
+  if (resultMessage) {
+    return errorResult(resultMessage);
+  }
+  if (!isSearchCaseLawSuccess(result)) {
+    return errorResult("Case-law search failed");
+  }
+
+  return textResult({
+    facets: result.facets,
+    nextCursor: result.nextCursor,
+    results: result.hits.map((hit) => ({
+      appUrl: buildCaseLawDecisionUrl({
+        caseNumber: hit.caseNumber,
+        decisionId: hit.decisionId,
+      }),
+      caseNumber: hit.caseNumber,
+      citationCount: hit.citationCount,
+      country: hit.country,
+      court: hit.court,
+      decisionDate: hit.decisionDate,
+      decisionId: hit.decisionId,
+      decisionType: hit.decisionType,
+      ecli: hit.ecli,
+      language: hit.language,
+      snippet: hit.headline,
+      sourceUrl: hit.sourceUrl,
+    })),
+    totalCount: result.totalCount,
+  });
+};
+
+const handleReadCaseLawDecisionTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  const decisionId = parseRequiredString(args, "decision_id");
+  if (typeof decisionId !== "string") {
+    return decisionId;
+  }
+
+  const result = await readDecisionHandler(decisionId, context.scopedDb);
+  const resultMessage = getResultMessage(result);
+  if (resultMessage) {
+    return errorResult(resultMessage);
+  }
+  if (!isReadCaseLawDecisionSuccess(result)) {
+    return errorResult("Decision not found");
+  }
+
+  return textResult({
+    decision: {
+      analysis: result.analysis,
+      appUrl: buildCaseLawDecisionUrl({
+        caseNumber: result.caseNumber,
+        decisionId: result.id,
+      }),
+      caseNumber: result.caseNumber,
+      citationsFrom: result.citationsFrom.slice(0, 50),
+      citationsFromTotal: result.citationsFrom.length,
+      citationsTo: result.citationsTo.slice(0, 50),
+      citationsToTotal: result.citationsTo.length,
+      country: result.country,
+      court: result.court,
+      decisionDate: toIsoDateString(result.decisionDate),
+      decisionId: result.id,
+      decisionType: result.decisionType,
+      documentUrl: result.documentUrl,
+      ecli: result.ecli,
+      language: result.language,
+      metadata: result.metadata,
+      source: result.source,
+      sourceUrl: result.sourceUrl,
+      text: toPlainDecisionText({
+        documentAst: result.documentAst,
+        fulltext: result.fulltext,
+      }),
+    },
   });
 };
 
@@ -287,7 +623,9 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
 export const STELLA_TOOL_HANDLERS = {
   get_matter_overview: handleGetMatterOverviewTool,
   list_matters: handleListMattersTool,
+  read_case_law_decision: handleReadCaseLawDecisionTool,
   read_contact: handleReadContactTool,
   read_content_across_matters: handleReadContentAcrossMattersTool,
+  search_case_law: handleSearchCaseLawTool,
   search_across_matters: handleSearchAcrossMattersTool,
 } satisfies Record<StellaToolName, McpToolHandler>;
