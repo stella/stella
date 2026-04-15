@@ -1204,7 +1204,7 @@ THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @electric-sql/pglite@0.4.2
+ - @electric-sql/pglite@0.4.4
 
 This package contains the following license:
 
@@ -2634,16 +2634,16 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/client-sesv2@3.1020.0
- - @aws-sdk/util-user-agent-browser@3.972.8
- - @aws-sdk/util-user-agent-node@3.973.13
- - @smithy/middleware-retry@4.4.45
- - @smithy/querystring-builder@4.2.12
- - @smithy/querystring-parser@4.2.12
- - @smithy/service-error-classification@4.2.12
- - @smithy/url-parser@4.2.12
- - @smithy/util-defaults-mode-browser@4.3.44
- - @smithy/util-defaults-mode-node@4.2.48
+ - @aws-sdk/client-sesv2@3.1028.0
+ - @aws-sdk/util-user-agent-browser@3.972.9
+ - @aws-sdk/util-user-agent-node@3.973.15
+ - @smithy/middleware-retry@4.5.1
+ - @smithy/querystring-builder@4.2.13
+ - @smithy/querystring-parser@4.2.13
+ - @smithy/service-error-classification@4.2.13
+ - @smithy/url-parser@4.2.13
+ - @smithy/util-defaults-mode-browser@4.3.45
+ - @smithy/util-defaults-mode-node@4.2.49
 
 These packages each contain the following license:
 
@@ -2853,17 +2853,18 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/middleware-host-header@3.972.8
- - @aws-sdk/middleware-recursion-detection@3.972.9
- - @aws-sdk/middleware-sdk-s3@3.972.27
- - @aws-sdk/middleware-user-agent@3.972.27
- - @aws-sdk/signature-v4-multi-region@3.996.15
- - @smithy/core@3.23.13
- - @smithy/invalid-dependency@4.2.12
- - @smithy/middleware-serde@4.2.16
- - @smithy/protocol-http@5.3.12
- - @smithy/smithy-client@4.12.8
+ - @aws-sdk/middleware-host-header@3.972.9
+ - @aws-sdk/middleware-recursion-detection@3.972.10
+ - @aws-sdk/middleware-sdk-s3@3.972.28
+ - @aws-sdk/middleware-user-agent@3.972.29
+ - @aws-sdk/signature-v4-multi-region@3.996.16
+ - @smithy/core@3.23.14
+ - @smithy/invalid-dependency@4.2.13
+ - @smithy/middleware-serde@4.2.17
+ - @smithy/protocol-http@5.3.13
+ - @smithy/smithy-client@4.12.9
  - @smithy/types@4.13.1
+ - @smithy/types@4.14.0
 
 These packages each contain the following license:
 
@@ -3283,7 +3284,7 @@ limitations under the License.
 
 The following npm package may be included in this product:
 
- - @openrouter/ai-sdk-provider@2.3.3
+ - @openrouter/ai-sdk-provider@2.5.1
 
 This package contains the following license:
 
@@ -5965,6 +5966,7 @@ The following npm packages may be included in this product:
  - marked@15.0.12
  - marked@16.4.2
  - marked@17.0.5
+ - marked@18.0.0
 
 These packages each contain the following license:
 
@@ -6860,7 +6862,7 @@ For more information, please refer to <http://unlicense.org/>
 
 The following npm package may be included in this product:
 
- - vite@8.0.3
+ - vite@8.0.8
 
 This package contains the following license:
 
@@ -11517,7 +11519,7 @@ AGPL-3.0-only
 
 The following npm package may be included in this product:
 
- - @aws-sdk/core@3.973.26
+ - @aws-sdk/core@3.973.27
 
 This package contains the following license:
 
@@ -12147,36 +12149,37 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/credential-provider-env@3.972.24
- - @aws-sdk/credential-provider-ini@3.972.27
- - @aws-sdk/credential-provider-node@3.972.28
- - @aws-sdk/region-config-resolver@3.972.10
- - @aws-sdk/token-providers@3.1020.0
+ - @aws-sdk/credential-provider-env@3.972.25
+ - @aws-sdk/credential-provider-ini@3.972.29
+ - @aws-sdk/credential-provider-node@3.972.30
+ - @aws-sdk/region-config-resolver@3.972.11
+ - @aws-sdk/token-providers@3.1026.0
  - @aws-sdk/types@3.973.6
+ - @aws-sdk/types@3.973.7
  - @aws-sdk/util-arn-parser@3.972.3
- - @aws-sdk/util-endpoints@3.996.5
+ - @aws-sdk/util-endpoints@3.996.6
  - @aws-sdk/util-locate-window@3.965.5
- - @aws-sdk/xml-builder@3.972.16
- - @smithy/config-resolver@4.4.13
- - @smithy/credential-provider-imds@4.2.12
- - @smithy/fetch-http-handler@5.3.15
- - @smithy/hash-node@4.2.12
+ - @aws-sdk/xml-builder@3.972.17
+ - @smithy/config-resolver@4.4.14
+ - @smithy/credential-provider-imds@4.2.13
+ - @smithy/fetch-http-handler@5.3.16
+ - @smithy/hash-node@4.2.13
  - @smithy/is-array-buffer@2.2.0
  - @smithy/is-array-buffer@4.2.2
- - @smithy/middleware-content-length@4.2.12
- - @smithy/middleware-endpoint@4.4.28
- - @smithy/middleware-stack@4.2.12
- - @smithy/node-http-handler@4.5.1
- - @smithy/property-provider@4.2.12
- - @smithy/shared-ini-file-loader@4.4.7
- - @smithy/signature-v4@5.3.12
+ - @smithy/middleware-content-length@4.2.13
+ - @smithy/middleware-endpoint@4.4.29
+ - @smithy/middleware-stack@4.2.13
+ - @smithy/node-http-handler@4.5.2
+ - @smithy/property-provider@4.2.13
+ - @smithy/shared-ini-file-loader@4.4.8
+ - @smithy/signature-v4@5.3.13
  - @smithy/util-base64@4.3.2
  - @smithy/util-body-length-browser@4.2.2
  - @smithy/util-body-length-node@4.2.3
  - @smithy/util-buffer-from@2.2.0
  - @smithy/util-buffer-from@4.2.2
  - @smithy/util-hex-encoding@4.2.2
- - @smithy/util-stream@4.5.21
+ - @smithy/util-stream@4.5.22
  - @smithy/util-uri-escape@4.2.2
  - @smithy/util-utf8@2.3.0
  - @smithy/util-utf8@4.2.2
@@ -12390,9 +12393,9 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/credential-provider-process@3.972.24
- - @aws-sdk/credential-provider-sso@3.972.27
- - @aws-sdk/credential-provider-web-identity@3.972.27
+ - @aws-sdk/credential-provider-process@3.972.25
+ - @aws-sdk/credential-provider-sso@3.972.29
+ - @aws-sdk/credential-provider-web-identity@3.972.29
 
 These packages each contain the following license:
 
@@ -12602,8 +12605,8 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/middleware-logger@3.972.8
- - @smithy/node-config-provider@4.3.12
+ - @aws-sdk/middleware-logger@3.972.9
+ - @smithy/node-config-provider@4.3.13
  - @smithy/util-config-provider@4.2.2
 
 These packages each contain the following license:
@@ -12814,9 +12817,9 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @smithy/util-endpoints@3.3.3
- - @smithy/util-middleware@4.2.12
- - @smithy/util-retry@4.2.12
+ - @smithy/util-endpoints@3.3.4
+ - @smithy/util-middleware@4.2.13
+ - @smithy/util-retry@4.3.1
 
 These packages each contain the following license:
 
@@ -13503,10 +13506,10 @@ END OF TERMS AND CONDITIONS
 
 The following npm packages may be included in this product:
 
- - @ai-sdk/provider-utils@4.0.21
- - @aws-sdk/credential-provider-http@3.972.26
- - @aws-sdk/credential-provider-login@3.972.27
- - @aws-sdk/nested-clients@3.996.17
+ - @ai-sdk/provider-utils@4.0.23
+ - @aws-sdk/credential-provider-http@3.972.27
+ - @aws-sdk/credential-provider-login@3.972.29
+ - @aws-sdk/nested-clients@3.996.19
  - @drizzle-team/brocli@0.11.0
  - drizzle-orm@1.0.0-beta.20
 
@@ -14346,7 +14349,7 @@ The complete list of contributors can be found at:
 
 The following npm package may be included in this product:
 
- - nodemailer@8.0.4
+ - nodemailer@8.0.5
 
 This package contains the following license:
 
@@ -15432,9 +15435,11 @@ The following npm packages may be included in this product:
  - domhandler@5.0.3
  - domhandler@6.0.1
  - domutils@3.2.2
+ - domutils@4.0.2
  - entities@4.5.0
  - entities@6.0.1
  - entities@7.0.1
+ - entities@8.0.0
  - nth-check@2.1.1
 
 These packages each contain the following license:
@@ -15528,6 +15533,22 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-----------
+
+The following npm package may be included in this product:
+
+ - dom-serializer@3.0.0
+
+This package contains the following license:
+
+Copyright © 2022 The Cheerio contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 -----------
 
@@ -15962,6 +15983,7 @@ THIS SOFTWARE.
 The following npm packages may be included in this product:
 
  - htmlparser2@10.1.0
+ - htmlparser2@12.0.0
  - htmlparser2@8.0.2
 
 These packages each contain the following license:
@@ -16461,9 +16483,9 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @posthog/types@1.364.3
- - posthog-js@1.364.3
- - posthog-node@5.28.9
+ - @posthog/types@1.367.0
+ - posthog-js@1.367.0
+ - posthog-node@5.29.2
 
 These packages each contain the following license:
 
@@ -16820,6 +16842,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 The following npm packages may be included in this product:
 
  - @atlaskit/pragmatic-drag-and-drop-hitbox@1.1.0
+ - @atlaskit/pragmatic-drag-and-drop@1.7.10
  - @atlaskit/pragmatic-drag-and-drop@1.7.9
 
 These packages each contain the following license:
@@ -16919,7 +16942,7 @@ License.
 
 The following npm package may be included in this product:
 
- - @elysiajs/eden@1.4.8
+ - @elysiajs/eden@1.4.9
 
 This package contains the following license:
 
@@ -16952,20 +16975,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 The following npm packages may be included in this product:
 
- - @ai-sdk/anthropic@3.0.64
- - @ai-sdk/gateway@3.0.83
- - @ai-sdk/google-vertex@4.0.97
- - @ai-sdk/google@3.0.54
- - @ai-sdk/openai-compatible@2.0.37
- - @ai-sdk/openai@3.0.49
+ - @ai-sdk/anthropic@3.0.68
+ - @ai-sdk/gateway@3.0.95
+ - @ai-sdk/google-vertex@4.0.106
+ - @ai-sdk/google@3.0.61
+ - @ai-sdk/openai-compatible@2.0.41
+ - @ai-sdk/openai@3.0.52
  - @ai-sdk/provider@3.0.8
- - @ai-sdk/react@3.0.143
- - @ai-sdk/valibot@2.0.22
+ - @ai-sdk/react@3.0.158
+ - @ai-sdk/valibot@2.0.24
  - @streamdown/cjk@1.0.3
  - @streamdown/code@1.1.1
  - @streamdown/math@1.0.2
  - @streamdown/mermaid@1.0.2
- - ai@6.0.141
+ - ai@6.0.156
  - remend@1.3.0
  - streamdown@2.5.0
 
@@ -17025,7 +17048,7 @@ The following npm packages may be included in this product:
  - @react-email/code-block@0.2.1
  - @react-email/code-inline@0.0.6
  - @react-email/column@0.0.14
- - @react-email/components@1.0.10
+ - @react-email/components@1.0.12
  - @react-email/container@0.0.16
  - @react-email/font@0.0.10
  - @react-email/head@0.0.13
@@ -17036,10 +17059,10 @@ The following npm packages may be included in this product:
  - @react-email/link@0.0.13
  - @react-email/markdown@0.0.18
  - @react-email/preview@0.0.14
- - @react-email/render@2.0.4
+ - @react-email/render@2.0.6
  - @react-email/row@0.0.13
  - @react-email/section@0.0.17
- - @react-email/tailwind@2.0.6
+ - @react-email/tailwind@2.0.7
  - @react-email/text@0.1.6
 
 These packages each contain the following license:
@@ -18240,7 +18263,7 @@ THIS SOFTWARE.
 
 The following npm package may be included in this product:
 
- - lucide-react@1.7.0
+ - lucide-react@1.8.0
 
 This package contains the following license:
 
@@ -18998,7 +19021,7 @@ THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 The following npm packages may be included in this product:
 
- - @better-auth/utils@0.3.1
+ - @better-auth/utils@0.4.0
  - @esbuild/linux-x64@0.25.12
  - @esbuild/linux-x64@0.27.3
  - @kreuzberg/html-to-markdown-node-linux-x64-gnu@2.28.2
@@ -19015,9 +19038,9 @@ The following npm packages may be included in this product:
  - @next/env@16.1.6
  - @next/swc-linux-x64-gnu@16.1.6
  - @next/swc-linux-x64-musl@16.1.6
- - @posthog/core@1.24.4
- - @rolldown/binding-linux-x64-gnu@1.0.0-rc.12
- - @rolldown/binding-linux-x64-musl@1.0.0-rc.12
+ - @posthog/core@1.25.2
+ - @rolldown/binding-linux-x64-gnu@1.0.0-rc.15
+ - @rolldown/binding-linux-x64-musl@1.0.0-rc.15
  - @rollup/rollup-linux-x64-gnu@4.60.0
  - @rollup/rollup-linux-x64-musl@4.60.0
  - @schummar/icu-type-parser@1.21.5
@@ -19573,7 +19596,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - html-dom-parser@5.1.8
+ - html-dom-parser@7.0.1
 
 This package contains the following license:
 
@@ -19910,7 +19933,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - bullmq@5.73.1
+ - bullmq@5.73.3
 
 This package contains the following license:
 
@@ -20819,7 +20842,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @posthog/react@1.8.2
+ - @posthog/react@1.9.0
 
 This package contains the following license:
 
@@ -21125,7 +21148,7 @@ The following npm packages may be included in this product:
  - @astrojs/prism@4.0.1
  - @astrojs/sitemap@3.7.2
  - @astrojs/telemetry@3.3.0
- - astro@6.1.2
+ - astro@6.1.5
 
 These packages each contain the following license:
 
@@ -21512,11 +21535,11 @@ The following npm packages may be included in this product:
 
  - @tanstack/form-core@1.28.6
  - @tanstack/history@1.161.6
- - @tanstack/query-core@5.95.2
- - @tanstack/query-devtools@5.95.2
+ - @tanstack/query-core@5.96.2
+ - @tanstack/query-devtools@5.96.2
  - @tanstack/react-form@1.28.6
- - @tanstack/react-query-devtools@5.95.2
- - @tanstack/react-query@5.95.2
+ - @tanstack/react-query-devtools@5.96.2
+ - @tanstack/react-query@5.96.2
  - @tanstack/react-router-devtools@1.166.11
  - @tanstack/react-router-ssr-query@1.166.10
  - @tanstack/react-router@1.168.10
@@ -21997,8 +22020,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - icu-minify@4.8.3
- - use-intl@4.8.3
+ - icu-minify@4.9.0
+ - use-intl@4.9.0
 
 These packages each contain the following license:
 
@@ -22219,8 +22242,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @rolldown/pluginutils@1.0.0-rc.12
- - rolldown@1.0.0-rc.12
+ - @rolldown/pluginutils@1.0.0-rc.15
+ - rolldown@1.0.0-rc.15
 
 These packages each contain the following license:
 
@@ -22254,7 +22277,7 @@ The licenses of externally maintained libraries from which parts of the Software
 
 The following npm package may be included in this product:
 
- - @oxc-project/types@0.122.0
+ - @oxc-project/types@0.124.0
 
 This package contains the following license:
 
@@ -22285,7 +22308,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - better-call@1.3.2
+ - better-call@1.3.5
 
 This package contains the following license:
 
@@ -22503,8 +22526,8 @@ The following npm packages may be included in this product:
  - @tanstack/devtools-event-client@0.4.1
  - @tanstack/devtools-ui@0.5.1
  - @tanstack/devtools-vite@0.6.0
- - @tanstack/devtools@0.11.0
- - @tanstack/react-devtools@0.10.0
+ - @tanstack/devtools@0.11.2
+ - @tanstack/react-devtools@0.10.2
 
 These packages each contain the following license:
 
@@ -22534,7 +22557,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - pompelmi@0.34.10
+ - pompelmi@0.35.5
 
 This package contains the following license:
 
@@ -22624,19 +22647,19 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @tiptap/extension-bold@3.21.0
- - @tiptap/extension-bubble-menu@3.21.0
- - @tiptap/extension-document@3.21.0
- - @tiptap/extension-floating-menu@3.21.0
- - @tiptap/extension-heading@3.21.0
- - @tiptap/extension-history@3.21.0
- - @tiptap/extension-italic@3.21.0
- - @tiptap/extension-mention@3.21.0
- - @tiptap/extension-paragraph@3.21.0
- - @tiptap/extension-placeholder@3.21.0
- - @tiptap/extension-text@3.21.0
- - @tiptap/react@3.21.0
- - @tiptap/suggestion@3.21.0
+ - @tiptap/extension-bold@3.22.3
+ - @tiptap/extension-bubble-menu@3.22.3
+ - @tiptap/extension-document@3.22.3
+ - @tiptap/extension-floating-menu@3.22.3
+ - @tiptap/extension-heading@3.22.3
+ - @tiptap/extension-history@3.22.3
+ - @tiptap/extension-italic@3.22.3
+ - @tiptap/extension-mention@3.22.3
+ - @tiptap/extension-paragraph@3.22.3
+ - @tiptap/extension-placeholder@3.22.3
+ - @tiptap/extension-text@3.22.3
+ - @tiptap/react@3.22.3
+ - @tiptap/suggestion@3.22.3
 
 These packages each contain the following license:
 
@@ -22696,7 +22719,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - better-result@2.7.0
+ - better-result@2.8.2
 
 This package contains the following license:
 
@@ -22856,8 +22879,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @tanstack/hotkeys@0.6.4
- - @tanstack/react-hotkeys@0.8.4
+ - @tanstack/hotkeys@0.7.1
+ - @tanstack/react-hotkeys@0.9.1
 
 These packages each contain the following license:
 
@@ -23193,8 +23216,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - react-dom@19.2.4
- - react@19.2.4
+ - react-dom@19.2.5
+ - react@19.2.5
  - scheduler@0.27.0
  - use-sync-external-store@1.6.0
 
@@ -23226,9 +23249,7 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @clack/core@0.5.0
  - @clack/core@1.1.0
- - @clack/prompts@0.11.0
  - @clack/prompts@1.1.0
 
 These packages each contain the following license:
@@ -23816,7 +23837,6 @@ The following npm packages may be included in this product:
  - @tailwindcss/oxide-linux-x64-musl@4.2.2
  - @tailwindcss/oxide@4.2.2
  - @tailwindcss/vite@4.2.2
- - tailwindcss@4.1.18
  - tailwindcss@4.2.2
 
 These packages each contain the following license:
@@ -24508,7 +24528,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - html-react-parser@5.2.17
+ - html-react-parser@6.0.1
 
 This package contains the following license:
 
@@ -25729,7 +25749,7 @@ THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - react-resizable-panels@4.8.0
+ - react-resizable-panels@4.9.0
 
 This package contains the following license:
 
@@ -26719,15 +26739,15 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @better-auth/core@1.5.6
- - @better-auth/drizzle-adapter@1.5.6
- - @better-auth/kysely-adapter@1.5.6
- - @better-auth/memory-adapter@1.5.6
- - @better-auth/mongo-adapter@1.5.6
- - @better-auth/oauth-provider@1.5.6
- - @better-auth/prisma-adapter@1.5.6
- - @better-auth/telemetry@1.5.6
- - better-auth@1.5.6
+ - @better-auth/core@1.6.2
+ - @better-auth/drizzle-adapter@1.6.2
+ - @better-auth/kysely-adapter@1.6.2
+ - @better-auth/memory-adapter@1.6.2
+ - @better-auth/mongo-adapter@1.6.2
+ - @better-auth/oauth-provider@1.6.2
+ - @better-auth/prisma-adapter@1.6.2
+ - @better-auth/telemetry@1.6.2
+ - better-auth@1.6.2
 
 These packages each contain the following license:
 
