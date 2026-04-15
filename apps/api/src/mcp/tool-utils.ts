@@ -156,6 +156,24 @@ export const buildDocumentUrl = ({
 }) =>
   `${getAppBaseUrl()}/workspaces/${workspaceId}/all/pdf?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;
 
+const slugifyCaseNumber = (caseNumber: string) =>
+  caseNumber
+    .toLowerCase()
+    .replace(/\//g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+export const buildCaseLawDecisionUrl = ({
+  caseNumber,
+  decisionId,
+}: {
+  caseNumber: string;
+  decisionId: string;
+}) =>
+  `${getAppBaseUrl()}/knowledge/case/${encodeURIComponent(
+    `${slugifyCaseNumber(caseNumber)}--${decisionId}`,
+  )}`;
+
 export const getOrgTools = (context: McpRequestContext) =>
   createOrgTools({
     organizationId: context.organizationId,

@@ -35,11 +35,13 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["search", COMPAT_TOOL_HANDLERS.search],
   ["get_matter_overview", STELLA_TOOL_HANDLERS.get_matter_overview],
   ["list_matters", STELLA_TOOL_HANDLERS.list_matters],
+  ["read_case_law_decision", STELLA_TOOL_HANDLERS.read_case_law_decision],
   ["read_contact", STELLA_TOOL_HANDLERS.read_contact],
   [
     "read_content_across_matters",
     STELLA_TOOL_HANDLERS.read_content_across_matters,
   ],
+  ["search_case_law", STELLA_TOOL_HANDLERS.search_case_law],
   ["search_across_matters", STELLA_TOOL_HANDLERS.search_across_matters],
 ]);
 
