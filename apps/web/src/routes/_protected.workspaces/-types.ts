@@ -26,6 +26,7 @@ export type WorkspaceGroup = {
   groupId: string;
   clientId: string;
   clientName: string;
+  responsibleAttorneyName: string | null;
   workspaces: Workspace[];
 };
 

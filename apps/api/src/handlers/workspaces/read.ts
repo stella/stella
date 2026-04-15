@@ -1,9 +1,21 @@
-import { count, desc, eq, inArray, max } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  max,
+  min,
+  notInArray,
+  or,
+} from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
 import { createRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
@@ -17,85 +29,140 @@ const readWorkspaces = createRootHandler(
   config,
   async ({ scopedDb, session }) => {
     const organizationId = session.activeOrganizationId;
-    const { result, counts, contributorRows } = await scopedDb(async (tx) => {
-      const allRows = await tx.query.workspaces.findMany({
-        where: {
-          organizationId: { eq: organizationId },
-        },
-        columns: {
-          id: true,
-          name: true,
-          reference: true,
-          clientId: true,
-          color: true,
-          status: true,
-          lastActivityAt: true,
-          createdAt: true,
-        },
-        with: {
-          client: {
-            columns: {
-              id: true,
-              displayName: true,
+    const { result, counts, contributorRows, taskCounts, deadlineRows } =
+      await scopedDb(async (tx) => {
+        const allRows = await tx.query.workspaces.findMany({
+          where: {
+            organizationId: { eq: organizationId },
+          },
+          columns: {
+            id: true,
+            name: true,
+            reference: true,
+            clientId: true,
+            color: true,
+            status: true,
+            lastActivityAt: true,
+            createdAt: true,
+          },
+          with: {
+            client: {
+              columns: {
+                id: true,
+                displayName: true,
+              },
+              with: {
+                responsibleAttorney: {
+                  columns: { name: true },
+                },
+              },
             },
           },
-        },
-        orderBy: {
-          lastActivityAt: "desc",
-        },
-        limit: LIMITS.workspacesCount,
-      });
+          orderBy: {
+            lastActivityAt: "desc",
+          },
+          limit: LIMITS.workspacesCount,
+        });
 
-      const workspaceRows = allRows.filter((w) => w.status === "active");
+        const workspaceRows = allRows.filter((w) => w.status === "active");
 
-      const wsIds = workspaceRows.map((w) => brandPersistedWorkspaceId(w.id));
+        const wsIds = workspaceRows.map((w) => brandPersistedWorkspaceId(w.id));
 
-      if (wsIds.length === 0) {
+        if (wsIds.length === 0) {
+          return {
+            result: workspaceRows,
+            counts: [],
+            contributorRows: [],
+            taskCounts: [],
+            deadlineRows: [],
+          };
+        }
+
+        const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
+
+        const [entityCounts, contributors, openTaskRows, dueDateRows] =
+          await Promise.all([
+            tx
+              .select({
+                workspaceId: entities.workspaceId,
+                count: count(),
+              })
+              .from(entities)
+              .where(inArray(entities.workspaceId, wsIds))
+              .groupBy(entities.workspaceId),
+            tx
+              .select({
+                workspaceId: entities.workspaceId,
+                userId: entities.createdBy,
+                userName: user.name,
+                userImage: user.image,
+                lastActivity: max(entities.updatedAt),
+              })
+              .from(entities)
+              .innerJoin(user, eq(entities.createdBy, user.id))
+              .where(inArray(entities.workspaceId, wsIds))
+              .groupBy(
+                entities.workspaceId,
+                entities.createdBy,
+                user.name,
+                user.image,
+              )
+              .orderBy(entities.workspaceId, desc(max(entities.updatedAt))),
+            tx
+              .select({
+                workspaceId: entities.workspaceId,
+                count: count(),
+              })
+              .from(entities)
+              .where(
+                and(
+                  inArray(entities.workspaceId, wsIds),
+                  eq(entities.kind, "task"),
+                  or(
+                    notInArray(entities.status, closedStatuses),
+                    isNull(entities.status),
+                  ),
+                ),
+              )
+              .groupBy(entities.workspaceId),
+            tx
+              .select({
+                workspaceId: entities.workspaceId,
+                deadline: min(entities.dueDate),
+              })
+              .from(entities)
+              .where(
+                and(
+                  inArray(entities.workspaceId, wsIds),
+                  eq(entities.kind, "task"),
+                  or(
+                    notInArray(entities.status, closedStatuses),
+                    isNull(entities.status),
+                  ),
+                ),
+              )
+              .groupBy(entities.workspaceId),
+          ]);
+
         return {
           result: workspaceRows,
-          counts: [],
-          contributorRows: [],
+          counts: entityCounts,
+          contributorRows: contributors,
+          taskCounts: openTaskRows,
+          deadlineRows: dueDateRows,
         };
-      }
-
-      const [entityCounts, contributors] = await Promise.all([
-        tx
-          .select({
-            workspaceId: entities.workspaceId,
-            count: count(),
-          })
-          .from(entities)
-          .where(inArray(entities.workspaceId, wsIds))
-          .groupBy(entities.workspaceId),
-        tx
-          .select({
-            workspaceId: entities.workspaceId,
-            userId: entities.createdBy,
-            userName: user.name,
-            userImage: user.image,
-            lastActivity: max(entities.updatedAt),
-          })
-          .from(entities)
-          .innerJoin(user, eq(entities.createdBy, user.id))
-          .where(inArray(entities.workspaceId, wsIds))
-          .groupBy(
-            entities.workspaceId,
-            entities.createdBy,
-            user.name,
-            user.image,
-          )
-          .orderBy(entities.workspaceId, desc(max(entities.updatedAt))),
-      ]);
-
-      return {
-        result: workspaceRows,
-        counts: entityCounts,
-        contributorRows: contributors,
-      };
-    });
+      });
 
     const countMap = new Map<string, number>(
       counts.map((c) => [c.workspaceId, c.count]),
+    );
+
+    const openTaskMap = new Map<string, number>(
+      taskCounts.map((c) => [c.workspaceId, c.count]),
+    );
+
+    const deadlineMap = new Map<string, string | null>(
+      deadlineRows.map((d) => [d.workspaceId, d.deadline]),
     );
 
     const contributorMap = new Map<string, typeof contributorRows>();
@@ -110,11 +177,23 @@ const readWorkspaces = createRootHandler(
       }
     }
 
-    const workspaces = result.map(({ status: _, ...w }) => ({
-      ...w,
-      entityCount: countMap.get(w.id) ?? 0,
-      contributors: contributorMap.get(w.id) ?? [],
-    }));
+    const workspaces = result.map(({ status: _, client, ...w }) => {
+      if (!client) {
+        throw new Error(`workspace ${w.id} has no client (NOT NULL invariant)`);
+      }
+      return {
+        ...w,
+        client: {
+          id: client.id,
+          displayName: client.displayName,
+          responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
+        },
+        entityCount: countMap.get(w.id) ?? 0,
+        openTaskCount: openTaskMap.get(w.id) ?? 0,
+        nextDeadline: deadlineMap.get(w.id) ?? null,
+        contributors: contributorMap.get(w.id) ?? [],
+      };
+    });
 
     return {
       workspaces,
