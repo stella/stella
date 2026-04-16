@@ -3,11 +3,11 @@ import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 ---
 
-<Base title="Security — Stella" description="How stella protects your data. Security controls, data handling, and compliance.">
+<Base title="Security — stella" description="How stella protects your data. Security controls, data handling, and compliance.">
   <div class="flex min-h-screen flex-col">
     <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
       <a href="/">
-        <img src="/images/stella-logo.svg" alt="Stella" class="h-6 dark:invert" />
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
       </a>
       <div class="flex items-center gap-4">
         <ThemeToggle />
@@ -30,7 +30,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               Security at stella
             </h1>
             <p class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
-              stella handles privileged legal data. Security is the foundation
+              stella handles privileged legal data. Security is the foundation that
               everything else is built on. Our architecture enforces least
               privilege, workspace isolation, and encryption at every layer.
             </p>
@@ -41,10 +41,10 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <!-- ——— Principles ——— -->
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-[1200px]">
-          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Principles</p>
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Principles</h2>
           <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
             {[
-              { title: "Open by default", body: "Fully open source under AGPL&#8209;3.0. Audit every line, fork anytime, verify our claims in code." },
+              { title: "Open source foundation", body: "Open source, standard formats, full export, and self&#8209;hosting support. You choose how stella runs and where data lives." },
               { title: "Your data, your rules", body: "Self&#8209;host on your infrastructure or use our managed cloud. You choose where data lives." },
               { title: "Least privilege", body: "Workspace isolation, role&#8209;based access, and tenant&#8209;scoped queries at every layer of the stack." },
             ].map((card) => (
@@ -60,7 +60,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <!-- ——— Controls ——— -->
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-[1200px]">
-          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Controls</p>
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Controls</h2>
           <div class="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
             {[
               { category: "Organization", items: [
@@ -125,7 +125,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <!-- ——— Subprocessors ——— -->
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-[1200px]">
-          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Subprocessors</p>
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Subprocessors</h2>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
@@ -157,7 +157,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <!-- ——— Resources ——— -->
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-[1200px]">
-          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Resources</p>
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Resources</h2>
           <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
             {[
               { title: "Data Processing Agreement", body: "GDPR&#8209;compliant DPA for your records." },
@@ -185,7 +185,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <!-- ——— FAQ ——— -->
       <section class="px-6 py-10 lg:py-12">
         <div class="mx-auto max-w-[1200px]">
-          <p class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">FAQ</p>
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">FAQ</h2>
           <div class="max-w-4xl space-y-8">
             {[
               { q: "Is customer data used to train AI models?", a: "No. Customer data is never used for model training. AI queries are scoped to the workspace and processed in real time without retention by the model provider." },
@@ -208,7 +208,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
     <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
       <div class="mx-auto max-w-[1200px] text-center">
         <p class="text-sm" style="color: var(--muted-foreground)">
-          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a> &#183; Built in the&#160;EU.
+          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
         </p>
       </div>
       <div
@@ -217,6 +217,18 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       ></div>
     </footer>
   </div>
+
+  <script is:inline type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Is customer data used to train AI models?", "acceptedAnswer": { "@type": "Answer", "text": "No. Customer data is never used for model training. AI queries are scoped to the workspace and processed in real time without retention by the model provider." }},
+      { "@type": "Question", "name": "Where is data stored?", "acceptedAnswer": { "@type": "Answer", "text": "You choose the region. Our managed cloud supports EU, US, and Swiss deployments. Self-hosted runs wherever you choose." }},
+      { "@type": "Question", "name": "Do you support SSO?", "acceptedAnswer": { "@type": "Answer", "text": "SSO via Google Workspace and Microsoft Entra is available as an enterprise add-on. SAML support is on the roadmap." }},
+      { "@type": "Question", "name": "Can I export all my data?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Full data export is available at any time in standard formats. There are no contractual or technical barriers to leaving." }},
+      { "@type": "Question", "name": "How do I report a vulnerability?", "acceptedAnswer": { "@type": "Answer", "text": "Email security@stll.app with details. We follow responsible disclosure practices and will acknowledge within 48 hours." }},
+    ],
+  })} />
 
   <style>
     .resource-card { cursor: pointer; }

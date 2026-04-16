@@ -1,37 +1,30 @@
-# Stella
+# stella
 
-> Open source legal workspace. Documents, matters, and research — powered by AI.
+> Open-source legal workspace for mid-size law firms. Documents, matters, review, and research in one place.
 
-Stella is a legal workspace built for mid-size law firms (5–50 lawyers). Core document management features are free forever. AI-powered review, research, and drafting are usage-based.
+stella is built for firms that need control. Matters, documents, and search are free to use. AI-powered review, research, and drafting are billed by usage. stella is open source, self-hostable, exportable, and designed for privileged legal work.
 
 ## Key facts
 
-- Open source (AGPL-3.0)
-- Built in the EU (stella labs, s.r.o., Czech Republic)
-- Self-hostable or cloud-hosted
-- AI outputs are grounded by citations
-- No per-seat pricing, no feature gates on core DMS
+- AGPL-3.0 for open-source use; commercial licensing is available when AGPL is not suitable.
+- AI outputs are grounded by citations and traceable to source material.
+- Sensitive text can be anonymized before AI workflows.
+- The AI layer uses the AI SDK and remains provider-agnostic.
+- No lock-in: standard files, full export, and no per-seat pricing on the core workspace.
 
-## Links
+## Start here
 
-- Website: https://stll.app
-- Application: https://app.stll.app
-- Source code: https://github.com/stella/stella
-- Documentation: https://docs.stll.app
-- Status: https://status.stll.app
+- [Website](https://stll.app): Product overview and pricing.
+- [Application](https://app.stll.app): Start using stella in the cloud.
+- [Contact](mailto:contact@stll.app): Deployment, pilots, and general questions.
 
-## Tech stack
+## Open source
 
-- Frontend: React 19, Vite, Tailwind CSS 4
-- Backend: Elysia (Bun runtime)
-- Database: PostgreSQL + Drizzle ORM
-- AI: Vercel AI SDK + Google Generative AI
-- Auth: better-auth
+- [Repository](https://github.com/stella/stella): Source code, issues, and contributions.
+- [Manifesto](https://github.com/stella/stella/blob/main/MANIFESTO.md): Product principles and positioning.
+- [License](https://github.com/stella/stella/blob/main/LICENSE): AGPL-3.0 license text.
 
-## Company
+## Trust
 
-stella labs, s.r.o.
-Nad Porubkou 2355, Poruba
-708 00 Ostrava, Czech Republic
-IČO: 24632872
-Contact: contact@stll.app
+- [Security](https://stll.app/security): Security posture and deployment options.
+- [Imprint](https://stll.app/imprint): Company details and legal contact.

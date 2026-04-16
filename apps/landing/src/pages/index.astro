@@ -1,6 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
+import ProductShowcase from "../components/react/ProductShowcase";
+import { controlCapabilities } from "../data/capabilities";
 ---
 
 <Base>
@@ -10,104 +12,93 @@ import ThemeToggle from "../components/ThemeToggle.astro";
   <main>
     <!-- ——— Hero ——— -->
     <section class="relative flex min-h-screen flex-col overflow-hidden">
+      <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
+        <div id="gradient-light" class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"></div>
+        <div id="gradient-dark" class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
+      </div>
       <nav class="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
-        <img src="/images/stella-logo.svg" alt="Stella" class="h-6 dark:invert" />
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
         <div class="flex items-center gap-4">
           <ThemeToggle />
-          <a
-            href="https://app.stll.app"
-            class="text-sm font-medium transition-colors"
-            style="color: var(--muted-foreground)"
-          >
-            Start free &rarr;
-          </a>
         </div>
       </nav>
 
       <div class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16">
+        <div
+          class="mb-8 inline-flex items-center gap-3 rounded-full px-4 py-2"
+          style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
+        >
+          <span
+            class="hero-beta-dot h-2.5 w-2.5 rounded-full"
+            style="background: var(--success)"
+            aria-hidden="true"
+          ></span>
+          <span class="text-xs font-semibold uppercase tracking-[0.18em]" style="color: var(--foreground)">
+            Now in beta
+          </span>
+        </div>
         <h1 class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl">
           Legal workspace.<br />Open source.
         </h1>
         <p class="mt-6 max-w-lg text-center text-lg leading-[1.7]" style="color: var(--muted-foreground)">
-          Documents, matters, and research in one place.
+          Documents, matters, review, and research in one place.
           <br />
-          Free core, usage&#8209;based AI, no&#160;lock&#8209;in.
+          Free to use, open to inspect, yours to keep.
         </p>
-        <a
-          href="https://app.stll.app"
-          class="mt-8 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+        <span
+          class="mt-8 inline-flex h-9 cursor-default items-center rounded-[0.625rem] px-4 text-sm font-medium opacity-60 whitespace-nowrap"
           style="background: var(--primary); color: var(--primary-foreground)"
         >
-          Start free
-        </a>
+          Coming soon
+        </span>
       </div>
 
       <div
         class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
-        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
-             ></div>
+        style="background: linear-gradient(to bottom, transparent, var(--background))"
+      ></div>
     </section>
 
     <!-- ——— Product ——— -->
     <section class="-mt-24 relative z-10 px-6 pb-16">
       <div class="mx-auto max-w-[1200px]">
-        <div
-          class="flex aspect-video items-center justify-center overflow-hidden rounded-2xl shadow-2xl"
-          style="background: var(--card); border: 1px solid var(--border)"
-        >
-          <span class="select-none text-lg" style="color: var(--muted-foreground)">
-            Product screenshot
-          </span>
-        </div>
+        <ProductShowcase />
       </div>
     </section>
-
-    <!-- ——— Value propositions ——— -->
-    <section class="px-6 py-16 lg:py-20">
-      <div class="mx-auto grid max-w-[1200px] grid-cols-1 gap-5 md:grid-cols-3">
-        {[
-          {
-            title: "Your data, your control",
-            body: "Self&#8209;host or use our cloud. EU\u00A0data residency. BYOK\u00A0encryption."
-          },
-          {
-            title: "Free forever",
-            body: "Unlimited users. Documents, matters, search. No\u00A0feature gates."
-          },
-          {
-            title: "Open source",
-            body: "Standard formats. Full export. Inspect every line of\u00A0code."
-          },
-        ].map((card) => (
-          <div class="rounded-2xl p-7" style="background: var(--card); border: 1px solid var(--border)">
-            <h3 class="mb-2 font-display text-lg font-medium">{card.title}</h3>
-            <p class="text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={card.body} />
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- ——— AI ——— -->
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-[1200px]">
-        <div class="mx-auto max-w-2xl text-center">
-          <p class="mb-3 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Intelligence</p>
-          <h2 class="font-display text-3xl font-medium leading-tight sm:text-4xl">
-            AI that cites its sources.
+        <div class="mx-auto max-w-4xl text-center">
+          <p class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Built to last</p>
+          <h2 class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl">
+            Ready for you.
+            <br />
+            And your agents.
+            <br />
+            And whatever comes next.
           </h2>
-          <p class="mt-4 text-base leading-[1.7]" style="color: var(--muted-foreground)">
-            Review, research, and draft with AI grounded in your
-            firm&#8217;s knowledge. Pay only for what you use.
+          <p class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg" style="color: var(--muted-foreground)">
+            Documents, matters, and search are free. AI-powered review, drafting, and research stay grounded in your workspace and trusted sources.
           </p>
+          <a
+            href="https://docs.stll.app"
+            class="mt-4 inline-flex text-sm font-medium transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+          >
+            Docs &rarr;
+          </a>
         </div>
-        <div
-          class="mt-10 flex aspect-video items-center justify-center overflow-hidden rounded-2xl shadow-2xl"
-          style="background: var(--card); border: 1px solid var(--border)"
-        >
-          <span class="select-none text-lg" style="color: var(--muted-foreground)">
-            AI screenshot
-          </span>
+
+        <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {controlCapabilities.slice(0, 3).map((card) => (
+            <div class="rounded-[1.45rem] p-6" style="background: var(--card); border: 1px solid var(--border)">
+              <h3 class="font-display text-lg font-medium tracking-tight">{card.title}</h3>
+              <p class="mt-2 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+                {card.body}
+              </p>
+            </div>
+          ))}
         </div>
+
       </div>
     </section>
 
@@ -118,14 +109,26 @@ import ThemeToggle from "../components/ThemeToggle.astro";
         <h2 class="mb-10 text-center font-display text-3xl font-medium sm:text-4xl">
           Simple, transparent.
         </h2>
+        <p class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8]" style="color: var(--muted-foreground)">
+          No lock-in, no per-seat licensing, no hidden pricing.
+        </p>
         <div class="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
           {[
-            { name: "Standard", price: "Free", features: ["Unlimited users", "Document management", "Matters\u00A0&\u00A0search", "Self\u2011hosting", "Community support"] },
-            { name: "Pro", price: "Usage\u2011based", features: ["Everything in Standard", "AI review\u00A0&\u00A0research", "Automated drafting", "Priority support"] },
+            {
+              name: "Standard",
+              price: "Free",
+              cta: "Coming soon",
+              features: ["Unlimited users", "Document management", "Matters\u00A0&\u00A0search", "Self\u2011hosting", "Community support"],
+            },
+            {
+              name: "Pro",
+              price: "Usage\u2011based",
+              cta: "Coming soon",
+              features: ["Everything in Standard", "AI review\u00A0&\u00A0research", "Automated drafting", "Priority support"],
+            },
           ].map((tier) => (
-            <a
-              href="https://app.stll.app"
-              class="pricing-card group flex flex-col rounded-2xl p-8 no-underline transition-all duration-200"
+            <div
+              class="pricing-card group flex flex-col rounded-2xl p-8 transition-all duration-200"
               style="background: var(--card); border: 1px solid var(--border); color: inherit"
             >
               <p class="text-xs font-medium uppercase tracking-[0.15em]" style="color: var(--muted-foreground)">{tier.name}</p>
@@ -135,12 +138,12 @@ import ThemeToggle from "../components/ThemeToggle.astro";
                 {tier.features.map((f) => <p set:html={f} />)}
               </div>
               <span
-                class="mt-8 inline-flex h-9 items-center self-start rounded-[0.625rem] px-4 text-sm font-medium"
+                class="mt-8 inline-flex h-9 cursor-default items-center self-start rounded-[0.625rem] px-4 text-sm font-medium opacity-60 whitespace-nowrap"
                 style="background: var(--primary); color: var(--primary-foreground)"
               >
-                Start free
+                {tier.cta}
               </span>
-            </a>
+            </div>
           ))}
         </div>
       </div>
@@ -151,25 +154,76 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       <div class="mx-auto max-w-[1200px]">
         <div class="grid grid-cols-1 gap-10 text-center md:grid-cols-3 md:gap-8">
           {[
-            { label: "Compliance", title: "Confidential by design", body: "Built in the\u00A0EU. Data stays where you\u00A0decide.", href: "/security", linkText: "Security \u2192" },
-            { label: "Scale", title: "Enterprise Ready", body: "SSO, audit logs, data residency, BYOK.", href: "https://docs.stll.app", linkText: "Documentation \u2192" },
-            { label: "Trust", title: "Transparent", body: "Fully open source. You see exactly what\u00A0runs.", href: "https://github.com/stella/stella", linkText: "View source \u2192" },
+            { label: "Deployment", title: "Self-host or managed cloud", body: "Choose the operating model that fits your firm. Move data on your timetable, not ours.", href: "mailto:contact@stll.app?subject=stella%20deployment", linkText: "Talk deployment \u2192" },
+            { label: "Security", title: "Confidential by design", body: "Least privilege, workspace isolation, and encryption for privileged work.", href: "/security", linkText: "Security \u2192" },
+            { label: "Scale", title: "Grows with you", body: "From solo practitioners to multinational teams.", href: "mailto:contact@stll.app?subject=stella%20scale", linkText: "Talk scale \u2192" },
           ].map((item) => (
-            <div>
+            <div class="flex flex-col">
               <p class="mb-1 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">{item.label}</p>
               <p class="font-display text-lg font-medium">{item.title}</p>
-              <p class="mt-1 text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={item.body} />
+              <p class="mt-1 flex-1 text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={item.body} />
               <a
                 href={item.href}
                 class="mt-2 inline-block text-sm font-medium transition-opacity hover:opacity-70"
                 style="color: var(--muted-foreground)"
-                target={item.href.startsWith("https://github") ? "_blank" : undefined}
-                rel={item.href.startsWith("https://github") ? "noopener noreferrer" : undefined}
               >
                 {item.linkText}
               </a>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ——— Final CTA ——— -->
+    <section class="px-6 pb-20 lg:pb-24">
+      <div
+        class="relative mx-auto max-w-[1200px] overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
+        style="background: var(--card); border: 1px solid var(--border)"
+      >
+        <div
+          class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-100 dark:opacity-28"
+          style="background-image: url('/images/gradient-hero.png')"
+          aria-hidden="true"
+        ></div>
+        <div
+          class="pointer-events-none absolute inset-0 dark:hidden"
+          style="background:
+            linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.34))"
+          aria-hidden="true"
+        ></div>
+        <div
+          class="pointer-events-none absolute inset-0 hidden dark:block"
+          style="background:
+            linear-gradient(180deg, color-mix(in srgb, var(--card) 74%, transparent), color-mix(in srgb, var(--card) 88%, transparent));
+            backdrop-filter: blur(2px)"
+          aria-hidden="true"
+        ></div>
+
+        <div class="relative z-10">
+        <div class="max-w-3xl">
+          <h2 class="font-display text-3xl font-medium leading-tight sm:text-4xl">
+            Start with a single click.
+            <br />
+            Bring us in when you need rollout help.
+          </h2>
+        </div>
+
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+          <span
+            class="inline-flex h-11 cursor-default items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium opacity-60 whitespace-nowrap"
+            style="background: var(--primary); color: var(--primary-foreground)"
+            >
+            Coming soon
+          </span>
+          <a
+            href="mailto:contact@stll.app?subject=stella%20walkthrough"
+            class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-colors whitespace-nowrap"
+            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+          >
+            Talk to us
+          </a>
+        </div>
         </div>
       </div>
     </section>
@@ -182,11 +236,21 @@ import ThemeToggle from "../components/ThemeToggle.astro";
         <nav class="flex items-center gap-4 text-sm" style="color: var(--muted-foreground)" aria-label="Footer">
           <a href="https://docs.stll.app" class="transition-opacity hover:opacity-70">Docs</a>
           <a href="https://github.com/stella/stella" class="transition-opacity hover:opacity-70" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a href="https://status.stll.app" class="transition-opacity hover:opacity-70">Status</a>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
           <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">Contact</a>
         </nav>
         <div class="flex items-center gap-4" aria-label="Social">
+          <a
+            href="https://github.com/stella/stella"
+            class="transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+          >
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 008.073 10.95c.59.11.805-.257.805-.57 0-.281-.01-1.024-.016-2.01-3.282.713-3.975-1.582-3.975-1.582-.536-1.362-1.31-1.725-1.31-1.725-1.072-.733.081-.718.081-.718 1.186.083 1.81 1.218 1.81 1.218 1.054 1.806 2.766 1.284 3.44.982.107-.764.413-1.285.752-1.58-2.62-.298-5.377-1.31-5.377-5.829 0-1.287.46-2.34 1.216-3.166-.122-.298-.527-1.5.116-3.126 0 0 .992-.317 3.25 1.209A11.33 11.33 0 0112 6.227c1.02.005 2.047.138 3.007.404 2.257-1.526 3.247-1.209 3.247-1.209.645 1.626.24 2.828.118 3.126.759.826 1.214 1.879 1.214 3.166 0 4.53-2.76 5.527-5.387 5.819.424.365.801 1.084.801 2.185 0 1.577-.014 2.85-.014 3.238 0 .316.212.686.81.569A11.502 11.502 0 0023.5 12C23.5 5.648 18.352.5 12 .5z"/></svg>
+          </a>
           <a
             href="https://x.com/stellaworkspace"
             class="transition-opacity hover:opacity-70"
@@ -210,21 +274,130 @@ import ThemeToggle from "../components/ThemeToggle.astro";
         </div>
       </div>
       <p class="mt-6 text-center text-sm sm:text-left" style="color: var(--muted-foreground)">
-        <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a> &#183; Built in the&#160;EU.
+        <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
       </p>
     </div>
     <div
       class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-      style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
          ></div>
   </footer>
 
   <style>
-    .pricing-card { cursor: pointer; }
-    .pricing-card:hover {
-      border-color: var(--primary) !important;
-      box-shadow: 0 0 0 1px var(--primary);
-      transform: translateY(-2px);
+    .hero-beta-dot {
+      animation: hero-beta-pulse 2.1s ease-out infinite;
     }
+
+    @keyframes hero-beta-pulse {
+      0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 30%, transparent);
+        transform: scale(1);
+      }
+      60% {
+        box-shadow: 0 0 0 8px color-mix(in srgb, var(--success) 0%, transparent);
+        transform: scale(1.04);
+      }
+      100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent);
+        transform: scale(1);
+      }
+    }
+
+    .pricing-card { cursor: default; }
   </style>
+
+  <script>
+    async function initGradient(containerId: string, svgUrl: string) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const resp = await fetch(svgUrl);
+      const svg = await resp.text();
+      container.innerHTML = svg;
+
+      const svgEl = container.querySelector("svg");
+      if (svgEl) {
+        svgEl.style.width = "100%";
+        svgEl.style.height = "100%";
+      }
+
+      // Select the last <g> — in dark mode the SVG has two groups
+      // (glow layer + sharp layer); we animate only the sharp layer.
+      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const group = groups[groups.length - 1] ?? null;
+      const rects = group ? [...group.querySelectorAll<SVGRectElement>("rect")] : [];
+      const filterId = group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/)?.[1] ?? "";
+      const n = rects.length;
+      if (n === 0) return;
+
+      const bases = rects.map((r) => {
+        const gradId = r.getAttribute("fill")?.match(/#(\w+)/)?.[1];
+        if (!gradId) return 0.5;
+        const grad = container.querySelector(`#${gradId}`);
+        if (!grad) return 0.5;
+        let max = 0;
+        for (const stop of grad.querySelectorAll("stop")) {
+          max = Math.max(max, parseFloat(stop.getAttribute("stop-opacity") ?? "0"));
+        }
+        return max;
+      });
+
+      const startTime = performance.now();
+
+      function loop() {
+        // Skip animation when this layer is hidden (opacity 0)
+        const layerEl = document.getElementById(containerId);
+        if (layerEl && getComputedStyle(layerEl).opacity === "0") {
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        const t = (performance.now() - startTime) / 1000;
+
+        const peak1 = 0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
+        const peak2 = 0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
+        const w1 = 0.18 + Math.sin(t * 0.03) * 0.06;
+        const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
+        const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
+
+        if (group) {
+          group.style.filter = `url(#${filterId}) hue-rotate(${hueShift.toFixed(1)}deg)`;
+        }
+
+        for (let i = 0; i < n; i++) {
+          const r = rects[i];
+          const norm = i / n;
+          const base = bases[i];
+          const isOdd = i % 2 === 1;
+
+          const d1 = Math.abs(norm - peak1);
+          const d2 = Math.abs(norm - peak2);
+          const envelope = Math.max(
+            Math.exp(-(d1 * d1) / (2 * w1 * w1)),
+            Math.exp(-(d2 * d2) / (2 * w2 * w2)),
+          );
+          const breathe = Math.sin(t * 0.35 + i * 0.2) * 0.08;
+          const opacity = base + envelope * 0.45 + breathe;
+
+          const dir = isOdd ? 1 : -1;
+          const sway = Math.sin(t * 0.22 + i * 0.25) * dir * 6;
+          const ySway = Math.cos(t * 0.15 + i * 0.18) * dir * 3;
+          const scaleX = 1 + Math.sin(t * 0.2 + i * 0.3) * 0.06;
+
+          r.setAttribute(
+            "transform",
+            `translate(${sway.toFixed(1)}, ${ySway.toFixed(1)}) scale(${scaleX.toFixed(3)}, 1)`,
+          );
+          r.style.opacity = Math.min(1.2, Math.max(0.08, opacity)).toFixed(3);
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    initGradient("gradient-light", "/images/gradients/hero-light.svg");
+    initGradient("gradient-dark", "/images/gradients/hero-dark.svg");
+  </script>
 </Base>

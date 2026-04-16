@@ -1,0 +1,345 @@
+<svg viewBox="0 0 1000 975" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<filter id="g2d-b" x="-10%" y="-3%" width="120%" height="106%">
+<feGaussianBlur stdDeviation="8 2"/>
+</filter>
+<filter id="g2d-glow" x="-20%" y="-10%" width="140%" height="120%">
+<feGaussianBlur stdDeviation="40 20"/>
+</filter>
+<linearGradient id="g2d0" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.003"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.045"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.200"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.366"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.421"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.416"/>
+</linearGradient>
+<linearGradient id="g2d1" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.090"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.215"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.295"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.328"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.337"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.329"/>
+</linearGradient>
+<linearGradient id="g2d2" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.025"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.143"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.288"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.343"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.353"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.353"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.346"/>
+</linearGradient>
+<linearGradient id="g2d3" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.001"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.023"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.086"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.179"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.258"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.284"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.290"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.291"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.285"/>
+</linearGradient>
+<linearGradient id="g2d4" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.003"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.063"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.171"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.225"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.240"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.250"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.255"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.254"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.250"/>
+</linearGradient>
+<linearGradient id="g2d5" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.082"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.180"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.222"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.236"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.245"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.249"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.249"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.244"/>
+</linearGradient>
+<linearGradient id="g2d6" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.001"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.010"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.065"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.125"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.146"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.157"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.164"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.169"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.172"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.173"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.169"/>
+</linearGradient>
+<linearGradient id="g2d7" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.002"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.086"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.142"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.155"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.161"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.168"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.173"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.176"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.175"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.173"/>
+</linearGradient>
+<linearGradient id="g2d8" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.011"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.029"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.087"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.115"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.121"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.127"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.132"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.135"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.137"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.137"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.135"/>
+</linearGradient>
+<linearGradient id="g2d9" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.018"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.043"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.094"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.106"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.110"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.116"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.120"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.122"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.123"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.123"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.123"/>
+</linearGradient>
+<linearGradient id="g2d10" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.018"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.039"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.086"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.096"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.103"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.107"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.112"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.115"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.116"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.116"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.114"/>
+</linearGradient>
+<linearGradient id="g2d11" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.007"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.020"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.051"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.063"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.071"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.073"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.076"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.080"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.082"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.082"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.080"/>
+</linearGradient>
+<linearGradient id="g2d12" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.005"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.018"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.048"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.064"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.069"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.075"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.078"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.079"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.080"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.081"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.079"/>
+</linearGradient>
+<linearGradient id="g2d13" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.001"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.005"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.025"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.032"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.039"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.042"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.043"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.045"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.045"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.044"/>
+</linearGradient>
+<linearGradient id="g2d14" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.001"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.005"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.010"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.017"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.021"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.022"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.023"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.024"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.029"/>
+</linearGradient>
+<linearGradient id="g2d15" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.017"/>
+</linearGradient>
+<linearGradient id="g2d19" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.002"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.006"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.013"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.008"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.004"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+<linearGradient id="g2d20" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.010"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.021"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.034"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.035"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.031"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.026"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.014"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.003"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+<linearGradient id="g2d21" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.060"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.070"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.074"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.076"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.073"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.069"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.060"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.040"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.002"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+<linearGradient id="g2d22" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.087"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.091"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.097"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.097"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.094"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.088"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.080"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.062"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.006"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+<linearGradient id="g2d23" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.117"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.119"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.124"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.124"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.123"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.117"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.108"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.086"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.009"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+<linearGradient id="g2d24" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#d4c8b8" stop-opacity="0.135"/>
+<stop offset="5%" stop-color="#d4c8b8" stop-opacity="0.137"/>
+<stop offset="15%" stop-color="#d4c8b8" stop-opacity="0.144"/>
+<stop offset="25%" stop-color="#d4c8b8" stop-opacity="0.145"/>
+<stop offset="35%" stop-color="#d4c8b8" stop-opacity="0.141"/>
+<stop offset="45%" stop-color="#d4c8b8" stop-opacity="0.135"/>
+<stop offset="55%" stop-color="#d4c8b8" stop-opacity="0.125"/>
+<stop offset="65%" stop-color="#d4c8b8" stop-opacity="0.075"/>
+<stop offset="75%" stop-color="#d4c8b8" stop-opacity="0.003"/>
+<stop offset="85%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+<stop offset="95%" stop-color="#d4c8b8" stop-opacity="0.000"/>
+</linearGradient>
+</defs>
+<rect width="1000" height="975" fill="#0c0a09"/>
+<g filter="url(#g2d-glow)">
+<rect x="-4.0" y="0" width="57.1" height="975" fill="url(#g2d0)" opacity="0.5"/>
+<rect x="36.8" y="0" width="57.1" height="975" fill="url(#g2d1)" opacity="0.5"/>
+<rect x="77.6" y="0" width="57.1" height="975" fill="url(#g2d2)" opacity="0.5"/>
+<rect x="118.4" y="0" width="57.1" height="975" fill="url(#g2d3)" opacity="0.5"/>
+<rect x="159.3" y="0" width="57.1" height="975" fill="url(#g2d4)" opacity="0.5"/>
+<rect x="200.1" y="0" width="57.1" height="975" fill="url(#g2d5)" opacity="0.5"/>
+<rect x="240.9" y="0" width="57.1" height="975" fill="url(#g2d6)" opacity="0.5"/>
+<rect x="281.7" y="0" width="57.1" height="975" fill="url(#g2d7)" opacity="0.5"/>
+<rect x="322.5" y="0" width="57.1" height="975" fill="url(#g2d8)" opacity="0.5"/>
+<rect x="363.3" y="0" width="57.1" height="975" fill="url(#g2d9)" opacity="0.5"/>
+<rect x="404.2" y="0" width="57.1" height="975" fill="url(#g2d10)" opacity="0.5"/>
+<rect x="445.0" y="0" width="57.1" height="975" fill="url(#g2d11)" opacity="0.5"/>
+<rect x="485.8" y="0" width="57.1" height="975" fill="url(#g2d12)" opacity="0.5"/>
+<rect x="526.6" y="0" width="57.1" height="975" fill="url(#g2d13)" opacity="0.5"/>
+<rect x="567.4" y="0" width="57.1" height="975" fill="url(#g2d14)" opacity="0.5"/>
+<rect x="608.2" y="0" width="57.1" height="975" fill="url(#g2d15)" opacity="0.5"/>
+<rect x="771.5" y="0" width="57.1" height="975" fill="url(#g2d19)" opacity="0.5"/>
+<rect x="812.3" y="0" width="57.1" height="975" fill="url(#g2d20)" opacity="0.5"/>
+<rect x="853.1" y="0" width="57.1" height="975" fill="url(#g2d21)" opacity="0.5"/>
+<rect x="894.0" y="0" width="57.1" height="975" fill="url(#g2d22)" opacity="0.5"/>
+<rect x="934.8" y="0" width="57.1" height="975" fill="url(#g2d23)" opacity="0.5"/>
+<rect x="975.6" y="0" width="57.1" height="975" fill="url(#g2d24)" opacity="0.5"/>
+</g>
+<g filter="url(#g2d-b)">
+<rect x="-4.0" y="0" width="57.1" height="975" fill="url(#g2d0)"/>
+<rect x="36.8" y="0" width="57.1" height="975" fill="url(#g2d1)"/>
+<rect x="77.6" y="0" width="57.1" height="975" fill="url(#g2d2)"/>
+<rect x="118.4" y="0" width="57.1" height="975" fill="url(#g2d3)"/>
+<rect x="159.3" y="0" width="57.1" height="975" fill="url(#g2d4)"/>
+<rect x="200.1" y="0" width="57.1" height="975" fill="url(#g2d5)"/>
+<rect x="240.9" y="0" width="57.1" height="975" fill="url(#g2d6)"/>
+<rect x="281.7" y="0" width="57.1" height="975" fill="url(#g2d7)"/>
+<rect x="322.5" y="0" width="57.1" height="975" fill="url(#g2d8)"/>
+<rect x="363.3" y="0" width="57.1" height="975" fill="url(#g2d9)"/>
+<rect x="404.2" y="0" width="57.1" height="975" fill="url(#g2d10)"/>
+<rect x="445.0" y="0" width="57.1" height="975" fill="url(#g2d11)"/>
+<rect x="485.8" y="0" width="57.1" height="975" fill="url(#g2d12)"/>
+<rect x="526.6" y="0" width="57.1" height="975" fill="url(#g2d13)"/>
+<rect x="567.4" y="0" width="57.1" height="975" fill="url(#g2d14)"/>
+<rect x="608.2" y="0" width="57.1" height="975" fill="url(#g2d15)"/>
+<rect x="771.5" y="0" width="57.1" height="975" fill="url(#g2d19)"/>
+<rect x="812.3" y="0" width="57.1" height="975" fill="url(#g2d20)"/>
+<rect x="853.1" y="0" width="57.1" height="975" fill="url(#g2d21)"/>
+<rect x="894.0" y="0" width="57.1" height="975" fill="url(#g2d22)"/>
+<rect x="934.8" y="0" width="57.1" height="975" fill="url(#g2d23)"/>
+<rect x="975.6" y="0" width="57.1" height="975" fill="url(#g2d24)"/>
+</g>
+</svg>

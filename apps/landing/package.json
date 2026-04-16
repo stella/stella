@@ -7,18 +7,26 @@
     "dev": "bun --bun astro dev",
     "build": "bun --bun astro build",
     "preview": "bun --bun astro preview",
+    "render:og-card": "node ./scripts/render-og-card.mjs",
     "typecheck": "bun --bun astro check",
     "lint": "echo 'no linter configured'",
     "format": "echo 'no formatter configured'"
   },
   "dependencies": {
+    "@astrojs/react": "^4.4.1",
     "@astrojs/sitemap": "^3.7.2",
+    "@stella/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "astro": "^6.1.5",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
     "typescript": "catalog:"
   }
 }
