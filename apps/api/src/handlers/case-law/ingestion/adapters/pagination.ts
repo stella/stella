@@ -210,12 +210,18 @@ export const createPagePaginatedFetch = <TResponse>(
           items.length >= opts.pageSize &&
           (total === undefined || total === null || fetched < total);
 
-        // When exhausted, park one page back so the next cycle
-        // only re-checks the tail for new entries. Never return
-        // null — that restarts from firstPage.
+        // When exhausted with results, park at the current page
+        // so the next cycle re-checks it for new entries.
+        // Parking at page-1 causes a ping-pong: page-1 (all
+        // skipped) → page (parks at page-1) → stagnation.
+        //
+        // When exhausted with zero results (overshot past end),
+        // step back so the cursor recovers into the valid range.
         const nextCursor = hasMore
           ? String(page + 1)
-          : String(Math.max(firstPage, page - 1));
+          : items.length > 0
+            ? String(page)
+            : String(Math.max(firstPage, page - 1));
 
         return { decisions, nextCursor };
       },
