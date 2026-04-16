@@ -10,6 +10,21 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
 import { and, eq, isNull } from "drizzle-orm";
 
+import type {
+  AnalysisHeading,
+  AnalysisInProgress,
+  DecisionAnalysis,
+  PersistedDecisionAnalysis,
+} from "@stella/case-law/analysis";
+import {
+  analysisHeadingSchema,
+  isAnalysisInProgress,
+  isAnalysisGenerating,
+  isDecisionAnalysis,
+} from "@stella/case-law/analysis";
+import type { DocumentAst } from "@stella/case-law/document-ast";
+import { hasUsableAst } from "@stella/case-law/document-ast";
+
 import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
@@ -18,20 +33,12 @@ import type { ScopedDb } from "@/api/db";
 // eslint-disable-next-line no-restricted-imports
 import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 
 import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
-import type { AnalysisHeading, DecisionAnalysis } from "./types";
-import {
-  analysisHeadingSchema,
-  isAnalysisGenerating,
-  isDecisionAnalysis,
-} from "./types";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
 
@@ -93,14 +100,13 @@ ${decisionText}`;
     const headings: AnalysisHeading[] = [];
 
     const persistPartial = async () => {
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      const partial = {
+      const partial: AnalysisInProgress = {
         version: 1,
         generatedAt: new Date().toISOString(),
         model: modelId,
         tree: headings,
         status: "generating",
-      } as unknown as DecisionAnalysis;
+      };
 
       await rootDb
         .update(caseLawDecisions)
@@ -158,7 +164,11 @@ ${decisionText}`;
 export const generateAnalysis = async (
   decisionId: string,
   scopedDb: ScopedDb,
-): Promise<{ status: string; analysis?: DecisionAnalysis; error?: string }> => {
+): Promise<{
+  status: "done" | "error" | "generating";
+  analysis?: PersistedDecisionAnalysis;
+  error?: string;
+}> => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: decisionId },
@@ -179,22 +189,17 @@ export const generateAnalysis = async (
   }
 
   // Return cached analysis (complete or partial with progress)
+  if (isAnalysisInProgress(decision.analysis)) {
+    return { status: "generating", analysis: decision.analysis };
+  }
+
   if (isDecisionAnalysis(decision.analysis)) {
-    const analysis = decision.analysis as DecisionAnalysis & {
-      status?: string;
-    };
-    // Partial result still generating — return as generating with tree
-    if (analysis.status === "generating") {
-      return { status: "generating", analysis: decision.analysis };
-    }
     return { status: "done", analysis: decision.analysis };
   }
 
   // Concurrent generation guard (old sentinel format without tree)
   if (isAnalysisGenerating(decision.analysis)) {
-    const startedAt = new Date(
-      (decision.analysis as { startedAt: string }).startedAt,
-    ).getTime();
+    const startedAt = new Date(decision.analysis.startedAt).getTime();
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
       return { status: "generating" };
     }
@@ -212,11 +217,10 @@ export const generateAnalysis = async (
   const [updated] = await rootDb
     .update(caseLawDecisions)
     .set({
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       analysis: {
         status: "generating",
         startedAt: new Date().toISOString(),
-      } as unknown as DecisionAnalysis,
+      },
     })
     .where(
       and(

@@ -11,6 +11,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { ExpenseForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
 import type { ExpenseFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form";
 import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
   useCreateExpense,
@@ -18,19 +19,6 @@ import {
   useUpdateExpense,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/expenses";
 import { expensesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
-
-const formatCurrencyAmount = (cents: number, currency: string): string => {
-  const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
-};
 
 type ExpenseListViewProps = {
   workspaceId: string;

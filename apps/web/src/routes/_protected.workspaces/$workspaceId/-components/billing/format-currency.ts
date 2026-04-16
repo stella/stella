@@ -7,15 +7,12 @@ export const formatCurrencyAmount = (
   currency: string,
 ): string => {
   const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
+  return formatCurrency({
+    amount,
+    currency,
+    minimumFractionDigits: 2,
+    fallback: `${amount.toFixed(2)} ${currency}`,
+  });
 };
 
 /**
@@ -27,17 +24,40 @@ export const formatCurrencyCompact = (
   currency: string,
 ): string => {
   const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `${Math.round(amount)} ${currency}`;
-  }
+  return formatCurrency({
+    amount,
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+    fallback: `${Math.round(amount)} ${currency}`,
+  });
 };
 
 /** Fallback currency when no entries exist. */
 export const DEFAULT_CURRENCY = "USD";
+
+const formatCurrency = ({
+  amount,
+  currency,
+  minimumFractionDigits,
+  maximumFractionDigits,
+  fallback,
+}: {
+  amount: number;
+  currency: string;
+  minimumFractionDigits: number;
+  maximumFractionDigits?: number;
+  fallback: string;
+}): string => {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits,
+      maximumFractionDigits,
+    }).format(amount);
+  } catch {
+    // Persisted billing currency codes are only length-validated today.
+    return fallback;
+  }
+};

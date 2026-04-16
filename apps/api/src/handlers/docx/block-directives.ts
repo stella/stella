@@ -53,6 +53,9 @@ const isRichPatchValue = (v: unknown): v is RichPatchValue =>
     !Array.isArray(v) &&
     "paragraphs" in v);
 
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 // ── Directive scanning ───────────────────────────────────
 
 const KIND_MAP: Record<string, BlockDirectiveKind> = {
@@ -537,7 +540,7 @@ export const processBlockDirectives = (
     contextData: Record<string, unknown>,
   ): void => {
     const arrayData = resolvePath(block.arrayPath, contextData);
-    const items = Array.isArray(arrayData) ? arrayData : [];
+    const items = isUnknownArray(arrayData) ? arrayData : [];
 
     const doc = bodyEl.ownerDocument;
     if (!doc) {
@@ -560,8 +563,6 @@ export const processBlockDirectives = (
     // Create expanded paragraphs for each item
     const expandedGroups: slimdom.Element[][] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
-      // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
       const item = items[itemIdx];
       const group: slimdom.Element[] = [];
 
@@ -604,8 +605,6 @@ export const processBlockDirectives = (
       if (!group) {
         continue;
       }
-      // TODO: FIXME — Array.isArray narrows unknown to any[] (TS lib limitation)
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- Array.isArray narrows unknown to any[]
       const item = items[itemIdx];
 
       // Build context for this iteration

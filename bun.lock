@@ -43,6 +43,7 @@
         "@opentelemetry/resources": "^2.6.1",
         "@opentelemetry/sdk-logs": "^0.214.0",
         "@react-email/render": "^2.0.6",
+        "@stella/case-law": "workspace:*",
         "@stella/permissions": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/transactional": "workspace:*",
@@ -128,6 +129,7 @@
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.9.0",
         "@stella/api": "workspace:*",
+        "@stella/case-law": "workspace:*",
         "@stella/permissions": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/ui": "workspace:*",
@@ -199,6 +201,17 @@
         "babel-plugin-react-compiler": "^1.0.0",
         "elysia": "catalog:",
         "react-grab": "0.1.31",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/case-law": {
+      "name": "@stella/case-law",
+      "version": "0.0.0",
+      "dependencies": {
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
         "typescript": "catalog:",
       },
     },
@@ -277,7 +290,6 @@
       "dependencies": {
         "@react-email/components": "^1.0.12",
         "react": "catalog:react19",
-        "react-dom": "catalog:react19",
         "use-intl": "catalog:",
       },
       "devDependencies": {
@@ -303,13 +315,11 @@
         "input-otp": "^1.4.2",
         "lucide-react": "catalog:",
         "react": "catalog:react19",
-        "react-dom": "catalog:react19",
         "tailwind-merge": "^3.4.1",
       },
       "devDependencies": {
         "@stella/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
-        "@types/react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "typescript": "catalog:",
       },
@@ -1370,6 +1380,8 @@
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
     "@stella/api": ["@stella/api@workspace:apps/api"],
+
+    "@stella/case-law": ["@stella/case-law@workspace:packages/case-law"],
 
     "@stella/desktop": ["@stella/desktop@workspace:apps/desktop"],
 

@@ -9,6 +9,32 @@
  */
 import { resolve } from "node:path";
 
+type JsonValue = string | JsonObject;
+type JsonObject = {
+  [key: string]: JsonValue;
+};
+
+const isJsonObject = (value: unknown): value is JsonObject =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every(
+    (entry): entry is JsonValue =>
+      typeof entry === "string" || isJsonObject(entry),
+  );
+
+const parseMessages = (json: string): JsonObject => {
+  const parsed: unknown = JSON.parse(json);
+  if (!isJsonObject(parsed)) {
+    console.error(
+      "Expected en.json to contain only nested objects and strings",
+    );
+    process.exit(1);
+  }
+
+  return parsed;
+};
+
 const langsDir = process.argv[2];
 
 if (!langsDir) {
@@ -20,13 +46,13 @@ const inputPath = resolve(langsDir, "en.json");
 const outputPath = resolve(langsDir, "messages.gen.ts");
 
 const json = await Bun.file(inputPath).text();
-const messages: unknown = JSON.parse(json);
+const messages = parseMessages(json);
 
 const indent = (depth: number) => "  ".repeat(depth);
 
 let keyCount = 0;
 
-const toLiteral = (value: unknown, depth: number): string => {
+const toLiteral = (value: JsonValue, depth: number): string => {
   if (typeof value === "string") {
     return JSON.stringify(value);
   }

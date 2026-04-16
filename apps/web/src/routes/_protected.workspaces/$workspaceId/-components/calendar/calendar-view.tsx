@@ -29,6 +29,8 @@ import {
 } from "./calendar-entity-chip";
 import { CalendarHeader } from "./calendar-header";
 import {
+  appendToMapArray,
+  formatMonthYearLabel,
   getEntityDate,
   getMonthDays,
   getWeekDays,
@@ -181,20 +183,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const entitiesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
 
-    const addEntry = (
-      date: string,
-      entity: CalendarEntry["entity"],
-      propertyId: string,
-    ) => {
-      const entry: CalendarEntry = { entity, propertyId };
-      const bucket = map.get(date);
-      if (bucket) {
-        bucket.push(entry);
-      } else {
-        map.set(date, [entry]);
-      }
-    };
-
     for (const entity of entityData.entities) {
       for (const propId of allDatePropertyIds) {
         const startDate = getEntityDate(entity, propId);
@@ -214,11 +202,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           const end = new Date(`${endDate}T00:00:00Z`);
           while (current <= end) {
             const iso = current.toISOString().slice(0, 10);
-            addEntry(iso, entity, propId);
+            appendToMapArray(map, iso, { entity, propertyId: propId });
             current.setUTCDate(current.getUTCDate() + 1);
           }
         } else {
-          addEntry(startDate, entity, propId);
+          appendToMapArray(map, startDate, { entity, propertyId: propId });
         }
       }
     }
@@ -356,11 +344,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     );
   }
 
-  const monthLabel = viewDate.toLocaleDateString(locale, {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
+  const monthLabel = formatMonthYearLabel(locale, year, month);
 
   const headerLabel =
     mode === "year"

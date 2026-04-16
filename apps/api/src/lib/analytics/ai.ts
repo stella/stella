@@ -8,7 +8,7 @@ import type {
 import { env } from "@/api/env";
 import { errorTag } from "@/api/lib/errors/utils";
 
-import { getAnalytics } from "./index";
+import { getAnalytics } from "./client";
 import type { Analytics } from "./types";
 
 type AnalyticsPrimitive = boolean | number | string;

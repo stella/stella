@@ -5,7 +5,12 @@ import { useLocale } from "use-intl";
 import { cn } from "@stella/ui/lib/utils";
 
 import type { CalendarDay } from "./calendar-utils";
-import { getMonthDays } from "./calendar-utils";
+import {
+  appendToMapArray,
+  getMonthDays,
+  getMonthLabels,
+  getWeekdayLabels,
+} from "./calendar-utils";
 
 /**
  * Entity dot descriptor for the year grid.
@@ -33,39 +38,21 @@ export const CalendarYearGrid = ({
 }: CalendarYearGridProps) => {
   const locale = useLocale();
 
-  const monthLabels = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat(locale, {
-      month: "long",
-      timeZone: "UTC",
-    });
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(Date.UTC(year, i, 1));
-      return fmt.format(d);
-    });
-  }, [locale, year]);
+  const monthLabels = useMemo(
+    () => getMonthLabels(locale, year, "long"),
+    [locale, year],
+  );
 
-  const weekdayLabels = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat(locale, {
-      weekday: "narrow",
-      timeZone: "UTC",
-    });
-    // 2024-01-01 is a Monday
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(Date.UTC(2024, 0, 1 + i));
-      return fmt.format(d);
-    });
-  }, [locale]);
+  const weekdayLabels = useMemo(
+    () => getWeekdayLabels(locale, "narrow"),
+    [locale],
+  );
 
   // Index dots by date for O(1) lookup
   const dotsByDate = useMemo(() => {
     const map = new Map<string, YearDot[]>();
     for (const dot of dots) {
-      const bucket = map.get(dot.date);
-      if (bucket) {
-        bucket.push(dot);
-      } else {
-        map.set(dot.date, [dot]);
-      }
+      appendToMapArray(map, dot.date, dot);
     }
     return map;
   }, [dots]);

@@ -1,34 +1,14 @@
-/**
- * Frontend mirror of the backend analysis types.
- * Kept minimal — only what the UI needs.
- */
-
 import type React from "react";
 
-export type AnalysisAnnotation = {
-  id: string;
-  summary: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  textSnippet: string;
-};
+import type {
+  AnalysisAnnotation,
+  AnalysisHeading,
+} from "@stella/case-law/analysis";
 
-export type AnalysisHeading = {
-  id: string;
-  label: string;
-  category: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  annotations: AnalysisAnnotation[];
-  children: AnalysisHeading[];
-};
-
-export type DecisionAnalysis = {
-  version: 1;
-  generatedAt: string;
-  model: string;
-  tree: AnalysisHeading[];
-};
+export type {
+  AnalysisAnnotation,
+  AnalysisHeading,
+} from "@stella/case-law/analysis";
 
 // ── Color system ──────────────────────────────────────────
 //

@@ -1,4 +1,3 @@
-import { runTranslators } from "../translators/registry";
 import type { PageMetadata } from "../types";
 
 type ContentMessage =
@@ -21,14 +20,10 @@ export default defineContentScript({
     /** Send initial page metadata to the service worker. */
     const sendMetadata = () => {
       const metadata = extractPageMetadata();
-      const translatorResult = runTranslators(metadata.url, document);
 
       void chrome.runtime.sendMessage({
         action: "page-metadata",
-        payload: {
-          ...metadata,
-          ...translatorResult,
-        },
+        payload: metadata,
       });
     };
 
@@ -43,12 +38,8 @@ export default defineContentScript({
 
         if (message.action === "get-page-metadata") {
           const metadata = extractPageMetadata();
-          const translatorResult = runTranslators(metadata.url, document);
           sendResponse({
-            metadata: {
-              ...metadata,
-              ...translatorResult,
-            },
+            metadata,
           });
           return true;
         }
@@ -71,7 +62,6 @@ export default defineContentScript({
       }, 300);
     });
 
-    // Run on load.
     sendMetadata();
   },
 });

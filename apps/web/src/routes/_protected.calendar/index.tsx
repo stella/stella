@@ -22,8 +22,11 @@ import { cn } from "@stella/ui/lib/utils";
 import type { WorkspaceEntity } from "@/lib/types";
 import type { CalendarDay } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import {
+  appendToMapArray,
+  formatMonthYearLabel,
   getEntityDate,
   getMonthDays,
+  getMonthLabels,
   getWeekdayLabels,
   getWeekDays,
   INTERNAL_DATE_IDS,
@@ -115,13 +118,7 @@ function CrossWorkspaceCalendar() {
           workspaceName: workspace.name,
           workspaceColor: workspace.color ?? null,
         };
-
-        const bucket = map.get(date);
-        if (bucket) {
-          bucket.push(entry);
-        } else {
-          map.set(date, [entry]);
-        }
+        appendToMapArray(map, date, entry);
       }
     }
 
@@ -186,25 +183,15 @@ function CrossWorkspaceCalendar() {
     });
   };
 
-  const monthLabel = viewDate.toLocaleDateString(locale, {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
+  const monthLabel = formatMonthYearLabel(locale, year, month);
 
   const weekLabel =
     mode === "week" ? `${days[0]?.date} – ${days[6]?.date}` : null;
 
-  const monthPickerMonths = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat(locale, {
-      month: "short",
-      timeZone: "UTC",
-    });
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(Date.UTC(year, i, 1));
-      return fmt.format(d);
-    });
-  }, [locale, year]);
+  const monthPickerMonths = useMemo(
+    () => getMonthLabels(locale, year, "short"),
+    [locale, year],
+  );
 
   const isLoading = entityQueries.some((q) => q.isLoading);
 

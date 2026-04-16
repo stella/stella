@@ -1,0 +1,24 @@
+{
+  "name": "@stella/case-law",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./analysis": {
+      "types": "./src/analysis.ts",
+      "import": "./src/analysis.ts"
+    },
+    "./document-ast": {
+      "types": "./src/document-ast.ts",
+      "import": "./src/document-ast.ts"
+    }
+  },
+  "dependencies": {
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

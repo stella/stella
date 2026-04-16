@@ -10,6 +10,8 @@ import {
   PopoverTrigger,
 } from "@stella/ui/components/popover";
 
+import { getMonthLabels } from "./calendar-utils";
+
 type CalendarHeaderProps = {
   headerLabel: string;
   year: number;
@@ -32,16 +34,10 @@ export const CalendarHeader = ({
   const t = useTranslations();
   const locale = useLocale();
 
-  const monthPickerMonths = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat(locale, {
-      month: "short",
-      timeZone: "UTC",
-    });
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(Date.UTC(year, i, 1));
-      return fmt.format(d);
-    });
-  }, [locale, year]);
+  const monthPickerMonths = useMemo(
+    () => getMonthLabels(locale, year, "short"),
+    [locale, year],
+  );
 
   return (
     <div className="flex min-w-0 items-center gap-2 px-4 py-2">

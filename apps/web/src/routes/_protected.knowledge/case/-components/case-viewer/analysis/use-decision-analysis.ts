@@ -9,9 +9,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 
-import { env } from "@/env";
+import type { DecisionAnalysis } from "@stella/case-law/analysis";
+import {
+  isAnalysisInProgress,
+  isDecisionAnalysis,
+} from "@stella/case-law/analysis";
 
-import type { DecisionAnalysis } from "./types";
+import { env } from "@/env";
 
 type AnalysisState =
   | { status: "idle" }
@@ -19,10 +23,41 @@ type AnalysisState =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "error"; message: string };
 
-const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
-  typeof val === "object" && val !== null && "version" in val && "tree" in val;
+type AnalysisResponse =
+  | { status: "done"; analysis?: unknown }
+  | { status: "error"; error?: string }
+  | { status: "generating"; analysis?: unknown };
 
 const POLL_INTERVAL_MS = 2000;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.status === "done" || value.status === "generating") {
+    return {
+      status: value.status,
+      analysis: value.analysis,
+    };
+  }
+
+  if (value.status === "error") {
+    return typeof value.error === "string"
+      ? {
+          status: value.status,
+          error: value.error,
+        }
+      : {
+          status: value.status,
+        };
+  }
+
+  return null;
+};
 
 export const useDecisionAnalysis = (
   decisionId: string,
@@ -31,7 +66,7 @@ export const useDecisionAnalysis = (
   const [state, setState] = useState<AnalysisState>(() => {
     if (
       isDecisionAnalysis(existingAnalysis) &&
-      !("status" in (existingAnalysis as object))
+      !isAnalysisInProgress(existingAnalysis)
     ) {
       return { status: "done", analysis: existingAnalysis };
     }
@@ -54,7 +89,7 @@ export const useDecisionAnalysis = (
 
       if (
         isDecisionAnalysis(existingAnalysis) &&
-        !("status" in (existingAnalysis as object))
+        !isAnalysisInProgress(existingAnalysis)
       ) {
         setState({ status: "done", analysis: existingAnalysis });
       } else {
@@ -65,7 +100,7 @@ export const useDecisionAnalysis = (
 
     if (
       isDecisionAnalysis(existingAnalysis) &&
-      !("status" in (existingAnalysis as object)) &&
+      !isAnalysisInProgress(existingAnalysis) &&
       state.status !== "done"
     ) {
       setState({ status: "done", analysis: existingAnalysis });
@@ -98,50 +133,43 @@ export const useDecisionAnalysis = (
 
     const data: unknown = await response.json();
 
-    if (typeof data === "object" && data !== null && "status" in data) {
-      // SAFETY: guarded by the `"status" in data` check above;
-      // each branch revalidates the payload before use.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      const obj = data as {
-        status: string;
-        analysis?: unknown;
-        error?: string;
-      };
-
-      if (obj.status === "done" && isDecisionAnalysis(obj.analysis)) {
+    const analysisResponse = parseAnalysisResponse(data);
+    if (analysisResponse) {
+      if (
+        analysisResponse.status === "done" &&
+        isDecisionAnalysis(analysisResponse.analysis)
+      ) {
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
-        setState({ status: "done", analysis: obj.analysis });
+        setState({ status: "done", analysis: analysisResponse.analysis });
         queryClient.setQueryData(
           ["case-law-decisions", decisionId],
           (old: Record<string, unknown> | undefined) =>
-            old ? { ...old, analysis: obj.analysis } : old,
+            old ? { ...old, analysis: analysisResponse.analysis } : old,
         );
         return true;
       }
 
-      if (obj.status === "generating") {
-        // SAFETY: partial results are optional on "generating" responses;
-        // we only read `.tree` with a nullish fallback below.
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        const partial = obj.analysis as DecisionAnalysis | undefined;
+      if (analysisResponse.status === "generating") {
         setState({
           status: "generating",
-          tree: partial?.tree ?? [],
+          tree: isDecisionAnalysis(analysisResponse.analysis)
+            ? analysisResponse.analysis.tree
+            : [],
         });
         return false;
       }
 
-      if (obj.status === "error") {
+      if (analysisResponse.status === "error") {
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
         setState({
           status: "error",
-          message: obj.error ?? "Generation failed",
+          message: analysisResponse.error ?? "Generation failed",
         });
         return true;
       }

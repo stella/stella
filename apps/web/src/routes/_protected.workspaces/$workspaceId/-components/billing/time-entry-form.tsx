@@ -19,6 +19,7 @@ import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { billingCodesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
 import { resolvedRateOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
@@ -43,19 +44,6 @@ type TimeEntryFormProps = {
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
-};
-
-const formatCurrencyAmount = (cents: number, currency: string): string => {
-  const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
 };
 
 export const TimeEntryForm = ({

@@ -22,7 +22,6 @@
   "dependencies": {
     "@react-email/components": "^1.0.12",
     "react": "catalog:react19",
-    "react-dom": "catalog:react19",
     "use-intl": "catalog:"
   },
   "devDependencies": {

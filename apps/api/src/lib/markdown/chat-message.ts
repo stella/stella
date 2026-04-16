@@ -70,12 +70,13 @@ const sanitizeHtml = (html: string): string => {
       continue;
     }
 
-    try {
-      const url = new URL(el.attribs.href, "https://placeholder.invalid");
-      if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
-        $(el).removeAttr("href");
-      }
-    } catch {
+    if (!URL.canParse(el.attribs.href, "https://placeholder.invalid")) {
+      $(el).removeAttr("href");
+      continue;
+    }
+
+    const url = new URL(el.attribs.href, "https://placeholder.invalid");
+    if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
       $(el).removeAttr("href");
     }
   }

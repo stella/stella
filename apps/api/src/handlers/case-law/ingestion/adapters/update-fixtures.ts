@@ -12,6 +12,7 @@
  *   bun run apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts --adapter sk-courts
  */
 
+import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapterKeys,
   loadAdapterByKey,
@@ -25,10 +26,7 @@ type FixtureRecord = {
   /** ISO timestamp of recording. */
   recordedAt: string;
   /** Raw fetchPage result (serialized SyncPage). */
-  page: {
-    decisions: unknown[];
-    nextCursor: string | null;
-  };
+  page: SyncPage;
 };
 
 const writeFixture = async (
