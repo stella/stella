@@ -1,0 +1,21 @@
+/* Override Starlight's purple accent with stella brand blue */
+:root,
+[data-theme="light"] {
+  --sl-color-accent-low: #deeaf5;
+  --sl-color-accent: #2a7ab5;
+  --sl-color-accent-high: #0f1419;
+  --sl-hue: 207;
+}
+
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --sl-color-accent-low: #0f2740;
+  --sl-color-accent: #59a1d4;
+  --sl-color-accent-high: #f0f4f8;
+}
+
+/* Constrain logo height in header */
+.site-title img {
+  height: 1.5rem;
+  width: auto;
+}
