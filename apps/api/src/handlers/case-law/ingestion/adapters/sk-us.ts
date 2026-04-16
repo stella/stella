@@ -131,7 +131,7 @@ type SearchDocument = {
   mkDifferentView?: string[];
   mkWordRegister?: string[];
   mkMaterialRegister?: string[];
-  mkComplainedLegalRegulation?: string;
+  mkComplainedLegalRegulation?: string | string[];
   mkFileReference?: string[];
   mkReferences?: string[];
   mkTypeOfProposer?: string;
@@ -161,6 +161,11 @@ const isOptionalStringArray = (
   value: unknown,
 ): value is string[] | null | undefined =>
   isNullish(value) || isStringArray(value);
+
+const isOptionalStringOrStringArray = (
+  value: unknown,
+): value is string | string[] | null | undefined =>
+  isNullish(value) || typeof value === "string" || isStringArray(value);
 
 const isOptionalBoolean = (
   value: unknown,
@@ -199,7 +204,7 @@ const isSearchDocument = (value: unknown): value is SearchDocument => {
     isOptionalStringArray(value.mkDifferentView) &&
     isOptionalStringArray(value.mkWordRegister) &&
     isOptionalStringArray(value.mkMaterialRegister) &&
-    isOptionalString(value.mkComplainedLegalRegulation) &&
+    isOptionalStringOrStringArray(value.mkComplainedLegalRegulation) &&
     isOptionalStringArray(value.mkFileReference) &&
     isOptionalStringArray(value.mkReferences) &&
     isOptionalString(value.mkTypeOfProposer) &&
@@ -333,7 +338,11 @@ const parseDocument = async (
       dissentingOpinion: dedupe(doc.mkDifferentView),
       wordRegister: dedupe(doc.mkWordRegister),
       materialRegister: dedupe(doc.mkMaterialRegister),
-      challengedLegislation: doc.mkComplainedLegalRegulation,
+      challengedLegislation: Array.isArray(doc.mkComplainedLegalRegulation)
+        ? doc.mkComplainedLegalRegulation
+        : doc.mkComplainedLegalRegulation
+          ? [doc.mkComplainedLegalRegulation]
+          : undefined,
       legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
       publicationDate: parseApiDate(doc.mkPublicationDate),
       references: doc.mkReferences,
