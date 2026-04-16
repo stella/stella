@@ -79,19 +79,64 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
   return stripHtml(match[1]).trim() || undefined;
 };
 
-/** Extract case number and date from the registry sign. */
+/** Roman numeral senate prefix → number for ECLI. */
+const SENATE_MAP: Record<string, string> = {
+  I: "1",
+  II: "2",
+  III: "3",
+  IV: "4",
+};
+
+/**
+ * Build ECLI from parsed case number components.
+ *
+ * Format: ECLI:CZ:US:{year}:{senate}.US.{index}.{shortYear}.{counter}
+ * Example: II.ÚS 3436/14 #1, year 2016 → ECLI:CZ:US:2016:2.US.3436.14.1
+ *
+ * The counter comes from the registry sign (`#1`), not hardcoded.
+ * Returns undefined if any component can't be parsed.
+ */
+const buildEcli = (
+  caseNumber: string,
+  decisionYear: number,
+  counter: number,
+): string | undefined => {
+  // "II.ÚS 3436/14" or "Pl.ÚS 24/10"
+  const match = /^([IVX]+|Pl)\.ÚS\s+(\d+)\/(\d+)$/.exec(caseNumber);
+  if (!match?.[1] || !match[2] || !match[3]) {
+    return undefined;
+  }
+  const senate = SENATE_MAP[match[1]] ?? match[1];
+  return `ECLI:CZ:US:${decisionYear}:${senate}.US.${match[2]}.${match[3]}.${counter}`;
+};
+
+/** Extract case number, date, and ECLI counter from the registry sign. */
 const parseRegistrySign = (
   raw: string,
-): { caseNumber: string; decisionDate?: string | undefined } | null => {
-  // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011"
+): {
+  caseNumber: string;
+  decisionDate?: string | undefined;
+  ecliCounter: number;
+} | null => {
+  // Format: "Pl.ÚS 24/10 #1 ze dne 22. 3. 2011"
   const match = REGISTRY_SIGN_PATTERN.exec(raw);
   if (!match?.[1] || !match[2]) {
     return null;
   }
 
+  const fullCaseRef = match[1].trim();
+  // Extract counter: "II.ÚS 3436/14 #1" → counter 1
+  const counterMatch = /#(\d+)$/.exec(fullCaseRef);
+  const ecliCounter = counterMatch?.[1]
+    ? Number.parseInt(counterMatch[1], 10)
+    : 1;
+  // Strip the counter from case number
+  const caseNumber = fullCaseRef.replace(/\s*#\d+$/, "");
+
   return {
-    caseNumber: match[1].trim(),
+    caseNumber,
     decisionDate: parseCeDate(match[2]),
+    ecliCounter,
   };
 };
 
@@ -156,6 +201,12 @@ const parseDecisionPage = (
 
   const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
 
+  // Build ECLI from case number + decision year + counter from registry sign.
+  const decisionYear = parsed.decisionDate
+    ? Number.parseInt(parsed.decisionDate.slice(0, 4), 10)
+    : year;
+  const ecli = buildEcli(parsed.caseNumber, decisionYear, parsed.ecliCounter);
+
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let resolvedFulltext = fulltext;
@@ -164,7 +215,7 @@ const parseDecisionPage = (
     const parserResult = parseUsDecisionHtml({
       html,
       caseNumber: parsed.caseNumber,
-      ecli: undefined,
+      ecli,
       court: "Ústavní soud",
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
@@ -182,6 +233,7 @@ const parseDecisionPage = (
 
   return {
     caseNumber: parsed.caseNumber,
+    ecli,
     court: "Ústavní soud",
     country: "CZE",
     language: "cs",
@@ -191,12 +243,14 @@ const parseDecisionPage = (
     sourceUrl,
     metadata: {
       caseNumber: parsed.caseNumber,
+      ecli,
       court: "Ústavní soud" as const,
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
       judge: judge || undefined,
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
+      ecliCounter: parsed.ecliCounter,
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
