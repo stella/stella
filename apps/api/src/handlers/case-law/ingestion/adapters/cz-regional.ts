@@ -125,10 +125,12 @@ type CzRegionalFinaldoc = {
   metadata?: {
     type?: string | null;
     solver?: FinaldocSolver | null;
-    caseResultType?: string | null;
+    caseNumber?: unknown;
+    caseResultType?: string | string[] | null;
     caseSubject?: string | null;
-    regulations?: string[] | null;
+    regulations?: unknown[] | null;
     flags?: string[] | null;
+    [key: string]: unknown;
   } | null;
 };
 
@@ -140,9 +142,9 @@ type FinaldocResult = {
   richMetadata: {
     decisionTypeRaw?: string;
     solver?: FinaldocSolver;
-    caseResultType?: string;
+    caseResultType?: string | string[];
     caseSubject?: string;
-    regulations?: string[];
+    regulations?: unknown[];
     flags?: string[];
   };
 };
@@ -176,22 +178,18 @@ const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
   typeof value.bold === "boolean" &&
   typeof value.italic === "boolean";
 
-const isNullishStringOrRecord = (value: unknown): boolean =>
-  value === undefined ||
-  value === null ||
-  typeof value === "string" ||
-  isRecord(value);
-
+/**
+ * Metadata validation is intentionally lenient: the court API
+ * evolves field types without notice (solver: string -> object,
+ * caseResultType: string -> string[], regulations: string[] ->
+ * object[]). Since metadata lands in an untyped JSONB column,
+ * we only require it to be a record and check `type` (needed
+ * for decision type mapping).
+ */
 const isCzRegionalMetadata = (
   value: unknown,
 ): value is NonNullable<CzRegionalFinaldoc["metadata"]> =>
-  isRecord(value) &&
-  isNullishString(value.type) &&
-  isNullishStringOrRecord(value.solver) &&
-  isNullishString(value.caseResultType) &&
-  isNullishString(value.caseSubject) &&
-  isOptionalStringArray(value.regulations) &&
-  isOptionalStringArray(value.flags);
+  isRecord(value) && isNullishString(value.type);
 
 const isCzRegionalFinaldoc = (value: unknown): value is CzRegionalFinaldoc =>
   isRecord(value) &&
@@ -296,8 +294,8 @@ const fetchFinaldoc = async (
     if (solver !== undefined) {
       richMetadata.solver = solver;
     }
-    const caseResultType = toOptionalValue(doc.metadata?.caseResultType);
-    if (caseResultType) {
+    const caseResultType = doc.metadata?.caseResultType ?? undefined;
+    if (caseResultType !== undefined) {
       richMetadata.caseResultType = caseResultType;
     }
     const caseSubject = toOptionalValue(doc.metadata?.caseSubject);
