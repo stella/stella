@@ -79,7 +79,11 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
   return stripHtml(match[1]).trim() || undefined;
 };
 
-/** Roman numeral senate prefix → number for ECLI. */
+/**
+ * Roman numeral senate prefix → number for ECLI.
+ * Pl (Plenary) is not mapped here; it is normalized
+ * to uppercase "PL" in buildEcli via explicit handling.
+ */
 const SENATE_MAP: Record<string, string> = {
   I: "1",
   II: "2",
@@ -106,38 +110,43 @@ const buildEcli = (
   if (!match?.[1] || !match[2] || !match[3]) {
     return undefined;
   }
-  const senate = SENATE_MAP[match[1]] ?? match[1];
+  const senate = SENATE_MAP[match[1]] ?? match[1].toUpperCase();
   return `ECLI:CZ:US:${decisionYear}:${senate}.US.${match[2]}.${match[3]}.${counter}`;
 };
 
-/** Extract case number, date, and ECLI counter from the registry sign. */
+/** Extract case number and date from the registry sign label. */
 const parseRegistrySign = (
   raw: string,
 ): {
   caseNumber: string;
   decisionDate?: string | undefined;
-  ecliCounter: number;
 } | null => {
-  // Format: "Pl.ÚS 24/10 #1 ze dne 22. 3. 2011"
+  // Format: "Pl.ÚS 24/10 ze dne 22. 3. 2011" (visible label, no counter)
   const match = REGISTRY_SIGN_PATTERN.exec(raw);
   if (!match?.[1] || !match[2]) {
     return null;
   }
 
-  const fullCaseRef = match[1].trim();
-  // Extract counter: "II.ÚS 3436/14 #1" → counter 1
-  const counterMatch = /#(\d+)$/.exec(fullCaseRef);
-  const ecliCounter = counterMatch?.[1]
-    ? Number.parseInt(counterMatch[1], 10)
-    : 1;
-  // Strip the counter from case number
-  const caseNumber = fullCaseRef.replace(/\s*#\d+$/, "");
-
   return {
-    caseNumber,
+    caseNumber: match[1].trim(),
     decisionDate: parseCeDate(match[2]),
-    ecliCounter,
   };
+};
+
+/**
+ * Extract ECLI counter from the hidden registry sign field.
+ *
+ * The visible lblRegistrySign omits the counter, but
+ * registrySignHidden includes it: "I.ÚS 100/25 #1 ze dne ...".
+ * Returns undefined if the counter is not present.
+ */
+const extractEcliCounter = (html: string): number | undefined => {
+  const hidden = /name="registrySignHidden"[^>]*value="([^"]*)"/.exec(html);
+  if (!hidden?.[1]) {
+    return undefined;
+  }
+  const counterMatch = /#(\d+)/.exec(hidden[1]);
+  return counterMatch?.[1] ? Number.parseInt(counterMatch[1], 10) : undefined;
 };
 
 /** Extract fulltext body from DocContent table. */
@@ -201,11 +210,17 @@ const parseDecisionPage = (
 
   const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
 
-  // Build ECLI from case number + decision year + counter from registry sign.
+  // Build ECLI from case number + decision year + counter.
+  // Counter comes from registrySignHidden (not the visible label).
+  // ECLI is only built when both decision year and counter are known.
   const decisionYear = parsed.decisionDate
     ? Number.parseInt(parsed.decisionDate.slice(0, 4), 10)
-    : year;
-  const ecli = buildEcli(parsed.caseNumber, decisionYear, parsed.ecliCounter);
+    : undefined;
+  const ecliCounter = extractEcliCounter(html);
+  const ecli =
+    decisionYear !== undefined && ecliCounter !== undefined
+      ? buildEcli(parsed.caseNumber, decisionYear, ecliCounter)
+      : undefined;
 
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
@@ -250,7 +265,7 @@ const parseDecisionPage = (
       judge: judge || undefined,
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
-      ecliCounter: parsed.ecliCounter,
+      ecliCounter,
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
