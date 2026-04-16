@@ -45,6 +45,9 @@
       ],
       "ignoreDependencies": ["react-grab", "@libpdf/core", "idb"]
     },
+    "apps/docs": {
+      "entry": ["src/**/*.astro", "src/content.config.ts", "astro.config.*"]
+    },
     "apps/landing": {
       "entry": ["src/**/*.astro", "astro.config.*"]
     },
