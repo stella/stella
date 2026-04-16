@@ -87,7 +87,7 @@ describe("createPagePaginatedFetch", () => {
     expect(page.nextCursor).toBe("2");
   });
 
-  test("parks cursor one page back on last page", async () => {
+  test("parks cursor at current page when exhausted", async () => {
     await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
     restore = await mockFetchWithFixtures([
       { pattern: "/test-api", fixture: FIXTURE_NAME },
@@ -96,9 +96,50 @@ describe("createPagePaginatedFetch", () => {
     const fetchPage = createTestFetch();
     const result = await fetchPage(null, {});
     const page = result.unwrap();
-    // Should park at firstPage (1) instead of null to avoid
-    // restarting the full scan.
+    // Parks at current page (1), not page-1. Parking at page-1
+    // causes a ping-pong where the cursor bounces between two
+    // adjacent pages, triggering the pipeline's stagnation
+    // detector and preventing forward progress.
     expect(page.nextCursor).toBe("1");
+  });
+
+  test("parking at current page avoids ping-pong stagnation", async () => {
+    // Simulates the bug: adapter has 7 full pages (0-6) then a
+    // partial page 7. Without the fix, parking at page-1 causes:
+    //   cursor 6 → advance to 7 → park at 6 → stagnation
+    // With the fix, parking at current page:
+    //   cursor 7 → park at 7 → next cycle starts at 7 → same
+    //   cursor detected by pipeline stagnation → clean stop
+
+    // Page with fewer items than pageSize = last page
+    await saveFixture(FIXTURE_NAME, makeFixture([{ id: 1 }], 1));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const fetchPage = createTestFetch({ zeroIndexed: true });
+    const result = await fetchPage("7", {});
+    const page = result.unwrap();
+    // Must park at 7 (current), NOT 6 (page-1)
+    expect(page.nextCursor).toBe("7");
+  });
+
+  test("steps back when page returns zero results (overshoot)", async () => {
+    // If the cursor is past the last valid page (API shrank or
+    // manual cursor set), the empty response should step back
+    // into the valid range instead of parking at an out-of-range
+    // cursor forever.
+    await saveFixture(FIXTURE_NAME, makeFixture([], 0));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+
+    const fetchPage = createTestFetch({ zeroIndexed: true });
+    const result = await fetchPage("10", {});
+    const page = result.unwrap();
+    expect(page.decisions).toHaveLength(0);
+    // Steps back to 9, not parks at 10
+    expect(page.nextCursor).toBe("9");
   });
 
   test("returns error for invalid cursor", async () => {
