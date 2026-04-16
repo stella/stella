@@ -6,17 +6,14 @@
 export const decodeCursor = (
   cursor: string,
 ): { score: number; id: string } | null => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString();
-    const [scoreStr, id] = decoded.split(":");
-    const score = Number(scoreStr);
-    if (Number.isNaN(score) || !id) {
-      return null;
-    }
-    return { score, id };
-  } catch {
+  const decoded = Buffer.from(cursor, "base64").toString();
+  const [scoreStr, id] = decoded.split(":");
+  const score = Number(scoreStr);
+  if (Number.isNaN(score) || !id) {
     return null;
   }
+
+  return { score, id };
 };
 
 export const encodeCursor = (score: number, id: string): string =>

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { getDocumentAstMetadata } from "@stella/case-law/document-ast";
 import { Button } from "@stella/ui/components/button";
 
 /**
@@ -27,21 +28,11 @@ const humanizeSourceUrl = (url: string): string => {
 
 /** Extract a human-readable label from a source URL. */
 const sourceLabel = (url: string): string => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
+  if (!URL.canParse(url)) {
     return url;
   }
-};
 
-type DocumentAstMetadata = {
-  caseNumber: string | null;
-  ecli: string | null;
-  court: string | null;
-  decisionDate: string | null;
-  decisionType: string | null;
-  keywords: string[];
-  statutes: string[];
+  return new URL(url).hostname.replace(/^www\./, "");
 };
 
 type MetadataPanelProps = {
@@ -116,26 +107,6 @@ const TagList = ({ label, values }: { label: string; values: string[] }) => {
   );
 };
 
-const parseAstMetadata = (raw: unknown): DocumentAstMetadata | null => {
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-  const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("metadata" in parsed)
-  ) {
-    return null;
-  }
-  // SAFETY: runtime-narrowed JSONB structure; `"metadata" in parsed`
-  // guarantees the key exists. Two casts bridge unknown to typed.
-  /* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
-  const { metadata } = parsed as Record<string, unknown>;
-  return (metadata ?? null) as DocumentAstMetadata | null;
-  /* eslint-enable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
-};
-
 /** Source-specific fields (excludes duplicates of AST metadata). */
 const SOURCE_FIELD_LABELS: Record<string, string> = {
   kategorieRozhodnuti: "Kategorie rozhodnutí",
@@ -153,7 +124,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
 
-  const astMeta = parseAstMetadata(decision.documentAst);
+  const astMeta = getDocumentAstMetadata(decision.documentAst);
   const sourceMeta = decision.metadata ?? {};
   const popularName = getPopularName(sourceMeta);
 

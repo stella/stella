@@ -5,6 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
+import { parseDocumentAst } from "@stella/case-law/document-ast";
+
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
@@ -31,37 +33,6 @@ export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
     ),
   component: DecisionViewer,
 });
-
-type AstBlock = {
-  type: string;
-  anchorId: string;
-  level?: number;
-  plainText: string;
-  role?: string;
-};
-
-type DocumentAst = {
-  blocks: AstBlock[];
-};
-
-const isDocumentAst = (val: unknown): val is DocumentAst =>
-  typeof val === "object" &&
-  val !== null &&
-  "blocks" in val &&
-  // SAFETY: `"blocks" in val` narrows val; Record cast reads it.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  Array.isArray((val as Record<string, unknown>).blocks);
-
-const parseDocumentAst = (raw: unknown): DocumentAst | null => {
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-  if (typeof raw === "string") {
-    const parsed: unknown = JSON.parse(raw);
-    return isDocumentAst(parsed) ? parsed : null;
-  }
-  return isDocumentAst(raw) ? raw : null;
-};
 
 function DecisionViewer() {
   const rawParam = Route.useParams({ select: (p) => p.decisionId });

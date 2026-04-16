@@ -5,6 +5,7 @@ import { Button } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 
 type Expense = {
   id: string;
@@ -32,19 +33,6 @@ const STATUS_STYLES: Record<string, string> = {
   approved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   billed: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   written_off: "bg-red-500/10 text-red-700 dark:text-red-400",
-};
-
-const formatCurrencyAmount = (cents: number, currency: string): string => {
-  const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
 };
 
 export const ExpenseRow = ({

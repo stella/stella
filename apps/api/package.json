@@ -40,6 +40,7 @@
     "@opentelemetry/resources": "^2.6.1",
     "@opentelemetry/sdk-logs": "^0.214.0",
     "@react-email/render": "^2.0.6",
+    "@stella/case-law": "workspace:*",
     "@stella/permissions": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/transactional": "workspace:*",

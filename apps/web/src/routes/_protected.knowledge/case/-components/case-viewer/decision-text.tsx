@@ -3,55 +3,13 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { Block, DocumentAst, Inline } from "@stella/case-law/document-ast";
+import { parseDocumentAst } from "@stella/case-law/document-ast";
 import { cn } from "@stella/ui/lib/utils";
 
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
 import { buildSearchResults } from "./decision-search";
 import "./reader.css";
-
-type Inline =
-  | { type: "text"; text: string; anonymized?: true }
-  | { type: "bold"; children: Inline[] }
-  | { type: "italic"; children: Inline[] }
-  | { type: "link"; href: string; children: Inline[] }
-  | { type: "line-break" };
-
-type HeadingBlock = {
-  id: string;
-  anchorId: string;
-  type: "heading";
-  level: 1 | 2 | 3;
-  role?: string;
-  inlines: Inline[];
-  plainText: string;
-};
-
-type ParagraphBlock = {
-  id: string;
-  anchorId: string;
-  type: "paragraph";
-  role?: string;
-  inlines: Inline[];
-  plainText: string;
-};
-
-type TableCell = { inlines: Inline[]; plainText: string };
-
-type TableBlock = {
-  id: string;
-  anchorId: string;
-  type: "table";
-  role?: string;
-  rows: TableCell[][];
-  plainText: string;
-};
-
-type Block = HeadingBlock | ParagraphBlock | TableBlock;
-
-type DocumentAst = {
-  version: 1;
-  blocks: Block[];
-};
 
 type Decision = {
   caseNumber: string;
@@ -91,26 +49,6 @@ type SynchronousNode =
 const SUPPLEMENT_LEGAL_SENTENCE_ID = "supplement-legal-sentence";
 const SUPPLEMENT_ABSTRACT_ID = "supplement-abstract";
 const DECISION_REFERENCE_ID = "decision-reference";
-
-const isDocumentAst = (val: unknown): val is DocumentAst =>
-  typeof val === "object" &&
-  val !== null &&
-  "blocks" in val &&
-  // SAFETY: `"blocks" in val` narrows val to object with
-  // the blocks key; Record cast reads it for Array.isArray.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  Array.isArray((val as Record<string, unknown>).blocks);
-
-const parseDocumentAst = (raw: unknown): DocumentAst | null => {
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-  if (typeof raw === "string") {
-    const parsed: unknown = JSON.parse(raw);
-    return isDocumentAst(parsed) ? parsed : null;
-  }
-  return isDocumentAst(raw) ? raw : null;
-};
 
 const isHoldingBlock = (block: Block): boolean =>
   block.type === "paragraph" && block.role === "holding";

@@ -82,6 +82,48 @@ export const getWeekDays = (referenceDate: Date): CalendarDay[] => {
   return days;
 };
 
+const getDateFormatter = (
+  locale: string,
+  options: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat => new Intl.DateTimeFormat(locale, options);
+
+export const getMonthLabels = (
+  locale: string,
+  year: number,
+  format: "short" | "long",
+): string[] => {
+  const fmt = getDateFormatter(locale, {
+    month: format,
+    timeZone: "UTC",
+  });
+
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(year, i, 1));
+    return fmt.format(d);
+  });
+};
+
+export const formatMonthYearLabel = (
+  locale: string,
+  year: number,
+  month: number,
+): string =>
+  getDateFormatter(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month, 1)));
+
+export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
+  const bucket = map.get(key);
+  if (bucket) {
+    bucket.push(value);
+    return;
+  }
+
+  map.set(key, [value]);
+};
+
 /**
  * Extract a date string from an entity for a given property ID.
  * Handles both custom date properties and internal properties.
@@ -148,8 +190,14 @@ export const isTaskDateProperty = (id: string) =>
  * Uses `Intl.DateTimeFormat` so labels follow the active locale.
  * 2024-01-01 is a Monday; we generate Mon→Sun from there.
  */
-export const getWeekdayLabels = (locale: string): string[] => {
-  const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
+export const getWeekdayLabels = (
+  locale: string,
+  format: "short" | "narrow" = "short",
+): string[] => {
+  const fmt = new Intl.DateTimeFormat(locale, {
+    weekday: format,
+    timeZone: "UTC",
+  });
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.UTC(2024, 0, 1 + i));
     return fmt.format(d);

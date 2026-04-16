@@ -27,6 +27,7 @@ import { cn } from "@stella/ui/lib/utils";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import {
+  formatMonthYearLabel,
   getMonthDays,
   getWeekdayLabels,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
@@ -168,11 +169,7 @@ export const DatePickerPopover = ({
   );
   const weekdays = useMemo(() => getWeekdayLabels(locale), [locale]);
 
-  const monthLabel = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(viewYear, viewMonth, 1)));
+  const monthLabel = formatMonthYearLabel(locale, viewYear, viewMonth);
 
   const navigatePrev = () => {
     if (viewMonth === 0) {

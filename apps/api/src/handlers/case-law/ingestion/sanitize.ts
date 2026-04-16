@@ -1,5 +1,12 @@
 import { isRecord } from "@/api/lib/type-guards";
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+type JsonObject = {
+  [key: string]: JsonPrimitive | JsonObject | JsonArray;
+};
+type JsonArray = JsonValue[];
+
 export const DANGEROUS_CHARS = new RegExp(
   "[" +
     "\x00" +
@@ -17,9 +24,17 @@ export const DANGEROUS_CHARS = new RegExp(
 export const stripDangerousChars = (value: string): string =>
   value.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
 
-const sanitizeMetadataValue = (value: unknown): unknown => {
+const sanitizeMetadataValue = (value: unknown): JsonValue => {
   if (typeof value === "string") {
     return stripDangerousChars(value);
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
+    return value;
   }
 
   if (Array.isArray(value)) {
@@ -27,14 +42,14 @@ const sanitizeMetadataValue = (value: unknown): unknown => {
   }
 
   if (isRecord(value)) {
-    const sanitized: Record<string, unknown> = {};
+    const sanitized: JsonObject = {};
     for (const [key, nestedValue] of Object.entries(value)) {
       sanitized[key] = sanitizeMetadataValue(nestedValue);
     }
     return sanitized;
   }
 
-  return value;
+  return null;
 };
 
 export const sanitizeMetadata = (

@@ -4,6 +4,9 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
+import type { PersistedDecisionAnalysis } from "@stella/case-law/analysis";
+import type { DocumentAst } from "@stella/case-law/document-ast";
+
 import { organization, user } from "@/api/db/auth-schema";
 import {
   chatPolicies,
@@ -27,8 +30,6 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import type { DecisionAnalysis } from "@/api/handlers/case-law/analysis/types";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type {
@@ -1456,7 +1457,7 @@ export const caseLawDecisions = p.pgTable(
      * on-demand on first open, persisted permanently.
      * null = not yet generated.
      */
-    analysis: p.jsonb().$type<DecisionAnalysis>(),
+    analysis: p.jsonb().$type<PersistedDecisionAnalysis>(),
     /**
      * Parser version that produced documentAst. Compared
      * against the adapter's current version on read; stale

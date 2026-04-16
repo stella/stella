@@ -71,7 +71,3 @@ export type GetMattersResponse =
 export type GetActiveMatterResponse = {
   matter: Matter | null;
 };
-
-export type GetPageMetadataResponse = {
-  metadata: PageMetadata | null;
-};

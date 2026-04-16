@@ -93,7 +93,7 @@ export const AlphabetIndex = ({
   useEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
-      return;
+      return undefined;
     }
     recalc();
     const observer = new ResizeObserver(recalc);
