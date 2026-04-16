@@ -22,13 +22,15 @@
 
 <script is:inline>
   document.querySelector("#theme-toggle").addEventListener("click", function() {
-    const d = document.documentElement.classList;
-    if (d.contains("dark")) {
-      d.remove("dark");
-      localStorage.setItem("theme", "light");
+    var d = document.documentElement.classList;
+    var isDark = d.contains("dark");
+    var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    d.toggle("dark", !isDark);
+    // If toggling back to what the system prefers, clear the override
+    if ((!isDark && systemDark) || (isDark && !systemDark)) {
+      localStorage.removeItem("theme");
     } else {
-      d.add("dark");
-      localStorage.setItem("theme", "dark");
+      localStorage.setItem("theme", isDark ? "light" : "dark");
     }
   });
 </script>

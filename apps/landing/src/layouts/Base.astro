@@ -6,18 +6,16 @@ type Props = {
 };
 
 const {
-  title = "Stella — Legal Workspace",
-  description = "Documents, matters, and research — powered by AI. Free core. No lock-in.",
+  title = "stella — Legal Workspace",
+  description = "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+const socialImageUrl = new URL("/images/og-card.png", Astro.site);
 ---
 
 <!--
-  stll.app — Stella landing page
-  Open source legal workspace: https://github.com/stella/stella
-  Built with Astro, Tailwind CSS 4, Cabinet Grotesk, DM Sans.
-  stella labs, s.r.o. — Built in the EU.
+  stll.app — stella landing page
 -->
 <!doctype html>
 <html lang="en" class="scroll-smooth">
@@ -32,15 +30,23 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:site_name" content="Stella" />
+    <meta property="og:site_name" content="stella" />
     <meta property="og:url" content={canonicalUrl.href} />
+    <meta property="og:image" content={socialImageUrl.href} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@stellaworkspace" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImageUrl.href} />
+    <meta name="twitter:image:alt" content={description} />
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -50,13 +56,19 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 
-    <!-- Theme: resolve before first paint to prevent flash -->
+    <!-- Theme: follow system preference, allow manual override -->
     <script is:inline>
       (function() {
-        const t = localStorage.getItem("theme");
-        if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        var t = localStorage.getItem("theme");
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (t === "dark" || (!t && prefersDark)) {
           document.documentElement.classList.add("dark");
         }
+        // When no manual override, follow system changes in real time
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(e) {
+          if (localStorage.getItem("theme")) return;
+          document.documentElement.classList.toggle("dark", e.matches);
+        });
       })();
     </script>
 
@@ -64,7 +76,7 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
     <script is:inline type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      "name": "Stella",
+      "name": "stella",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Web",
       "description": description,
@@ -124,11 +136,6 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
         unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
       }
 
-      /*
-       * Typography craftsmanship:
-       * - OpenType ligatures and kerning enabled
-       * - Tabular figures for pricing alignment
-       */
       body {
         font-feature-settings:
           "kern" 1,
