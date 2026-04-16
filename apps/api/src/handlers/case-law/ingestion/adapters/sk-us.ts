@@ -134,6 +134,13 @@ type SearchDocument = {
   mkComplainedLegalRegulation?: string;
   mkFileReference?: string[];
   mkReferences?: string[];
+  mkTypeOfProposer?: string;
+  mkAffectedLegalRegulation?: string;
+  mkUnderage?: string;
+  mkIncludeToZnaU?: boolean;
+  mkEntryDate?: string;
+  mkFormOfEntry?: string;
+  mkTypeOfEntry?: string;
 };
 
 type SearchResponse = {
@@ -144,11 +151,21 @@ type SearchResponse = {
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
-const isOptionalString = (value: unknown): value is string | undefined =>
-  value === undefined || typeof value === "string";
+const isNullish = (value: unknown): value is null | undefined =>
+  value === undefined || value === null;
 
-const isOptionalStringArray = (value: unknown): value is string[] | undefined =>
-  value === undefined || isStringArray(value);
+const isOptionalString = (value: unknown): value is string | null | undefined =>
+  isNullish(value) || typeof value === "string";
+
+const isOptionalStringArray = (
+  value: unknown,
+): value is string[] | null | undefined =>
+  isNullish(value) || isStringArray(value);
+
+const isOptionalBoolean = (
+  value: unknown,
+): value is boolean | null | undefined =>
+  isNullish(value) || typeof value === "boolean";
 
 const isTokenResponse = (
   value: unknown,
@@ -184,7 +201,14 @@ const isSearchDocument = (value: unknown): value is SearchDocument => {
     isOptionalStringArray(value.mkMaterialRegister) &&
     isOptionalString(value.mkComplainedLegalRegulation) &&
     isOptionalStringArray(value.mkFileReference) &&
-    isOptionalStringArray(value.mkReferences)
+    isOptionalStringArray(value.mkReferences) &&
+    isOptionalString(value.mkTypeOfProposer) &&
+    isOptionalString(value.mkAffectedLegalRegulation) &&
+    isOptionalString(value.mkUnderage) &&
+    isOptionalBoolean(value.mkIncludeToZnaU) &&
+    isOptionalString(value.mkEntryDate) &&
+    isOptionalString(value.mkFormOfEntry) &&
+    isOptionalString(value.mkTypeOfEntry)
   );
 };
 
@@ -314,6 +338,13 @@ const parseDocument = async (
       publicationDate: parseApiDate(doc.mkPublicationDate),
       references: doc.mkReferences,
       fileReference: doc.mkFileReference,
+      typeOfProposer: doc.mkTypeOfProposer,
+      affectedLegalRegulation: doc.mkAffectedLegalRegulation,
+      underage: doc.mkUnderage,
+      includeToZnaU: doc.mkIncludeToZnaU,
+      entryDate: parseApiDate(doc.mkEntryDate),
+      formOfEntry: doc.mkFormOfEntry,
+      typeOfEntry: doc.mkTypeOfEntry,
     },
     rawHash,
     parserVersion: PARSER_VERSION,
