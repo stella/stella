@@ -7,6 +7,17 @@
     "ignore": "Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość.",
     "subject": "Zostałeś zaproszony do organizacji {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Sprawdź sesje",
+    "body": "Na Twoje konto zalogowano się z nowego urządzenia lub lokalizacji.",
+    "device": "Urządzenie",
+    "heading": "Wykryto nowe logowanie",
+    "ignore": "Jeśli to byłeś Ty, nie musisz nic robić. Jeśli nie rozpoznajesz tej aktywności, sprawdź swoje aktywne sesje i unieważnij te, których nie rozpoznajesz.",
+    "ipAddress": "Adres IP",
+    "preview": "Nowe logowanie z {device}",
+    "subject": "Nowe logowanie na Twoje konto Stella",
+    "time": "Czas"
+  },
   "otp": {
     "changeEmail": "Użyj tego kodu, aby zweryfikować swój nowy adres e-mail.",
     "emailVerification": "Użyj tego kodu, aby zweryfikować swój adres e-mail.",

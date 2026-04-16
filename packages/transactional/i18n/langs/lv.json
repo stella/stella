@@ -7,6 +7,17 @@
     "ignore": "Ja negaidījāt šo uzaicinājumu, varat droši ignorēt šo e-pastu.",
     "subject": "Jūs esat uzaicināts pievienoties {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Pārskatīt sesijas",
+    "body": "Jūsu kontā tika pieteicies no jaunas ierīces vai atrašanās vietas.",
+    "device": "Ierīce",
+    "heading": "Konstatēta jauna pieteikšanās",
+    "ignore": "Ja tas bijāt jūs, nekāda darbība nav nepieciešama. Ja neatpazīstat šo darbību, pārskatiet savas aktīvās sesijas un atsauciet tās, kuras neatpazīstat.",
+    "ipAddress": "IP adrese",
+    "preview": "Jauna pieteikšanās no {device}",
+    "subject": "Jauna pieteikšanās jūsu Stella kontā",
+    "time": "Laiks"
+  },
   "otp": {
     "changeEmail": "Izmantojiet šo kodu, lai apstiprinātu savu jauno e-pasta adresi.",
     "emailVerification": "Izmantojiet šo kodu, lai apstiprinātu savu e-pasta adresi.",

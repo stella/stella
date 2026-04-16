@@ -7,6 +7,17 @@
     "ignore": "Kui te ei oodanud seda kutset, võite selle e-kirja eirata.",
     "subject": "Teid on kutsutud liituma organisatsiooniga {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Vaata seansse",
+    "body": "Teie kontole logiti sisse uuest seadmest või asukohast.",
+    "device": "Seade",
+    "heading": "Tuvastati uus sisselogimine",
+    "ignore": "Kui see olite teie, ei ole vaja midagi teha. Kui te seda tegevust ei tunne ära, vaadake oma aktiivseid seansse ja tühistage need, mida te ei tunne ära.",
+    "ipAddress": "IP-aadress",
+    "preview": "Uus sisselogimine seadmest {device}",
+    "subject": "Uus sisselogimine teie Stella kontole",
+    "time": "Aeg"
+  },
   "otp": {
     "changeEmail": "Kasutage seda koodi oma uue e-posti aadressi kinnitamiseks.",
     "emailVerification": "Kasutage seda koodi oma e-posti aadressi kinnitamiseks.",

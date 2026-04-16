@@ -2,6 +2,7 @@ import { render } from "@react-email/render";
 import { panic } from "better-result";
 
 import * as BetterAuthOTP from "@stella/transactional/emails/better-auth-otp";
+import * as NewDeviceLogin from "@stella/transactional/emails/new-device-login";
 import * as OrganizationInvitation from "@stella/transactional/emails/organization-invitation";
 
 import { env } from "@/api/env";
@@ -74,6 +75,41 @@ export const sendOTPEmail = async ({
     from: env.TRANSACTIONAL_EMAIL_FROM,
     to: email,
     subject: BetterAuthOTP.subject(lang, otp),
+    html,
+  });
+};
+
+type SendNewDeviceLoginEmailProps = {
+  email: string;
+  device: string;
+  ipAddress: string;
+  time: string;
+  sessionsUrl: string;
+  lang: SupportedLang;
+};
+
+export const sendNewDeviceLoginEmail = async ({
+  email,
+  device,
+  ipAddress,
+  time,
+  sessionsUrl,
+  lang,
+}: SendNewDeviceLoginEmailProps) => {
+  const html = await render(
+    <NewDeviceLogin.Email
+      device={device}
+      ipAddress={ipAddress}
+      lang={lang}
+      sessionsUrl={sessionsUrl}
+      time={time}
+    />,
+  );
+
+  await getTransport().send({
+    from: env.TRANSACTIONAL_EMAIL_FROM,
+    to: email,
+    subject: NewDeviceLogin.subject(lang),
     html,
   });
 };

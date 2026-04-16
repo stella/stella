@@ -7,6 +7,17 @@
     "ignore": "Jei nesitikėjote šio kvietimo, galite nepaisyti šio el. laiško.",
     "subject": "Jūs pakviesti prisijungti prie {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Peržiūrėti sesijas",
+    "body": "Prie jūsų paskyros buvo prisijungta iš naujo įrenginio ar vietos.",
+    "device": "Įrenginys",
+    "heading": "Aptiktas naujas prisijungimas",
+    "ignore": "Jei tai buvote jūs, jokių veiksmų nereikia. Jei neatpažįstate šios veiklos, peržiūrėkite aktyvias sesijas ir atšaukite tas, kurių neatpažįstate.",
+    "ipAddress": "IP adresas",
+    "preview": "Naujas prisijungimas iš {device}",
+    "subject": "Naujas prisijungimas prie jūsų Stella paskyros",
+    "time": "Laikas"
+  },
   "otp": {
     "changeEmail": "Naudokite šį kodą naujo el. pašto adreso patvirtinimui.",
     "emailVerification": "Naudokite šį kodą el. pašto adreso patvirtinimui.",

@@ -7,6 +7,17 @@
     "ignore": "Ak ste túto pozvánku nečakali, tento e-mail môžete ignorovať.",
     "subject": "Boli ste pozvaní do organizácie {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Skontrolovať relácie",
+    "body": "Do vášho účtu sa niekto prihlásil z nového zariadenia alebo miesta.",
+    "device": "Zariadenie",
+    "heading": "Zistené nové prihlásenie",
+    "ignore": "Ak ste to boli vy, nie je potrebné nič robiť. Ak túto aktivitu nespoznávate, skontrolujte svoje aktívne relácie a zrušte tie, ktoré nespoznávate.",
+    "ipAddress": "IP adresa",
+    "preview": "Nové prihlásenie z {device}",
+    "subject": "Nové prihlásenie do vášho účtu Stella",
+    "time": "Čas"
+  },
   "otp": {
     "changeEmail": "Použite tento kód na overenie vašej novej e-mailovej adresy.",
     "emailVerification": "Použite tento kód na overenie vašej e-mailovej adresy.",

@@ -2,7 +2,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import {
   bearer,
   emailOTP,
@@ -24,15 +24,20 @@ import { db } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
-import { identify } from "@/api/lib/analytics";
+import { captureError, identify } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
-import { sendOrganizationInvitation, sendOTPEmail } from "@/api/lib/email";
+import {
+  sendNewDeviceLoginEmail,
+  sendOrganizationInvitation,
+  sendOTPEmail,
+} from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
+import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -44,6 +49,8 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
+
+const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -331,6 +338,97 @@ const createAuth = () => {
         },
       }) as BetterAuthPlugin,
     ],
+    hooks: {
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== VERIFY_EMAIL_PATH || env.isDev) {
+          return;
+        }
+
+        const newSession = ctx.context.newSession;
+        if (!newSession) {
+          return;
+        }
+
+        try {
+          const { user, session } = newSession;
+
+          const previousSessions = await db.query.session.findMany({
+            where: {
+              userId: user.id,
+              id: { ne: session.id },
+            },
+            orderBy: { createdAt: "desc" },
+            limit: 10,
+            columns: {
+              ipAddress: true,
+              userAgent: true,
+            },
+          });
+
+          if (previousSessions.length === 0) {
+            return;
+          }
+
+          const knownIPs = new Set(
+            previousSessions
+              .map((previous) => previous.ipAddress)
+              .filter(Boolean),
+          );
+          const knownDevices = new Set(
+            previousSessions
+              .map((previous) => {
+                const previousDevice = parseUserAgent(previous.userAgent);
+                return `${previousDevice.browser}|${previousDevice.os}`;
+              })
+              .filter((device) => device !== "null|null"),
+          );
+
+          const currentDevice = parseUserAgent(session.userAgent);
+          const deviceKey = `${currentDevice.browser}|${currentDevice.os}`;
+          const currentIpAddress = session.ipAddress;
+          const isNewIP =
+            typeof currentIpAddress === "string" &&
+            !knownIPs.has(currentIpAddress);
+          const hasDevice =
+            currentDevice.browser !== null || currentDevice.os !== null;
+          const isNewDevice = hasDevice && !knownDevices.has(deviceKey);
+
+          if (!isNewIP && !isNewDevice) {
+            return;
+          }
+
+          const deviceLabel =
+            currentDevice.browser && currentDevice.os
+              ? `${currentDevice.browser} on ${currentDevice.os}`
+              : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
+          const lang = extractLangFromRequest(ctx.request);
+          const formattedTime = new Intl.DateTimeFormat(lang, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZone: "UTC",
+            timeZoneName: "short",
+          }).format(session.createdAt);
+
+          ctx.context.runInBackground(
+            sendNewDeviceLoginEmail({
+              email: user.email,
+              device: deviceLabel,
+              ipAddress: session.ipAddress ?? "Unknown",
+              time: formattedTime,
+              sessionsUrl: `${env.FRONTEND_URL}/account/sessions`,
+              lang,
+            }).catch((error: unknown) => {
+              captureError(error, { source: "new-device-login-email" });
+            }),
+          );
+        } catch (error) {
+          captureError(error, { source: "new-device-login-hook" });
+        }
+      }),
+    },
   });
   return auth;
 };
