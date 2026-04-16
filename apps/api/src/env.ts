@@ -1,26 +1,18 @@
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
+import { envBase } from "@/api/env-base";
+
 const HTTPS_PROTOCOL = "https:";
 
-export const env = createEnv({
+/**
+ * API-specific environment variables. These are only required
+ * when the full API server boots (auth, email, gotenberg, redis,
+ * etc.). Scripts and CLI tools that only need DB + S3 import
+ * envBase from env-base.ts instead.
+ */
+const envApi = createEnv({
   server: {
-    DATABASE_URL: v.pipe(v.string(), v.url()),
-    S3_ENDPOINT: v.string(),
-    S3_BUCKET: v.string(),
-    S3_ACCESS_KEY_ID: v.string(),
-    S3_SECRET_ACCESS_KEY: v.string(),
-    S3_REGION: v.string(),
-    POSTHOG_KEY: v.optional(v.string()),
-    POSTHOG_HOST: v.optional(v.string()),
-    POSTHOG_LOCAL_DEBUG: v.optional(
-      v.pipe(v.string(), v.parseBoolean()),
-      "false",
-    ),
-    POSTHOG_LOCAL_DEBUG_AI_CONTENT: v.optional(
-      v.pipe(v.string(), v.parseBoolean()),
-      "false",
-    ),
     AI_PROVIDER: v.optional(
       v.picklist([
         "google",
@@ -42,7 +34,6 @@ export const env = createEnv({
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
     REDIS_URL: v.pipe(v.string(), v.url()),
-    isDev: v.optional(v.boolean(), process.env.NODE_ENV !== "production"),
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
     BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
@@ -97,7 +88,6 @@ export const env = createEnv({
     ),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
-    SEARCH_PROVIDER: v.optional(v.picklist(["pg-fts", "paradedb"]), "pg-fts"),
     CONTENT_ENCRYPTION_KEY: v.optional(
       v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/i)),
     ),
@@ -115,6 +105,8 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,
 });
+
+export const env = { ...envBase, ...envApi };
 
 // Prevent accidental mutation of env vars at runtime.
 // Must run AFTER createEnv has consumed process.env.

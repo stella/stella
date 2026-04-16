@@ -1,4 +1,4 @@
-import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 
 import { shouldEnablePostHog } from "./config";
 import { noopAnalytics } from "./noop";
@@ -8,21 +8,21 @@ import type { Analytics } from "./types";
 let analytics: Analytics | null = null;
 
 export const isLocalPostHogDebugEnabled = (): boolean =>
-  env.isDev && env.POSTHOG_LOCAL_DEBUG;
+  envBase.isDev && envBase.POSTHOG_LOCAL_DEBUG;
 
 export const getAnalytics = (): Analytics => {
   if (analytics) {
     return analytics;
   }
 
-  const key = env.POSTHOG_KEY;
-  const host = env.POSTHOG_HOST;
+  const key = envBase.POSTHOG_KEY;
+  const host = envBase.POSTHOG_HOST;
   analytics =
     shouldEnablePostHog({
-      isDev: env.isDev,
+      isDev: envBase.isDev,
       key,
       host,
-      localDebug: env.POSTHOG_LOCAL_DEBUG,
+      localDebug: envBase.POSTHOG_LOCAL_DEBUG,
     }) &&
     key &&
     host

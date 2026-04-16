@@ -9,7 +9,7 @@ import {
   timeEntryStatusEnum,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
-import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 
 /**
  * Primary database handle connecting as postgres (table owner).
@@ -19,7 +19,7 @@ import { env } from "@/api/env";
  * Direct `db` usage is reserved for internal infrastructure
  * (workspace resolution in authMacro, better-auth).
  */
-export const db = drizzle(env.DATABASE_URL, {
+export const db = drizzle(envBase.DATABASE_URL, {
   relations: { ...relations, ...authRelationsPart },
   schema: {
     propertyStatusEnum,

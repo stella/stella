@@ -1,15 +1,19 @@
 import { S3Client } from "bun";
 
-import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 
 export const s3 = new S3Client({
   acl: "private",
-  bucket: env.S3_BUCKET,
-  endpoint: env.S3_ENDPOINT,
-  accessKeyId: env.S3_ACCESS_KEY_ID,
-  secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-  region: env.S3_REGION,
+  bucket: envBase.S3_BUCKET,
+  endpoint: envBase.S3_ENDPOINT,
+  region: envBase.S3_REGION,
+  ...(envBase.S3_ACCESS_KEY_ID && envBase.S3_SECRET_ACCESS_KEY
+    ? {
+        accessKeyId: envBase.S3_ACCESS_KEY_ID,
+        secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
+      }
+    : {}),
 });
 
 /**
