@@ -6,29 +6,29 @@ import {
   LoggerProvider,
 } from "@opentelemetry/sdk-logs";
 
-import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 import { shouldEnablePostHog } from "@/api/lib/analytics/config";
 
 const POSTHOG_LOGS_PATH = "/i/v1/logs";
 
 const loggerProvider = shouldEnablePostHog({
-  isDev: env.isDev,
-  key: env.POSTHOG_KEY,
-  host: env.POSTHOG_HOST,
-  localDebug: env.POSTHOG_LOCAL_DEBUG,
+  isDev: envBase.isDev,
+  key: envBase.POSTHOG_KEY,
+  host: envBase.POSTHOG_HOST,
+  localDebug: envBase.POSTHOG_LOCAL_DEBUG,
 })
   ? new LoggerProvider({
       resource: resourceFromAttributes({
         "service.name": "stella-api",
         "service.namespace": "stella",
-        "deployment.environment": env.isDev ? "development" : "production",
+        "deployment.environment": envBase.isDev ? "development" : "production",
       }),
       processors: [
         new BatchLogRecordProcessor(
           new OTLPLogExporter({
-            url: new URL(POSTHOG_LOGS_PATH, env.POSTHOG_HOST).toString(),
+            url: new URL(POSTHOG_LOGS_PATH, envBase.POSTHOG_HOST).toString(),
             headers: {
-              Authorization: `Bearer ${env.POSTHOG_KEY}`,
+              Authorization: `Bearer ${envBase.POSTHOG_KEY}`,
             },
           }),
         ),
