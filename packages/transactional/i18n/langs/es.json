@@ -7,6 +7,17 @@
     "ignore": "Si no esperaba esta invitación, puede ignorar este correo electrónico.",
     "subject": "Ha sido invitado a unirse a {organizationName}"
   },
+  "newDeviceLogin": {
+    "action": "Revisar sesiones",
+    "body": "Se ha iniciado sesión en su cuenta desde un nuevo dispositivo o ubicación.",
+    "device": "Dispositivo",
+    "heading": "Nuevo inicio de sesión detectado",
+    "ignore": "Si fue usted, no es necesario hacer nada. Si no reconoce esta actividad, revise sus sesiones activas y revoque las que no reconozca.",
+    "ipAddress": "Dirección IP",
+    "preview": "Nuevo inicio de sesión desde {device}",
+    "subject": "Nuevo inicio de sesión en su cuenta Stella",
+    "time": "Hora"
+  },
   "otp": {
     "changeEmail": "Utilice este código para verificar su nueva dirección de correo electrónico.",
     "emailVerification": "Utilice este código para verificar su dirección de correo electrónico.",

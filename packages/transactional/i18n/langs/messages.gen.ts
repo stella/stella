@@ -10,15 +10,26 @@ type Messages = {
     "ignore": "If you didn't expect this invitation, you can safely ignore this email.";
     "subject": "You're invited to join {organizationName}";
   };
+  "newDeviceLogin": {
+    "action": "Review sessions";
+    "body": "Your account was signed in to from a new device or location.";
+    "device": "Device";
+    "heading": "New sign-in detected";
+    "ignore": "If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.";
+    "ipAddress": "IP address";
+    "preview": "New sign-in from {device}";
+    "subject": "New sign-in to your Stella account";
+    "time": "Time";
+  };
   "otp": {
     "changeEmail": "Use this code to verify your new email address.";
     "emailVerification": "Use this code to verify your email address.";
     "expires": "This code expires in 5 minutes.";
     "forgetPassword": "Use this code to reset your password.";
-    "heading": "Your Stella one-time code";
+    "heading": "Your stella one-time code";
     "ignore": "If you didn't request this code, you can ignore this email.";
     "preview": "Your one-time code: {otp}";
-    "signIn": "Use this code to sign in to your Stella account.";
+    "signIn": "Use this code to sign in to your stella account.";
     "subject": "{otp} is your stella verification code";
   };
 };

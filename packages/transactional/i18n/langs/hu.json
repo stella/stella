@@ -7,6 +7,17 @@
     "ignore": "Ha nem számított erre a meghívóra, nyugodtan figyelmen kívül hagyhatja ezt az e-mailt.",
     "subject": "Meghívást kapott a(z) {organizationName} szervezetbe"
   },
+  "newDeviceLogin": {
+    "action": "Munkamenetek áttekintése",
+    "body": "Fiókjába új eszközről vagy helyről jelentkeztek be.",
+    "device": "Eszköz",
+    "heading": "Új bejelentkezés észlelve",
+    "ignore": "Ha Ön volt az, nincs teendő. Ha nem ismeri fel ezt a tevékenységet, tekintse át aktív munkameneteit, és vonja vissza azokat, amelyeket nem ismer fel.",
+    "ipAddress": "IP-cím",
+    "preview": "Új bejelentkezés innen: {device}",
+    "subject": "Új bejelentkezés a Stella fiókjába",
+    "time": "Időpont"
+  },
   "otp": {
     "changeEmail": "Használja ezt a kódot az új e-mail címe megerősítéséhez.",
     "emailVerification": "Használja ezt a kódot az e-mail címe megerősítéséhez.",

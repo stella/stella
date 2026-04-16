@@ -7,6 +7,17 @@
     "ignore": "Wenn Sie diese Einladung nicht erwartet haben, können Sie diese E-Mail ignorieren.",
     "subject": "Sie wurden eingeladen, {organizationName} beizutreten"
   },
+  "newDeviceLogin": {
+    "action": "Sitzungen überprüfen",
+    "body": "Ihr Konto wurde von einem neuen Gerät oder Standort aus angemeldet.",
+    "device": "Gerät",
+    "heading": "Neue Anmeldung erkannt",
+    "ignore": "Wenn Sie das waren, ist keine Aktion erforderlich. Wenn Sie diese Aktivität nicht erkennen, überprüfen Sie Ihre aktiven Sitzungen und widerrufen Sie alle, die Sie nicht erkennen.",
+    "ipAddress": "IP-Adresse",
+    "preview": "Neue Anmeldung von {device}",
+    "subject": "Neue Anmeldung bei Ihrem Stella-Konto",
+    "time": "Zeit"
+  },
   "otp": {
     "changeEmail": "Verwenden Sie diesen Code, um Ihre neue E-Mail-Adresse zu bestätigen.",
     "emailVerification": "Verwenden Sie diesen Code, um Ihre E-Mail-Adresse zu bestätigen.",
