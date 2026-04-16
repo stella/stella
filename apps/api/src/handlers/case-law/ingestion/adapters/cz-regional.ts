@@ -24,6 +24,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -101,6 +102,17 @@ type FinaldocStyle = {
   italic: boolean;
 };
 
+/** Solver can be a flat string or a structured object (API changed). */
+type FinaldocSolver =
+  | string
+  | {
+      titlesBefore?: string;
+      firstName?: string;
+      lastName?: string;
+      titlesAfter?: string;
+      function?: string;
+    };
+
 /** Response shape from /api/finaldoc/{uuid}. */
 type CzRegionalFinaldoc = {
   verdictText?: string | null;
@@ -112,7 +124,7 @@ type CzRegionalFinaldoc = {
   styles?: FinaldocStyle[] | null;
   metadata?: {
     type?: string | null;
-    solver?: string | null;
+    solver?: FinaldocSolver | null;
     caseResultType?: string | null;
     caseSubject?: string | null;
     regulations?: string[] | null;
@@ -127,7 +139,7 @@ type FinaldocResult = {
   sourceRaw: string | undefined;
   richMetadata: {
     decisionTypeRaw?: string;
-    solver?: string;
+    solver?: FinaldocSolver;
     caseResultType?: string;
     caseSubject?: string;
     regulations?: string[];
@@ -164,12 +176,18 @@ const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
   typeof value.bold === "boolean" &&
   typeof value.italic === "boolean";
 
+const isNullishStringOrRecord = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  typeof value === "string" ||
+  isRecord(value);
+
 const isCzRegionalMetadata = (
   value: unknown,
 ): value is NonNullable<CzRegionalFinaldoc["metadata"]> =>
   isRecord(value) &&
   isNullishString(value.type) &&
-  isNullishString(value.solver) &&
+  isNullishStringOrRecord(value.solver) &&
   isNullishString(value.caseResultType) &&
   isNullishString(value.caseSubject) &&
   isOptionalStringArray(value.regulations) &&
@@ -244,10 +262,28 @@ const fetchFinaldoc = async (
     }
 
     const doc = await response.json();
-    if (!isCzRegionalFinaldoc(doc)) {
-      return empty;
-    }
+    // Always preserve sourceRaw even if validation fails.
+    // The raw response can be re-parsed when the validator is fixed.
     const sourceRaw = JSON.stringify(doc);
+
+    if (!isCzRegionalFinaldoc(doc)) {
+      captureError(
+        new AdapterFetchError({
+          message: `CZ Regional finaldoc validation failed for ${item.caseNumber}`,
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          cursor: null,
+        }),
+        { docUrl, caseNumber: item.caseNumber },
+      );
+
+      return {
+        fulltext: undefined,
+        decisionType: undefined,
+        documentAst: EMPTY_AST,
+        sourceRaw,
+        richMetadata: {},
+      };
+    }
 
     const decisionType = mapDecisionType(toOptionalValue(doc.metadata?.type));
 
@@ -256,8 +292,8 @@ const fetchFinaldoc = async (
     if (decisionTypeRaw) {
       richMetadata.decisionTypeRaw = decisionTypeRaw;
     }
-    const solver = toOptionalValue(doc.metadata?.solver);
-    if (solver) {
+    const solver = doc.metadata?.solver ?? undefined;
+    if (solver !== undefined) {
       richMetadata.solver = solver;
     }
     const caseResultType = toOptionalValue(doc.metadata?.caseResultType);
