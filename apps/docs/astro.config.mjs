@@ -2,7 +2,8 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
-  site: "https://docs.stll.app",
+  site: "https://stll.app",
+  base: "/docs",
   redirects: {
     "/": "/getting-started/introduction",
   },
