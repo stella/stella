@@ -10,6 +10,7 @@ import {
   createWebEnv,
   ensureWorktreeEnvLinks,
   findFirstAvailableOffset,
+  infraPortsForOffset,
   isWorktreeCheckout,
   parseArgs,
   portsForOffset,
@@ -38,6 +39,7 @@ describe("parseArgs", () => {
     expect(parseArgs([])).toEqual({
       devInstance: undefined,
       dryRun: false,
+      infraOffset: undefined,
       mode: "dev",
       noBrowser: false,
       portOffset: undefined,
@@ -58,10 +60,13 @@ describe("parseArgs", () => {
         "worktree-a",
         "--dry-run",
         "--no-browser",
+        "--infra-offset",
+        "10",
       ]),
     ).toEqual({
       devInstance: "worktree-a",
       dryRun: true,
+      infraOffset: 10,
       mode: "dev:desktop",
       noBrowser: true,
       portOffset: 8,
@@ -155,6 +160,28 @@ describe("portsForOffset", () => {
       desktopBridge: 45_925,
       desktopView: 5201,
       web: 3024,
+    });
+  });
+});
+
+describe("infraPortsForOffset", () => {
+  test("returns default ports at offset 0", () => {
+    expect(infraPortsForOffset(0)).toEqual({
+      gotenberg: 3003,
+      minio: 9000,
+      minioConsole: 9001,
+      postgres: 5432,
+      valkey: 6379,
+    });
+  });
+
+  test("shifts all infra ports by the offset", () => {
+    expect(infraPortsForOffset(10)).toEqual({
+      gotenberg: 3013,
+      minio: 9010,
+      minioConsole: 9011,
+      postgres: 5442,
+      valkey: 6389,
     });
   });
 });
@@ -357,10 +384,36 @@ describe("worktree helpers", () => {
 });
 
 describe("dev env factories", () => {
-  test("threads computed ports into the API env", () => {
+  test("threads computed ports into the API env without infra overrides at offset 0", () => {
+    const result = createApiEnv({
+      baseEnv: { KEEP_ME: "1" },
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      ports: {
+        api: 3101,
+        desktopBridge: 45_999,
+        desktopView: 5199,
+        web: 3100,
+      },
+    });
+
+    expect(result).toMatchObject({
+      BETTER_AUTH_URL: "http://localhost:3101",
+      FRONTEND_URL: "http://localhost:3100",
+      KEEP_ME: "1",
+      STELLA_API_PORT: "3101",
+      STELLA_WEB_PORT: "3100",
+    });
+    expect(result).not.toHaveProperty("DATABASE_URL");
+    expect(result).not.toHaveProperty("REDIS_URL");
+  });
+
+  test("threads shifted infra ports into the API env at non-zero offset", () => {
     expect(
       createApiEnv({
-        baseEnv: { KEEP_ME: "1" },
+        baseEnv: {},
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
         ports: {
           api: 3101,
           desktopBridge: 45_999,
@@ -369,11 +422,10 @@ describe("dev env factories", () => {
         },
       }),
     ).toMatchObject({
-      BETTER_AUTH_URL: "http://localhost:3101",
-      FRONTEND_URL: "http://localhost:3100",
-      KEEP_ME: "1",
-      STELLA_API_PORT: "3101",
-      STELLA_WEB_PORT: "3100",
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
+      GOTENBERG_URL: "http://localhost:3013",
+      REDIS_URL: "redis://localhost:6389",
+      S3_ENDPOINT: "http://localhost:9010",
     });
   });
 

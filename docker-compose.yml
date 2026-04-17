@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stella
     ports:
-      - "5432:5432"
+      - "${STELLA_PG_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -29,8 +29,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${STELLA_MINIO_HOST_PORT:-9000}:9000"
+      - "${STELLA_MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - s3data:/data
     healthcheck:
@@ -55,7 +55,7 @@ services:
     profiles: [dev]
     image: valkey/valkey:8-alpine
     ports:
-      - "6379:6379"
+      - "${STELLA_VALKEY_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -69,7 +69,7 @@ services:
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.
     ports:
-      - "3003:3000"
+      - "${STELLA_GOTENBERG_HOST_PORT:-3003}:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 5s
