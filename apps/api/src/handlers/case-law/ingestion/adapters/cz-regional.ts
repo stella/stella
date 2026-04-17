@@ -47,6 +47,14 @@ import { isRecord } from "@/api/lib/type-guards";
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
 
 /**
+ * Concurrent finaldoc fetches per page. Conservative (5) to
+ * avoid overwhelming the court server. 200ms delay between
+ * batches matches the adapter's minRequestIntervalMs.
+ */
+const FINALDOC_CONCURRENCY = 5;
+const FINALDOC_BATCH_DELAY_MS = 200;
+
+/**
  * Map English decision type enums from the API to
  * lowercase Czech equivalents for consistency across
  * all CZ adapters.
@@ -242,7 +250,7 @@ const fetchFinaldoc = async (
   };
 
   try {
-    const response = await fetch(docUrl, {
+    const fetchOpts: RequestInit = {
       signal: signal
         ? AbortSignal.any([
             signal,
@@ -253,7 +261,15 @@ const fetchFinaldoc = async (
         Accept: "application/json",
         "User-Agent": INGESTION_USER_AGENT,
       },
-    });
+    };
+
+    let response = await fetch(docUrl, fetchOpts);
+
+    // Retry once on 429 (rate limit) with backoff
+    if (response.status === 429) {
+      await Bun.sleep(2000);
+      response = await fetch(docUrl, fetchOpts);
+    }
 
     if (!response.ok) {
       return empty;
@@ -573,10 +589,12 @@ export const czRegionalAdapter: SourceAdapter = {
           }
         }
 
-        // Enrich decisions with fulltext + AST from /api/finaldoc
-        for (const decision of decisions) {
+        // Enrich decisions with fulltext + AST from /api/finaldoc.
+        // Fetches run concurrently (batches of 10) to speed up
+        // bulk ingestion while respecting the court server.
+        const enrichDecision = async (decision: IngestionResult) => {
           if (!decision.documentUrl) {
-            continue;
+            return;
           }
 
           const result = await fetchFinaldoc(
@@ -595,7 +613,6 @@ export const czRegionalAdapter: SourceAdapter = {
           decision.sourceRaw = result.sourceRaw;
           decision.sourceRawContentType = "application/json";
 
-          // Merge rich metadata from finaldoc
           const rm = result.richMetadata;
           if (Object.keys(rm).length > 0) {
             decision.metadata = {
@@ -603,6 +620,15 @@ export const czRegionalAdapter: SourceAdapter = {
               ...rm,
             };
           }
+        };
+
+        for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
+          if (i > 0) {
+            await Bun.sleep(FINALDOC_BATCH_DELAY_MS);
+          }
+          await Promise.all(
+            decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
+          );
         }
 
         const totalPages = json.totalPages ?? 1;
