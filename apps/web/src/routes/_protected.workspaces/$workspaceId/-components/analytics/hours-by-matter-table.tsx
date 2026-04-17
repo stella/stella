@@ -38,26 +38,24 @@ export const HoursByMatterTable = ({
             <thead>
               <tr className="text-muted-foreground border-b text-start">
                 <th className="pb-2 font-medium">{rootT("common.matter")}</th>
-                <th className="pb-2 text-right font-medium">
-                  {t("totalHours")}
-                </th>
-                <th className="pb-2 text-right font-medium">
+                <th className="pb-2 text-end font-medium">{t("totalHours")}</th>
+                <th className="pb-2 text-end font-medium">
                   {t("billedHours")}
                 </th>
-                <th className="pb-2 text-right font-medium">{t("entries")}</th>
+                <th className="pb-2 text-end font-medium">{t("entries")}</th>
               </tr>
             </thead>
             <tbody>
               {data.map((row) => (
                 <tr className="border-b last:border-0" key={row.matterId}>
                   <td className="py-2">{row.matterName}</td>
-                  <td className="py-2 text-right tabular-nums">
+                  <td className="py-2 text-end tabular-nums">
                     {formatHours(row.totalMinutes)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">
+                  <td className="py-2 text-end tabular-nums">
                     {formatHours(row.billedMinutes)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{row.count}</td>
+                  <td className="py-2 text-end tabular-nums">{row.count}</td>
                 </tr>
               ))}
             </tbody>

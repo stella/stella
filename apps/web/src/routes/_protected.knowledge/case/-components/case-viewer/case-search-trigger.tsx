@@ -119,7 +119,7 @@ export const CaseSearchTrigger = () => {
         value={query}
       />
       {hasQuery && (
-        <div className="text-muted-foreground px-1 text-right font-sans text-xs tabular-nums">
+        <div className="text-muted-foreground px-1 text-end font-sans text-xs tabular-nums">
           {matchCount === 0
             ? t("common.noResults")
             : `${activeMatchIndex + 1} / ${matchCount}`}

@@ -58,10 +58,12 @@ const sendMessage = createSafeRootHandler(
     const accessibleWorkspaceIds = accessibleWorkspaces.map(
       (workspace) => workspace.id,
     );
+    /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,
       workspaceId: body.workspaceId,
     });
+    /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
 
     const workspaceId = scope.scope === "workspace" ? scope.workspaceId : null;
 

@@ -128,7 +128,7 @@ export const AlphabetIndex = ({
   return (
     <div
       className={cn(
-        "absolute top-0 right-0 bottom-0 z-20 max-lg:hidden",
+        "absolute end-0 top-0 bottom-0 z-20 max-lg:hidden",
         active
           ? "w-36 transition-[width] duration-150"
           : "w-5 transition-[width] duration-150",
@@ -147,7 +147,7 @@ export const AlphabetIndex = ({
         const isHovered = hoveredId === m.groupId;
         return (
           <button
-            className="absolute right-0 flex items-center gap-0.5"
+            className="absolute end-0 flex items-center gap-0.5"
             key={m.groupId}
             onClick={() => scrollTo(m.groupId)}
             onMouseEnter={() => setHoveredId(m.groupId)}

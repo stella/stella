@@ -71,7 +71,7 @@ const HeadingNode = ({
     <div>
       <button
         className={cn(
-          "group flex w-full items-start gap-1.5 rounded px-2 py-1.5 text-left text-xs transition-colors",
+          "group flex w-full items-start gap-1.5 rounded px-2 py-1.5 text-start text-xs transition-colors",
           isActive
             ? "bg-muted text-foreground"
             : "hover:bg-muted/60 text-muted-foreground",
@@ -101,7 +101,7 @@ const HeadingNode = ({
         <div>
           {heading.annotations.map((annotation) => (
             <button
-              className="hover:bg-muted/40 text-muted-foreground w-full rounded px-2 py-1 text-left text-[0.7rem] leading-relaxed"
+              className="hover:bg-muted/40 text-muted-foreground w-full rounded px-2 py-1 text-start text-[0.7rem] leading-relaxed"
               key={annotation.id}
               onClick={() =>
                 scrollToAnchor(

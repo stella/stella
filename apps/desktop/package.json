@@ -11,8 +11,8 @@
     "dev:app": "bun run build:view && electrobun dev --watch",
     "dev:view": "vite --host 127.0.0.1 --strictPort",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
-    "lint": "bun --bun oxlint --type-aware",
-    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware apps/desktop",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix apps/desktop",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "tsgo --noEmit"
   },

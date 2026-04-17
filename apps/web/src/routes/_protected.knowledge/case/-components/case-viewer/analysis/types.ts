@@ -62,12 +62,12 @@ export const getCategoryVar = (category: string): string => {
 
 /** Inline style for using a category color. */
 export const categoryColorStyle = (category: string): React.CSSProperties => ({
-  borderLeftColor: `var(${getCategoryVar(category)})`,
+  borderInlineStartColor: `var(${getCategoryVar(category)})`,
 });
 
 /** Inline style for subtle line (low opacity). */
 export const categoryLineStyle = (category: string): React.CSSProperties => ({
-  borderLeftColor: `color-mix(in srgb, var(${getCategoryVar(category)}) 25%, transparent)`,
+  borderInlineStartColor: `color-mix(in srgb, var(${getCategoryVar(category)}) 25%, transparent)`,
 });
 
 /** i18n key for a category. Used with useTranslations(). */

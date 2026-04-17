@@ -15,8 +15,8 @@
     "typecheck": "tsgo --noEmit",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:check": "bun ../scripts/src/i18n-check.ts i18n/langs",
-    "lint": "bun --bun oxlint --type-aware",
-    "lint:fix": "bun --bun oxlint --type-aware --fix",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/transactional",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/transactional",
     "format": "oxfmt ."
   },
   "dependencies": {
@@ -25,11 +25,11 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@react-email/preview-server": "5.2.8",
+    "@react-email/preview-server": "5.2.10",
     "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "react-email": "5.2.8",
+    "react-email": "5.2.10",
     "typescript": "catalog:"
   }
 }

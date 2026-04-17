@@ -845,7 +845,7 @@ const JustificationBar = ({
         className={cn("flex items-center justify-between", TOOLBAR_ROW_HEIGHT)}
       >
         <button
-          className="flex flex-1 cursor-pointer items-center gap-2 overflow-hidden text-left text-xs"
+          className="flex flex-1 cursor-pointer items-center gap-2 overflow-hidden text-start text-xs"
           onClick={() => setIsExpanded((prev) => !prev)}
           type="button"
         >

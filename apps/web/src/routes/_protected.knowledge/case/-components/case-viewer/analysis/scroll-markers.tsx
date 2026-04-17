@@ -110,7 +110,7 @@ export const ScrollMarkers = ({
   return (
     <div
       className={cn(
-        "absolute top-0 right-0 bottom-0 z-20 max-lg:hidden",
+        "absolute end-0 top-0 bottom-0 z-20 max-lg:hidden",
         active
           ? "w-36 transition-[width] duration-150"
           : "w-5 transition-[width] duration-150",
@@ -132,7 +132,7 @@ export const ScrollMarkers = ({
         const isHovered = hoveredId === m.id;
         return (
           <button
-            className="absolute right-0 flex items-center gap-0.5"
+            className="absolute end-0 flex items-center gap-0.5"
             key={m.id}
             onClick={() => scrollTo(m.startAnchorId)}
             onMouseEnter={() => setHoveredId(m.id)}

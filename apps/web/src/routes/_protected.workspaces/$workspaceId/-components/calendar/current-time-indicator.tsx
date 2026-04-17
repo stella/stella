@@ -26,7 +26,7 @@ export const CurrentTimeIndicator = () => {
 
   return (
     <div
-      className="pointer-events-none absolute right-0 left-0 z-10 flex items-center"
+      className="pointer-events-none absolute start-0 end-0 z-10 flex items-center"
       style={{ top: `${top}%` }}
     >
       <div className="bg-destructive size-1.5 rounded-full" />

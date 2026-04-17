@@ -154,7 +154,7 @@ export const InviteStep = ({
             {userDomain.length > 0 &&
               emails.some((e) => getDomain(e) !== userDomain) && (
                 <p className="text-xs text-amber-500">
-                  <AlertTriangleIcon className="mr-1 inline size-3" />
+                  <AlertTriangleIcon className="me-1 inline size-3" />
                   {t("onboarding.inviteExternal")}
                 </p>
               )}

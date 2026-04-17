@@ -24,17 +24,17 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const KIND_COLORS: Record<string, string> = {
-  document: "border-l-blue-400 dark:border-l-blue-600",
-  folder: "border-l-neutral-400 dark:border-l-neutral-500",
-  message: "border-l-green-400 dark:border-l-green-600",
+  document: "border-s-blue-400 dark:border-s-blue-600",
+  folder: "border-s-neutral-400 dark:border-s-neutral-500",
+  message: "border-s-green-400 dark:border-s-green-600",
 };
 
 const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
-  open: "border-l-muted-foreground",
-  in_progress: "border-l-blue-500",
-  in_review: "border-l-amber-500",
-  done: "border-l-green-500",
-  cancelled: "border-l-red-400",
+  open: "border-s-muted-foreground",
+  in_progress: "border-s-blue-500",
+  in_review: "border-s-amber-500",
+  done: "border-s-green-500",
+  cancelled: "border-s-red-400",
 };
 
 /** CSS color values for year-view dots (not tailwind classes). */
@@ -130,13 +130,13 @@ export const CalendarEntityChip = ({
     <button
       ref={dragRef}
       className={cn(
-        "bg-card w-full rounded border border-l-2 px-1.5 py-0.5",
-        "hover:bg-accent text-left text-xs",
+        "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
+        "hover:bg-accent text-start text-xs",
         "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
         entity.kind === "task" && entity.status
           ? (TASK_STATUS_BORDER_COLORS[entity.status] ??
-              "border-l-muted-foreground")
+              "border-s-muted-foreground")
           : KIND_COLORS[entity.kind],
       )}
       onClick={handleClick}

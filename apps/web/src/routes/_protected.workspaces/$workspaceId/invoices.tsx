@@ -107,7 +107,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
               <th className="px-4 py-2 font-medium">
                 {t("billing.invoices.dueDate")}
               </th>
-              <th className="px-4 py-2 text-right font-medium">
+              <th className="px-4 py-2 text-end font-medium">
                 {t("billing.invoices.totalAmount")}
               </th>
               <th className="px-4 py-2 font-medium">{t("common.reference")}</th>
@@ -141,7 +141,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
                 <td className="text-muted-foreground px-4 py-2.5 tabular-nums">
                   {invoice.dueDate ?? "—"}
                 </td>
-                <td className="px-4 py-2.5 text-right tabular-nums">
+                <td className="px-4 py-2.5 text-end tabular-nums">
                   {formatCurrencyAmount(invoice.totalAmount, invoice.currency)}
                 </td>
                 <td className="text-muted-foreground px-4 py-2.5">

@@ -264,7 +264,7 @@ export const KanbanCard = ({
       <div className="group/card" ref={dragRef}>
         <button
           className={cn(
-            "bg-card relative block w-full rounded-lg border p-3 text-left shadow-xs transition-shadow hover:shadow-md",
+            "bg-card relative block w-full rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActiveTask && "ring-primary/30 ring-2",
           )}
           onClick={() =>

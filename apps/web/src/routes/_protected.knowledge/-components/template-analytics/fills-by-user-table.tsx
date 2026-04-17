@@ -30,7 +30,7 @@ export const FillsByUserTable = ({
             <thead>
               <tr className="text-muted-foreground border-b text-start">
                 <th className="pb-2 font-medium">{tc("user")}</th>
-                <th className="pb-2 text-right font-medium">{t("fills")}</th>
+                <th className="pb-2 text-end font-medium">{t("fills")}</th>
               </tr>
             </thead>
             <tbody>
@@ -43,7 +43,7 @@ export const FillsByUserTable = ({
                       name={row.userName}
                     />
                   </td>
-                  <td className="py-2 text-right tabular-nums">{row.count}</td>
+                  <td className="py-2 text-end tabular-nums">{row.count}</td>
                 </tr>
               ))}
             </tbody>

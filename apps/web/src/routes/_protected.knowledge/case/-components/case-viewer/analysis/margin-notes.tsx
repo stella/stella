@@ -123,13 +123,13 @@ export const MarginNotes = ({
 
         return (
           <button
-            className="text-foreground/60 hover:text-foreground/80 absolute right-0 left-0 border-l-[3px] py-1 pl-2.5 text-left transition-colors"
+            className="text-foreground/60 hover:text-foreground/80 absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-colors"
             key={item.id}
             onClick={() => scrollTo(item.startAnchorId)}
             ref={(el) => measureRef(el, item.id)}
             style={{
               top: `${item.top}px`,
-              borderLeftColor:
+              borderInlineStartColor:
                 item.kind === "card"
                   ? `var(${cssVar})`
                   : `color-mix(in srgb, var(${cssVar}) 60%, transparent)`,

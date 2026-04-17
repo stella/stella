@@ -39,10 +39,8 @@ export const HoursByUserTable = ({
             <thead>
               <tr className="text-muted-foreground border-b text-start">
                 <th className="pb-2 font-medium">{tc("user")}</th>
-                <th className="pb-2 text-right font-medium">
-                  {t("totalHours")}
-                </th>
-                <th className="pb-2 text-right font-medium">{t("entries")}</th>
+                <th className="pb-2 text-end font-medium">{t("totalHours")}</th>
+                <th className="pb-2 text-end font-medium">{t("entries")}</th>
               </tr>
             </thead>
             <tbody>
@@ -55,10 +53,10 @@ export const HoursByUserTable = ({
                       name={row.userName}
                     />
                   </td>
-                  <td className="py-2 text-right tabular-nums">
+                  <td className="py-2 text-end tabular-nums">
                     {formatHours(row.totalMinutes)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{row.count}</td>
+                  <td className="py-2 text-end tabular-nums">{row.count}</td>
                 </tr>
               ))}
             </tbody>

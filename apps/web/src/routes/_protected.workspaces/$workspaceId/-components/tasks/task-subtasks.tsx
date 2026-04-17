@@ -20,7 +20,7 @@ const SubtaskRow = ({
   const isDone = status === "done";
   return (
     <button
-      className="hover:bg-muted/50 flex w-full items-center gap-2 rounded px-1 py-0.5 text-left text-sm"
+      className="hover:bg-muted/50 flex w-full items-center gap-2 rounded px-1 py-0.5 text-start text-sm"
       onClick={onToggle}
       type="button"
     >
