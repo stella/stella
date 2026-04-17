@@ -36,10 +36,18 @@ const DEFAULT_PORTS = {
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = 1500;
 const DEFAULT_HTTP_READY_TIMEOUT_MS = 30_000;
 const DEFAULT_OPEN_BROWSER_TIMEOUT_MS = 5000;
-const SHARED_DOCKER_PROJECT_NAME = "stella-dev";
-const SHARED_INFRA_PORTS = [5432, 6379, 9000, 3003] as const;
+const DEFAULT_INFRA_PORTS = {
+  gotenberg: 3003,
+  minio: 9000,
+  minioConsole: 9001,
+  postgres: 5432,
+  valkey: 6379,
+} as const;
+const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
 const MAX_HASH_OFFSET = 400;
 const MAX_PORT = 65_535;
+const MAX_INFRA_OFFSET =
+  MAX_PORT - Math.max(...Object.values(DEFAULT_INFRA_PORTS));
 const MAX_PORT_OFFSET = MAX_PORT - Math.max(...Object.values(DEFAULT_PORTS));
 const PORT_SEARCH_LIMIT = 2000;
 const WEB_HTML_MARKER = 'id="app"';
@@ -50,9 +58,18 @@ const DESKTOP_HTML_MARKERS = [
 
 export type DevMode = (typeof DEV_MODES)[number];
 
+export type InfraPorts = {
+  gotenberg: number;
+  minio: number;
+  minioConsole: number;
+  postgres: number;
+  valkey: number;
+};
+
 type ParsedArgs = {
   devInstance: string | undefined;
   dryRun: boolean;
+  infraOffset: number | undefined;
   mode: DevMode;
   noBrowser: boolean;
   portOffset: number | undefined;
@@ -164,6 +181,7 @@ const validateOffset = (offset: number, source: string) => {
 export const parseArgs = (args: string[]): ParsedArgs => {
   let mode: DevMode = "dev";
   let portOffset: number | undefined;
+  let infraOffset: number | undefined;
   let devInstance: string | undefined;
   let skipInstall = false;
   let skipDbPush = false;
@@ -221,12 +239,23 @@ export const parseArgs = (args: string[]): ParsedArgs => {
       continue;
     }
 
+    if (arg === "--infra-offset") {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error("--infra-offset requires a value");
+      }
+      infraOffset = Number.parseInt(value, 10);
+      i++;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
   return {
     devInstance,
     dryRun,
+    infraOffset,
     mode,
     noBrowser,
     portOffset,
@@ -289,6 +318,19 @@ export const resolveOffset = ({
     source: `hashed worktree=${seed}`,
   };
 };
+
+export const infraPortsForOffset = (offset: number): InfraPorts => ({
+  gotenberg: DEFAULT_INFRA_PORTS.gotenberg + offset,
+  minio: DEFAULT_INFRA_PORTS.minio + offset,
+  minioConsole: DEFAULT_INFRA_PORTS.minioConsole + offset,
+  postgres: DEFAULT_INFRA_PORTS.postgres + offset,
+  valkey: DEFAULT_INFRA_PORTS.valkey + offset,
+});
+
+const dockerProjectName = (infraOffset: number) =>
+  infraOffset === 0
+    ? SHARED_DOCKER_PROJECT_BASE
+    : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 export const portsForOffset = (offset: number): DevPorts => ({
   api: DEFAULT_PORTS.api + offset,
@@ -403,12 +445,14 @@ const checkHttpOk = async (url: string) => {
   }
 };
 
-const areSharedDockerServicesHealthy = async () => {
+const areSharedDockerServicesHealthy = async (infraPorts: InfraPorts) => {
   const healthChecks = await Promise.all([
-    connectToPort({ port: 5432 }),
-    connectToPort({ port: 6379 }),
-    checkHttpOk("http://127.0.0.1:9000/minio/health/live"),
-    checkHttpOk("http://127.0.0.1:3003/health"),
+    connectToPort({ port: infraPorts.postgres }),
+    connectToPort({ port: infraPorts.valkey }),
+    checkHttpOk(
+      `http://127.0.0.1:${String(infraPorts.minio)}/minio/health/live`,
+    ),
+    checkHttpOk(`http://127.0.0.1:${String(infraPorts.gotenberg)}/health`),
   ]);
 
   return healthChecks.every(Boolean);
@@ -427,9 +471,17 @@ const isHealthyApiPort = async (port: number) => {
   }
 };
 
-const areSharedDockerPortsFree = async () => {
+const sharedInfraPortList = (infraPorts: InfraPorts) => [
+  infraPorts.postgres,
+  infraPorts.valkey,
+  infraPorts.minio,
+  infraPorts.minioConsole,
+  infraPorts.gotenberg,
+];
+
+const areSharedDockerPortsFree = async (infraPorts: InfraPorts) => {
   const availability = await Promise.all(
-    SHARED_INFRA_PORTS.map(
+    sharedInfraPortList(infraPorts).map(
       async (port) => await checkPortAvailabilityOnHosts(port),
     ),
   );
@@ -437,15 +489,32 @@ const areSharedDockerPortsFree = async () => {
   return availability.every(Boolean);
 };
 
-const ensureDockerServices = async (rootDir: string) => {
-  if (await areSharedDockerServicesHealthy()) {
+const dockerComposeEnv = (infraPorts: InfraPorts) => ({
+  ...process.env,
+  STELLA_GOTENBERG_HOST_PORT: String(infraPorts.gotenberg),
+  STELLA_MINIO_CONSOLE_PORT: String(infraPorts.minioConsole),
+  STELLA_MINIO_HOST_PORT: String(infraPorts.minio),
+  STELLA_PG_HOST_PORT: String(infraPorts.postgres),
+  STELLA_VALKEY_HOST_PORT: String(infraPorts.valkey),
+});
+
+const ensureDockerServices = async ({
+  infraOffset,
+  infraPorts,
+  rootDir,
+}: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
+  rootDir: string;
+}) => {
+  if (await areSharedDockerServicesHealthy(infraPorts)) {
     console.log("==> Reusing healthy shared Docker services...");
     return;
   }
 
-  if (!(await areSharedDockerPortsFree())) {
+  if (!(await areSharedDockerPortsFree(infraPorts))) {
     throw new Error(
-      "Shared Docker ports are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack or fix it first.",
+      `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
 
@@ -454,7 +523,7 @@ const ensureDockerServices = async (rootDir: string) => {
       resolveCommandPath("docker"),
       "compose",
       "--project-name",
-      SHARED_DOCKER_PROJECT_NAME,
+      dockerProjectName(infraOffset),
       "--profile",
       "dev",
       "up",
@@ -464,6 +533,7 @@ const ensureDockerServices = async (rootDir: string) => {
       "30",
     ],
     cwd: rootDir,
+    env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
   });
 };
@@ -562,9 +632,13 @@ const desktopViewUrlForPort = (port: number) =>
 
 export const createApiEnv = ({
   baseEnv,
+  infraOffset,
+  infraPorts,
   ports,
 }: {
   baseEnv: NodeJS.ProcessEnv;
+  infraOffset: number;
+  infraPorts: InfraPorts;
   ports: DevPorts;
 }) => ({
   ...baseEnv,
@@ -572,6 +646,12 @@ export const createApiEnv = ({
   FRONTEND_URL: webUrlForPort(ports.web),
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
+  ...(infraOffset > 0 && {
+    DATABASE_URL: `postgres://postgres:postgres@localhost:${String(infraPorts.postgres)}/stella`,
+    GOTENBERG_URL: `http://localhost:${String(infraPorts.gotenberg)}`,
+    REDIS_URL: `redis://localhost:${String(infraPorts.valkey)}`,
+    S3_ENDPOINT: `http://localhost:${String(infraPorts.minio)}`,
+  }),
 });
 
 export const createWebEnv = ({
@@ -842,20 +922,22 @@ const createGitContext = (cwd: string): GitContext => {
 };
 
 const buildPreparationSteps = ({
+  infraOffset,
+  infraPorts,
   mode,
+  ports,
   rootDir,
   skipDbPush,
   skipInstall,
 }: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
   mode: DevMode;
+  ports: DevPorts;
   rootDir: string;
   skipDbPush: boolean;
   skipInstall: boolean;
 }) => {
-  const apiBaseEnv = stripAppEnvKeys({
-    baseEnv: process.env,
-    envFilePath: pathResolve(rootDir, "apps/api/.env"),
-  });
   const steps: Step[] = [];
 
   if (!skipInstall) {
@@ -867,10 +949,19 @@ const buildPreparationSteps = ({
   }
 
   if (!skipDbPush && modeIncludesApi(mode)) {
+    const apiBaseEnv = stripAppEnvKeys({
+      baseEnv: process.env,
+      envFilePath: pathResolve(rootDir, "apps/api/.env"),
+    });
     steps.push({
       cmd: [resolveCommandPath("bun"), "run", "db:push"],
       cwd: pathResolve(rootDir, "apps/api"),
-      env: apiBaseEnv,
+      env: createApiEnv({
+        baseEnv: apiBaseEnv,
+        infraOffset,
+        infraPorts,
+        ports,
+      }),
       label: "Pushing database schema",
     });
   }
@@ -879,10 +970,14 @@ const buildPreparationSteps = ({
 };
 
 const buildPersistentSteps = ({
+  infraOffset,
+  infraPorts,
   mode,
   ports,
   rootDir,
 }: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
   mode: DevMode;
   ports: DevPorts;
   rootDir: string;
@@ -901,6 +996,8 @@ const buildPersistentSteps = ({
   });
   const apiEnv = createApiEnv({
     baseEnv: apiBaseEnv,
+    infraOffset,
+    infraPorts,
     ports,
   });
   const webEnv = createWebEnv({
@@ -1051,6 +1148,8 @@ const openBrowser = (url: string) => {
 
 const printSummary = ({
   browserWillOpen,
+  infraOffset,
+  infraPorts,
   preparedEnvFiles,
   mode,
   offset,
@@ -1059,6 +1158,8 @@ const printSummary = ({
   rootDir,
 }: {
   browserWillOpen: boolean;
+  infraOffset: number;
+  infraPorts: InfraPorts;
   preparedEnvFiles: number;
   mode: DevMode;
   offset: number;
@@ -1071,6 +1172,9 @@ const printSummary = ({
   console.log(`  mode: ${mode}`);
   console.log(`  root: ${rootDir}`);
   console.log(`  offset: ${String(offset)} (${offsetSource})`);
+  if (infraOffset > 0) {
+    console.log(`  infra offset: ${String(infraOffset)}`);
+  }
   console.log(`  env files prepared: ${String(preparedEnvFiles)}`);
   if (modeIncludesWeb(mode)) {
     console.log(`  web: ${webUrlForPort(ports.web)}`);
@@ -1080,6 +1184,10 @@ const printSummary = ({
   }
   if (modeIncludesApi(mode)) {
     console.log(`  api: ${apiUrlForPort(ports.api)}`);
+    console.log(`  postgres: localhost:${String(infraPorts.postgres)}`);
+    console.log(`  valkey: localhost:${String(infraPorts.valkey)}`);
+    console.log(`  minio: localhost:${String(infraPorts.minio)}`);
+    console.log(`  gotenberg: localhost:${String(infraPorts.gotenberg)}`);
   }
   if (modeIncludesDesktop(mode)) {
     console.log(`  desktop view: ${desktopViewUrlForPort(ports.desktopView)}`);
@@ -1092,6 +1200,8 @@ const printSummary = ({
 
 const printDryRun = ({
   browserWillOpen,
+  infraOffset,
+  infraPorts,
   preparedEnvFiles,
   mode,
   offset,
@@ -1102,6 +1212,8 @@ const printDryRun = ({
   rootDir,
 }: {
   browserWillOpen: boolean;
+  infraOffset: number;
+  infraPorts: InfraPorts;
   preparedEnvFiles: number;
   mode: DevMode;
   offset: number;
@@ -1113,6 +1225,8 @@ const printDryRun = ({
 }) => {
   printSummary({
     browserWillOpen,
+    infraOffset,
+    infraPorts,
     preparedEnvFiles,
     mode,
     offset,
@@ -1142,6 +1256,22 @@ const main = async () => {
     mainRoot: gitContext.mainRoot,
   });
 
+  const infraOffset =
+    parsedArgs.infraOffset ??
+    (process.env.STELLA_INFRA_OFFSET
+      ? Number.parseInt(process.env.STELLA_INFRA_OFFSET, 10)
+      : 0);
+  if (
+    !Number.isInteger(infraOffset) ||
+    infraOffset < 0 ||
+    infraOffset > MAX_INFRA_OFFSET
+  ) {
+    throw new Error(
+      `STELLA_INFRA_OFFSET must be an integer between 0 and ${String(MAX_INFRA_OFFSET)}`,
+    );
+  }
+  const infraPorts = infraPortsForOffset(infraOffset);
+
   if (!parsedArgs.dryRun && modeIncludesApi(parsedArgs.mode)) {
     console.log("==> Checking Docker engine...");
     runStep({
@@ -1149,7 +1279,11 @@ const main = async () => {
       cwd: gitContext.currentRoot,
       label: "Verifying Docker engine health",
     });
-    await ensureDockerServices(gitContext.currentRoot);
+    await ensureDockerServices({
+      infraOffset,
+      infraPorts,
+      rootDir: gitContext.currentRoot,
+    });
   }
 
   const initialOffset = resolveOffset({
@@ -1173,12 +1307,17 @@ const main = async () => {
       ? initialOffset.source
       : `${initialOffset.source}; adjusted for free ports`;
   const preparationSteps = buildPreparationSteps({
+    infraOffset,
+    infraPorts,
     mode: parsedArgs.mode,
+    ports,
     rootDir: gitContext.currentRoot,
     skipDbPush: parsedArgs.skipDbPush,
     skipInstall: parsedArgs.skipInstall,
   });
   const persistentSteps = buildPersistentSteps({
+    infraOffset,
+    infraPorts,
     mode: parsedArgs.mode,
     ports,
     rootDir: gitContext.currentRoot,
@@ -1195,6 +1334,8 @@ const main = async () => {
   if (parsedArgs.dryRun) {
     printDryRun({
       browserWillOpen,
+      infraOffset,
+      infraPorts,
       preparedEnvFiles,
       mode: parsedArgs.mode,
       offset: resolvedOffset,
@@ -1276,6 +1417,8 @@ const main = async () => {
 
     printSummary({
       browserWillOpen,
+      infraOffset,
+      infraPorts,
       preparedEnvFiles,
       mode: parsedArgs.mode,
       offset: resolvedOffset,
