@@ -1,22 +1,18 @@
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "extends": [
-    "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
-  ],
-  "ignorePatterns": ["**/routeTree.gen.ts", "**/*.config.js"],
+import { defineConfig } from "oxlint";
+import core from "./node_modules/ultracite/config/oxlint/core/index.mjs";
+import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
 
-  "jsPlugins": [
-    "./.oxlint-plugins/no-raw-colors.ts",
-    "./.oxlint-plugins/no-physical-properties.ts",
-    "./.oxlint-plugins/no-body-ownership-ids.ts",
-    "./.oxlint-plugins/no-untyped-updates.ts",
-    "./.oxlint-plugins/no-nanoid.ts",
-    "./.oxlint-plugins/require-router-select.ts",
-    "./.oxlint-plugins/no-raw-route-query-client.ts",
-  ],
+// All workspaces run oxlint from the repo root via:
+//   cd ../.. && oxlint -c oxlint.config.mjs --type-aware <workspace-dir>
+// Override paths are therefore relative to the repo root.
 
-  "rules": {
+export default defineConfig({
+  ...core,
+  plugins: [...core.plugins, ...react.plugins],
+  rules: {
+    ...core.rules,
+    ...react.rules,
+
     // Override ultracite defaults for Stella
     "no-console": "warn",
     "no-shadow": "error",
@@ -26,16 +22,12 @@
 
     "typescript/no-explicit-any": "error",
     "typescript/no-dynamic-delete": "error",
-    // JSX handlers (onClick, etc.) are typed void; async work is
-    // intentionally fire-and-forget. Other checksVoidReturn sites stay on.
     "typescript/no-misused-promises": [
       "error",
-      { "checksVoidReturn": { "attributes": false } }
+      { checksVoidReturn: { attributes: false } },
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
 
-    // Disabled: conflicts with typescript/consistent-return, which requires
-    // explicit `return undefined` on all code paths
     "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-at": "error",
@@ -46,20 +38,18 @@
     "no-restricted-imports": [
       "error",
       {
-        "paths": [
+        paths: [
           {
-            "name": "zod",
-            "message": "Use 'valibot' instead of 'zod'.",
+            name: "zod",
+            message: "Use 'valibot' instead of 'zod'.",
           },
         ],
       },
     ],
     "no-nanoid/no-nanoid": "error",
-    // Allow void as statement (fire-and-forget promises)
-    "no-void": ["error", { "allowAsStatement": true }],
+    "no-void": ["error", { allowAsStatement: true }],
 
     // --- Disabled ultracite defaults ---
-    // General JS
     "sort-keys": "off",
     "no-plusplus": "off",
     "no-inline-comments": "off",
@@ -75,21 +65,17 @@
     "class-methods-use-this": "off",
     "no-unmodified-loop-condition": "off",
     "no-loop-func": "off",
-    "complexity": "off",
-    // func-style: Stella uses both declarations and expressions
+    complexity: "off",
     "func-style": "off",
     "func-names": "off",
 
-    // TypeScript
     "typescript/no-inferrable-types": "off",
     "typescript/consistent-return": "error",
     "typescript/dot-notation": "error",
-    // Too noisy for existing class-based code; low signal
     "typescript/prefer-readonly": "off",
     "typescript/no-unnecessary-type-conversion": "error",
     "typescript/no-unnecessary-type-arguments": "error",
 
-    // Unicorn
     "unicorn/switch-case-braces": "off",
     "unicorn/number-literal-case": "off",
     "unicorn/escape-case": "off",
@@ -101,9 +87,6 @@
     "unicorn/no-immediate-mutation": "off",
     "unicorn/prefer-ternary": "off",
     "unicorn/no-array-reduce": "off",
-    // no-array-sort: false positives when the chain already yields a new array
-    // (e.g. .map() then .sort()); switching to toSorted() would add another copy
-    // and extra memory for no benefit in those cases.
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
     "unicorn/no-await-expression-member": "off",
@@ -111,11 +94,8 @@
     "unicorn/prefer-set-has": "off",
     "unicorn/prefer-spread": "off",
 
-    // React perf
     "react_perf/jsx-no-new-function-as-prop": "off",
 
-    // React
-    // False positives on legitimate patterns (prefixed setters, read-only destructuring)
     "react/hook-use-state": "off",
     "react/no-array-index-key": "off",
     "react/no-children-prop": "off",
@@ -127,84 +107,80 @@
     "import/no-relative-parent-imports": "off",
     "import/no-namespace": "off",
 
-    // Promise
     "promise/prefer-await-to-then": "off",
     "promise/prefer-await-to-callbacks": "off",
     "promise/avoid-new": "off",
 
-    // JSDoc
     "jsdoc/require-param-type": "off",
-
-    // Rules without oxlint equivalents (tracked for future):
-    // - noSecrets (entropy-based secret detection)
-    // - noDuplicateDependencies (package.json lint)
-    // - noJsxLiterals (JSX string literal enforcement)
-    // - useSimplifiedLogicExpression
-    // - useErrorCause
-    // - noScriptUrl (partially covered by jsx-a11y)
 
     "typescript/strict-boolean-expressions": [
       "error",
-      {
-        "allowNullableString": true,
-        "allowNullableBoolean": true,
-      },
+      { allowNullableString: true, allowNullableBoolean: true },
     ],
     "typescript/no-confusing-void-expression": [
       "error",
-      { "ignoreArrowShorthand": true, "ignoreVoidReturningFunctions": true },
+      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
     ],
     "typescript/prefer-nullish-coalescing": [
       "error",
-      {
-        "ignorePrimitives": { "string": true, "boolean": true },
-      },
+      { ignorePrimitives: { string: true, boolean: true } },
     ],
     "typescript/only-throw-error": [
       "error",
       {
-        "allow": [
+        allow: [
           {
-            "from": "package",
-            "name": ["Redirect", "AnyRedirect", "NotFoundError"],
-            "package": "@tanstack/router-core",
+            from: "package",
+            name: ["Redirect", "AnyRedirect", "NotFoundError"],
+            package: "@tanstack/router-core",
           },
         ],
       },
     ],
     "typescript/return-await": ["error", "error-handling-correctness-only"],
-    // Conflicts with no-non-null-assertion: this rule wants `x!`
-    // but we ban `!` assertions project-wide.
     "typescript/non-nullable-type-assertion-style": "off",
   },
-  "overrides": [
+  ignorePatterns: ["**/routeTree.gen.ts", "**/*.config.js"],
+
+  jsPlugins: [
+    "./.oxlint-plugins/no-raw-colors.ts",
+    "./.oxlint-plugins/no-physical-properties.ts",
+    "./.oxlint-plugins/no-body-ownership-ids.ts",
+    "./.oxlint-plugins/no-untyped-updates.ts",
+    "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/require-router-select.ts",
+    "./.oxlint-plugins/no-raw-route-query-client.ts",
+  ],
+
+  overrides: [
+    ...(core.overrides ?? []),
     {
-      "files": ["**/scripts/**"],
-      "rules": { "no-console": "off" },
+      files: ["**/scripts/**"],
+      rules: { "no-console": "off" },
     },
     {
-      "files": ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
-      "rules": {
+      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
+      rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
       },
     },
     {
-      "files": ["apps/web/src/**/*.{ts,tsx}"],
-      "rules": {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
         "no-restricted-imports": [
           "error",
           {
-            "paths": [
+            paths: [
               {
-                "name": "zod",
-                "message": "Use 'valibot' instead of 'zod'.",
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
               },
             ],
-            "patterns": [
+            patterns: [
               {
-                "group": ["@/api/*", "@/api/**/*"],
-                "message": "Use '@stella/api/types' instead of '@/api/'.",
+                group: ["@/api/*", "@/api/**/*"],
+                message: "Use '@stella/api/types' instead of '@/api/'.",
               },
             ],
           },
@@ -213,22 +189,24 @@
       },
     },
     {
-      "files": ["apps/web/src/**/appearance-settings.tsx"],
-      "rules": {
-        // Palette swatch previews use intentional hardcoded colors
+      files: ["apps/web/src/**/appearance-settings.tsx"],
+      rules: { "no-raw-colors/no-raw-colors": "off" },
+    },
+    {
+      files: ["packages/ui/src/**/button.tsx"],
+      rules: { "no-raw-colors/no-raw-colors": "off" },
+    },
+    {
+      // Category pills use text-white on dynamic colored backgrounds;
+      // left-1/2 is intentional physical centering (paired with -translate-x-1/2)
+      files: ["apps/web/src/**/heading-breadcrumb.tsx"],
+      rules: {
         "no-raw-colors/no-raw-colors": "off",
+        "no-physical-properties/no-physical-properties": "off",
       },
     },
     {
-      "files": ["packages/ui/src/**/button.tsx"],
-      "rules": {
-        // Destructive variant uses text-white on a colored bg;
-        // there is no semantic token for "filled-destructive text"
-        "no-raw-colors/no-raw-colors": "off",
-      },
-    },
-    {
-      "files": [
+      files: [
         "apps/web/src/**/conversation.tsx",
         "packages/ui/src/**/toast.tsx",
         "packages/ui/src/**/tabs.tsx",
@@ -239,48 +217,40 @@
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/page-citation.tsx",
       ],
-      "rules": {
-        // Physical properties intentional: centering with
-        // translate-x, tab indicators, DOCX/PDF coordinates
-        "no-physical-properties/no-physical-properties": "off",
+      rules: { "no-physical-properties/no-physical-properties": "off" },
+    },
+    {
+      files: ["apps/web/src/routes/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-route-query-client/no-raw-route-query-client": "error",
       },
     },
     {
-      "files": ["apps/web/src/routes/**/*.{ts,tsx}"],
-      "rules": {
-        "no-raw-route-query-client/no-raw-route-query-client": "error"
-      }
-    },
-    {
-      "files": ["apps/api/src/handlers/**/*.ts"],
-      "rules": {
+      files: ["apps/api/src/handlers/**/*.ts"],
+      rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
         "no-untyped-updates/no-untyped-updates": "error",
       },
     },
     {
-      "files": ["apps/api/src/handlers/search/search.ts"],
-      "rules": {
-        // Search handler validates body.workspaceId against
-        // the caller's organization before use
-        "no-body-ownership-ids/no-body-ownership-ids": "off",
-      },
+      files: ["apps/api/src/handlers/search/search.ts"],
+      rules: { "no-body-ownership-ids/no-body-ownership-ids": "off" },
     },
     {
-      "files": ["apps/api/src/handlers/docx/**/*.ts"],
-      "rules": {
-        // DOCX handlers legitimately use Record<string, unknown>
-        // as generic data containers for template rendering
+      files: ["apps/api/src/handlers/docx/**/*.ts"],
+      rules: {
         "no-untyped-updates/no-untyped-updates": "off",
+        "unicorn/prefer-modern-dom-apis": "off",
+        "unicorn/prefer-dom-node-remove": "off",
       },
     },
     {
-      "files": [
+      files: [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
-      "plugins": ["jest", "vitest"],
-      "rules": {
+      plugins: ["jest", "vitest"],
+      rules: {
         "jest/no-hooks": "off",
         "jest/no-conditional-in-test": "off",
         "jest/no-conditional-expect": "off",
@@ -289,20 +259,14 @@
         "jest/prefer-each": "off",
         "jest/valid-title": "off",
         "no-console": "off",
-        // Mock functions are often async without await to satisfy interface
-        // return types (Promise<T>) without an actual async operation.
         "require-await": "off",
         "typescript/unbound-method": "off",
-        // Test mocks use body.workspaceId and Record<string, unknown>
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-untyped-updates/no-untyped-updates": "off",
-        // UI tests may assert class names with raw colors or
-        // physical properties in snapshots / a11y checks
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
-        // We use bun:test, not vitest; the vitest plugin's global-import rule is a false positive.
         "vitest/prefer-importing-vitest-globals": "off",
       },
     },
   ],
-}
+});

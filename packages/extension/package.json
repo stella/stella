@@ -9,8 +9,8 @@
     "zip": "wxt zip",
     "prepare": "wxt prepare",
     "typecheck": "wxt prepare && tsgo --noEmit",
-    "lint": "wxt prepare && bun --bun oxlint --type-aware",
-    "lint:fix": "wxt prepare && bun --bun oxlint --type-aware --fix",
+    "lint": "wxt prepare && cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/extension",
+    "lint:fix": "wxt prepare && cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/extension",
     "format": "oxfmt ."
   },
   "dependencies": {

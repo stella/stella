@@ -715,7 +715,7 @@ const MatterItem = ({
               sideOffset={4}
             >
               <div
-                className="max-w-48 border-l-2 px-2 py-1.5"
+                className="max-w-48 border-s-2 px-2 py-1.5"
                 style={{
                   borderColor: `var(${ws.color || getMatterSwatch(ws.id)})`,
                 }}

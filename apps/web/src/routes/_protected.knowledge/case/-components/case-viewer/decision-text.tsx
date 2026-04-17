@@ -445,10 +445,10 @@ const BlockRenderer = ({
           isRomanNumeralDivider &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
           block.role === "case-number" &&
-            "text-muted-foreground mb-2 text-right font-sans text-[0.95rem]",
+            "text-muted-foreground mb-2 text-end font-sans text-[0.95rem]",
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
-            "reader-signature text-muted-foreground mt-1 text-right",
+            "reader-signature text-muted-foreground mt-1 text-end",
         )}
         id={block.anchorId}
       >
@@ -577,15 +577,15 @@ const renderBlocksWithHoldingZone = ({
     const hasPreviousGroup = result.length > 0;
     const borderStyle = group.cssVar
       ? {
-          borderLeftColor: `color-mix(in srgb, var(${group.cssVar}) 25%, transparent)`,
+          borderInlineStartColor: `color-mix(in srgb, var(${group.cssVar}) 25%, transparent)`,
         }
       : undefined;
 
     result.push(
       <div
         className={cn(
-          "border-l-2 pl-3",
-          !group.cssVar && "border-l-transparent",
+          "border-s-2 ps-3",
+          !group.cssVar && "border-s-transparent",
           hasPreviousGroup && "mt-1.5",
         )}
         key={`section-${group.blocks.at(0)?.id}`}
@@ -755,7 +755,7 @@ export const DecisionText = ({
   if (visibleBlocks.length > 0) {
     return (
       <article
-        className="text-card-foreground text-left"
+        className="text-card-foreground text-start"
         lang={decision.language}
         ref={articleRef}
         style={{
@@ -764,7 +764,7 @@ export const DecisionText = ({
           lineHeight: "var(--reader-body-line-height)",
         }}
       >
-        <p className="text-muted-foreground mb-4 text-right font-sans text-xs italic">
+        <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
             pieceId={DECISION_REFERENCE_ID}
@@ -792,7 +792,7 @@ export const DecisionText = ({
   if (decision.fulltext) {
     return (
       <article
-        className="text-card-foreground text-left"
+        className="text-card-foreground text-start"
         lang={decision.language}
         ref={articleRef}
         style={{
@@ -801,7 +801,7 @@ export const DecisionText = ({
           lineHeight: "var(--reader-body-line-height)",
         }}
       >
-        <p className="text-muted-foreground mb-4 text-right font-sans text-xs italic">
+        <p className="text-muted-foreground mb-4 text-end font-sans text-xs italic">
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
             pieceId={DECISION_REFERENCE_ID}

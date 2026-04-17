@@ -113,7 +113,7 @@ export const CalendarDayCell = ({
       ref={dropRef}
       className={cn(
         "group/day relative flex flex-col gap-0.5",
-        "overflow-hidden border-r border-b p-1",
+        "overflow-hidden border-e border-b p-1",
         !day.isCurrentMonth && "bg-muted/30",
         day.isWeekend && day.isCurrentMonth && "bg-muted/15",
         mode === "week" && "min-h-[300px]",
@@ -174,7 +174,7 @@ export const CalendarDayCell = ({
       {/* Overflow indicator */}
       {overflow > 0 && !expanded && (
         <button
-          className="text-muted-foreground hover:text-foreground text-left text-xs"
+          className="text-muted-foreground hover:text-foreground text-start text-xs"
           onClick={() => setExpanded(true)}
           type="button"
         >

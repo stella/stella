@@ -308,10 +308,10 @@ const InvoiceDetail = ({
                   <th className="px-4 py-2 font-medium">
                     {t("billing.narrative")}
                   </th>
-                  <th className="px-4 py-2 text-right font-medium">
+                  <th className="px-4 py-2 text-end font-medium">
                     {t("billing.hours")}
                   </th>
-                  <th className="px-4 py-2 text-right font-medium">
+                  <th className="px-4 py-2 text-end font-medium">
                     {t("billing.amount")}
                   </th>
                   {invoiceStatus === "draft" && (
@@ -329,10 +329,10 @@ const InvoiceDetail = ({
                     <td className="max-w-xs truncate px-4 py-2">
                       {entry.invoiceNarrative ?? entry.narrative}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td className="px-4 py-2 text-end tabular-nums">
                       {(entry.billedMinutes / 60).toFixed(1)}h
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
                         Math.round(
                           (entry.billedMinutes / 60) * entry.rateAtEntry,
@@ -379,7 +379,7 @@ const InvoiceDetail = ({
                   <th className="px-4 py-2 font-medium">
                     {t("common.description")}
                   </th>
-                  <th className="px-4 py-2 text-right font-medium">
+                  <th className="px-4 py-2 text-end font-medium">
                     {t("billing.amount")}
                   </th>
                   {invoiceStatus === "draft" && (
@@ -397,7 +397,7 @@ const InvoiceDetail = ({
                     <td className="max-w-xs truncate px-4 py-2">
                       {expense.invoiceDescription ?? expense.description}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
                         Math.round(expense.amount * (1 + expense.markup / 100)),
                         expense.currency,

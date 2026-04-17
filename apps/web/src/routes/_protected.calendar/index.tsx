@@ -297,7 +297,7 @@ function CrossWorkspaceCalendar() {
 
       <div className="flex min-h-0 flex-1">
         {/* Workspace filter sidebar */}
-        <div className="w-48 flex-shrink-0 overflow-y-auto border-r p-2">
+        <div className="w-48 flex-shrink-0 overflow-y-auto border-e p-2">
           <p className="text-muted-foreground mb-1 px-1 text-xs font-medium">
             {t("common.matters")}
           </p>
@@ -308,7 +308,7 @@ function CrossWorkspaceCalendar() {
               <button
                 className={cn(
                   "flex w-full items-center gap-2 rounded px-2 py-1",
-                  "text-left text-xs",
+                  "text-start text-xs",
                   "hover:bg-accent",
                   !isActive && "opacity-40",
                 )}
@@ -406,7 +406,7 @@ const CrossCalendarDayCell = ({
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-0.5 border-r border-b p-1",
+        "relative flex flex-col gap-0.5 border-e border-b p-1",
         "overflow-hidden",
         !day.isCurrentMonth && "bg-muted/30",
         day.isWeekend && day.isCurrentMonth && "bg-muted/15",
@@ -436,7 +436,7 @@ const CrossCalendarDayCell = ({
 
       {overflow > 0 && !expanded && (
         <button
-          className="text-muted-foreground hover:text-foreground text-left text-xs"
+          className="text-muted-foreground hover:text-foreground text-start text-xs"
           onClick={() => setExpanded(true)}
           type="button"
         >
@@ -475,13 +475,13 @@ const CrossCalendarEntityCard = ({ entry }: { entry: CalendarEntity }) => {
   const card = (
     <button
       className={cn(
-        "bg-card w-full rounded border border-l-2 px-1.5 py-0.5",
-        "hover:bg-accent text-left text-xs",
+        "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
+        "hover:bg-accent text-start text-xs",
         "truncate",
       )}
       onClick={handleClick}
       style={{
-        borderLeftColor: entry.workspaceColor
+        borderInlineStartColor: entry.workspaceColor
           ? `var(${entry.workspaceColor})`
           : "var(--color-muted-foreground)",
       }}

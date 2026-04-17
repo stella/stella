@@ -107,7 +107,7 @@ const MiniMonth = ({
     <button
       className={cn(
         "flex flex-col rounded-lg px-2 pt-1.5 pb-2",
-        "hover:bg-accent/40 text-left transition-colors",
+        "hover:bg-accent/40 text-start transition-colors",
       )}
       onClick={onClick}
       type="button"

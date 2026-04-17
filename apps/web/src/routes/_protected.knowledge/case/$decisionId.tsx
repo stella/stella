@@ -208,7 +208,7 @@ function DecisionViewer() {
               </div>
 
               <div
-                className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -right-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
                 onPointerDown={(event) => {
                   event.preventDefault();
                   isDragging.current = true;
@@ -276,7 +276,7 @@ function AnalysisLoader() {
           />
           {index % 2 === 0 && (
             <div
-              className="bg-muted/30 ml-3 h-2 animate-pulse rounded"
+              className="bg-muted/30 ms-3 h-2 animate-pulse rounded"
               style={{
                 width: `${width * 70}%`,
                 animationDelay: `${index * 150 + 75}ms`,

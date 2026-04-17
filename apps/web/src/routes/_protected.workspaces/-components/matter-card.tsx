@@ -121,7 +121,7 @@ export const MatterCard = ({
             <MenuTrigger
               render={
                 <Button
-                  className="relative z-10 -mr-1.5 size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  className="relative z-10 -me-1.5 size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

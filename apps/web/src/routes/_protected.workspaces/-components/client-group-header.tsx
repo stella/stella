@@ -30,7 +30,7 @@ export const ClientGroupHeader = ({
         "sticky top-0 z-10 col-span-full",
         "flex cursor-pointer items-center gap-2",
         "bg-background/95 border-b backdrop-blur-sm",
-        "pt-4 pb-2 text-left first:pt-0",
+        "pt-4 pb-2 text-start first:pt-0",
       )}
       data-group-id={groupId}
       onClick={onToggle}

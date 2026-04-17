@@ -457,7 +457,7 @@ const AdditionalDatesControl = ({
       <MenuTrigger
         render={
           <Button size="xs" variant="ghost">
-            <CalendarIcon className="mr-1 size-3" />
+            <CalendarIcon className="me-1 size-3" />
             {count > 0
               ? t("workspaces.views.calendar.additionalDates", {
                   count: String(count),

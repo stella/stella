@@ -47,9 +47,12 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
         : Promise.resolve(),
     ]);
 
-    void qc.prefetchQuery(viewsOptions(wsId));
-    void qc.prefetchQuery(overviewOptions(wsId));
-    void qc.prefetchQuery(propertiesOptions(wsId));
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+    void prefetchNonCriticalQuery(qc, viewsOptions(wsId), onPrefetchError);
+    void prefetchNonCriticalQuery(qc, overviewOptions(wsId), onPrefetchError);
+    void prefetchNonCriticalQuery(qc, propertiesOptions(wsId), onPrefetchError);
 
     return workspace;
   },

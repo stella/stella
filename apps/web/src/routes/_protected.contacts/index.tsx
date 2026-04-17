@@ -251,7 +251,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       <TableCell className="text-muted-foreground">
         {primaryPhone?.number}
       </TableCell>
-      <TableCell className="text-right tabular-nums">
+      <TableCell className="text-end tabular-nums">
         {contact.matterCount}
       </TableCell>
       <TableCell className="w-10 text-end">

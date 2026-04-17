@@ -23,7 +23,7 @@ export const LanguagePicker = () => {
   const setLang = useI18nStore((s) => s.setLang);
 
   return (
-    <div className="fixed top-4 right-4 z-20 lg:top-6 lg:right-8">
+    <div className="fixed end-4 top-4 z-20 lg:end-8 lg:top-6">
       <Menu>
         <MenuTrigger
           className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors"

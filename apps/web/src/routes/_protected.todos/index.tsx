@@ -140,7 +140,7 @@ function MyTodosPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
       <div className="flex items-center gap-2">
-        <h1 className="mr-auto text-lg font-semibold">
+        <h1 className="me-auto text-lg font-semibold">
           {t("tasks.myTasksTitle")}
         </h1>
         {workspaces?.workspaces && workspaces.workspaces.length > 0 && (

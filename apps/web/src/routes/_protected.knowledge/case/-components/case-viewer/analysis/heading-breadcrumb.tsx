@@ -179,7 +179,7 @@ export const HeadingBreadcrumb = ({
             {flatHeadings.map((heading) => (
               <button
                 className={cn(
-                  "hover:bg-muted flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm",
+                  "hover:bg-muted flex w-full items-center gap-2 rounded-md px-3 py-2 text-start text-sm",
                   currentHeading?.id === heading.id && "bg-muted",
                 )}
                 key={heading.id}
