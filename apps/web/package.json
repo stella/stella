@@ -31,7 +31,7 @@
     "@stella/template-conditions": "workspace:*",
     "@stella/ui": "workspace:*",
     "@stll/anonymize-data": "^0.0.4",
-    "@stll/anonymize-wasm": "^0.1.4",
+    "@stll/anonymize-wasm": "^0.1.6",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/code": "^1.1.0",
     "@streamdown/math": "^1.0.2",

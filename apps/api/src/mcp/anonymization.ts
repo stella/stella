@@ -16,6 +16,7 @@ const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   threshold: 0.4,
   enableTriggerPhrases: true,
   enableRegex: true,
+  enableLegalForms: true,
   enableNameCorpus: true,
   enableDenyList: false,
   enableGazetteer: false,
