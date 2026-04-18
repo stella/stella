@@ -50,7 +50,7 @@
     "ai": "^6.0.158",
     "better-auth": "catalog:",
     "better-result": "catalog:",
-    "bullmq": "^5.73.4",
+    "bullmq": "^5.73.5",
     "cheerio": "^1.2.0",
     "diff": "catalog:",
     "docx": "^9.6.0",
@@ -62,7 +62,7 @@
     "jszip": "^3.10.1",
     "marked": "^18.0.0",
     "nodemailer": "^8.0.5",
-    "pompelmi": "^1.0.0",
+    "pompelmi": "^1.1.0",
     "posthog-node": "^5.29.2",
     "slimdom": "^4.3.5",
     "valibot": "catalog:"
