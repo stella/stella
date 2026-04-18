@@ -62,7 +62,6 @@
     "jszip": "^3.10.1",
     "marked": "^18.0.0",
     "nodemailer": "^8.0.5",
-    "pompelmi": "^1.1.0",
     "posthog-node": "^5.29.2",
     "slimdom": "^4.3.5",
     "valibot": "catalog:"
