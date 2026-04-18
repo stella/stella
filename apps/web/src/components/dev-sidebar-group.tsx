@@ -90,8 +90,6 @@ export const DevSidebarGroup = () => {
     useShallow((s) => ({
       tanstackDevtools: s.tanstackDevtools,
       setTanstackDevtools: s.setTanstackDevtools,
-      rivetDevtools: s.rivetDevtools,
-      setRivetDevtools: s.setRivetDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
       chatModelId: s.chatModelId,
@@ -171,13 +169,6 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           TanStack Devtools
-        </MenuCheckboxItem>
-        <MenuCheckboxItem
-          checked={dev.rivetDevtools}
-          onClick={() => dev.setRivetDevtools(!dev.rivetDevtools)}
-          variant="switch"
-        >
-          Rivet Devtools
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.sourceInspector}
