@@ -20,7 +20,8 @@ const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
 };
 
 export const yaraScanner: Scanner = {
-  scan(bytes) {
+  // eslint-disable-next-line require-await -- Scanner interface requires Promise
+  async scan(bytes) {
     const matches = compiled.scan(Buffer.from(bytes));
 
     return matches.map((m: RuleMatch): Match => {

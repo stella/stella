@@ -156,7 +156,18 @@ export default defineConfig({
     ...(core.overrides ?? []),
     {
       files: ["**/scripts/**"],
-      rules: { "no-console": "off" },
+      rules: {
+        "no-console": "off",
+        // Scripts import from untyped packages and use dynamic data;
+        // strict unsafe-any rules add friction without real safety.
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/strict-boolean-expressions": "off",
+        "typescript/no-redundant-type-constituents": "off",
+      },
     },
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
@@ -223,6 +234,19 @@ export default defineConfig({
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
         "no-raw-route-query-client/no-raw-route-query-client": "error",
+      },
+    },
+    {
+      // pompelmi ships no .d.ts; oxlint's type-aware mode sees every
+      // access as `any`. Suppress until upstream publishes types.
+      files: ["apps/api/src/lib/file-scan/{pompelmi,yara,scan}.ts"],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/strict-boolean-expressions": "off",
       },
     },
     {
