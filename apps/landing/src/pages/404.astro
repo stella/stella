@@ -1,0 +1,31 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+---
+
+<Base title="Not found — stella" description="Page not found.">
+  <div class="flex min-h-screen flex-col">
+    <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+      </div>
+    </nav>
+
+    <div class="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <p class="font-display text-6xl font-medium">404</p>
+      <p class="mt-4 text-base leading-relaxed" style="color: var(--muted-foreground)">
+        This page doesn't exist.
+      </p>
+      <a
+        href="/"
+        class="mt-6 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-colors"
+        style="background: var(--primary); color: var(--primary-foreground)"
+      >
+        Back to home
+      </a>
+    </div>
+  </div>
+</Base>
