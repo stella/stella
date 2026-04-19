@@ -237,16 +237,16 @@ export default defineConfig({
       },
     },
     {
-      // pompelmi ships no .d.ts; oxlint's type-aware mode sees every
-      // access as `any`. Suppress until upstream publishes types.
-      files: ["apps/api/src/lib/file-scan/{pompelmi,yara,scan}.ts"],
+      // YARA's compile/scan returns loosely-typed RuleMatch; the local
+      // Scanner/Match types are strict but oxlint still infers `any`
+      // through the yara-x FFI boundary.
+      files: ["apps/api/src/lib/file-scan/yara.ts"],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-argument": "off",
         "typescript/no-unsafe-call": "off",
-        "typescript/strict-boolean-expressions": "off",
       },
     },
     {

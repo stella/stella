@@ -1,34 +1,10 @@
 import {
-  CommonHeuristicsScanner,
   composeScanners,
   createZipBombGuard,
-} from "pompelmi";
-import type { Match, Scanner } from "pompelmi";
-
+} from "@/api/lib/file-scan/scanner";
+import type { Match } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
 import { yaraScanner } from "@/api/lib/file-scan/yara";
-
-const HEURISTIC_SEVERITY_MAP: Record<string, Match["severity"]> = {
-  info: "low",
-  suspicious: "suspicious",
-  malicious: "critical",
-};
-
-const heuristicsScanner: Scanner = {
-  async scan(bytes) {
-    const matches = await CommonHeuristicsScanner.scan(bytes);
-
-    return matches.map((m): Match => {
-      const severity =
-        (m.severity && HEURISTIC_SEVERITY_MAP[m.severity]) ?? "suspicious";
-      return {
-        rule: m.rule,
-        severity,
-        ...(m.meta !== undefined && { meta: m.meta }),
-      };
-    });
-  },
-};
 
 const zipBombGuard = createZipBombGuard({
   maxEntries: 1000,
@@ -36,11 +12,7 @@ const zipBombGuard = createZipBombGuard({
   maxCompressionRatio: 1000,
 });
 
-export const scanner = composeScanners(
-  heuristicsScanner,
-  zipBombGuard,
-  yaraScanner,
-);
+export const scanner = composeScanners(zipBombGuard, yaraScanner);
 
 const MATCH_SEVERITY_TO_VERDICT: Record<
   NonNullable<Match["severity"]>,
