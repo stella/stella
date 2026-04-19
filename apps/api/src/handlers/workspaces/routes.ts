@@ -1,5 +1,6 @@
 import Elysia, { t } from "elysia";
 
+import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
 import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
@@ -10,6 +11,7 @@ import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justif
 import readWorkspaceNavigation from "@/api/handlers/workspaces/read-navigation";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
+import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
 import updateWorkspace from "@/api/handlers/workspaces/update-by-id";
 import workflowStart from "@/api/handlers/workspaces/workflow-start";
@@ -99,6 +101,11 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .delete("/", deleteWorkspace.handler, {
           invalidateQuery: true,
         })
+        .post("/archive", archiveWorkspace.handler, {
+          permissions: archiveWorkspace.config.permissions,
+          invalidateQuery: true,
+        })
+        // Unarchive is mounted below, outside the active-only group.
         .get(
           "/contacts",
           async (ctx) =>
@@ -135,4 +142,9 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           params: removeWorkspaceMember.config.params,
           invalidateQuery: true,
         }),
-  );
+  )
+  .post("/:workspaceId/unarchive", unarchiveWorkspace.handler, {
+    validateWorkspaceAccessIncludingArchived: true,
+    permissions: unarchiveWorkspace.config.permissions,
+    invalidateQuery: true,
+  });

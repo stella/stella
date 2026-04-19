@@ -456,6 +456,7 @@
     "connectionLost": "Ühendus katkes",
     "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
+    "copied": "Copied to clipboard",
     "copyLink": "Kopeeri link",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
@@ -493,6 +494,7 @@
     "noResults": "Tulemused puuduvad",
     "notes": "Märkused",
     "open": "Ava",
+    "openInNewTab": "Open in new tab",
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
@@ -1092,6 +1094,7 @@
     "answer": "Vastus:",
     "archiveMatter": "Arhiveeri",
     "archived": "Arhiveeritud",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
     "deleteItem": "Kustuta element",
@@ -1309,6 +1312,7 @@
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Lisa väljad",
       "aiGenerated": "Tehisintellektiga loodud",

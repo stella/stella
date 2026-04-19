@@ -456,6 +456,7 @@
     "connectionLost": "Verbindung verloren",
     "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederholung.",
     "convertTo": "Konvertieren zu",
+    "copied": "Copied to clipboard",
     "copyLink": "Link kopieren",
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
@@ -493,6 +494,7 @@
     "noResults": "Keine Ergebnisse",
     "notes": "Notizen",
     "open": "Öffnen",
+    "openInNewTab": "Open in new tab",
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "pin": "Anheften",
@@ -1092,6 +1094,7 @@
     "answer": "Antwort:",
     "archiveMatter": "Archivieren",
     "archived": "Archiviert",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
     "deleteItem": "Element löschen",
@@ -1309,6 +1312,7 @@
       "aiModel": "KI-Modell",
       "manualInput": "Manuell"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Felder hinzufügen",
       "aiGenerated": "KI-generiert",

@@ -459,6 +459,7 @@ type Messages = {
     "connectionLost": "Connection lost";
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
+    "copied": "Copied to clipboard";
     "copyLink": "Copy link";
     "createdAt": "Created at {date}";
     "currency": "Currency";
@@ -496,6 +497,7 @@ type Messages = {
     "noResults": "No results";
     "notes": "Notes";
     "open": "Open";
+    "openInNewTab": "Open in new tab";
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
@@ -1095,6 +1097,7 @@ type Messages = {
     "answer": "Answer:";
     "archiveMatter": "Archive";
     "archived": "Archived";
+    "archivedBadge": "Archived";
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
     "deleteItem": "Delete item";
@@ -1190,10 +1193,9 @@ type Messages = {
     "newMatter": "New matter";
     "noDocuments": "No documents yet";
     "noFieldsToView": "This entity doesn't have any fields to view";
-    "noGrouping": "None";
+    "noGrouping": "No grouping";
     "noItems": "No items yet";
     "noMatters": "No matters yet. Create your first matter to get started.";
-    "possibleDuplicates": "Possible duplicates";
     "operators": {
       "containsEvery": "Contains every";
       "equals": "Equals";
@@ -1243,7 +1245,7 @@ type Messages = {
       "adjustForDarkMode": "Adjust pages for dark mode";
       "anonymizeSidebar": "Anonymization";
       "entitySidebar": "Entity details";
-      "evidence": "Evidence";
+      "evidence": "Justification";
       "goBack": "Go back";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";
@@ -1257,6 +1259,7 @@ type Messages = {
       "zoomIn": "Zoom in";
       "zoomOut": "Zoom out";
     };
+    "possibleDuplicates": "Possible duplicates";
     "properties": {
       "addInputProperty": "Add at least one input property using \"@\"";
       "addPromptForBetterResults": "Add a prompt for better results";
@@ -1312,6 +1315,7 @@ type Messages = {
       "aiModel": "AI Model";
       "manualInput": "Manually";
     };
+    "unarchiveMatter": "Unarchive";
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";

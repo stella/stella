@@ -275,7 +275,7 @@ export const workspaces = p.pgTable(
     }),
     color: p.varchar({ length: 32 }),
     status: p
-      .text({ enum: ["active", "deleting"] })
+      .text({ enum: ["active", "deleting", "archived"] })
       .notNull()
       .default("active"),
     lastActivityAt: p.timestamp("last_activity_at").notNull().defaultNow(),

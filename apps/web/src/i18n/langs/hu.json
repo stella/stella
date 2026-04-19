@@ -456,6 +456,7 @@
     "connectionLost": "Kapcsolat megszakadt",
     "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
+    "copied": "Copied to clipboard",
     "copyLink": "Hivatkozás másolása",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
@@ -493,6 +494,7 @@
     "noResults": "Nincs találat",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
+    "openInNewTab": "Open in new tab",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
@@ -1092,6 +1094,7 @@
     "answer": "Válasz:",
     "archiveMatter": "Archiválás",
     "archived": "Archivált",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
     "deleteItem": "Elem törlése",
@@ -1309,6 +1312,7 @@
       "aiModel": "AI modell",
       "manualInput": "Kézzel"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Mezők hozzáadása",
       "aiGenerated": "MI által generált",

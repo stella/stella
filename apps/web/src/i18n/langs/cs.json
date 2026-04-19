@@ -456,6 +456,7 @@
     "connectionLost": "Spojení ztraceno",
     "connectionLostDescription": "Ztratili jsme spojení se serverem. Automaticky opakujeme.",
     "convertTo": "Převést na",
+    "copied": "Zkopírováno do schránky",
     "copyLink": "Kopírovat odkaz",
     "createdAt": "Vytvořeno {date}",
     "currency": "Měna",
@@ -493,6 +494,7 @@
     "noResults": "Žádné výsledky",
     "notes": "Poznámky",
     "open": "Otevřít",
+    "openInNewTab": "Otevřít na nové kartě",
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
@@ -1092,6 +1094,7 @@
     "answer": "Odpověď:",
     "archiveMatter": "Archivovat",
     "archived": "Archivované",
+    "archivedBadge": "Archivováno",
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",
     "deleteItem": "Smazat položku",
@@ -1309,6 +1312,7 @@
       "aiModel": "AI model",
       "manualInput": "Ručně"
     },
+    "unarchiveMatter": "Obnovit z archivu",
     "views": {
       "addFields": "Přidat pole",
       "aiGenerated": "Generováno AI",

@@ -34,6 +34,7 @@ const readWorkspaces = createRootHandler(
         const allRows = await tx.query.workspaces.findMany({
           where: {
             organizationId: { eq: organizationId },
+            status: { eq: "active" },
           },
           columns: {
             id: true,

@@ -707,4 +707,22 @@ export const workspaceAccessMacro = new Elysia({
         workspaceId: toSafeId<"workspace">(ctx.params.workspaceId),
       };
     },
+  })
+  .macro("validateWorkspaceAccessIncludingArchived", {
+    validateAuth: true,
+    params: t.Object({ workspaceId: tNanoid }),
+    body: t.Object({}),
+    resolve(ctx) {
+      const ws = ctx.accessibleWorkspaces.find(
+        (w) => w.id === ctx.params.workspaceId,
+      );
+
+      if (!ws || (ws.status !== "active" && ws.status !== "archived")) {
+        return ctx.status(404);
+      }
+
+      return {
+        workspaceId: toSafeId<"workspace">(ctx.params.workspaceId),
+      };
+    },
   });
