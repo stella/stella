@@ -117,6 +117,17 @@ export const AlphabetIndex = ({
         return;
       }
       sc.scrollTo({ top: marker.top, behavior: "instant" });
+
+      // Flash ring on the target group header
+      const target = sc.querySelector<HTMLElement>(
+        `[data-group-id="${CSS.escape(groupId)}"]`,
+      );
+      if (target) {
+        target.classList.add("ring-2", "ring-primary");
+        setTimeout(() => {
+          target.classList.remove("ring-2", "ring-primary");
+        }, 600);
+      }
     },
     [scrollContainerRef, markers],
   );

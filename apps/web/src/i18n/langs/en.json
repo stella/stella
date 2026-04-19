@@ -456,6 +456,7 @@
     "connectionLost": "Connection lost",
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.",
     "convertTo": "Convert to",
+    "copied": "Copied to clipboard",
     "copyLink": "Copy link",
     "createdAt": "Created at {date}",
     "currency": "Currency",
@@ -493,6 +494,7 @@
     "noResults": "No results",
     "notes": "Notes",
     "open": "Open",
+    "openInNewTab": "Open in new tab",
     "organization": "Organization",
     "organizationName": "Organization name",
     "pin": "Pin",
@@ -1092,6 +1094,7 @@
     "answer": "Answer:",
     "archiveMatter": "Archive",
     "archived": "Archived",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
     "deleteItem": "Delete item",
@@ -1309,6 +1312,7 @@
       "aiModel": "AI Model",
       "manualInput": "Manually"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Add fields",
       "aiGenerated": "AI-generated",

@@ -456,6 +456,7 @@
     "connectionLost": "Savienojums zaudēts",
     "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
+    "copied": "Copied to clipboard",
     "copyLink": "Kopēt saiti",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
@@ -493,6 +494,7 @@
     "noResults": "Nav rezultātu",
     "notes": "Piezīmes",
     "open": "Atvērt",
+    "openInNewTab": "Open in new tab",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
@@ -1092,6 +1094,7 @@
     "answer": "Atbilde:",
     "archiveMatter": "Arhivēt",
     "archived": "Arhivēts",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
     "deleteItem": "Dzēst vienību",
@@ -1309,6 +1312,7 @@
       "aiModel": "AI modelis",
       "manualInput": "Manuāli"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Pievienot laukus",
       "aiGenerated": "AI ģenerēts",

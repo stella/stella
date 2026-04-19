@@ -21,7 +21,6 @@ import {
   GlobeIcon,
   InboxIcon,
   LayersIcon,
-  LinkIcon,
   Loader2Icon,
   LogOutIcon,
   MailIcon,
@@ -30,7 +29,6 @@ import {
   MonitorSmartphoneIcon,
   MoonIcon,
   PanelLeftIcon,
-  PencilIcon,
   PinIcon,
   PinOffIcon,
   PlayIcon,
@@ -39,7 +37,6 @@ import {
   Settings2Icon,
   SquareIcon,
   SunIcon,
-  TrashIcon,
   UsersIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -128,6 +125,11 @@ import {
   timeEntriesKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import {
+  AddMemberDialog,
+  MatterMenuItems,
+} from "@/routes/_protected.workspaces/-components/matter-context-menu";
+import {
+  useArchiveWorkspace,
   useDeleteWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
@@ -521,10 +523,12 @@ const MatterItem = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
   const updateWorkspace = useUpdateWorkspace();
+  const archiveWorkspace = useArchiveWorkspace();
   const escapedRef = useRef(false);
   const dropRef = useRef<HTMLLIElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -631,143 +635,160 @@ const MatterItem = ({
   }
 
   return (
-    <SidebarMenuItem
-      className={
-        isDropTarget
-          ? "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full"
-          : undefined
-      }
-      onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const x = e.clientX;
-        const y = e.clientY;
-        setCtxAnchor({
-          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-        });
-        setMenuOpen(true);
-      }}
-      ref={dropRef}
-    >
-      <SidebarMenuButton
-        asChild
-        className="pe-12"
-        tooltip={[ws.name, ws.client?.displayName, ws.reference]
-          .filter(Boolean)
-          .join(" — ")}
+    <>
+      <SidebarMenuItem
+        className={
+          isDropTarget
+            ? "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full"
+            : undefined
+        }
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const x = e.clientX;
+          const y = e.clientY;
+          setCtxAnchor({
+            getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+          });
+          setMenuOpen(true);
+        }}
+        ref={dropRef}
       >
-        <Link
-          activeProps={{ "data-active": true }}
-          params={{ workspaceId: ws.id }}
-          to="/workspaces/$workspaceId"
+        <SidebarMenuButton
+          asChild
+          className="pe-12"
+          tooltip={[ws.name, ws.client?.displayName, ws.reference]
+            .filter(Boolean)
+            .join(" — ")}
         >
-          <MatterIcon color={ws.color} id={ws.id} />
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate">{ws.name}</span>
-            {ws.client ? (
-              <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
-                {ws.client.displayName}
-                {relTime ? ` · ${relTime}` : ""}
-              </span>
-            ) : (
-              <span className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
-                {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
-              </span>
-            )}
-          </span>
-        </Link>
-      </SidebarMenuButton>
-      {navBadge !== undefined ? (
-        <NavBadge digit={navBadge} />
-      ) : (
-        <div
-          className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100"
-          data-pinned={isPinned || undefined}
-        >
-          <button
-            className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
-            onClick={() => onTogglePin(ws.id)}
-            title={isPinned ? t("common.unpin") : t("common.pin")}
-            type="button"
+          <Link
+            activeProps={{ "data-active": true }}
+            params={{ workspaceId: ws.id }}
+            to="/workspaces/$workspaceId"
           >
-            {isPinned ? (
-              <PinOffIcon className="size-3.5" />
-            ) : (
-              <PinIcon className="size-3.5" />
-            )}
-          </button>
-          <Menu
-            onOpenChange={(open) => {
-              setMenuOpen(open);
-              if (!open) {
-                setCtxAnchor(null);
-              }
-            }}
-            open={menuOpen}
+            <MatterIcon color={ws.color} id={ws.id} />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate">{ws.name}</span>
+              {ws.client ? (
+                <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+                  {ws.client.displayName}
+                  {relTime ? ` · ${relTime}` : ""}
+                </span>
+              ) : (
+                <span className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+                  {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
+                </span>
+              )}
+            </span>
+          </Link>
+        </SidebarMenuButton>
+        {navBadge !== undefined ? (
+          <NavBadge digit={navBadge} />
+        ) : (
+          <div
+            className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100"
+            data-pinned={isPinned || undefined}
           >
-            <MenuTrigger className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100">
-              <EllipsisVerticalIcon className="size-4" />
-            </MenuTrigger>
-            <MenuPopup
-              align="start"
-              anchor={ctxAnchor ?? undefined}
-              side="right"
-              sideOffset={4}
+            <button
+              className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
+              onClick={() => onTogglePin(ws.id)}
+              title={isPinned ? t("common.unpin") : t("common.pin")}
+              type="button"
             >
-              <div
-                className="max-w-48 border-s-2 px-2 py-1.5"
-                style={{
-                  borderColor: `var(${ws.color || getMatterSwatch(ws.id)})`,
-                }}
+              {isPinned ? (
+                <PinOffIcon className="size-3.5" />
+              ) : (
+                <PinIcon className="size-3.5" />
+              )}
+            </button>
+            <Menu
+              onOpenChange={(open) => {
+                setMenuOpen(open);
+                if (!open) {
+                  setCtxAnchor(null);
+                }
+              }}
+              open={menuOpen}
+            >
+              <MenuTrigger className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100">
+                <EllipsisVerticalIcon className="size-4" />
+              </MenuTrigger>
+              <MenuPopup
+                align="start"
+                anchor={ctxAnchor ?? undefined}
+                side="right"
+                sideOffset={4}
               >
-                <div className="truncate text-xs font-medium">{ws.name}</div>
-                {ws.client && (
-                  <div className="text-muted-foreground truncate text-xs">
-                    {ws.client.displayName}
-                  </div>
-                )}
-              </div>
-              <MenuSeparator />
-              <MenuItem onClick={() => onTogglePin(ws.id)}>
-                {isPinned ? <PinOffIcon /> : <PinIcon />}
-                {isPinned ? t("common.unpin") : t("common.pin")}
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setRenameValue(ws.name);
-                  setIsRenaming(true);
-                }}
-              >
-                <PencilIcon />
-                {t("common.rename")}
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  const url = new URL(
-                    `/workspaces/${ws.id}`,
-                    window.location.origin,
-                  );
-                  navigator.clipboard.writeText(url.toString()).catch(() => {
-                    // Clipboard API may fail if page loses focus
-                  });
-                }}
-              >
-                <LinkIcon />
-                {t("common.copyLink")}
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem
-                className="text-destructive"
-                onClick={() => onDelete(ws.id)}
-              >
-                <TrashIcon />
-                {t("common.delete")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        </div>
+                <div
+                  className="max-w-48 border-s-2 px-2 py-1.5"
+                  style={{
+                    borderColor: `var(${ws.color || getMatterSwatch(ws.id)})`,
+                  }}
+                >
+                  <div className="truncate text-xs font-medium">{ws.name}</div>
+                  {ws.client && (
+                    <div className="text-muted-foreground truncate text-xs">
+                      {ws.client.displayName}
+                    </div>
+                  )}
+                </div>
+                <MenuSeparator />
+                <MatterMenuItems
+                  isArchived={false}
+                  isPinned={isPinned}
+                  onAddMember={() => setAddMemberOpen(true)}
+                  onArchive={() =>
+                    archiveWorkspace.mutate(
+                      { workspaceId: ws.id },
+                      {
+                        onError: () => {
+                          toastManager.add({
+                            title: t("errors.actionFailed"),
+                            type: "error",
+                          });
+                        },
+                      },
+                    )
+                  }
+                  onCopyLink={async () => {
+                    try {
+                      const url = `${window.location.origin}/workspaces/${ws.id}`;
+                      await navigator.clipboard.writeText(url);
+                      toastManager.add({
+                        title: t("common.copied"),
+                        type: "success",
+                      });
+                    } catch {
+                      toastManager.add({
+                        title: t("errors.actionFailed"),
+                        type: "error",
+                      });
+                    }
+                  }}
+                  onDelete={() => onDelete(ws.id)}
+                  onOpenInNewTab={() =>
+                    window.open(`/workspaces/${ws.id}`, "_blank")
+                  }
+                  onRename={() => {
+                    setRenameValue(ws.name);
+                    setIsRenaming(true);
+                  }}
+                  onTogglePin={() => onTogglePin(ws.id)}
+                />
+              </MenuPopup>
+            </Menu>
+          </div>
+        )}
+      </SidebarMenuItem>
+
+      {addMemberOpen && (
+        <AddMemberDialog
+          onOpenChange={setAddMemberOpen}
+          open={addMemberOpen}
+          workspaceId={ws.id}
+        />
       )}
-    </SidebarMenuItem>
+    </>
   );
 };
 

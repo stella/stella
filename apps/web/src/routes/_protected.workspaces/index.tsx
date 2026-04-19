@@ -6,7 +6,6 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { Skeleton } from "@stella/ui/components/skeleton";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { pageTitle } from "@/lib/page-title";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
@@ -14,7 +13,6 @@ import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/cl
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
 import { MattersTable } from "@/routes/_protected.workspaces/-components/matters-table";
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
-import { useDeleteWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 import type {
   Workspace,
@@ -161,40 +159,11 @@ const MattersContentView = ({
   focusIndex,
 }: MattersContentViewProps) => {
   const gridRef = useRef<HTMLDivElement>(null);
-  const t = useTranslations();
   const viewMode = useConfigStore((s) => s.matters.viewMode);
   const collapsedGroups = useConfigStore(
     useShallow((s) => s.matters.collapsedGroups ?? []),
   );
   const toggleGroupCollapsed = useConfigStore((s) => s.toggleGroupCollapsed);
-  const deleteWorkspace = useDeleteWorkspace();
-
-  const handleDelete = (workspaceId: string) => {
-    if (deleteWorkspace.isPending) {
-      return;
-    }
-    const toastId = toastManager.add({
-      title: t("workspaces.deletingWorkspace"),
-      type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
-    });
-    deleteWorkspace.mutate(
-      { workspaceId },
-      {
-        onSuccess: () =>
-          toastManager.update(toastId, {
-            title: t("success.workspaceDeletedSuccessfully"),
-            type: "success",
-          }),
-        onError: () =>
-          toastManager.update(toastId, {
-            title: t("errors.failedToDeleteWorkspace"),
-            type: "error",
-          }),
-      },
-    );
-  };
-
   return (
     <div className="p-2">
       {viewMode === "table" ? (
@@ -228,7 +197,6 @@ const MattersContentView = ({
                       focused={focusIndex === baseIndex + i}
                       hideClientName
                       key={workspace.id}
-                      onDelete={handleDelete}
                       workspace={workspace}
                     />
                   ))}
@@ -242,7 +210,6 @@ const MattersContentView = ({
             <MatterCard
               focused={focusIndex === i}
               key={workspace.id}
-              onDelete={handleDelete}
               workspace={workspace}
             />
           ))}

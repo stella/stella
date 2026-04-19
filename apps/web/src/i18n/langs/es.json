@@ -456,6 +456,7 @@
     "connectionLost": "Conexión perdida",
     "connectionLostDescription": "Se perdió la conexión con el servidor. Reintentando automáticamente.",
     "convertTo": "Convertir a",
+    "copied": "Copied to clipboard",
     "copyLink": "Copiar enlace",
     "createdAt": "Creado el {date}",
     "currency": "Moneda",
@@ -493,6 +494,7 @@
     "noResults": "Sin resultados",
     "notes": "Notas",
     "open": "Abrir",
+    "openInNewTab": "Open in new tab",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
@@ -1092,6 +1094,7 @@
     "answer": "Respuesta:",
     "archiveMatter": "Archivar",
     "archived": "Archivado",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
     "deleteItem": "Eliminar elemento",
@@ -1309,6 +1312,7 @@
       "aiModel": "Modelo de IA",
       "manualInput": "Manualmente"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Añadir campos",
       "aiGenerated": "Generado por IA",

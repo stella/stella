@@ -456,6 +456,7 @@
     "connectionLost": "Ryšys nutrūko",
     "connectionLostDescription": "Praradome ryšį su serveriu. Bandoma automatiškai iš naujo.",
     "convertTo": "Konvertuoti į",
+    "copied": "Copied to clipboard",
     "copyLink": "Kopijuoti nuorodą",
     "createdAt": "Sukurta {date}",
     "currency": "Valiuta",
@@ -493,6 +494,7 @@
     "noResults": "Rezultatų nėra",
     "notes": "Pastabos",
     "open": "Atidaryti",
+    "openInNewTab": "Open in new tab",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
@@ -1092,6 +1094,7 @@
     "answer": "Atsakymas:",
     "archiveMatter": "Archyvuoti",
     "archived": "Archyvuota",
+    "archivedBadge": "Archived",
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
     "deleteItem": "Ištrinti elementą",
@@ -1309,6 +1312,7 @@
       "aiModel": "AI modelis",
       "manualInput": "Rankiniu būdu"
     },
+    "unarchiveMatter": "Unarchive",
     "views": {
       "addFields": "Pridėti laukus",
       "aiGenerated": "Sugeneruota AI",
