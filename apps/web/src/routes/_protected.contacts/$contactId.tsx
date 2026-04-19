@@ -538,6 +538,19 @@ type EditableField =
   | "currency"
   | "paymentTermDays";
 
+const FIELD_MAX_LENGTH: Partial<Record<EditableField, number>> = {
+  prefix: 32,
+  firstName: 256,
+  middleName: 256,
+  lastName: 256,
+  suffix: 32,
+  organizationName: 512,
+  displayName: 512,
+  registrationNumber: 64,
+  taxId: 64,
+  currency: 3,
+};
+
 type EditableRowProps = {
   label: string;
   value: string | null | undefined;
@@ -559,6 +572,8 @@ const EditableRow = ({
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(value ?? "");
 
+  const maxLength = FIELD_MAX_LENGTH[field];
+
   const handleSave = () => {
     setIsEditing(false);
     const trimmed = inputValue.trim();
@@ -568,12 +583,27 @@ const EditableRow = ({
       return;
     }
 
+    if (maxLength !== undefined && trimmed.length > maxLength) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      setInputValue(value ?? "");
+      return;
+    }
+
     let payload: Record<string, unknown>;
     if (field === "defaultHourlyRate" || field === "paymentTermDays") {
       const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
-      payload = {
-        [field]: parsed !== null && !Number.isNaN(parsed) ? parsed : null,
-      };
+      if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+        setInputValue(value ?? "");
+        return;
+      }
+      if (field === "paymentTermDays" && parsed !== null && parsed > 365) {
+        setInputValue(value ?? "");
+        return;
+      }
+      payload = { [field]: parsed };
     } else {
       payload = { [field]: trimmed || null };
     }
@@ -611,6 +641,7 @@ const EditableRow = ({
         <Input
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
+          maxLength={maxLength}
           onBlur={handleSave}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => {

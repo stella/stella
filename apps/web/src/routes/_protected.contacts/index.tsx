@@ -284,19 +284,20 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   );
 };
 
-const trimmedString = v.pipe(v.string(), v.trim());
+const trimmedString = (maxLength: number) =>
+  v.pipe(v.string(), v.trim(), v.maxLength(maxLength));
 
-const requiredTrimmedString = (message: string) =>
-  v.pipe(v.string(), v.trim(), v.nonEmpty(message));
+const requiredTrimmedString = (maxLength: number, message: string) =>
+  v.pipe(v.string(), v.trim(), v.nonEmpty(message), v.maxLength(maxLength));
 
 const createContactSchema = (requiredMessage: string) =>
   v.pipe(
     v.strictObject({
       type: v.picklist(["person", "organization"]),
-      displayName: requiredTrimmedString(requiredMessage),
-      firstName: trimmedString,
-      lastName: trimmedString,
-      organizationName: trimmedString,
+      displayName: requiredTrimmedString(512, requiredMessage),
+      firstName: trimmedString(256),
+      lastName: trimmedString(256),
+      organizationName: trimmedString(512),
     }),
     v.forward(
       v.partialCheck(

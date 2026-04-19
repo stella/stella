@@ -1,4 +1,5 @@
-import { status, t } from "elysia";
+import { Result } from "better-result";
+import { t } from "elysia";
 
 import {
   AresAPIError,
@@ -9,63 +10,83 @@ import {
   searchByName,
 } from "@stella/ares";
 
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const aresQuerySchema = t.Object({
   ico: t.Optional(t.String({ minLength: 1, maxLength: 11 })),
   name: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
 });
 
-const aresLookup = createRootHandler(
+const aresLookup = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     query: aresQuerySchema,
   },
-  async ({ query }) => {
+  async function* ({ query }) {
     const { ico, name } = query;
 
     if (!ico && !name) {
-      return status(400, {
-        message: "Either 'ico' or 'name' query parameter is required",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Either 'ico' or 'name' query parameter is required",
+        }),
+      );
     }
 
     if (ico && name) {
-      return status(400, {
-        message: "Provide either 'ico' or 'name', not both",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Provide either 'ico' or 'name', not both",
+        }),
+      );
     }
 
-    try {
-      if (ico) {
-        const company = await lookupByIco(ico);
-        return { type: "lookup" as const, company };
-      }
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          if (ico) {
+            const company = await lookupByIco(ico);
+            return { type: "lookup" as const, company };
+          }
 
-      // SAFETY: the guard clauses above ensure name is defined here
-      const results = await searchByName(name ?? "");
-      return { type: "search" as const, results };
-    } catch (error: unknown) {
-      if (error instanceof AresValidationError) {
-        return status(400, { message: error.message });
-      }
-      if (error instanceof AresTooBroadError) {
-        return status(400, {
-          message: "Search too broad. Please refine your query.",
-        });
-      }
-      if (error instanceof AresAPIError) {
-        return status(502, {
-          message: `ARES API error: ${error.message}`,
-        });
-      }
-      if (error instanceof AresRequestError) {
-        return status(502, {
-          message: `ARES request failed: ${error.message}`,
-        });
-      }
-      throw error;
-    }
+          const results = await searchByName(name ?? "");
+          return { type: "search" as const, results };
+        },
+        catch: (error): HandlerError => {
+          if (error instanceof AresValidationError) {
+            return new HandlerError({ status: 400, message: error.message });
+          }
+          if (error instanceof AresTooBroadError) {
+            return new HandlerError({
+              status: 400,
+              message: "Search too broad. Please refine your query.",
+            });
+          }
+          if (error instanceof AresAPIError) {
+            return new HandlerError({
+              status: 502,
+              message: `ARES API error: ${error.message}`,
+            });
+          }
+          if (error instanceof AresRequestError) {
+            return new HandlerError({
+              status: 502,
+              message: `ARES request failed: ${error.message}`,
+            });
+          }
+          return new HandlerError({
+            status: 500,
+            message: "ARES lookup failed",
+            cause: error,
+          });
+        },
+      }),
+    );
+
+    return Result.ok(result);
   },
 );
 
