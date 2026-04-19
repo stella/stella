@@ -249,13 +249,16 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
   `config` owns handler-level concerns such as `body`, `params`, `query`, and
   `permissions`; reusable helpers must live in a separate module instead of being
   exported from the endpoint file.
-- Backend handlers should be created via `createHandler` from
-  `/apps/api/src/lib/api-handlers.ts`. Do not export raw workspace-scoped handlers
-  that accept plain `WorkspaceContext`; use the branded authorized context that
-  `createHandler` provides instead.
+- Backend handlers should be created via `createSafeHandler` (workspace-scoped) or
+  `createSafeRootHandler` (root-scoped) from `/apps/api/src/lib/api-handlers.ts`.
+  Both wrap handlers in `Result.gen()` for structured error capture. Use
+  `async function*` with `yield* Result.await(safeDb(...))` for DB operations and
+  `Result.err(new HandlerError(...))` for error returns. Do not export raw handlers
+  that accept plain `WorkspaceContext`; use the branded authorized context that the
+  safe handler factories provide instead.
 - Permission requirements live in the handler file next to the schema and business
   logic. Every workspace-scoped mutation handler must declare permissions in `config`
-  and wrap the implementation with `createHandler`.
+  and wrap the implementation with `createSafeHandler`.
 - **Ownership IDs come from server-validated sources.** `workspaceId` from `SafeId` via
   `validateWorkspaceAccess`, `organizationId` from
   `ctx.session.activeOrganizationId`. The `no-body-ownership-ids` lint rule catches

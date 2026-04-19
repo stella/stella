@@ -250,6 +250,17 @@ export default defineConfig({
       },
     },
     {
+      // @stella/ares types resolve as error in type-aware linting
+      // because the workspace package dist isn't always available
+      // during local lint runs.
+      files: ["apps/api/src/handlers/contacts/ares-lookup.ts"],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-call": "off",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
