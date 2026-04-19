@@ -47,9 +47,6 @@ export const OrganizationStep = ({
 
   const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
   const currentName = useStore(form.store, (s) => s.values.name);
-  const previewSlug = currentName
-    ? createSlug(currentName).replace(/-\d+$/, "")
-    : "";
 
   const flashInput = useCallback(() => {
     const el = inputRef.current;
@@ -101,9 +98,6 @@ export const OrganizationStep = ({
                 value={field.state.value}
               />
               <FieldError />
-              <p className="text-muted-foreground/60 mt-1.5 text-xs">
-                {previewSlug || "your-team"}.stll.app
-              </p>
             </Field>
           )}
         </form.Field>
