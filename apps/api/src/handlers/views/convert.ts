@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceViews } from "@/api/db/schema";
 import { convertLayout } from "@/api/handlers/views/utils";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
 const VIEW_LAYOUT_TYPES = [
@@ -27,45 +29,54 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const convertView = createHandler(
+const convertView = createSafeHandler(
   config,
-  async ({
-    scopedDb,
+  async function* ({
+    safeDb,
     workspaceId,
     params: { viewId },
     body: { targetType },
-  }) => {
-    const existing = await scopedDb((tx) =>
-      tx.query.workspaceViews.findFirst({
-        where: {
-          id: viewId,
-          workspaceId: { eq: workspaceId },
-        },
-      }),
+  }) {
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.workspaceViews.findFirst({
+          where: {
+            id: viewId,
+            workspaceId: { eq: workspaceId },
+          },
+        }),
+      ),
     );
 
     if (!existing) {
-      return status(404, { message: "View not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "View not found" }),
+      );
     }
 
     if (existing.layout.type === targetType) {
-      return status(400, {
-        message: "View is already this layout type",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "View is already this layout type",
+        }),
+      );
     }
 
     const newLayout = convertLayout(existing.layout, targetType);
 
-    await scopedDb((tx) =>
-      tx
-        .update(workspaceViews)
-        .set({ layout: newLayout })
-        .where(
-          and(
-            eq(workspaceViews.id, viewId),
-            eq(workspaceViews.workspaceId, workspaceId),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(workspaceViews)
+          .set({ layout: newLayout })
+          .where(
+            and(
+              eq(workspaceViews.id, viewId),
+              eq(workspaceViews.workspaceId, workspaceId),
+            ),
           ),
-        ),
+      ),
     );
 
     const view = {
@@ -82,7 +93,7 @@ const convertView = createHandler(
       data: ["views", workspaceId],
     });
 
-    return view;
+    return Result.ok(view);
   },
 );
 

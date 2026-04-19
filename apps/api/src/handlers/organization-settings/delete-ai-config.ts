@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { organizationSettings } from "@/api/db/schema";
 import { invalidateOrgAIConfig } from "@/api/lib/ai-config-cache";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
@@ -13,25 +14,30 @@ const config = {
  * Remove the org's AI config. Nulls the encrypted columns
  * so the org reverts to instance-level AI defaults.
  */
-const deleteAIConfig = createRootHandler(
+const deleteAIConfig = createSafeRootHandler(
   config,
-  async ({ scopedDb, session }) => {
-    await scopedDb((tx) =>
-      tx
-        .update(organizationSettings)
-        .set({
-          aiConfigEncrypted: null,
-          aiConfigIv: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          eq(organizationSettings.organizationId, session.activeOrganizationId),
-        ),
+  async function* ({ safeDb, session }) {
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(organizationSettings)
+          .set({
+            aiConfigEncrypted: null,
+            aiConfigIv: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            eq(
+              organizationSettings.organizationId,
+              session.activeOrganizationId,
+            ),
+          ),
+      ),
     );
 
     invalidateOrgAIConfig(session.activeOrganizationId);
 
-    return { deleted: true };
+    return Result.ok({ deleted: true });
   },
 );
 

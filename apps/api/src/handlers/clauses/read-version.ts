@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -16,15 +16,16 @@ const config = {
   params: getClauseVersionParamsSchema,
 } satisfies HandlerConfig;
 
-const getClauseVersion = createRootHandler(
+const getClauseVersion = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await getClauseVersionHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* getClauseVersionHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       versionId: params.versionId,
-    }),
+    });
+  },
 );
 
 export default getClauseVersion;

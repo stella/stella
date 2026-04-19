@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -7,7 +8,7 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 const readTimeEntriesQuerySchema = t.Object({
@@ -23,12 +24,12 @@ const readTimeEntriesQuerySchema = t.Object({
   hasActiveTimer: t.Optional(t.BooleanString()),
 });
 
-const readTimeEntries = createHandler(
+const readTimeEntries = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     query: readTimeEntriesQuerySchema,
   },
-  async ({ scopedDb, workspaceId, query }) => {
+  async function* ({ safeDb, workspaceId, query }) {
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
 
@@ -59,35 +60,37 @@ const readTimeEntries = createHandler(
       conditions.push(isNotNull(timeEntries.timerStartedAt));
     }
 
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({
-          id: timeEntries.id,
-          userId: timeEntries.userId,
-          matterId: timeEntries.matterId,
-          dateWorked: timeEntries.dateWorked,
-          timezoneId: timeEntries.timezoneId,
-          durationMinutes: timeEntries.durationMinutes,
-          billedMinutes: timeEntries.billedMinutes,
-          rateAtEntry: timeEntries.rateAtEntry,
-          currency: timeEntries.currency,
-          narrative: timeEntries.narrative,
-          invoiceNarrative: timeEntries.invoiceNarrative,
-          billable: timeEntries.billable,
-          noCharge: timeEntries.noCharge,
-          status: timeEntries.status,
-          source: timeEntries.source,
-          taskCode: timeEntries.taskCode,
-          activityCode: timeEntries.activityCode,
-          timerStartedAt: timeEntries.timerStartedAt,
-          timerStoppedAt: timeEntries.timerStoppedAt,
-          createdAt: timeEntries.createdAt,
-        })
-        .from(timeEntries)
-        .where(and(...conditions))
-        .orderBy(timeEntries.dateWorked)
-        .limit(limit)
-        .offset(offset),
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: timeEntries.id,
+            userId: timeEntries.userId,
+            matterId: timeEntries.matterId,
+            dateWorked: timeEntries.dateWorked,
+            timezoneId: timeEntries.timezoneId,
+            durationMinutes: timeEntries.durationMinutes,
+            billedMinutes: timeEntries.billedMinutes,
+            rateAtEntry: timeEntries.rateAtEntry,
+            currency: timeEntries.currency,
+            narrative: timeEntries.narrative,
+            invoiceNarrative: timeEntries.invoiceNarrative,
+            billable: timeEntries.billable,
+            noCharge: timeEntries.noCharge,
+            status: timeEntries.status,
+            source: timeEntries.source,
+            taskCode: timeEntries.taskCode,
+            activityCode: timeEntries.activityCode,
+            timerStartedAt: timeEntries.timerStartedAt,
+            timerStoppedAt: timeEntries.timerStoppedAt,
+            createdAt: timeEntries.createdAt,
+          })
+          .from(timeEntries)
+          .where(and(...conditions))
+          .orderBy(timeEntries.dateWorked)
+          .limit(limit)
+          .offset(offset),
+      ),
     );
 
     // Batch-fetch user names
@@ -100,23 +103,27 @@ const readTimeEntries = createHandler(
 
     const usersResult =
       userIds.size > 0
-        ? await scopedDb((tx) =>
-            tx
-              .select({ id: user.id, name: user.name })
-              .from(user)
-              .where(inArray(user.id, [...userIds])),
+        ? yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ id: user.id, name: user.name })
+                .from(user)
+                .where(inArray(user.id, [...userIds])),
+            ),
           )
         : [];
 
     const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
 
-    return rows.map((row) => ({
-      ...row,
-      userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
-      timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
-      timerStoppedAt: row.timerStoppedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return Result.ok(
+      rows.map((row) => ({
+        ...row,
+        userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
+        timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+        timerStoppedAt: row.timerStoppedAt?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    );
   },
 );
 

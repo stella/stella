@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { isMockAI } from "@/api/consts";
 import { justifications } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
@@ -19,9 +19,16 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const generateBoundingBoxes = createHandler(
+const generateBoundingBoxes = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, body, orgAIConfig }) => {
+  async function* ({
+    scopedDb,
+    safeDb,
+    session,
+    workspaceId,
+    body,
+    orgAIConfig,
+  }) {
     const organizationId = session.activeOrganizationId;
     const { justificationId } = body;
 
@@ -38,7 +45,7 @@ const generateBoundingBoxes = createHandler(
         path: `/workspaces/${workspaceId}/bounding-boxes`,
       });
 
-      return { boxes: [] };
+      return Result.ok({ boxes: [] });
     }
 
     const preparedData = preparedDataResult.value;
@@ -66,19 +73,21 @@ const generateBoundingBoxes = createHandler(
 
     const boxes = bBoxes.flat();
 
-    await scopedDb((tx) =>
-      tx
-        .update(justifications)
-        .set({
-          boundingBoxes: {
-            version: 1,
-            boxes,
-          },
-        })
-        .where(eq(justifications.id, justificationId)),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(justifications)
+          .set({
+            boundingBoxes: {
+              version: 1,
+              boxes,
+            },
+          })
+          .where(eq(justifications.id, justificationId)),
+      ),
     );
 
-    return { boxes };
+    return Result.ok({ boxes });
   },
 );
 

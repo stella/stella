@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { count, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { contacts } from "@/api/db/schema";
 import {
@@ -9,8 +10,9 @@ import {
   contactEmailSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createContactBodySchema = t.Object({
@@ -40,60 +42,66 @@ const createContactBodySchema = t.Object({
   responsibleAttorneyId: t.Optional(t.String()),
 });
 
-const createContact = createRootHandler(
+const createContact = createSafeRootHandler(
   {
     permissions: { contact: ["create"] },
     body: createContactBodySchema,
   },
-  async ({ scopedDb, session, user, body }) => {
-    const [totalRow] = await scopedDb((tx) =>
-      tx
-        .select({ total: count() })
-        .from(contacts)
-        .where(eq(contacts.organizationId, session.activeOrganizationId)),
+  async function* ({ safeDb, session, user, body }) {
+    const [totalRow] = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ total: count() })
+          .from(contacts)
+          .where(eq(contacts.organizationId, session.activeOrganizationId)),
+      ),
     );
 
     const total = totalRow?.total ?? 0;
 
     if (total >= LIMITS.contactsCount) {
-      return status(400, { message: "Contacts limit reached" });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Contacts limit reached" }),
+      );
     }
 
-    const [contact] = await scopedDb((tx) =>
-      tx
-        .insert(contacts)
-        .values({
-          id: body.id,
-          organizationId: session.activeOrganizationId,
-          type: body.type,
-          prefix: body.prefix,
-          firstName: body.firstName,
-          middleName: body.middleName,
-          lastName: body.lastName,
-          suffix: body.suffix,
-          organizationName: body.organizationName,
-          displayName: body.displayName,
-          notes: body.notes,
-          emails: body.emails,
-          phones: body.phones,
-          addresses: body.addresses,
-          tags: body.tags,
-          color: body.color,
-          registrationNumber: body.registrationNumber,
-          taxId: body.taxId,
-          bankAccounts: body.bankAccounts,
-          billingAddress: body.billingAddress,
-          defaultHourlyRate: body.defaultHourlyRate,
-          currency: body.currency,
-          paymentTermDays: body.paymentTermDays,
-          originatingAttorneyId: body.originatingAttorneyId,
-          responsibleAttorneyId: body.responsibleAttorneyId,
-          createdBy: user.id,
-        })
-        .returning(),
+    const [contact] = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .insert(contacts)
+          .values({
+            id: body.id,
+            organizationId: session.activeOrganizationId,
+            type: body.type,
+            prefix: body.prefix,
+            firstName: body.firstName,
+            middleName: body.middleName,
+            lastName: body.lastName,
+            suffix: body.suffix,
+            organizationName: body.organizationName,
+            displayName: body.displayName,
+            notes: body.notes,
+            emails: body.emails,
+            phones: body.phones,
+            addresses: body.addresses,
+            tags: body.tags,
+            color: body.color,
+            registrationNumber: body.registrationNumber,
+            taxId: body.taxId,
+            bankAccounts: body.bankAccounts,
+            billingAddress: body.billingAddress,
+            defaultHourlyRate: body.defaultHourlyRate,
+            currency: body.currency,
+            paymentTermDays: body.paymentTermDays,
+            originatingAttorneyId: body.originatingAttorneyId,
+            responsibleAttorneyId: body.responsibleAttorneyId,
+            createdBy: user.id,
+          })
+          .returning(),
+      ),
     );
 
-    return contact;
+    return Result.ok(contact);
   },
 );
 

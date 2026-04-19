@@ -1,10 +1,12 @@
-import { status, t } from "elysia";
+import { Result } from "better-result";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import type { SafeDb } from "@/api/db";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 
 const getTemplateParamsSchema = t.Object({
@@ -12,7 +14,7 @@ const getTemplateParamsSchema = t.Object({
 });
 
 type GetTemplateProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
@@ -20,31 +22,35 @@ type GetTemplateProps = {
 /** Presigned URL validity in seconds (15 min). */
 const PRESIGN_EXPIRES_IN = 900;
 
-const getTemplateHandler = async ({
-  scopedDb,
+const getTemplateHandler = async function* ({
+  safeDb,
   organizationId,
   templateId,
-}: GetTemplateProps) => {
-  const template = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: {
-        id: true,
-        name: true,
-        fileName: true,
-        s3Key: true, // needed for presigning, excluded below
-        sizeBytes: true,
-        manifest: true,
-        fieldCount: true,
-        createdBy: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
+}: GetTemplateProps) {
+  const template = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: {
+          id: true,
+          name: true,
+          fileName: true,
+          s3Key: true, // needed for presigning, excluded below
+          sizeBytes: true,
+          manifest: true,
+          fieldCount: true,
+          createdBy: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ),
   );
 
   if (!template) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   const presignedUrl = s3.presign(template.s3Key, {
@@ -53,10 +59,10 @@ const getTemplateHandler = async ({
 
   const { s3Key: _, ...rest } = template;
 
-  return {
+  return Result.ok({
     ...rest,
     presignedUrl,
-  };
+  });
 };
 
 const config = {
@@ -64,14 +70,15 @@ const config = {
   params: getTemplateParamsSchema,
 } satisfies HandlerConfig;
 
-const getTemplate = createRootHandler(
+const getTemplate = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await getTemplateHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* getTemplateHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       templateId: params.templateId,
-    }),
+    });
+  },
 );
 
 export default getTemplate;

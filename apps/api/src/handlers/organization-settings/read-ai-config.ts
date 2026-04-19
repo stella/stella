@@ -1,9 +1,21 @@
 import { Result } from "better-result";
 
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
+import type { AIProvider, DataRegion, ModelRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+
+type AIConfigResult =
+  | { configured: false }
+  | {
+      configured: true;
+      provider: AIProvider;
+      apiKeyMasked: string;
+      baseURL: string | null;
+      overrideRoles: ModelRole[];
+      region: DataRegion;
+    };
 
 const config = {
   permissions: { organizationSettings: ["update"] },
@@ -14,51 +26,53 @@ const config = {
  * override roles. The API key is masked (first 8 chars only)
  * to prevent exposure.
  */
-const readAIConfig = createRootHandler(
+const readAIConfig = createSafeRootHandler(
   config,
-  async ({ scopedDb, session }) => {
-    const row = await scopedDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: {
-          organizationId: {
-            eq: session.activeOrganizationId,
+  async function* ({ safeDb, session }) {
+    const row = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: {
+              eq: session.activeOrganizationId,
+            },
           },
-        },
-        columns: {
-          aiConfigEncrypted: true,
-          aiConfigIv: true,
-        },
-      }),
+          columns: {
+            aiConfigEncrypted: true,
+            aiConfigIv: true,
+          },
+        }),
+      ),
     );
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
 
-    if (!ciphertext || !iv) {
-      return { configured: false as const };
+    let result: AIConfigResult = { configured: false };
+
+    if (ciphertext && iv) {
+      const decryptResult = await Result.tryPromise({
+        try: async () =>
+          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
+        catch: (error: unknown) => error,
+      });
+
+      if (decryptResult.isErr()) {
+        captureError(decryptResult.error);
+      } else {
+        const aiConfig = decryptResult.value;
+        result = {
+          configured: true,
+          provider: aiConfig.provider,
+          apiKeyMasked: maskApiKey(aiConfig.apiKey),
+          baseURL: aiConfig.baseURL ?? null,
+          overrideRoles: aiConfig.overrideRoles ?? [],
+          region: aiConfig.region ?? "global",
+        };
+      }
     }
 
-    const decryptResult = await Result.tryPromise({
-      try: async () =>
-        await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-      catch: (error: unknown) => error,
-    });
-
-    if (decryptResult.isErr()) {
-      captureError(decryptResult.error);
-      return { configured: false as const };
-    }
-
-    const aiConfig = decryptResult.value;
-
-    return {
-      configured: true as const,
-      provider: aiConfig.provider,
-      apiKeyMasked: maskApiKey(aiConfig.apiKey),
-      baseURL: aiConfig.baseURL ?? null,
-      overrideRoles: aiConfig.overrideRoles ?? [],
-      region: aiConfig.region ?? "global",
-    };
+    return Result.ok(result);
   },
 );
 

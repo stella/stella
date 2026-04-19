@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
@@ -13,19 +15,32 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const workflowStart = createHandler(
+const workflowStart = createSafeHandler(
   config,
-  async ({ workspaceId, session, user, scopedDb, body }) => {
-    const result = await startWorkflow({
-      workspaceId,
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-      scopedDb,
-      ...(body.entityIds && { entityIds: body.entityIds }),
-      ...(body.entityIdsOrder && { entityIdsOrder: body.entityIdsOrder }),
-    });
+  async function* ({ workspaceId, session, user, scopedDb, body }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await startWorkflow({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            scopedDb,
+            ...(body.entityIds && { entityIds: body.entityIds }),
+            ...(body.entityIdsOrder && {
+              entityIdsOrder: body.entityIdsOrder,
+            }),
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
 
-    return result;
+    return Result.ok(result);
   },
 );
 

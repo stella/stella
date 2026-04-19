@@ -1,9 +1,10 @@
+import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,16 +19,16 @@ const exportQuerySchema = t.Object({
 });
 
 type ExportProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   query: { ids?: string };
 };
 
-const exportHandler = async ({
-  scopedDb,
+const exportHandler = async function* ({
+  safeDb,
   organizationId,
   query,
-}: ExportProps) => {
+}: ExportProps) {
   const conditions = [eq(clauses.organizationId, organizationId)];
 
   if (query.ids) {
@@ -40,29 +41,33 @@ const exportHandler = async ({
     }
   }
 
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({
-        id: clauses.id,
-        title: clauses.title,
-        description: clauses.description,
-        usageNotes: clauses.usageNotes,
-        language: clauses.language,
-        body: clauses.body,
-        metadata: clauses.metadata,
-        categoryId: clauses.categoryId,
-      })
-      .from(clauses)
-      .where(and(...conditions))
-      .limit(LIMITS.clauseExportLimit),
+  const rows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          id: clauses.id,
+          title: clauses.title,
+          description: clauses.description,
+          usageNotes: clauses.usageNotes,
+          language: clauses.language,
+          body: clauses.body,
+          metadata: clauses.metadata,
+          categoryId: clauses.categoryId,
+        })
+        .from(clauses)
+        .where(and(...conditions))
+        .limit(LIMITS.clauseExportLimit),
+    ),
   );
 
   // Load categories for path building
-  const allCategories = await scopedDb((tx) =>
-    tx.query.clauseCategories.findMany({
-      where: { organizationId: { eq: organizationId } },
-      columns: { id: true, name: true, parentId: true },
-    }),
+  const allCategories = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauseCategories.findMany({
+        where: { organizationId: { eq: organizationId } },
+        columns: { id: true, name: true, parentId: true },
+      }),
+    ),
   );
 
   const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
@@ -109,13 +114,15 @@ const exportHandler = async ({
     clauses: items,
   };
 
-  return new Response(JSON.stringify(payload, null, 2), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Disposition": 'attachment; filename="clauses-export.json"',
-    },
-  });
+  return Result.ok(
+    new Response(JSON.stringify(payload, null, 2), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Disposition": 'attachment; filename="clauses-export.json"',
+      },
+    }),
+  );
 };
 
 const config = {
@@ -123,14 +130,15 @@ const config = {
   query: exportQuerySchema,
 } satisfies HandlerConfig;
 
-const exportClauses = createRootHandler(
+const exportClauses = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, query }) =>
-    await exportHandler({
-      scopedDb,
+  async function* ({ safeDb, session, query }) {
+    return yield* exportHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       query,
-    }),
+    });
+  },
 );
 
 export default exportClauses;

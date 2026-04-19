@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateExpenseBodySchema = t.Object({
@@ -29,46 +31,58 @@ const config = {
   body: updateExpenseBodySchema,
 } satisfies HandlerConfig;
 
-const updateExpense = createHandler(
+const updateExpense = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) => {
-    const existing = await scopedDb((tx) =>
-      tx.query.expenses.findFirst({
-        where: {
-          id: body.id,
-          workspaceId: { eq: workspaceId },
-        },
-        columns: {
-          status: true,
-        },
-      }),
+  async function* ({ safeDb, workspaceId, body }) {
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.expenses.findFirst({
+          where: {
+            id: body.id,
+            workspaceId: { eq: workspaceId },
+          },
+          columns: {
+            status: true,
+          },
+        }),
+      ),
     );
 
     if (!existing) {
-      return status(404, { message: "Expense not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Expense not found" }),
+      );
     }
 
     if (
       existing.status === BILLING_STATUS.BILLED ||
       existing.status === BILLING_STATUS.WRITTEN_OFF
     ) {
-      return status(400, {
-        message: "Cannot edit a billed or written-off expense",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot edit a billed or written-off expense",
+        }),
+      );
     }
 
     if (body.matterId !== undefined) {
-      const matter = await scopedDb((tx) =>
-        tx.query.entities.findFirst({
-          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-          columns: { id: true },
-        }),
+      const matter = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.entities.findFirst({
+            where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+            columns: { id: true },
+          }),
+        ),
       );
 
       if (!matter) {
-        return status(400, {
-          message: "Matter not found in this workspace",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Matter not found in this workspace",
+          }),
+        );
       }
     }
 
@@ -88,16 +102,21 @@ const updateExpense = createHandler(
       updatedAt: new Date(),
     };
 
-    await scopedDb((tx) =>
-      tx
-        .update(expenses)
-        .set(updates)
-        .where(
-          and(eq(expenses.id, body.id), eq(expenses.workspaceId, workspaceId)),
-        ),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(expenses)
+          .set(updates)
+          .where(
+            and(
+              eq(expenses.id, body.id),
+              eq(expenses.workspaceId, workspaceId),
+            ),
+          ),
+      ),
     );
 
-    return { id: body.id };
+    return Result.ok({ id: body.id });
   },
 );
 

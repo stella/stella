@@ -1,13 +1,15 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 
 const deleteTemplateParamsSchema = t.Object({
@@ -15,28 +17,32 @@ const deleteTemplateParamsSchema = t.Object({
 });
 
 type DeleteTemplateProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
 
-const deleteTemplateHandler = async ({
-  scopedDb,
+const deleteTemplateHandler = async function* ({
+  safeDb,
   organizationId,
   templateId,
-}: DeleteTemplateProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: { id: true, s3Key: true },
-      with: {
-        versions: { columns: { s3Key: true } },
-      },
-    }),
+}: DeleteTemplateProps) {
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: { id: true, s3Key: true },
+        with: {
+          versions: { columns: { s3Key: true } },
+        },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   // Collect all S3 keys (current + historical versions)
@@ -47,15 +53,17 @@ const deleteTemplateHandler = async ({
     s3Keys.add(v.s3Key);
   }
 
-  await scopedDb((tx) =>
-    tx
-      .delete(templates)
-      .where(
-        and(
-          eq(templates.id, templateId),
-          eq(templates.organizationId, organizationId),
+  yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .delete(templates)
+        .where(
+          and(
+            eq(templates.id, templateId),
+            eq(templates.organizationId, organizationId),
+          ),
         ),
-      ),
+    ),
   );
 
   // Delete S3 objects outside the transaction to keep
@@ -65,7 +73,7 @@ const deleteTemplateHandler = async ({
     s3.delete(key).catch(captureError);
   }
 
-  return undefined;
+  return Result.ok(undefined);
 };
 
 const config = {
@@ -73,14 +81,15 @@ const config = {
   params: deleteTemplateParamsSchema,
 } satisfies HandlerConfig;
 
-const deleteTemplate = createRootHandler(
+const deleteTemplate = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await deleteTemplateHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* deleteTemplateHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       templateId: params.templateId,
-    }),
+    });
+  },
 );
 
 export default deleteTemplate;

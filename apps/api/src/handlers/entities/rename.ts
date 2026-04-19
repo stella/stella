@@ -1,15 +1,16 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -24,74 +25,80 @@ const renameEntityBodySchema = t.Object({
 type RenameEntityBodySchema = Static<typeof renameEntityBodySchema>;
 
 type RenameEntityHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   body: RenameEntityBodySchema;
 };
 
-const renameEntityHandler = async ({
-  scopedDb,
+const renameEntityHandler = async function* ({
+  safeDb,
   workspaceId,
   body,
-}: RenameEntityHandlerProps) => {
-  const entity = await scopedDb((tx) =>
-    tx.query.entities.findFirst({
-      where: {
-        id: body.entityId,
-        workspaceId: { eq: workspaceId },
-      },
-      columns: { id: true },
-    }),
+}: RenameEntityHandlerProps) {
+  const entity = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: body.entityId,
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    ),
   );
 
   if (!entity) {
-    return status(404, { message: "Entity not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Entity not found" }),
+    );
   }
 
-  await scopedDb(async (tx) => {
-    await tx
-      .update(entities)
-      .set({ name: body.name, updatedAt: new Date() })
-      .where(eq(entities.id, body.entityId));
+  yield* Result.await(
+    safeDb(async (tx) => {
+      await tx
+        .update(entities)
+        .set({ name: body.name, updatedAt: new Date() })
+        .where(eq(entities.id, body.entityId));
 
-    // Also update the file field's fileName so the table
-    // column (which reads content.fileName) stays in sync.
-    const fileField = await tx.query.entities
-      .findFirst({
-        where: { id: body.entityId },
-        columns: { id: true },
-        with: {
-          currentVersion: {
-            columns: { id: true },
-            with: {
-              fields: {
-                columns: { id: true, content: true },
+      // Also update the file field's fileName so the table
+      // column (which reads content.fileName) stays in sync.
+      const fileField = await tx.query.entities
+        .findFirst({
+          where: { id: body.entityId },
+          columns: { id: true },
+          with: {
+            currentVersion: {
+              columns: { id: true },
+              with: {
+                fields: {
+                  columns: { id: true, content: true },
+                },
               },
             },
           },
-        },
-      })
-      .then((e) => {
-        const cv = e?.currentVersion ?? panic("Entity has no currentVersion");
-        return cv.fields.find((f) => f.content.type === "file");
-      });
-
-    if (fileField && fileField.content.type === "file") {
-      await tx
-        .update(fields)
-        .set({
-          content: {
-            ...fileField.content,
-            fileName: body.name,
-          },
         })
-        .where(eq(fields.id, fileField.id));
-    }
-  });
+        .then((e) => {
+          const cv = e?.currentVersion ?? panic("Entity has no currentVersion");
+          return cv.fields.find((f) => f.content.type === "file");
+        });
+
+      if (fileField && fileField.content.type === "file") {
+        await tx
+          .update(fields)
+          .set({
+            content: {
+              ...fileField.content,
+              fileName: body.name,
+            },
+          })
+          .where(eq(fields.id, fileField.id));
+      }
+    }),
+  );
 
   getSearchProvider().indexEntity(body.entityId).catch(captureError);
 
-  return { entityId: body.entityId };
+  return Result.ok({ entityId: body.entityId });
 };
 
 const config = {
@@ -99,14 +106,15 @@ const config = {
   body: renameEntityBodySchema,
 } satisfies HandlerConfig;
 
-const renameEntity = createHandler(
+const renameEntity = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) =>
-    await renameEntityHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, body }) {
+    return yield* renameEntityHandler({
+      safeDb,
       workspaceId,
       body,
-    }),
+    });
+  },
 );
 
 export default renameEntity;

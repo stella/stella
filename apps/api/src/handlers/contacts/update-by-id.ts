@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { contacts } from "@/api/db/schema";
 import {
@@ -9,8 +10,9 @@ import {
   contactEmailSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
@@ -48,32 +50,36 @@ const updateContactParamsSchema = t.Object({
   contactId: tNanoid,
 });
 
-const updateContactById = createRootHandler(
+const updateContactById = createSafeRootHandler(
   {
     permissions: { contact: ["update"] },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,
   },
-  async ({ scopedDb, session, params, body }) => {
-    const updatedRows = await scopedDb((tx) =>
-      tx
-        .update(contacts)
-        .set(body)
-        .where(
-          and(
-            eq(contacts.id, params.contactId),
-            eq(contacts.organizationId, session.activeOrganizationId),
-          ),
-        )
-        .returning({ id: contacts.id }),
+  async function* ({ safeDb, session, params, body }) {
+    const updatedRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(contacts)
+          .set(body)
+          .where(
+            and(
+              eq(contacts.id, params.contactId),
+              eq(contacts.organizationId, session.activeOrganizationId),
+            ),
+          )
+          .returning({ id: contacts.id }),
+      ),
     );
     const updated = updatedRows.at(0);
 
     if (!updated) {
-      return status(404, { message: "Contact not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Contact not found" }),
+      );
     }
 
-    return updated;
+    return Result.ok(updated);
   },
 );
 

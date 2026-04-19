@@ -1,4 +1,4 @@
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 import { listCategoriesHandler } from "./categories";
@@ -7,13 +7,14 @@ const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
 
-const listClauseCategories = createRootHandler(
+const listClauseCategories = createSafeRootHandler(
   config,
-  async ({ scopedDb, session }) =>
-    await listCategoriesHandler({
-      scopedDb,
+  async function* ({ safeDb, session }) {
+    return yield* listCategoriesHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
-    }),
+    });
+  },
 );
 
 export default listClauseCategories;

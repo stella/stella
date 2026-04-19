@@ -1,9 +1,11 @@
+import type { Err } from "better-result";
+import { Result } from "better-result";
 import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const resolveRateQuerySchema = t.Object({
@@ -11,39 +13,45 @@ const resolveRateQuerySchema = t.Object({
   date: t.String({ format: "date" }),
 });
 
-const resolveRateHandler = createHandler(
+const resolveRateHandler = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     query: resolveRateQuerySchema,
   },
-  async ({ scopedDb, workspaceId, query }) => {
-    const result = await resolveRate({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, query }) {
+    const result = yield* resolveRate({
+      safeDb,
       workspaceId,
       userId: query.userId,
       dateWorked: query.date,
     });
 
-    return result ?? { hourlyRate: null, currency: null };
+    return Result.ok(result ?? { hourlyRate: null, currency: null });
   },
 );
 
-const resolveRate = async ({
-  scopedDb,
+const resolveRate = async function* ({
+  safeDb,
   workspaceId,
   userId,
   dateWorked,
 }: {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: string;
   dateWorked: string;
-}): Promise<{ hourlyRate: number; currency: string } | null> => {
-  const defaultTable = await scopedDb((tx) =>
-    tx.query.rateTables.findFirst({
-      where: { workspaceId: { eq: workspaceId }, isDefault: true },
-      columns: { id: true, currency: true },
-    }),
+}): AsyncGenerator<
+  Err<never, SafeDbError>,
+  { hourlyRate: number; currency: string } | null,
+  unknown
+> {
+  const defaultTable = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.rateTables.findFirst({
+        where: { workspaceId: { eq: workspaceId }, isDefault: true },
+        columns: { id: true, currency: true },
+      }),
+    ),
   );
 
   if (!defaultTable) {
@@ -59,21 +67,23 @@ const resolveRate = async ({
   );
 
   // Try user-specific rate first
-  const userRate = await scopedDb((tx) =>
-    tx
-      .select({
-        hourlyRate: rateEntries.hourlyRate,
-      })
-      .from(rateEntries)
-      .where(
-        and(
-          eq(rateEntries.rateTableId, defaultTable.id),
-          eq(rateEntries.userId, userId),
-          dateCondition,
-        ),
-      )
-      .orderBy(desc(rateEntries.effectiveFrom))
-      .limit(1),
+  const userRate = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          hourlyRate: rateEntries.hourlyRate,
+        })
+        .from(rateEntries)
+        .where(
+          and(
+            eq(rateEntries.rateTableId, defaultTable.id),
+            eq(rateEntries.userId, userId),
+            dateCondition,
+          ),
+        )
+        .orderBy(desc(rateEntries.effectiveFrom))
+        .limit(1),
+    ),
   );
 
   const userRateRow = userRate.at(0);
@@ -85,21 +95,23 @@ const resolveRate = async ({
   }
 
   // Fall back to table default rate (userId IS NULL)
-  const defaultRate = await scopedDb((tx) =>
-    tx
-      .select({
-        hourlyRate: rateEntries.hourlyRate,
-      })
-      .from(rateEntries)
-      .where(
-        and(
-          eq(rateEntries.rateTableId, defaultTable.id),
-          isNull(rateEntries.userId),
-          dateCondition,
-        ),
-      )
-      .orderBy(desc(rateEntries.effectiveFrom))
-      .limit(1),
+  const defaultRate = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          hourlyRate: rateEntries.hourlyRate,
+        })
+        .from(rateEntries)
+        .where(
+          and(
+            eq(rateEntries.rateTableId, defaultTable.id),
+            isNull(rateEntries.userId),
+            dateCondition,
+          ),
+        )
+        .orderBy(desc(rateEntries.effectiveFrom))
+        .limit(1),
+    ),
   );
 
   const defaultRateRow = defaultRate.at(0);

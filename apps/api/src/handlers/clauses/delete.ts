@@ -1,40 +1,46 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteClauseParamsSchema = t.Object({
   clauseId: tNanoid,
 });
 
 type DeleteClauseProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
 };
 
-const deleteClauseHandler = async ({
-  scopedDb,
+const deleteClauseHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
-}: DeleteClauseProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.clauses.findFirst({
-      where: {
-        id: clauseId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    }),
+}: DeleteClauseProps) {
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauses.findFirst({
+        where: {
+          id: clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Clause not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
   }
 
   // FK constraints handle templateClauses nullification:
@@ -44,18 +50,20 @@ const deleteClauseHandler = async ({
   //  - templateClauses.clauseVersionId → onDelete: "set null"
   //    (via cascade on clause_versions)
   // Cascade deletes variants + versions via FK
-  await scopedDb((tx) =>
-    tx
-      .delete(clauses)
-      .where(
-        and(
-          eq(clauses.id, clauseId),
-          eq(clauses.organizationId, organizationId),
+  yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .delete(clauses)
+        .where(
+          and(
+            eq(clauses.id, clauseId),
+            eq(clauses.organizationId, organizationId),
+          ),
         ),
-      ),
+    ),
   );
 
-  return undefined;
+  return Result.ok(undefined);
 };
 
 const config = {
@@ -63,14 +71,15 @@ const config = {
   params: deleteClauseParamsSchema,
 } satisfies HandlerConfig;
 
-const deleteClause = createRootHandler(
+const deleteClause = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await deleteClauseHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* deleteClauseHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
-    }),
+    });
+  },
 );
 
 export default deleteClause;

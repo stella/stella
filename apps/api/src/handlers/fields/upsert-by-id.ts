@@ -1,12 +1,13 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const config = {
@@ -47,39 +48,52 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const upsertField = createHandler(
+const upsertField = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) => {
-    const property = await scopedDb((tx) =>
-      tx.query.properties.findFirst({
-        columns: { id: true, content: true },
-        where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
-      }),
+  async function* ({ safeDb, workspaceId, body }) {
+    const property = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { id: true, content: true },
+          where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
+        }),
+      ),
     );
 
     if (!property) {
-      return status(404, {
-        message: "Property not found in workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Property not found in workspace",
+        }),
+      );
     }
 
     if (property.content.type !== body.content.type) {
-      return status(400, {
-        message: "Property content type mismatch",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Property content type mismatch",
+        }),
+      );
     }
 
-    const entity = await scopedDb((tx) =>
-      tx.query.entities.findFirst({
-        columns: { id: true, currentVersionId: true },
-        where: { id: body.entityId, workspaceId: { eq: workspaceId } },
-      }),
+    const entity = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findFirst({
+          columns: { id: true, currentVersionId: true },
+          where: { id: body.entityId, workspaceId: { eq: workspaceId } },
+        }),
+      ),
     );
 
     if (!entity) {
-      return status(404, {
-        message: "Entity not found in workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Entity not found in workspace",
+        }),
+      );
     }
 
     if (!entity.currentVersionId) {
@@ -99,7 +113,28 @@ const upsertField = createHandler(
     };
 
     if (isEmpty) {
-      await scopedDb(async (tx) => {
+      yield* Result.await(
+        safeDb(async (tx) => {
+          await tx
+            .delete(fields)
+            .where(
+              and(
+                eq(fields.propertyId, property.id),
+                eq(fields.entityVersionId, entityVersionId),
+              ),
+            );
+          await tx
+            .update(entities)
+            .set({ updatedAt: new Date() })
+            .where(eq(entities.id, body.entityId));
+        }),
+      );
+      reindex();
+      return Result.ok(undefined);
+    }
+
+    yield* Result.await(
+      safeDb(async (tx) => {
         await tx
           .delete(fields)
           .where(
@@ -108,39 +143,22 @@ const upsertField = createHandler(
               eq(fields.entityVersionId, entityVersionId),
             ),
           );
+
+        await tx.insert(fields).values({
+          workspaceId,
+          propertyId: property.id,
+          entityVersionId,
+          content: body.content,
+        });
+
         await tx
           .update(entities)
           .set({ updatedAt: new Date() })
           .where(eq(entities.id, body.entityId));
-      });
-      reindex();
-      return undefined;
-    }
-
-    await scopedDb(async (tx) => {
-      await tx
-        .delete(fields)
-        .where(
-          and(
-            eq(fields.propertyId, property.id),
-            eq(fields.entityVersionId, entityVersionId),
-          ),
-        );
-
-      await tx.insert(fields).values({
-        workspaceId,
-        propertyId: property.id,
-        entityVersionId,
-        content: body.content,
-      });
-
-      await tx
-        .update(entities)
-        .set({ updatedAt: new Date() })
-        .where(eq(entities.id, body.entityId));
-    });
+      }),
+    );
     reindex();
-    return undefined;
+    return Result.ok(undefined);
   },
 );
 

@@ -1,9 +1,10 @@
+import { Result } from "better-result";
 import { count, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -13,22 +14,22 @@ const readEntitySummariesQuerySchema = t.Object({
 });
 
 type ReadEntitySummariesHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   page: number;
 };
 
-const readEntitySummariesHandler = async ({
-  scopedDb,
+const readEntitySummariesHandler = async function* ({
+  safeDb,
   workspaceId,
   page,
-}: ReadEntitySummariesHandlerProps) => {
+}: ReadEntitySummariesHandlerProps) {
   const pageSize = LIMITS.entitySummariesPageSize;
   const offset = (page - 1) * pageSize;
   const whereClause = eq(entities.workspaceId, workspaceId);
 
-  const [rows, countResult] = await Promise.all([
-    scopedDb((tx) =>
+  const [rowsResult, countResult] = await Promise.all([
+    safeDb((tx) =>
       tx
         .select({
           id: entities.id,
@@ -40,17 +41,20 @@ const readEntitySummariesHandler = async ({
         .offset(offset)
         .limit(pageSize),
     ),
-    scopedDb((tx) =>
+    safeDb((tx) =>
       tx.select({ total: count() }).from(entities).where(whereClause),
     ),
   ]);
 
-  return {
+  const rows = yield* rowsResult;
+  const counts = yield* countResult;
+
+  return Result.ok({
     summaries: rows,
-    totalCount: countResult.at(0)?.total ?? 0,
+    totalCount: counts.at(0)?.total ?? 0,
     page,
     pageSize,
-  };
+  });
 };
 
 const config = {
@@ -58,14 +62,15 @@ const config = {
   query: readEntitySummariesQuerySchema,
 } satisfies HandlerConfig;
 
-const readEntitySummaries = createHandler(
+const readEntitySummaries = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, query }) =>
-    await readEntitySummariesHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, query }) {
+    return yield* readEntitySummariesHandler({
+      safeDb,
       workspaceId,
       page: query.page ?? 1,
-    }),
+    });
+  },
 );
 
 export default readEntitySummaries;

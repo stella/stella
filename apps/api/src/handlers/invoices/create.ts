@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import {
   BILLING_STATUS,
@@ -7,9 +8,9 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
-import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createInvoiceBodySchema = t.Object({
@@ -25,53 +26,66 @@ const createInvoiceBodySchema = t.Object({
   }),
 });
 
-const createInvoice = createHandler(
+const createInvoice = createSafeHandler(
   {
     permissions: { invoice: ["create"] },
     body: createInvoiceBodySchema,
   },
-  async ({ scopedDb, session, workspaceId, body }) => {
-    const totalInvoices = await scopedDb((tx) =>
-      tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
+  async function* ({ safeDb, session, workspaceId, body }) {
+    const totalInvoices = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
+      ),
     );
 
     if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-      return status(400, {
-        message: "Invoice limit reached for this workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invoice limit reached for this workspace",
+        }),
+      );
     }
 
-    const entries = await scopedDb((tx) =>
-      tx
-        .select({
-          id: timeEntries.id,
-          billedMinutes: timeEntries.billedMinutes,
-          rateAtEntry: timeEntries.rateAtEntry,
-          status: timeEntries.status,
-          billable: timeEntries.billable,
-        })
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.workspaceId, workspaceId),
-            inArray(timeEntries.id, body.timeEntryIds),
+    const entries = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: timeEntries.id,
+            billedMinutes: timeEntries.billedMinutes,
+            rateAtEntry: timeEntries.rateAtEntry,
+            status: timeEntries.status,
+            billable: timeEntries.billable,
+          })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, body.timeEntryIds),
+            ),
           ),
-        ),
+      ),
     );
 
     if (entries.length !== body.timeEntryIds.length) {
-      return status(400, {
-        message: "Some time entries were not found",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Some time entries were not found",
+        }),
+      );
     }
 
     const invalid = entries.some(
       (e) => e.status !== BILLING_STATUS.APPROVED || !e.billable,
     );
     if (invalid) {
-      return status(400, {
-        message: "All entries must be approved and billable",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "All entries must be approved and billable",
+        }),
+      );
     }
 
     let totalAmount = 0;
@@ -82,76 +96,78 @@ const createInvoice = createHandler(
     const now = new Date();
     const expectedCount = entries.length;
 
-    const result = await scopedDb(async (tx) => {
-      const [created] = await tx
-        .insert(invoices)
-        .values({
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          invoiceNumber: body.invoiceNumber,
-          invoiceDate: body.invoiceDate,
-          dueDate: body.dueDate ?? null,
-          reference: body.reference ?? null,
-          currency: body.currency,
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        const [created] = await tx
+          .insert(invoices)
+          .values({
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            invoiceNumber: body.invoiceNumber,
+            invoiceDate: body.invoiceDate,
+            dueDate: body.dueDate ?? null,
+            reference: body.reference ?? null,
+            currency: body.currency,
+            totalAmount,
+            notes: body.notes ?? null,
+            status: INVOICE_STATUS.DRAFT,
+          })
+          .returning({
+            id: invoices.id,
+            invoiceNumber: invoices.invoiceNumber,
+          });
+
+        if (!created) {
+          return { ok: false as const };
+        }
+
+        const updated = await tx
+          .update(timeEntries)
+          .set({
+            invoiceId: created.id,
+            status: BILLING_STATUS.BILLED,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, body.timeEntryIds),
+              eq(timeEntries.status, BILLING_STATUS.APPROVED),
+              eq(timeEntries.billable, true),
+            ),
+          )
+          .returning({ id: timeEntries.id });
+
+        const linkedCount = updated.length;
+        if (linkedCount !== expectedCount) {
+          return { ok: false as const };
+        }
+
+        return {
+          ok: true as const,
+          id: created.id,
+          invoiceNumber: created.invoiceNumber,
           totalAmount,
-          notes: body.notes ?? null,
-          status: INVOICE_STATUS.DRAFT,
-        })
-        .returning({
-          id: invoices.id,
-          invoiceNumber: invoices.invoiceNumber,
-        });
+          entryCount: linkedCount,
+        };
+      }),
+    );
 
-      if (!created) {
-        throw new ConcurrentModificationError({
-          message: "Failed to create invoice",
-        });
-      }
-
-      const updated = await tx
-        .update(timeEntries)
-        .set({
-          invoiceId: created.id,
-          status: BILLING_STATUS.BILLED,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(timeEntries.workspaceId, workspaceId),
-            inArray(timeEntries.id, body.timeEntryIds),
-            eq(timeEntries.status, BILLING_STATUS.APPROVED),
-            eq(timeEntries.billable, true),
-          ),
-        )
-        .returning({ id: timeEntries.id });
-
-      const linkedCount = updated.length;
-      if (linkedCount !== expectedCount) {
-        throw new ConcurrentModificationError({
-          message: "Time entries modified during invoice creation",
-        });
-      }
-
-      return {
-        id: created.id,
-        invoiceNumber: created.invoiceNumber,
-        totalAmount,
-        entryCount: linkedCount,
-      };
-    }).catch((error: unknown) => {
-      if (error instanceof ConcurrentModificationError) {
-        return null;
-      }
-      throw error;
-    });
-
-    if (!result) {
-      return status(409, {
-        message: "Some entries were modified concurrently; please retry",
-      });
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Some entries were modified concurrently; please retry",
+        }),
+      );
     }
 
-    return result;
+    return Result.ok({
+      id: txResult.id,
+      invoiceNumber: txResult.invoiceNumber,
+      totalAmount: txResult.totalAmount,
+      entryCount: txResult.entryCount,
+    });
   },
 );
 

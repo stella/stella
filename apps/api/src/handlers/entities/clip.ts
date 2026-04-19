@@ -1,12 +1,14 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -19,25 +21,29 @@ const clipBodySchema = t.Object({
   sourceType: t.Optional(t.String({ maxLength: 64 })),
 });
 
-export default createHandler(
+export default createSafeHandler(
   {
     body: clipBodySchema,
     permissions: { entity: ["create"] },
   },
-  async (ctx) => {
+  async function* (ctx) {
     const {
-      scopedDb,
+      safeDb,
       workspaceId,
       user,
       body: { title, url, snippet, citation, jurisdiction, sourceType },
     } = ctx;
 
-    const entityCount = await scopedDb((tx) =>
-      tx.$count(entities, eq(entities.workspaceId, workspaceId)),
+    const entityCount = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(entities, eq(entities.workspaceId, workspaceId)),
+      ),
     );
 
     if (entityCount >= LIMITS.entitiesCount) {
-      return status(400, { message: "Entities limit reached" });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
     }
 
     const metadata: LinkMetadata = {
@@ -51,41 +57,43 @@ export default createHandler(
     const entityId = crypto.randomUUID();
     const entityVersionId = crypto.randomUUID();
 
-    await scopedDb(async (tx) => {
-      const entityStamp = await allocateEntityStamp(tx, workspaceId);
+    yield* Result.await(
+      safeDb(async (tx) => {
+        const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-      await tx.insert(entities).values({
-        id: entityId,
-        workspaceId,
-        kind: "link",
-        name: title,
-        metadata,
-        createdBy: user.id,
-        docSequence: entityStamp.docSequence,
-      });
+        await tx.insert(entities).values({
+          id: entityId,
+          workspaceId,
+          kind: "link",
+          name: title,
+          metadata,
+          createdBy: user.id,
+          docSequence: entityStamp.docSequence,
+        });
 
-      await tx.insert(entityVersions).values({
-        id: entityVersionId,
-        workspaceId,
-        entityId,
-        versionNumber: 1,
-        stamp: entityStamp.stamp,
-        verificationCode: entityStamp.verificationCode,
-      });
+        await tx.insert(entityVersions).values({
+          id: entityVersionId,
+          workspaceId,
+          entityId,
+          versionNumber: 1,
+          stamp: entityStamp.stamp,
+          verificationCode: entityStamp.verificationCode,
+        });
 
-      await tx
-        .update(entities)
-        .set({ currentVersionId: entityVersionId })
-        .where(eq(entities.id, entityId));
+        await tx
+          .update(entities)
+          .set({ currentVersionId: entityVersionId })
+          .where(eq(entities.id, entityId));
 
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
-    });
+        await tx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
+      }),
+    );
 
     getSearchProvider().indexEntity(entityId).catch(captureError);
 
-    return { entityId };
+    return Result.ok({ entityId });
   },
 );

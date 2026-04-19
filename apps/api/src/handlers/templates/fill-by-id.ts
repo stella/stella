@@ -1,18 +1,19 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
@@ -35,6 +36,7 @@ const fillByIdParamsSchema = t.Object({
 const PDF_MIME_TYPE = "application/pdf";
 
 type FillByIdProps = {
+  safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -43,46 +45,60 @@ type FillByIdProps = {
   query: { format?: "docx" | "pdf" };
 };
 
-const fillByIdHandler = async ({
+const fillByIdHandler = async function* ({
+  safeDb,
   scopedDb,
   organizationId,
   userId,
   templateId,
   body: { values: valuesJson },
   query: { format = "docx" },
-}: FillByIdProps) => {
-  const template = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: {
-        s3Key: true,
-        fileName: true,
-      },
-    }),
+}: FillByIdProps) {
+  const template = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: {
+          s3Key: true,
+          fileName: true,
+        },
+      }),
+    ),
   );
 
   if (!template) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
   if (Result.isError(parseResult)) {
-    return status(400, {
-      message: "Invalid JSON in 'values' field.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid JSON in 'values' field.",
+      }),
+    );
   }
 
   const parsed = parseResult.value;
   if (!isRecord(parsed)) {
-    return status(400, {
-      message: "'values' must be a JSON object (not null or array).",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "'values' must be a JSON object (not null or array).",
+      }),
+    );
   }
 
   if (Object.values(parsed).some(containsNull)) {
-    return status(400, {
-      message: "'values' must not contain null values.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "'values' must not contain null values.",
+      }),
+    );
   }
 
   const s3File = s3.file(template.s3Key);
@@ -104,11 +120,14 @@ const fillByIdHandler = async ({
   }
 
   if (!isTemplateData(parsed)) {
-    return status(400, {
-      message:
-        "'values' must contain only strings, numbers, booleans, " +
-        "arrays, nested objects, or rich-text patch values.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          "'values' must contain only strings, numbers, booleans, " +
+          "arrays, nested objects, or rich-text patch values.",
+      }),
+    );
   }
 
   const result = await fillTemplate(buffer, parsed);
@@ -148,21 +167,26 @@ const fillByIdHandler = async ({
       DOCX_MIME_TYPE,
     );
     if (Result.isError(pdfResult)) {
-      return status(502, {
-        message: "PDF conversion failed",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: "PDF conversion failed",
+        }),
+      );
     }
 
     const pdfName = DOCX_EXT_RE.test(baseName)
       ? baseName.replace(DOCX_EXT_RE, ".pdf")
       : `${baseName}.pdf`;
-    return new Response(new Uint8Array(pdfResult.value.buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": PDF_MIME_TYPE,
-        "Content-Disposition": contentDisposition(pdfName),
-      },
-    });
+    return Result.ok(
+      new Response(new Uint8Array(pdfResult.value.buffer), {
+        status: 200,
+        headers: {
+          "Content-Type": PDF_MIME_TYPE,
+          "Content-Disposition": contentDisposition(pdfName),
+        },
+      }),
+    );
   }
 
   const headers = new Headers({
@@ -183,10 +207,12 @@ const fillByIdHandler = async ({
     headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));
   }
 
-  return new Response(new Uint8Array(result.buffer), {
-    status: 200,
-    headers,
-  });
+  return Result.ok(
+    new Response(new Uint8Array(result.buffer), {
+      status: 200,
+      headers,
+    }),
+  );
 };
 
 const config = {
@@ -196,17 +222,19 @@ const config = {
   query: fillByIdQuerySchema,
 } satisfies HandlerConfig;
 
-const fillTemplateById = createRootHandler(
+const fillTemplateById = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, user, params, body, query }) =>
-    await fillByIdHandler({
+  async function* ({ safeDb, scopedDb, session, user, params, body, query }) {
+    return yield* fillByIdHandler({
+      safeDb,
       scopedDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       templateId: params.templateId,
       body,
       query,
-    }),
+    });
+  },
 );
 
 export default fillTemplateById;

@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { createScopedDb } from "@/api/db";
-import type { ScopedDb } from "@/api/db";
+import { createSafeDb, createScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
@@ -20,6 +20,7 @@ export type McpRequestContext = {
   accessibleWorkspaceIdSet: Set<string>;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
 };
@@ -81,6 +82,7 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
     memberRole,
     organizationId,
+    safeDb: createSafeDb(db, accessibleWorkspaceIds, organizationId, userId),
     scopedDb: createScopedDb(
       db,
       accessibleWorkspaceIds,

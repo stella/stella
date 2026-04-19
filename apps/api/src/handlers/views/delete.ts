@@ -1,10 +1,12 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceViews } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
 
@@ -15,27 +17,36 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const deleteView = createHandler(
+const deleteView = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, params: { viewId } }) => {
-    const allViews = await scopedDb((tx) =>
-      tx
-        .select({
-          id: workspaceViews.id,
-          layoutType: workspaceViews.layout,
-        })
-        .from(workspaceViews)
-        .where(eq(workspaceViews.workspaceId, workspaceId))
-        .for("update"),
+  async function* ({ safeDb, workspaceId, params: { viewId } }) {
+    const allViews = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: workspaceViews.id,
+            layoutType: workspaceViews.layout,
+          })
+          .from(workspaceViews)
+          .where(eq(workspaceViews.workspaceId, workspaceId))
+          .for("update"),
+      ),
     );
 
     if (allViews.length <= 1) {
-      return status(400, { message: "Cannot delete the last view" });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot delete the last view",
+        }),
+      );
     }
 
     const target = allViews.find((v) => v.id === viewId);
     if (!target) {
-      return status(404, { message: "View not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "View not found" }),
+      );
     }
 
     const targetLayoutType = target.layoutType.type;
@@ -45,21 +56,26 @@ const deleteView = createHandler(
       ).length;
 
       if (sameLayoutCount <= 1) {
-        return status(400, {
-          message: `Cannot delete the last ${targetLayoutType} view`,
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `Cannot delete the last ${targetLayoutType} view`,
+          }),
+        );
       }
     }
 
-    await scopedDb((tx) =>
-      tx
-        .delete(workspaceViews)
-        .where(
-          and(
-            eq(workspaceViews.id, viewId),
-            eq(workspaceViews.workspaceId, workspaceId),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .delete(workspaceViews)
+          .where(
+            and(
+              eq(workspaceViews.id, viewId),
+              eq(workspaceViews.workspaceId, workspaceId),
+            ),
           ),
-        ),
+      ),
     );
 
     broadcast(workspaceId, {
@@ -67,7 +83,7 @@ const deleteView = createHandler(
       data: ["views", workspaceId],
     });
 
-    return undefined;
+    return Result.ok(undefined);
   },
 );
 

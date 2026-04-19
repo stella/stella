@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import {
   BILLING_STATUS,
@@ -9,8 +10,9 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type TransitionAction =
   | "finalize"
@@ -59,13 +61,13 @@ const invoiceParamsSchema = t.Object({
   invoiceId: tNanoid,
 });
 
-const transitionInvoice = createHandler(
+const transitionInvoice = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
-  async ({ scopedDb, workspaceId, params, body }) => {
+  async function* ({ safeDb, workspaceId, params, body }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
 
@@ -81,8 +83,72 @@ const transitionInvoice = createHandler(
     }
 
     if (body.action === "void") {
-      const result = await scopedDb(async (tx) => {
-        const updated = await tx
+      const txResult = yield* Result.await(
+        safeDb(async (tx) => {
+          const updated = await tx
+            .update(invoices)
+            .set(set)
+            .where(
+              and(
+                eq(invoices.id, params.invoiceId),
+                eq(invoices.workspaceId, workspaceId),
+                inArray(invoices.status, transition.from),
+              ),
+            )
+            .returning({ id: invoices.id });
+
+          const voidedInvoice = updated.at(0);
+          if (!voidedInvoice) {
+            return { ok: false as const };
+          }
+
+          await tx
+            .update(timeEntries)
+            .set({
+              status: BILLING_STATUS.APPROVED,
+              invoiceId: null,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(timeEntries.invoiceId, params.invoiceId),
+                eq(timeEntries.workspaceId, workspaceId),
+              ),
+            );
+
+          await tx
+            .update(expenses)
+            .set({
+              status: BILLING_STATUS.APPROVED,
+              invoiceId: null,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(expenses.invoiceId, params.invoiceId),
+                eq(expenses.workspaceId, workspaceId),
+              ),
+            );
+
+          return { ok: true as const, id: voidedInvoice.id };
+        }),
+      );
+
+      if (!txResult.ok) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Invoice cannot be voided from its current status",
+          }),
+        );
+      }
+
+      return Result.ok({ id: txResult.id });
+    }
+
+    const result = yield* Result.await(
+      safeDb((tx) =>
+        tx
           .update(invoices)
           .set(set)
           .where(
@@ -92,75 +158,21 @@ const transitionInvoice = createHandler(
               inArray(invoices.status, transition.from),
             ),
           )
-          .returning({ id: invoices.id });
-
-        const voidedInvoice = updated.at(0);
-        if (!voidedInvoice) {
-          return null;
-        }
-
-        await tx
-          .update(timeEntries)
-          .set({
-            status: BILLING_STATUS.APPROVED,
-            invoiceId: null,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(timeEntries.invoiceId, params.invoiceId),
-              eq(timeEntries.workspaceId, workspaceId),
-            ),
-          );
-
-        await tx
-          .update(expenses)
-          .set({
-            status: BILLING_STATUS.APPROVED,
-            invoiceId: null,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(expenses.invoiceId, params.invoiceId),
-              eq(expenses.workspaceId, workspaceId),
-            ),
-          );
-
-        return { id: voidedInvoice.id };
-      });
-
-      if (!result) {
-        return status(409, {
-          message: "Invoice cannot be voided from its current status",
-        });
-      }
-
-      return result;
-    }
-
-    const result = await scopedDb((tx) =>
-      tx
-        .update(invoices)
-        .set(set)
-        .where(
-          and(
-            eq(invoices.id, params.invoiceId),
-            eq(invoices.workspaceId, workspaceId),
-            inArray(invoices.status, transition.from),
-          ),
-        )
-        .returning({ id: invoices.id }),
+          .returning({ id: invoices.id }),
+      ),
     );
 
     const transitioned = result.at(0);
     if (!transitioned) {
-      return status(409, {
-        message: `Cannot ${body.action} invoice from its current status`,
-      });
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Cannot ${body.action} invoice from its current status`,
+        }),
+      );
     }
 
-    return { id: transitioned.id };
+    return Result.ok({ id: transitioned.id });
   },
 );
 

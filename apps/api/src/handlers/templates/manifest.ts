@@ -4,9 +4,10 @@ import { t } from "elysia";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -137,13 +138,26 @@ const config = {
   body: manifestBodySchema,
 } satisfies HandlerConfig;
 
-const manifestTemplate = createRootHandler(
+const manifestTemplate = createSafeRootHandler(
   config,
-  async ({ session, body }) =>
-    await manifestHandler({
-      organizationId: session.activeOrganizationId,
-      body,
-    }),
+  async function* ({ session, body }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await manifestHandler({
+            organizationId: session.activeOrganizationId,
+            body,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
+    return Result.ok(result);
+  },
 );
 
 export default manifestTemplate;

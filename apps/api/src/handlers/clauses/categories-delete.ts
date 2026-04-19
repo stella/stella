@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -15,14 +15,15 @@ const config = {
   params: deleteClauseCategoryParamsSchema,
 } satisfies HandlerConfig;
 
-const deleteClauseCategory = createRootHandler(
+const deleteClauseCategory = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await deleteCategoryHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* deleteCategoryHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       categoryId: params.categoryId,
-    }),
+    });
+  },
 );
 
 export default deleteClauseCategory;

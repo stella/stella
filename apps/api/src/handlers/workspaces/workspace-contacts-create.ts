@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceContacts } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -33,41 +34,45 @@ const config = {
   body: createWorkspaceContactBodySchema,
 } satisfies HandlerConfig;
 
-const createWorkspaceContact = createHandler(
+const createWorkspaceContact = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, body }) =>
-    await scopedDb(async (tx) => {
-      const contact = await tx.query.contacts.findFirst({
-        where: {
-          id: body.contactId,
-          organizationId: { eq: session.activeOrganizationId },
-        },
-        columns: { id: true },
-      });
-
-      if (!contact) {
-        return status(400, {
-          message: "Contact not found",
+  async function* ({ safeDb, session, workspaceId, body }) {
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        const contact = await tx.query.contacts.findFirst({
+          where: {
+            id: body.contactId,
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { id: true },
         });
-      }
 
-      // Lock rows then count to serialize concurrent adds.
-      // PG rejects FOR UPDATE with aggregate functions.
-      const lockedRows = await tx
-        .select({ id: workspaceContacts.id })
-        .from(workspaceContacts)
-        .where(eq(workspaceContacts.workspaceId, workspaceId))
-        .for("update");
+        if (!contact) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Contact not found",
+          };
+        }
 
-      if (lockedRows.length >= LIMITS.workspaceContactsCount) {
-        return status(400, {
-          message: "Workspace contacts limit reached",
-        });
-      }
+        // Lock rows then count to serialize concurrent adds.
+        // PG rejects FOR UPDATE with aggregate functions.
+        const lockedRows = await tx
+          .select({ id: workspaceContacts.id })
+          .from(workspaceContacts)
+          .where(eq(workspaceContacts.workspaceId, workspaceId))
+          .for("update");
 
-      const result = await Result.tryPromise({
-        try: () =>
-          tx
+        if (lockedRows.length >= LIMITS.workspaceContactsCount) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Workspace contacts limit reached",
+          };
+        }
+
+        try {
+          const [created] = await tx
             .insert(workspaceContacts)
             .values({
               organizationId: session.activeOrganizationId,
@@ -77,22 +82,33 @@ const createWorkspaceContact = createHandler(
               isPrimary: body.isPrimary ?? false,
               notes: body.notes ?? null,
             })
-            .returning(),
-        catch: (error) => error,
-      });
+            .returning();
 
-      if (result.isErr()) {
-        if (isPgError(result.error, PG_ERROR.UNIQUE_VIOLATION)) {
-          return status(409, {
-            message: "Contact already has this role on the matter",
-          });
+          return { ok: true as const, created };
+        } catch (error) {
+          if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
+            return {
+              ok: false as const,
+              status: 409 as const,
+              message: "Contact already has this role on the matter",
+            };
+          }
+          throw error;
         }
-        throw result.error;
-      }
+      }),
+    );
 
-      const [created] = result.value;
-      return created;
-    }),
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: txResult.status,
+          message: txResult.message,
+        }),
+      );
+    }
+
+    return Result.ok(txResult.created);
+  },
 );
 
 export default createWorkspaceContact;

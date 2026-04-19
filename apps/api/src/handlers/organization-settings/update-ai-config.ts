@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
 import { invalidateOrgAIConfig } from "@/api/lib/ai-config-cache";
@@ -12,8 +12,9 @@ import {
 import { getModelForRole, supportsRegion } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const updateAIConfigBody = t.Object({
   provider: t.UnionEnum([
@@ -42,27 +43,29 @@ const config = {
  * Validates the API key with a lightweight test call,
  * encrypts the config, and stores it.
  */
-const updateAIConfig = createRootHandler(
+const updateAIConfig = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, body }) => {
+  async function* ({ safeDb, session, body }) {
     // Resolve the API key and existing config: use the new
     // key if provided, otherwise read from storage.
     let resolvedKey: string | undefined = body.apiKey;
     let existingConfig: OrgAIConfig | undefined;
 
     if (!resolvedKey) {
-      const row = await scopedDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: {
-              eq: session.activeOrganizationId,
+      const row = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.organizationSettings.findFirst({
+            where: {
+              organizationId: {
+                eq: session.activeOrganizationId,
+              },
             },
-          },
-          columns: {
-            aiConfigEncrypted: true,
-            aiConfigIv: true,
-          },
-        }),
+            columns: {
+              aiConfigEncrypted: true,
+              aiConfigIv: true,
+            },
+          }),
+        ),
       );
 
       const ciphertext = row?.aiConfigEncrypted;
@@ -77,11 +80,14 @@ const updateAIConfig = createRootHandler(
 
         if (decryptResult.isErr()) {
           captureError(decryptResult.error);
-          return status(400, {
-            message:
-              "Stored AI config could not be decrypted. " +
-              "Please re-enter your API key.",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message:
+                "Stored AI config could not be decrypted. " +
+                "Please re-enter your API key.",
+            }),
+          );
         }
 
         existingConfig = decryptResult.value;
@@ -90,9 +96,12 @@ const updateAIConfig = createRootHandler(
     }
 
     if (!resolvedKey) {
-      return status(400, {
-        message: "API key is required for initial setup",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "API key is required for initial setup",
+        }),
+      );
     }
 
     // Require a new key when switching providers; the old
@@ -102,18 +111,24 @@ const updateAIConfig = createRootHandler(
       existingConfig &&
       existingConfig.provider !== body.provider
     ) {
-      return status(400, {
-        message: "API key is required when changing provider",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "API key is required when changing provider",
+        }),
+      );
     }
 
     // Resolve baseURL: body > existing > reject for
     // openai_compatible.
     const resolvedBaseURL = body.baseURL ?? existingConfig?.baseURL;
     if (body.provider === "openai_compatible" && !resolvedBaseURL) {
-      return status(400, {
-        message: "Base URL is required for OpenAI-compatible provider",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Base URL is required for OpenAI-compatible provider",
+        }),
+      );
     }
 
     // Reject region + non-regional provider at the boundary.
@@ -122,11 +137,14 @@ const updateAIConfig = createRootHandler(
       body.region !== "global" &&
       !supportsRegion(body.provider)
     ) {
-      return status(400, {
-        message:
-          `Regional routing is not supported for ${body.provider}. ` +
-          "Only Google AI supports EU/CH regional endpoints via Vertex AI.",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            `Regional routing is not supported for ${body.provider}. ` +
+            "Only Google AI supports EU/CH regional endpoints via Vertex AI.",
+        }),
+      );
     }
 
     // Only validate when a new key is provided.
@@ -139,9 +157,12 @@ const updateAIConfig = createRootHandler(
       );
 
       if (!validationResult.valid) {
-        return status(400, {
-          message: validationResult.error,
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: validationResult.error,
+          }),
+        );
       }
     }
 
@@ -158,32 +179,34 @@ const updateAIConfig = createRootHandler(
       orgConfig,
     );
 
-    await scopedDb((tx) =>
-      tx
-        .insert(organizationSettings)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: session.activeOrganizationId,
-          aiConfigEncrypted: newCiphertext,
-          aiConfigIv: newIv,
-        })
-        .onConflictDoUpdate({
-          target: organizationSettings.organizationId,
-          set: {
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .insert(organizationSettings)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: session.activeOrganizationId,
             aiConfigEncrypted: newCiphertext,
             aiConfigIv: newIv,
-            updatedAt: new Date(),
-          },
-        }),
+          })
+          .onConflictDoUpdate({
+            target: organizationSettings.organizationId,
+            set: {
+              aiConfigEncrypted: newCiphertext,
+              aiConfigIv: newIv,
+              updatedAt: new Date(),
+            },
+          }),
+      ),
     );
 
     invalidateOrgAIConfig(session.activeOrganizationId);
 
-    return {
+    return Result.ok({
       provider: body.provider,
       apiKeyMasked: maskApiKey(resolvedKey),
       region: orgConfig.region ?? "global",
-    };
+    });
   },
 );
 

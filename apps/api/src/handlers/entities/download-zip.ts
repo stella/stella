@@ -1,14 +1,16 @@
+import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import JSZip from "jszip";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 
 const downloadZipParamsSchema = t.Object({
@@ -16,7 +18,7 @@ const downloadZipParamsSchema = t.Object({
 });
 
 type DownloadZipHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   entityId: string;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -33,11 +35,11 @@ type FileRow = {
  * recursive CTE (single query, no N+1).
  */
 const collectDescendantIds = async (
-  scopedDb: ScopedDb,
+  safeDb: SafeDb,
   parentId: string,
   workspaceId: SafeId<"workspace">,
-): Promise<string[]> => {
-  const result = await scopedDb((tx) =>
+) =>
+  await safeDb((tx) =>
     tx.execute<{ id: string }>(sql`
     WITH RECURSIVE descendants AS (
       SELECT ${entities.id}
@@ -54,60 +56,70 @@ const collectDescendantIds = async (
   `),
   );
 
-  // Drizzle's execute() erases the generic to Record<string, any>
-  return result.map((r) => String(r.id));
-};
-
-const downloadZipHandler = async ({
-  scopedDb,
+const downloadZipHandler = async function* ({
+  safeDb,
   entityId,
   organizationId,
   workspaceId,
-}: DownloadZipHandlerProps) => {
-  const folderRows = await scopedDb((tx) =>
-    tx
-      .select({ id: entities.id, kind: entities.kind })
-      .from(entities)
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      )
-      .limit(1),
+}: DownloadZipHandlerProps) {
+  const folderRows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({ id: entities.id, kind: entities.kind })
+        .from(entities)
+        .where(
+          and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+        )
+        .limit(1),
+    ),
   );
   const folder = folderRows.at(0);
 
   if (!folder) {
-    return status(404);
+    return Result.err(
+      new HandlerError({ status: 404, message: "Folder not found" }),
+    );
   }
 
   if (folder.kind !== "folder") {
-    return status(400);
+    return Result.err(
+      new HandlerError({ status: 400, message: "Entity is not a folder" }),
+    );
   }
 
-  const descendantIds = await collectDescendantIds(
-    scopedDb,
-    entityId,
-    workspaceId,
+  const descendantRows = yield* Result.await(
+    collectDescendantIds(safeDb, entityId, workspaceId),
   );
 
+  // Drizzle's execute() erases the generic to Record<string, any>
+  const descendantIds = descendantRows.map((r) => String(r.id));
+
   if (descendantIds.length === 0) {
-    return status(404);
+    return Result.err(
+      new HandlerError({ status: 404, message: "Folder is empty" }),
+    );
   }
 
   // Batch-query all file fields in one query
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({ content: fields.content })
-      .from(fields)
-      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-      .innerJoin(
-        entities,
-        and(
-          eq(entityVersions.entityId, entities.id),
-          eq(entityVersions.id, entities.currentVersionId),
-          eq(entities.workspaceId, workspaceId),
-        ),
-      )
-      .where(inArray(entityVersions.entityId, descendantIds)),
+  const rows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({ content: fields.content })
+        .from(fields)
+        .innerJoin(
+          entityVersions,
+          eq(fields.entityVersionId, entityVersions.id),
+        )
+        .innerJoin(
+          entities,
+          and(
+            eq(entityVersions.entityId, entities.id),
+            eq(entityVersions.id, entities.currentVersionId),
+            eq(entities.workspaceId, workspaceId),
+          ),
+        )
+        .where(inArray(entityVersions.entityId, descendantIds)),
+    ),
   );
 
   const fileRows: FileRow[] = [];
@@ -122,7 +134,9 @@ const downloadZipHandler = async ({
   }
 
   if (fileRows.length === 0) {
-    return status(404);
+    return Result.err(
+      new HandlerError({ status: 404, message: "No files found in folder" }),
+    );
   }
 
   // Build ZIP — stream each file from S3 individually
@@ -184,12 +198,14 @@ const downloadZipHandler = async ({
     compressionOptions: { level: 6 },
   });
 
-  return new Response(zipBuffer, {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": 'attachment; filename="folder.zip"',
-    },
-  });
+  return Result.ok(
+    new Response(zipBuffer, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": 'attachment; filename="folder.zip"',
+      },
+    }),
+  );
 };
 
 const config = {
@@ -197,15 +213,16 @@ const config = {
   params: downloadZipParamsSchema,
 } satisfies HandlerConfig;
 
-const downloadZip = createHandler(
+const downloadZip = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, params }) =>
-    await downloadZipHandler({
-      scopedDb,
+  async function* ({ safeDb, session, workspaceId, params }) {
+    return yield* downloadZipHandler({
+      safeDb,
       entityId: params.entityId,
       organizationId: session.activeOrganizationId,
       workspaceId,
-    }),
+    });
+  },
 );
 
 export default downloadZip;

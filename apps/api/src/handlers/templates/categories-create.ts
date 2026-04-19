@@ -1,5 +1,8 @@
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { Result } from "better-result";
+
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
   createTemplateCategoryBodySchema,
@@ -11,14 +14,27 @@ const config = {
   body: createTemplateCategoryBodySchema,
 } satisfies HandlerConfig;
 
-const createTemplateCategory = createRootHandler(
+const createTemplateCategory = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, body }) =>
-    await createTemplateCategoryHandler({
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      body,
-    }),
+  async function* ({ scopedDb, session, body }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await createTemplateCategoryHandler({
+            scopedDb,
+            organizationId: session.activeOrganizationId,
+            body,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
+    return Result.ok(result);
+  },
 );
 
 export default createTemplateCategory;

@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { clauseVariants } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -30,11 +32,11 @@ type UpdateVariantBody = Static<typeof updateVariantBodySchema>;
 // ── Helpers ─────────────────────────────────────────
 
 const verifyClauseOwnership = async (
-  scopedDb: ScopedDb,
+  safeDb: SafeDb,
   clauseId: string,
   organizationId: SafeId<"organization">,
 ) => {
-  const clause = await scopedDb((tx) =>
+  const result = await safeDb((tx) =>
     tx.query.clauses.findFirst({
       where: {
         id: clauseId,
@@ -44,150 +46,181 @@ const verifyClauseOwnership = async (
     }),
   );
 
-  return clause;
+  return result;
 };
 
 // ── List ────────────────────────────────────────────
 
 type ListVariantsProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
 };
 
-export const listVariantsHandler = async ({
-  scopedDb,
+export const listVariantsHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
-}: ListVariantsProps) => {
-  const clause = await verifyClauseOwnership(
-    scopedDb,
+}: ListVariantsProps) {
+  const clauseResult = await verifyClauseOwnership(
+    safeDb,
     clauseId,
     organizationId,
   );
 
-  if (!clause) {
-    return status(404, { message: "Clause not found" });
+  if (Result.isError(clauseResult)) {
+    return yield* Result.err(clauseResult.error);
   }
 
-  const result = await scopedDb((tx) =>
-    tx.query.clauseVariants.findMany({
-      where: {
-        clauseId,
-        organizationId: { eq: organizationId },
-      },
-      columns: {
-        id: true,
-        label: true,
-        body: true,
-        sortOrder: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { sortOrder: "asc" },
-      limit: LIMITS.clauseVariantsPerClause,
-    }),
+  if (!clauseResult.value) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
+  }
+
+  const result = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauseVariants.findMany({
+        where: {
+          clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: {
+          id: true,
+          label: true,
+          body: true,
+          sortOrder: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { sortOrder: "asc" },
+        limit: LIMITS.clauseVariantsPerClause,
+      }),
+    ),
   );
 
-  return { variants: result };
+  return Result.ok({ variants: result });
 };
 
 // ── Create ──────────────────────────────────────────
 
 type CreateVariantProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   body: CreateVariantBody;
 };
 
-export const createVariantHandler = async ({
-  scopedDb,
+export const createVariantHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
   body,
-}: CreateVariantProps) => {
-  const clause = await verifyClauseOwnership(
-    scopedDb,
+}: CreateVariantProps) {
+  const clauseResult = await verifyClauseOwnership(
+    safeDb,
     clauseId,
     organizationId,
   );
 
-  if (!clause) {
-    return status(404, { message: "Clause not found" });
+  if (Result.isError(clauseResult)) {
+    return yield* Result.err(clauseResult.error);
   }
 
-  const existingCount = await scopedDb((tx) =>
-    tx.$count(clauseVariants, eq(clauseVariants.clauseId, clauseId)),
+  if (!clauseResult.value) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
+  }
+
+  const existingCount = yield* Result.await(
+    safeDb((tx) =>
+      tx.$count(clauseVariants, eq(clauseVariants.clauseId, clauseId)),
+    ),
   );
 
   if (existingCount >= LIMITS.clauseVariantsPerClause) {
-    return status(400, {
-      message: "Variant limit reached for this clause",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Variant limit reached for this clause",
+      }),
+    );
   }
 
-  const [inserted] = await scopedDb((tx) =>
-    tx
-      .insert(clauseVariants)
-      .values({
-        id: crypto.randomUUID(),
-        organizationId,
-        clauseId,
-        label: body.label,
-        body: body.body,
-      })
-      .returning({
-        id: clauseVariants.id,
-        label: clauseVariants.label,
-        sortOrder: clauseVariants.sortOrder,
-        createdAt: clauseVariants.createdAt,
-      }),
+  const [inserted] = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .insert(clauseVariants)
+        .values({
+          id: crypto.randomUUID(),
+          organizationId,
+          clauseId,
+          label: body.label,
+          body: body.body,
+        })
+        .returning({
+          id: clauseVariants.id,
+          label: clauseVariants.label,
+          sortOrder: clauseVariants.sortOrder,
+          createdAt: clauseVariants.createdAt,
+        }),
+    ),
   );
 
-  return inserted;
+  return Result.ok(inserted);
 };
 
 // ── Update ──────────────────────────────────────────
 
 type UpdateVariantProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   variantId: string;
   body: UpdateVariantBody;
 };
 
-export const updateVariantHandler = async ({
-  scopedDb,
+export const updateVariantHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
   variantId,
   body,
-}: UpdateVariantProps) => {
-  const clause = await verifyClauseOwnership(
-    scopedDb,
+}: UpdateVariantProps) {
+  const clauseResult = await verifyClauseOwnership(
+    safeDb,
     clauseId,
     organizationId,
   );
 
-  if (!clause) {
-    return status(404, { message: "Clause not found" });
+  if (Result.isError(clauseResult)) {
+    return yield* Result.err(clauseResult.error);
   }
 
-  const existing = await scopedDb((tx) =>
-    tx.query.clauseVariants.findFirst({
-      where: {
-        id: variantId,
-        clauseId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    }),
+  if (!clauseResult.value) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
+  }
+
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauseVariants.findFirst({
+        where: {
+          id: variantId,
+          clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Variant not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Variant not found" }),
+    );
   }
 
   const updates = {
@@ -195,77 +228,91 @@ export const updateVariantHandler = async ({
     updatedAt: new Date(),
   };
 
-  const [updated] = await scopedDb((tx) =>
-    tx
-      .update(clauseVariants)
-      .set(updates)
-      .where(
-        and(
-          eq(clauseVariants.id, variantId),
-          eq(clauseVariants.clauseId, clauseId),
-        ),
-      )
-      .returning({
-        id: clauseVariants.id,
-        label: clauseVariants.label,
-        sortOrder: clauseVariants.sortOrder,
-        updatedAt: clauseVariants.updatedAt,
-      }),
+  const [updated] = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .update(clauseVariants)
+        .set(updates)
+        .where(
+          and(
+            eq(clauseVariants.id, variantId),
+            eq(clauseVariants.clauseId, clauseId),
+          ),
+        )
+        .returning({
+          id: clauseVariants.id,
+          label: clauseVariants.label,
+          sortOrder: clauseVariants.sortOrder,
+          updatedAt: clauseVariants.updatedAt,
+        }),
+    ),
   );
 
-  return updated;
+  return Result.ok(updated);
 };
 
 // ── Delete ──────────────────────────────────────────
 
 type DeleteVariantProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   variantId: string;
 };
 
-export const deleteVariantHandler = async ({
-  scopedDb,
+export const deleteVariantHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
   variantId,
-}: DeleteVariantProps) => {
-  const clause = await verifyClauseOwnership(
-    scopedDb,
+}: DeleteVariantProps) {
+  const clauseResult = await verifyClauseOwnership(
+    safeDb,
     clauseId,
     organizationId,
   );
 
-  if (!clause) {
-    return status(404, { message: "Clause not found" });
+  if (Result.isError(clauseResult)) {
+    return yield* Result.err(clauseResult.error);
   }
 
-  const existing = await scopedDb((tx) =>
-    tx.query.clauseVariants.findFirst({
-      where: {
-        id: variantId,
-        clauseId,
-        organizationId: { eq: organizationId },
-      },
-      columns: { id: true },
-    }),
+  if (!clauseResult.value) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
+  }
+
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauseVariants.findFirst({
+        where: {
+          id: variantId,
+          clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Variant not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Variant not found" }),
+    );
   }
 
-  await scopedDb((tx) =>
-    tx
-      .delete(clauseVariants)
-      .where(
-        and(
-          eq(clauseVariants.id, variantId),
-          eq(clauseVariants.clauseId, clauseId),
+  yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .delete(clauseVariants)
+        .where(
+          and(
+            eq(clauseVariants.id, variantId),
+            eq(clauseVariants.clauseId, clauseId),
+          ),
         ),
-      ),
+    ),
   );
 
-  return undefined;
+  return Result.ok(undefined);
 };

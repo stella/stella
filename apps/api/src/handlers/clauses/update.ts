@@ -1,13 +1,15 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -32,54 +34,60 @@ const updateClauseParamsSchema = t.Object({
 type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
 
 type UpdateClauseProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   clauseId: string;
   body: UpdateClauseBody;
 };
 
-const updateClauseHandler = async ({
-  scopedDb,
+const updateClauseHandler = async function* ({
+  safeDb,
   organizationId,
   clauseId,
   body,
-}: UpdateClauseProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.clauses.findFirst({
-      where: {
-        id: clauseId,
-        organizationId: { eq: organizationId },
-      },
-      columns: {
-        id: true,
-        title: true,
-        description: true,
-        body: true,
-        currentVersion: true,
-      },
-    }),
+}: UpdateClauseProps) {
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.clauses.findFirst({
+        where: {
+          id: clauseId,
+          organizationId: { eq: organizationId },
+        },
+        columns: {
+          id: true,
+          title: true,
+          description: true,
+          body: true,
+          currentVersion: true,
+        },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Clause not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Clause not found" }),
+    );
   }
 
   const categoryId = body.categoryId;
   if (categoryId) {
-    const category = await scopedDb((tx) =>
-      tx.query.clauseCategories.findFirst({
-        where: {
-          id: categoryId,
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true },
-      }),
+    const category = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.clauseCategories.findFirst({
+          where: {
+            id: categoryId,
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!category) {
-      return status(404, {
-        message: "Category not found",
-      });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Category not found" }),
+      );
     }
   }
 
@@ -108,14 +116,19 @@ const updateClauseHandler = async ({
   // If body changes, bump version and create snapshot
   let newVersion: number | null = null;
   if (body.body !== undefined) {
-    const versionCount = await scopedDb((tx) =>
-      tx.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
+    const versionCount = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
+      ),
     );
 
     if (versionCount >= LIMITS.clauseVersionsPerClause) {
-      return status(400, {
-        message: "Version limit reached for this clause",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Version limit reached for this clause",
+        }),
+      );
     }
 
     newVersion = existing.currentVersion + 1;
@@ -123,36 +136,38 @@ const updateClauseHandler = async ({
     updates.currentVersion = newVersion;
   }
 
-  const updated = await scopedDb(async (tx) => {
-    const [row] = await tx
-      .update(clauses)
-      .set(updates)
-      .where(
-        and(
-          eq(clauses.id, clauseId),
-          eq(clauses.organizationId, organizationId),
-        ),
-      )
-      .returning({
-        id: clauses.id,
-        title: clauses.title,
-        categoryId: clauses.categoryId,
-        currentVersion: clauses.currentVersion,
-        updatedAt: clauses.updatedAt,
-      });
+  const updated = yield* Result.await(
+    safeDb(async (tx) => {
+      const [row] = await tx
+        .update(clauses)
+        .set(updates)
+        .where(
+          and(
+            eq(clauses.id, clauseId),
+            eq(clauses.organizationId, organizationId),
+          ),
+        )
+        .returning({
+          id: clauses.id,
+          title: clauses.title,
+          categoryId: clauses.categoryId,
+          currentVersion: clauses.currentVersion,
+          updatedAt: clauses.updatedAt,
+        });
 
-    if (newVersion !== null && body.body !== undefined) {
-      await tx.insert(clauseVersions).values({
-        id: crypto.randomUUID(),
-        organizationId,
-        clauseId,
-        version: newVersion,
-        body: body.body,
-      });
-    }
+      if (newVersion !== null && body.body !== undefined) {
+        await tx.insert(clauseVersions).values({
+          id: crypto.randomUUID(),
+          organizationId,
+          clauseId,
+          version: newVersion,
+          body: body.body,
+        });
+      }
 
-    return row;
-  });
+      return row;
+    }),
+  );
 
   // Re-index search vector when searchable fields change
   const searchFieldsChanged =
@@ -166,7 +181,7 @@ const updateClauseHandler = async ({
   if (searchFieldsChanged) {
     try {
       await updateSearchVector(
-        scopedDb,
+        safeDb,
         clauseId,
         body.title ?? existing.title,
         body.description !== undefined
@@ -179,7 +194,7 @@ const updateClauseHandler = async ({
     }
   }
 
-  return updated;
+  return Result.ok(updated);
 };
 
 const config = {
@@ -188,15 +203,16 @@ const config = {
   body: updateClauseBodySchema,
 } satisfies HandlerConfig;
 
-const updateClause = createRootHandler(
+const updateClause = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params, body }) =>
-    await updateClauseHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params, body }) {
+    return yield* updateClauseHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       body,
-    }),
+    });
+  },
 );
 
 export default updateClause;

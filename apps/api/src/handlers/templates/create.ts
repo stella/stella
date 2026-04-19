@@ -1,7 +1,8 @@
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
@@ -15,10 +16,11 @@ import type {
   TemplateManifest,
 } from "@/api/handlers/docx/types";
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { s3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -37,7 +39,7 @@ const createTemplateBodySchema = t.Object({
 });
 
 type CreateTemplateProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: {
@@ -87,27 +89,34 @@ const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   };
 };
 
-const createTemplateHandler = async ({
-  scopedDb,
+const createTemplateHandler = async function* ({
+  safeDb,
   organizationId,
   userId,
   body: { file, name, categoryId, manifest: manifestJson },
-}: CreateTemplateProps) => {
+}: CreateTemplateProps) {
   if (file.type !== DOCX_MIME_TYPE) {
-    return status(400, {
-      message: "Invalid file type. Expected a DOCX file.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid file type. Expected a DOCX file.",
+      }),
+    );
   }
 
   if (categoryId) {
-    const category = await scopedDb((tx) =>
-      tx.query.templateCategories.findFirst({
-        where: { id: categoryId, organizationId: { eq: organizationId } },
-        columns: { id: true },
-      }),
+    const category = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.templateCategories.findFirst({
+          where: { id: categoryId, organizationId: { eq: organizationId } },
+          columns: { id: true },
+        }),
+      ),
     );
     if (!category) {
-      return status(400, { message: "Category not found" });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Category not found" }),
+      );
     }
   }
 
@@ -169,65 +178,70 @@ const createTemplateHandler = async ({
 
   // Advisory lock + count + insert in one transaction to
   // prevent TOCTOU on the template limit.
-  const inserted = await scopedDb(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
-    );
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
+      );
 
-    const existingCount = await tx.$count(
-      templates,
-      eq(templates.organizationId, organizationId),
-    );
+      const existingCount = await tx.$count(
+        templates,
+        eq(templates.organizationId, organizationId),
+      );
 
-    if (existingCount >= LIMITS.templatesCount) {
-      return null;
-    }
+      if (existingCount >= LIMITS.templatesCount) {
+        return { ok: false as const };
+      }
 
-    const [row] = await tx
-      .insert(templates)
-      .values({
-        id: templateId,
+      const [row] = await tx
+        .insert(templates)
+        .values({
+          id: templateId,
+          organizationId,
+          categoryId: categoryId ?? null,
+          name,
+          fileName: sanitizeFilename(file.name),
+          s3Key,
+          sizeBytes: docxWithManifest.byteLength,
+          manifest,
+          fieldCount: fields.length,
+          currentVersion: 1,
+          createdBy: userId,
+        })
+        .returning({
+          id: templates.id,
+          name: templates.name,
+          fileName: templates.fileName,
+          fieldCount: templates.fieldCount,
+          sizeBytes: templates.sizeBytes,
+          createdAt: templates.createdAt,
+        });
+
+      await tx.insert(templateVersions).values({
+        id: versionId,
         organizationId,
-        categoryId: categoryId ?? null,
-        name,
-        fileName: sanitizeFilename(file.name),
+        templateId,
+        version: 1,
         s3Key,
-        sizeBytes: docxWithManifest.byteLength,
         manifest,
         fieldCount: fields.length,
-        currentVersion: 1,
         createdBy: userId,
-      })
-      .returning({
-        id: templates.id,
-        name: templates.name,
-        fileName: templates.fileName,
-        fieldCount: templates.fieldCount,
-        sizeBytes: templates.sizeBytes,
-        createdAt: templates.createdAt,
       });
 
-    await tx.insert(templateVersions).values({
-      id: versionId,
-      organizationId,
-      templateId,
-      version: 1,
-      s3Key,
-      manifest,
-      fieldCount: fields.length,
-      createdBy: userId,
-    });
+      return { ok: true as const, row };
+    }),
+  );
 
-    return row;
-  });
-
-  if (!inserted) {
-    return status(400, {
-      message: "Templates limit reached",
-    });
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Templates limit reached",
+      }),
+    );
   }
 
-  return inserted;
+  return Result.ok(txResult.row);
 };
 
 const config = {
@@ -235,15 +249,16 @@ const config = {
   body: createTemplateBodySchema,
 } satisfies HandlerConfig;
 
-const createTemplate = createRootHandler(
+const createTemplate = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, user, body }) =>
-    await createTemplateHandler({
-      scopedDb,
+  async function* ({ safeDb, session, user, body }) {
+    return yield* createTemplateHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       body,
-    }),
+    });
+  },
 );
 
 export default createTemplate;

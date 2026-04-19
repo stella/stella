@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
@@ -451,16 +452,19 @@ const handleCompatFetchTool: McpToolHandler = async ({
     return errorResult("Matter not found or not accessible");
   }
 
-  const entity = await readEntityByIdHandler({
-    scopedDb: context.scopedDb,
-    workspaceId: workspaceAccess,
-    entityId,
-  });
+  const entityResult = await Result.gen(() =>
+    readEntityByIdHandler({
+      safeDb: context.safeDb,
+      workspaceId: workspaceAccess,
+      entityId,
+    }),
+  );
 
   let url = buildMatterUrl(fetchPayload.workspaceId);
-  if (typeof entity === "object" && entity !== null && "fields" in entity) {
+  if (Result.isOk(entityResult)) {
+    const entity = entityResult.value;
     const fileField = entity.fields.find(
-      (field) => field.content.type === "file",
+      (field: { content: { type: string } }) => field.content.type === "file",
     );
     if (fileField) {
       url = buildDocumentUrl({

@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
 const updateOrganizationSettingsBodySchema = t.Object({
@@ -16,41 +17,45 @@ const config = {
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 
-const updateOrganizationSettings = createRootHandler(
+const updateOrganizationSettings = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, body }) => {
+  async function* ({ safeDb, session, body }) {
     const validation = validatePattern(
       body.matterNumberPattern,
       body.matterNumberPadding,
     );
 
     if (Result.isError(validation)) {
-      return status(400, { message: validation.error.message });
+      return Result.err(
+        new HandlerError({ status: 400, message: validation.error.message }),
+      );
     }
 
-    await scopedDb((tx) =>
-      tx
-        .insert(organizationSettings)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: session.activeOrganizationId,
-          matterNumberPattern: body.matterNumberPattern,
-          matterNumberPadding: body.matterNumberPadding,
-        })
-        .onConflictDoUpdate({
-          target: organizationSettings.organizationId,
-          set: {
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .insert(organizationSettings)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: session.activeOrganizationId,
             matterNumberPattern: body.matterNumberPattern,
             matterNumberPadding: body.matterNumberPadding,
-            updatedAt: new Date(),
-          },
-        }),
+          })
+          .onConflictDoUpdate({
+            target: organizationSettings.organizationId,
+            set: {
+              matterNumberPattern: body.matterNumberPattern,
+              matterNumberPadding: body.matterNumberPadding,
+              updatedAt: new Date(),
+            },
+          }),
+      ),
     );
 
-    return {
+    return Result.ok({
       matterNumberPattern: body.matterNumberPattern,
       matterNumberPadding: body.matterNumberPadding,
-    };
+    });
   },
 );
 

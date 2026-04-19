@@ -1,12 +1,14 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { updateSearchVector } from "./search-vector";
@@ -24,7 +26,7 @@ const createClauseBodySchema = t.Object({
 });
 
 type CreateClauseProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: {
@@ -38,84 +40,90 @@ type CreateClauseProps = {
   };
 };
 
-const createClauseHandler = async ({
-  scopedDb,
+const createClauseHandler = async function* ({
+  safeDb,
   organizationId,
   userId,
   body,
-}: CreateClauseProps) => {
-  const existingCount = await scopedDb((tx) =>
-    tx.$count(clauses, eq(clauses.organizationId, organizationId)),
+}: CreateClauseProps) {
+  const existingCount = yield* Result.await(
+    safeDb((tx) =>
+      tx.$count(clauses, eq(clauses.organizationId, organizationId)),
+    ),
   );
 
   if (existingCount >= LIMITS.clausesPerOrganization) {
-    return status(400, {
-      message: "Clause limit reached",
-    });
+    return Result.err(
+      new HandlerError({ status: 400, message: "Clause limit reached" }),
+    );
   }
 
   if (body.categoryId) {
-    const category = await scopedDb((tx) =>
-      tx.query.clauseCategories.findFirst({
-        where: {
-          id: body.categoryId,
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true },
-      }),
+    const category = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.clauseCategories.findFirst({
+          where: {
+            id: body.categoryId,
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!category) {
-      return status(404, {
-        message: "Category not found",
-      });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Category not found" }),
+      );
     }
   }
 
   const clauseId = crypto.randomUUID();
   const versionId = crypto.randomUUID();
 
-  const inserted = await scopedDb(async (tx) => {
-    const [row] = await tx
-      .insert(clauses)
-      .values({
-        id: clauseId,
+  const inserted = yield* Result.await(
+    safeDb(async (tx) => {
+      const [row] = await tx
+        .insert(clauses)
+        .values({
+          id: clauseId,
+          organizationId,
+          categoryId: body.categoryId ?? null,
+          title: body.title,
+          description: body.description ?? null,
+          usageNotes: body.usageNotes ?? null,
+          language: body.language ?? null,
+          body: body.body,
+          metadata: body.metadata ?? null,
+          currentVersion: 1,
+          createdBy: userId,
+        })
+        .returning({
+          id: clauses.id,
+          title: clauses.title,
+          categoryId: clauses.categoryId,
+          currentVersion: clauses.currentVersion,
+          createdAt: clauses.createdAt,
+        });
+
+      await tx.insert(clauseVersions).values({
+        id: versionId,
         organizationId,
-        categoryId: body.categoryId ?? null,
-        title: body.title,
-        description: body.description ?? null,
-        usageNotes: body.usageNotes ?? null,
-        language: body.language ?? null,
+        clauseId,
+        version: 1,
         body: body.body,
-        metadata: body.metadata ?? null,
-        currentVersion: 1,
-        createdBy: userId,
-      })
-      .returning({
-        id: clauses.id,
-        title: clauses.title,
-        categoryId: clauses.categoryId,
-        currentVersion: clauses.currentVersion,
-        createdAt: clauses.createdAt,
       });
 
-    await tx.insert(clauseVersions).values({
-      id: versionId,
-      organizationId,
-      clauseId,
-      version: 1,
-      body: body.body,
-    });
-
-    return row;
-  });
+      return row;
+    }),
+  );
 
   // Best-effort: if the search vector update fails the clause
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
   try {
     await updateSearchVector(
-      scopedDb,
+      safeDb,
       clauseId,
       body.title,
       body.description,
@@ -125,7 +133,7 @@ const createClauseHandler = async ({
     // Intentionally swallowed; see comment above.
   }
 
-  return inserted;
+  return Result.ok(inserted);
 };
 
 const config = {
@@ -133,15 +141,16 @@ const config = {
   body: createClauseBodySchema,
 } satisfies HandlerConfig;
 
-const createClause = createRootHandler(
+const createClause = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, user, body }) =>
-    await createClauseHandler({
-      scopedDb,
+  async function* ({ safeDb, session, user, body }) {
+    return yield* createClauseHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       body,
-    }),
+    });
+  },
 );
 
 export default createClause;

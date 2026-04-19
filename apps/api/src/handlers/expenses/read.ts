@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -7,7 +8,7 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -28,9 +29,9 @@ const config = {
   query: readExpensesQuerySchema,
 } satisfies HandlerConfig;
 
-const readExpenses = createHandler(
+const readExpenses = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, query }) => {
+  async function* ({ safeDb, workspaceId, query }) {
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
 
@@ -58,28 +59,30 @@ const readExpenses = createHandler(
       conditions.push(eq(expenses.billable, query.billable));
     }
 
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({
-          id: expenses.id,
-          userId: expenses.userId,
-          matterId: expenses.matterId,
-          dateIncurred: expenses.dateIncurred,
-          amount: expenses.amount,
-          currency: expenses.currency,
-          category: expenses.category,
-          description: expenses.description,
-          invoiceDescription: expenses.invoiceDescription,
-          billable: expenses.billable,
-          markup: expenses.markup,
-          status: expenses.status,
-          createdAt: expenses.createdAt,
-        })
-        .from(expenses)
-        .where(and(...conditions))
-        .orderBy(expenses.dateIncurred)
-        .limit(limit)
-        .offset(offset),
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: expenses.id,
+            userId: expenses.userId,
+            matterId: expenses.matterId,
+            dateIncurred: expenses.dateIncurred,
+            amount: expenses.amount,
+            currency: expenses.currency,
+            category: expenses.category,
+            description: expenses.description,
+            invoiceDescription: expenses.invoiceDescription,
+            billable: expenses.billable,
+            markup: expenses.markup,
+            status: expenses.status,
+            createdAt: expenses.createdAt,
+          })
+          .from(expenses)
+          .where(and(...conditions))
+          .orderBy(expenses.dateIncurred)
+          .limit(limit)
+          .offset(offset),
+      ),
     );
 
     // Batch-fetch user names
@@ -92,21 +95,25 @@ const readExpenses = createHandler(
 
     const usersResult =
       userIds.size > 0
-        ? await scopedDb((tx) =>
-            tx
-              .select({ id: user.id, name: user.name })
-              .from(user)
-              .where(inArray(user.id, [...userIds])),
+        ? yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ id: user.id, name: user.name })
+                .from(user)
+                .where(inArray(user.id, [...userIds])),
+            ),
           )
         : [];
 
     const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
 
-    return rows.map((row) => ({
-      ...row,
-      userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return Result.ok(
+      rows.map((row) => ({
+        ...row,
+        userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    );
   },
 );
 

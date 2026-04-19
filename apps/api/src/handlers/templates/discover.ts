@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
@@ -5,9 +6,10 @@ import {
   mergeManifestWithDiscovery,
   readManifest,
 } from "@/api/handlers/docx/template-manifest";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -51,13 +53,26 @@ const config = {
   body: discoverBodySchema,
 } satisfies HandlerConfig;
 
-const discoverTemplateHandler = createRootHandler(
+const discoverTemplateHandler = createSafeRootHandler(
   config,
-  async ({ session, body }) =>
-    await discoverHandler({
-      organizationId: session.activeOrganizationId,
-      body,
-    }),
+  async function* ({ session, body }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await discoverHandler({
+            organizationId: session.activeOrganizationId,
+            body,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
+    return Result.ok(result);
+  },
 );
 
 export default discoverTemplateHandler;

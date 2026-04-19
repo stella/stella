@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, like } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import {
@@ -13,11 +13,12 @@ import {
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -35,7 +36,7 @@ const uploadEntityBodySchema = t.Object({
 });
 
 type UploadEntityHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
@@ -74,19 +75,17 @@ const resolveFileName = async ({
   return { renamed: true, value: `${base}_${fieldsCount}${ext}` };
 };
 
-const uploadEntityHandler = async ({
-  scopedDb,
+const uploadEntityHandler = async function* ({
+  safeDb,
   organizationId,
   workspaceId,
   userId,
   body: { file, name: rawName, propertyId },
-}: UploadEntityHandlerProps) => {
+}: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
-  const [entityCount, property] = await Promise.all([
-    scopedDb((tx) =>
-      tx.$count(entities, eq(entities.workspaceId, workspaceId)),
-    ),
-    scopedDb((tx) =>
+  const [entityCountResult, propertyResult] = await Promise.all([
+    safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
+    safeDb((tx) =>
       tx.query.properties.findFirst({
         columns: { id: true, content: true },
         where: { id: propertyId, workspaceId: { eq: workspaceId } },
@@ -94,20 +93,28 @@ const uploadEntityHandler = async ({
     ),
   ]);
 
+  const entityCount = yield* entityCountResult;
+  const property = yield* propertyResult;
+
   if (entityCount >= LIMITS.entitiesCount) {
-    return status(400, { message: "Entities limit reached" });
+    return Result.err(
+      new HandlerError({ status: 400, message: "Entities limit reached" }),
+    );
   }
 
   if (!property) {
-    return status(400, {
-      message: "Property not found in workspace",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Property not found in workspace",
+      }),
+    );
   }
 
   if (property.content.type !== "file") {
-    return status(400, {
-      message: "Property isn't of type file",
-    });
+    return Result.err(
+      new HandlerError({ status: 400, message: "Property isn't of type file" }),
+    );
   }
 
   const fileBuffer = await file.arrayBuffer();
@@ -123,18 +130,21 @@ const uploadEntityHandler = async ({
   });
 
   if (Result.isError(scanResult)) {
-    return status(422, {
-      message: "File security scan failed",
-    });
+    return Result.err(
+      new HandlerError({ status: 422, message: "File security scan failed" }),
+    );
   }
 
   if (scanResult.value.verdict === "reject") {
     const reasons = scanResult.value.findings
       .filter((f) => f.severity === "reject")
       .map((f) => f.message);
-    return status(422, {
-      message: `File rejected: ${reasons.join("; ")}`,
-    });
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: `File rejected: ${reasons.join("; ")}`,
+      }),
+    );
   }
 
   const scanWarnings =
@@ -153,9 +163,12 @@ const uploadEntityHandler = async ({
         mimeType: PDF_MIME_TYPE,
         sizeBytes: String(fileBuffer.byteLength),
       });
-      return status(422, {
-        message: "Failed to open PDF: file appears corrupted",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Failed to open PDF: file appears corrupted",
+        }),
+      );
     }
 
     encrypted = result.value;
@@ -189,9 +202,12 @@ const uploadEntityHandler = async ({
       sizeBytes: String(fileBuffer.byteLength),
     });
     await s3.delete(sourceKey);
-    return status(502, {
-      message: "File conversion to PDF failed",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: "File conversion to PDF failed",
+      }),
+    );
   }
 
   // Upload converted PDF if conversion succeeded
@@ -216,68 +232,70 @@ const uploadEntityHandler = async ({
     const entityId = crypto.randomUUID();
     const entityVersionId = crypto.randomUUID();
 
-    const fileName = await scopedDb(async (tx) => {
-      const resolvedName = await resolveFileName({ tx, propertyId, name });
+    const fileName = yield* Result.await(
+      safeDb(async (tx) => {
+        const resolvedName = await resolveFileName({ tx, propertyId, name });
 
-      const entityStamp = await allocateEntityStamp(tx, workspaceId);
+        const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-      await tx.insert(entities).values({
-        id: entityId,
-        workspaceId,
-        createdBy: userId,
-        docSequence: entityStamp.docSequence,
-      });
+        await tx.insert(entities).values({
+          id: entityId,
+          workspaceId,
+          createdBy: userId,
+          docSequence: entityStamp.docSequence,
+        });
 
-      await tx.insert(entityVersions).values({
-        id: entityVersionId,
-        workspaceId,
-        entityId,
-        versionNumber: 1,
-        stamp: entityStamp.stamp,
-        verificationCode: entityStamp.verificationCode,
-      });
+        await tx.insert(entityVersions).values({
+          id: entityVersionId,
+          workspaceId,
+          entityId,
+          versionNumber: 1,
+          stamp: entityStamp.stamp,
+          verificationCode: entityStamp.verificationCode,
+        });
 
-      await tx
-        .update(entities)
-        .set({ currentVersionId: entityVersionId })
-        .where(eq(entities.id, entityId));
+        await tx
+          .update(entities)
+          .set({ currentVersionId: entityVersionId })
+          .where(eq(entities.id, entityId));
 
-      await tx.insert(fields).values({
-        workspaceId,
-        propertyId: property.id,
-        entityVersionId,
-        content: {
-          type: "file",
-          version: 1,
-          id: fileId,
-          fileName: resolvedName.value,
-          mimeType: file.type,
-          sizeBytes: file.size,
-          encrypted,
-          sha256Hex,
-          pdfFileId,
-          ...(scanWarnings !== undefined && { scanWarnings }),
-        },
-      });
+        await tx.insert(fields).values({
+          workspaceId,
+          propertyId: property.id,
+          entityVersionId,
+          content: {
+            type: "file",
+            version: 1,
+            id: fileId,
+            fileName: resolvedName.value,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            encrypted,
+            sha256Hex,
+            pdfFileId,
+            ...(scanWarnings !== undefined && { scanWarnings }),
+          },
+        });
 
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
+        await tx
+          .update(workspaces)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(workspaces.id, workspaceId));
 
-      return resolvedName;
-    });
+        return resolvedName;
+      }),
+    );
 
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
 
-    return {
+    return Result.ok({
       entityId,
       fileId,
       fileName: fileName.value,
       renamed: fileName.renamed,
-    };
+    });
   } catch (error) {
     await Promise.all(s3Keys.map(async (key) => await s3.delete(key)));
     throw error;
@@ -289,16 +307,17 @@ const config = {
   body: uploadEntityBodySchema,
 } satisfies HandlerConfig;
 
-const uploadEntity = createHandler(
+const uploadEntity = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, user, body }) =>
-    await uploadEntityHandler({
-      scopedDb,
+  async function* ({ safeDb, session, workspaceId, user, body }) {
+    return yield* uploadEntityHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
       body,
-    }),
+    });
+  },
 );
 
 export default uploadEntity;

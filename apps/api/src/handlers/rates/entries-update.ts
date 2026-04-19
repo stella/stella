@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateEntryBodySchema = t.Object({
@@ -17,38 +19,46 @@ const rateEntryParamsSchema = t.Object({
   rateTableId: tNanoid,
 });
 
-const updateRateEntry = createHandler(
+const updateRateEntry = createSafeHandler(
   {
     permissions: { rate: ["update"] },
     params: rateEntryParamsSchema,
     body: updateRateEntryBodySchema,
   },
-  async ({ scopedDb, workspaceId, params, body }) => {
-    const table = await scopedDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
-      }),
+  async function* ({ safeDb, workspaceId, params, body }) {
+    const table = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.rateTables.findFirst({
+          where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!table) {
-      return status(404, { message: "Rate table not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Rate table not found" }),
+      );
     }
 
-    const existing = await scopedDb((tx) =>
-      tx.query.rateEntries.findFirst({
-        where: { id: body.id, rateTableId: params.rateTableId },
-        columns: {
-          id: true,
-          userId: true,
-          effectiveFrom: true,
-          effectiveTo: true,
-        },
-      }),
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.rateEntries.findFirst({
+          where: { id: body.id, rateTableId: params.rateTableId },
+          columns: {
+            id: true,
+            userId: true,
+            effectiveFrom: true,
+            effectiveTo: true,
+          },
+        }),
+      ),
     );
 
     if (!existing) {
-      return status(404, { message: "Rate entry not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Rate entry not found" }),
+      );
     }
 
     const updates = pickDefined(body, [
@@ -58,94 +68,114 @@ const updateRateEntry = createHandler(
     ]);
 
     if (Object.keys(updates).length === 0) {
-      return { id: body.id };
+      return Result.ok({ id: body.id });
     }
 
     const datesChanged =
       body.effectiveFrom !== undefined || body.effectiveTo !== undefined;
 
-    return scopedDb(async (tx) => {
-      if (datesChanged) {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
-        );
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        if (datesChanged) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
+          );
 
-        const locked = await tx.query.rateEntries.findFirst({
-          where: { id: body.id, rateTableId: params.rateTableId },
-          columns: {
-            userId: true,
-            effectiveFrom: true,
-            effectiveTo: true,
-          },
-        });
-
-        if (!locked) {
-          return status(404, {
-            message: "Rate entry not found",
+          const locked = await tx.query.rateEntries.findFirst({
+            where: { id: body.id, rateTableId: params.rateTableId },
+            columns: {
+              userId: true,
+              effectiveFrom: true,
+              effectiveTo: true,
+            },
           });
-        }
 
-        const resolvedFrom = body.effectiveFrom ?? locked.effectiveFrom;
-        const resolvedTo =
-          body.effectiveTo !== undefined
-            ? body.effectiveTo
-            : locked.effectiveTo;
+          if (!locked) {
+            return {
+              ok: false as const,
+              status: 404 as const,
+              message: "Rate entry not found",
+            };
+          }
 
-        if (resolvedTo && resolvedTo < resolvedFrom) {
-          return status(400, {
-            message: "effectiveTo must be >= effectiveFrom",
-          });
-        }
+          const resolvedFrom = body.effectiveFrom ?? locked.effectiveFrom;
+          const resolvedTo =
+            body.effectiveTo !== undefined
+              ? body.effectiveTo
+              : locked.effectiveTo;
 
-        const userCondition = locked.userId
-          ? eq(rateEntries.userId, locked.userId)
-          : isNull(rateEntries.userId);
+          if (resolvedTo && resolvedTo < resolvedFrom) {
+            return {
+              ok: false as const,
+              status: 400 as const,
+              message: "effectiveTo must be >= effectiveFrom",
+            };
+          }
 
-        const overlapFromCondition = resolvedTo
-          ? lte(rateEntries.effectiveFrom, resolvedTo)
-          : undefined;
+          const userCondition = locked.userId
+            ? eq(rateEntries.userId, locked.userId)
+            : isNull(rateEntries.userId);
 
-        const overlapToCondition = or(
-          isNull(rateEntries.effectiveTo),
-          gte(rateEntries.effectiveTo, resolvedFrom),
-        );
+          const overlapFromCondition = resolvedTo
+            ? lte(rateEntries.effectiveFrom, resolvedTo)
+            : undefined;
 
-        const overlapConditions = [
-          eq(rateEntries.rateTableId, params.rateTableId),
-          userCondition,
-          ne(rateEntries.id, body.id),
-          overlapToCondition,
-        ];
-        if (overlapFromCondition) {
-          overlapConditions.push(overlapFromCondition);
-        }
+          const overlapToCondition = or(
+            isNull(rateEntries.effectiveTo),
+            gte(rateEntries.effectiveTo, resolvedFrom),
+          );
 
-        const overlapRows = await tx
-          .select({ id: rateEntries.id })
-          .from(rateEntries)
-          .where(and(...overlapConditions))
-          .limit(1);
-        const overlap = overlapRows.at(0);
-
-        if (overlap) {
-          return status(400, {
-            message: "Date range overlaps with an existing entry for this user",
-          });
-        }
-      }
-
-      await tx
-        .update(rateEntries)
-        .set(updates)
-        .where(
-          and(
-            eq(rateEntries.id, body.id),
+          const overlapConditions = [
             eq(rateEntries.rateTableId, params.rateTableId),
-          ),
-        );
+            userCondition,
+            ne(rateEntries.id, body.id),
+            overlapToCondition,
+          ];
+          if (overlapFromCondition) {
+            overlapConditions.push(overlapFromCondition);
+          }
 
-      return { id: body.id };
-    });
+          const overlapRows = await tx
+            .select({ id: rateEntries.id })
+            .from(rateEntries)
+            .where(and(...overlapConditions))
+            .limit(1);
+          const overlap = overlapRows.at(0);
+
+          if (overlap) {
+            return {
+              ok: false as const,
+              status: 400 as const,
+              message:
+                "Date range overlaps with an existing entry for this user",
+            };
+          }
+        }
+
+        await tx
+          .update(rateEntries)
+          .set(updates)
+          .where(
+            and(
+              eq(rateEntries.id, body.id),
+              eq(rateEntries.rateTableId, params.rateTableId),
+            ),
+          );
+
+        return { ok: true as const };
+      }),
+    );
+
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: txResult.status,
+          message: txResult.message,
+        }),
+      );
+    }
+
+    return Result.ok({ id: body.id });
   },
 );
 

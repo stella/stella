@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceMembers } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -12,60 +14,67 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const removeWorkspaceMember = createHandler(
+const removeWorkspaceMember = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, params: { userId } }) => {
+  async function* ({ safeDb, workspaceId, params: { userId } }) {
     // Lock + delete in one transaction to prevent TOCTOU.
     // FOR UPDATE on the row select (not aggregate) locks
     // member rows so concurrent removals serialize.
-    const result = await scopedDb(async (tx) => {
-      const lockedRows = await tx
-        .select({
-          id: workspaceMembers.id,
-          userId: workspaceMembers.userId,
-        })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, workspaceId))
-        .for("update");
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        const lockedRows = await tx
+          .select({
+            id: workspaceMembers.id,
+            userId: workspaceMembers.userId,
+          })
+          .from(workspaceMembers)
+          .where(eq(workspaceMembers.workspaceId, workspaceId))
+          .for("update");
 
-      // Check membership before the count guard so a non-member
-      // gets 404, not 400 "last member".
-      if (!lockedRows.some((r) => r.userId === userId)) {
-        return { error: "not-found" as const };
+        // Check membership before the count guard so a non-member
+        // gets 404, not 400 "last member".
+        if (!lockedRows.some((r) => r.userId === userId)) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
+
+        if (lockedRows.length <= 1) {
+          return { ok: false as const, reason: "last-member" as const };
+        }
+
+        const deleteResult = await tx
+          .delete(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.userId, userId),
+            ),
+          )
+          .returning({ id: workspaceMembers.id });
+        const deleted = deleteResult.at(0);
+
+        if (!deleted) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
+
+        return { ok: true as const, id: deleted.id };
+      }),
+    );
+
+    if (!txResult.ok) {
+      if (txResult.reason === "last-member") {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Cannot remove the last workspace member",
+          }),
+        );
       }
-
-      if (lockedRows.length <= 1) {
-        return { error: "last-member" as const };
-      }
-
-      const deleteResult = await tx
-        .delete(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, workspaceId),
-            eq(workspaceMembers.userId, userId),
-          ),
-        )
-        .returning({ id: workspaceMembers.id });
-      const deleted = deleteResult.at(0);
-
-      if (!deleted) {
-        return { error: "not-found" as const };
-      }
-
-      return { id: deleted.id };
-    });
-
-    if ("error" in result) {
-      if (result.error === "last-member") {
-        return status(400, {
-          message: "Cannot remove the last workspace member",
-        });
-      }
-      return status(404, { message: "Member not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Member not found" }),
+      );
     }
 
-    return { id: result.id };
+    return Result.ok({ id: txResult.id });
   },
 );
 

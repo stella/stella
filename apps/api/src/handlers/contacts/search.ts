@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const SEARCH_LIMIT = 20;
@@ -12,12 +13,12 @@ const searchContactsQuerySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
 });
 
-const searchContacts = createRootHandler(
+const searchContacts = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     query: searchContactsQuerySchema,
   },
-  async ({ scopedDb, session, query }) => {
+  async function* ({ safeDb, session, query }) {
     const pattern = `%${escapeLike(query.q)}%`;
 
     const conditions = [
@@ -34,25 +35,27 @@ const searchContacts = createRootHandler(
       conditions.push(eq(contacts.type, query.type));
     }
 
-    const items = await scopedDb((tx) =>
-      tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          displayName: contacts.displayName,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          organizationName: contacts.organizationName,
-          emails: contacts.emails,
-          color: contacts.color,
-        })
-        .from(contacts)
-        .where(and(...conditions))
-        .orderBy(contacts.displayName)
-        .limit(SEARCH_LIMIT),
+    const items = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: contacts.id,
+            type: contacts.type,
+            displayName: contacts.displayName,
+            firstName: contacts.firstName,
+            lastName: contacts.lastName,
+            organizationName: contacts.organizationName,
+            emails: contacts.emails,
+            color: contacts.color,
+          })
+          .from(contacts)
+          .where(and(...conditions))
+          .orderBy(contacts.displayName)
+          .limit(SEARCH_LIMIT),
+      ),
     );
 
-    return { items };
+    return Result.ok({ items });
   },
 );
 

@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createExpenseBodySchema = t.Object({
@@ -26,9 +28,9 @@ const config = {
   body: createExpenseBodySchema,
 } satisfies HandlerConfig;
 
-const createExpense = createHandler(
+const createExpense = createSafeHandler(
   config,
-  async ({ scopedDb, session, user, workspaceId, body }) => {
+  async function* ({ safeDb, session, user, workspaceId, body }) {
     const now = new Date();
     // en-CA locale formats dates as YYYY-MM-DD (ISO 8601)
     const todayStr = new Intl.DateTimeFormat("en-CA", {
@@ -38,66 +40,89 @@ const createExpense = createHandler(
     const today = new Date(`${todayStr}T00:00:00`);
 
     if (dateIncurred > today) {
-      return status(400, {
-        message: "Date incurred cannot be in the future",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Date incurred cannot be in the future",
+        }),
+      );
     }
 
     const maxAgeCutoff = new Date(today);
     maxAgeCutoff.setDate(maxAgeCutoff.getDate() - LIMITS.timeEntryMaxAgeDays);
     if (dateIncurred < maxAgeCutoff) {
-      return status(400, {
-        message: `Date incurred cannot be more than ${LIMITS.timeEntryMaxAgeDays} days ago`,
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Date incurred cannot be more than ${LIMITS.timeEntryMaxAgeDays} days ago`,
+        }),
+      );
     }
 
-    const matter = await scopedDb((tx) =>
-      tx.query.entities.findFirst({
-        where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
-      }),
+    const matter = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findFirst({
+          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!matter) {
-      return status(400, {
-        message: "Matter not found in this workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Matter not found in this workspace",
+        }),
+      );
     }
 
-    const totalExpenses = await scopedDb((tx) =>
-      tx.$count(expenses, eq(expenses.workspaceId, workspaceId)),
+    const totalExpenses = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(expenses, eq(expenses.workspaceId, workspaceId)),
+      ),
     );
 
     if (totalExpenses >= LIMITS.expensesPerWorkspace) {
-      return status(400, {
-        message: "Expenses limit reached for this workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Expenses limit reached for this workspace",
+        }),
+      );
     }
 
-    const [entry] = await scopedDb((tx) =>
-      tx
-        .insert(expenses)
-        .values({
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          userId: user.id,
-          matterId: body.matterId,
-          dateIncurred: body.dateIncurred,
-          amount: body.amount,
-          currency: body.currency,
-          category: body.category,
-          description: body.description,
-          invoiceDescription: body.invoiceDescription ?? null,
-          billable: body.billable ?? true,
-          markup: body.markup ?? 0,
-        })
-        .returning({ id: expenses.id }),
+    const [entry] = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .insert(expenses)
+          .values({
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            userId: user.id,
+            matterId: body.matterId,
+            dateIncurred: body.dateIncurred,
+            amount: body.amount,
+            currency: body.currency,
+            category: body.category,
+            description: body.description,
+            invoiceDescription: body.invoiceDescription ?? null,
+            billable: body.billable ?? true,
+            markup: body.markup ?? 0,
+          })
+          .returning({ id: expenses.id }),
+      ),
     );
 
     if (!entry) {
-      return status(500, { message: "Failed to create expense" });
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to create expense",
+        }),
+      );
     }
-    return { id: entry.id };
+    return Result.ok({ id: entry.id });
   },
 );
 
