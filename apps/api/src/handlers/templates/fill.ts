@@ -6,10 +6,11 @@ import { templateFills } from "@/api/db/schema";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
@@ -188,16 +189,29 @@ const config = {
   query: fillQuerySchema,
 } satisfies HandlerConfig;
 
-const fillTemplateHandler = createRootHandler(
+const fillTemplateHandler = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, user, body, query }) =>
-    await fillHandler({
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-      body,
-      query,
-    }),
+  async function* ({ scopedDb, session, user, body, query }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await fillHandler({
+            scopedDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            body,
+            query,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
+    return Result.ok(result);
+  },
 );
 
 export default fillTemplateHandler;

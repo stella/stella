@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
@@ -17,16 +17,17 @@ const config = {
   body: updateVariantBodySchema,
 } satisfies HandlerConfig;
 
-const updateVariant = createRootHandler(
+const updateVariant = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params, body }) =>
-    await updateVariantHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params, body }) {
+    return yield* updateVariantHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       variantId: params.variantId,
       body,
-    }),
+    });
+  },
 );
 
 export default updateVariant;

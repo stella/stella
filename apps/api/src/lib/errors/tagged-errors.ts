@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-export type HandlerErrorStatusCode = 400 | 403 | 404 | 422 | 500;
+export type HandlerErrorStatusCode = 400 | 403 | 404 | 409 | 422 | 500 | 502;
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,

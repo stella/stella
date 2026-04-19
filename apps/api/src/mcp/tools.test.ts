@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
@@ -184,6 +185,8 @@ const createContext = ({
   accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
+  safeDb: (async (fn) =>
+    Result.ok(await scopedDb(fn))) as McpRequestContext["safeDb"],
   scopedDb,
   userId: toSafeId<"user">("user_1"),
 });

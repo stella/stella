@@ -1,16 +1,18 @@
+import { Result } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { SafeDb, Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -20,7 +22,7 @@ const duplicateEntityBodySchema = t.Object({
 });
 
 type DuplicateEntityHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   body: Static<typeof duplicateEntityBodySchema>;
@@ -116,51 +118,61 @@ const extractFileName = (
   return null;
 };
 
-const duplicateEntityHandler = async ({
-  scopedDb,
+const duplicateEntityHandler = async function* ({
+  safeDb,
   workspaceId,
   userId,
   body: { entityId: sourceEntityId },
-}: DuplicateEntityHandlerProps) => {
-  const source = await scopedDb((tx) =>
-    tx.query.entities.findFirst({
-      where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
-      columns: {
-        id: true,
-        kind: true,
-        name: true,
-        parentId: true,
-      },
-      with: {
-        currentVersion: {
-          columns: { id: true },
-          with: {
-            fields: {
-              columns: {
-                propertyId: true,
-                content: true,
+}: DuplicateEntityHandlerProps) {
+  const source = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
+        columns: {
+          id: true,
+          kind: true,
+          name: true,
+          parentId: true,
+        },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              fields: {
+                columns: {
+                  propertyId: true,
+                  content: true,
+                },
               },
             },
           },
         },
-      },
-    }),
+      }),
+    ),
   );
 
   if (!source) {
-    return status(404, { message: "Entity not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Entity not found" }),
+    );
   }
 
   if (source.kind === "folder") {
-    return status(400, {
-      message: "Folder duplication is not supported",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Folder duplication is not supported",
+      }),
+    );
   }
 
   if (!source.currentVersion) {
-    return status(400, {
-      message: "Entity has no current version",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity has no current version",
+      }),
+    );
   }
 
   const sourceFields = source.currentVersion.fields;
@@ -169,84 +181,91 @@ const duplicateEntityHandler = async ({
   // display name from the file field's fileName
   const effectiveName = source.name ?? extractFileName(sourceFields);
 
-  const result = await scopedDb(async (tx) => {
-    const entityCount = await tx.$count(
-      entities,
-      eq(entities.workspaceId, workspaceId),
-    );
-
-    if (entityCount >= LIMITS.entitiesCount) {
-      return status(400, {
-        message: "Entities limit reached",
-      });
-    }
-
-    const newEntityId = crypto.randomUUID();
-    const newVersionId = crypto.randomUUID();
-
-    const duplicateName = await resolveEntityName({
-      tx,
-      workspaceId,
-      parentId: source.parentId,
-      name: effectiveName,
-    });
-
-    const entityStamp =
-      source.kind === "document"
-        ? await allocateEntityStamp(tx, workspaceId)
-        : null;
-
-    await tx.insert(entities).values({
-      id: newEntityId,
-      workspaceId,
-      kind: source.kind,
-      parentId: source.parentId,
-      name: duplicateName,
-      createdBy: userId,
-      docSequence: entityStamp?.docSequence ?? null,
-    });
-
-    await tx.insert(entityVersions).values({
-      id: newVersionId,
-      workspaceId,
-      entityId: newEntityId,
-      versionNumber: 1,
-      stamp: entityStamp?.stamp ?? null,
-      verificationCode: entityStamp?.verificationCode ?? null,
-    });
-
-    await tx
-      .update(entities)
-      .set({ currentVersionId: newVersionId })
-      .where(eq(entities.id, newEntityId));
-
-    // Copy all fields from source version (reuses S3 file
-    // references; no data is physically duplicated)
-    if (sourceFields.length > 0) {
-      await tx.insert(fields).values(
-        sourceFields.map((field) => ({
-          workspaceId,
-          propertyId: field.propertyId,
-          entityVersionId: newVersionId,
-          content: field.content,
-        })),
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      const entityCount = await tx.$count(
+        entities,
+        eq(entities.workspaceId, workspaceId),
       );
-    }
 
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
+      if (entityCount >= LIMITS.entitiesCount) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Entities limit reached",
+        };
+      }
 
-    return { entityId: newEntityId };
-  });
+      const newEntityId = crypto.randomUUID();
+      const newVersionId = crypto.randomUUID();
 
-  // oxlint-disable-next-line typescript/strict-boolean-expressions -- result discriminated union check
-  if (result && typeof result === "object" && "entityId" in result) {
-    processExtraction(result.entityId).catch(captureError);
+      const duplicateName = await resolveEntityName({
+        tx,
+        workspaceId,
+        parentId: source.parentId,
+        name: effectiveName,
+      });
+
+      const entityStamp =
+        source.kind === "document"
+          ? await allocateEntityStamp(tx, workspaceId)
+          : null;
+
+      await tx.insert(entities).values({
+        id: newEntityId,
+        workspaceId,
+        kind: source.kind,
+        parentId: source.parentId,
+        name: duplicateName,
+        createdBy: userId,
+        docSequence: entityStamp?.docSequence ?? null,
+      });
+
+      await tx.insert(entityVersions).values({
+        id: newVersionId,
+        workspaceId,
+        entityId: newEntityId,
+        versionNumber: 1,
+        stamp: entityStamp?.stamp ?? null,
+        verificationCode: entityStamp?.verificationCode ?? null,
+      });
+
+      await tx
+        .update(entities)
+        .set({ currentVersionId: newVersionId })
+        .where(eq(entities.id, newEntityId));
+
+      // Copy all fields from source version (reuses S3 file
+      // references; no data is physically duplicated)
+      if (sourceFields.length > 0) {
+        await tx.insert(fields).values(
+          sourceFields.map((field) => ({
+            workspaceId,
+            propertyId: field.propertyId,
+            entityVersionId: newVersionId,
+            content: field.content,
+          })),
+        );
+      }
+
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+
+      return { ok: true as const, entityId: newEntityId };
+    }),
+  );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({ status: txResult.status, message: txResult.message }),
+    );
   }
 
-  return result;
+  processExtraction(txResult.entityId).catch(captureError);
+
+  return Result.ok({ entityId: txResult.entityId });
 };
 
 const config = {
@@ -254,15 +273,16 @@ const config = {
   body: duplicateEntityBodySchema,
 } satisfies HandlerConfig;
 
-const duplicateEntity = createHandler(
+const duplicateEntity = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, user, body }) =>
-    await duplicateEntityHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, user, body }) {
+    return yield* duplicateEntityHandler({
+      safeDb,
       workspaceId,
       userId: user.id,
       body,
-    }),
+    });
+  },
 );
 
 export default duplicateEntity;

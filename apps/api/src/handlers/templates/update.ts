@@ -1,16 +1,18 @@
+import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { s3 } from "@/api/lib/s3";
@@ -34,7 +36,7 @@ const updateTemplateParamsSchema = t.Object({
 type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
 
 type UpdateTemplateProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: string;
@@ -52,38 +54,46 @@ const parseManifest = (json: string): TemplateManifest | null => {
   return isTemplateManifest(parsed) ? parsed : null;
 };
 
-const updateTemplateHandler = async ({
-  scopedDb,
+const updateTemplateHandler = async function* ({
+  safeDb,
   organizationId,
   userId,
   templateId,
   body,
-}: UpdateTemplateProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: {
-        id: true,
-        s3Key: true,
-        currentVersion: true,
-      },
-    }),
+}: UpdateTemplateProps) {
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: {
+          id: true,
+          s3Key: true,
+          currentVersion: true,
+        },
+      }),
+    ),
   );
 
   if (!existing) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   const categoryId = body.categoryId;
   if (categoryId !== undefined && categoryId !== null) {
-    const category = await scopedDb((tx) =>
-      tx.query.templateCategories.findFirst({
-        where: { id: categoryId, organizationId: { eq: organizationId } },
-        columns: { id: true },
-      }),
+    const category = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.templateCategories.findFirst({
+          where: { id: categoryId, organizationId: { eq: organizationId } },
+          columns: { id: true },
+        }),
+      ),
     );
     if (!category) {
-      return status(400, { message: "Category not found" });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Category not found" }),
+      );
     }
   }
 
@@ -104,9 +114,12 @@ const updateTemplateHandler = async ({
   if (body.manifest !== undefined) {
     const manifest = parseManifest(body.manifest);
     if (!manifest) {
-      return status(400, {
-        message: "Invalid manifest JSON",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invalid manifest JSON",
+        }),
+      );
     }
 
     // Re-embed the manifest in the DOCX so the S3 file
@@ -136,21 +149,67 @@ const updateTemplateHandler = async ({
 
     // Advisory lock + version count + update + insert in one
     // transaction to prevent TOCTOU on the version limit.
-    const row = await scopedDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
+        );
+
+        const versionCount = await tx.$count(
+          templateVersions,
+          eq(templateVersions.templateId, templateId),
+        );
+
+        if (versionCount >= LIMITS.templateVersionsPerTemplate) {
+          return { ok: false as const };
+        }
+
+        const [r] = await tx
+          .update(templates)
+          .set(updates)
+          .where(
+            and(
+              eq(templates.id, templateId),
+              eq(templates.organizationId, organizationId),
+            ),
+          )
+          .returning({
+            id: templates.id,
+            name: templates.name,
+            fieldCount: templates.fieldCount,
+            updatedAt: templates.updatedAt,
+          });
+
+        await tx.insert(templateVersions).values({
+          id: crypto.randomUUID(),
+          organizationId,
+          templateId,
+          version: newVersion,
+          s3Key: versionS3Key,
+          manifest,
+          fieldCount: manifest.fields.length,
+          createdBy: userId,
+        });
+
+        return { ok: true as const, row: r };
+      }),
+    );
+
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Version limit reached for this template",
+        }),
       );
+    }
 
-      const versionCount = await tx.$count(
-        templateVersions,
-        eq(templateVersions.templateId, templateId),
-      );
+    return Result.ok(txResult.row);
+  }
 
-      if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-        return null;
-      }
-
-      const [r] = await tx
+  const [updated] = yield* Result.await(
+    safeDb((tx) =>
+      tx
         .update(templates)
         .set(updates)
         .where(
@@ -164,50 +223,11 @@ const updateTemplateHandler = async ({
           name: templates.name,
           fieldCount: templates.fieldCount,
           updatedAt: templates.updatedAt,
-        });
-
-      await tx.insert(templateVersions).values({
-        id: crypto.randomUUID(),
-        organizationId,
-        templateId,
-        version: newVersion,
-        s3Key: versionS3Key,
-        manifest,
-        fieldCount: manifest.fields.length,
-        createdBy: userId,
-      });
-
-      return r;
-    });
-
-    if (!row) {
-      return status(400, {
-        message: "Version limit reached for this template",
-      });
-    }
-
-    return row;
-  }
-
-  const [updated] = await scopedDb((tx) =>
-    tx
-      .update(templates)
-      .set(updates)
-      .where(
-        and(
-          eq(templates.id, templateId),
-          eq(templates.organizationId, organizationId),
-        ),
-      )
-      .returning({
-        id: templates.id,
-        name: templates.name,
-        fieldCount: templates.fieldCount,
-        updatedAt: templates.updatedAt,
-      }),
+        }),
+    ),
   );
 
-  return updated;
+  return Result.ok(updated);
 };
 
 const config = {
@@ -216,16 +236,17 @@ const config = {
   body: updateTemplateBodySchema,
 } satisfies HandlerConfig;
 
-const updateTemplate = createRootHandler(
+const updateTemplate = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, user, params, body }) =>
-    await updateTemplateHandler({
-      scopedDb,
+  async function* ({ safeDb, session, user, params, body }) {
+    return yield* updateTemplateHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       templateId: params.templateId,
       body,
-    }),
+    });
+  },
 );
 
 export default updateTemplate;

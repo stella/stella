@@ -1,9 +1,10 @@
+import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 
 const readRateEntriesQuerySchema = t.Object({
@@ -15,42 +16,46 @@ const rateEntryParamsSchema = t.Object({
   rateTableId: tNanoid,
 });
 
-const readRateEntries = createHandler(
+const readRateEntries = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,
   },
-  async ({ scopedDb, workspaceId, params, query }) => {
-    const table = await scopedDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
-      }),
+  async function* ({ safeDb, workspaceId, params, query }) {
+    const table = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.rateTables.findFirst({
+          where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!table) {
-      return [];
+      return Result.ok([]);
     }
 
     const limit = query.limit ?? 200;
     const offset = query.offset ?? 0;
 
-    const rows = await scopedDb((tx) =>
-      tx
-        .select({
-          id: rateEntries.id,
-          userId: rateEntries.userId,
-          hourlyRate: rateEntries.hourlyRate,
-          effectiveFrom: rateEntries.effectiveFrom,
-          effectiveTo: rateEntries.effectiveTo,
-          createdAt: rateEntries.createdAt,
-        })
-        .from(rateEntries)
-        .where(eq(rateEntries.rateTableId, params.rateTableId))
-        .orderBy(rateEntries.effectiveFrom)
-        .limit(limit)
-        .offset(offset),
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: rateEntries.id,
+            userId: rateEntries.userId,
+            hourlyRate: rateEntries.hourlyRate,
+            effectiveFrom: rateEntries.effectiveFrom,
+            effectiveTo: rateEntries.effectiveTo,
+            createdAt: rateEntries.createdAt,
+          })
+          .from(rateEntries)
+          .where(eq(rateEntries.rateTableId, params.rateTableId))
+          .orderBy(rateEntries.effectiveFrom)
+          .limit(limit)
+          .offset(offset),
+      ),
     );
 
     const userIds = new Set<string>();
@@ -62,11 +67,13 @@ const readRateEntries = createHandler(
 
     const usersResult =
       userIds.size > 0
-        ? await scopedDb((tx) =>
-            tx
-              .select({ id: user.id, image: user.image, name: user.name })
-              .from(user)
-              .where(inArray(user.id, [...userIds])),
+        ? yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ id: user.id, image: user.image, name: user.name })
+                .from(user)
+                .where(inArray(user.id, [...userIds])),
+            ),
           )
         : [];
 
@@ -74,12 +81,14 @@ const readRateEntries = createHandler(
       usersResult.map((u) => [u.id, { image: u.image, name: u.name }]),
     );
 
-    return rows.map((row) => ({
-      ...row,
-      userImage: row.userId ? (userMap.get(row.userId)?.image ?? null) : null,
-      userName: row.userId ? (userMap.get(row.userId)?.name ?? null) : null,
-      createdAt: row.createdAt.toISOString(),
-    }));
+    return Result.ok(
+      rows.map((row) => ({
+        ...row,
+        userImage: row.userId ? (userMap.get(row.userId)?.image ?? null) : null,
+        userName: row.userId ? (userMap.get(row.userId)?.name ?? null) : null,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    );
   },
 );
 

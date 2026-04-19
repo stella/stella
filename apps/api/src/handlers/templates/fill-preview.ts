@@ -1,16 +1,17 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { isTemplateData } from "@/api/handlers/docx/types";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -25,48 +26,63 @@ const fillPreviewParamsSchema = t.Object({
 });
 
 type FillPreviewProps = {
+  safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   templateId: string;
   body: { values: string };
 };
 
-const fillPreviewHandler = async ({
+const fillPreviewHandler = async function* ({
+  safeDb,
   scopedDb,
   organizationId,
   templateId,
   body: { values: valuesJson },
-}: FillPreviewProps) => {
-  const template = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: { s3Key: true },
-    }),
+}: FillPreviewProps) {
+  const template = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: { s3Key: true },
+      }),
+    ),
   );
 
   if (!template) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
   if (Result.isError(parseResult)) {
-    return status(400, {
-      message: "Invalid JSON in 'values' field.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid JSON in 'values' field.",
+      }),
+    );
   }
 
   const parsed = parseResult.value;
   if (!isRecord(parsed)) {
-    return status(400, {
-      message: "'values' must be a JSON object (not null or array).",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "'values' must be a JSON object (not null or array).",
+      }),
+    );
   }
 
   const record = parsed;
   if (Object.values(record).some(containsNull)) {
-    return status(400, {
-      message: "'values' must not contain null values.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "'values' must not contain null values.",
+      }),
+    );
   }
 
   const s3File = s3.file(template.s3Key);
@@ -88,11 +104,14 @@ const fillPreviewHandler = async ({
   }
 
   if (!isTemplateData(record)) {
-    return status(400, {
-      message:
-        "'values' must contain only strings, numbers, booleans, " +
-        "arrays, nested objects, or rich-text patch values.",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          "'values' must contain only strings, numbers, booleans, " +
+          "arrays, nested objects, or rich-text patch values.",
+      }),
+    );
   }
 
   const result = await fillTemplate(buffer, record);
@@ -100,13 +119,13 @@ const fillPreviewHandler = async ({
   // Extract text from the filled document
   const { paragraphs, charCount } = await extractText(result.buffer);
 
-  return {
+  return Result.ok({
     paragraphs,
     charCount,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     unusedValues: result.unusedValues,
     structureErrors: result.structureErrors,
-  };
+  });
 };
 
 const config = {
@@ -115,15 +134,17 @@ const config = {
   body: fillPreviewBodySchema,
 } satisfies HandlerConfig;
 
-const fillTemplatePreview = createRootHandler(
+const fillTemplatePreview = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params, body }) =>
-    await fillPreviewHandler({
+  async function* ({ safeDb, scopedDb, session, params, body }) {
+    return yield* fillPreviewHandler({
+      safeDb,
       scopedDb,
       organizationId: session.activeOrganizationId,
       templateId: params.templateId,
       body,
-    }),
+    });
+  },
 );
 
 export default fillTemplatePreview;

@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateInvoiceBodySchema = t.Object({
@@ -19,13 +21,13 @@ const invoiceParamsSchema = t.Object({
   invoiceId: tNanoid,
 });
 
-const updateInvoice = createHandler(
+const updateInvoice = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },
-  async ({ scopedDb, workspaceId, params, body }) => {
+  async function* ({ safeDb, workspaceId, params, body }) {
     const set = {
       ...pickDefined(body, [
         "invoiceNumber",
@@ -38,27 +40,32 @@ const updateInvoice = createHandler(
       updatedAt: new Date(),
     };
 
-    const result = await scopedDb((tx) =>
-      tx
-        .update(invoices)
-        .set(set)
-        .where(
-          and(
-            eq(invoices.id, params.invoiceId),
-            eq(invoices.workspaceId, workspaceId),
-            eq(invoices.status, INVOICE_STATUS.DRAFT),
-          ),
-        )
-        .returning({ id: invoices.id }),
+    const result = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(invoices)
+          .set(set)
+          .where(
+            and(
+              eq(invoices.id, params.invoiceId),
+              eq(invoices.workspaceId, workspaceId),
+              eq(invoices.status, INVOICE_STATUS.DRAFT),
+            ),
+          )
+          .returning({ id: invoices.id }),
+      ),
     );
 
     const updated = result.at(0);
     if (!updated) {
-      return status(409, {
-        message: "Invoice not found or not in draft status",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Invoice not found or not in draft status",
+        }),
+      );
     }
-    return { id: updated.id };
+    return Result.ok({ id: updated.id });
   },
 );
 

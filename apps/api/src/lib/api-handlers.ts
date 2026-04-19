@@ -60,98 +60,30 @@ type WorkspaceHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     workspaceId: SafeId<"workspace">;
   };
 
-type Handler<TContext, TResult = unknown> = (
-  ctx: TContext,
-) => TResult | Promise<TResult>;
-
-type HandlerDefinition<
-  TConfig extends HandlerConfig = HandlerConfig,
-  TContext = RootHandlerContext<TConfig>,
-  TResult = unknown,
-> = {
-  config: TConfig;
-  handler: (
-    ctx: TContext,
-  ) => Promise<TResult | ElysiaCustomStatusResponse<403>>;
-};
-
-const createScopedHandler = <
-  TConfig extends HandlerConfig,
-  TContext extends BaseHandlerContext<TConfig>,
-  TResult,
->(
-  config: TConfig,
-  handler: Handler<TContext, TResult>,
-): HandlerDefinition<TConfig, TContext, TResult> => ({
-  config,
-  handler: async (ctx: TContext) => {
-    const hasPermission = roles[ctx.memberRole.role].authorize(
-      config.permissions,
-    );
-
-    if (!hasPermission.success) {
-      return status(403);
-    }
-
-    return await handler(ctx);
-  },
-});
-
-export const createRootHandler = <
-  TConfig extends HandlerConfig,
-  TResult = unknown,
->(
-  config: TConfig,
-  handler: Handler<RootHandlerContext<TConfig>, TResult>,
-): HandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
-  createScopedHandler(config, handler);
-
-export const createHandler = <TConfig extends HandlerConfig, TResult = unknown>(
-  config: TConfig,
-  handler: Handler<WorkspaceHandlerContext<TConfig>, TResult>,
-): HandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createScopedHandler(config, handler);
-
 type SafeHandlerError =
   | DatabaseError
   | DatabaseRlsError
   | HandlerError
   | UnhandledException;
 
-type ExtractedHandlerError<TError extends SafeHandlerError> = Extract<
-  TError,
-  HandlerError
->;
-
-type HandlerErrorStatus<TError extends SafeHandlerError> =
-  ExtractedHandlerError<TError>["status"];
-
-type SafeStatusCode<TError extends SafeHandlerError> =
-  | 400
-  | 403
-  | 500
-  | HandlerErrorStatus<TError>;
+type SafeErrorBody = { message: string };
 
 // The conditional form is intentional: it keeps status unions distributive so
-// Eden sees distinct error codes like 405 instead of a single widened response.
+// Eden sees distinct error codes instead of a single widened response.
 type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? ElysiaCustomStatusResponse<TStatusCode>
+    ? ElysiaCustomStatusResponse<TStatusCode, SafeErrorBody>
     : never;
 
-type SafeHandlerResult<TResult, TStatusCode extends HandlerErrorStatusCode> =
+type SafeHandlerResult<TResult> =
   | TResult
-  | SafeStatusResponse<TStatusCode>;
+  | SafeStatusResponse<HandlerErrorStatusCode>;
 
-type SafeRootHandler<
-  TContext,
-  TResult,
-  TError extends SafeHandlerError = SafeHandlerError,
-> = (
+type SafeHandlerFn<TContext, TResult> = (
   ctx: TContext,
 ) => AsyncGenerator<
   Err<never, SafeHandlerError>,
-  Result<TResult, TError>,
+  Result<TResult, SafeHandlerError>,
   unknown
 >;
 
@@ -159,46 +91,40 @@ type SafeHandlerDefinition<
   TConfig extends HandlerConfig = HandlerConfig,
   TContext = RootHandlerContext<TConfig>,
   TResult = unknown,
-  TError extends SafeHandlerError = SafeHandlerError,
 > = {
   config: TConfig;
-  handler: (
-    ctx: TContext,
-  ) => Promise<SafeHandlerResult<TResult, SafeStatusCode<TError>>>;
+  handler: (ctx: TContext) => Promise<SafeHandlerResult<TResult>>;
 };
 
 // This needs function overloads. A generic arrow returning `status(statusCode)`
 // widens too much, and the casted version trips oxlint's unsafe assertion rule.
 function toSafeStatusResponse<TStatusCode extends HandlerErrorStatusCode>(
   statusCode: TStatusCode,
+  body: SafeErrorBody,
 ): SafeStatusResponse<TStatusCode>;
-function toSafeStatusResponse(statusCode: HandlerErrorStatusCode) {
-  return status(statusCode);
+function toSafeStatusResponse(
+  statusCode: HandlerErrorStatusCode,
+  body: SafeErrorBody,
+) {
+  return status(statusCode, body);
 }
 
-export const createSafeRootHandler = <
+const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
   TResult,
-  TError extends SafeHandlerError = SafeHandlerError,
 >(
   config: TConfig,
-  handler: SafeRootHandler<RootHandlerContext<TConfig>, TResult, TError>,
-): SafeHandlerDefinition<
-  TConfig,
-  RootHandlerContext<TConfig>,
-  TResult,
-  TError
-> => ({
+  handler: SafeHandlerFn<TContext, TResult>,
+): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
-  handler: async (
-    ctx,
-  ): Promise<SafeHandlerResult<TResult, SafeStatusCode<TError>>> => {
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
     const hasPermission = roles[ctx.memberRole.role].authorize(
       config.permissions,
     );
 
     if (!hasPermission.success) {
-      return toSafeStatusResponse(403);
+      return toSafeStatusResponse(403, { message: "Forbidden" });
     }
 
     try {
@@ -214,7 +140,7 @@ export const createSafeRootHandler = <
         const statusCode = error.status;
 
         if (statusCode >= 500) {
-          logAndCaptureSafeRootError({
+          logAndCaptureSafeError({
             request: ctx.request,
             route: ctx.route,
             error,
@@ -222,65 +148,81 @@ export const createSafeRootHandler = <
           });
         }
 
-        return toSafeStatusResponse<HandlerErrorStatus<TError>>(error.status);
+        return toSafeStatusResponse(error.status, {
+          message: error.message,
+        });
       }
 
       if (DatabaseError.is(error)) {
-        logAndCaptureSafeRootError({
+        logAndCaptureSafeError({
           request: ctx.request,
           route: ctx.route,
           error,
           statusCode: 500,
         });
 
-        return toSafeStatusResponse(500);
+        return toSafeStatusResponse(500, {
+          message: "Internal server error",
+        });
       }
 
       if (DatabaseRlsError.is(error)) {
-        logAndCaptureSafeRootError({
+        logAndCaptureSafeError({
           request: ctx.request,
           route: ctx.route,
           error,
           statusCode: 400,
         });
 
-        return toSafeStatusResponse(400);
+        return toSafeStatusResponse(400, { message: "Access denied" });
       }
 
-      logAndCaptureSafeRootError({
+      logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error,
         statusCode: 500,
       });
 
-      return toSafeStatusResponse(500);
+      return toSafeStatusResponse(500, { message: "Internal server error" });
     } catch (error) {
-      logAndCaptureSafeRootError({
+      logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error,
         statusCode: 500,
       });
 
-      return toSafeStatusResponse(500);
+      return toSafeStatusResponse(500, { message: "Internal server error" });
     }
   },
 });
 
-type LogAndCaptureSafeRootErrorProps = {
+export const createSafeRootHandler = <TConfig extends HandlerConfig, TResult>(
+  config: TConfig,
+  handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult>,
+): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
+  createSafeScopedHandler(config, handler);
+
+export const createSafeHandler = <TConfig extends HandlerConfig, TResult>(
+  config: TConfig,
+  handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
+): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
+  createSafeScopedHandler(config, handler);
+
+type LogAndCaptureSafeErrorProps = {
   request: Request;
   route: string;
   error: unknown;
   statusCode: number;
 };
 
-const logAndCaptureSafeRootError = ({
+const logAndCaptureSafeError = ({
   request,
   route,
   error,
   statusCode,
-}: LogAndCaptureSafeRootErrorProps) => {
+}: LogAndCaptureSafeErrorProps) => {
   const path = new URL(request.url).pathname;
   const reqCtx = getRequestContext(request);
 

@@ -1,13 +1,15 @@
+import { Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
   timeEntries,
 } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const timerStartBodySchema = t.Object({
@@ -18,43 +20,53 @@ const timerStartBodySchema = t.Object({
   narrative: t.Optional(t.String({ maxLength: 10_000 })),
 });
 
-const timerStart = createHandler(
+const timerStart = createSafeHandler(
   {
     permissions: { timeEntry: ["create"] },
     body: timerStartBodySchema,
   },
-  async ({ scopedDb, session, workspaceId, user, body }) => {
+  async function* ({ safeDb, session, workspaceId, user, body }) {
     // Check active timer limit
-    const activeTimerCount = await scopedDb((tx) =>
-      tx.$count(
-        timeEntries,
-        and(
-          eq(timeEntries.userId, user.id),
-          isNotNull(timeEntries.timerStartedAt),
-          eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
-          eq(timeEntries.status, BILLING_STATUS.DRAFT),
+    const activeTimerCount = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(
+          timeEntries,
+          and(
+            eq(timeEntries.userId, user.id),
+            isNotNull(timeEntries.timerStartedAt),
+            eq(timeEntries.source, TIME_ENTRY_SOURCE.TIMER),
+            eq(timeEntries.status, BILLING_STATUS.DRAFT),
+          ),
         ),
       ),
     );
 
     if (activeTimerCount >= LIMITS.activeTimersPerUser) {
-      return status(400, {
-        message: "You already have an active timer. Stop it first.",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "You already have an active timer. Stop it first.",
+        }),
+      );
     }
 
     // Validate matter exists in workspace
-    const matter = await scopedDb((tx) =>
-      tx.query.entities.findFirst({
-        where: { id: body.matterId, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
-      }),
+    const matter = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findFirst({
+          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!matter) {
-      return status(400, {
-        message: "Matter not found in this workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Matter not found in this workspace",
+        }),
+      );
     }
 
     const now = new Date();
@@ -65,55 +77,60 @@ const timerStart = createHandler(
 
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the workspace time entry limit.
-    const result = await scopedDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+        );
+        const totalEntries = await tx.$count(
+          timeEntries,
+          eq(timeEntries.workspaceId, workspaceId),
+        );
+
+        if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
+          return null;
+        }
+
+        const [entry] = await tx
+          .insert(timeEntries)
+          .values({
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            userId: user.id,
+            matterId: body.matterId,
+            dateWorked: todayStr,
+            timezoneId: body.timezoneId,
+            durationMinutes: 0,
+            billedMinutes: 0,
+            rateAtEntry: body.rateAtEntry,
+            currency: body.currency,
+            narrative: body.narrative ?? "",
+            source: TIME_ENTRY_SOURCE.TIMER,
+            status: BILLING_STATUS.DRAFT,
+            timerStartedAt: now,
+          })
+          .returning({
+            id: timeEntries.id,
+            timerStartedAt: timeEntries.timerStartedAt,
+          });
+
+        return entry;
+      }),
+    );
+
+    if (!txResult) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Time entries limit reached for this workspace",
+        }),
       );
-      const totalEntries = await tx.$count(
-        timeEntries,
-        eq(timeEntries.workspaceId, workspaceId),
-      );
-
-      if (totalEntries >= LIMITS.timeEntriesPerWorkspace) {
-        return null;
-      }
-
-      const [entry] = await tx
-        .insert(timeEntries)
-        .values({
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          userId: user.id,
-          matterId: body.matterId,
-          dateWorked: todayStr,
-          timezoneId: body.timezoneId,
-          durationMinutes: 0,
-          billedMinutes: 0,
-          rateAtEntry: body.rateAtEntry,
-          currency: body.currency,
-          narrative: body.narrative ?? "",
-          source: TIME_ENTRY_SOURCE.TIMER,
-          status: BILLING_STATUS.DRAFT,
-          timerStartedAt: now,
-        })
-        .returning({
-          id: timeEntries.id,
-          timerStartedAt: timeEntries.timerStartedAt,
-        });
-
-      return entry;
-    });
-
-    if (!result) {
-      return status(400, {
-        message: "Time entries limit reached for this workspace",
-      });
     }
 
-    return {
-      id: result.id,
-      timerStartedAt: result.timerStartedAt?.toISOString(),
-    };
+    return Result.ok({
+      id: txResult.id,
+      timerStartedAt: txResult.timerStartedAt?.toISOString(),
+    });
   },
 );
 

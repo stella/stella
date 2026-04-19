@@ -1,12 +1,12 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -84,7 +84,7 @@ type ViewSort = {
 };
 
 type ReadEntitiesHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
@@ -92,14 +92,14 @@ type ReadEntitiesHandlerProps = {
   pageSize: number;
 };
 
-const readEntitiesHandler = async ({
-  scopedDb,
+const readEntitiesHandler = async function* ({
+  safeDb,
   workspaceId,
   filters,
   sorts,
   page,
   pageSize,
-}: ReadEntitiesHandlerProps) => {
+}: ReadEntitiesHandlerProps) {
   const offset = (page - 1) * pageSize;
 
   const workspaceCondition = eq(entities.workspaceId, workspaceId);
@@ -107,9 +107,9 @@ const readEntitiesHandler = async ({
   const whereClause = and(workspaceCondition, ...filterConditions);
   const sortExpressions = buildSortExpressions(sorts);
 
-  // Phase 1: Get paginated IDs and total count in parallel
-  const [idRows, countResult] = await Promise.all([
-    scopedDb((tx) =>
+  // Phase 1: Get paginated IDs and total count (parallel)
+  const [idRowsResult, countRowsResult] = await Promise.all([
+    safeDb((tx) =>
       tx
         .select({ id: entities.id })
         .from(entities)
@@ -118,73 +118,85 @@ const readEntitiesHandler = async ({
         .offset(offset)
         .limit(pageSize),
     ),
-    scopedDb((tx) =>
+    safeDb((tx) =>
       tx.select({ total: count() }).from(entities).where(whereClause),
     ),
   ]);
+
+  const idRows = yield* idRowsResult;
+  const countResult = yield* countRowsResult;
 
   const totalCount = countResult.at(0)?.total ?? 0;
   const pageIds = idRows.map((r) => r.id);
 
   if (pageIds.length === 0) {
-    return {
+    return Result.ok({
       entities: [],
       totalCount,
       page,
       pageSize,
-    };
+    });
   }
 
   // Phase 2: Fetch full entity data for the page
   const idFilter = inArray(entities.id, pageIds);
 
-  const [entityRows, versionCounts, fieldRows] = await Promise.all([
-    scopedDb((tx) =>
-      tx
-        .select({
-          id: entities.id,
-          kind: entities.kind,
-          name: entities.name,
-          parentId: entities.parentId,
-          currentVersionId: entities.currentVersionId,
-          createdAt: entities.createdAt,
-          updatedAt: entities.updatedAt,
-          createdByName: user.name,
-          createdByImage: user.image,
-          status: entities.status,
-          priority: entities.priority,
-          dueDate: entities.dueDate,
-          sortOrder: entities.sortOrder,
-        })
-        .from(entities)
-        .leftJoin(user, eq(entities.createdBy, user.id))
-        .where(idFilter),
-    ),
-    scopedDb((tx) =>
-      tx
-        .select({
-          entityId: entityVersions.entityId,
-          versionCount: count(),
-        })
-        .from(entityVersions)
-        .where(inArray(entityVersions.entityId, pageIds))
-        .groupBy(entityVersions.entityId),
-    ),
-    scopedDb((tx) =>
-      tx
-        .select({
-          entityVersionId: fields.entityVersionId,
-          id: fields.id,
-          propertyId: fields.propertyId,
-          content: fields.content,
-        })
-        .from(fields)
-        .innerJoin(
-          entities,
-          and(eq(fields.entityVersionId, entities.currentVersionId), idFilter),
-        ),
-    ),
-  ]);
+  // Phase 2: Fetch full entity data for the page (parallel)
+  const [entityRowsResult, versionCountsResult, fieldRowsResult] =
+    await Promise.all([
+      safeDb((tx) =>
+        tx
+          .select({
+            id: entities.id,
+            kind: entities.kind,
+            name: entities.name,
+            parentId: entities.parentId,
+            currentVersionId: entities.currentVersionId,
+            createdAt: entities.createdAt,
+            updatedAt: entities.updatedAt,
+            createdByName: user.name,
+            createdByImage: user.image,
+            status: entities.status,
+            priority: entities.priority,
+            dueDate: entities.dueDate,
+            sortOrder: entities.sortOrder,
+          })
+          .from(entities)
+          .leftJoin(user, eq(entities.createdBy, user.id))
+          .where(idFilter),
+      ),
+      safeDb((tx) =>
+        tx
+          .select({
+            entityId: entityVersions.entityId,
+            versionCount: count(),
+          })
+          .from(entityVersions)
+          .where(inArray(entityVersions.entityId, pageIds))
+          .groupBy(entityVersions.entityId),
+      ),
+      safeDb((tx) =>
+        tx
+          .select({
+            entityVersionId: fields.entityVersionId,
+            id: fields.id,
+            propertyId: fields.propertyId,
+            content: fields.content,
+          })
+          .from(fields)
+          .innerJoin(
+            entities,
+            and(
+              eq(fields.entityVersionId, entities.currentVersionId),
+              idFilter,
+            ),
+          ),
+      ),
+    ]);
+
+  const entityRows = yield* entityRowsResult;
+  const versionCounts = yield* versionCountsResult;
+  const fieldRows = yield* fieldRowsResult;
 
   // Index lookup maps
   const versionCountMap = new Map(
@@ -263,12 +275,12 @@ const readEntitiesHandler = async ({
     });
   }
 
-  return {
+  return Result.ok({
     entities: result,
     totalCount,
     page,
     pageSize,
-  };
+  });
 };
 
 const config = {
@@ -276,17 +288,18 @@ const config = {
   body: readEntitiesBodySchema,
 } satisfies HandlerConfig;
 
-const readEntities = createHandler(
+const readEntities = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) =>
-    await readEntitiesHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, body }) {
+    return yield* readEntitiesHandler({
+      safeDb,
       workspaceId,
       filters: body.filters ?? [],
       sorts: body.sorts ?? [],
       page: body.page ?? 1,
       pageSize: body.pageSize ?? LIMITS.entitiesPageSizeDefault,
-    }),
+    });
+  },
 );
 
 export default readEntities;

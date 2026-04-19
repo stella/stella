@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateBillingCodeBodySchema = t.Object({
@@ -21,51 +23,61 @@ const config = {
   body: updateBillingCodeBodySchema,
 } satisfies HandlerConfig;
 
-const updateBillingCode = createHandler(
+const updateBillingCode = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) => {
-    const existing = await scopedDb((tx) =>
-      tx.query.billingCodes.findFirst({
-        where: {
-          id: body.id,
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
+  async function* ({ safeDb, workspaceId, body }) {
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.billingCodes.findFirst({
+          where: {
+            id: body.id,
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!existing) {
-      return status(404, { message: "Billing code not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Billing code not found" }),
+      );
     }
 
     const updates = pickDefined(body, ["code", "label", "active", "sortOrder"]);
 
     if (Object.keys(updates).length === 0) {
-      return { id: body.id };
+      return Result.ok({ id: body.id });
     }
 
-    try {
-      await scopedDb((tx) =>
-        tx
-          .update(billingCodes)
-          .set(updates)
-          .where(
-            and(
-              eq(billingCodes.id, body.id),
-              eq(billingCodes.workspaceId, workspaceId),
-            ),
+    const updateResult = await safeDb((tx) =>
+      tx
+        .update(billingCodes)
+        .set(updates)
+        .where(
+          and(
+            eq(billingCodes.id, body.id),
+            eq(billingCodes.workspaceId, workspaceId),
           ),
-      );
+        ),
+    );
 
-      return { id: body.id };
-    } catch (error) {
-      if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
-        return status(409, {
-          message: "A billing code with this code already exists",
-        });
+    if (Result.isError(updateResult)) {
+      if (
+        DatabaseError.is(updateResult.error) &&
+        updateResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A billing code with this code already exists",
+          }),
+        );
       }
-      throw error;
+      return Result.err(updateResult.error);
     }
+
+    return Result.ok({ id: body.id });
   },
 );
 

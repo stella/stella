@@ -254,6 +254,23 @@ export default defineConfig({
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
         "no-untyped-updates/no-untyped-updates": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@/api/lib/api-handlers",
+                importNames: ["createHandler", "createRootHandler"],
+                message:
+                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
+              },
+            ],
+          },
+        ],
       },
     },
     {

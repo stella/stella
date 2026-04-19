@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import * as v from "valibot";
 
 import { workspaceViews } from "@/api/db/schema";
@@ -7,9 +8,10 @@ import {
   hasDuplicateSorts,
   hasMultipleKindFilters,
 } from "@/api/handlers/views/utils";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { viewLayoutSchema } from "@/api/lib/views-schema";
@@ -25,38 +27,59 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const updateView = createHandler(
+const updateView = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, params: { viewId }, body }) => {
-    const existing = await scopedDb((tx) =>
-      tx.query.workspaceViews.findFirst({
-        where: {
-          id: viewId,
-          workspaceId: { eq: workspaceId },
-        },
-      }),
+  async function* ({ safeDb, workspaceId, params: { viewId }, body }) {
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.workspaceViews.findFirst({
+          where: {
+            id: viewId,
+            workspaceId: { eq: workspaceId },
+          },
+        }),
+      ),
     );
 
     if (!existing) {
-      return status(404, { message: "View not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "View not found" }),
+      );
     }
 
     let parsedLayout: ViewLayout | undefined;
     if (body.layout !== undefined) {
       const parsed = v.safeParse(viewLayoutSchema, body.layout);
       if (!parsed.success) {
-        return status(400, { message: "Invalid layout" });
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid layout" }),
+        );
       }
       parsedLayout = parsed.output;
 
       if (hasDuplicateSorts(parsedLayout.sorts)) {
-        return status(400, { message: "Duplicate sort property" });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Duplicate sort property",
+          }),
+        );
       }
       if (hasMultipleKindFilters(parsedLayout.filters)) {
-        return status(400, { message: "Multiple kind filters" });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Multiple kind filters",
+          }),
+        );
       }
       if (existing.layout.type !== parsedLayout.type) {
-        return status(400, { message: "Cannot change view type" });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Cannot change view type",
+          }),
+        );
       }
     }
 
@@ -69,19 +92,21 @@ const updateView = createHandler(
     }
 
     if (Object.keys(updates).length === 0) {
-      return undefined;
+      return Result.ok(undefined);
     }
 
-    await scopedDb((tx) =>
-      tx
-        .update(workspaceViews)
-        .set(updates)
-        .where(
-          and(
-            eq(workspaceViews.id, viewId),
-            eq(workspaceViews.workspaceId, workspaceId),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(workspaceViews)
+          .set(updates)
+          .where(
+            and(
+              eq(workspaceViews.id, viewId),
+              eq(workspaceViews.workspaceId, workspaceId),
+            ),
           ),
-        ),
+      ),
     );
 
     broadcast(workspaceId, {
@@ -89,7 +114,7 @@ const updateView = createHandler(
       data: ["views", workspaceId],
     });
 
-    return undefined;
+    return Result.ok(undefined);
   },
 );
 

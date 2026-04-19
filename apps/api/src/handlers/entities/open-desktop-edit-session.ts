@@ -1,10 +1,11 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { SafeDb, Transaction } from "@/api/db";
 import { desktopEditSessions, entityVersions } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -12,6 +13,7 @@ import {
   createDesktopEditSessionToken,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 import {
@@ -40,7 +42,7 @@ type OpenDesktopEditSessionResponse = {
 type OpenDesktopEditSessionHandlerProps = {
   body: Static<typeof openDesktopEditSessionBodySchema>;
   organizationId: SafeId<"organization">;
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -192,18 +194,18 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   } satisfies OpenDesktopEditSessionResponse;
 };
 
-const openDesktopEditSessionHandler = async ({
+const openDesktopEditSessionHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
-  scopedDb,
+  safeDb,
   userId,
   workspaceId,
-}: OpenDesktopEditSessionHandlerProps) => {
+}: OpenDesktopEditSessionHandlerProps) {
   const sessionToken = createDesktopEditSessionToken();
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
 
   const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
-    await scopedDb(async (tx) => {
+    await safeDb(async (tx) => {
       const existingSession = await readExistingOpenDesktopEditSession({
         entityId,
         propertyId,
@@ -239,7 +241,7 @@ const openDesktopEditSessionHandler = async ({
         return {
           error: {
             message: "Target property is not an editable DOCX field.",
-            statusCode: 400,
+            statusCode: 400 as const,
           },
         } as const;
       }
@@ -275,38 +277,61 @@ const openDesktopEditSessionHandler = async ({
       } satisfies OpenDesktopEditSessionResponse;
     });
 
-  let result;
+  let firstAttempt = await runOpenSession({ allowInsert: true });
 
-  try {
-    result = await runOpenSession({ allowInsert: true });
-  } catch (error) {
-    if (!isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
-      throw error;
-    }
-
-    result = await runOpenSession({ allowInsert: false });
-    if (result === null) {
-      throw error;
-    }
-  }
-
-  if (result === null) {
-    result = await runOpenSession({ allowInsert: true });
-
-    if (result === null) {
-      throw new Error(
-        "Desktop edit session changed while opening. Please try again.",
+  // Handle unique violation: retry without insert, then with insert
+  if (Result.isError(firstAttempt)) {
+    const error = firstAttempt.error;
+    if ("cause" in error && isPgError(error.cause, PG_ERROR.UNIQUE_VIOLATION)) {
+      const retryResult = await runOpenSession({ allowInsert: false });
+      if (Result.isError(retryResult)) {
+        return Result.err(
+          new HandlerError({ status: 500, message: "Internal server error" }),
+        );
+      }
+      if (retryResult.value === null) {
+        return Result.err(
+          new HandlerError({ status: 500, message: "Internal server error" }),
+        );
+      }
+      firstAttempt = retryResult;
+    } else {
+      return Result.err(
+        new HandlerError({ status: 500, message: "Internal server error" }),
       );
     }
   }
 
-  if ("error" in result) {
-    return status(result.error.statusCode, {
-      message: result.error.message,
-    });
+  let result = firstAttempt.value;
+
+  if (result === null) {
+    const retryResult = yield* Result.await(
+      runOpenSession({ allowInsert: true }),
+    );
+
+    if (retryResult === null) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message:
+            "Desktop edit session changed while opening. Please try again.",
+        }),
+      );
+    }
+
+    result = retryResult;
   }
 
-  return result;
+  if ("error" in result) {
+    return Result.err(
+      new HandlerError({
+        status: result.error.statusCode,
+        message: result.error.message,
+      }),
+    );
+  }
+
+  return Result.ok(result);
 };
 
 const config = {
@@ -314,16 +339,17 @@ const config = {
   permissions: { entity: ["update"] },
 } satisfies HandlerConfig;
 
-const openDesktopEditSession = createHandler(
+const openDesktopEditSession = createSafeHandler(
   config,
-  async ({ body, scopedDb, session, user, workspaceId }) =>
-    await openDesktopEditSessionHandler({
+  async function* ({ body, safeDb, session, user, workspaceId }) {
+    return yield* openDesktopEditSessionHandler({
       body,
       organizationId: session.activeOrganizationId,
-      scopedDb,
+      safeDb,
       userId: user.id,
       workspaceId,
-    }),
+    });
+  },
 );
 
 export default openDesktopEditSession;

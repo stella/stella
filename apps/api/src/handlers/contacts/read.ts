@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { and, count, eq, gt, ilike, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaces } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const DEFAULT_LIMIT = 50;
@@ -36,12 +37,12 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
 const encodeCursor = (displayName: string, id: string): string =>
   Buffer.from(`${displayName}\0${id}`, "utf-8").toString("base64");
 
-const readContacts = createRootHandler(
+const readContacts = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     query: readContactsQuerySchema,
   },
-  async ({ scopedDb, session, query }) => {
+  async function* ({ safeDb, session, query }) {
     const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
 
     const conditions = [
@@ -72,34 +73,36 @@ const readContacts = createRootHandler(
       }
     }
 
-    const items = await scopedDb((tx) =>
-      tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          displayName: contacts.displayName,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName,
-          organizationName: contacts.organizationName,
-          emails: contacts.emails,
-          phones: contacts.phones,
-          tags: contacts.tags,
-          color: contacts.color,
-          createdAt: contacts.createdAt,
-          matterCount: count(workspaces.id),
-        })
-        .from(contacts)
-        .leftJoin(
-          workspaces,
-          and(
-            eq(workspaces.clientId, contacts.id),
-            eq(workspaces.status, "active"),
-          ),
-        )
-        .where(and(...conditions))
-        .groupBy(contacts.id)
-        .orderBy(contacts.displayName, contacts.id)
-        .limit(limit + 1),
+    const items = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: contacts.id,
+            type: contacts.type,
+            displayName: contacts.displayName,
+            firstName: contacts.firstName,
+            lastName: contacts.lastName,
+            organizationName: contacts.organizationName,
+            emails: contacts.emails,
+            phones: contacts.phones,
+            tags: contacts.tags,
+            color: contacts.color,
+            createdAt: contacts.createdAt,
+            matterCount: count(workspaces.id),
+          })
+          .from(contacts)
+          .leftJoin(
+            workspaces,
+            and(
+              eq(workspaces.clientId, contacts.id),
+              eq(workspaces.status, "active"),
+            ),
+          )
+          .where(and(...conditions))
+          .groupBy(contacts.id)
+          .orderBy(contacts.displayName, contacts.id)
+          .limit(limit + 1),
+      ),
     );
 
     const hasMore = items.length > limit;
@@ -110,7 +113,7 @@ const readContacts = createRootHandler(
         ? encodeCursor(lastItem.displayName, lastItem.id)
         : null;
 
-    return { items: page, nextCursor };
+    return Result.ok({ items: page, nextCursor });
   },
 );
 

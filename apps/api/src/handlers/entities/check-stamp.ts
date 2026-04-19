@@ -1,10 +1,11 @@
+import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
@@ -15,7 +16,7 @@ const checkStampBodySchema = t.Object({
 });
 
 type CheckStampHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   body: Static<typeof checkStampBodySchema>;
 };
@@ -26,49 +27,55 @@ type CheckStampHandlerProps = {
  *
  * Returns match info for the frontend to offer "update
  * existing" vs "upload as new" options.
+ *
+ * @yields {Err} on database lookup failure
  */
-const checkStampHandler = async ({
-  scopedDb,
+const checkStampHandler = async function* ({
+  safeDb,
   organizationId,
   body: { file },
-}: CheckStampHandlerProps) => {
+}: CheckStampHandlerProps) {
+  const noMatch: CheckStampResult = { match: null };
+
   if (!isStampableDocx(file.type, file.size)) {
-    return { match: null };
+    return Result.ok(noMatch);
   }
 
   const buffer = await file.arrayBuffer();
   const extracted = await extractStamp(buffer);
 
   if (!extracted.verificationCode && !extracted.stamp) {
-    return { match: null };
+    return Result.ok(noMatch);
   }
 
   // Primary: look up by verification code (globally unique,
   // then scoped to org for security)
   if (extracted.verificationCode) {
-    const match = await lookupByVerificationCode(
-      scopedDb,
-      extracted.verificationCode,
-      organizationId,
+    const match = yield* Result.await(
+      lookupByVerificationCode(
+        safeDb,
+        extracted.verificationCode,
+        organizationId,
+      ),
     );
     if (match) {
-      return { match };
+      const found: CheckStampResult = { match };
+      return Result.ok(found);
     }
   }
 
   // Fallback: look up by stamp string (org-scoped)
   if (extracted.stamp) {
-    const match = await lookupByStamp(
-      scopedDb,
-      extracted.stamp,
-      organizationId,
+    const match = yield* Result.await(
+      lookupByStamp(safeDb, extracted.stamp, organizationId),
     );
     if (match) {
-      return { match };
+      const found: CheckStampResult = { match };
+      return Result.ok(found);
     }
   }
 
-  return { match: null };
+  return Result.ok(noMatch);
 };
 
 type StampMatch = {
@@ -80,13 +87,15 @@ type StampMatch = {
   versionNumber: number;
 };
 
+type CheckStampResult = { match: StampMatch | null };
+
 const lookupByVerificationCode = async (
-  scopedDb: ScopedDb,
+  safeDb: SafeDb,
   verificationCode: string,
   organizationId: SafeId<"organization">,
-): Promise<StampMatch | null> => {
-  const rows = await scopedDb((tx) =>
-    tx
+) =>
+  await safeDb(async (tx) => {
+    const rows = await tx
       .select({
         entityId: entities.id,
         entityName: entities.name,
@@ -105,48 +114,48 @@ const lookupByVerificationCode = async (
         ),
       )
       .where(eq(entityVersions.verificationCode, verificationCode))
-      .limit(1),
-  );
-  const row = rows.at(0);
+      .limit(1);
+    const row = rows.at(0);
 
-  if (!row || !row.stamp) {
-    return null;
-  }
+    if (!row || !row.stamp) {
+      return null;
+    }
 
-  return {
-    entityId: row.entityId,
-    entityName: row.entityName,
-    workspaceId: row.workspaceId,
-    workspaceName: row.workspaceName,
-    stamp: row.stamp,
-    versionNumber: row.versionNumber,
-  };
-};
+    return {
+      entityId: row.entityId,
+      entityName: row.entityName,
+      workspaceId: row.workspaceId,
+      workspaceName: row.workspaceName,
+      stamp: row.stamp,
+      versionNumber: row.versionNumber,
+    } satisfies StampMatch;
+  });
 
 const config = {
   permissions: { workspace: ["read"] },
   body: checkStampBodySchema,
 } satisfies HandlerConfig;
 
-const checkStamp = createHandler(
+const checkStamp = createSafeHandler(
   config,
-  async ({ scopedDb, session, body }) =>
-    await checkStampHandler({
-      scopedDb,
+  async function* ({ safeDb, session, body }) {
+    return yield* checkStampHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       body,
-    }),
+    });
+  },
 );
 
 export default checkStamp;
 
 const lookupByStamp = async (
-  scopedDb: ScopedDb,
+  safeDb: SafeDb,
   stamp: string,
   organizationId: SafeId<"organization">,
-): Promise<StampMatch | null> => {
-  const rows = await scopedDb((tx) =>
-    tx
+) =>
+  await safeDb(async (tx) => {
+    const rows = await tx
       .select({
         entityId: entities.id,
         entityName: entities.name,
@@ -166,20 +175,19 @@ const lookupByStamp = async (
       )
       .where(eq(entityVersions.stamp, stamp))
       .orderBy(desc(entityVersions.createdAt))
-      .limit(1),
-  );
-  const row = rows.at(0);
+      .limit(1);
+    const row = rows.at(0);
 
-  if (!row || !row.stamp) {
-    return null;
-  }
+    if (!row || !row.stamp) {
+      return null;
+    }
 
-  return {
-    entityId: row.entityId,
-    entityName: row.entityName,
-    workspaceId: row.workspaceId,
-    workspaceName: row.workspaceName,
-    stamp: row.stamp,
-    versionNumber: row.versionNumber,
-  };
-};
+    return {
+      entityId: row.entityId,
+      entityName: row.entityName,
+      workspaceId: row.workspaceId,
+      workspaceName: row.workspaceName,
+      stamp: row.stamp,
+      versionNumber: row.versionNumber,
+    } satisfies StampMatch;
+  });

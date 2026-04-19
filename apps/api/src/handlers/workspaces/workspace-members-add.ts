@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceMembers } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -17,45 +18,50 @@ const config = {
   body: addWorkspaceMemberBodySchema,
 } satisfies HandlerConfig;
 
-const addWorkspaceMember = createHandler(
+const addWorkspaceMember = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, body }) => {
+  async function* ({ safeDb, session, workspaceId, body }) {
     // Verify user is a member of the organization.
     // `member` is an org-level auth table (no RLS policy);
-    // scopedDb works for querying it.
-    const orgMember = await scopedDb((tx) =>
-      tx.query.member.findFirst({
-        where: {
-          userId: { eq: body.userId },
-          organizationId: { eq: session.activeOrganizationId },
-        },
-        columns: { id: true },
-      }),
+    // safeDb works for querying it.
+    const orgMember = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.member.findFirst({
+          where: {
+            userId: { eq: body.userId },
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { id: true },
+        }),
+      ),
     );
 
     if (!orgMember) {
-      return status(400, {
-        message: "User is not a member of this organization",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
     }
 
-    const result = await Result.tryPromise({
-      try: async () =>
-        await scopedDb(async (tx) => {
-          // Lock rows then count to serialize concurrent adds.
-          // PG rejects FOR UPDATE with aggregate functions, so
-          // we select rows first and count in application code.
-          const lockedRows = await tx
-            .select({ id: workspaceMembers.id })
-            .from(workspaceMembers)
-            .where(eq(workspaceMembers.workspaceId, workspaceId))
-            .for("update");
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        // Lock rows then count to serialize concurrent adds.
+        // PG rejects FOR UPDATE with aggregate functions, so
+        // we select rows first and count in application code.
+        const lockedRows = await tx
+          .select({ id: workspaceMembers.id })
+          .from(workspaceMembers)
+          .where(eq(workspaceMembers.workspaceId, workspaceId))
+          .for("update");
 
-          if (lockedRows.length >= LIMITS.workspaceMembersCount) {
-            return null;
-          }
+        if (lockedRows.length >= LIMITS.workspaceMembersCount) {
+          return { ok: false as const, reason: "limit" as const };
+        }
 
-          return tx
+        try {
+          const rows = await tx
             .insert(workspaceMembers)
             .values({
               workspaceId,
@@ -66,27 +72,36 @@ const addWorkspaceMember = createHandler(
               userId: workspaceMembers.userId,
               createdAt: workspaceMembers.createdAt,
             });
-        }),
-      catch: (error) => error,
-    });
 
-    if (result.isErr()) {
-      if (isPgError(result.error, PG_ERROR.UNIQUE_VIOLATION)) {
-        return status(409, {
-          message: "User is already a member of this workspace",
-        });
+          return { ok: true as const, rows };
+        } catch (error) {
+          if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
+            return { ok: false as const, reason: "duplicate" as const };
+          }
+          throw error;
+        }
+      }),
+    );
+
+    if (!txResult.ok) {
+      if (txResult.reason === "duplicate") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "User is already a member of this workspace",
+          }),
+        );
       }
-      throw result.error;
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Workspace members limit reached",
+        }),
+      );
     }
 
-    if (result.value === null) {
-      return status(400, {
-        message: "Workspace members limit reached",
-      });
-    }
-
-    const [created] = result.value;
-    return created;
+    const [created] = txResult.rows;
+    return Result.ok(created);
   },
 );
 

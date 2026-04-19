@@ -1,17 +1,18 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { SafeDb, Transaction } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -24,7 +25,7 @@ const createEntityBodySchema = t.Object({
 type CreateEntityBodySchema = Static<typeof createEntityBodySchema>;
 
 type CreateEntitiesHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   body: CreateEntityBodySchema;
@@ -50,7 +51,7 @@ const validateParentId = async (
   tx: Transaction,
   parentId: string,
   workspaceId: SafeId<"workspace">,
-) => {
+): Promise<string | null> => {
   const parent = await tx.query.entities.findFirst({
     where: {
       id: parentId,
@@ -62,93 +63,96 @@ const validateParentId = async (
   });
 
   if (!parent) {
-    return status(400, {
-      message: "Parent entity not found in this workspace",
-    });
+    return "Parent entity not found in this workspace";
   }
 
   if (parent.kind !== "folder") {
-    return status(400, {
-      message: "Parent entity must be a folder",
-    });
+    return "Parent entity must be a folder";
   }
 
   return null;
 };
 
-const createEntitiesHandler = async ({
-  scopedDb,
+const createEntitiesHandler = async function* ({
+  safeDb,
   workspaceId,
   userId,
   body,
-}: CreateEntitiesHandlerProps) => {
+}: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
   const kind = body.kind;
   const name = body.name ?? null;
 
-  const txResult = await scopedDb(async (tx) => {
-    const limitResult = await checkEntityLimit(tx, workspaceId);
-    if (Result.isError(limitResult)) {
-      return status(400, {
-        message: limitResult.error,
-      });
-    }
-
-    if (parentId) {
-      const error = await validateParentId(tx, parentId, workspaceId);
-      if (error) {
-        return error;
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      const limitResult = await checkEntityLimit(tx, workspaceId);
+      if (Result.isError(limitResult)) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: limitResult.error,
+        };
       }
-    }
 
-    const entityId = crypto.randomUUID();
-    const effectiveKind = kind ?? "document";
+      if (parentId) {
+        const error = await validateParentId(tx, parentId, workspaceId);
+        if (error) {
+          return { ok: false as const, status: 400 as const, message: error };
+        }
+      }
 
-    const entityStamp =
-      effectiveKind === "document"
-        ? await allocateEntityStamp(tx, workspaceId)
-        : null;
+      const entityId = crypto.randomUUID();
+      const effectiveKind = kind ?? "document";
 
-    await tx.insert(entities).values({
-      id: entityId,
-      workspaceId,
-      kind,
-      parentId,
-      name,
-      createdBy: userId,
-      docSequence: entityStamp?.docSequence ?? null,
-    });
+      const entityStamp =
+        effectiveKind === "document"
+          ? await allocateEntityStamp(tx, workspaceId)
+          : null;
 
-    const entityVersionId = crypto.randomUUID();
+      await tx.insert(entities).values({
+        id: entityId,
+        workspaceId,
+        kind,
+        parentId,
+        name,
+        createdBy: userId,
+        docSequence: entityStamp?.docSequence ?? null,
+      });
 
-    await tx.insert(entityVersions).values({
-      id: entityVersionId,
-      workspaceId,
-      entityId,
-      versionNumber: 1,
-      stamp: entityStamp?.stamp ?? null,
-      verificationCode: entityStamp?.verificationCode ?? null,
-    });
+      const entityVersionId = crypto.randomUUID();
 
-    await tx
-      .update(entities)
-      .set({ currentVersionId: entityVersionId })
-      .where(eq(entities.id, entityId));
+      await tx.insert(entityVersions).values({
+        id: entityVersionId,
+        workspaceId,
+        entityId,
+        versionNumber: 1,
+        stamp: entityStamp?.stamp ?? null,
+        verificationCode: entityStamp?.verificationCode ?? null,
+      });
 
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
+      await tx
+        .update(entities)
+        .set({ currentVersionId: entityVersionId })
+        .where(eq(entities.id, entityId));
 
-    return { entityId };
-  });
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
 
-  // oxlint-disable-next-line typescript/strict-boolean-expressions -- txResult discriminated union check
-  if (txResult && typeof txResult === "object" && "entityId" in txResult) {
-    getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+      return { ok: true as const, entityId };
+    }),
+  );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({ status: txResult.status, message: txResult.message }),
+    );
   }
 
-  return txResult;
+  getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+
+  return Result.ok({ entityId: txResult.entityId });
 };
 
 const config = {
@@ -156,15 +160,16 @@ const config = {
   body: createEntityBodySchema,
 } satisfies HandlerConfig;
 
-const createEntities = createHandler(
+const createEntities = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, user, body }) =>
-    await createEntitiesHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, user, body }) {
+    return yield* createEntitiesHandler({
+      safeDb,
       workspaceId,
       userId: user.id,
       body,
-    }),
+    });
+  },
 );
 
 export default createEntities;

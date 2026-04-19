@@ -1,12 +1,14 @@
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { properties } from "@/api/db/schema";
 import { propertyContentTypeSchema } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createPropertyBodySchema = t.Object({
@@ -19,9 +21,9 @@ const config = {
   body: createPropertyBodySchema,
 } satisfies HandlerConfig;
 
-const createProperty = createHandler(
+const createProperty = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body }) => {
+  async function* ({ safeDb, workspaceId, body }) {
     let content: PropertyContent | null = null;
     let tool: PropertyTool | null = null;
 
@@ -54,39 +56,60 @@ const createProperty = createHandler(
     }
 
     if (!content || !tool) {
-      return status(422);
+      return Result.err(
+        new HandlerError({ status: 422, message: "Unsupported content type" }),
+      );
     }
 
-    return await scopedDb(async (tx) => {
-      // Lock rows then count to serialize concurrent adds.
-      // PG rejects FOR UPDATE with aggregate functions.
-      const lockedRows = await tx
-        .select({ id: properties.id })
-        .from(properties)
-        .where(eq(properties.workspaceId, workspaceId))
-        .for("update");
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        // Lock rows then count to serialize concurrent adds.
+        // PG rejects FOR UPDATE with aggregate functions.
+        const lockedRows = await tx
+          .select({ id: properties.id })
+          .from(properties)
+          .where(eq(properties.workspaceId, workspaceId))
+          .for("update");
 
-      if (lockedRows.length >= LIMITS.propertiesCount) {
-        return status(400, {
-          message: "Properties limit reached",
-        });
-      }
+        if (lockedRows.length >= LIMITS.propertiesCount) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Properties limit reached",
+          };
+        }
 
-      const [inserted] = await tx
-        .insert(properties)
-        .values({
-          workspaceId,
-          name: body.name,
-          content,
-          tool,
-        })
-        .returning({ id: properties.id });
+        const [inserted] = await tx
+          .insert(properties)
+          .values({
+            workspaceId,
+            name: body.name,
+            content,
+            tool,
+          })
+          .returning({ id: properties.id });
 
-      if (!inserted) {
-        return status(500);
-      }
-      return { id: inserted.id };
-    });
+        if (!inserted) {
+          return {
+            ok: false as const,
+            status: 500 as const,
+            message: "Failed to create property",
+          };
+        }
+        return { ok: true as const, id: inserted.id };
+      }),
+    );
+
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: txResult.status,
+          message: txResult.message,
+        }),
+      );
+    }
+
+    return Result.ok({ id: txResult.id });
   },
 );
 

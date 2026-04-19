@@ -3,12 +3,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -22,7 +22,7 @@ const deleteEntitiesBodySchema = t.Object({
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
 type DeleteEntitiesHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   body: DeleteEntitiesBodySchema;
@@ -47,29 +47,31 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
   return refs;
 };
 
-const deleteEntitiesHandler = async ({
-  scopedDb,
+const deleteEntitiesHandler = async function* ({
+  safeDb,
   organizationId,
   workspaceId,
   body,
-}: DeleteEntitiesHandlerProps) => {
-  const fieldRows = await scopedDb((tx) => {
-    const entityVersionIds = tx
-      .select({ id: entityVersions.id })
-      .from(entityVersions)
-      .innerJoin(entities, eq(entityVersions.entityId, entities.id))
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          inArray(entities.id, body.entityIds),
-        ),
-      );
+}: DeleteEntitiesHandlerProps) {
+  const fieldRows = yield* Result.await(
+    safeDb((tx) => {
+      const entityVersionIds = tx
+        .select({ id: entityVersions.id })
+        .from(entityVersions)
+        .innerJoin(entities, eq(entityVersions.entityId, entities.id))
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            inArray(entities.id, body.entityIds),
+          ),
+        );
 
-    return tx
-      .select({ content: fields.content })
-      .from(fields)
-      .where(inArray(fields.entityVersionId, entityVersionIds));
-  });
+      return tx
+        .select({ content: fields.content })
+        .from(fields)
+        .where(inArray(fields.entityVersionId, entityVersionIds));
+    }),
+  );
 
   const fileRefs = fieldRows.flatMap((row) => extractFileRefs(row.content));
 
@@ -86,22 +88,26 @@ const deleteEntitiesHandler = async ({
 
   // Cascade: entities → entityVersions → fields →
   // justifications (all cascade).
-  await scopedDb((tx) =>
-    tx
-      .delete(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          inArray(entities.id, body.entityIds),
+  yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .delete(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            inArray(entities.id, body.entityIds),
+          ),
         ),
-      ),
+    ),
   );
 
-  await scopedDb((tx) =>
-    tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId)),
+  yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId)),
+    ),
   );
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
@@ -110,7 +116,7 @@ const deleteEntitiesHandler = async ({
     provider.removeEntity(id).catch(captureError);
   }
 
-  return;
+  return Result.ok(undefined);
 };
 
 const config = {
@@ -118,15 +124,16 @@ const config = {
   body: deleteEntitiesBodySchema,
 } satisfies HandlerConfig;
 
-const deleteEntities = createHandler(
+const deleteEntities = createSafeHandler(
   config,
-  async ({ scopedDb, session, workspaceId, body }) =>
-    await deleteEntitiesHandler({
-      scopedDb,
+  async function* ({ safeDb, session, workspaceId, body }) {
+    return yield* deleteEntitiesHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
       body,
-    }),
+    });
+  },
 );
 
 export default deleteEntities;

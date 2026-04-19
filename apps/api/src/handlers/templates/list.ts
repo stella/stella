@@ -1,9 +1,10 @@
+import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
@@ -16,16 +17,16 @@ const listTemplatesQuerySchema = t.Object({
 });
 
 type ListTemplatesProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   query: { categoryId?: string };
 };
 
-const listTemplatesHandler = async ({
-  scopedDb,
+const listTemplatesHandler = async function* ({
+  safeDb,
   organizationId,
   query,
-}: ListTemplatesProps) => {
+}: ListTemplatesProps) {
   const conditions = [eq(templates.organizationId, organizationId)];
 
   if (query.categoryId === UNCATEGORIZED) {
@@ -34,27 +35,29 @@ const listTemplatesHandler = async ({
     conditions.push(eq(templates.categoryId, query.categoryId));
   }
 
-  const result = await scopedDb((tx) =>
-    tx
-      .select({
-        id: templates.id,
-        name: templates.name,
-        fileName: templates.fileName,
-        fieldCount: templates.fieldCount,
-        sizeBytes: templates.sizeBytes,
-        categoryId: templates.categoryId,
-        createdAt: templates.createdAt,
-      })
-      .from(templates)
-      .where(and(...conditions))
-      .orderBy(desc(templates.createdAt))
-      .limit(LIMITS.templatesCount),
+  const result = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          id: templates.id,
+          name: templates.name,
+          fileName: templates.fileName,
+          fieldCount: templates.fieldCount,
+          sizeBytes: templates.sizeBytes,
+          categoryId: templates.categoryId,
+          createdAt: templates.createdAt,
+        })
+        .from(templates)
+        .where(and(...conditions))
+        .orderBy(desc(templates.createdAt))
+        .limit(LIMITS.templatesCount),
+    ),
   );
 
-  return {
+  return Result.ok({
     templates: result,
     templatesCountLimit: LIMITS.templatesCount,
-  };
+  });
 };
 
 const config = {
@@ -62,14 +65,15 @@ const config = {
   query: listTemplatesQuerySchema,
 } satisfies HandlerConfig;
 
-const listTemplates = createRootHandler(
+const listTemplates = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, query }) =>
-    await listTemplatesHandler({
-      scopedDb,
+  async function* ({ safeDb, session, query }) {
+    return yield* listTemplatesHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       query,
-    }),
+    });
+  },
 );
 
 export default listTemplates;

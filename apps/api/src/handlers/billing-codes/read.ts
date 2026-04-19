@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const readBillingCodesQuerySchema = t.Object({
@@ -17,9 +18,9 @@ const config = {
   query: readBillingCodesQuerySchema,
 } satisfies HandlerConfig;
 
-const readBillingCodes = createHandler(
+const readBillingCodes = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, query }) => {
+  async function* ({ safeDb, workspaceId, query }) {
     const limit = query.limit ?? 500;
     const offset = query.offset ?? 0;
 
@@ -32,22 +33,26 @@ const readBillingCodes = createHandler(
       conditions.push(eq(billingCodes.active, query.active));
     }
 
-    return await scopedDb((tx) =>
-      tx
-        .select({
-          id: billingCodes.id,
-          type: billingCodes.type,
-          code: billingCodes.code,
-          label: billingCodes.label,
-          active: billingCodes.active,
-          sortOrder: billingCodes.sortOrder,
-        })
-        .from(billingCodes)
-        .where(and(...conditions))
-        .orderBy(asc(billingCodes.sortOrder), asc(billingCodes.code))
-        .limit(limit)
-        .offset(offset),
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: billingCodes.id,
+            type: billingCodes.type,
+            code: billingCodes.code,
+            label: billingCodes.label,
+            active: billingCodes.active,
+            sortOrder: billingCodes.sortOrder,
+          })
+          .from(billingCodes)
+          .where(and(...conditions))
+          .orderBy(asc(billingCodes.sortOrder), asc(billingCodes.code))
+          .limit(limit)
+          .offset(offset),
+      ),
     );
+
+    return Result.ok(rows);
   },
 );
 

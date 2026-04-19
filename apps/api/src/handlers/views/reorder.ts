@@ -1,10 +1,12 @@
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { workspaceViews } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
@@ -14,34 +16,44 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const reorderViews = createHandler(
+const reorderViews = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, body: { viewIds } }) => {
+  async function* ({ safeDb, workspaceId, body: { viewIds } }) {
     if (new Set(viewIds).size !== viewIds.length) {
-      return status(400, { message: "Duplicate view IDs" });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Duplicate view IDs" }),
+      );
     }
 
     // Validate before mutating: check that all supplied IDs
     // match the existing views in this workspace.
-    const existing = await scopedDb((tx) =>
-      tx
-        .select({ id: workspaceViews.id })
-        .from(workspaceViews)
-        .where(eq(workspaceViews.workspaceId, workspaceId)),
+    const existing = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ id: workspaceViews.id })
+          .from(workspaceViews)
+          .where(eq(workspaceViews.workspaceId, workspaceId)),
+      ),
     );
 
     if (viewIds.length !== existing.length) {
-      return status(400, {
-        message: "View IDs must include all views in the workspace",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "View IDs must include all views in the workspace",
+        }),
+      );
     }
 
     const existingIds = new Set(existing.map((v) => v.id));
     for (const id of viewIds) {
       if (!existingIds.has(id)) {
-        return status(400, {
-          message: "View IDs must include all views in the workspace",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "View IDs must include all views in the workspace",
+          }),
+        );
       }
     }
 
@@ -50,13 +62,15 @@ const reorderViews = createHandler(
       (id, i) => sql`when ${workspaceViews.id} = ${id} then ${i}`,
     );
 
-    await scopedDb((tx) =>
-      tx
-        .update(workspaceViews)
-        .set({
-          position: sql`case ${sql.join(cases, sql` `)} end`,
-        })
-        .where(eq(workspaceViews.workspaceId, workspaceId)),
+    yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .update(workspaceViews)
+          .set({
+            position: sql`case ${sql.join(cases, sql` `)} end`,
+          })
+          .where(eq(workspaceViews.workspaceId, workspaceId)),
+      ),
     );
 
     broadcast(workspaceId, {
@@ -64,7 +78,7 @@ const reorderViews = createHandler(
       data: ["views", workspaceId],
     });
 
-    return undefined;
+    return Result.ok(undefined);
   },
 );
 

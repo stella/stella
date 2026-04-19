@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { t } from "elysia";
 
 import { properties } from "@/api/db/schema";
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { property: ["delete"] },
@@ -14,58 +16,73 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const deleteProperty = createHandler(
+const deleteProperty = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, params: { propertyId } }) => {
-    const property = await scopedDb((tx) =>
-      tx.query.properties.findFirst({
-        columns: { content: true, system: true },
-        where: {
-          id: propertyId,
-          workspaceId: { eq: workspaceId },
-        },
-      }),
+  async function* ({ safeDb, workspaceId, params: { propertyId } }) {
+    const property = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { content: true, system: true },
+          where: {
+            id: propertyId,
+            workspaceId: { eq: workspaceId },
+          },
+        }),
+      ),
     );
 
     if (!property) {
-      return status(404, { message: "Property not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Property not found" }),
+      );
     }
 
     if (property.system) {
-      return status(400, {
-        message: "System properties cannot be deleted",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "System properties cannot be deleted",
+        }),
+      );
     }
 
     // TODO: allow this in the future
     if (property.content.type === "file") {
-      return status(400, {
-        message: "File properties cannot be deleted",
-      });
-    }
-
-    try {
-      await scopedDb((tx) =>
-        tx
-          .delete(properties)
-          .where(
-            and(
-              eq(properties.id, propertyId),
-              eq(properties.workspaceId, workspaceId),
-            ),
-          ),
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "File properties cannot be deleted",
+        }),
       );
-    } catch (error) {
-      if (isPgError(error, PG_ERROR.FOREIGN_KEY_VIOLATION)) {
-        return status(400, {
-          message: "Property is referenced by other properties",
-        });
-      }
-
-      throw error;
     }
 
-    return undefined;
+    const deleteResult = await safeDb((tx) =>
+      tx
+        .delete(properties)
+        .where(
+          and(
+            eq(properties.id, propertyId),
+            eq(properties.workspaceId, workspaceId),
+          ),
+        ),
+    );
+
+    if (Result.isError(deleteResult)) {
+      if (
+        DatabaseError.is(deleteResult.error) &&
+        deleteResult.error.code === PG_ERROR.FOREIGN_KEY_VIOLATION
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Property is referenced by other properties",
+          }),
+        );
+      }
+      return Result.err(deleteResult.error);
+    }
+
+    return Result.ok(undefined);
   },
 );
 

@@ -1,13 +1,15 @@
-import { status, t } from "elysia";
+import { Result } from "better-result";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb } from "@/api/db";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { s3 } from "@/api/lib/s3";
 
 const previewTemplateParamsSchema = t.Object({
@@ -15,25 +17,29 @@ const previewTemplateParamsSchema = t.Object({
 });
 
 type PreviewTemplateProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: string;
 };
 
-const previewTemplateHandler = async ({
-  scopedDb,
+const previewTemplateHandler = async function* ({
+  safeDb,
   organizationId,
   templateId,
-}: PreviewTemplateProps) => {
-  const template = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
-      columns: { s3Key: true },
-    }),
+}: PreviewTemplateProps) {
+  const template = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: { id: templateId, organizationId: { eq: organizationId } },
+        columns: { s3Key: true },
+      }),
+    ),
   );
 
   if (!template) {
-    return status(404, { message: "Template not found" });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
   }
 
   const buffer = Buffer.from(await s3.file(template.s3Key).arrayBuffer());
@@ -64,12 +70,12 @@ const previewTemplateHandler = async ({
 
   const slotNames = clauseSlots.map((s) => s.name);
 
-  return {
+  return Result.ok({
     paragraphs,
     charCount,
     structureErrors,
     clauseSlots: slotNames,
-  };
+  });
 };
 
 const config = {
@@ -77,14 +83,15 @@ const config = {
   params: previewTemplateParamsSchema,
 } satisfies HandlerConfig;
 
-const previewTemplate = createRootHandler(
+const previewTemplate = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params }) =>
-    await previewTemplateHandler({
-      scopedDb,
+  async function* ({ safeDb, session, params }) {
+    return yield* previewTemplateHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       templateId: params.templateId,
-    }),
+    });
+  },
 );
 
 export default previewTemplate;

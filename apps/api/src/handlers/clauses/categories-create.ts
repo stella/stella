@@ -1,4 +1,4 @@
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 import { createCategoryBodySchema, createCategoryHandler } from "./categories";
@@ -8,14 +8,15 @@ const config = {
   body: createCategoryBodySchema,
 } satisfies HandlerConfig;
 
-const createClauseCategory = createRootHandler(
+const createClauseCategory = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, body }) =>
-    await createCategoryHandler({
-      scopedDb,
+  async function* ({ safeDb, session, body }) {
+    return yield* createCategoryHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       body,
-    }),
+    });
+  },
 );
 
 export default createClauseCategory;

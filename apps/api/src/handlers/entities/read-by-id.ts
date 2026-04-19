@@ -1,70 +1,83 @@
-import { status, t } from "elysia";
+import { Result } from "better-result";
+import { t } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
-import { createHandler } from "@/api/lib/api-handlers";
+import type { SafeDb } from "@/api/db";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readEntityByIdParamsSchema = t.Object({
   entityId: t.String(),
 });
 
 type ReadEntityByIdHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityId: string;
 };
 
-export const readEntityByIdHandler = async ({
-  scopedDb,
+export const readEntityByIdHandler = async function* ({
+  safeDb,
   workspaceId,
   entityId,
-}: ReadEntityByIdHandlerProps) => {
-  const entity = await scopedDb((tx) =>
-    tx.query.entities.findFirst({
-      where: {
-        id: entityId,
-        workspaceId: {
-          eq: workspaceId,
+}: ReadEntityByIdHandlerProps) {
+  const entity = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: entityId,
+          workspaceId: {
+            eq: workspaceId,
+          },
         },
-      },
-      columns: {
-        currentVersionId: true,
-        kind: true,
-        name: true,
-      },
-    }),
+        columns: {
+          currentVersionId: true,
+          kind: true,
+          name: true,
+        },
+      }),
+    ),
   );
 
   if (!entity) {
-    return status(404);
+    return Result.err(
+      new HandlerError({ status: 404, message: "Entity not found" }),
+    );
   }
 
   if (!entity.currentVersionId) {
-    return status(400, { message: "Entity has no current version" });
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity has no current version",
+      }),
+    );
   }
 
   const currentVersionId = entity.currentVersionId;
 
-  const fields = await scopedDb((tx) =>
-    tx.query.fields.findMany({
-      where: {
-        entityVersionId: currentVersionId,
-      },
-      columns: {
-        id: true,
-        propertyId: true,
-        content: true,
-      },
-    }),
+  const fields = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.fields.findMany({
+        where: {
+          entityVersionId: currentVersionId,
+        },
+        columns: {
+          id: true,
+          propertyId: true,
+          content: true,
+        },
+      }),
+    ),
   );
 
-  return {
+  return Result.ok({
     entityId,
     kind: entity.kind,
     name: entity.name,
     fields,
-  };
+  });
 };
 
 const config = {
@@ -72,14 +85,15 @@ const config = {
   params: readEntityByIdParamsSchema,
 } satisfies HandlerConfig;
 
-const readEntityById = createHandler(
+const readEntityById = createSafeHandler(
   config,
-  async ({ scopedDb, workspaceId, params }) =>
-    await readEntityByIdHandler({
-      scopedDb,
+  async function* ({ safeDb, workspaceId, params }) {
+    return yield* readEntityByIdHandler({
+      safeDb,
       workspaceId,
       entityId: params.entityId,
-    }),
+    });
+  },
 );
 
 export default readEntityById;

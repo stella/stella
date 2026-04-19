@@ -1,8 +1,10 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createRootHandler } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
   updateTemplateCategoryBodySchema,
@@ -19,15 +21,28 @@ const config = {
   body: updateTemplateCategoryBodySchema,
 } satisfies HandlerConfig;
 
-const updateTemplateCategory = createRootHandler(
+const updateTemplateCategory = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, params, body }) =>
-    await updateTemplateCategoryHandler({
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      categoryId: params.categoryId,
-      body,
-    }),
+  async function* ({ scopedDb, session, params, body }) {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await updateTemplateCategoryHandler({
+            scopedDb,
+            organizationId: session.activeOrganizationId,
+            categoryId: params.categoryId,
+            body,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Internal server error",
+            cause,
+          }),
+      }),
+    );
+    return Result.ok(result);
+  },
 );
 
 export default updateTemplateCategory;

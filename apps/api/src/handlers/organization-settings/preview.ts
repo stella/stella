@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
-import { createRootHandler } from "@/api/lib/api-handlers";
+import type { SafeDb } from "@/api/db";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   toReference,
   toScopeKey,
@@ -22,33 +23,37 @@ type PreviewOrganizationSettingsBodySchema = Static<
 >;
 
 type PreviewOrganizationSettingsHandlerProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   body: PreviewOrganizationSettingsBodySchema;
 };
 
-const previewOrganizationSettingsHandler = async ({
-  scopedDb,
+const previewOrganizationSettingsHandler = async function* ({
+  safeDb,
   organizationId,
   body,
-}: PreviewOrganizationSettingsHandlerProps) => {
+}: PreviewOrganizationSettingsHandlerProps) {
   const validation = validatePattern(
     body.matterNumberPattern,
     body.matterNumberPadding,
   );
 
   if (Result.isError(validation)) {
-    return status(400, { message: validation.error.message });
+    return Result.err(
+      new HandlerError({ status: 400, message: validation.error.message }),
+    );
   }
 
   const now = new Date();
   const scopeKey = toScopeKey(body.matterNumberPattern, now);
 
-  const counter = await scopedDb((tx) =>
-    tx.query.matterCounters.findFirst({
-      where: { organizationId: { eq: organizationId }, scopeKey },
-      columns: { lastValue: true },
-    }),
+  const counter = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.matterCounters.findFirst({
+        where: { organizationId: { eq: organizationId }, scopeKey },
+        columns: { lastValue: true },
+      }),
+    ),
   );
 
   const nextValue = (counter?.lastValue ?? 0) + 1;
@@ -59,7 +64,7 @@ const previewOrganizationSettingsHandler = async ({
     padding: body.matterNumberPadding,
   });
 
-  return { preview, nextValue };
+  return Result.ok({ preview, nextValue });
 };
 
 const config = {
@@ -67,14 +72,15 @@ const config = {
   body: previewOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 
-const previewOrganizationSettings = createRootHandler(
+const previewOrganizationSettings = createSafeRootHandler(
   config,
-  async ({ scopedDb, session, body }) =>
-    await previewOrganizationSettingsHandler({
-      scopedDb,
+  async function* ({ safeDb, session, body }) {
+    return yield* previewOrganizationSettingsHandler({
+      safeDb,
       organizationId: session.activeOrganizationId,
       body,
-    }),
+    });
+  },
 );
 
 export default previewOrganizationSettings;

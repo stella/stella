@@ -1,82 +1,88 @@
-import { status, t } from "elysia";
+import { Result } from "better-result";
+import { t } from "elysia";
 
-import { createHandler } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const invoiceParamsSchema = t.Object({
   invoiceId: tNanoid,
 });
 
-const readInvoiceById = createHandler(
+const readInvoiceById = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     params: invoiceParamsSchema,
   },
-  async ({ scopedDb, workspaceId, params }) => {
-    const invoice = await scopedDb((tx) =>
-      tx.query.invoices.findFirst({
-        where: {
-          id: params.invoiceId,
-          workspaceId: { eq: workspaceId },
-        },
-        with: {
-          timeEntries: {
-            columns: {
-              id: true,
-              matterId: true,
-              dateWorked: true,
-              billedMinutes: true,
-              rateAtEntry: true,
-              currency: true,
-              narrative: true,
-              invoiceNarrative: true,
-              status: true,
+  async function* ({ safeDb, workspaceId, params }) {
+    const invoice = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.invoices.findFirst({
+          where: {
+            id: params.invoiceId,
+            workspaceId: { eq: workspaceId },
+          },
+          with: {
+            timeEntries: {
+              columns: {
+                id: true,
+                matterId: true,
+                dateWorked: true,
+                billedMinutes: true,
+                rateAtEntry: true,
+                currency: true,
+                narrative: true,
+                invoiceNarrative: true,
+                status: true,
+              },
+              with: {
+                matter: {
+                  columns: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
             },
-            with: {
-              matter: {
-                columns: {
-                  id: true,
-                  name: true,
+            expenses: {
+              columns: {
+                id: true,
+                matterId: true,
+                dateIncurred: true,
+                amount: true,
+                currency: true,
+                category: true,
+                description: true,
+                invoiceDescription: true,
+                billable: true,
+                markup: true,
+              },
+              with: {
+                matter: {
+                  columns: {
+                    id: true,
+                    name: true,
+                  },
                 },
               },
             },
           },
-          expenses: {
-            columns: {
-              id: true,
-              matterId: true,
-              dateIncurred: true,
-              amount: true,
-              currency: true,
-              category: true,
-              description: true,
-              invoiceDescription: true,
-              billable: true,
-              markup: true,
-            },
-            with: {
-              matter: {
-                columns: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      }),
+        }),
+      ),
     );
 
     if (!invoice) {
-      return status(404, { message: "Invoice not found" });
+      return Result.err(
+        new HandlerError({ status: 404, message: "Invoice not found" }),
+      );
     }
 
-    return {
+    return Result.ok({
       ...invoice,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
-    };
+    });
   },
 );
 

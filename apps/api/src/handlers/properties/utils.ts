@@ -1,7 +1,8 @@
+import type { Err } from "better-result";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db";
 import type {
   AIModelTool,
   ManualInputTool,
@@ -67,32 +68,38 @@ export const comparePropertiesForStale = ({
 };
 
 type ValidatePropertyInputsProps = {
-  scopedDb: ScopedDb;
+  safeDb: SafeDb;
   propertyId: string;
   workspaceId: SafeId<"workspace">;
   proposedInputs: string[];
 };
 
-export const validatePropertyInputs = async ({
-  scopedDb,
+export const validatePropertyInputs = async function* ({
+  safeDb,
   propertyId,
   workspaceId,
   proposedInputs,
-}: ValidatePropertyInputsProps): Promise<Result<void, string[]>> => {
-  const workspaceProperties = await scopedDb((tx) =>
-    tx.query.properties.findMany({
-      where: {
-        workspaceId: { eq: workspaceId },
-      },
-      columns: { id: true },
-      with: {
-        dependencies: {
-          columns: {
-            dependsOnPropertyId: true,
+}: ValidatePropertyInputsProps): AsyncGenerator<
+  Err<never, SafeDbError>,
+  Result<void, string[]>,
+  unknown
+> {
+  const workspaceProperties = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.properties.findMany({
+        where: {
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+        with: {
+          dependencies: {
+            columns: {
+              dependsOnPropertyId: true,
+            },
           },
         },
-      },
-    }),
+      }),
+    ),
   );
 
   const dependencyGraph = new Map<string, string[]>();
