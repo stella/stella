@@ -43,6 +43,7 @@
         "@opentelemetry/resources": "^2.6.1",
         "@opentelemetry/sdk-logs": "^0.214.0",
         "@react-email/render": "^2.0.6",
+        "@stella/ares": "workspace:*",
         "@stella/case-law": "workspace:*",
         "@stella/permissions": "workspace:*",
         "@stella/template-conditions": "workspace:*",
@@ -219,6 +220,18 @@
         "babel-plugin-react-compiler": "^1.0.0",
         "elysia": "catalog:",
         "react-grab": "0.1.32",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/ares": {
+      "name": "@stella/ares",
+      "version": "0.1.0",
+      "dependencies": {
+        "@stll/stdnum": "^0.0.1",
+      },
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1460,6 +1473,8 @@
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
     "@stella/api": ["@stella/api@workspace:apps/api"],
+
+    "@stella/ares": ["@stella/ares@workspace:packages/ares"],
 
     "@stella/case-law": ["@stella/case-law@workspace:packages/case-law"],
 

@@ -1,0 +1,60 @@
+{
+  "name": "@stella/ares",
+  "version": "0.1.0",
+  "description": "Typed client for the Czech ARES business registry API",
+  "keywords": [
+    "ares",
+    "company",
+    "czech",
+    "ico",
+    "legal",
+    "registry"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/ares",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/ares"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/ares",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/ares",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "@stll/stdnum": "^0.0.1"
+  },
+  "devDependencies": {
+    "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}
