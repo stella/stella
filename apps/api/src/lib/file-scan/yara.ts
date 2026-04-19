@@ -2,8 +2,8 @@ import { compile } from "@litko/yara-x";
 import type { RuleMatch } from "@litko/yara-x";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Match, Scanner } from "pompelmi";
 
+import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
 import { isRecord } from "@/api/lib/type-guards";
 
 const YARA_DIR = join(import.meta.dir, "yara");
@@ -20,7 +20,8 @@ const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
 };
 
 export const yaraScanner: Scanner = {
-  scan(bytes) {
+  // eslint-disable-next-line require-await -- Scanner interface requires Promise
+  async scan(bytes) {
     const matches = compiled.scan(Buffer.from(bytes));
 
     return matches.map((m: RuleMatch): Match => {

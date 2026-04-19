@@ -1,3 +1,30 @@
+rule ooxml_macros
+{
+    meta:
+        description = "Document contains VBA macro project (vbaProject.bin)"
+        verdict = "suspicious"
+
+    strings:
+        $content_types = "[Content_Types].xml" ascii
+        $vba = "vbaProject.bin" ascii
+
+    condition:
+        $content_types and $vba
+}
+
+rule ole2_container
+{
+    meta:
+        description = "File is a legacy OLE2 compound document"
+        verdict = "suspicious"
+
+    strings:
+        $magic = { D0 CF 11 E0 A1 B1 1A E1 }
+
+    condition:
+        $magic at 0
+}
+
 rule office_macro_suspicious_words
 {
     meta:

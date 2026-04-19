@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
-import type { ScanContext } from "pompelmi";
 
-import { mapMatchFinding, scanner } from "@/api/lib/file-scan/pompelmi";
+import { mapMatchFinding, scanner } from "@/api/lib/file-scan/pipeline";
+import type { ScanContext } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
 import { aggregateVerdict } from "@/api/lib/file-scan/verdict";
 import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
