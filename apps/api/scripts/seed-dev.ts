@@ -2924,6 +2924,29 @@ export async function seed(organizationId?: string, userId?: string) {
     });
   }
 
+  // Clean up any previous seed data so re-running for a different
+  // org works correctly (deterministic seedId means same IDs every run).
+  const allSeedContactIds = [
+    ...orgContacts,
+    ...personContacts,
+    ...moreOrgContacts,
+  ].map((c) => c.id);
+  const allSeedWorkspaceIds = [
+    ...seedWorkspaces.map((ws) => ws.id),
+    ...MORE_WORKSPACES.map((mw) => seedId(`extra-ws-${mw.reference}`)),
+  ];
+
+  if (allSeedWorkspaceIds.length > 0) {
+    await db
+      .delete(workspaces)
+      .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+  }
+  if (allSeedContactIds.length > 0) {
+    await db
+      .delete(contacts)
+      .where(sql`${contacts.id} IN ${allSeedContactIds}`);
+  }
+
   console.log("Seeding development data...\n");
 
   // 1. Contacts (original orgs + people)
@@ -3460,19 +3483,32 @@ export async function seed(organizationId?: string, userId?: string) {
 
 // Allow running as a CLI script
 if (import.meta.main) {
-  // Verify test user exists when running standalone
   const testUser = await db.query.user.findFirst({
     where: { id: DEFAULT_USER_ID },
     columns: { id: true },
   });
+
+  let targetOrgId: string | undefined;
+  let targetUserId: string | undefined;
+
   if (!testUser) {
-    console.error(
-      "Test user not found. Run `bun run db:seed-test-user` first.",
+    const firstMember = await db.query.member.findFirst({
+      columns: { userId: true, organizationId: true },
+      where: { role: "owner" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!firstMember) {
+      console.error("No users found. Sign in at least once before seeding.");
+      process.exit(1);
+    }
+    targetOrgId = firstMember.organizationId;
+    targetUserId = firstMember.userId;
+    console.log(
+      `No test user found; seeding into org ${targetOrgId} for user ${targetUserId}`,
     );
-    process.exit(1);
   }
 
-  seed()
+  seed(targetOrgId, targetUserId)
     .then(() => process.exit(0))
     .catch((error: unknown) => {
       console.error("Seed failed:", error);

@@ -27,7 +27,6 @@ export default defineConfig({
     // producing a WASM CompileError. Excluding them keeps the original
     // module paths intact so the relative URL resolves.
     exclude: [
-      "@stll/anonymize-wasm",
       "@stll/text-search-wasm",
       "@stll/aho-corasick-wasm",
       "@stll/fuzzy-search-wasm",
@@ -38,7 +37,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
-    devtools(),
+    devtools({ consolePiping: { enabled: false } }),
     tailwindcss(),
     tanstackRouter({
       target: "react",

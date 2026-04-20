@@ -1,10 +1,19 @@
 import { useEffect } from "react";
 
-import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useMatch,
+} from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
+import { toastManager } from "@stella/ui/components/toast";
+
+import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { APIError } from "@/lib/errors";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import {
   ensureCriticalQueryData,
@@ -25,6 +34,16 @@ import {
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
+  onError: (error) => {
+    if (error instanceof APIError && error.status === 404) {
+      const t = getTranslator();
+      toastManager.add({
+        title: t("errors.matterNotFound"),
+        type: "error",
+      });
+      throw redirect({ to: "/workspaces" });
+    }
+  },
   loader: async ({ context, params, cause }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;

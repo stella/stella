@@ -1,3 +1,4 @@
+import { loadNameDictionaries } from "@stll/anonymize-data";
 import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
@@ -92,9 +93,10 @@ export const anonymizePdf = async ({
     await pdf.destroy();
   }
 
+  const dictionaries = await loadNameDictionaries();
   const entities = await runPipeline({
     fullText: text,
-    config: buildPipelineConfig(workspaceId),
+    config: { ...buildPipelineConfig(workspaceId), dictionaries },
     gazetteerEntries: [],
   });
 

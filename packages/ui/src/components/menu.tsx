@@ -14,7 +14,13 @@ const Menu = MenuPrimitive.Root;
 const MenuPortal = MenuPrimitive.Portal;
 
 function MenuTrigger(props: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="menu-trigger" {...props} />;
+  return (
+    <MenuPrimitive.Trigger
+      data-slot="menu-trigger"
+      nativeButton={false}
+      {...props}
+    />
+  );
 }
 
 function MenuPopup({
