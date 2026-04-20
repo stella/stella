@@ -22,7 +22,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -188,7 +188,7 @@ const uploadEntityHandler = async function* ({
   const shouldConvert = !encrypted && isConvertibleMimeType(file.type);
 
   const [, conversionResult] = await Promise.all([
-    s3.write(sourceKey, new Uint8Array(fileBuffer)),
+    getS3().write(sourceKey, new Uint8Array(fileBuffer)),
     shouldConvert
       ? convertToPdf(fileBuffer, name, file.type)
       : Promise.resolve(null),
@@ -201,7 +201,7 @@ const uploadEntityHandler = async function* ({
       mimeType: file.type,
       sizeBytes: String(fileBuffer.byteLength),
     });
-    await s3.delete(sourceKey);
+    await getS3().delete(sourceKey);
     return Result.err(
       new HandlerError({
         status: 502,
@@ -225,7 +225,7 @@ const uploadEntityHandler = async function* ({
 
     s3Keys.push(pdfKey);
 
-    await s3.write(pdfKey, new Uint8Array(conversionResult.value.buffer));
+    await getS3().write(pdfKey, new Uint8Array(conversionResult.value.buffer));
   }
 
   try {
@@ -297,7 +297,7 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } catch (error) {
-    await Promise.all(s3Keys.map(async (key) => await s3.delete(key)));
+    await Promise.all(s3Keys.map(async (key) => await getS3().delete(key)));
     throw error;
   }
 };

@@ -38,7 +38,7 @@ import type {
   TemplateManifest,
 } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2296,7 +2296,7 @@ export async function seedTemplates(
 
     // Upload to S3
     const s3Key = `${ORG_ID}/templates/${templateId}.docx`;
-    await s3.write(s3Key, new Uint8Array(docxBuffer));
+    await getS3().write(s3Key, new Uint8Array(docxBuffer));
 
     // Insert template
     await db
@@ -2318,7 +2318,7 @@ export async function seedTemplates(
 
     // Insert version v1
     const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
-    await s3.write(versionS3Key, new Uint8Array(docxBuffer));
+    await getS3().write(versionS3Key, new Uint8Array(docxBuffer));
 
     await db
       .insert(templateVersions)

@@ -8,7 +8,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
-import { presignDownloadUrl, s3 } from "@/api/lib/s3";
+import { getS3, presignDownloadUrl } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type FilePurpose = "download" | "display";
@@ -105,7 +105,7 @@ export const readFileHandler = async ({
     originalMimeType: content.mimeType,
     fileName: content.fileName,
     encrypted: content.encrypted,
-    presignedUrl: s3.presign(
+    presignedUrl: getS3().presign(
       createFileKey({
         organizationId,
         workspaceId,
@@ -168,7 +168,7 @@ export const stampedDownloadHandler = async ({
     mimeType: content.mimeType,
   });
 
-  const presignedUrl = s3.presign(fileKey, { expiresIn: 900 });
+  const presignedUrl = getS3().presign(fileKey, { expiresIn: 900 });
   const response = await fetch(presignedUrl, {
     signal: AbortSignal.timeout(30_000),
   });

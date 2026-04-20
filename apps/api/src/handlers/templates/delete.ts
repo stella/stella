@@ -10,7 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const deleteTemplateParamsSchema = t.Object({
   templateId: tNanoid,
@@ -70,7 +70,7 @@ const deleteTemplateHandler = async function* ({
   // DB operations short. If any delete fails, files become
   // orphaned but that is safer than a dangling DB row.
   for (const key of s3Keys) {
-    s3.delete(key).catch(captureError);
+    getS3().delete(key).catch(captureError);
   }
 
   return Result.ok(undefined);

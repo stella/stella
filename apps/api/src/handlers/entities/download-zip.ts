@@ -11,7 +11,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const downloadZipParamsSchema = t.Object({
   entityId: t.String(),
@@ -152,7 +152,7 @@ const downloadZipHandler = async function* ({
       mimeType: file.mimeType,
     });
 
-    const presignedUrl = s3.presign(key, { expiresIn: 900 });
+    const presignedUrl = getS3().presign(key, { expiresIn: 900 });
     const response = await fetch(presignedUrl, {
       signal: AbortSignal.timeout(30_000),
     });

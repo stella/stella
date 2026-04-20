@@ -7,7 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const getTemplateParamsSchema = t.Object({
   templateId: tNanoid,
@@ -53,7 +53,7 @@ const getTemplateHandler = async function* ({
     );
   }
 
-  const presignedUrl = s3.presign(template.s3Key, {
+  const presignedUrl = getS3().presign(template.s3Key, {
     expiresIn: PRESIGN_EXPIRES_IN,
   });
 

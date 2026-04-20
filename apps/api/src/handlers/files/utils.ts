@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const fileExtensionMap: Record<string, string> = {
   "application/pdf": "pdf",
@@ -62,7 +62,7 @@ export const createUserFileKey = ({
   `${userId}/${fileId}.${getFileExtension(mimeType)}`;
 
 /**
- * Concurrency limit for individual s3.delete() calls. Bun's
+ * Concurrency limit for individual S3 delete calls. Bun's
  * S3Client has no batch-delete API, so we chunk to avoid
  * overwhelming the endpoint with concurrent HTTP requests.
  */
@@ -108,7 +108,7 @@ export const deleteS3Keys = async (
 
     const result = await Result.tryPromise(
       async () =>
-        await Promise.all(chunk.map(async (key) => await s3.delete(key))),
+        await Promise.all(chunk.map(async (key) => await getS3().delete(key))),
     );
 
     if (Result.isError(result)) {

@@ -12,7 +12,7 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -103,7 +103,7 @@ export const createEntityFromBuffer = async ({
       shouldConvert
         ? convertToPdf(bytes.slice().buffer, fileName, mimeType)
         : Promise.resolve(null),
-      s3.write(s3Key, bytes),
+      getS3().write(s3Key, bytes),
     ]);
 
     if (pdfResult && Result.isOk(pdfResult)) {
@@ -115,7 +115,7 @@ export const createEntityFromBuffer = async ({
         mimeType: PDF_MIME_TYPE,
       });
       s3Keys.push(pdfKey);
-      await s3.write(pdfKey, new Uint8Array(pdfResult.value.buffer));
+      await getS3().write(pdfKey, new Uint8Array(pdfResult.value.buffer));
     }
 
     await scopedDb(async (tx) => {
@@ -177,7 +177,7 @@ export const createEntityFromBuffer = async ({
         .where(eq(workspaces.id, workspaceId));
     });
   } catch (error) {
-    await Promise.all(s3Keys.map(async (k) => await s3.delete(k)));
+    await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
 
     if (EntityLimitError.is(error)) {
       return Result.err(error);

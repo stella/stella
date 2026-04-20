@@ -43,7 +43,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
 import { seedTemplates } from "./seed-templates";
@@ -3162,7 +3162,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${ext}`;
-      await s3.write(s3Key, new Uint8Array(content));
+      await getS3().write(s3Key, new Uint8Array(content));
 
       // DOCX → PDF converted twin
       let pdfFileId: string | null = null;
@@ -3170,7 +3170,7 @@ export async function seed(organizationId?: string, userId?: string) {
         pdfFileId = seedId(`${wsLabel}-pdf-twin-${j}`);
         const pdfContent = createMockPdf(title, docText);
         const pdfS3Key = `${ORG_ID}/${wsId}/${pdfFileId}.pdf`;
-        await s3.write(pdfS3Key, new Uint8Array(pdfContent));
+        await getS3().write(pdfS3Key, new Uint8Array(pdfContent));
         pdfTwinCount++;
       }
 

@@ -22,7 +22,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -172,7 +172,7 @@ const createTemplateHandler = async function* ({
   const templateId = crypto.randomUUID();
   const s3Key = buildS3Key(organizationId, templateId);
 
-  await s3.write(s3Key, new Uint8Array(docxWithManifest));
+  await getS3().write(s3Key, new Uint8Array(docxWithManifest));
 
   const versionId = crypto.randomUUID();
 

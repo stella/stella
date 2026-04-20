@@ -31,7 +31,7 @@ import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 type PipelineInput = {
@@ -186,7 +186,7 @@ const uploadSourceRaw = async (
   hasher.update(data);
   const blobHash = hasher.digest("hex");
   const key = `case-law/raw/${sourceId}/${blobHash}`;
-  await s3.write(key, data, { type: contentType });
+  await getS3().write(key, data, { type: contentType });
   return key;
 };
 

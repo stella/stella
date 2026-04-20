@@ -7,7 +7,7 @@ import {
   Unreachable,
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
 import {
@@ -106,7 +106,7 @@ const fetchAndPrepareFiles = async (
       });
 
       const simplifiedName = `F${index}`;
-      const fileBuffer = await s3.file(fileKey).arrayBuffer();
+      const fileBuffer = await getS3().file(fileKey).arrayBuffer();
       const preparedPdf = await addBatesNumbers(fileBuffer, simplifiedName);
 
       return {
