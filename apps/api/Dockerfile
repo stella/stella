@@ -11,7 +11,7 @@ RUN turbo prune @stella/api --docker
 # Install dependencies using only package manifests (cached layer)
 FROM base AS deps
 COPY --from=pruner /app/out/json/ .
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # Copy source code and run as non-root
 FROM deps AS runner
