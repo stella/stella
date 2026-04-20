@@ -108,31 +108,13 @@ const buildS3Client = (
  * processes to prevent STS credential expiry.
  */
 export const refreshS3 = async (): Promise<void> => {
-  console.log(
-    `[s3] refreshS3 called. S3_ACCESS_KEY_ID=${envBase.S3_ACCESS_KEY_ID ? "SET" : "unset"}, AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID?.slice(0, 8) ?? "unset"}`,
-  );
   if (envBase.S3_ACCESS_KEY_ID && envBase.S3_SECRET_ACCESS_KEY) {
-    console.log("[s3] using static S3 credentials");
     _client = buildS3Client({
       accessKeyId: envBase.S3_ACCESS_KEY_ID,
       secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
     });
   } else {
-    // Bun's S3Client reads AWS_* env vars at the libc level,
-    // not through process.env. Overwrite them with fresh IMDS
-    // credentials so both the constructor AND env-var path use
-    // valid credentials.
     const imdsCreds = await fetchImdsCredentials();
-    if (imdsCreds) {
-      process.env.AWS_ACCESS_KEY_ID = imdsCreds.accessKeyId;
-      process.env.AWS_SECRET_ACCESS_KEY = imdsCreds.secretAccessKey;
-      process.env.AWS_SESSION_TOKEN = imdsCreds.sessionToken;
-      console.log(
-        `[s3] IMDS credentials refreshed (key: ${imdsCreds.accessKeyId.slice(0, 8)}...)`,
-      );
-    } else {
-      console.log("[s3] IMDS credentials unavailable (local dev?)");
-    }
     _client = buildS3Client(imdsCreds);
   }
   _clientCreatedAt = Date.now();

@@ -4,8 +4,8 @@
 .cache
 dist
 node_modules
-.env
-.env.local
-.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 *.md
 !README.md
