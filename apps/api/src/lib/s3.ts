@@ -114,15 +114,16 @@ export const refreshS3 = async (): Promise<void> => {
       secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
     });
   } else {
-    // Bun's S3Client prioritizes AWS_* env vars over constructor
-    // options. Docker injects stale IMDS credentials as env vars
-    // at container start. Clear them so the constructor options
-    // (fresh IMDS creds) take effect.
-    delete process.env.AWS_ACCESS_KEY_ID;
-    delete process.env.AWS_SECRET_ACCESS_KEY;
-    delete process.env.AWS_SESSION_TOKEN;
-
+    // Bun's S3Client reads AWS_* env vars at the libc level,
+    // not through process.env. Overwrite them with fresh IMDS
+    // credentials so both the constructor AND env-var path use
+    // valid credentials.
     const imdsCreds = await fetchImdsCredentials();
+    if (imdsCreds) {
+      process.env.AWS_ACCESS_KEY_ID = imdsCreds.accessKeyId;
+      process.env.AWS_SECRET_ACCESS_KEY = imdsCreds.secretAccessKey;
+      process.env.AWS_SESSION_TOKEN = imdsCreds.sessionToken;
+    }
     _client = buildS3Client(imdsCreds);
   }
   _clientCreatedAt = Date.now();
