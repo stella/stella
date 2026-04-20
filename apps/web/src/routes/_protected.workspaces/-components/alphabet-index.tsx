@@ -188,7 +188,7 @@ export const AlphabetIndex = ({
               {m.label}
             </span>
             <div
-              className="shrink-0 rounded-full transition-all duration-150"
+              className="shrink-0 rounded-full transition-[width,height,opacity,background-color] duration-150"
               style={{
                 backgroundColor: isHovered
                   ? "var(--color-primary)"

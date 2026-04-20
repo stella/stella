@@ -164,7 +164,7 @@ export const ScrollMarkers = ({
             </span>
             {/* Tick */}
             <div
-              className="shrink-0 rounded-full transition-all duration-150"
+              className="shrink-0 rounded-full transition-[width,height,opacity,background-color] duration-150"
               style={{
                 backgroundColor: `var(${m.cssVar})`,
                 width: isHovered ? "16px" : active ? "12px" : "8px",
