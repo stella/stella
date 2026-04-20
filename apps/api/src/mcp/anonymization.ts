@@ -22,6 +22,7 @@ const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: true,
+  enableLegalForms: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId,
 });

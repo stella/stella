@@ -8,9 +8,10 @@ import { cn } from "@stella/ui/lib/utils";
 
 type InputProps = Omit<
   InputPrimitive.Props & React.RefAttributes<HTMLInputElement>,
-  "size"
+  "size" | "style"
 > & {
   size?: "sm" | "default" | "lg" | number;
+  style?: React.CSSProperties;
   unstyled?: boolean;
   nativeInput?: boolean;
 };
