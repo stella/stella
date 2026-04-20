@@ -2635,7 +2635,7 @@ Apache License
 
 The following npm packages may be included in this product:
 
- - @aws-sdk/client-sesv2@3.1029.0
+ - @aws-sdk/client-sesv2@3.1030.0
  - @aws-sdk/util-user-agent-browser@3.972.9
  - @aws-sdk/util-user-agent-node@3.973.15
  - @smithy/middleware-retry@4.5.1
@@ -5977,7 +5977,7 @@ The following npm packages may be included in this product:
 
  - common-ancestor-path@2.0.0
  - lru-cache@11.2.6
- - lru-cache@11.3.3
+ - lru-cache@11.3.5
  - sax@1.5.0
 
 These packages each contain the following license:
@@ -16723,8 +16723,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @posthog/types@1.367.0
- - posthog-js@1.367.0
+ - @posthog/types@1.369.0
+ - posthog-js@1.369.0
  - posthog-node@5.29.2
 
 These packages each contain the following license:
@@ -17217,10 +17217,11 @@ The following npm packages may be included in this product:
 
  - @ai-sdk/anthropic@3.0.69
  - @ai-sdk/gateway@3.0.95
- - @ai-sdk/google-vertex@4.0.108
- - @ai-sdk/google@3.0.62
+ - @ai-sdk/gateway@3.0.97
+ - @ai-sdk/google-vertex@4.0.109
+ - @ai-sdk/google@3.0.63
  - @ai-sdk/openai-compatible@2.0.41
- - @ai-sdk/openai@3.0.52
+ - @ai-sdk/openai@3.0.53
  - @ai-sdk/provider@3.0.8
  - @ai-sdk/react@3.0.160
  - @ai-sdk/valibot@2.0.24
@@ -17229,6 +17230,7 @@ The following npm packages may be included in this product:
  - @streamdown/math@1.0.2
  - @streamdown/mermaid@1.0.2
  - ai@6.0.158
+ - ai@6.0.160
  - remend@1.3.0
  - streamdown@2.5.0
 
@@ -17780,7 +17782,7 @@ permission of its copyright owner.
 The following npm packages may be included in this product:
 
  - dompurify@3.3.2
- - dompurify@3.3.3
+ - dompurify@3.4.0
 
 These packages each contain the following license:
 
@@ -19274,6 +19276,9 @@ The following npm packages may be included in this product:
  - @napi-rs/canvas-linux-x64-gnu@0.1.96
  - @napi-rs/canvas-linux-x64-musl@0.1.96
  - @napi-rs/wasm-runtime@1.1.3
+ - @next/env@16.1.7
+ - @next/swc-linux-x64-gnu@16.1.7
+ - @next/swc-linux-x64-musl@16.1.7
  - @pagefind/default-ui@1.5.0
  - @pagefind/linux-x64@1.5.0
  - @posthog/core@1.25.2
@@ -19623,6 +19628,7 @@ The following npm packages may be included in this product:
  - @babel/plugin-transform-react-jsx-self@7.27.1
  - @babel/plugin-transform-react-jsx-source@7.27.1
  - @babel/runtime@7.28.6
+ - @babel/runtime@7.29.2
  - @babel/template@7.28.6
  - @babel/traverse@7.29.0
  - @babel/types@7.29.0
@@ -21816,8 +21822,8 @@ The following npm packages may be included in this product:
  - @tanstack/react-query@5.99.0
  - @tanstack/react-router-devtools@1.166.13
  - @tanstack/react-router-ssr-query@1.166.11
- - @tanstack/react-router@1.168.19
- - @tanstack/router-core@1.168.14
+ - @tanstack/react-router@1.168.21
+ - @tanstack/router-core@1.168.15
  - @tanstack/router-devtools-core@1.167.3
  - @tanstack/router-ssr-query-core@1.167.1
 
@@ -25554,36 +25560,6 @@ THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - tabbable@6.4.0
-
-This package contains the following license:
-
-The MIT License (MIT)
-
-Copyright (c) 2015 David Clark
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
------------
-
-The following npm package may be included in this product:
-
  - set-cookie-parser@3.0.1
 
 This package contains the following license:
@@ -26217,8 +26193,8 @@ THE SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @base-ui/react@1.3.0
- - @base-ui/utils@0.2.6
+ - @base-ui/react@1.4.0
+ - @base-ui/utils@0.2.7
 
 These packages each contain the following license:
 
@@ -26641,6 +26617,36 @@ SOFTWARE.
 
 -----------
 
+The following npm package may be included in this product:
+
+ - next@16.1.7
+
+This package contains the following license:
+
+The MIT License (MIT)
+
+Copyright (c) 2025 Vercel, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-----------
+
 The following npm packages may be included in this product:
 
  - safe-buffer@5.1.2
@@ -26874,11 +26880,12 @@ SOFTWARE.
 
 -----------
 
-The following npm package may be included in this product:
+The following npm packages may be included in this product:
 
+ - postcss@8.4.31
  - postcss@8.5.8
 
-This package contains the following license:
+These packages each contain the following license:
 
 The MIT License (MIT)
 
@@ -27145,15 +27152,15 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @better-auth/core@1.6.2
- - @better-auth/drizzle-adapter@1.6.2
- - @better-auth/kysely-adapter@1.6.2
- - @better-auth/memory-adapter@1.6.2
- - @better-auth/mongo-adapter@1.6.2
- - @better-auth/oauth-provider@1.6.2
- - @better-auth/prisma-adapter@1.6.2
- - @better-auth/telemetry@1.6.2
- - better-auth@1.6.2
+ - @better-auth/core@1.6.3
+ - @better-auth/drizzle-adapter@1.6.3
+ - @better-auth/kysely-adapter@1.6.3
+ - @better-auth/memory-adapter@1.6.3
+ - @better-auth/mongo-adapter@1.6.3
+ - @better-auth/oauth-provider@1.6.3
+ - @better-auth/prisma-adapter@1.6.3
+ - @better-auth/telemetry@1.6.3
+ - better-auth@1.6.3
 
 These packages each contain the following license:
 
