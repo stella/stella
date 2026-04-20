@@ -108,7 +108,11 @@ const buildS3Client = (
  * processes to prevent STS credential expiry.
  */
 export const refreshS3 = async (): Promise<void> => {
+  console.log(
+    `[s3] refreshS3 called. S3_ACCESS_KEY_ID=${envBase.S3_ACCESS_KEY_ID ? "SET" : "unset"}, AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID?.slice(0, 8) ?? "unset"}`,
+  );
   if (envBase.S3_ACCESS_KEY_ID && envBase.S3_SECRET_ACCESS_KEY) {
+    console.log("[s3] using static S3 credentials");
     _client = buildS3Client({
       accessKeyId: envBase.S3_ACCESS_KEY_ID,
       secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
