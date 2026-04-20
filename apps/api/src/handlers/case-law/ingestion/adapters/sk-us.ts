@@ -152,30 +152,6 @@ type SearchResponse = {
   numFound: number;
 };
 
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
-
-const isNullish = (value: unknown): value is null | undefined =>
-  value === undefined || value === null;
-
-const isOptionalString = (value: unknown): value is string | null | undefined =>
-  isNullish(value) || typeof value === "string";
-
-const isOptionalStringArray = (
-  value: unknown,
-): value is string[] | null | undefined =>
-  isNullish(value) || isStringArray(value);
-
-const isOptionalStringOrStringArray = (
-  value: unknown,
-): value is string | string[] | null | undefined =>
-  isNullish(value) || typeof value === "string" || isStringArray(value);
-
-const isOptionalBoolean = (
-  value: unknown,
-): value is boolean | null | undefined =>
-  isNullish(value) || typeof value === "boolean";
-
 const isTokenResponse = (
   value: unknown,
 ): value is { access_token: string; expires_in: number } =>
@@ -183,48 +159,18 @@ const isTokenResponse = (
   typeof value.access_token === "string" &&
   typeof value.expires_in === "number";
 
-const isSearchDocument = (value: unknown): value is SearchDocument => {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    isOptionalString(value.documentId) &&
-    isOptionalString(value.mkDocumentType) &&
-    isOptionalString(value.mkRSAPNumberOfFile) &&
-    isOptionalString(value.mkRVPNumberOfFile) &&
-    isOptionalString(value.mkECLI) &&
-    isOptionalString(value.mkDateOfDecision) &&
-    isOptionalString(value.mkDateOfLegalForce) &&
-    isOptionalString(value.mkPublicationDate) &&
-    isOptionalString(value.mkFormOfDecision) &&
-    isOptionalStringArray(value.mkTypeOfDecision) &&
-    isOptionalString(value.mkTypeOfProceeding) &&
-    isOptionalStringArray(value.mkTypeOfNegotiation) &&
-    isOptionalStringArray(value.mkDecisionInTermsOf) &&
-    isOptionalStringArray(value.mkResultOfNegotiation) &&
-    isOptionalStringArray(value.mkCause) &&
-    isOptionalString(value.mkJudgeReporter) &&
-    isOptionalStringArray(value.mkDifferentView) &&
-    isOptionalStringArray(value.mkWordRegister) &&
-    isOptionalStringArray(value.mkMaterialRegister) &&
-    isOptionalStringOrStringArray(value.mkComplainedLegalRegulation) &&
-    isOptionalStringArray(value.mkFileReference) &&
-    isOptionalStringArray(value.mkReferences) &&
-    isOptionalString(value.mkTypeOfProposer) &&
-    isOptionalString(value.mkAffectedLegalRegulation) &&
-    isOptionalString(value.mkUnderage) &&
-    isOptionalBoolean(value.mkIncludeToZnaU) &&
-    isOptionalString(value.mkEntryDate) &&
-    isOptionalString(value.mkFormOfEntry) &&
-    isOptionalString(value.mkTypeOfEntry)
-  );
-};
-
+/**
+ * Validate only the response envelope. Individual document
+ * field validation is too brittle: the Liferay DMS API adds
+ * fields and changes types without notice (e.g. returning
+ * USSR_DECISION alongside USSR_DECISION_MK items). Since all
+ * metadata lands in JSONB, strict per-field validation adds
+ * no safety — it just causes the entire page to be rejected.
+ */
 const isSearchResponse = (value: unknown): value is SearchResponse =>
   isRecord(value) &&
   Array.isArray(value.documents) &&
-  value.documents.every(isSearchDocument) &&
+  value.documents.every(isRecord) &&
   typeof value.numFound === "number";
 
 // ── Date parsing ─────────────────────────────────────────
