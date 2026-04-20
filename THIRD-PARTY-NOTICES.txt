@@ -19289,8 +19289,8 @@ The following npm packages may be included in this product:
  - @schummar/icu-type-parser@1.21.5
  - @stll/aho-corasick-wasm@1.0.0
  - @stll/fuzzy-search-wasm@1.0.0
- - @stll/regex-set-wasm@1.0.0
- - @stll/text-search-wasm@1.0.0
+ - @stll/regex-set-wasm@1.0.1
+ - @stll/text-search-wasm@1.0.1
  - @t3-oss/env-core@0.13.11
  - @tybys/wasm-util@0.10.1
  - babel-plugin-react-compiler@1.0.0
@@ -23124,7 +23124,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @stll/anonymize-data@0.0.4
+ - @stll/anonymize-wasm@1.1.1
 
 This package contains the following license:
 
@@ -23139,8 +23139,8 @@ Software without restriction, including without
 limitation the rights to use, copy, modify, merge,
 publish, distribute, sublicense, and/or sell copies of
 the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the
-following conditions:
+Software is furnished to do so, subject to the following
+conditions:
 
 The above copyright notice and this permission notice
 shall be included in all copies or substantial portions
@@ -23160,13 +23160,13 @@ DEALINGS IN THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @stll/anonymize-wasm@0.1.7
+ - @stll/anonymize-data@0.0.5
 
 This package contains the following license:
 
 MIT License
 
-Copyright (c) 2026 Stella
+Copyright (c) 2026 stella labs, s.r.o.
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -23175,8 +23175,8 @@ Software without restriction, including without
 limitation the rights to use, copy, modify, merge,
 publish, distribute, sublicense, and/or sell copies of
 the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following
-conditions:
+Software is furnished to do so, subject to the
+following conditions:
 
 The above copyright notice and this permission notice
 shall be included in all copies or substantial portions
