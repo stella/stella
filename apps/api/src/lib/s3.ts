@@ -123,6 +123,11 @@ export const refreshS3 = async (): Promise<void> => {
       process.env.AWS_ACCESS_KEY_ID = imdsCreds.accessKeyId;
       process.env.AWS_SECRET_ACCESS_KEY = imdsCreds.secretAccessKey;
       process.env.AWS_SESSION_TOKEN = imdsCreds.sessionToken;
+      console.log(
+        `[s3] IMDS credentials refreshed (key: ${imdsCreds.accessKeyId.slice(0, 8)}...)`,
+      );
+    } else {
+      console.log("[s3] IMDS credentials unavailable (local dev?)");
     }
     _client = buildS3Client(imdsCreds);
   }
