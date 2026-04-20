@@ -111,7 +111,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
-        className={`flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-all duration-200 ${
+        className={`flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200 ${
           isDragOver
             ? "border-foreground/30 bg-accent/50 shadow-primary/20 shadow-lg"
             : "border-border shadow-none"

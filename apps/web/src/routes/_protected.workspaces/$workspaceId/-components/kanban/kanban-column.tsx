@@ -313,7 +313,7 @@ export const KanbanColumn = ({
   return (
     <div
       className={cn(
-        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-all",
+        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-[opacity,background-color,outline-color]",
         !colorBg && "bg-muted/50",
         (isFileDragOver || isEntityDragOver) &&
           "bg-primary/5 ring-primary/50 ring-2",

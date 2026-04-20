@@ -163,7 +163,7 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
       className={cn(
         "flex h-auto w-full items-center",
         "justify-between px-2 py-1.5",
-        "transition-all duration-150",
+        "transition-colors duration-150",
         isActivated
           ? "bg-accent text-accent-foreground"
           : isActive

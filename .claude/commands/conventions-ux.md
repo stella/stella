@@ -45,3 +45,47 @@ Small, almost invisible touches. Linear is a good reference.
 - Secondary information (counts, metadata) subtle by default.
   Use opacity transitions to reveal details on hover.
 - Don't compete for attention; let the content speak.
+
+## Typography Polish
+
+- `-webkit-font-smoothing: antialiased` on macOS for crisper
+  text on light backgrounds. Apply globally in the base stylesheet.
+- `font-variant-numeric: tabular-nums` on any element whose
+  number changes dynamically (counters, timers, tables with
+  numeric columns). Prevents layout shift.
+- `text-wrap: balance` on headings and short text blocks to
+  distribute lines evenly. `text-wrap: pretty` on body/paragraph
+  text to avoid orphans.
+
+## Surfaces & Depth
+
+- **Concentric border radius:** when nesting rounded elements,
+  outer radius = inner radius + padding between them. Hard-coding
+  both to the same value produces a visual mismatch.
+- **Shadows over borders:** prefer layered semi-transparent
+  `box-shadow` for depth and separation. Reserve `border` for
+  semantic boundaries (inputs, dividers), not for creating depth.
+- **Image outlines:** for images on white/light backgrounds, add a
+  subtle `outline: 1px solid rgb(0 0 0 / 0.06)` to define the edge
+  without a heavy border.
+
+## Interactions & Animations
+
+- **Never use `transition: all`.** Always specify exact properties
+  (e.g., `transition: opacity 150ms, transform 150ms`). `all`
+  triggers unnecessary repaints and can animate properties you
+  didn't intend.
+- **Interruptible animations:** use CSS `transition` for
+  interactive state changes (hover, press) so the browser can
+  interrupt mid-animation. Reserve `@keyframes` for staged
+  sequences (page load, modals).
+- **Optical alignment over geometric:** icons inside circles,
+  play-button triangles, and asymmetric glyphs should be nudged
+  visually until they *look* centred, even if that means offset
+  from the geometric centre.
+
+## Hit Areas
+
+- All interactive elements must have a minimum 44×44px touch
+  target (WCAG 2.5.8). If the visible element is smaller, extend
+  the hit area with a pseudo-element or padding.
