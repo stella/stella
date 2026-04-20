@@ -10,6 +10,7 @@
 import * as cheerio from "cheerio";
 
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import { logger } from "@/api/lib/observability/logger";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -337,19 +338,19 @@ export const validateAndLog = (
   const result = validateAst(html, blocks);
 
   if (!result.ok) {
-    // eslint-disable-next-line no-console -- parser diagnostic
-    console.warn(`[${parserName}] AST validation failed for ${caseNumber}:`);
-    for (const issue of result.issues) {
-      // eslint-disable-next-line no-console -- parser diagnostic
-      console.warn(`  ${issue.severity}: ${issue.message}`);
-    }
+    logger.error("case_law.ingestion.ast_validation_failed", {
+      parser: parserName,
+      caseNumber,
+      issues: result.issues.length,
+      missingWords: result.stats.missingWords.length,
+      retainedPct: result.stats.retainedPct,
+    });
   } else if (result.issues.length > 0) {
-    // eslint-disable-next-line no-console -- parser diagnostic
-    console.warn(`[${parserName}] AST warnings for ${caseNumber}:`);
-    for (const issue of result.issues) {
-      // eslint-disable-next-line no-console -- parser diagnostic
-      console.warn(`  ${issue.severity}: ${issue.message}`);
-    }
+    logger.warn("case_law.ingestion.ast_validation_warning", {
+      parser: parserName,
+      caseNumber,
+      issues: result.issues.length,
+    });
   }
 
   return result;
