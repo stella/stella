@@ -15,7 +15,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -98,7 +98,7 @@ export const processExtraction = async (entityId: string): Promise<void> => {
         mimeType: source.mimeType,
       });
 
-      const s3File = s3.file(key);
+      const s3File = getS3().file(key);
       const buffer = await s3File.arrayBuffer();
 
       const text = await extractFileText(buffer, source.mimeType, {

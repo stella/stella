@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const readUserFileContent = createSafeRootHandler(
   {
@@ -33,7 +33,7 @@ const readUserFileContent = createSafeRootHandler(
     }
 
     return Result.ok(
-      Response.redirect(s3.presign(file.s3Key, { expiresIn: 900 }), 302),
+      Response.redirect(getS3().presign(file.s3Key, { expiresIn: 900 }), 302),
     );
   },
 );

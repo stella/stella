@@ -8,7 +8,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import type { BoundingBox } from "@/api/types";
 
@@ -233,7 +233,7 @@ export const prepareJustificationData = async (
       mimeType: PDF_MIME_TYPE,
     });
 
-    const fileBuffer = await s3.file(fileKey).arrayBuffer();
+    const fileBuffer = await getS3().file(fileKey).arrayBuffer();
     const pdf = await PDF.load(new Uint8Array(fileBuffer));
 
     return Result.ok({

@@ -27,7 +27,7 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -71,21 +71,25 @@ export const finalizeDesktopEditSessionHandler = async ({
   let shouldRollbackUploadedKeys = true;
 
   const deleteCheckpointKey = async (checkpointKey: string) => {
-    await s3.delete(checkpointKey).catch((error: unknown) => {
-      captureError(error, {
-        checkpointKey,
-        sessionId,
+    await getS3()
+      .delete(checkpointKey)
+      .catch((error: unknown) => {
+        captureError(error, {
+          checkpointKey,
+          sessionId,
+        });
       });
-    });
   };
 
   const deleteUploadedKey = async (uploadedKey: string) => {
-    await s3.delete(uploadedKey).catch((error: unknown) => {
-      captureError(error, {
-        rollbackKey: uploadedKey,
-        sessionId,
+    await getS3()
+      .delete(uploadedKey)
+      .catch((error: unknown) => {
+        captureError(error, {
+          rollbackKey: uploadedKey,
+          sessionId,
+        });
       });
-    });
   };
 
   try {
@@ -279,7 +283,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const checkpointBuffer = await s3.file(checkpointKey).arrayBuffer();
+      const checkpointBuffer = await getS3().file(checkpointKey).arrayBuffer();
 
       const nextVersionNumber = baseVersion.versionNumber + 1;
 
@@ -313,7 +317,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       const shouldConvert = isConvertibleMimeType(DOCX_MIME_TYPE);
       const [, conversionResult] = await Promise.all([
-        s3.write(sourceKey, storedBytes),
+        getS3().write(sourceKey, storedBytes),
         shouldConvert
           ? convertToPdf(checkpointBuffer, editSession.fileName, DOCX_MIME_TYPE)
           : Promise.resolve(null),
@@ -347,7 +351,10 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspaceId: authorizedSession.value.workspaceId,
         });
         uploadedKeys.push(pdfKey);
-        await s3.write(pdfKey, new Uint8Array(conversionResult.value.buffer));
+        await getS3().write(
+          pdfKey,
+          new Uint8Array(conversionResult.value.buffer),
+        );
       }
 
       await tx.insert(entityVersions).values({

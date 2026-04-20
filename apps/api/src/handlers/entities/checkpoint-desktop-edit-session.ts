@@ -13,7 +13,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -150,7 +150,7 @@ export const checkpointDesktopEditSessionHandler = async ({
       workspaceId: authorizedSession.value.workspaceId,
     });
 
-    await s3.write(key, new Uint8Array(buffer));
+    await getS3().write(key, new Uint8Array(buffer));
 
     const checkpointedAt = new Date();
 

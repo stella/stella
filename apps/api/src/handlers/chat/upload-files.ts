@@ -14,7 +14,7 @@ import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -98,7 +98,7 @@ export const hydrateFilePart = async ({
   await Result.gen(async function* () {
     const buffer = yield* Result.await(
       Result.tryPromise({
-        try: async () => await s3.file(s3Key).arrayBuffer(),
+        try: async () => await getS3().file(s3Key).arrayBuffer(),
         catch: (cause) =>
           new ChatError({
             message: "Failed to read chat attachment",
@@ -214,7 +214,7 @@ export const uploadUserFile = async ({
 
     yield* Result.await(
       Result.tryPromise({
-        try: async () => await s3.write(s3Key, file.bytes),
+        try: async () => await getS3().write(s3Key, file.bytes),
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -247,7 +247,7 @@ export const uploadUserFile = async ({
     }
 
     const cleanupResult = await Result.tryPromise({
-      try: async () => await s3.delete(s3Key),
+      try: async () => await getS3().delete(s3Key),
       catch: (cleanupError) =>
         new HandlerError({
           status: 500,

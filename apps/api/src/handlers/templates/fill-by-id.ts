@@ -14,7 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -101,7 +101,7 @@ const fillByIdHandler = async function* ({
     );
   }
 
-  const s3File = s3.file(template.s3Key);
+  const s3File = getS3().file(template.s3Key);
   const arrayBuf = await s3File.arrayBuffer();
   const buffer = Buffer.from(arrayBuf);
 

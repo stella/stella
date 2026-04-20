@@ -15,7 +15,7 @@ import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const buildVersionS3Key = (
   organizationId: string,
@@ -124,7 +124,7 @@ const updateTemplateHandler = async function* ({
 
     // Re-embed the manifest in the DOCX so the S3 file
     // stays in sync with the DB.
-    const docxBuffer = await s3.file(existing.s3Key).arrayBuffer();
+    const docxBuffer = await getS3().file(existing.s3Key).arrayBuffer();
     const updatedDocx = await writeManifest(Buffer.from(docxBuffer), manifest);
 
     updates.manifest = manifest;
@@ -145,7 +145,7 @@ const updateTemplateHandler = async function* ({
 
     // Write to the new version-specific key (outside
     // the transaction to keep it short).
-    await s3.write(versionS3Key, new Uint8Array(updatedDocx));
+    await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
 
     // Advisory lock + version count + update + insert in one
     // transaction to prevent TOCTOU on the version limit.

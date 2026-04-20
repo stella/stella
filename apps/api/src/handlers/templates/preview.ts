@@ -10,7 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tNanoid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { s3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 
 const previewTemplateParamsSchema = t.Object({
   templateId: tNanoid,
@@ -42,7 +42,7 @@ const previewTemplateHandler = async function* ({
     );
   }
 
-  const buffer = Buffer.from(await s3.file(template.s3Key).arrayBuffer());
+  const buffer = Buffer.from(await getS3().file(template.s3Key).arrayBuffer());
 
   const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
     await Promise.all([
