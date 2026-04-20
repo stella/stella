@@ -24,6 +24,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { isS3Stale, refreshS3 } from "@/api/lib/s3";
 
 type SourceDef = {
   adapterKey: string;
@@ -136,6 +137,9 @@ const daysAgoCursor = (n: number): string => {
 const filterKey = process.argv[2];
 
 const main = async () => {
+  if (isS3Stale()) {
+    await refreshS3();
+  }
   writeHeartbeat();
   const scriptUserId = toSafeId<"user">("script_case_law");
 
@@ -264,6 +268,7 @@ if (filterKey) {
 
 // All adapters: continuous daemon loop.
 console.log("Ingestion daemon started.");
+await refreshS3();
 writeHeartbeat();
 while (true) {
   try {
