@@ -37,3 +37,6 @@ export const ADAPTER_TIMEOUT = {
   LIST: 15_000,
   PAGE: 30_000,
 } as const;
+
+/** Maximum time (ms) for a single adapter cycle. */
+export const MAX_CYCLE_MS = 10 * 60 * 1000;

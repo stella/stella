@@ -1,29 +1,30 @@
 /**
  * Continuous case law ingestion daemon.
  *
- * Loops through all configured court adapters, runs one
- * pipeline cycle per source, sleeps, and repeats. Cursors
- * are persisted in RDS after each cycle; safe to restart
- * at any time.
+ * Each adapter runs in its own independent loop so a slow
+ * adapter (e.g. cz-us crawling nalus.usoud.cz) cannot block
+ * others from progressing. Cursors are persisted in RDS after
+ * each cycle; safe to restart at any time.
  *
- * Each cycle writes an event row to `case_law_ingestion_events`
- * for observability and touches `/tmp/ingestion.lock` as a
- * heartbeat for the Docker health check.
+ * Per-adapter cycles are capped by MAX_CYCLE_MS (10 min).
+ * If an adapter exceeds this, the pipeline aborts gracefully,
+ * persists the cursor, and retries next cycle.
  *
  * Usage:
  *   bun apps/api/scripts/ingest-case-law.ts [adapter-key]
  *
- * Without arguments, runs all sources in a continuous loop.
+ * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
 
 import { createScopedDb } from "@/api/db";
 import { db } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { isS3Stale, refreshS3 } from "@/api/lib/s3";
 
 type SourceDef = {
@@ -32,6 +33,9 @@ type SourceDef = {
 };
 
 const HEARTBEAT_PATH = "/tmp/ingestion.lock";
+const CYCLE_DELAY_MS = 5000;
+const HEALTH_INTERVAL_MS = 30_000;
+const SUSTAINED_FAILURE_THRESHOLD = 5;
 
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
@@ -134,147 +138,189 @@ const daysAgoCursor = (n: number): string => {
   return date;
 };
 
+const scriptUserId = toSafeId<"user">("script_case_law");
+
+type CycleOutcome = "completed" | "failed" | "timeout";
+
+/**
+ * Run a single ingestion cycle for one adapter.
+ * "timeout" means the cycle hit MAX_CYCLE_MS but progress
+ * was made (cursor advanced) — not a true failure.
+ */
+const runOneCycle = async (
+  adapterKey: string,
+  name: string,
+): Promise<CycleOutcome> => {
+  const initialCursor =
+    adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
+
+  const source = await ensureSource(adapterKey, name, initialCursor);
+  const cursorBefore = source.syncCursor;
+
+  console.log(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
+
+  const startedAt = new Date();
+  const t0 = performance.now();
+
+  const scopedDb = createScopedDb(
+    db,
+    [],
+    toSafeId<"organization">(""),
+    scriptUserId,
+  );
+
+  let outcome: CycleOutcome = "completed";
+  let errorMessage: string | null = null;
+  let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null = null;
+
+  try {
+    result = await runIngestionPipeline({
+      source,
+      scopedDb,
+      signal: AbortSignal.timeout(MAX_CYCLE_MS),
+    });
+    if (result.haltReason) {
+      outcome =
+        result.haltReason === "Cycle timeout exceeded" ? "timeout" : "failed";
+      errorMessage = result.haltReason.slice(0, 2048);
+    }
+  } catch (error) {
+    outcome = "failed";
+    errorMessage =
+      `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
+        0,
+        2048,
+      );
+  }
+
+  const durationMs = Math.round(performance.now() - t0);
+
+  // DB status column only supports "completed" | "failed";
+  // timeouts are recorded as "completed" (progress was made).
+  const dbStatus = outcome === "failed" ? "failed" : "completed";
+
+  try {
+    await db.insert(caseLawIngestionEvents).values({
+      sourceId: source.id,
+      status: dbStatus,
+      inserted: result?.inserted ?? 0,
+      skipped: result?.skipped ?? 0,
+      searchVectorFailures: result?.searchVectorFailures ?? 0,
+      pagesProcessed: result?.pagesProcessed ?? 0,
+      cursorBefore,
+      cursorAfter: result !== null ? result.nextCursor : cursorBefore,
+      durationMs,
+      errorMessage,
+      startedAt,
+    });
+  } catch (eventError) {
+    console.error(
+      `[${adapterKey}] Failed to write ingestion event:`,
+      eventError,
+    );
+  }
+
+  if (outcome === "completed") {
+    console.log(
+      `[${adapterKey}] Inserted: ${result?.inserted ?? 0}, ` +
+        `Skipped: ${result?.skipped ?? 0}, ` +
+        `Pages: ${result?.pagesProcessed ?? 0}, ` +
+        `Duration: ${durationMs}ms`,
+    );
+  } else if (outcome === "timeout") {
+    console.log(
+      `[${adapterKey}] Timed out after ${durationMs}ms ` +
+        `(inserted: ${result?.inserted ?? 0}, pages: ${result?.pagesProcessed ?? 0})`,
+    );
+  } else {
+    console.error(`[${adapterKey}] Failed: ${errorMessage}`);
+  }
+
+  return outcome;
+};
+
+/**
+ * Independent loop for a single adapter. Runs forever,
+ * catching all errors so it never crashes.
+ */
+const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
+  let consecutiveFailures = 0;
+
+  while (true) {
+    try {
+      const status = await runOneCycle(adapterKey, name);
+
+      if (status === "failed") {
+        consecutiveFailures++;
+      } else {
+        consecutiveFailures = 0;
+      }
+    } catch (error) {
+      consecutiveFailures++;
+      console.error(`[${adapterKey}] Unexpected error:`, error);
+    }
+
+    if (consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD) {
+      logger.error("case_law.ingestion.sustained_failure", {
+        adapterKey,
+        consecutiveFailures,
+      });
+      // Reset to avoid flooding; will fire again after another N failures
+      consecutiveFailures = 0;
+    }
+
+    writeHeartbeat();
+    await Bun.sleep(CYCLE_DELAY_MS);
+  }
+};
+
+// ── Entry point ─────────────────────────────────────────
+
 const filterKey = process.argv[2];
 
-const main = async () => {
-  if (isS3Stale()) {
-    await refreshS3();
-  }
-  writeHeartbeat();
-  const scriptUserId = toSafeId<"user">("script_case_law");
-
-  const toRun = filterKey
-    ? SOURCES.filter((s) => s.adapterKey === filterKey)
-    : SOURCES;
-
-  if (toRun.length === 0) {
+// Single adapter: run once and exit (useful for debugging).
+if (filterKey) {
+  const match = SOURCES.find((s) => s.adapterKey === filterKey);
+  if (!match) {
     console.error(
       `Unknown adapter: ${filterKey}. ` +
         `Valid keys: ${SOURCES.map((s) => s.adapterKey).join(", ")}`,
     );
     process.exit(1);
   }
-
-  const results = await Promise.allSettled(
-    toRun.map(async ({ adapterKey, name }) => {
-      const initialCursor =
-        adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
-
-      const source = await ensureSource(adapterKey, name, initialCursor);
-      const cursorBefore = source.syncCursor;
-
-      console.log(`\nIngesting: ${name} (cursor: ${cursorBefore ?? "start"})`);
-
-      const startedAt = new Date();
-      const t0 = performance.now();
-
-      // SAFETY: CLI script operates on global case law
-      // data (no tenant).
-      const scopedDb = createScopedDb(
-        db,
-        [],
-        toSafeId<"organization">(""),
-        scriptUserId,
-      );
-
-      let status: "completed" | "failed" = "completed";
-      let errorMessage: string | null = null;
-      let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null =
-        null;
-
-      try {
-        result = await runIngestionPipeline({ source, scopedDb });
-        if (result.haltReason) {
-          status = "failed";
-          errorMessage = result.haltReason.slice(0, 2048);
-        }
-      } catch (error) {
-        status = "failed";
-        errorMessage =
-          `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
-            0,
-            2048,
-          );
-      }
-
-      const durationMs = Math.round(performance.now() - t0);
-
-      // Persist ingestion event
-      try {
-        await db.insert(caseLawIngestionEvents).values({
-          sourceId: source.id,
-          status,
-          inserted: result?.inserted ?? 0,
-          skipped: result?.skipped ?? 0,
-          searchVectorFailures: result?.searchVectorFailures ?? 0,
-          pagesProcessed: result?.pagesProcessed ?? 0,
-          cursorBefore,
-          // When the pipeline failed (result is null), cursor did not advance.
-          // When it succeeded, use the actual nextCursor (which may be null if exhausted).
-          cursorAfter: result !== null ? result.nextCursor : cursorBefore,
-          durationMs,
-          errorMessage,
-          startedAt,
-        });
-      } catch (eventError) {
-        console.error("Failed to write ingestion event:", eventError);
-      }
-
-      writeHeartbeat();
-
-      if (status === "failed") {
-        throw new Error(errorMessage ?? "Pipeline failed");
-      }
-
-      if (result) {
-        console.log(
-          `  Inserted: ${result.inserted}, ` +
-            `Skipped: ${result.skipped}, ` +
-            `Search failures: ${result.searchVectorFailures}, ` +
-            `S3 failures: ${result.s3UploadFailures}, ` +
-            `Pages: ${result.pagesProcessed}, ` +
-            `Duration: ${durationMs}ms`,
-        );
-        console.log(`  Next cursor: ${result.nextCursor ?? "done"}`);
-      }
-    }),
-  );
-
-  const failures = results.filter(
-    (r): r is PromiseRejectedResult => r.status === "rejected",
-  );
-
-  for (const { reason } of failures) {
-    console.error("Adapter error:", reason);
-  }
-
-  console.log("\nCycle complete.");
-
-  if (failures.length > 0) {
-    throw new Error(`${failures.length} adapter(s) failed`);
-  }
-};
-
-const CYCLE_DELAY_MS = 5000;
-
-// Single adapter: run once and exit (useful for debugging).
-if (filterKey) {
-  await main().catch((error: unknown) => {
-    console.error("Ingestion failed:", error);
-    process.exit(1);
-  });
-  process.exit(0);
+  await refreshS3();
+  const status = await runOneCycle(match.adapterKey, match.name);
+  process.exit(status === "completed" ? 0 : 1);
 }
 
-// All adapters: continuous daemon loop.
+if (SOURCES.length === 0) {
+  console.error("No adapters enabled. Check DISABLED_ADAPTERS env var.");
+  process.exit(1);
+}
+
+// All adapters: independent concurrent loops.
 console.log("Ingestion daemon started.");
 await refreshS3();
 writeHeartbeat();
-while (true) {
-  try {
-    await main();
-  } catch (error: unknown) {
-    console.error("Cycle error:", error);
-  }
-  await Bun.sleep(CYCLE_DELAY_MS);
+
+const adapterLoops: Promise<void>[] = [];
+for (const source of SOURCES) {
+  adapterLoops.push(runAdapterLoop(source));
 }
+
+// Health loop: heartbeat + S3 credential refresh.
+const healthLoop = (async () => {
+  while (true) {
+    await Bun.sleep(HEALTH_INTERVAL_MS);
+    writeHeartbeat();
+    try {
+      if (isS3Stale()) {
+        await refreshS3();
+      }
+    } catch (error) {
+      console.error("S3 credential refresh failed:", error);
+    }
+  }
+})();
+
+await Promise.all([...adapterLoops, healthLoop]);

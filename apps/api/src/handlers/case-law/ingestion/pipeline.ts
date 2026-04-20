@@ -37,6 +37,8 @@ import { isRecord } from "@/api/lib/type-guards";
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   scopedDb: ScopedDb;
+  /** Per-cycle abort signal. Fires when the adapter's time budget is exhausted. */
+  signal?: AbortSignal;
 };
 
 type PipelineResult = {
@@ -404,6 +406,7 @@ const processDecision = async (
 export const runIngestionPipeline = async ({
   source,
   scopedDb,
+  signal,
 }: PipelineInput): Promise<PipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
@@ -431,12 +434,27 @@ export const runIngestionPipeline = async ({
   const maxPages = adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
   while (pagesProcessed < maxPages) {
+    if (signal?.aborted) {
+      haltReason = "Cycle timeout exceeded";
+      logger.warn("case_law.ingestion.cycle_timeout", {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+        pagesProcessed,
+        inserted,
+        skipped,
+      });
+      break;
+    }
+
     const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
+    const pageSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
+      : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
     const pageResult = await adapter.fetchPage(
       cursor,
       source.config ?? {},
-      AbortSignal.timeout(pageTimeout),
+      pageSignal,
     );
 
     if (Result.isError(pageResult)) {
