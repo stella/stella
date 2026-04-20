@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Failed to update matter",
     "failedToUploadFiles": "Failed to upload files",
     "failedToVerifyOtp": "Failed to verify code",
+    "matterNotFound": "Matter not found",
     "partyAlreadyExists": "Contact already has this role on the matter",
     "slugAlreadyTaken": "This slug is already taken",
     "uploadFailed": "Upload failed"

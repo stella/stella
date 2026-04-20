@@ -48,8 +48,7 @@
         "@stella/permissions": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/transactional": "workspace:*",
-        "@stll/anonymize-data": "^0.0.4",
-        "@stll/anonymize-wasm": "^0.1.6",
+        "@stll/anonymize-wasm": "catalog:",
         "@t3-oss/env-core": "catalog:",
         "ai": "^6.0.158",
         "better-auth": "catalog:",
@@ -152,8 +151,8 @@
         "@stella/permissions": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/ui": "workspace:*",
-        "@stll/anonymize-data": "^0.0.4",
-        "@stll/anonymize-wasm": "^0.1.6",
+        "@stll/anonymize-data": "catalog:",
+        "@stll/anonymize-wasm": "catalog:",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/code": "^1.1.0",
         "@streamdown/math": "^1.0.2",
@@ -366,6 +365,8 @@
     "@base-ui/react": "1.4.0",
     "@better-auth/oauth-provider": "1.6.3",
     "@libpdf/core": "0.3.4",
+    "@stll/anonymize-data": "0.0.5",
+    "@stll/anonymize-wasm": "1.1.1",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/vite": "4.2.2",
     "@types/bun": "1.3.12",
@@ -1508,17 +1509,17 @@
 
     "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@1.0.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-aefKKHhFpZkS1dytxBFiqZKbjnBz08h19b3J6wl0UAtBBW+hoSbYat0Xp5IULt1Fpd4ATqFHspsfpXDb8v15Zw=="],
 
-    "@stll/anonymize-data": ["@stll/anonymize-data@0.0.4", "", {}, "sha512-u5UgpNt/5E/YU2WEAkQ5RfCpTPVgFwzeKdHAwhZu3uqpyvbM0P1cqpNZF6c3haRSKyTGDyE7TgigVdRQj8aqaw=="],
+    "@stll/anonymize-data": ["@stll/anonymize-data@0.0.5", "", {}, "sha512-4/j5sJjGXw8UxR2AOY21Av31/kFCHRYIcxGh248EcogeBvu25JSXdJuIEsN8rVKSRJOeqEG/ZdM+tF0uaN228w=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@0.1.7", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.2", "@stll/stdnum": "^0.0.1", "@stll/text-search-wasm": "^1.0.0" }, "peerDependencies": { "@stll/anonymize-data": "^0.0.4", "vite": ">=5 <10" }, "optionalPeers": ["@stll/anonymize-data", "vite"] }, "sha512-5cFw1UVyOFw7Kfiyu0Wwb0p8S1brAOGiVE8GoX9+WdmYs6H7bDB8fUsIMR8g6TALTEvjYs5q+w7Ir6siGQQjnA=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@1.1.1", "", { "dependencies": { "@huggingface/tokenizers": "^0.1.2", "@stll/stdnum": "^0.0.1", "@stll/text-search-wasm": "^1.0.1" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-kE9Vrj8aDThe5YiJcd44dyK8nKuaaikOf8ii2FmIQtw2mBjsb6ObjQh1Z/aHEXSTnIn+W6QRMyGILBdnC4UhoA=="],
 
     "@stll/fuzzy-search-wasm": ["@stll/fuzzy-search-wasm@1.0.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-WLrVSlcl8jR6xcXf13EA8oyaOfQ5ceuh7Pg+mvpY+k04kV44KF7XSrx1LL5hsCVnPbYSyuiQ9sJyWHgdYMPnqA=="],
 
-    "@stll/regex-set-wasm": ["@stll/regex-set-wasm@1.0.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-zPCDsH6QZ2m979zPGF8iJ6Vz6Acwg33BPYoFI1mloMWycLzKsuvISYrgx68hDQ84ZIuhZCb3K+m3fXFEPQtaWQ=="],
+    "@stll/regex-set-wasm": ["@stll/regex-set-wasm@1.0.1", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-K6tm0cMiX0pZI++/M8/RfGlCJBaSP/rIH9OrBueUmBsisBqIsG0POORtqz4Q2MlUuYWtlL8Fpuc/hulxAoG94Q=="],
 
     "@stll/stdnum": ["@stll/stdnum@0.0.1", "", {}, "sha512-YVYjfxU9zgmPS/6YhHHuMgBPv9hEgtCKcwprzP20mebLoP+Pt0v/6FvbfVzxlBBDCqhkit/IXT20EcE/PhSAfA=="],
 
-    "@stll/text-search-wasm": ["@stll/text-search-wasm@1.0.0", "", { "dependencies": { "@stll/aho-corasick-wasm": "^1.0.0", "@stll/fuzzy-search-wasm": "^1.0.0", "@stll/regex-set-wasm": "^1.0.0" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-HEc4rdY/ley9MX5dSpSk9KL1O47ZGyFzkr8kuewgTSc2jFIZd/7xFMMOjGedQ0+2TSksTL7Is40xtwwPE1gQfA=="],
+    "@stll/text-search-wasm": ["@stll/text-search-wasm@1.0.1", "", { "dependencies": { "@stll/aho-corasick-wasm": "^1.0.0", "@stll/fuzzy-search-wasm": "^1.0.0", "@stll/regex-set-wasm": "^1.0.1" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-C7e1nYUUFBLD3xqqP82SqNeo1j7cWGR7I0PeNuvPePbSlF+6H0YxZbQ/oAKfpModFb4Ur2riIDP37Ai5tUbFKQ=="],
 
     "@streamdown/cjk": ["@streamdown/cjk@1.0.3", "", { "dependencies": { "remark-cjk-friendly": "^2.0.1", "remark-cjk-friendly-gfm-strikethrough": "^2.0.1", "unist-util-visit": "^5.0.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-WRg8HR/gHbBoTgsMd91OKFUClIoDcEFVofJvluvEAyjx3KpU0aGgD9tGDqHkHj14ShoMSkX0IYetWGegTcwIJw=="],
 
