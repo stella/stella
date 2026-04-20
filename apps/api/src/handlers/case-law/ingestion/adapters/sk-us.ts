@@ -74,6 +74,10 @@ const FIELDS_TO_RETURN: string[] = [];
 type CachedToken = { value: string; expiresAt: number };
 let cachedToken: CachedToken | null = null;
 
+const invalidateToken = (): void => {
+  cachedToken = null;
+};
+
 const getToken = async (signal?: AbortSignal): Promise<string> => {
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.value;
@@ -385,57 +389,89 @@ export const skUsAdapter: SourceAdapter = {
       try: async () => {
         const offset = cursor ? Number.parseInt(cursor, 10) : 0;
 
-        const token = await getToken(signal);
+        const executeSearch = async (): Promise<SearchResponse | null> => {
+          const token = await getToken(signal);
 
-        const response = await fetch(SEARCH_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            "User-Agent": INGESTION_USER_AGENT,
-          },
-          body: JSON.stringify({
-            docType: "USSR_DECISION_MK",
-            start: offset,
-            pageSize: PAGE_SIZE,
-            searchFilter: {
-              filterNameValue: [
-                {
-                  type: "DATE_RANGE",
-                  fieldName: "mkDateOfDecision",
-                  fieldValue: {
-                    FROM: null,
-                    TO: new Date().toISOString().split("T")[0],
-                  },
-                },
-              ],
+          const response = await fetch(SEARCH_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+              "User-Agent": INGESTION_USER_AGENT,
             },
-            facetFilter: { facetFilterNameValue: [] },
-            facets: [],
-            fieldsToReturn: FIELDS_TO_RETURN,
-            clustering: false,
-          }),
-          signal: signal
-            ? AbortSignal.any([
-                signal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-              ])
-            : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-        });
+            body: JSON.stringify({
+              docType: "USSR_DECISION_MK",
+              start: offset,
+              pageSize: PAGE_SIZE,
+              searchFilter: {
+                filterNameValue: [
+                  {
+                    type: "DATE_RANGE",
+                    fieldName: "mkDateOfDecision",
+                    fieldValue: {
+                      FROM: null,
+                      TO: new Date().toISOString().split("T")[0],
+                    },
+                  },
+                ],
+              },
+              facetFilter: { facetFilterNameValue: [] },
+              facets: [],
+              fieldsToReturn: FIELDS_TO_RETURN,
+              clustering: false,
+            }),
+            signal: signal
+              ? AbortSignal.any([
+                  signal,
+                  AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                ])
+              : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+          });
 
-        if (!response.ok) {
-          throw new Error(`SK ÚS search failed: ${response.status}`);
+          if (!response.ok) {
+            // 401/403 indicate token rejection; clear cache
+            // so the retry gets a fresh token.
+            if (response.status === 401 || response.status === 403) {
+              invalidateToken();
+            }
+            throw new Error(`SK ÚS search failed: ${response.status}`);
+          }
+
+          // 204 = no results (empty search)
+          if (response.status === 204) {
+            return null;
+          }
+
+          const data = await response.json();
+          if (!isSearchResponse(data)) {
+            // Liferay sometimes returns 200 with an error body
+            // when the token is stale. Invalidate and include a
+            // preview so the logs show what actually came back.
+            invalidateToken();
+            const preview = JSON.stringify(data).slice(0, 200);
+            throw new Error(
+              `SK ÚS search returned an invalid payload: ${preview}`,
+            );
+          }
+
+          return data;
+        };
+
+        let data: SearchResponse | null;
+        try {
+          data = await executeSearch();
+        } catch (error) {
+          if (error instanceof DOMException) {
+            throw error; // Respect abort/timeout signals
+          }
+          // Retry once with a fresh token in case the first
+          // attempt failed due to a stale/expired token.
+          data = await executeSearch();
         }
 
-        // 204 = no results (empty search); park at current
-        // offset so we don't restart from 0 on a transient 204.
-        if (response.status === 204) {
+        // 204 / empty search — park at current offset
+        if (!data) {
           return { decisions: [], nextCursor: String(offset) };
-        }
-
-        const data = await response.json();
-        if (!isSearchResponse(data)) {
-          throw new Error("SK ÚS search returned an invalid payload");
         }
         const decisions: IngestionResult[] = [];
 
