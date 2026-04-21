@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Nepodařilo se aktualizovat spis",
     "failedToUploadFiles": "Nepodařilo se nahrát soubory",
     "failedToVerifyOtp": "Nepodařilo se ověřit kód",
+    "matterNotFound": "Spis nenalezen",
     "partyAlreadyExists": "Kontakt již má tuto roli ve spisu",
     "slugAlreadyTaken": "Tento slug je již obsazený",
     "uploadFailed": "Nahrávání selhalo"

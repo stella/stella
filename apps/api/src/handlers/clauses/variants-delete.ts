@@ -2,13 +2,13 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 
 import { deleteVariantHandler } from "./variants";
 
 const deleteVariantParamsSchema = t.Object({
-  clauseId: tNanoid,
-  variantId: tNanoid,
+  clauseId: tUuid,
+  variantId: tUuid,
 });
 
 const config = {

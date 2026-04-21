@@ -9,7 +9,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -17,7 +17,7 @@ import { includes } from "@/api/lib/type-guards";
 
 const createTaskBodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
-  parentId: t.Optional(tNanoid),
+  parentId: t.Optional(tUuid),
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),

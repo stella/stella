@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { workspaceContacts } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const readContactByIdParamsSchema = t.Object({
-  contactId: tNanoid,
+  contactId: tUuid,
 });
 
 const readContactById = createSafeRootHandler(

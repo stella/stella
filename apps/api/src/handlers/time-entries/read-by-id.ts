@@ -1,16 +1,13 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const readTimeEntryByIdParamsSchema = t.Object({
-  id: tNanoid,
-});
+const readTimeEntryByIdParamsSchema = workspaceParams({ id: tUuid });
 
 const readTimeEntryById = createSafeHandler(
   {

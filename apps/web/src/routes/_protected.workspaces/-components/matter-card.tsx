@@ -47,6 +47,7 @@ export const MatterCard = ({
 
   const lastActivityAt = formatRelativeTime(workspace.lastActivityAt, lang);
   const [previewEnabled, setPreviewEnabled] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: preview } = useQuery({
     ...overviewOptions(workspace.id),
@@ -69,13 +70,16 @@ export const MatterCard = ({
     >
       {(rename) => (
         <PreviewCard
+          open={previewOpen}
           onOpenChange={(open) => {
+            setPreviewOpen(open);
             if (open) {
               setPreviewEnabled(true);
             }
           }}
         >
           <PreviewCardTrigger
+            closeDelay={0}
             delay={400}
             render={
               <div
@@ -103,6 +107,7 @@ export const MatterCard = ({
                 ) : (
                   <Link
                     className="after:absolute after:inset-0"
+                    onClick={() => setPreviewOpen(false)}
                     params={{ workspaceId: workspace.id }}
                     to="/workspaces/$workspaceId"
                   >
@@ -195,6 +200,9 @@ const getDeadlineInfo = (
   }
 
   const dueDate = new Date(`${deadline}T23:59:59`);
+  if (Number.isNaN(dueDate.getTime())) {
+    return null;
+  }
   const now = Date.now();
   const diff = dueDate.getTime() - now;
   const label = formatRelativeTime(new Date(`${deadline}T00:00:00`), lang);

@@ -8,12 +8,12 @@ import { entities, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const moveEntityBodySchema = t.Object({
-  entityId: tNanoid,
-  parentId: t.Nullable(tNanoid),
+  entityId: tUuid,
+  parentId: t.Nullable(tUuid),
 });
 
 type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;

@@ -10,7 +10,7 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -18,7 +18,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 const duplicateEntityBodySchema = t.Object({
-  entityId: tNanoid,
+  entityId: tUuid,
 });
 
 type DuplicateEntityHandlerProps = {

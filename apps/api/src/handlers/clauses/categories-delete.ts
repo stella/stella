@@ -2,12 +2,12 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 
 import { deleteCategoryHandler } from "./categories";
 
 const deleteClauseCategoryParamsSchema = t.Object({
-  categoryId: tNanoid,
+  categoryId: tUuid,
 });
 
 const config = {

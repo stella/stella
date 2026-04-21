@@ -5,19 +5,19 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateTimeEntryBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   dateWorked: t.Optional(t.String({ format: "date" })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
   narrative: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   noCharge: t.Optional(t.Boolean()),
-  matterId: t.Optional(tNanoid),
+  matterId: t.Optional(tUuid),
   taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   status: t.Optional(

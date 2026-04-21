@@ -5,13 +5,13 @@ import { t } from "elysia";
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateBillingCodeBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   code: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
   label: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   active: t.Optional(t.Boolean()),

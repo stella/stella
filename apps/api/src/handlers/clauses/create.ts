@@ -7,7 +7,7 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -17,7 +17,7 @@ import type { ClauseBody } from "./types";
 
 const createClauseBodySchema = t.Object({
   title: tDefaultVarchar,
-  categoryId: t.Optional(tNanoid),
+  categoryId: t.Optional(tUuid),
   language: t.Optional(t.String({ maxLength: 10 })),
   body: clauseBodySchema,
   description: t.Optional(t.String({ maxLength: 2000 })),

@@ -13,7 +13,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,8 +28,8 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 const config = {
   permissions: { workspace: ["create"] },
   body: t.Object({
-    id: tNanoid,
-    clientId: tNanoid,
+    id: tUuid,
+    clientId: tUuid,
     memberUserIds: t.Optional(
       t.Array(t.String({ maxLength: 128 }), {
         maxItems: LIMITS.workspaceMembersCount - 1,

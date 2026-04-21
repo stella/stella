@@ -6,12 +6,12 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateExpenseBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   dateIncurred: t.Optional(t.String({ format: "date" })),
   amount: t.Optional(t.Integer({ minimum: 1 })),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
@@ -20,7 +20,7 @@ const updateExpenseBodySchema = t.Object({
   invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
-  matterId: t.Optional(tNanoid),
+  matterId: t.Optional(tUuid),
   status: t.Optional(
     t.UnionEnum([BILLING_STATUS.DRAFT, BILLING_STATUS.APPROVED]),
   ),

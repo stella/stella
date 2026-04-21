@@ -34,6 +34,7 @@ import {
   taskDetailOptions,
   taskKeys,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 import type { TaskPriority, TaskStatus } from "./task-detail-constants";
 
@@ -90,12 +91,17 @@ export const TaskDetailPanel = ({
       return response.data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: taskKeys.detail(workspaceId, taskId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(workspaceId, taskId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+      ]);
     },
   });
 

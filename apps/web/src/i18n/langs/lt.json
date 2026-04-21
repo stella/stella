@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Nepavyko atnaujinti bylos",
     "failedToUploadFiles": "Nepavyko įkelti failų",
     "failedToVerifyOtp": "Nepavyko patvirtinti kodo",
+    "matterNotFound": "Byla nerasta",
     "partyAlreadyExists": "Kontaktas jau turi šią rolę byloje",
     "slugAlreadyTaken": "Šis slug jau užimtas",
     "uploadFailed": "Įkėlimas nepavyko"

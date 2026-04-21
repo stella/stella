@@ -34,6 +34,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stella/ui/components/popover";
+import { ScrollArea } from "@stella/ui/components/scroll-area";
 import { toastManager } from "@stella/ui/components/toast";
 import {
   TooltipPopup,
@@ -310,13 +311,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           icon={<CalendarClockIcon className="size-4" />}
           label={t("workspaces.overview.nextDeadline")}
           onClick={() => {
-            const view = findViewByType("kanban");
-            if (view) {
-              // eslint-disable-next-line typescript/no-floating-promises
-              navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { workspaceId, viewId: view.id },
-              });
+            const task = tasksWithDue.at(0);
+            if (task) {
+              useInspectorStore.getState().openTask(task.entityId, task.name);
             }
           }}
           sublabel={tasksWithDue.at(0)?.name}
@@ -365,43 +362,51 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             </Button>
           </div>
           {tasks.length > 0 ? (
-            <div className="divide-y rounded-lg border">
-              {tasks.map((task) => (
-                <div
-                  className="flex items-center gap-3 px-3 py-2.5"
-                  key={task.entityId}
-                >
-                  {task.status === "closed" ? (
-                    <CheckCircle2Icon className="text-muted-foreground size-4 shrink-0" />
-                  ) : (
-                    <CircleDotIcon className="text-primary size-4 shrink-0" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={cn(
-                        "truncate text-sm",
-                        task.status === "closed" &&
-                          "text-muted-foreground line-through",
-                      )}
-                    >
-                      {task.name}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {task.createdBy}
-                      {task.dueDate && (
-                        <>
-                          {task.createdBy ? " · " : ""}
-                          {new Date(task.dueDate).toLocaleDateString(lang, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ScrollArea className="max-h-64 rounded-lg border">
+              <div className="divide-y">
+                {tasks.map((task) => (
+                  <button
+                    className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
+                    key={task.entityId}
+                    onClick={() =>
+                      useInspectorStore
+                        .getState()
+                        .openTask(task.entityId, task.name)
+                    }
+                    type="button"
+                  >
+                    {task.status === "closed" ? (
+                      <CheckCircle2Icon className="text-muted-foreground size-4 shrink-0" />
+                    ) : (
+                      <CircleDotIcon className="text-primary size-4 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "truncate text-sm",
+                          task.status === "closed" &&
+                            "text-muted-foreground line-through",
+                        )}
+                      >
+                        {task.name}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {task.createdBy}
+                        {task.dueDate && (
+                          <>
+                            {task.createdBy ? " · " : ""}
+                            {new Date(task.dueDate).toLocaleDateString(lang, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
           ) : (
             <div className="text-muted-foreground rounded-lg border px-3 py-6 text-center text-sm">
               {t("common.noResults")}

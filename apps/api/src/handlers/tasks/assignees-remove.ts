@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const removeAssigneeBodySchema = t.Object({
-  taskId: tNanoid,
+  taskId: tUuid,
   userId: t.String({ minLength: 1 }),
 });
 

@@ -7,13 +7,13 @@ import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const UNCATEGORIZED = "uncategorized" as const;
 
 const listTemplatesQuerySchema = t.Object({
-  categoryId: t.Optional(t.Union([tNanoid, t.Literal(UNCATEGORIZED)])),
+  categoryId: t.Optional(t.Union([tUuid, t.Literal(UNCATEGORIZED)])),
 });
 
 type ListTemplatesProps = {

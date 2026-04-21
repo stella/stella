@@ -1,19 +1,16 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { property: ["delete"] },
-  params: t.Object({
-    propertyId: tNanoid,
-  }),
+  params: workspaceParams({ propertyId: tUuid }),
 } satisfies HandlerConfig;
 
 const deleteProperty = createSafeHandler(

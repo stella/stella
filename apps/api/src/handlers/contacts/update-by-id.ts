@@ -11,7 +11,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const updateContactBodySchema = t.Object({
@@ -47,7 +47,7 @@ const updateContactBodySchema = t.Object({
 });
 
 const updateContactParamsSchema = t.Object({
-  contactId: tNanoid,
+  contactId: tUuid,
 });
 
 const updateContactById = createSafeRootHandler(

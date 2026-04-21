@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteTimeEntryBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
 });
 
 const deleteTimeEntryById = createSafeHandler(

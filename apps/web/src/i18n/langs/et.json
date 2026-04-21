@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Toimiku uuendamine ebaõnnestus",
     "failedToUploadFiles": "Failide üleslaadimine ebaõnnestus",
     "failedToVerifyOtp": "Koodi kinnitamine ebaõnnestus",
+    "matterNotFound": "Toimikut ei leitud",
     "partyAlreadyExists": "Kontaktil on selles toimikus juba see roll",
     "slugAlreadyTaken": "See slug on juba kasutusel",
     "uploadFailed": "Üleslaadimine ebaõnnestus"

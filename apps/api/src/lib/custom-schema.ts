@@ -1,3 +1,4 @@
+import type { TProperties } from "@sinclair/typebox";
 import { t } from "elysia";
 
 /**
@@ -12,13 +13,11 @@ const UUID_REGEX: RegExp =
 /**
  * Elysia schema for UUID string validation.
  *
- * Historically named `tNanoid` when the project used nanoid
- * for ID generation. Now validates UUID format after the
- * migration to `crypto.randomUUID()`. The export name is
- * kept for compatibility across ~80+ import sites; a rename
- * to `tUuid` is tracked as a follow-up chore.
+ * Validates UUID v4 format (8-4-4-4-12 hex digits).
+ * Previously named `tNanoid` when the project used nanoid;
+ * renamed to `tUuid` after migrating to `crypto.randomUUID()`.
  */
-export const tNanoid = t.String({
+export const tUuid = t.String({
   minLength: 36,
   maxLength: 36,
   pattern: UUID_REGEX.source,
@@ -28,3 +27,6 @@ export const tDefaultVarchar = t.String({
   minLength: 1,
   maxLength: 256,
 });
+
+export const workspaceParams = <T extends TProperties>(extra: T) =>
+  t.Object({ workspaceId: tUuid, ...extra });

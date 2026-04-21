@@ -11,7 +11,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
@@ -37,13 +37,13 @@ export const userContextSchema = t.Object({
 });
 
 export const activeFileSchema = t.Object({
-  entityId: tNanoid,
+  entityId: tUuid,
   fileName: t.String(),
 });
 
 export const sendMessageBodySchema = t.Object({
-  threadId: tNanoid,
-  workspaceId: t.Optional(tNanoid),
+  threadId: tUuid,
+  workspaceId: t.Optional(tUuid),
   message: rawMessageSchema,
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),

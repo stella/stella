@@ -3,14 +3,14 @@ import { t } from "elysia";
 
 import { entityLinks } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";
 
 const createEntityLinkBodySchema = t.Object({
-  sourceEntityId: tNanoid,
-  targetEntityId: tNanoid,
+  sourceEntityId: tUuid,
+  targetEntityId: tUuid,
   linkType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
 });
 

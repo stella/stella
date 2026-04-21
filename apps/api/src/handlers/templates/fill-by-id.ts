@@ -12,7 +12,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
@@ -30,7 +30,7 @@ const fillByIdQuerySchema = t.Object({
 });
 
 const fillByIdParamsSchema = t.Object({
-  templateId: tNanoid,
+  templateId: tUuid,
 });
 
 const PDF_MIME_TYPE = "application/pdf";

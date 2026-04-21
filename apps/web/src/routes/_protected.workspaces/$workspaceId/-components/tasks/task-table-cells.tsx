@@ -1,136 +1,178 @@
-import {
-  AlertCircleIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CalendarIcon,
-  CheckCircle2Icon,
-  CircleDotIcon,
-  CircleIcon,
-  MinusIcon,
-  XCircleIcon,
-} from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
-import { cn } from "@stella/ui/lib/utils";
+import { toastManager } from "@stella/ui/components/toast";
 
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import type { WorkspaceEntity } from "@/lib/types";
+import type {
+  TaskPriority,
+  TaskStatus,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
+import {
+  isTaskPriority,
+  isTaskStatus,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
+import {
+  DatePickerPopover,
+  PrioritySelect,
+  StatusSelect,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+
+// -- Shared mutation hook --
+
+const useUpdateTask = (workspaceId: string, taskId: string) => {
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const t = useTranslations();
+
+  return useMutation({
+    mutationFn: async (body: {
+      taskId: string;
+      status?: string;
+      priority?: string;
+      dueDate?: string | null;
+    }) => {
+      const response = await api.tasks({ workspaceId }).patch({
+        queryKey: entitiesKeys.all(workspaceId),
+        ...body,
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(workspaceId, taskId),
+        }),
+      ]);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+};
 
 // -- Status cell --
 
-const STATUS_ICONS: Record<string, typeof CircleIcon> = {
-  open: CircleIcon,
-  in_progress: CircleDotIcon,
-  in_review: CircleDotIcon,
-  done: CheckCircle2Icon,
-  cancelled: XCircleIcon,
+export type EditableCellProps = {
+  entity: WorkspaceEntity;
+  workspaceId: string;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  open: "text-muted-foreground",
-  in_progress: "text-blue-500",
-  in_review: "text-amber-500",
-  done: "text-green-500",
-  cancelled: "text-red-400",
-};
+export const StatusCell = ({ entity, workspaceId }: EditableCellProps) => {
+  const updateTask = useUpdateTask(workspaceId, entity.entityId);
 
-export const StatusCell = ({ entity }: { entity: WorkspaceEntity }) => {
-  const t = useTranslations("tasks");
-
-  if (!entity.status) {
+  if (entity.kind !== "task" || !entity.status) {
     return null;
   }
 
-  const Icon = STATUS_ICONS[entity.status] ?? CircleIcon;
-  const color = STATUS_COLORS[entity.status] ?? "text-muted-foreground";
+  const currentStatus: TaskStatus = isTaskStatus(entity.status)
+    ? entity.status
+    : "open";
+
+  const handleChange = (value: TaskStatus | null) => {
+    if (!value || value === currentStatus) {
+      return;
+    }
+    updateTask.mutate({ taskId: entity.entityId, status: value });
+  };
 
   return (
-    <span className="flex items-center gap-1.5 text-xs">
-      <Icon className={cn("size-3.5", color)} />
-      <span>
-        {t(
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          `statusValues.${entity.status}` as "statusValues.open",
-        )}
-      </span>
-    </span>
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="-mx-1.5"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <StatusSelect onChange={handleChange} value={currentStatus} />
+    </div>
   );
 };
 
 // -- Priority cell --
 
-const PRIORITY_ICONS: Record<string, typeof MinusIcon> = {
-  none: MinusIcon,
-  urgent: AlertCircleIcon,
-  high: ArrowUpIcon,
-  medium: MinusIcon,
-  low: ArrowDownIcon,
-};
+export const PriorityCell = ({ entity, workspaceId }: EditableCellProps) => {
+  const updateTask = useUpdateTask(workspaceId, entity.entityId);
 
-const PRIORITY_COLORS: Record<string, string> = {
-  none: "text-muted-foreground",
-  urgent: "text-red-500",
-  high: "text-orange-500",
-  medium: "text-yellow-500",
-  low: "text-blue-400",
-};
-
-export const PriorityCell = ({ entity }: { entity: WorkspaceEntity }) => {
-  const t = useTranslations("tasks");
-
-  if (!entity.priority) {
+  if (entity.kind !== "task" || !entity.priority) {
     return null;
   }
 
-  const Icon = PRIORITY_ICONS[entity.priority] ?? MinusIcon;
-  const color = PRIORITY_COLORS[entity.priority] ?? "text-muted-foreground";
+  const currentPriority: TaskPriority = isTaskPriority(entity.priority)
+    ? entity.priority
+    : "none";
+
+  const handleChange = (value: TaskPriority | null) => {
+    if (!value || value === currentPriority) {
+      return;
+    }
+    updateTask.mutate({ taskId: entity.entityId, priority: value });
+  };
 
   return (
-    <span className="flex items-center gap-1.5 text-xs">
-      <Icon className={cn("size-3.5", color)} />
-      <span>
-        {t(
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          `priorityValues.${entity.priority}` as "priorityValues.none",
-        )}
-      </span>
-    </span>
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="-mx-1.5"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <PrioritySelect onChange={handleChange} value={currentPriority} />
+    </div>
   );
 };
 
 // -- Due date cell --
 
-export const DueDateCell = ({ entity }: { entity: WorkspaceEntity }) => {
-  const t = useTranslations("tasks");
-  const locale = useLocale();
+export const DueDateCell = ({ entity, workspaceId }: EditableCellProps) => {
+  const updateTask = useUpdateTask(workspaceId, entity.entityId);
 
-  if (!entity.dueDate) {
+  if (entity.kind !== "task") {
     return null;
   }
 
   const isOverdue =
+    entity.dueDate &&
     entity.status !== "done" &&
     entity.status !== "cancelled" &&
     entity.dueDate < new Date().toISOString().slice(0, 10);
 
+  const handleChange = (value: string | null) => {
+    updateTask.mutate({ taskId: entity.entityId, dueDate: value });
+  };
+
   return (
-    <span
-      className={cn(
-        "flex items-center gap-1 text-xs",
-        isOverdue && "text-red-500",
-      )}
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="-mx-1.5"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      role="presentation"
     >
-      <CalendarIcon className="size-3" />
-      <span>
-        {new Date(entity.dueDate).toLocaleDateString(locale, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          timeZone: "UTC",
-        })}
-      </span>
-      {isOverdue && (
-        <span className="text-[10px] font-medium">{t("overdue")}</span>
-      )}
-    </span>
+      <DatePickerPopover
+        isOverdue={isOverdue === true}
+        onChange={handleChange}
+        value={entity.dueDate}
+      />
+    </div>
   );
 };

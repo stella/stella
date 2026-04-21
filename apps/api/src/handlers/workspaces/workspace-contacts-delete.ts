@@ -1,16 +1,15 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { workspaceContacts } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { workspace: ["update"] },
-  params: t.Object({ workspaceContactId: tNanoid }),
+  params: workspaceParams({ workspaceContactId: tUuid }),
 } satisfies HandlerConfig;
 
 const deleteWorkspaceContact = createSafeHandler(

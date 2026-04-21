@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Impossible de mettre à jour le dossier",
     "failedToUploadFiles": "Impossible d'importer les fichiers",
     "failedToVerifyOtp": "Impossible de vérifier le code",
+    "matterNotFound": "Dossier introuvable",
     "partyAlreadyExists": "Ce contact a déjà ce rôle dans le dossier",
     "slugAlreadyTaken": "Ce slug est déjà utilisé",
     "uploadFailed": "Échec de l'import"

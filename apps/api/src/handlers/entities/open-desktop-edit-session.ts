@@ -8,7 +8,7 @@ import { desktopEditSessions, entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import {
   createDesktopEditSessionToken,
   hashDesktopEditSessionToken,
@@ -24,8 +24,8 @@ import {
 } from "./desktop-edit-session-utils";
 
 const openDesktopEditSessionBodySchema = t.Object({
-  entityId: tNanoid,
-  propertyId: tNanoid,
+  entityId: tUuid,
+  propertyId: tUuid,
 });
 
 type OpenDesktopEditSessionResponse = {

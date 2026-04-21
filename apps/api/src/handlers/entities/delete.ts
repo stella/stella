@@ -11,12 +11,12 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const deleteEntitiesBodySchema = t.Object({
-  entityIds: t.Array(tNanoid, { minItems: 1 }),
+  entityIds: t.Array(tUuid, { minItems: 1 }),
 });
 
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;

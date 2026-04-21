@@ -8,12 +8,12 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const timerStartBodySchema = t.Object({
-  matterId: tNanoid,
+  matterId: tUuid,
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   rateAtEntry: t.Integer({ minimum: 0 }),
   currency: t.String({ minLength: 3, maxLength: 3 }),

@@ -3,14 +3,14 @@ import { t } from "elysia";
 
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";
 
 const addAssigneeBodySchema = t.Object({
-  taskId: tNanoid,
+  taskId: tUuid,
   userId: t.String({ minLength: 1 }),
   role: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
 });

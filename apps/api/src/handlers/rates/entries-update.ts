@@ -4,20 +4,18 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateEntryBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   hourlyRate: t.Optional(t.Integer({ minimum: 0 })),
   effectiveFrom: t.Optional(t.String({ format: "date" })),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
 });
 
-const rateEntryParamsSchema = t.Object({
-  rateTableId: tNanoid,
-});
+const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
 
 const updateRateEntry = createSafeHandler(
   {

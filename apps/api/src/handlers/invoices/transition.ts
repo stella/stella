@@ -11,7 +11,7 @@ import {
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type TransitionAction =
@@ -57,9 +57,7 @@ const transitionInvoiceBodySchema = t.Object({
   ]),
 });
 
-const invoiceParamsSchema = t.Object({
-  invoiceId: tNanoid,
-});
+const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
 
 const transitionInvoice = createSafeHandler(
   {

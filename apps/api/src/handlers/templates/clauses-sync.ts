@@ -4,12 +4,12 @@ import { t } from "elysia";
 import { syncClauseHandler } from "@/api/handlers/clauses/template-links";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const syncTemplateClauseParamsSchema = t.Object({
-  templateId: tNanoid,
-  linkId: tNanoid,
+  templateId: tUuid,
+  linkId: tUuid,
 });
 
 const config = {

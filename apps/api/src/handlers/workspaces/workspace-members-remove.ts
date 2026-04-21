@@ -5,13 +5,12 @@ import { t } from "elysia";
 import { workspaceMembers } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { workspace: ["update"] },
-  params: t.Object({
-    userId: t.String({ maxLength: 128 }),
-  }),
+  params: workspaceParams({ userId: t.String({ maxLength: 128 }) }),
 } satisfies HandlerConfig;
 
 const removeWorkspaceMember = createSafeHandler(
