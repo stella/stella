@@ -24134,6 +24134,7 @@ The following npm packages may be included in this product:
  - default-browser-id@5.0.1
  - default-browser@5.5.0
  - define-lazy-prop@3.0.0
+ - escape-string-regexp@4.0.0
  - escape-string-regexp@5.0.0
  - get-east-asian-width@1.5.0
  - is-docker@2.2.1
