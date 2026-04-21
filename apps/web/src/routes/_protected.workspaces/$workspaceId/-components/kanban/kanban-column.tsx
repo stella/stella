@@ -89,6 +89,8 @@ type KanbanColumnProps = {
   onReorderColumn?:
     | ((sourceValue: string, targetValue: string, edge: Edge | null) => void)
     | undefined;
+  /** When true, the column footer shows "+ New todo" instead of file upload. */
+  taskOnly?: boolean | undefined;
 };
 
 export const KanbanColumn = ({
@@ -110,6 +112,7 @@ export const KanbanColumn = ({
   onCreate,
   onDeleteAll,
   onReorderColumn,
+  taskOnly,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const columnRef = useRef<HTMLDivElement>(null);
@@ -507,26 +510,40 @@ export const KanbanColumn = ({
           </MenuPopup>
         </Menu>
       )}
-      {onFileUpload && (
+      {taskOnly && onCreate ? (
         <div className="border-t p-2">
-          <input
-            accept="*/*"
-            className="hidden"
-            multiple
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            type="file"
-          />
           <Button
             className="w-full gap-1"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => onCreate("task")}
             size="xs"
             variant="ghost"
           >
             <PlusIcon className="size-3" />
-            {t("workspaces.kanban.uploadDocument")}
+            {t("tasks.newTask")}
           </Button>
         </div>
+      ) : (
+        onFileUpload && (
+          <div className="border-t p-2">
+            <input
+              accept="*/*"
+              className="hidden"
+              multiple
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              type="file"
+            />
+            <Button
+              className="w-full gap-1"
+              onClick={() => fileInputRef.current?.click()}
+              size="xs"
+              variant="ghost"
+            >
+              <PlusIcon className="size-3" />
+              {t("workspaces.kanban.uploadDocument")}
+            </Button>
+          </div>
+        )
       )}
     </div>
   );

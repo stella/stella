@@ -34,6 +34,11 @@ import {
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
+  notFoundComponent: () => {
+    // Handles unmatched child routes (e.g. doubled
+    // /workspaces/$id/workspaces/$id from stale router state).
+    throw redirect({ to: "/workspaces" });
+  },
   onError: (error) => {
     if (error instanceof APIError && error.status === 404) {
       const t = getTranslator();

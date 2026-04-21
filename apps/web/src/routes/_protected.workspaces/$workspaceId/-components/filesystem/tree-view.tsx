@@ -206,7 +206,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       page: 1,
     }),
   );
-  const data = entityData.entities;
+  const data = useMemo(
+    () => entityData.entities.filter((e) => e.kind !== "task"),
+    [entityData.entities],
+  );
 
   // Build a lookup for drag preview data from selected entities.
   const entityMap = useMemo(() => {

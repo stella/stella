@@ -191,6 +191,19 @@ export const TaskDetailPanel = ({
     });
   };
 
+  // Sync task status to the inspector tab icon so the vertical
+  // tab bar reflects the current status color.
+  const resolvedStatus = task
+    ? isTaskStatus(task.status)
+      ? task.status
+      : "open"
+    : null;
+  useEffect(() => {
+    if (resolvedStatus !== null) {
+      useInspectorStore.getState().updateTaskStatus(taskId, resolvedStatus);
+    }
+  }, [taskId, resolvedStatus]);
+
   if (isLoading) {
     return (
       <div className="bg-background flex h-full min-w-0 flex-1 flex-col">

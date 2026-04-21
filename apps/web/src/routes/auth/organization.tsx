@@ -186,22 +186,29 @@ const OrganizationList = ({
   });
 
   // Auto-select when there's only one organization
+  const singleOrg = organizations.length === 1 ? organizations[0] : null;
   const autoSelected = useRef(false);
   useEffect(() => {
-    if (
-      organizations.length === 1 &&
-      !autoSelected.current &&
-      !selectOrganization.isPending
-    ) {
-      const organizationId = organizations.at(0)?.id;
-      if (!organizationId) {
-        return;
-      }
-
+    if (singleOrg && !autoSelected.current && !selectOrganization.isPending) {
       autoSelected.current = true;
-      selectOrganization.mutate(organizationId);
+      selectOrganization.mutate(singleOrg.id);
     }
-  }, [organizations, selectOrganization]);
+  }, [singleOrg, selectOrganization]);
+
+  // Show skeleton while auto-selecting the single org
+  if (singleOrg && (selectOrganization.isPending || !autoSelected.current)) {
+    return (
+      <Frame className="w-full max-w-sm">
+        <FrameHeader>
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </FrameHeader>
+        <FramePanel className="flex flex-col gap-2">
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </FramePanel>
+      </Frame>
+    );
+  }
 
   return (
     <Frame className="w-full max-w-sm">

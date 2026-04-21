@@ -66,6 +66,7 @@ const REQUIRED_VIEW_LAYOUTS = new Set<ViewLayoutType>([
   "overview",
   "table",
   "filesystem",
+  "kanban",
 ]);
 
 const layoutIcons: Record<ViewLayoutType, React.ElementType> = {
