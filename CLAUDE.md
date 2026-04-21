@@ -48,7 +48,8 @@ The `stella-docs` MCP server provides on-demand access to library documentation 
 
 ## Meta Preferences
 
-- Never reformat code you did not semantically change
+- Never manually reformat code you did not semantically change (auto-formatter
+  output from `bun run format` is fine to include)
 - Vary punctuation: prefer colons, semicolons, commas, and parentheses over em dashes
 - Prefer explicit over implicit — when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,

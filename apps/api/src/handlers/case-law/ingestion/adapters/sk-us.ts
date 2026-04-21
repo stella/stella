@@ -108,8 +108,7 @@ const parseCursor = (cursor: string | null): YearCursor => {
   return { year: FIRST_YEAR, offset: 0 };
 };
 
-const encodeCursor = (c: YearCursor): string =>
-  `${c.year}:${c.offset}`;
+const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
 
 // ── OAuth2 token management ──────────────────────────────
 
@@ -394,10 +393,7 @@ const executeSearch = async (
       clustering: false,
     }),
     signal: signal
-      ? AbortSignal.any([
-          signal,
-          AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-        ])
+      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
       : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
   });
 
@@ -416,9 +412,7 @@ const executeSearch = async (
   if (!isSearchResponse(data)) {
     invalidateToken();
     const preview = JSON.stringify(data).slice(0, 200);
-    throw new Error(
-      `SK ÚS search returned an invalid payload: ${preview}`,
-    );
+    throw new Error(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
   return data;

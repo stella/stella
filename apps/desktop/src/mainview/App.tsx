@@ -12,6 +12,7 @@ import { Separator } from "@stella/ui/components/separator";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stella/ui/components/tabs";
 import { cn } from "@stella/ui/lib/utils";
 
+import { isAppSnapshot } from "../shared/rpc";
 import type {
   AppSnapshot,
   DesktopNotificationPreferences,
@@ -82,6 +83,13 @@ const rpc = Electroview.defineRPC<DesktopRPC>({
         window.dispatchEvent(
           new CustomEvent<PreferencesTab>(ACTIVATE_TAB_EVENT, {
             detail: tab,
+          }),
+        );
+      },
+      stateChanged: ({ snapshot }: { snapshot: AppSnapshot }) => {
+        window.dispatchEvent(
+          new CustomEvent<AppSnapshot>("stella:desktop-state-changed", {
+            detail: snapshot,
           }),
         );
       },
@@ -535,6 +543,23 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
 
+    const handleStateChanged = (event: Event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+
+      const detail: unknown = event.detail;
+      if (!isAppSnapshot(detail)) {
+        return;
+      }
+
+      const nextState = detail;
+      startTransition(() => {
+        setError(null);
+        setState(nextState);
+      });
+    };
+
     const syncState = async () => {
       try {
         const nextState = await desktopRpc.request.getState({});
@@ -559,14 +584,26 @@ export default function App() {
       }
     };
 
-    void syncState();
-    const intervalId = window.setInterval(() => {
-      void syncState();
-    }, 1000);
+    window.addEventListener("stella:desktop-state-changed", handleStateChanged);
+
+    // Retry initial sync a few times in case the RPC bridge
+    // is still coming up when the webview mounts.
+    const trySync = async (retries: number) => {
+      await syncState();
+      if (!disposed && state === null && retries > 0) {
+        setTimeout(() => {
+          void trySync(retries - 1);
+        }, 500);
+      }
+    };
+    void trySync(3);
 
     return () => {
       disposed = true;
-      window.clearInterval(intervalId);
+      window.removeEventListener(
+        "stella:desktop-state-changed",
+        handleStateChanged,
+      );
     };
   }, []);
 

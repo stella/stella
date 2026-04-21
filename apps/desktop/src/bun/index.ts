@@ -397,6 +397,10 @@ if (isMac) {
 const sessionManager = new DesktopSessionManager({
   onStateChange: (snapshot) => {
     tray.setMenu(buildTrayMenu(snapshot));
+
+    if (mainWindow) {
+      mainWindow.webview.rpc.send.stateChanged?.({ snapshot });
+    }
   },
 });
 await sessionManager.initialize();
