@@ -13,7 +13,13 @@
  * embedded in the court's JavaScript bundle for anonymous
  * browser access. ~52,000 decisions from 1993 to present.
  *
- * Cursor format: offset number as string (e.g. "0", "10").
+ * The Liferay DMS search endpoint has an internal pagination
+ * cap (~3,000 results per query). To access the full archive,
+ * we window queries by year and paginate within each window.
+ *
+ * Cursor format: "YYYY:offset" (e.g. "1993:0", "2020:1500").
+ * Legacy cursors (plain offset like "3060") are migrated
+ * to the current year on first use.
  */
 
 import { Result } from "better-result";
@@ -61,6 +67,9 @@ const CLIENT_SECRET =
 
 const PAGE_SIZE = 10;
 
+/** First year with decisions in the API. */
+const FIRST_YEAR = 1993;
+
 /**
  * Fields to request from the search API. Empty array
  * returns all fields including the built-in `documentId`.
@@ -68,6 +77,39 @@ const PAGE_SIZE = 10;
  * omitted (Liferay DMS quirk), so we request everything.
  */
 const FIELDS_TO_RETURN: string[] = [];
+
+// ── Cursor helpers ──────────────────────────────────────────
+
+type YearCursor = { year: number; offset: number };
+
+const parseCursor = (cursor: string | null): YearCursor => {
+  if (!cursor) {
+    return { year: FIRST_YEAR, offset: 0 };
+  }
+
+  // New format: "YYYY:offset"
+  const match = /^(\d{4}):(\d+)$/.exec(cursor);
+  if (match?.[1] && match[2]) {
+    return {
+      year: Number.parseInt(match[1], 10),
+      offset: Number.parseInt(match[2], 10),
+    };
+  }
+
+  // Legacy format: plain offset number (e.g. "3060").
+  // The global offset is meaningless with year-windowed queries.
+  // Restart from FIRST_YEAR to backfill the full 1993–present
+  // archive (~52k decisions, takes a few hours to crawl through).
+  const legacyOffset = Number.parseInt(cursor, 10);
+  if (!Number.isNaN(legacyOffset)) {
+    return { year: FIRST_YEAR, offset: 0 };
+  }
+
+  return { year: FIRST_YEAR, offset: 0 };
+};
+
+const encodeCursor = (c: YearCursor): string =>
+  `${c.year}:${c.offset}`;
 
 // ── OAuth2 token management ──────────────────────────────
 
@@ -314,6 +356,74 @@ const parseDocument = async (
   };
 };
 
+// ── Search helper ───────────────────────────────────────
+
+const executeSearch = async (
+  year: number,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<SearchResponse | null> => {
+  const token = await getToken(signal);
+
+  const response = await fetch(SEARCH_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": INGESTION_USER_AGENT,
+    },
+    body: JSON.stringify({
+      docType: "USSR_DECISION_MK",
+      start: offset,
+      pageSize: PAGE_SIZE,
+      searchFilter: {
+        filterNameValue: [
+          {
+            type: "DATE_RANGE",
+            fieldName: "mkDateOfDecision",
+            fieldValue: {
+              FROM: `${year}-01-01`,
+              TO: `${year}-12-31`,
+            },
+          },
+        ],
+      },
+      facetFilter: { facetFilterNameValue: [] },
+      facets: [],
+      fieldsToReturn: FIELDS_TO_RETURN,
+      clustering: false,
+    }),
+    signal: signal
+      ? AbortSignal.any([
+          signal,
+          AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+        ])
+      : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      invalidateToken();
+    }
+    throw new Error(`SK ÚS search failed: ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const data = await response.json();
+  if (!isSearchResponse(data)) {
+    invalidateToken();
+    const preview = JSON.stringify(data).slice(0, 200);
+    throw new Error(
+      `SK ÚS search returned an invalid payload: ${preview}`,
+    );
+  }
+
+  return data;
+};
+
 // ── Adapter ──────────────────────────────────────────────
 
 export const skUsAdapter: SourceAdapter = {
@@ -333,92 +443,37 @@ export const skUsAdapter: SourceAdapter = {
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const offset = cursor ? Number.parseInt(cursor, 10) : 0;
-
-        const executeSearch = async (): Promise<SearchResponse | null> => {
-          const token = await getToken(signal);
-
-          const response = await fetch(SEARCH_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-              "User-Agent": INGESTION_USER_AGENT,
-            },
-            body: JSON.stringify({
-              docType: "USSR_DECISION_MK",
-              start: offset,
-              pageSize: PAGE_SIZE,
-              searchFilter: {
-                filterNameValue: [
-                  {
-                    type: "DATE_RANGE",
-                    fieldName: "mkDateOfDecision",
-                    fieldValue: {
-                      FROM: null,
-                      TO: new Date().toISOString().split("T")[0],
-                    },
-                  },
-                ],
-              },
-              facetFilter: { facetFilterNameValue: [] },
-              facets: [],
-              fieldsToReturn: FIELDS_TO_RETURN,
-              clustering: false,
-            }),
-            signal: signal
-              ? AbortSignal.any([
-                  signal,
-                  AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                ])
-              : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          });
-
-          if (!response.ok) {
-            // 401/403 indicate token rejection; clear cache
-            // so the retry gets a fresh token.
-            if (response.status === 401 || response.status === 403) {
-              invalidateToken();
-            }
-            throw new Error(`SK ÚS search failed: ${response.status}`);
-          }
-
-          // 204 = no results (empty search)
-          if (response.status === 204) {
-            return null;
-          }
-
-          const data = await response.json();
-          if (!isSearchResponse(data)) {
-            // Liferay sometimes returns 200 with an error body
-            // when the token is stale. Invalidate and include a
-            // preview so the logs show what actually came back.
-            invalidateToken();
-            const preview = JSON.stringify(data).slice(0, 200);
-            throw new Error(
-              `SK ÚS search returned an invalid payload: ${preview}`,
-            );
-          }
-
-          return data;
-        };
+        const { year, offset } = parseCursor(cursor);
+        const currentYear = new Date().getFullYear();
 
         let data: SearchResponse | null;
         try {
-          data = await executeSearch();
+          data = await executeSearch(year, offset, signal);
         } catch (error) {
           if (error instanceof DOMException) {
-            throw error; // Respect abort/timeout signals
+            throw error;
           }
-          // Retry once with a fresh token in case the first
-          // attempt failed due to a stale/expired token.
-          data = await executeSearch();
+          // Retry once with a fresh token
+          data = await executeSearch(year, offset, signal);
         }
 
-        // 204 / empty search — park at current offset
-        if (!data) {
-          return { decisions: [], nextCursor: String(offset) };
+        // 204 / empty search for this year window.
+        // Advance to next year if available.
+        if (!data || data.documents.length === 0) {
+          if (year < currentYear) {
+            // Move to next year
+            return {
+              decisions: [],
+              nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
+            };
+          }
+          // Current year exhausted; park at current offset
+          return {
+            decisions: [],
+            nextCursor: encodeCursor({ year, offset }),
+          };
         }
+
         const decisions: IngestionResult[] = [];
 
         for (const doc of data.documents) {
@@ -429,9 +484,9 @@ export const skUsAdapter: SourceAdapter = {
             }
           } catch (error) {
             if (error instanceof DOMException) {
-              throw error; // Re-throw abort/timeout
+              throw error;
             }
-            continue; // Skip failed items
+            continue;
           }
 
           // Rate limit between PDF downloads
@@ -441,13 +496,29 @@ export const skUsAdapter: SourceAdapter = {
         const nextOffset = offset + PAGE_SIZE;
         const hasMore =
           data.documents.length >= PAGE_SIZE && nextOffset < data.numFound;
-        // Park one page back when exhausted; never null (null
-        // restarts from offset 0).
-        const nextCursor = hasMore
-          ? String(nextOffset)
-          : String(Math.max(0, offset));
 
-        return { decisions, nextCursor };
+        if (hasMore) {
+          return {
+            decisions,
+            nextCursor: encodeCursor({ year, offset: nextOffset }),
+          };
+        }
+
+        // Year exhausted — advance to next year or park
+        if (year < currentYear) {
+          return {
+            decisions,
+            nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
+          };
+        }
+
+        // Current year exhausted; park at current offset so the
+        // pipeline's stagnation detection stops the cycle cleanly
+        // instead of rewinding and reprocessing already-seen pages.
+        return {
+          decisions,
+          nextCursor: encodeCursor({ year, offset }),
+        };
       },
       catch: adapterCatch(ADAPTER_KEYS.SK_US, cursor),
     });
