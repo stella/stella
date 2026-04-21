@@ -183,7 +183,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const entitiesByDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
 
-    for (const entity of entityData.entities) {
+    const calendarEntities = entityData.entities.filter(
+      (e) => e.kind === "task",
+    );
+
+    for (const entity of calendarEntities) {
       for (const propId of allDatePropertyIds) {
         const startDate = getEntityDate(entity, propId);
         if (!startDate) {

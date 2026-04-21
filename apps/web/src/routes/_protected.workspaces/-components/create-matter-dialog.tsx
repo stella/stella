@@ -41,6 +41,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import {
   buildCollaboratorStats,
   compareMembersByCollaboratorStats,
@@ -247,11 +248,40 @@ export const CreateMatterDialog = () => {
       return;
     }
 
+    // Fetch views for the new workspace (the API lazily creates
+    // default views on first access) and navigate directly to the
+    // first view. This skips the index route redirect which triggers
+    // a TanStack Router double-slash path bug when transitioning
+    // between workspaces.
+    const workspaceId = result.value.id;
+
     handleClose();
-    await navigate({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: result.value.id },
-    });
+    try {
+      const views = await queryClient.fetchQuery(viewsOptions(workspaceId));
+      const firstViewId = views.at(0)?.id;
+
+      if (firstViewId) {
+        await navigate({
+          to: "/workspaces/$workspaceId/$viewId",
+          params: { workspaceId, viewId: firstViewId },
+          replace: true,
+        });
+      } else {
+        await navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId },
+          replace: true,
+        });
+      }
+    } catch {
+      // View fetch failed; fall back to the workspace root which
+      // triggers the index route redirect as a fallback.
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId },
+        replace: true,
+      });
+    }
   };
 
   const canSubmit = !createWorkspace.isPending && !createContact.isPending;

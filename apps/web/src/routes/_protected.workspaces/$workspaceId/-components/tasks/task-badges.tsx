@@ -5,19 +5,11 @@ import {
   CalendarIcon,
   MinusIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useLocale } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
 import type { WorkspaceEntity } from "@/lib/types";
-
-const STATUS_COLORS: Record<string, string> = {
-  open: "bg-muted-foreground",
-  in_progress: "bg-blue-500",
-  in_review: "bg-amber-500",
-  done: "bg-green-500",
-  cancelled: "bg-red-400",
-};
 
 const PRIORITY_CONFIG: Record<
   string,
@@ -40,14 +32,12 @@ type TaskBadgesProps = {
 };
 
 export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
-  const t = useTranslations("tasks");
   const locale = useLocale();
 
   if (entity.kind !== "task") {
     return null;
   }
 
-  const statusColor = entity.status ? STATUS_COLORS[entity.status] : null;
   const priorityCfg =
     entity.priority && entity.priority !== "none"
       ? PRIORITY_CONFIG[entity.priority]
@@ -56,7 +46,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
     ? isOverdue(entity.dueDate, entity.status)
     : false;
 
-  if (!statusColor && !priorityCfg && !entity.dueDate) {
+  if (!priorityCfg && !entity.dueDate) {
     return null;
   }
 
@@ -67,19 +57,6 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         className,
       )}
     >
-      {statusColor && (
-        <span
-          className={cn("size-2 rounded-full", statusColor)}
-          title={
-            entity.status
-              ? t(
-                  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                  `statusValues.${entity.status}` as "statusValues.open",
-                )
-              : undefined
-          }
-        />
-      )}
       {priorityCfg && (
         <priorityCfg.icon className={cn("size-3", priorityCfg.className)} />
       )}

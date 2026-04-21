@@ -25,6 +25,7 @@ export type TaskTab = {
   id: string;
   label: string;
   isNew: boolean;
+  status?: string | null;
 };
 
 export type InspectorTab = PdfTab | TaskTab;
@@ -45,6 +46,7 @@ type Actions = {
   closeAll: () => void;
   clearTaskNewFlag: (taskId: string) => void;
   updateLabel: (tabId: string, label: string) => void;
+  updateTaskStatus: (taskId: string, status: string | null) => void;
 };
 
 export const useInspectorStore = create<State & Actions>()(
@@ -137,6 +139,16 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab) {
           tab.label = label;
+        }
+      }),
+
+    updateTaskStatus: (taskId, status) =>
+      set((state) => {
+        const tab = state.tabs.find(
+          (t) => t.type === "task" && t.id === taskId,
+        );
+        if (tab && tab.type === "task") {
+          tab.status = status;
         }
       }),
   })),

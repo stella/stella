@@ -19,7 +19,6 @@ import {
   FileTextIcon,
   LoaderCircleIcon,
   ScanEyeIcon,
-  SquareCheckIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -40,6 +39,7 @@ import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import {
   anonymizePdf,
@@ -993,7 +993,7 @@ const VerticalTab = ({
       side="left"
     >
       {tab.type === "task" ? (
-        <SquareCheckIcon className="size-3.5" />
+        <EntityKindIcon className="size-3.5" kind="task" status={tab.status} />
       ) : active && tab.mimeType ? (
         <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />
       ) : active ? (

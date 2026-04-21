@@ -3,15 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { FolderIcon, SquareCheckIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -129,14 +128,14 @@ export const KanbanCard = ({
     }
   };
 
-  const icon =
-    entity.kind === "folder" ? (
-      <FolderIcon className="text-muted-foreground size-4 shrink-0" />
-    ) : entity.kind === "task" ? (
-      <SquareCheckIcon className="text-muted-foreground size-4 shrink-0" />
-    ) : file?.mimeType ? (
-      <DocumentIcon className="size-4 shrink-0" mimeType={file.mimeType} />
-    ) : null;
+  const icon = (
+    <EntityKindIcon
+      className="size-4 shrink-0"
+      kind={entity.kind}
+      mimeType={file?.mimeType}
+      status={entity.status}
+    />
+  );
 
   const nameElement = isEditing ? (
     <InlineEdit
@@ -197,6 +196,9 @@ export const KanbanCard = ({
             );
           }
           if (fieldId === getInternalPropertyId("created-by")) {
+            if (isTask) {
+              return null;
+            }
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
                 <AuthorCell entity={entity} />
@@ -211,6 +213,9 @@ export const KanbanCard = ({
             );
           }
           if (fieldId === getInternalPropertyId("version")) {
+            if (isTask) {
+              return null;
+            }
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
                 <VersionCell entity={entity} />
@@ -256,26 +261,35 @@ export const KanbanCard = ({
     return tab?.type === "task" && tab.id === entity.entityId;
   });
 
-  const cardRef = useRef<HTMLButtonElement>(null);
+  // SAFETY: the ref is attached to either a <div> (task) or <button>
+  // (navigable file); both extend HTMLElement which useInspectorFlash needs.
+  const cardRef = useRef<HTMLDivElement>(null);
   useInspectorFlash(entity.entityId, cardRef);
 
   if (isTask) {
     return (
       <div className="group/card" ref={dragRef}>
-        <button
+        <div
           className={cn(
-            "bg-card relative block w-full rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
+            "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActiveTask && "ring-primary/30 ring-2",
           )}
           onClick={() =>
             useInspectorStore.getState().openTask(entity.entityId, name)
           }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              useInspectorStore.getState().openTask(entity.entityId, name);
+            }
+          }}
           ref={cardRef}
-          type="button"
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+          role="button"
+          tabIndex={0}
         >
           {content}
           {actionsButton}
-        </button>
+        </div>
       </div>
     );
   }
@@ -283,9 +297,9 @@ export const KanbanCard = ({
   if (navigable && file !== undefined) {
     return (
       <div className="group/card" ref={dragRef}>
-        <button
+        <div
           className={cn(
-            "bg-card relative block w-full rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
+            "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActivePeek && "ring-primary/30 ring-2",
           )}
           onClick={() =>
@@ -297,12 +311,25 @@ export const KanbanCard = ({
               workspaceId,
             })
           }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              useInspectorStore.getState().openPdf({
+                id: file.fieldId,
+                entityId: file.entityId,
+                label: name,
+                mimeType: file.mimeType,
+                workspaceId,
+              });
+            }
+          }}
           ref={cardRef}
-          type="button"
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+          role="button"
+          tabIndex={0}
         >
           {content}
           {actionsButton}
-        </button>
+        </div>
       </div>
     );
   }

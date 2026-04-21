@@ -5,7 +5,8 @@ import { workspaceViews } from "@/api/db/schema";
 import { cleanStalePropertyIds } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { DEFAULT_VIEWS } from "@/api/lib/views";
+import { extractLangFromRequest } from "@/api/lib/locale";
+import { getDefaultViews } from "@/api/lib/views";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -28,7 +29,7 @@ const toViewResponse = (view: {
 
 const readViews = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId }) {
+  async function* ({ safeDb, workspaceId, request }) {
     const views = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -41,7 +42,8 @@ const readViews = createSafeHandler(
 
     // Seed default views on first access (replaces actor onWake).
     if (views.length === 0) {
-      const defaults = DEFAULT_VIEWS.map((v) => ({
+      const lang = extractLangFromRequest(request);
+      const defaults = getDefaultViews(lang).map((v) => ({
         workspaceId,
         name: v.name,
         layout: v.layout,

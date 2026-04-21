@@ -11,8 +11,6 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import {
   CalendarClockIcon,
-  CheckCircle2Icon,
-  CircleDotIcon,
   ClockIcon,
   FolderTreeIcon,
   LayoutDashboardIcon,
@@ -50,9 +48,9 @@ import { api } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
 import type { EntityKind, WorkspaceEntity } from "@/lib/types";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
@@ -375,16 +373,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     }
                     type="button"
                   >
-                    {task.status === "closed" ? (
-                      <CheckCircle2Icon className="text-muted-foreground size-4 shrink-0" />
-                    ) : (
-                      <CircleDotIcon className="text-primary size-4 shrink-0" />
-                    )}
+                    <EntityKindIcon
+                      className="size-4 shrink-0"
+                      kind="task"
+                      status={task.status}
+                    />
                     <div className="min-w-0 flex-1">
                       <p
                         className={cn(
                           "truncate text-sm",
-                          task.status === "closed" &&
+                          (task.status === "done" ||
+                            task.status === "cancelled") &&
                             "text-muted-foreground line-through",
                         )}
                       >
@@ -850,12 +849,14 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       encrypted: entity.encrypted,
     });
 
-  const icon =
-    entity.kind === "task" ? (
-      <SquareCheckIcon className="text-muted-foreground size-4 shrink-0" />
-    ) : entity.mimeType ? (
-      <DocumentIcon className="size-4 shrink-0" mimeType={entity.mimeType} />
-    ) : null;
+  const icon = (
+    <EntityKindIcon
+      className="size-4 shrink-0"
+      kind={entity.kind}
+      mimeType={entity.mimeType}
+      status={entity.status}
+    />
+  );
 
   useEffect(() => {
     const el = rowRef.current;

@@ -7,7 +7,11 @@ import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -67,8 +71,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const createEntities = useCreateEntities();
   const deleteEntities = useDeleteEntities();
   const startWorkflow = useStartWorkflow();
+  const queryClient = useQueryClient();
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>([]);
 
   const handleCreate = async (kind: EntityKind) => {
     if (kind === "task") {
@@ -121,6 +127,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const configuredGroupBy =
     view.layout.type === "kanban" ? (view.layout.groupByPropertyId ?? "") : "";
 
+  // Reset local column order when the groupBy property changes so stale
+  // column positions from the previous grouping don't leak through.
+  useEffect(() => {
+    setLocalColumnOrder([]);
+  }, [configuredGroupBy]);
+
   const resolvedGroupBy = useMemo(
     () => resolveKanbanGroupBy(configuredGroupBy, properties),
     [configuredGroupBy, properties],
@@ -145,13 +157,16 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 
   const groupByPropertyId = resolvedGroupBy;
-  const isBuiltInGrouping =
-    groupByPropertyId === getInternalPropertyId("kind") ||
-    groupByPropertyId === getInternalPropertyId("created-by") ||
+  const isStatusGrouping =
     groupByPropertyId === getInternalPropertyId("status");
-  const groupByProperty = isBuiltInGrouping
-    ? null
-    : properties.find((p) => p.id === groupByPropertyId);
+  const isBuiltInGrouping =
+    !isStatusGrouping &&
+    (groupByPropertyId === getInternalPropertyId("kind") ||
+      groupByPropertyId === getInternalPropertyId("created-by"));
+  const groupByProperty =
+    isBuiltInGrouping || isStatusGrouping
+      ? null
+      : properties.find((p) => p.id === groupByPropertyId);
 
   const { filters, sorts } = view.layout;
 
@@ -164,10 +179,42 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     }),
   );
 
-  const entities = entityData.entities;
+  const entities = useMemo(
+    () => entityData.entities.filter((e) => e.kind === "task"),
+    [entityData.entities],
+  );
+
+  // Mutation for changing task status via kanban drag-drop
+  const updateTaskStatus = useMutation({
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: string;
+    }) => {
+      const response = await api.tasks({ workspaceId }).patch({
+        queryKey: entitiesKeys.all(workspaceId),
+        taskId,
+        status,
+      });
+      if (response.error) {
+        toastManager.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+      }
+      return response.data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+    },
+  });
 
   // No group-by selected at all
-  if (!isBuiltInGrouping && !groupByProperty) {
+  if (!isBuiltInGrouping && !isStatusGrouping && !groupByProperty) {
     return (
       <EmptyState
         hint={t("workspaces.kanban.usePropertyHint")}
@@ -177,193 +224,212 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     );
   }
 
-  // Property-based grouping (single-select)
-  if (
-    !isBuiltInGrouping &&
-    groupByProperty &&
-    isGroupableProperty(groupByProperty)
-  ) {
-    const options = getGroupOptions(groupByProperty);
-    const groups = groupEntities(
-      entities,
-      groupByPropertyId,
-      options,
-      t("common.uncategorized"),
-    );
+  // -- Unified grouping: resolve options, then render one board --
 
-    const handleDrop = (targetValue: string | null, entityId: string) => {
+  const statusLabels: Record<string, string> = isStatusGrouping
+    ? Object.fromEntries(
+        TASK_STATUS_ORDER.map((s) => [
+          s,
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          t(`tasks.statusValues.${s}` as "tasks.statusValues.open"),
+        ]),
+      )
+    : {};
+
+  const options: GroupOption[] = isStatusGrouping
+    ? getStatusGroupOptions(statusLabels)
+    : isBuiltInGrouping
+      ? getBuiltInGroupOptions(
+          entities,
+          groupByPropertyId,
+          t("workspaces.kanban.unknown"),
+        )
+      : groupByProperty && isGroupableProperty(groupByProperty)
+        ? getGroupOptions(groupByProperty)
+        : [];
+
+  const groups = isStatusGrouping
+    ? groupEntitiesByStatus(entities, options, t("common.uncategorized"))
+    : groupEntities(
+        entities,
+        groupByPropertyId,
+        options,
+        t("common.uncategorized"),
+      );
+
+  const handleDrop = (targetValue: string | null, entityId: string) => {
+    if (isStatusGrouping && targetValue !== null) {
+      updateTaskStatus.mutate({ taskId: entityId, status: targetValue });
+      return;
+    }
+    if (isBuiltInGrouping) {
+      return;
+    }
+    const content = {
+      version: 1 as const,
+      type: "single-select" as const,
+      value: targetValue,
+    };
+    upsertField.mutate(
+      {
+        workspaceId,
+        propertyId: groupByPropertyId,
+        entityId,
+        content,
+      },
+      {
+        onSuccess: () => {
+          if (!hasAIProperties) {
+            return;
+          }
+          const entity = entities.find((e) => e.entityId === entityId);
+          if (entity?.kind === "folder") {
+            return;
+          }
+          void startWorkflow({ entityIds: [entityId] });
+        },
+      },
+    );
+  };
+
+  const handleFileUpload = async (
+    columnValue: string | null,
+    files: File[],
+  ) => {
+    const filePropertyId = properties.find(
+      (p) => p.content.type === "file",
+    )?.id;
+
+    if (!filePropertyId) {
+      toastManager.add({
+        title: t("workspaces.files.addFilePropertyToUpload"),
+        type: "warning",
+      });
+      return;
+    }
+
+    const results = await uploadFileEntitiesBatched({
+      files,
+      workspaceId,
+      propertyId: filePropertyId,
+      labels,
+      onError: (error) => analytics.captureError(error),
+    });
+
+    if (columnValue === null) {
+      return;
+    }
+
+    for (const result of results) {
+      const { entityId } = result;
       const content = {
         version: 1 as const,
         type: "single-select" as const,
-        value: targetValue,
+        value: columnValue,
       };
 
-      upsertField.mutate(
-        {
-          workspaceId,
-          propertyId: groupByPropertyId,
-          entityId,
-          content,
-        },
-        {
-          onSuccess: () => {
-            if (!hasAIProperties) {
-              return;
-            }
-            const entity = entities.find((e) => e.entityId === entityId);
-            if (entity?.kind === "folder") {
-              return;
-            }
-            void startWorkflow({ entityIds: [entityId] });
-          },
-        },
-      );
-    };
-
-    const handleFileUpload = async (
-      columnValue: string | null,
-      files: File[],
-    ) => {
-      const filePropertyId = properties.find(
-        (p) => p.content.type === "file",
-      )?.id;
-
-      if (!filePropertyId) {
-        toastManager.add({
-          title: t("workspaces.files.addFilePropertyToUpload"),
-          type: "warning",
-        });
-        return;
-      }
-
-      const results = await uploadFileEntitiesBatched({
-        files,
-        workspaceId,
-        propertyId: filePropertyId,
-        labels,
-        onError: (error) => analytics.captureError(error),
-      });
-
-      if (columnValue === null) {
-        return;
-      }
-
-      for (const result of results) {
-        const { entityId } = result;
-        const content = {
-          version: 1 as const,
-          type: "single-select" as const,
-          value: columnValue,
-        };
-
-        upsertField.mutate({
-          workspaceId,
-          propertyId: groupByPropertyId,
-          entityId,
-          content,
-        });
-      }
-    };
-
-    const handleChangeColor = (optionValue: string, newColor: OptionColor) => {
-      if (
-        groupByProperty.content.type !== "single-select" &&
-        groupByProperty.content.type !== "multi-select"
-      ) {
-        return;
-      }
-      const updatedOptions = groupByProperty.content.options.map((opt) =>
-        opt.value === optionValue ? { ...opt, color: newColor } : opt,
-      );
-      updateProperty.mutate({
+      upsertField.mutate({
         workspaceId,
         propertyId: groupByPropertyId,
-        name: groupByProperty.name,
-        content: { ...groupByProperty.content, options: updatedOptions },
-        tool: groupByProperty.tool,
-      });
-    };
-
-    const handleRenameColumn = (oldValue: string, newValue: string) => {
-      if (
-        groupByProperty.content.type !== "single-select" &&
-        groupByProperty.content.type !== "multi-select"
-      ) {
-        return;
-      }
-      const updatedOptions = groupByProperty.content.options.map((opt) =>
-        opt.value === oldValue ? { ...opt, value: newValue } : opt,
-      );
-      updateProperty.mutate({
-        workspaceId,
-        propertyId: groupByPropertyId,
-        name: groupByProperty.name,
-        content: { ...groupByProperty.content, options: updatedOptions },
-        tool: groupByProperty.tool,
-      });
-
-      // Update all entities that had the old value
-      const affected = entities.filter((e) => {
-        const val = getFieldValue(e.fields[groupByPropertyId]);
-        return val === oldValue;
-      });
-      for (const entity of affected) {
-        const content = {
-          version: 1 as const,
-          type: "single-select" as const,
-          value: newValue,
-        };
-        upsertField.mutate({
-          workspaceId,
-          propertyId: groupByPropertyId,
-          entityId: entity.entityId,
-          content,
-        });
-      }
-    };
-
-    const handleHideColumn = (value: string) => {
-      setHiddenGroups((prev) => {
-        const next = new Set(prev);
-        next.add(value);
-        return next;
-      });
-    };
-
-    const handleDeleteAll = (entityIds: string[]) => {
-      deleteEntities.mutate({ workspaceId, entityIds });
-    };
-
-    const handleRenameEntity = (entityId: string, newName: string) => {
-      renameEntity.mutate({
-        workspaceId,
         entityId,
-        name: newName,
+        content,
       });
-    };
+    }
+  };
 
-    const handleReorderColumn = (
-      sourceValue: string,
-      targetValue: string,
-      edge: Edge | null,
-    ) => {
-      if (
-        groupByProperty.content.type !== "single-select" &&
-        groupByProperty.content.type !== "multi-select"
-      ) {
-        return;
+  const handleChangeColor = groupByProperty
+    ? (optionValue: string, newColor: OptionColor) => {
+        if (
+          groupByProperty.content.type !== "single-select" &&
+          groupByProperty.content.type !== "multi-select"
+        ) {
+          return;
+        }
+        const updatedOptions = groupByProperty.content.options.map((opt) =>
+          opt.value === optionValue ? { ...opt, color: newColor } : opt,
+        );
+        updateProperty.mutate({
+          workspaceId,
+          propertyId: groupByPropertyId,
+          name: groupByProperty.name,
+          content: { ...groupByProperty.content, options: updatedOptions },
+          tool: groupByProperty.tool,
+        });
       }
+    : null;
+
+  const handleRenameColumn = groupByProperty
+    ? (oldValue: string, newValue: string) => {
+        if (
+          groupByProperty.content.type !== "single-select" &&
+          groupByProperty.content.type !== "multi-select"
+        ) {
+          return;
+        }
+        const updatedOptions = groupByProperty.content.options.map((opt) =>
+          opt.value === oldValue ? { ...opt, value: newValue } : opt,
+        );
+        updateProperty.mutate({
+          workspaceId,
+          propertyId: groupByPropertyId,
+          name: groupByProperty.name,
+          content: { ...groupByProperty.content, options: updatedOptions },
+          tool: groupByProperty.tool,
+        });
+
+        const affected = entities.filter((e) => {
+          const val = getFieldValue(e.fields[groupByPropertyId]);
+          return val === oldValue;
+        });
+        for (const entity of affected) {
+          upsertField.mutate({
+            workspaceId,
+            propertyId: groupByPropertyId,
+            entityId: entity.entityId,
+            content: {
+              version: 1 as const,
+              type: "single-select" as const,
+              value: newValue,
+            },
+          });
+        }
+      }
+    : null;
+
+  const handleHideColumn = (value: string) => {
+    setHiddenGroups((prev) => {
+      const next = new Set(prev);
+      next.add(value);
+      return next;
+    });
+  };
+
+  const handleDeleteAll = (entityIds: string[]) => {
+    deleteEntities.mutate({ workspaceId, entityIds });
+  };
+
+  const handleRenameEntity = (entityId: string, newName: string) => {
+    renameEntity.mutate({ workspaceId, entityId, name: newName });
+  };
+
+  const handleReorderColumn = (
+    sourceValue: string,
+    targetValue: string,
+    edge: Edge | null,
+  ) => {
+    if (
+      groupByProperty &&
+      (groupByProperty.content.type === "single-select" ||
+        groupByProperty.content.type === "multi-select")
+    ) {
       const opts = [...groupByProperty.content.options];
       const srcIdx = opts.findIndex((o) => o.value === sourceValue);
       const tgtIdx = opts.findIndex((o) => o.value === targetValue);
       if (srcIdx === -1 || tgtIdx === -1) {
         return;
       }
-      // Compute insertion index based on closest edge.
-      // "left" means insert before the target, "right" after.
       const insertBeforeTarget = edge === "left";
       const rawDestIdx = insertBeforeTarget ? tgtIdx : tgtIdx + 1;
-      // Adjust for the source removal.
       const destIdx = srcIdx < rawDestIdx ? rawDestIdx - 1 : rawDestIdx;
       if (destIdx === srcIdx) {
         return;
@@ -380,105 +446,98 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         content: { ...groupByProperty.content, options: opts },
         tool: groupByProperty.tool,
       });
-    };
-
-    const visibleGroups = groups.filter(
-      (g) => g.value === null || !hiddenGroups.has(g.value),
-    );
-
-    return (
-      <KanbanBoard onReorderColumn={handleReorderColumn}>
-        {visibleGroups.map((group) => {
-          const { value } = group;
-          return (
-            <KanbanColumn
-              cardFields={cardFields}
-              color={group.color}
-              colorBg={group.colorBg}
-              columnValue={value}
-              entities={group.entities}
-              key={value ?? "__uncategorized__"}
-              onChangeColor={
-                value !== null ? (c) => handleChangeColor(value, c) : undefined
-              }
-              onDeleteAll={
-                value !== null
-                  ? () => handleDeleteAll(group.entities.map((e) => e.entityId))
-                  : undefined
-              }
-              onCreate={(kind) => {
-                handleCreate(kind).catch(() => {
-                  // Error handled inside handleCreate
-                });
-              }}
-              onDrop={(entityId) => handleDrop(value, entityId)}
-              // eslint-disable-next-line typescript/no-misused-promises
-              onFileUpload={async (files) =>
-                await handleFileUpload(value, files)
-              }
-              onHideColumn={
-                value !== null ? () => handleHideColumn(value) : undefined
-              }
-              onRenameColumn={
-                value !== null
-                  ? (newName) => handleRenameColumn(value, newName)
-                  : undefined
-              }
-              onRenameEntity={handleRenameEntity}
-              onReorderColumn={handleReorderColumn}
-              optionColor={group.optionColor}
-              properties={properties}
-              title={group.label}
-              workspaceId={workspaceId}
-            />
-          );
-        })}
-      </KanbanBoard>
-    );
-  }
-
-  // Built-in grouping (kind / author): read-only columns
-  const resolveBuiltInLabel = (key: string) => {
-    if (groupByPropertyId === getInternalPropertyId("kind")) {
-      return key.charAt(0).toUpperCase() + key.slice(1);
+      return;
     }
-    if (groupByPropertyId === getInternalPropertyId("status")) {
-      return (
-        t(
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          `tasks.statusValues.${key}` as "tasks.statusValues.open",
-        ) ?? key
-      );
-    }
-    return key || t("workspaces.kanban.unknown");
+
+    // For status/built-in: reorder locally
+    setLocalColumnOrder((prev) => {
+      const current = prev.length > 0 ? prev : groups.map((g) => g.value ?? "");
+      const srcIdx = current.indexOf(sourceValue);
+      const tgtIdx = current.indexOf(targetValue);
+      if (srcIdx === -1 || tgtIdx === -1) {
+        return prev;
+      }
+      const next = [...current];
+      const insertBeforeTarget = edge === "left";
+      const rawDestIdx = insertBeforeTarget ? tgtIdx : tgtIdx + 1;
+      const destIdx = srcIdx < rawDestIdx ? rawDestIdx - 1 : rawDestIdx;
+      if (destIdx === srcIdx) {
+        return prev;
+      }
+      const [moved] = next.splice(srcIdx, 1);
+      if (!moved) {
+        return prev;
+      }
+      next.splice(destIdx, 0, moved);
+      return next;
+    });
   };
-  const builtInGroups = groupByBuiltIn(
-    entities,
-    groupByPropertyId,
-    resolveBuiltInLabel,
+
+  const filteredGroups = groups.filter(
+    (g) => g.value === null || !hiddenGroups.has(g.value),
   );
 
+  // Apply local column order if set
+  const visibleGroups =
+    localColumnOrder.length > 0
+      ? localColumnOrder
+          .map((v) => filteredGroups.find((g) => g.value === v))
+          .filter((g): g is EntityGroup => g !== undefined)
+          .concat(
+            filteredGroups.filter(
+              (g) => g.value === null || !localColumnOrder.includes(g.value),
+            ),
+          )
+      : filteredGroups;
+
   return (
-    <KanbanBoard>
-      {builtInGroups.map((group) => (
-        <KanbanColumn
-          cardFields={cardFields}
-          columnValue={null}
-          entities={group.entities}
-          key={group.label}
-          onCreate={(kind) => {
-            handleCreate(kind).catch(() => {
-              // Error handled inside handleCreate
-            });
-          }}
-          onDrop={() => {
-            // Built-in groupings are read-only
-          }}
-          properties={properties}
-          title={group.label}
-          workspaceId={workspaceId}
-        />
-      ))}
+    <KanbanBoard onReorderColumn={handleReorderColumn}>
+      {visibleGroups.map((group) => {
+        const { value } = group;
+        return (
+          <KanbanColumn
+            cardFields={cardFields}
+            color={group.color}
+            colorBg={group.colorBg}
+            columnValue={value}
+            entities={group.entities}
+            key={value ?? "__uncategorized__"}
+            onChangeColor={
+              value !== null && handleChangeColor
+                ? (c) => handleChangeColor(value, c)
+                : undefined
+            }
+            onDeleteAll={
+              value !== null
+                ? () => handleDeleteAll(group.entities.map((e) => e.entityId))
+                : undefined
+            }
+            onCreate={(kind) => {
+              handleCreate(kind).catch(() => {
+                // Error handled inside handleCreate
+              });
+            }}
+            onDrop={(entityId) => handleDrop(value, entityId)}
+            // eslint-disable-next-line typescript/no-misused-promises
+            onFileUpload={async (files) => await handleFileUpload(value, files)}
+            onHideColumn={
+              value !== null ? () => handleHideColumn(value) : undefined
+            }
+            onRenameColumn={
+              value !== null && handleRenameColumn
+                ? (newName) => handleRenameColumn(value, newName)
+                : undefined
+            }
+            onRenameEntity={handleRenameEntity}
+            onReorderColumn={handleReorderColumn}
+            optionColor={group.optionColor}
+            properties={properties}
+            taskOnly={isStatusGrouping}
+            title={group.label}
+            workspaceId={workspaceId}
+          />
+        );
+      })}
     </KanbanBoard>
   );
 };
@@ -649,36 +708,100 @@ const groupEntities = (
   return result;
 };
 
-type BuiltInGroup = {
-  label: string;
-  entities: WorkspaceEntity[];
+/** All task statuses in the order they should appear as kanban columns. */
+const TASK_STATUS_ORDER = [
+  "open",
+  "in_progress",
+  "in_review",
+  "done",
+  "cancelled",
+] as const;
+
+/** Map task status to kanban option colors. */
+const STATUS_OPTION_COLORS: Record<string, OptionColor> = {
+  open: "gray",
+  in_progress: "blue",
+  in_review: "amber",
+  done: "green",
+  cancelled: "red",
 };
 
-const groupByBuiltIn = (
+/** Build GroupOption[] for task status kanban. */
+const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
+  TASK_STATUS_ORDER.map((status) => {
+    const optColor = STATUS_OPTION_COLORS[status] ?? "gray";
+    return {
+      value: status,
+      label: labels[status] ?? status,
+      color: optionColorsMap[optColor]?.color,
+      colorBg: optionColorsMap[optColor]?.background,
+      optionColor: optColor,
+    };
+  });
+
+/** Group entities by status, pre-seeding all status columns. */
+const groupEntitiesByStatus = (
   entities: WorkspaceEntity[],
-  mode: string,
-  resolveLabel: (key: string) => string,
-): BuiltInGroup[] => {
-  const grouped = new Map<string, WorkspaceEntity[]>();
+  options: GroupOption[],
+  uncategorizedLabel: string,
+): EntityGroup[] => {
+  const grouped = new Map<string | null, WorkspaceEntity[]>();
+  for (const opt of options) {
+    grouped.set(opt.value, []);
+  }
+  grouped.set(null, []);
 
   for (const entity of entities) {
-    const key =
-      mode === getInternalPropertyId("kind")
-        ? entity.kind
-        : mode === getInternalPropertyId("status")
-          ? (entity.status ?? "")
-          : (entity.createdBy ?? "");
-
+    const key = entity.status ?? "open";
     const bucket = grouped.get(key);
     if (bucket) {
       bucket.push(entity);
     } else {
-      grouped.set(key, [entity]);
+      grouped.get(null)?.push(entity);
     }
   }
 
-  return [...grouped.entries()].map(([key, ents]) => ({
-    label: resolveLabel(key),
-    entities: ents,
+  const result: EntityGroup[] = options.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    color: opt.color,
+    colorBg: opt.colorBg,
+    optionColor: opt.optionColor,
+    entities: grouped.get(opt.value) ?? [],
+  }));
+
+  const uncategorized = grouped.get(null) ?? [];
+  if (uncategorized.length > 0) {
+    result.push({
+      value: null,
+      label: uncategorizedLabel,
+      entities: uncategorized,
+    });
+  }
+
+  return result;
+};
+
+/** Build GroupOption[] for read-only built-in groupings (kind, created-by). */
+const getBuiltInGroupOptions = (
+  entities: WorkspaceEntity[],
+  mode: string,
+  unknownLabel: string,
+): GroupOption[] => {
+  const seen = new Set<string>();
+  for (const entity of entities) {
+    const key =
+      mode === getInternalPropertyId("kind")
+        ? entity.kind
+        : (entity.createdBy ?? "");
+    seen.add(key);
+  }
+
+  return [...seen].map((key) => ({
+    value: key,
+    label:
+      mode === getInternalPropertyId("kind")
+        ? key.charAt(0).toUpperCase() + key.slice(1)
+        : key || unknownLabel,
   }));
 };

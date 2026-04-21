@@ -64,7 +64,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
       page,
     }),
     select: (data) =>
-      toTableEntities(data.entities.filter((e) => e.kind !== "folder")),
+      toTableEntities(
+        data.entities.filter((e) => e.kind !== "folder" && e.kind !== "task"),
+      ),
   });
 
   const columns = useMemo(() => {
