@@ -89,6 +89,22 @@ const openRemoteDesktopSession = async ({
   return response.data satisfies RemoteDesktopSession;
 };
 
+/**
+ * Check if the desktop bridge is reachable (app is running).
+ * Returns true/false without throwing.
+ */
+export const isDesktopBridgeReachable = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
 export const openDocxInDesktop = async ({
   apiBaseUrl,
   entityId,

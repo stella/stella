@@ -44,7 +44,7 @@ export const readOverviewHandler = async ({
               columns: { id: true },
               with: {
                 fields: {
-                  columns: { id: true, content: true },
+                  columns: { id: true, propertyId: true, content: true },
                   limit: 1,
                 },
               },
@@ -89,10 +89,12 @@ export const readOverviewHandler = async ({
     let name = e.name ?? "Untitled";
     let mimeType: string | null = null;
     let fieldId: string | null = null;
+    let propertyId: string | null = null;
     let pdfFileId: string | null = null;
     let encrypted = false;
     if (firstField) {
       fieldId = firstField.id;
+      propertyId = firstField.propertyId;
       const c = firstField.content;
       if (c.type === "text" && "value" in c) {
         name = c.value;
@@ -116,6 +118,7 @@ export const readOverviewHandler = async ({
       dueDate: e.dueDate,
       mimeType,
       fieldId,
+      propertyId,
       pdfFileId,
       encrypted,
       createdAt: e.createdAt.toISOString(),

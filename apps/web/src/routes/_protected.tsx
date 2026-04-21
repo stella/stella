@@ -23,6 +23,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   LayersIcon,
+  MonitorIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
@@ -48,6 +49,7 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useChatPanelStore } from "@/lib/chat-panel-store";
 import { getCourtColor } from "@/lib/court-colors";
+import { isDesktopBridgeReachable } from "@/lib/desktop-bridge";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -291,6 +293,7 @@ function ProtectedContent({
                   )}
                 </Button>
               )}
+              <DesktopAppButton />
               <Button
                 onClick={() => togglePin(workspaceId)}
                 size="icon-sm"
@@ -334,6 +337,35 @@ function ProtectedContent({
     </SidebarInset>
   );
 }
+
+// -- Desktop app button --
+
+const DESKTOP_DOWNLOAD_URL = "https://stll.app/desktop";
+
+const DesktopAppButton = () => {
+  const t = useTranslations();
+
+  const handleClick = async () => {
+    const reachable = await isDesktopBridgeReachable();
+    if (reachable) {
+      // TODO: POST /v1/open-workspace when desktop implements it
+    } else {
+      window.open(DESKTOP_DOWNLOAD_URL, "_blank");
+    }
+  };
+
+  return (
+    <Button
+      // eslint-disable-next-line typescript/no-misused-promises
+      onClick={handleClick}
+      size="icon-sm"
+      title={t("navigation.openInDesktop")}
+      variant="ghost"
+    >
+      <MonitorIcon className="size-4" />
+    </Button>
+  );
+};
 
 // -- Matter context badge --
 
