@@ -131,6 +131,9 @@ export type DesktopRPC = {
       activateTab: {
         tab: "general" | "notifications" | "about";
       };
+      stateChanged: {
+        snapshot: AppSnapshot;
+      };
     };
   };
 };
@@ -145,4 +148,23 @@ type RequestClient<
 
 export type DesktopRpcClient = {
   request: RequestClient<DesktopRPC["bun"]["requests"]>;
+};
+
+export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.bridgePort === "number" &&
+    typeof record.runningSince === "string" &&
+    Array.isArray(record.sessions) &&
+    typeof record.notificationPreferences === "object" &&
+    record.notificationPreferences !== null &&
+    typeof record.update === "object" &&
+    record.update !== null
+  );
 };
