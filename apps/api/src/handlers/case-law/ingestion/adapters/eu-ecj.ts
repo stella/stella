@@ -124,7 +124,7 @@ const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   Array.isArray(value.results.bindings) &&
   value.results.bindings.every(isSparqlResult);
 
-const SPARQL_LIMIT = 200;
+const SPARQL_LIMIT = 10_000;
 
 const CDM_TYPE_MAP: Record<string, string> = {
   "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
@@ -342,7 +342,10 @@ export const euEcjAdapter: SourceAdapter = {
       try: async () => {
         const abortSignal = signal ?? AbortSignal.timeout(ECJ_PAGE_TIMEOUT);
 
-        // Cursor is a date; each page = 1 day
+        // Cursor is a date; each page = 1 day.
+        // Null cursor defaults to 7 days ago (used by health
+        // checks). Historical backfill is triggered by setting
+        // the DB cursor to "1952-01-01" after deploy.
         const dateFrom =
           cursor ?? toIsoDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
         const dateTo = dateFrom;
@@ -421,7 +424,8 @@ export const euEcjAdapter: SourceAdapter = {
         const nextDate = addDays(dateFrom, 1);
         const today = toIsoDate(new Date());
         // Park at today when exhausted; never null (null
-        // restarts from 7 days ago).
+        // triggers a health-check-friendly recent window, not
+        // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
         return { decisions, nextCursor };
