@@ -143,6 +143,10 @@ export default defineConfig({
   ignorePatterns: ["**/routeTree.gen.ts", "**/*.config.js"],
 
   jsPlugins: [
+    "@tanstack/eslint-plugin-query",
+    "@tanstack/eslint-plugin-router",
+    "eslint-plugin-drizzle",
+    "eslint-plugin-sonarjs",
     "./.oxlint-plugins/no-raw-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -179,6 +183,12 @@ export default defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
+        "@tanstack/query/exhaustive-deps": "error",
+        "@tanstack/query/infinite-query-property-order": "error",
+        "@tanstack/query/mutation-property-order": "error",
+        "@tanstack/query/no-rest-destructuring": "error",
+        "@tanstack/query/no-unstable-deps": "error",
+        "@tanstack/query/stable-query-client": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -197,6 +207,8 @@ export default defineConfig({
           },
         ],
         "require-router-select/require-router-select": "error",
+        "sonarjs/jsx-no-leaked-render": "error",
+        "sonarjs/no-hook-setter-in-body": "error",
       },
     },
     {
@@ -233,7 +245,32 @@ export default defineConfig({
     {
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
+        "@tanstack/router/create-route-property-order": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
+      },
+    },
+    {
+      files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
+      rules: {
+        "sonarjs/no-all-duplicated-branches": "error",
+        "sonarjs/no-duplicated-branches": "error",
+        "sonarjs/no-gratuitous-expressions": "error",
+        "sonarjs/no-identical-expressions": "error",
+        "sonarjs/no-ignored-return": "error",
+        "sonarjs/no-use-of-empty-return-value": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],
+      rules: {
+        "drizzle/enforce-delete-with-where": [
+          "error",
+          { drizzleObjectName: ["db", "tx"] },
+        ],
+        "drizzle/enforce-update-with-where": [
+          "error",
+          { drizzleObjectName: ["db", "tx"] },
+        ],
       },
     },
     {

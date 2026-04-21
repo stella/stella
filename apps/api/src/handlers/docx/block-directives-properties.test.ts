@@ -157,7 +157,7 @@ describe("property: nested objects in #each items resolve", () => {
             [
               P(`{{#each ${arrayName}}}`),
               P(`{{${arrayName}.${nestedObj}.${nestedField}}}`),
-              P(`{{/${arrayName.length > 0 ? "each" : "each"}}}`),
+              P("{{/each}}"),
             ].join(""),
           );
           const docx = await makeDocx(xml);

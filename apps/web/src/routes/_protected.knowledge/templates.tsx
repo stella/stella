@@ -376,6 +376,7 @@ const fieldEditReducer = (
         saving: false,
       };
     case "cancel":
+    case "saved":
       return {
         active: false,
         fields: [],
@@ -395,13 +396,6 @@ const fieldEditReducer = (
       return { ...state, saving: true };
     case "saveFailed":
       return { ...state, saving: false };
-    case "saved":
-      return {
-        active: false,
-        fields: [],
-        expandedPath: null,
-        saving: false,
-      };
     default:
       return state;
   }

@@ -77,9 +77,7 @@ const searchSchema = v.strictObject({
 });
 
 export const Route = createFileRoute("/_protected/organization")({
-  head: () => ({
-    meta: [{ title: pageTitle("common.organization") }],
-  }),
+  validateSearch: searchSchema,
   beforeLoad: async ({ context }) => {
     const role = await ensureCriticalQueryData(
       context.queryClient,
@@ -90,7 +88,9 @@ export const Route = createFileRoute("/_protected/organization")({
       throw redirect({ to: "/workspaces", replace: true });
     }
   },
-  validateSearch: searchSchema,
+  head: () => ({
+    meta: [{ title: pageTitle("common.organization") }],
+  }),
   component: MembersLayout,
 });
 

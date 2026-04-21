@@ -29,9 +29,6 @@ const searchSchema = v.object({
 });
 
 export const Route = createFileRoute("/consent")({
-  head: () => ({
-    meta: [{ title: pageTitle("consent.title") }],
-  }),
   validateSearch: searchSchema,
   beforeLoad: ({ context, location }) => {
     if (!context.session) {
@@ -44,6 +41,9 @@ export const Route = createFileRoute("/consent")({
       });
     }
   },
+  head: () => ({
+    meta: [{ title: pageTitle("consent.title") }],
+  }),
   component: ConsentPage,
 });
 

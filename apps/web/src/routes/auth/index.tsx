@@ -25,9 +25,6 @@ const searchSchema = v.strictObject({
 });
 
 export const Route = createFileRoute("/auth/")({
-  head: () => ({
-    meta: [{ title: pageTitle("auth.signIn") }],
-  }),
   validateSearch: searchSchema,
   beforeLoad: ({ context, search }) => {
     if (context.session) {
@@ -38,6 +35,9 @@ export const Route = createFileRoute("/auth/")({
       });
     }
   },
+  head: () => ({
+    meta: [{ title: pageTitle("auth.signIn") }],
+  }),
   component: LoginOrSignup,
 });
 
