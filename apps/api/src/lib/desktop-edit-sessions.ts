@@ -10,6 +10,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 type AuthorizedDesktopEditSession = {
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
+  userId: string;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -82,6 +83,7 @@ export const authorizeDesktopEditSession = async ({
         userId: brandPersistedUserId(session.createdBy),
         workspaceIds: [session.workspaceId],
       }),
+      userId: session.createdBy,
       workspaceId: session.workspaceId,
     },
   };

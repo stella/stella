@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 import { and, count, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
@@ -141,6 +142,8 @@ const readEntitiesHandler = async function* ({
   // Phase 2: Fetch full entity data for the page
   const idFilter = inArray(entities.id, pageIds);
 
+  const lastEditor = alias(user, "last_editor");
+
   // Phase 2: Fetch full entity data for the page (parallel)
   const [entityRowsResult, versionCountsResult, fieldRowsResult] =
     await Promise.all([
@@ -156,6 +159,8 @@ const readEntitiesHandler = async function* ({
             updatedAt: entities.updatedAt,
             createdByName: user.name,
             createdByImage: user.image,
+            lastEditedByName: lastEditor.name,
+            lastEditedByImage: lastEditor.image,
             status: entities.status,
             priority: entities.priority,
             dueDate: entities.dueDate,
@@ -163,6 +168,7 @@ const readEntitiesHandler = async function* ({
           })
           .from(entities)
           .leftJoin(user, eq(entities.createdBy, user.id))
+          .leftJoin(lastEditor, eq(entities.lastEditedBy, lastEditor.id))
           .where(idFilter),
       ),
       safeDb((tx) =>
@@ -258,8 +264,8 @@ const readEntitiesHandler = async function* ({
       name: entity.name,
       parentId: entity.parentId,
       createdAt: entity.createdAt.toISOString(),
-      createdBy: entity.createdByName ?? null,
-      createdByImage: entity.createdByImage ?? null,
+      createdBy: entity.lastEditedByName ?? entity.createdByName ?? null,
+      createdByImage: entity.lastEditedByImage ?? entity.createdByImage ?? null,
       version: versionCountMap.get(entity.id) ?? 0,
       updatedAt: entity.updatedAt?.toISOString() ?? null,
       status: entity.status,
