@@ -11,9 +11,6 @@ const searchSchema = v.strictObject({
 });
 
 export const Route = createFileRoute("/onboarding")({
-  head: () => ({
-    meta: [{ title: pageTitle("onboarding.orgTitle") }],
-  }),
   validateSearch: searchSchema,
   beforeLoad: ({ context, search }) => {
     if (!context.session) {
@@ -29,5 +26,8 @@ export const Route = createFileRoute("/onboarding")({
       throw redirect({ to: "/", replace: true });
     }
   },
+  head: () => ({
+    meta: [{ title: pageTitle("onboarding.orgTitle") }],
+  }),
   component: OnboardingWizard,
 });

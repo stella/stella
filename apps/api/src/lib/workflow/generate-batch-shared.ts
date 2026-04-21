@@ -180,6 +180,12 @@ export const prepareBatchInput = (
   const inputFieldsForAI: FieldContentForAI[] = [];
   const resolvedFiles: ResolvedFile[] = [];
   const textInputs: TextInput[] = [];
+  const pushTextInput = (propertyId: string, value: string) => {
+    textInputs.push({
+      propertyId,
+      value,
+    });
+  };
 
   for (const field of inputFields) {
     const content = field.content;
@@ -209,32 +215,20 @@ export const prepareBatchInput = (
     }
 
     if (content.type === "text") {
-      textInputs.push({
-        propertyId: field.propertyId,
-        value: content.value,
-      });
+      pushTextInput(field.propertyId, content.value);
     } else if (content.type === "single-select" && content.value !== null) {
-      textInputs.push({
-        propertyId: field.propertyId,
-        value: content.value,
-      });
+      pushTextInput(field.propertyId, content.value);
     } else if (content.type === "multi-select") {
-      textInputs.push({
-        propertyId: field.propertyId,
-        value: content.value.join(", "),
-      });
+      pushTextInput(field.propertyId, content.value.join(", "));
     } else if (content.type === "date" && content.value) {
-      textInputs.push({
-        propertyId: field.propertyId,
-        value: content.value,
-      });
+      pushTextInput(field.propertyId, content.value);
     } else if (content.type === "int") {
-      textInputs.push({
-        propertyId: field.propertyId,
-        value: content.currency
+      pushTextInput(
+        field.propertyId,
+        content.currency
           ? `${content.value} ${content.currency}`
           : String(content.value),
-      });
+      );
     }
   }
 

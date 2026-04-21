@@ -73,6 +73,7 @@ type PDFDocumentOptionsInput = QueryOptionsInput<
 export const usePDFDocument = ({ key, context }: PDFDocumentOptionsInput) => {
   const queryClient = useQueryClient();
 
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- this hook intentionally keys by file identity and uses manual query removal when the in-memory buffer or password changes.
   const { data } = useSuspenseQuery({
     structuralSharing: false,
     // the query should be only removed, if it's updated updated the document instance needs to be cleaned up manually

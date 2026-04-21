@@ -158,32 +158,33 @@ const OrganizationList = ({
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
 
-  const selectOrganization = useMutation({
-    mutationFn: async (organizationId: string) => {
-      const { error } = await authClient.organization.setActive({
-        organizationId,
-      });
-
-      if (error) {
-        toastManager.add({
-          title: error.message ?? t("errors.actionFailed"),
-          type: "error",
+  const { isPending: isSelectingOrganization, mutate: selectOrganization } =
+    useMutation({
+      mutationFn: async (organizationId: string) => {
+        const { error } = await authClient.organization.setActive({
+          organizationId,
         });
-        throw toAuthClientError(error);
-      }
 
-      await completeOrganizationFlow({
-        invalidateSession,
-        isOauthPostLogin,
-        navigate,
-        redirectTo,
-        status: "selected",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
+        if (error) {
+          toastManager.add({
+            title: error.message ?? t("errors.actionFailed"),
+            type: "error",
+          });
+          throw toAuthClientError(error);
+        }
+
+        await completeOrganizationFlow({
+          invalidateSession,
+          isOauthPostLogin,
+          navigate,
+          redirectTo,
+          status: "selected",
+        });
+      },
+      onError: (error) => {
+        analytics.captureError(error);
+      },
+    });
 
   // Auto-select when there's only one organization
   const singleOrg = organizations.length === 1 ? organizations[0] : null;
@@ -220,9 +221,9 @@ const OrganizationList = ({
         {organizations.map((org) => (
           <button
             className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start transition-colors disabled:opacity-64"
-            disabled={selectOrganization.isPending}
+            disabled={isSelectingOrganization}
             key={org.id}
-            onClick={() => selectOrganization.mutate(org.id)}
+            onClick={() => selectOrganization(org.id)}
             type="button"
           >
             <Avatar className="size-10">

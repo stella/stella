@@ -73,6 +73,10 @@ function CrossWorkspaceCalendar() {
 
   const { data: workspacesData } = useSuspenseQuery(workspacesOptions);
   const workspaces = workspacesData.workspaces;
+  const workspacesById = useMemo(
+    () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+    [workspaces],
+  );
 
   const activeWorkspaceIds = useMemo(() => {
     if (selectedWorkspaceIds === null) {
@@ -81,8 +85,7 @@ function CrossWorkspaceCalendar() {
     return [...selectedWorkspaceIds];
   }, [workspaces, selectedWorkspaceIds]);
 
-  // Fetch entities from each active workspace
-  const entityQueries = useQueries({
+  const { entitiesByDate, isLoading } = useQueries({
     queries: activeWorkspaceIds.map((workspaceId) =>
       entitiesOptions({
         workspaceId,
@@ -91,39 +94,42 @@ function CrossWorkspaceCalendar() {
         page: 1,
       }),
     ),
-  });
+    combine: (results) => {
+      const map = new Map<string, CalendarEntity[]>();
 
-  // Aggregate entities by date across workspaces
-  const entitiesByDate = useMemo(() => {
-    const map = new Map<string, CalendarEntity[]>();
-
-    for (let i = 0; i < activeWorkspaceIds.length; i++) {
-      const query = entityQueries[i];
-      const workspaceId = activeWorkspaceIds[i] ?? "";
-      const workspace = workspaces.find((w) => w.id === workspaceId);
-
-      if (!query?.data || !workspace) {
-        continue;
-      }
-
-      for (const entity of query.data.entities) {
-        const date = getEntityDate(entity, DATE_PROPERTY);
-        if (!date) {
+      for (let i = 0; i < activeWorkspaceIds.length; i++) {
+        const workspaceId = activeWorkspaceIds[i];
+        if (!workspaceId) {
           continue;
         }
 
-        const entry: CalendarEntity = {
-          entity,
-          workspaceId,
-          workspaceName: workspace.name,
-          workspaceColor: workspace.color ?? null,
-        };
-        appendToMapArray(map, date, entry);
-      }
-    }
+        const workspace = workspacesById.get(workspaceId);
+        const entities = results[i]?.data?.entities;
+        if (!workspace || !entities) {
+          continue;
+        }
 
-    return map;
-  }, [entityQueries, activeWorkspaceIds, workspaces]);
+        for (const entity of entities) {
+          const date = getEntityDate(entity, DATE_PROPERTY);
+          if (!date) {
+            continue;
+          }
+
+          appendToMapArray(map, date, {
+            entity,
+            workspaceId,
+            workspaceName: workspace.name,
+            workspaceColor: workspace.color ?? null,
+          });
+        }
+      }
+
+      return {
+        entitiesByDate: map,
+        isLoading: results.some((result) => result.isLoading),
+      };
+    },
+  });
 
   const navigatePrev = useCallback(() => {
     setViewDate((d) => {
@@ -192,8 +198,6 @@ function CrossWorkspaceCalendar() {
     () => getMonthLabels(locale, year, "short"),
     [locale, year],
   );
-
-  const isLoading = entityQueries.some((q) => q.isLoading);
 
   return (
     <div

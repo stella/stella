@@ -29,6 +29,7 @@ export const ChatMentionProviders = ({
   const queryClient = useQueryClient();
   const { data: workspacesData } = useQuery(workspacesNavigationOptions);
   const workspaces = workspacesData?.workspaces;
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the query client is an app-scope dependency, not part of this query's cache identity.
   const { data: firstViewIdsByWorkspaceId } = useQuery({
     queryKey: [
       "chat-mention-workspace-views",

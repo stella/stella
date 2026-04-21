@@ -270,7 +270,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
 
-  const mutation = useMutation({
+  const { isPending, mutate } = useMutation({
     mutationFn: async (files: File[]) => {
       let propertyId = properties.find((p) => p.content.type === "file")?.id;
 
@@ -309,13 +309,13 @@ export const useCreateFileEntities = (workspaceId: string) => {
 
   const handleCreateFileEntities = useCallback(
     (files: File[]) => {
-      if (mutation.isPending || files.length === 0) {
+      if (isPending || files.length === 0) {
         return;
       }
-      mutation.mutate(files);
+      mutate(files);
     },
-    [mutation],
+    [isPending, mutate],
   );
 
-  return [mutation.isPending, handleCreateFileEntities] as const;
+  return [isPending, handleCreateFileEntities] as const;
 };

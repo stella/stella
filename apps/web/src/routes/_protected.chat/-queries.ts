@@ -32,6 +32,10 @@ type ChatThreadOptionsContext = {
   getUserContext?: (() => ChatUserContext) | undefined;
 };
 
+type ChatThreadQueryKey = ChatThreadRef & {
+  allowMissingThread?: boolean | undefined;
+};
+
 type ChatThreadOptionsInput = QueryOptionsInput<
   ChatThreadKey,
   ChatThreadOptionsContext
@@ -40,10 +44,23 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 export const chatKeys = {
   all: ["chat"],
   groupedThreads: () => [...chatKeys.all, "threads", "grouped"],
-  thread: (key: ChatThreadKey) =>
+  thread: (key: ChatThreadQueryKey) =>
     key.scope === "global"
-      ? [...chatKeys.all, "thread", key.scope, key.threadId]
-      : [...chatKeys.all, "thread", key.scope, key.workspaceId, key.threadId],
+      ? [
+          ...chatKeys.all,
+          "thread",
+          key.scope,
+          key.threadId,
+          key.allowMissingThread ?? false,
+        ]
+      : [
+          ...chatKeys.all,
+          "thread",
+          key.scope,
+          key.workspaceId,
+          key.threadId,
+          key.allowMissingThread ?? false,
+        ],
 };
 
 const fetchThreadMessages = async (
@@ -128,10 +145,14 @@ const buildSendRequestBody = ({
 };
 
 export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- runtime getter callbacks configure the Chat transport but are intentionally not part of cache identity.
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.thread(key),
+    queryKey: chatKeys.thread({
+      ...key,
+      allowMissingThread: context?.allowMissingThread,
+    }),
     queryFn: async () => {
       const messages = await fetchThreadMessages(key, {
         allowMissingThread: context?.allowMissingThread,

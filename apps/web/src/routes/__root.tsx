@@ -25,11 +25,6 @@ export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
   component: RootComponent,
-  // Document head management via route `head` option.
-  // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
-  head: () => ({
-    meta: [{ title: "stella" }],
-  }),
   beforeLoad: async ({ context }) => {
     const sessionData = await ensureCriticalQueryData(
       context.queryClient,
@@ -41,6 +36,11 @@ export const Route = createRootRouteWithContext<{
       user: sessionData?.user ?? null,
     };
   },
+  // Document head management via route `head` option.
+  // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
+  head: () => ({
+    meta: [{ title: "stella" }],
+  }),
   pendingComponent: () => <DefaultPendingComponent className="h-screen" />,
   errorComponent: (props) => (
     <DefaultErrorComponent className="h-screen" {...props} />
