@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Nem sikerült frissíteni az ügyet",
     "failedToUploadFiles": "Nem sikerült feltölteni a fájlokat",
     "failedToVerifyOtp": "Nem sikerült ellenőrizni a kódot",
+    "matterNotFound": "Ügy nem található",
     "partyAlreadyExists": "A kontakt már rendelkezik ezzel a szereppel az ügyben",
     "slugAlreadyTaken": "Ez a slug már foglalt",
     "uploadFailed": "Feltöltés sikertelen"

@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Akte konnte nicht aktualisiert werden",
     "failedToUploadFiles": "Dateien konnten nicht hochgeladen werden",
     "failedToVerifyOtp": "Code konnte nicht verifiziert werden",
+    "matterNotFound": "Akte nicht gefunden",
     "partyAlreadyExists": "Kontakt hat bereits diese Rolle in der Akte",
     "slugAlreadyTaken": "Dieser Slug ist bereits vergeben",
     "uploadFailed": "Upload fehlgeschlagen"

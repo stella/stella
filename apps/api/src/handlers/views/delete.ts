@@ -1,20 +1,17 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
 
 const config = {
   permissions: { view: ["delete"] },
-  params: t.Object({
-    viewId: tNanoid,
-  }),
+  params: workspaceParams({ viewId: tUuid }),
 } satisfies HandlerConfig;
 
 const deleteView = createSafeHandler(

@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "No se pudo actualizar el asunto",
     "failedToUploadFiles": "No se pudieron subir los archivos",
     "failedToVerifyOtp": "No se pudo verificar el código",
+    "matterNotFound": "Asunto no encontrado",
     "partyAlreadyExists": "El contacto ya tiene este rol en el asunto",
     "slugAlreadyTaken": "Este slug ya está en uso",
     "uploadFailed": "Error al subir"

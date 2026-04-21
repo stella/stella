@@ -23,7 +23,7 @@ import {
   permissionMacro,
   workspaceAccessMacro,
 } from "@/api/lib/auth";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 
 /**
  * Global-read routes: any authenticated user can read.
@@ -45,7 +45,7 @@ const globalCaseLawRoute = new Elysia({
     "/decisions/:decisionId",
     async (ctx) =>
       await readDecisionHandler(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tNanoid }) },
+    { params: t.Object({ decisionId: tUuid }) },
   )
   .post(
     "/decisions/search",
@@ -57,7 +57,7 @@ const globalCaseLawRoute = new Elysia({
   .get(
     "/decisions/:decisionId/analysis",
     async (ctx) => await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tNanoid }) },
+    { params: t.Object({ decisionId: tUuid }) },
   )
   .get(
     "/decisions/:decisionId/analysis/debug",
@@ -115,7 +115,7 @@ const globalCaseLawRoute = new Elysia({
         userMessage,
       };
     },
-    { params: t.Object({ decisionId: tNanoid }) },
+    { params: t.Object({ decisionId: tUuid }) },
   );
 
 /**
@@ -160,7 +160,7 @@ const caseLawMatterLinksRoute = new Elysia({
       }),
     {
       permissions: { entity: ["delete"] },
-      params: t.Object({ workspaceId: tNanoid, linkId: tNanoid }),
+      params: t.Object({ workspaceId: tUuid, linkId: tUuid }),
     },
   );
 

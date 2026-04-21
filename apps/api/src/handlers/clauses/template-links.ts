@@ -5,14 +5,14 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { templateClauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 // ── Schemas ─────────────────────────────────────────
 
 export const linkClauseBodySchema = t.Object({
-  clauseId: tNanoid,
-  variantId: t.Optional(tNanoid),
+  clauseId: tUuid,
+  variantId: t.Optional(tUuid),
   slotName: t.Optional(t.String({ maxLength: 128 })),
 });
 

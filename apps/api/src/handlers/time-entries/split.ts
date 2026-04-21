@@ -5,15 +5,15 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const splitEntryBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   splits: t.Array(
     t.Object({
-      matterId: tNanoid,
+      matterId: tUuid,
       percentage: t.Integer({ minimum: 1, maximum: 100 }),
     }),
     { minItems: 2, maxItems: 10 },

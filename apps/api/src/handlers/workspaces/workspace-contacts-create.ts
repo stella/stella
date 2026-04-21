@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { workspaceContacts } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -23,7 +23,7 @@ const WORKSPACE_CONTACT_ROLES = [
 ] as const;
 
 const createWorkspaceContactBodySchema = t.Object({
-  contactId: tNanoid,
+  contactId: tUuid,
   role: t.UnionEnum(WORKSPACE_CONTACT_ROLES),
   isPrimary: t.Optional(t.Boolean()),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),

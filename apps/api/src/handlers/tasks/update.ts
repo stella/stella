@@ -4,13 +4,13 @@ import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";
 
 const updateTaskBodySchema = t.Object({
-  taskId: tNanoid,
+  taskId: tUuid,
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),

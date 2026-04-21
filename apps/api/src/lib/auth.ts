@@ -27,7 +27,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureError, identify } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import {
   sendNewDeviceLoginEmail,
@@ -690,7 +690,7 @@ export const workspaceAccessMacro = new Elysia({
   .use(authMacro)
   .macro("validateWorkspaceAccess", {
     validateAuth: true,
-    params: t.Object({ workspaceId: tNanoid }),
+    params: t.Object({ workspaceId: tUuid }),
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
@@ -710,7 +710,7 @@ export const workspaceAccessMacro = new Elysia({
   })
   .macro("validateWorkspaceAccessIncludingArchived", {
     validateAuth: true,
-    params: t.Object({ workspaceId: tNanoid }),
+    params: t.Object({ workspaceId: tUuid }),
     body: t.Object({}),
     resolve(ctx) {
       const ws = ctx.accessibleWorkspaces.find(

@@ -10,12 +10,11 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
-const downloadZipParamsSchema = t.Object({
-  entityId: t.String(),
-});
+const downloadZipParamsSchema = workspaceParams({ entityId: t.String() });
 
 type DownloadZipHandlerProps = {
   safeDb: SafeDb;

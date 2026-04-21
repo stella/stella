@@ -4,7 +4,7 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -13,7 +13,7 @@ export const searchBodySchema = t.Object({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  workspaceId: t.Optional(tNanoid),
+  workspaceId: t.Optional(tUuid),
   kinds: t.Optional(t.Array(entityKindSchema)),
   cursor: t.Optional(t.String()),
   limit: t.Optional(

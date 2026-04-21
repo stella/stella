@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateTableBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   name: t.Optional(tDefaultVarchar),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   isDefault: t.Optional(t.Boolean()),

@@ -11,7 +11,7 @@ import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -25,12 +25,12 @@ const buildVersionS3Key = (
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
-  categoryId: t.Optional(t.Nullable(tNanoid)),
+  categoryId: t.Optional(t.Nullable(tUuid)),
   manifest: t.Optional(t.String()),
 });
 
 const updateTemplateParamsSchema = t.Object({
-  templateId: tNanoid,
+  templateId: tUuid,
 });
 
 type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;

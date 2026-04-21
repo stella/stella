@@ -11,12 +11,12 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createContactBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
   type: t.UnionEnum(["person", "organization"]),
   prefix: t.Optional(t.String({ maxLength: 32 })),
   firstName: t.Optional(t.String({ maxLength: 256 })),

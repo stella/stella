@@ -22,6 +22,8 @@ import { sql } from "drizzle-orm";
 import { db } from "@/api/db/root";
 import {
   billingCodes,
+  chatMessages,
+  chatThreads,
   contacts,
   entities,
   entityVersions,
@@ -34,6 +36,7 @@ import {
   rateTables,
   timeEntries,
   workspaceContacts,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import type {
@@ -2938,6 +2941,12 @@ export async function seed(organizationId?: string, userId?: string) {
 
   if (allSeedWorkspaceIds.length > 0) {
     await db
+      .delete(chatMessages)
+      .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`);
+    await db
+      .delete(chatThreads)
+      .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
+    await db
       .delete(workspaces)
       .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
   }
@@ -3048,6 +3057,27 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(
     `  Workspaces: ${seedWorkspaces.length} + ${moreWsCount} extra = ${seedWorkspaces.length + moreWsCount}`,
+  );
+
+  // 2c. Workspace members — add all seed users to every workspace
+  const allWsIds = [
+    ...seedWorkspaces.map((ws) => ws.id),
+    ...MORE_WORKSPACES.map((mw) => seedId(`extra-ws-${mw.reference}`)),
+  ];
+  for (const wsId of allWsIds) {
+    for (const uid of seedUserIds) {
+      await db
+        .insert(workspaceMembers)
+        .values({
+          id: seedId(`wm-${wsId}-${uid}`),
+          workspaceId: toWs(wsId),
+          userId: uid,
+        })
+        .onConflictDoNothing();
+    }
+  }
+  console.log(
+    `  Workspace members: ${allWsIds.length} × ${seedUserIds.length} users`,
   );
 
   // 3. Properties

@@ -5,11 +5,11 @@ import { t } from "elysia";
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteBillingCodeBodySchema = t.Object({
-  id: tNanoid,
+  id: tUuid,
 });
 
 const config = {

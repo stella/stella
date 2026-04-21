@@ -1,13 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const readTaskByIdParamsSchema = t.Object({
-  taskId: tNanoid,
-});
+const readTaskByIdParamsSchema = workspaceParams({ taskId: tUuid });
 
 const readTaskById = createSafeHandler(
   {

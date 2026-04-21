@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -15,9 +15,7 @@ const createRateEntryBodySchema = t.Object({
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
 });
 
-const rateEntryParamsSchema = t.Object({
-  rateTableId: tNanoid,
-});
+const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
 
 const createRateEntry = createSafeHandler(
   {

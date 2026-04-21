@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createTimeEntryBodySchema = t.Object({
-  matterId: tNanoid,
+  matterId: tUuid,
   dateWorked: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   durationMinutes: t.Integer({ minimum: 1 }),

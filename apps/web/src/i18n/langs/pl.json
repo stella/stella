@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Nie udało się zaktualizować sprawy",
     "failedToUploadFiles": "Nie udało się przesłać plików",
     "failedToVerifyOtp": "Nie udało się zweryfikować kodu",
+    "matterNotFound": "Sprawa nie została znaleziona",
     "partyAlreadyExists": "Kontakt ma już tę rolę w sprawie",
     "slugAlreadyTaken": "Ten slug jest już zajęty",
     "uploadFailed": "Przesyłanie nie powiodło się"

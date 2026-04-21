@@ -1,7 +1,7 @@
 import Elysia, { t } from "elysia";
 
 import { validateBearerAuth } from "@/api/lib/auth";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { subscribe } from "@/api/lib/sse";
 
 /**
@@ -45,7 +45,7 @@ export const workspaceEventsRoute = new Elysia({
     });
   },
   {
-    params: t.Object({ workspaceId: tNanoid }),
+    params: t.Object({ workspaceId: tUuid }),
     query: t.Object({ token: t.String({ minLength: 1 }) }),
   },
 );

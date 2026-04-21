@@ -172,7 +172,7 @@ export const KanbanCard = ({
             }
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
-                <StatusCell entity={entity} />
+                <StatusCell entity={entity} workspaceId={workspaceId} />
               </div>
             );
           }
@@ -182,7 +182,7 @@ export const KanbanCard = ({
             }
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
-                <PriorityCell entity={entity} />
+                <PriorityCell entity={entity} workspaceId={workspaceId} />
               </div>
             );
           }
@@ -192,7 +192,7 @@ export const KanbanCard = ({
             }
             return (
               <div className="text-muted-foreground text-xs" key={fieldId}>
-                <DueDateCell entity={entity} />
+                <DueDateCell entity={entity} workspaceId={workspaceId} />
               </div>
             );
           }

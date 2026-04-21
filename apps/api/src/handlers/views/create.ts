@@ -10,7 +10,7 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcast } from "@/api/lib/sse";
@@ -19,7 +19,7 @@ import { viewLayoutSchema } from "@/api/lib/views-schema";
 const config = {
   permissions: { view: ["create"] },
   body: t.Object({
-    id: tNanoid,
+    id: tUuid,
     name: tDefaultVarchar,
     layout: t.Any(),
   }),

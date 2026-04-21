@@ -6,7 +6,7 @@ import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -15,8 +15,8 @@ const config = {
     entity: ["create", "update"],
   },
   body: t.Object({
-    propertyId: tNanoid,
-    entityId: tNanoid,
+    propertyId: tUuid,
+    entityId: tUuid,
     content: t.Union([
       t.Object({
         version: t.Literal(1),

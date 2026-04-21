@@ -677,6 +677,7 @@
     "failedToUpdateWorkspace": "Neizdevās atjaunināt lietu",
     "failedToUploadFiles": "Neizdevās augšupielādēt failus",
     "failedToVerifyOtp": "Neizdevās verificēt kodu",
+    "matterNotFound": "Lieta nav atrasta",
     "partyAlreadyExists": "Kontaktam jau ir šī loma lietā",
     "slugAlreadyTaken": "Šis slug jau ir aizņemts",
     "uploadFailed": "Augšupielāde neizdevās"

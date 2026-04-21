@@ -17,6 +17,9 @@ export const formatRelativeTime = (
   const now = Date.now();
   const then =
     typeof date === "string" ? new Date(date).getTime() : date.getTime();
+  if (Number.isNaN(then)) {
+    return "";
+  }
   const diff = Math.round((then - now) / 1000);
   const absDiff = Math.abs(diff);
 

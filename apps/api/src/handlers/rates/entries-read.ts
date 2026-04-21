@@ -5,16 +5,14 @@ import { t } from "elysia";
 import { user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 
 const readRateEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 500 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
 });
 
-const rateEntryParamsSchema = t.Object({
-  rateTableId: tNanoid,
-});
+const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
 
 const readRateEntries = createSafeHandler(
   {

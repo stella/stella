@@ -6,12 +6,12 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createExpenseBodySchema = t.Object({
-  matterId: tNanoid,
+  matterId: tUuid,
   dateIncurred: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   amount: t.Integer({ minimum: 1 }),

@@ -107,7 +107,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
           sortHint="text"
         />
       ),
-      cell: (props) => <StatusCell entity={props.row.original} />,
+      cell: (props) => (
+        <StatusCell entity={props.row.original} workspaceId={workspaceId} />
+      ),
       size: 120,
     });
 
@@ -123,7 +125,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
           sortHint="text"
         />
       ),
-      cell: (props) => <PriorityCell entity={props.row.original} />,
+      cell: (props) => (
+        <PriorityCell entity={props.row.original} workspaceId={workspaceId} />
+      ),
       size: 100,
     });
 
@@ -139,7 +143,9 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
           sortHint="date"
         />
       ),
-      cell: (props) => <DueDateCell entity={props.row.original} />,
+      cell: (props) => (
+        <DueDateCell entity={props.row.original} workspaceId={workspaceId} />
+      ),
       size: 120,
     });
 

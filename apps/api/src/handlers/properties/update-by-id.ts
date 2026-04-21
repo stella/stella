@@ -16,7 +16,11 @@ import {
 } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import {
+  tDefaultVarchar,
+  tUuid,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
@@ -71,7 +75,7 @@ const updatePropertyBodySchema = t.Object({
       t.Object({
         dependencies: t.Array(
           t.Object({
-            dependsOnPropertyId: tNanoid,
+            dependsOnPropertyId: tUuid,
             condition: t.Nullable(propertyConditionSchema),
           }),
         ),
@@ -83,9 +87,7 @@ const updatePropertyBodySchema = t.Object({
 
 const config = {
   permissions: { property: ["update"] },
-  params: t.Object({
-    propertyId: tNanoid,
-  }),
+  params: workspaceParams({ propertyId: tUuid }),
   body: updatePropertyBodySchema,
 } satisfies HandlerConfig;
 

@@ -9,13 +9,13 @@ import {
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid } from "@/api/lib/custom-schema";
 
 const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
   userId: t.Optional(t.String({ minLength: 1 })),
-  matterId: t.Optional(tNanoid),
+  matterId: t.Optional(tUuid),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   status: t.Optional(timeEntryStatusSchema),

@@ -10,17 +10,15 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tNanoid } from "@/api/lib/custom-schema";
+import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const addEntriesBodySchema = t.Object({
-  timeEntryIds: t.Optional(t.Array(tNanoid, { minItems: 1, maxItems: 500 })),
-  expenseIds: t.Optional(t.Array(tNanoid, { minItems: 1, maxItems: 500 })),
+  timeEntryIds: t.Optional(t.Array(tUuid, { minItems: 1, maxItems: 500 })),
+  expenseIds: t.Optional(t.Array(tUuid, { minItems: 1, maxItems: 500 })),
 });
 
-const invoiceParamsSchema = t.Object({
-  invoiceId: tNanoid,
-});
+const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
 
 const addEntries = createSafeHandler(
   {

@@ -6,7 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db";
 import { clauseCategories } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tNanoid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -16,13 +16,13 @@ import { pickDefined } from "@/api/lib/pick-defined";
 export const createCategoryBodySchema = t.Object({
   name: tDefaultVarchar,
   description: t.Optional(t.String({ maxLength: 2000 })),
-  parentId: t.Optional(tNanoid),
+  parentId: t.Optional(tUuid),
 });
 
 export const updateCategoryBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  parentId: t.Optional(t.Nullable(tNanoid)),
+  parentId: t.Optional(t.Nullable(tUuid)),
   sortOrder: t.Optional(t.Integer({ minimum: 0 })),
 });
 
