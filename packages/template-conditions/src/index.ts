@@ -106,7 +106,7 @@ const parseNumeric = (raw: string): number | undefined => {
 const resolveToken = (
   token: Token,
   data: Record<string, unknown>,
-  namedConditions?: NamedCondition[],
+  namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
 ): unknown => {
   if (token.type === "string") {
@@ -206,7 +206,7 @@ type Atom = { negated: boolean; value: boolean };
  * Find the matching closing parenthesis for an opening
  * paren at `start`. Returns the index of the `)` token.
  */
-const findMatchingParen = (tokens: Token[], start: number): number => {
+const findMatchingParen = (tokens: readonly Token[], start: number): number => {
   let depth = 1;
   for (let j = start + 1; j < tokens.length; j++) {
     const tok = tokens[j];
@@ -231,9 +231,9 @@ const findMatchingParen = (tokens: Token[], start: number): number => {
  * explicit grouping.
  */
 const evaluateTokens = (
-  tokens: Token[],
+  tokens: readonly Token[],
   data: Record<string, unknown>,
-  namedConditions?: NamedCondition[],
+  namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
 ): boolean => {
   const atoms: Atom[] = [];
@@ -357,7 +357,7 @@ const evaluateTokens = (
 export const evaluateCondition = (
   expression: string,
   data: Record<string, unknown>,
-  namedConditions?: NamedCondition[],
+  namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
 ): boolean => {
   if (namedConditions) {

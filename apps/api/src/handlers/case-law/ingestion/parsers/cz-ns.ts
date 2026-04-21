@@ -329,7 +329,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
    * boundaries in older <br>-based HTML) and push each
    * segment as a separate chunk.
    */
-  const flushInlines = (inlines: Inline[], centered: boolean) => {
+  const flushInlines = (inlines: readonly Inline[], centered: boolean) => {
     const segments: Inline[][] = [[]];
     let consecutiveBr = 0;
 
@@ -385,7 +385,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     bufferCentered = false;
   };
 
-  const appendToBuffer = (inlines: Inline[], centered: boolean) => {
+  const appendToBuffer = (inlines: readonly Inline[], centered: boolean) => {
     if (centered) {
       bufferCentered = true;
     }
@@ -517,7 +517,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
 
 // ── Helpers (must precede classifyBlocks) ─────────────────
 
-const inlinesToPlainText = (inlines: Inline[]): string => {
+const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const inline of inlines) {
     switch (inline.type) {
@@ -545,7 +545,7 @@ const inlinesToPlainText = (inlines: Inline[]): string => {
   return text;
 };
 
-export const blocksToPlainText = (blocks: Block[]): string =>
+export const blocksToPlainText = (blocks: readonly Block[]): string =>
   blocks
     .map((block) => block.plainText)
     .join("\n\n")

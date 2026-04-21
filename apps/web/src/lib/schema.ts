@@ -17,7 +17,7 @@ export const emailSchema = () =>
 export const optionalSearchStringSchema = () =>
   v.optional(v.pipe(v.string(), v.trim(), v.transform(toUndefinedIfEmpty)));
 
-const fieldErrorsToString = (errors: unknown[]): string | null => {
+const fieldErrorsToString = (errors: readonly unknown[]): string | null => {
   if (errors.length === 0) {
     return null;
   }

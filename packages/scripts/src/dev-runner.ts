@@ -178,7 +178,7 @@ const validateOffset = (offset: number, source: string) => {
   }
 };
 
-export const parseArgs = (args: string[]): ParsedArgs => {
+export const parseArgs = (args: readonly string[]): ParsedArgs => {
   let mode: DevMode = "dev";
   let portOffset: number | undefined;
   let infraOffset: number | undefined;
@@ -1384,7 +1384,7 @@ const main = async () => {
     process.exit(exitCode);
   };
 
-  const startSteps = (steps: Step[]) => {
+  const startSteps = (steps: readonly Step[]) => {
     for (const step of steps) {
       children.push(spawnPersistentStep(step));
     }

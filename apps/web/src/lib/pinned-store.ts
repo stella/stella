@@ -17,7 +17,7 @@ const readFromStorage = (userId: string): string[] => {
   }
 };
 
-const writeToStorage = (userId: string, ids: string[]) => {
+const writeToStorage = (userId: string, ids: readonly string[]) => {
   localStorage.setItem(PINNED_LS_PREFIX + userId, JSON.stringify(ids));
 };
 

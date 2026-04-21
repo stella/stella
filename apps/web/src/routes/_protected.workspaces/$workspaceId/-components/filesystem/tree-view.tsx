@@ -151,7 +151,9 @@ type FilesystemViewProps = {
 };
 
 /** Collect all folder entity IDs from a flat entity list. */
-const collectFolderIds = (entities: WorkspaceEntity[]): Set<string> => {
+const collectFolderIds = (
+  entities: readonly WorkspaceEntity[],
+): Set<string> => {
   const ids = new Set<string>();
   for (const e of entities) {
     if (e.kind === "folder") {
@@ -273,7 +275,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // Cmd+A: select all visible entities.
   const allVisibleIds = useMemo(() => {
     const ids = new Set<string>();
-    const collect = (nodes: TableTreeNode[]) => {
+    const collect = (nodes: readonly TableTreeNode[]) => {
       for (const n of nodes) {
         ids.add(n.entityId);
         if (n.children.length > 0) {

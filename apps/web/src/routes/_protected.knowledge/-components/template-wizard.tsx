@@ -77,7 +77,9 @@ const inferInputType = (field: ResolvedField): InputType => {
   return "text";
 };
 
-export const buildEditableFields = (fields: ResolvedField[]): EditableField[] =>
+export const buildEditableFields = (
+  fields: readonly ResolvedField[],
+): EditableField[] =>
   fields.map((f) => ({
     path: f.path,
     kind: f.kind,

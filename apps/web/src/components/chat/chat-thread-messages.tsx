@@ -58,7 +58,7 @@ const IMAGE_MEDIA_TYPES = new Set([
   "image/gif",
 ]);
 
-const UserAttachments = ({ parts }: { parts: FileUIPart[] }) => {
+const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
   if (parts.length === 0) {
     return null;
   }
@@ -126,7 +126,9 @@ const ThinkingIndicator = () => {
   );
 };
 
-const hasVisibleContent = (messages: PersistedChatMessage[]): boolean => {
+const hasVisibleContent = (
+  messages: readonly PersistedChatMessage[],
+): boolean => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message || message.role !== "assistant") {

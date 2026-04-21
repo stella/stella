@@ -23,7 +23,7 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_DISPLAYED_FAILURES = 5;
 
-const formatFailedFiles = (names: string[]): string => {
+const formatFailedFiles = (names: readonly string[]): string => {
   const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
   const remaining = names.length - shown.length;
   const list = shown.join(", ");

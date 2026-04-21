@@ -286,7 +286,7 @@ const walkInlines = (
   return inlines;
 };
 
-const inlinesToPlainText = (inlines: Inline[]): string => {
+const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   let text = "";
 
   for (const inline of inlines) {

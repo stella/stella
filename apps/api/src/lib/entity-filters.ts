@@ -319,7 +319,7 @@ const internalSortExpr = (
  * extracts the sort key from the fields table.
  * Falls back to createdAt ASC when no sorts are provided.
  */
-export const buildSortExpressions = (sorts: ViewSort[]): SQL[] => {
+export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
   if (sorts.length === 0) {
     return [asc(entities.createdAt), asc(entities.id)];
   }

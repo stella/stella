@@ -255,7 +255,7 @@ const fetchPdfBytes = async (
 
 // ── Item parsing ─────────────────────────────────────────
 
-const dedupe = (arr: string[] | undefined): string[] =>
+const dedupe = (arr: readonly string[] | undefined): string[] =>
   arr ? [...new Set(arr)] : [];
 
 const parseDocument = async (

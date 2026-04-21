@@ -110,7 +110,9 @@ export const cleanStalePropertyIds = (
   return changed;
 };
 
-export const hasDuplicateSorts = (sorts: { propertyId: string }[]): boolean => {
+export const hasDuplicateSorts = (
+  sorts: readonly { propertyId: string }[],
+): boolean => {
   const seen = new Set<string>();
   for (const s of sorts) {
     if (seen.has(s.propertyId)) {
@@ -121,8 +123,9 @@ export const hasDuplicateSorts = (sorts: { propertyId: string }[]): boolean => {
   return false;
 };
 
-export const hasMultipleKindFilters = (filters: { field: string }[]): boolean =>
-  filters.filter((f) => f.field === "kind").length > 1;
+export const hasMultipleKindFilters = (
+  filters: readonly { field: string }[],
+): boolean => filters.filter((f) => f.field === "kind").length > 1;
 
 export const convertLayout = (
   source: ViewLayout,

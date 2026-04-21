@@ -45,7 +45,7 @@ export const includesValue = <T extends string>(
   // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
   (arr as readonly string[]).includes(value);
 
-export const shuffleArray = <T>(originalArray: T[]): T[] => {
+export const shuffleArray = <T>(originalArray: readonly T[]): T[] => {
   const array = [...originalArray];
 
   for (let i = array.length - 1; i > 0; i--) {

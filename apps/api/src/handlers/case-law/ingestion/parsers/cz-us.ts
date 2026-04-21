@@ -267,7 +267,7 @@ const _walkInlines = (
   return inlines;
 };
 
-const inlinesToPlainText = (inlines: Inline[]): string => {
+const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
@@ -492,9 +492,12 @@ const makeAnchorId = (prefix: string, index: number): string =>
 /**
  * Strip a character-counted prefix from inlines.
  */
-const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
+const stripInlinePrefix = (
+  inlines: readonly Inline[],
+  charCount: number,
+): Inline[] => {
   if (charCount <= 0) {
-    return inlines;
+    return [...inlines];
   }
 
   const result: Inline[] = [];
@@ -560,7 +563,7 @@ const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
  *   2. Výrok / ruling zone (between "takto:" and "Odůvodnění:")
  *   3. Odůvodnění zone (after "Odůvodnění:")
  */
-const classifyLines = (lines: ParsedLine[]): Block[] => {
+const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
     blockCounter += 1;
@@ -790,7 +793,7 @@ const classifyLines = (lines: ParsedLine[]): Block[] => {
 
 /** Find the next line with non-empty plainText. */
 const findNextNonEmpty = (
-  lines: ParsedLine[],
+  lines: readonly ParsedLine[],
   startIndex: number,
 ): ParsedLine | undefined => {
   for (let j = startIndex; j < lines.length; j++) {
@@ -807,7 +810,7 @@ const findNextNonEmpty = (
  * in the caller. Kept for clarity of intent.
  */
 const skipToLine = (
-  _lines: ParsedLine[],
+  _lines: readonly ParsedLine[],
   _current: number,
   _target: ParsedLine,
 ): void => {

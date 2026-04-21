@@ -6,10 +6,10 @@ import { useParams } from "@tanstack/react-router";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
-const normalizeEntityIds = (entityIds: string[]) =>
+const normalizeEntityIds = (entityIds: readonly string[]) =>
   [...new Set(entityIds)].toSorted();
 
-export const useSyncJustifications = (entityIds: string[]) => {
+export const useSyncJustifications = (entityIds: readonly string[]) => {
   const workspaceId = useParams({
     from: "/_protected/workspaces/$workspaceId",
     select: (params) => params.workspaceId,

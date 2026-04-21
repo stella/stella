@@ -206,7 +206,7 @@ const readUserFilesByIds = async ({
   return rowsResult.map((rows) => new Map(rows.map((row) => [row.id, row])));
 };
 
-const collectMessageUserFileIds = (messages: ChatMessage[]) => {
+const collectMessageUserFileIds = (messages: readonly ChatMessage[]) => {
   const ids = new Set<string>();
 
   for (const message of messages) {

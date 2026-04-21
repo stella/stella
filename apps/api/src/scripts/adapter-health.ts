@@ -151,7 +151,7 @@ const SOURCE_TOTAL_TIMEOUT = 10_000;
 
 // ── Helpers ─────────────────────────────────────────────
 
-const parseWindowArg = (args: string[]): number => {
+const parseWindowArg = (args: readonly string[]): number => {
   const idx = args.indexOf("--since");
   if (idx === -1 || idx + 1 >= args.length) {
     return 24; // default: 24h

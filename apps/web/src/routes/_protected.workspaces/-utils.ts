@@ -5,7 +5,7 @@ import type {
 } from "@/routes/_protected.workspaces/-types";
 
 export const getUniqueClientsFromWorkspace = (
-  workspaces: Workspace[],
+  workspaces: readonly Workspace[],
 ): { id: string; displayName: string }[] => {
   const map = new Map<string, { id: string; displayName: string }>();
   for (const ws of workspaces) {
@@ -16,7 +16,9 @@ export const getUniqueClientsFromWorkspace = (
   );
 };
 
-export const groupByClient = (workspaces: Workspace[]): WorkspaceGroup[] => {
+export const groupByClient = (
+  workspaces: readonly Workspace[],
+): WorkspaceGroup[] => {
   const groups = new Map<string, WorkspaceGroup>();
 
   for (const ws of workspaces) {

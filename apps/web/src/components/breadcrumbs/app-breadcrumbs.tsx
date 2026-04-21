@@ -20,7 +20,8 @@ import type { RouterFullPath } from "@/lib/types";
 
 const PATH_SEPARATOR = "|";
 
-const serializeKey = (paths: RouterFullPath[]) => paths.join(PATH_SEPARATOR);
+const serializeKey = (paths: readonly RouterFullPath[]) =>
+  paths.join(PATH_SEPARATOR);
 // SAFETY: key comes from breadcrumbMap keys built from RouterFullPath[]
 const deserializeKey = (key: string) =>
   // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion

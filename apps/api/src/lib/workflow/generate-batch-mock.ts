@@ -20,7 +20,9 @@ import type {
 import { parseJustificationXml } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
-const getValueFromInputFields = (input: FieldContentForAI[]): string => {
+const getValueFromInputFields = (
+  input: readonly FieldContentForAI[],
+): string => {
   const values = input.map((field) => {
     switch (field.type) {
       case "file":

@@ -121,7 +121,7 @@ const insHasContent: Rule = (doc) => {
 const revisionAttrs: Rule = (doc) => {
   const violations: OoxmlViolation[] = [];
 
-  const check = (elements: slimdom.Element[], tag: string) => {
+  const check = (elements: readonly slimdom.Element[], tag: string) => {
     for (const el of elements) {
       const id =
         el.getAttributeNS(W_NS, "id") ?? el.getAttribute("w:id") ?? "?";

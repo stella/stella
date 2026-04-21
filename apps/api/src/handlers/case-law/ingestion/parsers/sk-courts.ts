@@ -217,7 +217,7 @@ type PdfTextLine = {
  * Most body text lines start at the same X position;
  * lines starting further right have leading redaction.
  */
-const detectLeftMargin = (lines: PdfTextLine[]): number => {
+const detectLeftMargin = (lines: readonly PdfTextLine[]): number => {
   const xCounts = new Map<number, number>();
   for (const line of lines) {
     if (line.spans.length === 0) {
@@ -389,7 +389,7 @@ function isStructuralStart(line: PdfLine): boolean {
   return false;
 }
 
-const mergeWrappedLines = (lines: PdfLine[]): PdfLine[] => {
+const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
 
   for (const line of lines) {
@@ -459,7 +459,7 @@ const HEADER_LABELS = [
 const isHeaderLine = (text: string): boolean =>
   HEADER_LABELS.some((label) => text.startsWith(label));
 
-const skipHeaderLines = (lines: PdfLine[]): PdfLine[] => {
+const skipHeaderLines = (lines: readonly PdfLine[]): PdfLine[] => {
   // Skip header lines at the start of the document
   let i = 0;
   while (i < lines.length && isHeaderLine(lines[i]?.text ?? "")) {
@@ -548,7 +548,7 @@ type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
  * or last line on its PDF page (page headers/footers).
  * This is more robust than matching digit patterns alone.
  */
-const isPageNumber = (line: PdfLine, allLines: PdfLine[]): boolean => {
+const isPageNumber = (line: PdfLine, allLines: readonly PdfLine[]): boolean => {
   if (!/^\d{1,4}$/.test(line.text.trim())) {
     return false;
   }
@@ -582,7 +582,7 @@ const isPageNumber = (line: PdfLine, allLines: PdfLine[]): boolean => {
  * Bold and font size come directly from PDF font metadata;
  * no heuristic regex splitting needed.
  */
-const classifyLines = (lines: PdfLine[]): Block[] => {
+const classifyLines = (lines: readonly PdfLine[]): Block[] => {
   const makeId = createIdGenerator();
   let blockCount = 0;
   const blocks: Block[] = [];

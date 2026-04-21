@@ -82,7 +82,7 @@ const extractWords = (text: string): Set<string> => {
 };
 
 /** Count characters across all inline nodes. */
-const inlineTextLength = (inlines: Inline[]): number => {
+const inlineTextLength = (inlines: readonly Inline[]): number => {
   let len = 0;
   for (const node of inlines) {
     if (node.type === "text") {
@@ -369,7 +369,7 @@ export const validateAndLog = (
  * validator's cheerio-based word extraction sees proper word
  * boundaries between paragraphs.
  */
-export const buildValidationHtml = (paragraphs: string[]): string => {
+export const buildValidationHtml = (paragraphs: readonly string[]): string => {
   const parts = paragraphs.filter((p) => p.trim()).map((p) => `<p>${p}</p>`);
   return `<body>${parts.join("")}</body>`;
 };

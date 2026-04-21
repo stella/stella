@@ -167,7 +167,7 @@ const getCompatSearchHits = (result: unknown): unknown[] => {
   return Array.isArray(hits) ? hits : [];
 };
 
-const getCompatSearchEntityIds = (hits: unknown[]) =>
+const getCompatSearchEntityIds = (hits: readonly unknown[]) =>
   hits.flatMap((hit) => {
     if (typeof hit !== "object" || hit === null || !("entityId" in hit)) {
       return [];

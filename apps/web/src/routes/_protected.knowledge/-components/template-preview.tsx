@@ -158,7 +158,11 @@ const ALIGNMENT_CLASS: Record<string, string> = {
 const LINE_OFFSET = 16; // px per depth level
 
 /** Thin vertical connector lines for active block spans. */
-const ConnectorLines = ({ activeSpans }: { activeSpans: BlockSpan[] }) => (
+const ConnectorLines = ({
+  activeSpans,
+}: {
+  activeSpans: readonly BlockSpan[];
+}) => (
   <>
     {activeSpans.map((span) => (
       <div

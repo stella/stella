@@ -86,7 +86,13 @@ const MetadataField = ({
   );
 };
 
-const TagList = ({ label, values }: { label: string; values: string[] }) => {
+const TagList = ({
+  label,
+  values,
+}: {
+  label: string;
+  values: readonly string[];
+}) => {
   if (values.length === 0) {
     return null;
   }

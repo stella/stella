@@ -6,8 +6,9 @@ import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 
 import type { DecisionSection } from "./types";
 
-const sectionsToPlainText = (sections: DecisionSection[] | null): string =>
-  sections?.map((s) => s.text).join(" ") ?? "";
+const sectionsToPlainText = (
+  sections: readonly DecisionSection[] | null,
+): string => sections?.map((s) => s.text).join(" ") ?? "";
 
 /**
  * Upsert a decision into the `case_law_search_documents` table,

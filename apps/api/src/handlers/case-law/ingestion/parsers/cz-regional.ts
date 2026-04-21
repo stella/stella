@@ -306,7 +306,7 @@ const toInlines = (
   return { inlines, plainText: plain.trim() };
 };
 
-const inlinePlainLength = (nodes: Inline[]): number => {
+const inlinePlainLength = (nodes: readonly Inline[]): number => {
   let len = 0;
   for (const n of nodes) {
     if (n.type === "text") {
@@ -319,9 +319,12 @@ const inlinePlainLength = (nodes: Inline[]): number => {
 };
 
 /** Strip N characters from the front of inlines. */
-const stripPrefix = (inlines: Inline[], charCount: number): Inline[] => {
+const stripPrefix = (
+  inlines: readonly Inline[],
+  charCount: number,
+): Inline[] => {
   if (charCount <= 0) {
-    return inlines;
+    return [...inlines];
   }
 
   const result: Inline[] = [];
