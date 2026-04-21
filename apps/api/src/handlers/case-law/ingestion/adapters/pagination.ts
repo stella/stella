@@ -52,6 +52,11 @@ type PagePaginationOptions<TResponse> = {
     total?: number | undefined;
   };
   /**
+   * Per-request timeout for the list/page fetch (ms).
+   * Defaults to ADAPTER_TIMEOUT.LIST (15s).
+   */
+  listTimeoutMs?: number | undefined;
+  /**
    * Transform a single raw item into an IngestionResult.
    * May perform secondary fetches (detail pages, fulltext).
    * Return null to skip the item.
@@ -117,6 +122,7 @@ export const createPagePaginatedFetch = <TResponse>(
         const { url, init } = opts.buildRequest(page);
 
         // Retry on 5xx up to SERVER_ERROR_RETRIES times
+        const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
         let response: Response | undefined;
         for (let attempt = 0; attempt <= SERVER_ERROR_RETRIES; attempt++) {
           const headers = new Headers(init?.headers);
@@ -127,11 +133,8 @@ export const createPagePaginatedFetch = <TResponse>(
             ...init,
             headers,
             signal: signal
-              ? AbortSignal.any([
-                  signal,
-                  AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-                ])
-              : AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
+              ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
+              : AbortSignal.timeout(listTimeout),
           });
 
           if (response.ok || response.status < 500) {

@@ -336,6 +336,7 @@ export const skCourtsAdapter: SourceAdapter = {
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
     zeroIndexed: true,
+    listTimeoutMs: 30_000,
 
     buildRequest: (page) => ({
       url: `${BASE_URL}?${new URLSearchParams({

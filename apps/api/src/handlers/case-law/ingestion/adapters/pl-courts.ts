@@ -149,7 +149,7 @@ type SaosItem = {
   meansOfAppeal?: string | null;
   judgmentResult?: string | null;
   lowerCourtJudgments?: SaosCourtCase[] | null;
-  dissentingOpinions?: string[] | null;
+  dissentingOpinions?: unknown[] | null;
 };
 
 type SaosDumpResponse = {
@@ -263,23 +263,12 @@ const isSaosItem = (value: unknown): value is SaosItem =>
   isNullishString(value.meansOfAppeal) &&
   isNullishString(value.judgmentResult) &&
   isNullishArrayOf(value.lowerCourtJudgments, isSaosCourtCase) &&
-  isOptionalStringArray(value.dissentingOpinions);
-
-const isPageValue = (value: unknown): value is { value?: number | null } =>
-  isRecord(value) && isNullishNumber(value.value);
+  (value.dissentingOpinions === undefined ||
+    value.dissentingOpinions === null ||
+    Array.isArray(value.dissentingOpinions));
 
 const isSaosDumpResponse = (value: unknown): value is SaosDumpResponse =>
-  isRecord(value) &&
-  isNullishArrayOf(value.items, isSaosItem) &&
-  isNullishValue(
-    value.queryTemplate,
-    (
-      queryTemplate,
-    ): queryTemplate is NonNullable<SaosDumpResponse["queryTemplate"]> =>
-      isRecord(queryTemplate) &&
-      isNullishValue(queryTemplate.pageNumber, isPageValue) &&
-      isNullishValue(queryTemplate.pageSize, isPageValue),
-  );
+  isRecord(value) && isNullishArrayOf(value.items, isRecord);
 
 const isSaosSearchResponse = (value: unknown): value is SaosSearchResponse =>
   isRecord(value) &&
@@ -414,6 +403,29 @@ const fetchDetail = async (
 const publicSourceUrl = (id: number | null | undefined): string | undefined =>
   id !== undefined && id !== null ? `${PUBLIC_JUDGMENT_URL}/${id}` : undefined;
 
+/**
+ * SAOS dissentingOpinions can be plain strings OR objects
+ * with a `textContent` field. Normalize to string[].
+ * Unknown shapes are dropped (stored verbatim in sourceRaw).
+ */
+const normalizeDissentingOpinions = (
+  opinions: unknown[] | null | undefined,
+): string[] => {
+  if (!opinions) {
+    return [];
+  }
+  const result: string[] = [];
+  for (const opinion of opinions) {
+    if (typeof opinion === "string") {
+      result.push(opinion);
+    } else if (isRecord(opinion) && typeof opinion.textContent === "string") {
+      result.push(opinion.textContent);
+    }
+    // Other shapes dropped; raw data preserved in sourceRaw for re-parsing.
+  }
+  return result;
+};
+
 const courtNameForItem = (item: SaosItem): string | undefined =>
   toOptionalValue(
     item.division?.court?.name ??
@@ -426,11 +438,16 @@ const parseItemWithDetail = async (
   raw: unknown,
   signal?: AbortSignal,
 ): Promise<IngestionResult | null> => {
-  if (!isSaosItem(raw)) {
+  if (!isRecord(raw)) {
     return null;
   }
 
-  const dumpItem = raw;
+  // SAFETY: All SaosItem fields are optional/nullable. The function
+  // accesses them with optional chaining and null checks throughout.
+  // Full isSaosItem validation was moved out of the hot path because
+  // a single unexpected field type (e.g. dissentingOpinions as object)
+  // would reject the entire page, blocking all ingestion.
+  const dumpItem = raw as SaosItem;
   const detail =
     dumpItem.id !== undefined && dumpItem.id !== null
       ? await fetchDetail(dumpItem.id, signal)
@@ -555,8 +572,9 @@ const parseItemWithDetail = async (
       ),
       lowerCourtJudgments:
         item.lowerCourtJudgments ?? dumpItem.lowerCourtJudgments ?? [],
-      dissentingOpinions:
+      dissentingOpinions: normalizeDissentingOpinions(
         item.dissentingOpinions ?? dumpItem.dissentingOpinions ?? [],
+      ),
       ingestion: {
         dumpHash: rawHash,
         sourceTier: detail ? "detail" : "dump",
