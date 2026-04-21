@@ -640,6 +640,7 @@ export const plCourtsAdapter: SourceAdapter = {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize: PAGE_SIZE,
     zeroIndexed: true,
+    listTimeoutMs: 60_000,
 
     buildRequest: (page) => ({
       url: `${DUMP_URL}?${new URLSearchParams({

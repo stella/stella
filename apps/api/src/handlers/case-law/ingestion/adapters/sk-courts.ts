@@ -331,12 +331,13 @@ export const skCourtsAdapter: SourceAdapter = {
   country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
+  pageTimeoutMs: 120_000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
     zeroIndexed: true,
-    listTimeoutMs: 30_000,
+    listTimeoutMs: 60_000,
 
     buildRequest: (page) => ({
       url: `${BASE_URL}?${new URLSearchParams({
