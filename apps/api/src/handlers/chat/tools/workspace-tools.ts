@@ -70,20 +70,22 @@ const formatFieldValue = (content: FieldContent): string => {
 };
 
 type WorkspaceToolsContext = {
-  allowedWorkspaceIds: SafeId<"workspace">[];
+  allowedWorkspaceIds: readonly SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
 };
 
-const createAllowedWorkspaceIdMap = (allowedIds: SafeId<"workspace">[]) => {
+const createAllowedWorkspaceIdMap = (
+  allowedIds: readonly SafeId<"workspace">[],
+) => {
   const allowedIdsByValue = new Map<string, SafeId<"workspace">>(
     allowedIds.map((id) => [id, id]),
   );
   return allowedIdsByValue;
 };
 
-const workspaceIdSchema = (allowedIds: SafeId<"workspace">[]) =>
+const workspaceIdSchema = (allowedIds: readonly SafeId<"workspace">[]) =>
   v.pipe(
     v.string(),
     v.description(

@@ -39,7 +39,7 @@ const isTextItem = (item: { str?: string; type?: string }): item is TextItem =>
  * Extract font size from a pdfjs TextItem transform matrix.
  * The transform is [scaleX, skewY, skewX, scaleY, tx, ty].
  */
-const getFontSize = (transform: number[]): number => {
+const getFontSize = (transform: readonly number[]): number => {
   const scaleX = transform.at(0) ?? 0;
   const scaleY = transform.at(3) ?? 0;
   return Math.abs(scaleY) || Math.abs(scaleX) || 12;

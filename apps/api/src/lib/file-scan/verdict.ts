@@ -6,7 +6,9 @@ const VERDICT_PRIORITY: Record<ScanVerdict, number> = {
   reject: 2,
 };
 
-export const aggregateVerdict = (findings: ScanFinding[]): ScanVerdict => {
+export const aggregateVerdict = (
+  findings: readonly ScanFinding[],
+): ScanVerdict => {
   let highest: ScanVerdict = "pass";
 
   for (const f of findings) {

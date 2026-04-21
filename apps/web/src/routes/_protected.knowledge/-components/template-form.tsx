@@ -141,7 +141,7 @@ type TemplateFormProps = TransientFillProps | ServerFillProps;
 
 type FormValues = Record<string, unknown>;
 
-const groupFieldsByPrefix = (fields: ResolvedField[]) => {
+const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
   const groups = new Map<string, ResolvedField[]>();
 
   for (const field of fields) {
@@ -165,7 +165,7 @@ const getDefaultValue = (field: ResolvedField): unknown => {
   return "";
 };
 
-const buildInitialValues = (fields: ResolvedField[]): FormValues => {
+const buildInitialValues = (fields: readonly ResolvedField[]): FormValues => {
   const values: FormValues = {};
   for (const field of fields) {
     if (field.kind !== "array") {
@@ -184,7 +184,7 @@ const buildInitialValues = (fields: ResolvedField[]): FormValues => {
 const isFieldVisible = (
   field: ResolvedField,
   values: FormValues,
-  conditions: NamedCondition[],
+  conditions: readonly NamedCondition[],
 ): boolean => {
   if (!field.visibleWhen) {
     return true;

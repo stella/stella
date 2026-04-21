@@ -73,7 +73,7 @@ type GroupedTasks = {
   tasks: ValidTask[];
 };
 
-const groupByWorkspace = (tasks: ValidTask[]): GroupedTasks[] => {
+const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
   const map = new Map<string, GroupedTasks>();
 
   for (const task of tasks) {

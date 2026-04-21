@@ -201,7 +201,7 @@ export const buildBatchSchema = (
 
 // --------------- User message templates ---------------
 
-export const buildTextInputsMessage = (textInputs: TextInput[]) => {
+export const buildTextInputsMessage = (textInputs: readonly TextInput[]) => {
   const list = textInputs
     .map(({ propertyId, value }) => `- ${propertyId}: ${value}`)
     .join("\n");
@@ -213,7 +213,7 @@ export const buildTextInputsMessage = (textInputs: TextInput[]) => {
 };
 
 export const buildPromptsMessage = (
-  properties: {
+  properties: readonly {
     id: string;
     tool: { prompt: string };
   }[],

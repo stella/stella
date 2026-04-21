@@ -82,7 +82,11 @@ const badgeStyle = {
   border: "2px solid var(--color-card, #fff)",
 } as const;
 
-const MultiPreviewContent = ({ items }: { items: DragPreviewData[] }) => {
+const MultiPreviewContent = ({
+  items,
+}: {
+  items: readonly DragPreviewData[];
+}) => {
   const first = items[0];
   if (!first) {
     return null;

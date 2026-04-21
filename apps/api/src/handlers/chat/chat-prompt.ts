@@ -288,7 +288,9 @@ const buildWorkspaceContextSections = ({
   return sections;
 };
 
-const buildMetadataColumnsSection = (properties: WorkspacePromptProperty[]) => {
+const buildMetadataColumnsSection = (
+  properties: readonly WorkspacePromptProperty[],
+) => {
   const propertyLines = properties
     .filter(({ status }) => status !== UNINITIALIZED_PROPERTY_STATUS)
     .map(formatMetadataColumnLine);

@@ -130,7 +130,9 @@ export type PdfSegment = {
  * detection). Consecutive non-bold text segments merge
  * into one inline to reduce fragment count.
  */
-export const segmentsToInlines = (segments: PdfSegment[]): Inline[] => {
+export const segmentsToInlines = (
+  segments: readonly PdfSegment[],
+): Inline[] => {
   const inlines: Inline[] = [];
 
   for (let i = 0; i < segments.length; i++) {

@@ -23,7 +23,7 @@ export const mapEntityToSpanSlices = ({
   entityStart,
   entityEnd,
 }: {
-  pageSpans: CharSpan[];
+  pageSpans: readonly CharSpan[];
   entityStart: number;
   entityEnd: number;
 }): SpanSlice[] => {
@@ -58,9 +58,11 @@ export const mapEntityToSpanSlices = ({
  * rectangles. Two rects are on the same line if their
  * `top` values are within half the rect height.
  */
-export const mergeAdjacentRects = (rects: OverlayRect[]): OverlayRect[] => {
+export const mergeAdjacentRects = (
+  rects: readonly OverlayRect[],
+): OverlayRect[] => {
   if (rects.length <= 1) {
-    return rects;
+    return [...rects];
   }
 
   const sorted = rects.toSorted((a, b) => {

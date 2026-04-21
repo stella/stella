@@ -154,7 +154,7 @@ export const exportPdfHandler = async ({
  * only supports WinAnsiEncoding; this also ensures
  * string.length === byte length for correct xref offsets.
  */
-const buildMinimalPdf = (lines: string[]): Uint8Array => {
+const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
   const enc = new TextEncoder();
 
   // Replace non-ASCII characters with '?' since Helvetica

@@ -30,7 +30,7 @@ const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
 export const tokenize = (text: string): string[] =>
   text.match(WORD_TOKEN_RE) ?? [];
 
-const mergeAdjacentWordChanges = (diffs: Diff[]): Diff[] => {
+const mergeAdjacentWordChanges = (diffs: readonly Diff[]): Diff[] => {
   const merged: Diff[] = [];
 
   for (let i = 0; i < diffs.length; i++) {

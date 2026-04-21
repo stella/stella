@@ -25,7 +25,7 @@ import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
 
 // ── Conversion: ClauseBody → TipTap JSON ────────────
 
-const clauseBodyToTipTap = (body: ClauseParagraph[]): JSONContent => ({
+const clauseBodyToTipTap = (body: readonly ClauseParagraph[]): JSONContent => ({
   type: "doc",
   content: body
     .filter((p) => !p.isDirective)

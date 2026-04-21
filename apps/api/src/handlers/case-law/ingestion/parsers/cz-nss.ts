@@ -217,7 +217,7 @@ const walkInlines = (
   return inlines;
 };
 
-const inlinesToPlainText = (inlines: Inline[]): string => {
+const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
@@ -491,9 +491,12 @@ const makeAnchorId = (prefix: string, index: number): string =>
  * italic, and other wrapper nodes by recursively counting
  * their text content.
  */
-const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
+const stripInlinePrefix = (
+  inlines: readonly Inline[],
+  charCount: number,
+): Inline[] => {
   if (charCount <= 0) {
-    return inlines;
+    return [...inlines];
   }
 
   const result: Inline[] = [];
@@ -554,7 +557,7 @@ const stripInlinePrefix = (inlines: Inline[], charCount: number): Inline[] => {
   return result;
 };
 
-const classifyChunks = (chunks: PChunk[]): Block[] => {
+const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
     blockCounter += 1;

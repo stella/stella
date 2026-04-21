@@ -581,6 +581,9 @@ const broadcastWorkflowStatus = (workspaceId: string, running: boolean) => {
   }
 };
 
-const broadcastInvalidation = (workspaceId: string, queryKey: string[]) => {
+const broadcastInvalidation = (
+  workspaceId: string,
+  queryKey: readonly string[],
+) => {
   broadcast(workspaceId, { type: "invalidate-query", data: queryKey });
 };

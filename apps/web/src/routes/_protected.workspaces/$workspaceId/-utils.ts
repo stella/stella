@@ -248,7 +248,9 @@ export const formatFullTimestamp = (
 
 // -- Tree utilities (shared between filesystem and table views) --
 
-export const buildTree = (entities: WorkspaceEntity[]): TableTreeNode[] => {
+export const buildTree = (
+  entities: readonly WorkspaceEntity[],
+): TableTreeNode[] => {
   const nodeMap = new Map<string, TableTreeNode>();
   const roots: TableTreeNode[] = [];
 
@@ -278,7 +280,7 @@ export const buildTree = (entities: WorkspaceEntity[]): TableTreeNode[] => {
 };
 
 export const toTableEntities = (
-  entities: WorkspaceEntity[],
+  entities: readonly WorkspaceEntity[],
 ): TableTreeNode[] => {
   const hasFolders = entities.some((e) => e.kind === "folder");
   return hasFolders
@@ -288,7 +290,7 @@ export const toTableEntities = (
 
 /** Find a node by ID in a tree (depth-first). */
 export const findNode = (
-  roots: TableTreeNode[],
+  roots: readonly TableTreeNode[],
   targetId: string,
 ): TableTreeNode | null => {
   const stack = [...roots];
@@ -329,7 +331,7 @@ export const countDescendants = (node: TableTreeNode): number => {
  */
 export const resolveKanbanGroupBy = (
   configuredId: string,
-  properties: WorkspaceProperty[],
+  properties: readonly WorkspaceProperty[],
 ): string => {
   if (configuredId) {
     return configuredId;

@@ -65,7 +65,7 @@ const isHoldingBlock = (block: Block): boolean =>
  * Using `plainText` would misalign match offsets from the inline
  * offsets the highlight renderer uses.
  */
-const inlinesToPlainText = (inlines: Inline[]): string => {
+const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   let out = "";
   for (const node of inlines) {
     if (node.type === "text") {

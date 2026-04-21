@@ -115,7 +115,9 @@ type ParseResult = {
  * Parse a flat list of directives into a nested block tree.
  * Validates matching open/close pairs and reports errors.
  */
-export const parseBlockTree = (directives: BlockDirective[]): ParseResult => {
+export const parseBlockTree = (
+  directives: readonly BlockDirective[],
+): ParseResult => {
   const blocks: Block[] = [];
   const errors: TemplateStructureError[] = [];
 

@@ -16,12 +16,14 @@ import { cn } from "@stella/ui/lib/utils";
 import type { AnalysisHeading } from "./types";
 
 type NavigationPanelProps = {
-  tree: AnalysisHeading[];
+  tree: readonly AnalysisHeading[];
   scrollContainerRef: RefObject<HTMLElement | null>;
 };
 
 /** Flatten headings for scroll tracking. */
-const flattenHeadings = (headings: AnalysisHeading[]): AnalysisHeading[] => {
+const flattenHeadings = (
+  headings: readonly AnalysisHeading[],
+): AnalysisHeading[] => {
   const result: AnalysisHeading[] = [];
   for (const h of headings) {
     result.push(h);

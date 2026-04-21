@@ -38,7 +38,7 @@ export const getEntityBBoxes = ({
   entityEnd,
   measureWidth = canvasMeasureWidth,
 }: {
-  spans: CharSpan[];
+  spans: readonly CharSpan[];
   entityStart: number;
   entityEnd: number;
   measureWidth?: MeasureWidthFn;
@@ -120,9 +120,9 @@ export const getEntityBBoxes = ({
  * they share the same pageIndex and their y coordinates are
  * within half a fontSize of each other.
  */
-export const mergeAdjacentBBoxes = (bboxes: PDFBBox[]): PDFBBox[] => {
+export const mergeAdjacentBBoxes = (bboxes: readonly PDFBBox[]): PDFBBox[] => {
   if (bboxes.length <= 1) {
-    return bboxes;
+    return bboxes.map((bbox) => ({ ...bbox }));
   }
 
   const sorted = bboxes.toSorted((a, b) => {
@@ -140,7 +140,7 @@ export const mergeAdjacentBBoxes = (bboxes: PDFBBox[]): PDFBBox[] => {
   if (first === undefined) {
     return [];
   }
-  const merged: PDFBBox[] = [first];
+  const merged: PDFBBox[] = [{ ...first }];
 
   for (let i = 1; i < sorted.length; i++) {
     const current = sorted[i];
@@ -164,7 +164,7 @@ export const mergeAdjacentBBoxes = (bboxes: PDFBBox[]): PDFBBox[] => {
       prev.height = Math.max(prev.height, current.height);
       prev.fontSize = Math.max(prev.fontSize, current.fontSize);
     } else {
-      merged.push(current);
+      merged.push({ ...current });
     }
   }
 

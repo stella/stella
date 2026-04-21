@@ -104,7 +104,7 @@ type Match = {
   context: string;
 };
 
-const findMatches = (text: string, rules: CompiledRule[]): Match[] => {
+const findMatches = (text: string, rules: readonly CompiledRule[]): Match[] => {
   const matches: Match[] = [];
 
   for (const rule of rules) {

@@ -138,13 +138,13 @@ const rangeKey = (r: HeadingRange): string => `${r.start}:${r.end}`;
  * is empty in today's analyses but the type allows nesting.
  */
 const collectRanges = (
-  nodes: AnalysisHeading[],
+  nodes: readonly AnalysisHeading[],
   idxMap: Map<string, number>,
 ): { all: HeadingRange[]; descendantsByKey: Map<string, Set<string>> } => {
   const all: HeadingRange[] = [];
   const descendantsByKey = new Map<string, Set<string>>();
 
-  const walk = (subtree: AnalysisHeading[]): string[] => {
+  const walk = (subtree: readonly AnalysisHeading[]): string[] => {
     const subKeys: string[] = [];
     for (const node of subtree) {
       const start = idxMap.get(node.startAnchorId);
@@ -171,7 +171,7 @@ const collectRanges = (
 
 const crossesAnotherRange = (
   candidate: HeadingRange,
-  all: HeadingRange[],
+  all: readonly HeadingRange[],
   descendants: Set<string>,
 ): boolean => {
   const candidateKey = rangeKey(candidate);
@@ -208,15 +208,15 @@ const crossesAnotherRange = (
 };
 
 export const buildSectionMap = (
-  headings: AnalysisHeading[],
-  allAnchorIds: string[],
+  headings: readonly AnalysisHeading[],
+  allAnchorIds: readonly string[],
 ): Map<string, SectionInfo> => {
   const map = new Map<string, SectionInfo>();
   const idxMap = new Map(allAnchorIds.map((id, i) => [id, i]));
 
   const { all: allRanges, descendantsByKey } = collectRanges(headings, idxMap);
 
-  const walk = (nodes: AnalysisHeading[]) => {
+  const walk = (nodes: readonly AnalysisHeading[]) => {
     for (const node of nodes) {
       const start = idxMap.get(node.startAnchorId);
       const end = idxMap.get(node.endAnchorId);
@@ -250,11 +250,11 @@ export const buildSectionMap = (
 };
 
 export const flattenAnnotations = (
-  headings: AnalysisHeading[],
+  headings: readonly AnalysisHeading[],
 ): FlatAnnotation[] => {
   const result: FlatAnnotation[] = [];
 
-  const walk = (nodes: AnalysisHeading[]) => {
+  const walk = (nodes: readonly AnalysisHeading[]) => {
     for (const node of nodes) {
       for (const annotation of node.annotations) {
         result.push({

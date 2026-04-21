@@ -102,7 +102,7 @@ const toMentionHref = ({
   id: string;
 }): ChatMentionHref => `${CHAT_MENTION_HREF_PREFIXES[category]}${id}`;
 
-const dedupeMentions = (mentions: ChatMention[]): ChatMention[] => {
+const dedupeMentions = (mentions: readonly ChatMention[]): ChatMention[] => {
   const seen = new Set<string>();
   const deduped: ChatMention[] = [];
 
@@ -125,7 +125,7 @@ const dedupeMentions = (mentions: ChatMention[]): ChatMention[] => {
 
 const mentionIsWorkspaceAccessible = (
   mention: ChatMention,
-  accessibleWorkspaceIds: string[],
+  accessibleWorkspaceIds: readonly string[],
 ): boolean => {
   if (mention.category === "workspace") {
     return accessibleWorkspaceIds.includes(mention.id);

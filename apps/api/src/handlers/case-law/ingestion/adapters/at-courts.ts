@@ -270,11 +270,16 @@ const isRisApiResponse = (value: unknown): value is RisApiResponse =>
   );
 
 /** Normalize item fields that can be string or string[]. */
-const toArray = (val: string | string[] | undefined | null): string[] => {
+const toArray = (
+  val: string | readonly string[] | undefined | null,
+): string[] => {
   if (val === undefined || val === null) {
     return [];
   }
-  return Array.isArray(val) ? val : [val];
+  if (typeof val === "string") {
+    return [val];
+  }
+  return [...val];
 };
 
 /** Find the HTML fulltext URL from content URLs. */

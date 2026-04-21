@@ -227,7 +227,9 @@ export const checkAllAdapters = async (
 };
 
 /** Format health results as a human-readable report. */
-export const formatHealthReport = (results: HealthResult[]): string => {
+export const formatHealthReport = (
+  results: readonly HealthResult[],
+): string => {
   const lines: string[] = ["=== Adapter Health Report ===", ""];
 
   for (const r of results) {
