@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
@@ -392,6 +393,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       await tx
         .update(entities)
         .set({
+          lastEditedBy: authorizedSession.value.userId,
           currentVersionId: nextVersionId,
           updatedAt: new Date(),
         })
@@ -440,6 +442,11 @@ export const finalizeDesktopEditSessionHandler = async ({
     }
 
     if (result.outcome === "finalized") {
+      broadcast(authorizedSession.value.workspaceId, {
+        type: "invalidate-query",
+        data: ["entities", authorizedSession.value.workspaceId],
+      });
+
       await processExtraction(result.entityId).catch((error: unknown) => {
         captureError(error, {
           entityId: result.entityId,

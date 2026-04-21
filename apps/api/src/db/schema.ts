@@ -461,6 +461,9 @@ export const entities = p.pgTable(
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
+    lastEditedBy: p
+      .text("last_edited_by")
+      .references(() => user.id, { onDelete: "set null" }),
     currentVersionId: p
       .uuid("current_version_id")
       .references((): AnyPgColumn => entityVersions.id, {
@@ -2062,6 +2065,10 @@ export const relations = defineRelations(
       }),
       createdByUser: r.one.user({
         from: r.entities.createdBy,
+        to: r.user.id,
+      }),
+      lastEditedByUser: r.one.user({
+        from: r.entities.lastEditedBy,
         to: r.user.id,
       }),
       searchDocument: r.one.searchDocuments({
