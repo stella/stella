@@ -680,6 +680,7 @@ type Messages = {
     "failedToUpdateWorkspace": "Failed to update matter";
     "failedToUploadFiles": "Failed to upload files";
     "failedToVerifyOtp": "Failed to verify code";
+    "matterNotFound": "Matter not found";
     "partyAlreadyExists": "Contact already has this role on the matter";
     "slugAlreadyTaken": "This slug is already taken";
     "uploadFailed": "Upload failed";
@@ -741,12 +742,14 @@ type Messages = {
     "chatAlreadyOpen": "Chat is already open";
     "clients": "Clients";
     "contacts": "Contacts";
+    "getDesktopApp": "Get desktop app";
     "inbox": "Inbox";
     "invitations": "Invitations";
     "knowledge": "Knowledge";
     "members": "Members";
     "myTodos": "My tasks";
     "newMatter": "New matter";
+    "openInDesktop": "Open in desktop app";
     "pinned": "Pinned";
     "recents": "Recents";
     "search": "Search";

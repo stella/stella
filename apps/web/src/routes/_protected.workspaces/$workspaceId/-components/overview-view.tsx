@@ -345,7 +345,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       {/* Two-column layout: tasks + team */}
       <div className="grid gap-6 @3xl:grid-cols-2">
         {/* Upcoming tasks */}
-        <section>
+        <section className="flex flex-col">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-muted-foreground text-sm font-medium">
               {t("workspaces.overview.upcomingTasks")}
@@ -362,7 +362,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             </Button>
           </div>
           {tasks.length > 0 ? (
-            <ScrollArea className="max-h-64 rounded-lg border">
+            <ScrollArea className="min-h-0 flex-1 rounded-lg border">
               <div className="divide-y">
                 {tasks.map((task) => (
                   <button
@@ -390,8 +390,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       >
                         {task.name}
                       </p>
-                      <p className="text-muted-foreground text-xs">
-                        {task.createdBy}
+                      <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                        {task.createdBy !== null && (
+                          <PersonMentionLabel
+                            avatarClassName="size-4 text-[7px]"
+                            mention={{
+                              name: task.createdBy,
+                              image: task.createdByImage,
+                            }}
+                          />
+                        )}
                         {task.dueDate && (
                           <>
                             {task.createdBy ? " · " : ""}
@@ -401,21 +409,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                             })}
                           </>
                         )}
-                      </p>
+                      </span>
                     </div>
                   </button>
                 ))}
               </div>
             </ScrollArea>
           ) : (
-            <div className="text-muted-foreground rounded-lg border px-3 py-6 text-center text-sm">
+            <div className="text-muted-foreground flex flex-1 items-center justify-center rounded-lg border px-3 py-6 text-center text-sm">
               {t("common.noResults")}
             </div>
           )}
         </section>
 
         {/* Time & Team */}
-        <section>
+        <section className="flex flex-col">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-muted-foreground text-sm font-medium">
               <ClockIcon className="me-1.5 inline size-3.5" />
@@ -437,7 +445,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.logTime")}
             </Button>
           </div>
-          <div className="rounded-lg border">
+          <div className="flex-1 rounded-lg border">
             {/* Day labels — i18n via Intl.DateTimeFormat */}
             <div className="flex items-center gap-3 border-b px-3 py-1.5">
               <span className="w-20 shrink-0 @lg:w-28" />
@@ -753,6 +761,7 @@ type OverviewEntity = {
   dueDate: string | null;
   mimeType: string | null;
   fieldId: string | null;
+  propertyId: string | null;
   pdfFileId: string | null;
   encrypted: boolean;
   createdAt: string;
@@ -786,14 +795,16 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   // Previously TODO by @nnad3N — now resolved.
   const fullEntity = useMemo((): WorkspaceEntity => {
     const fields: WorkspaceEntity["fields"] = {};
-    if (entity.fieldId && entity.mimeType) {
-      fields[entity.fieldId] = {
-        id: entity.fieldId,
+    const propertyKey = entity.propertyId ?? entity.fieldId;
+    const fieldKey = entity.fieldId ?? propertyKey;
+    if (propertyKey && fieldKey && entity.mimeType) {
+      fields[propertyKey] = {
+        id: fieldKey,
         entityId: entity.entityId,
         content: {
           type: "file",
           version: 1,
-          id: entity.fieldId,
+          id: fieldKey,
           fileName: entity.name,
           mimeType: entity.mimeType,
           sizeBytes: 0,
@@ -928,7 +939,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       {entity.createdBy !== null && (
         <PersonMentionLabel
           avatarClassName="size-5 text-[8px]"
-          className="shrink-0"
+          className="w-36 shrink-0 truncate"
           mention={{
             name: entity.createdBy,
             image: entity.createdByImage,
@@ -936,7 +947,8 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         />
       )}
       <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm">
-        <span className="text-muted-foreground">{activityLabel}</span> {icon}
+        <span className="text-muted-foreground shrink-0">{activityLabel}</span>{" "}
+        {icon}
         <span className="truncate">{entity.name}</span>
       </span>
       {relTime && (
