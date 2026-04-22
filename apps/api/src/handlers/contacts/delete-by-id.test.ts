@@ -7,14 +7,17 @@ import deleteContactById from "./delete-by-id";
 
 const createContext = ({
   contactId,
+  safeDb,
   scopedDb,
 }: {
   contactId: string;
+  safeDb: Parameters<typeof deleteContactById.handler>[0]["safeDb"];
   scopedDb: Parameters<typeof deleteContactById.handler>[0]["scopedDb"];
 }): Parameters<typeof deleteContactById.handler>[0] =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   ({
     params: { contactId },
+    safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     session: {
@@ -33,7 +36,7 @@ const createContext = ({
 describe("deleteContactById", () => {
   test("blocks deleting a contact assigned as a matter client", async () => {
     let deleteCalled = false;
-    const { getCallCount, scopedDb } = createScopedDbMock({
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => ({
         from: () => ({
           where: () => ({
@@ -55,6 +58,7 @@ describe("deleteContactById", () => {
     const result = await deleteContactById.handler(
       createContext({
         contactId: crypto.randomUUID(),
+        safeDb,
         scopedDb,
       }),
     );
@@ -70,7 +74,7 @@ describe("deleteContactById", () => {
   });
 
   test("returns 404 when the contact does not exist", async () => {
-    const { getCallCount, scopedDb } = createScopedDbMock({
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => ({
         from: () => ({
           where: () => ({
@@ -89,6 +93,7 @@ describe("deleteContactById", () => {
     const result = await deleteContactById.handler(
       createContext({
         contactId: crypto.randomUUID(),
+        safeDb,
         scopedDb,
       }),
     );

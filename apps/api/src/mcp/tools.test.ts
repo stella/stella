@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
 const captureErrorMock = mock();
@@ -88,6 +89,13 @@ const parseToolPayload = (
   }
 
   return JSON.parse(item.text) as unknown;
+};
+
+const mockReadEntityByIdHandlerOk = (value: unknown) => {
+  readEntityByIdHandlerMock.mockImplementation(async function* () {
+    yield* [];
+    return Result.ok(value);
+  });
 };
 
 const createReadDecisionResult = () => ({
@@ -185,8 +193,7 @@ const createContext = ({
   accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
-  safeDb: (async (fn) =>
-    Result.ok(await scopedDb(fn))) as McpRequestContext["safeDb"],
+  safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
 });
@@ -362,7 +369,7 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
       workspaceId: "ws_1",
     });
-    readEntityByIdHandlerMock.mockResolvedValue({
+    mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
         {
@@ -385,7 +392,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(readEntityByIdHandlerMock).toHaveBeenCalledWith({
       entityId: "entity_1",
-      scopedDb: context.scopedDb,
+      safeDb: context.safeDb,
       workspaceId: "ws_1",
     });
 
@@ -806,7 +813,7 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
       workspaceId: "ws_1",
     });
-    readEntityByIdHandlerMock.mockResolvedValue({
+    mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
         {
@@ -855,7 +862,7 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
       workspaceId: "ws_1",
     });
-    readEntityByIdHandlerMock.mockResolvedValue({
+    mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
         {
@@ -904,7 +911,7 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
       workspaceId: "ws_1",
     });
-    readEntityByIdHandlerMock.mockResolvedValue({
+    mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
         {

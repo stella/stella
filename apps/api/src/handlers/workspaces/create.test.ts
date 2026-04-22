@@ -7,14 +7,17 @@ import createWorkspaces from "./create";
 
 const createContext = ({
   body,
+  safeDb,
   scopedDb,
 }: {
   body: Parameters<typeof createWorkspaces.handler>[0]["body"];
+  safeDb: Parameters<typeof createWorkspaces.handler>[0]["safeDb"];
   scopedDb: Parameters<typeof createWorkspaces.handler>[0]["scopedDb"];
 }): Parameters<typeof createWorkspaces.handler>[0] =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   ({
     body,
+    safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
@@ -55,7 +58,7 @@ describe("createWorkspaces", () => {
       }),
     };
 
-    const { getCallCount, scopedDb } = createScopedDbMock({
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: (fields: Record<string, unknown>) => {
         if ("total" in fields) {
           return countSelect;
@@ -83,6 +86,7 @@ describe("createWorkspaces", () => {
           name: "Litigation intake",
           filePropertyName: "Documents",
         },
+        safeDb,
         scopedDb,
       }),
     );
