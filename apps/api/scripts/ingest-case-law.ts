@@ -27,6 +27,35 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { isS3Stale, refreshS3 } from "@/api/lib/s3";
 
+/**
+ * Bun's native Postgres pool emits unhandled errors when the
+ * server closes a connection (e.g. database failover or
+ * network interruption). The internal `#onClose` callback
+ * throws a PostgresError that isn't caught by query-level
+ * try/catch. Without this handler, the process crashes on
+ * any connection drop.
+ *
+ * Adapter loops already retry on the next cycle, so the
+ * daemon self-heals within CYCLE_DELAY_MS (5s).
+ */
+const isTransientConnectionError = (msg: string): boolean =>
+  msg.includes("Connection closed") ||
+  msg.includes("ERR_POSTGRES_CONNECTION_CLOSED") ||
+  msg.includes("PostgresError");
+
+/** Set to true once daemon mode starts; single-adapter mode exits on all errors. */
+let daemonMode = false;
+
+process.on("unhandledRejection", (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  if (daemonMode && isTransientConnectionError(message)) {
+    console.error(`[daemon] DB connection lost (will retry): ${message}`);
+    return;
+  }
+  console.error("[daemon] Unhandled rejection:", reason);
+  process.exit(1);
+});
+
 type SourceDef = {
   adapterKey: string;
   name: string;
@@ -36,6 +65,43 @@ const HEARTBEAT_PATH = "/tmp/ingestion.lock";
 const CYCLE_DELAY_MS = 5000;
 const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
+
+/**
+ * Max adapters doing DB-heavy work (insert + search index +
+ * citation extraction) simultaneously. The pipeline acquires
+ * a slot before processing decisions and releases it before
+ * the next external API fetch, so court API I/O runs freely
+ * in parallel while DB pressure is capped.
+ */
+const MAX_CONCURRENT_DB_WRITES = Math.max(
+  1,
+  Number.parseInt(process.env.MAX_CONCURRENT_DB_WRITES ?? "3", 10) || 3,
+);
+
+let activeDbSlots = 0;
+const dbSlotQueue: (() => void)[] = [];
+
+// eslint-disable-next-line require-await -- returns Promise on queued path
+const acquireDbSlot = async (): Promise<void> => {
+  if (activeDbSlots < MAX_CONCURRENT_DB_WRITES) {
+    activeDbSlots++;
+    return;
+  }
+  return new Promise<void>((resolve) => {
+    dbSlotQueue.push(() => {
+      activeDbSlots++;
+      resolve();
+    });
+  });
+};
+
+const releaseDbSlot = (): void => {
+  activeDbSlots--;
+  const next = dbSlotQueue.shift();
+  if (next) {
+    next();
+  }
+};
 
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
@@ -177,6 +243,7 @@ const runOneCycle = async (
     result = await runIngestionPipeline({
       source,
       scopedDb,
+      dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
       signal: AbortSignal.timeout(MAX_CYCLE_MS),
     });
     if (result.haltReason) {
@@ -257,7 +324,14 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     } catch (error) {
       consecutiveFailures++;
-      console.error(`[${adapterKey}] Unexpected error:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (isTransientConnectionError(msg)) {
+        console.error(
+          `[${adapterKey}] DB connection error (will retry): ${msg}`,
+        );
+      } else {
+        console.error(`[${adapterKey}] Unexpected error:`, error);
+      }
     }
 
     if (consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD) {
@@ -299,6 +373,7 @@ if (SOURCES.length === 0) {
 }
 
 // All adapters: independent concurrent loops.
+daemonMode = true;
 console.log("Ingestion daemon started.");
 await refreshS3();
 writeHeartbeat();
