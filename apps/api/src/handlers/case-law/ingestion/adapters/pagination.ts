@@ -186,7 +186,42 @@ export const createPagePaginatedFetch = <TResponse>(
           });
         }
 
-        const data = await opts.parseResponse(response);
+        let data: TResponse;
+        try {
+          data = await opts.parseResponse(response);
+        } catch (parseError) {
+          // Some court APIs return HTML error pages with 200 status
+          // (rate limits, maintenance). Retry once after a delay.
+          if (parseError instanceof SyntaxError) {
+            // eslint-disable-next-line no-console -- operational retry logging
+            console.warn(
+              `${opts.adapterKey}: page ${page} returned unparseable response, retrying`,
+            );
+            await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
+            const retryHeaders = new Headers(init?.headers);
+            if (!retryHeaders.has("User-Agent")) {
+              retryHeaders.set("User-Agent", INGESTION_USER_AGENT);
+            }
+            const retryResponse = await fetch(url, {
+              ...init,
+              headers: retryHeaders,
+              signal: signal
+                ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
+                : AbortSignal.timeout(listTimeout),
+            });
+            if (!retryResponse.ok) {
+              throw new AdapterFetchError({
+                message: `${opts.adapterKey}: retry HTTP ${retryResponse.status}`,
+                adapterKey: opts.adapterKey,
+                cursor,
+                httpStatus: retryResponse.status,
+              });
+            }
+            data = await opts.parseResponse(retryResponse);
+          } else {
+            throw parseError;
+          }
+        }
         const { items, total } = opts.extractItems(data);
         const decisions: IngestionResult[] = [];
 
