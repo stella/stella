@@ -10,6 +10,7 @@ import { diffArrays } from "diff";
 
 import type {
   DiffResult,
+  DiffStats,
   DocxEdit,
   ExtractedDocument,
   ParagraphRewrite,
@@ -29,6 +30,11 @@ const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
 
 export const tokenize = (text: string): string[] =>
   text.match(WORD_TOKEN_RE) ?? [];
+
+const WORD_ONLY_RE = /[\p{L}\p{N}_]+/gu;
+
+const countWords = (text: string): number =>
+  text.match(WORD_ONLY_RE)?.length ?? 0;
 
 const mergeAdjacentWordChanges = (diffs: readonly Diff[]): Diff[] => {
   const merged: Diff[] = [];
@@ -155,6 +161,7 @@ export const diffParagraphs = (
 ): DiffResult => {
   const edits: DocxEdit[] = [];
   const skippedRewrites: number[] = [];
+  const stats: DiffStats = { wordsAdded: 0, wordsRemoved: 0 };
 
   for (const rewrite of rewrites) {
     const para = extracted.paragraphs.find(
@@ -169,6 +176,16 @@ export const diffParagraphs = (
       continue;
     }
 
+    // Count word-level changes from the raw diff
+    const diffs = wordDiff(para.text, rewrite.newText);
+    for (const d of diffs) {
+      if (d.kind === "insert") {
+        stats.wordsAdded += countWords(d.text);
+      } else if (d.kind === "delete") {
+        stats.wordsRemoved += countWords(d.text);
+      }
+    }
+
     edits.push(
       ...diffSingleParagraph(
         rewrite.paragraphIndex,
@@ -178,5 +195,5 @@ export const diffParagraphs = (
     );
   }
 
-  return { edits, skippedRewrites };
+  return { edits, skippedRewrites, stats };
 };

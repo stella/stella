@@ -50,6 +50,7 @@ import { Route as ProtectedKnowledgeCaseDecisionIdRouteImport } from './routes/_
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
+import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdPdfRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.pdf'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 
@@ -280,6 +281,12 @@ const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
     path: '/$invoiceId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdInvoicesRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute =
+  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport.update({
+    id: '/entities/$entityId',
+    path: '/entities/$entityId',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdViewIdPdfRoute =
   ProtectedWorkspacesWorkspaceIdViewIdPdfRouteImport.update({
     id: '/pdf',
@@ -334,6 +341,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/workspaces/$workspaceId/$viewId/pdf': typeof ProtectedWorkspacesWorkspaceIdViewIdPdfRoute
+  '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
 }
@@ -372,6 +380,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/workspaces/$workspaceId/$viewId/pdf': typeof ProtectedWorkspacesWorkspaceIdViewIdPdfRoute
+  '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
 }
@@ -418,6 +427,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/_protected/workspaces/$workspaceId/$viewId/pdf': typeof ProtectedWorkspacesWorkspaceIdViewIdPdfRoute
+  '/_protected/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/_protected/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
 }
@@ -464,6 +474,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/workspaces/$workspaceId/$viewId/pdf'
+    | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/$viewId/'
   fileRoutesByTo: FileRoutesByTo
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/workspaces/$workspaceId/$viewId/pdf'
+    | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/$viewId'
   id:
@@ -547,6 +559,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
     | '/_protected/workspaces/$workspaceId/$viewId/pdf'
+    | '/_protected/workspaces/$workspaceId/entities/$entityId'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
     | '/_protected/workspaces/$workspaceId/$viewId/'
   fileRoutesById: FileRoutesById
@@ -848,6 +861,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRoute
     }
+    '/_protected/workspaces/$workspaceId/entities/$entityId': {
+      id: '/_protected/workspaces/$workspaceId/entities/$entityId'
+      path: '/entities/$entityId'
+      fullPath: '/workspaces/$workspaceId/entities/$entityId'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/$viewId/pdf': {
       id: '/_protected/workspaces/$workspaceId/$viewId/pdf'
       path: '/pdf'
@@ -1011,6 +1031,7 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdInvoicesRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
+  ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
 }
 
 const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorkspaceIdRouteRouteChildren =
@@ -1027,6 +1048,8 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdTimesheetsRoute,
     ProtectedWorkspacesWorkspaceIdIndexRoute:
       ProtectedWorkspacesWorkspaceIdIndexRoute,
+    ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute:
+      ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute,
   }
 
 const ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren =

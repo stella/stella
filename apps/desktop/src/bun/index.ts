@@ -1,5 +1,5 @@
 import type { BrowserWindow as BrowserWindowType } from "electrobun/bun";
-import {
+import Electrobun, {
   ApplicationMenu,
   BrowserView,
   BrowserWindow,
@@ -36,6 +36,16 @@ const OPEN_PREFERENCES_ACTION = "open-preferences";
 const OPEN_SUPPORT_ROOT_ACTION = "open-support-root";
 const QUIT_ACTION = "quit";
 const bridgeAllowedOrigins = resolveDesktopAllowedOrigins();
+
+// Handle stella:// deep link URLs (macOS only)
+Electrobun.events.on("open-url", (event) => {
+  const raw = event.data.url;
+  // eslint-disable-next-line no-console
+  console.log("[stella-desktop] deep link received:", raw);
+
+  // stella://ping — no-op, just proves the app is running
+  // Future: stella://edit/{fieldId}?workspaceId=...
+});
 
 type PreferencesTab = "general" | "notifications" | "about";
 

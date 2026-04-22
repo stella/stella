@@ -5,7 +5,12 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { user } from "@/api/db/auth-schema";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entities,
+  entityVersions,
+  fields,
+} from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -143,71 +148,106 @@ const readEntitiesHandler = async function* ({
   const idFilter = inArray(entities.id, pageIds);
 
   const lastEditor = alias(user, "last_editor");
-
-  // Phase 2: Fetch full entity data for the page (parallel)
-  const [entityRowsResult, versionCountsResult, fieldRowsResult] =
-    await Promise.all([
-      safeDb((tx) =>
-        tx
-          .select({
-            id: entities.id,
-            kind: entities.kind,
-            name: entities.name,
-            parentId: entities.parentId,
-            currentVersionId: entities.currentVersionId,
-            createdAt: entities.createdAt,
-            updatedAt: entities.updatedAt,
-            createdByName: user.name,
-            createdByImage: user.image,
-            lastEditedByName: lastEditor.name,
-            lastEditedByImage: lastEditor.image,
-            status: entities.status,
-            priority: entities.priority,
-            dueDate: entities.dueDate,
-            sortOrder: entities.sortOrder,
-          })
-          .from(entities)
-          .leftJoin(user, eq(entities.createdBy, user.id))
-          .leftJoin(lastEditor, eq(entities.lastEditedBy, lastEditor.id))
-          .where(idFilter),
-      ),
-      safeDb((tx) =>
-        tx
-          .select({
-            entityId: entityVersions.entityId,
-            versionCount: count(),
-          })
-          .from(entityVersions)
-          .where(inArray(entityVersions.entityId, pageIds))
-          .groupBy(entityVersions.entityId),
-      ),
-      safeDb((tx) =>
-        tx
-          .select({
-            entityVersionId: fields.entityVersionId,
-            id: fields.id,
-            propertyId: fields.propertyId,
-            content: fields.content,
-          })
-          .from(fields)
-          .innerJoin(
-            entities,
-            and(
-              eq(fields.entityVersionId, entities.currentVersionId),
-              idFilter,
-            ),
+  const sessionEditor = alias(user, "session_editor");
+  const [
+    entityRowsResult,
+    versionCountsResult,
+    fieldRowsResult,
+    activeSessionsResult,
+  ] = await Promise.all([
+    safeDb((tx) =>
+      tx
+        .select({
+          id: entities.id,
+          kind: entities.kind,
+          name: entities.name,
+          parentId: entities.parentId,
+          currentVersionId: entities.currentVersionId,
+          createdAt: entities.createdAt,
+          updatedAt: entities.updatedAt,
+          createdByName: user.name,
+          createdByImage: user.image,
+          lastEditedByName: lastEditor.name,
+          lastEditedByImage: lastEditor.image,
+          status: entities.status,
+          priority: entities.priority,
+          dueDate: entities.dueDate,
+          sortOrder: entities.sortOrder,
+        })
+        .from(entities)
+        .leftJoin(user, eq(entities.createdBy, user.id))
+        .leftJoin(lastEditor, eq(entities.lastEditedBy, lastEditor.id))
+        .where(idFilter),
+    ),
+    safeDb((tx) =>
+      tx
+        .select({
+          entityId: entityVersions.entityId,
+          versionCount: count(),
+        })
+        .from(entityVersions)
+        .where(inArray(entityVersions.entityId, pageIds))
+        .groupBy(entityVersions.entityId),
+    ),
+    safeDb((tx) =>
+      tx
+        .select({
+          entityVersionId: fields.entityVersionId,
+          id: fields.id,
+          propertyId: fields.propertyId,
+          content: fields.content,
+        })
+        .from(fields)
+        .innerJoin(
+          entities,
+          and(eq(fields.entityVersionId, entities.currentVersionId), idFilter),
+        ),
+    ),
+    safeDb((tx) =>
+      tx
+        .select({
+          entityId: desktopEditSessions.entityId,
+          editorName: sessionEditor.name,
+          editorImage: sessionEditor.image,
+        })
+        .from(desktopEditSessions)
+        .innerJoin(
+          sessionEditor,
+          eq(desktopEditSessions.createdBy, sessionEditor.id),
+        )
+        .where(
+          and(
+            inArray(desktopEditSessions.entityId, pageIds),
+            eq(desktopEditSessions.status, "open"),
           ),
-      ),
-    ]);
+        ),
+    ),
+  ]);
 
   const entityRows = yield* entityRowsResult;
   const versionCounts = yield* versionCountsResult;
   const fieldRows = yield* fieldRowsResult;
+  const activeSessions = yield* activeSessionsResult;
 
   // Index lookup maps
   const versionCountMap = new Map(
     versionCounts.map((v) => [v.entityId, v.versionCount]),
   );
+
+  // First open session per entity (there should be at most one per
+  // user, but take the first match).
+  const activeEditMap = new Map<
+    string,
+    { name: string; image: string | null }
+  >();
+  for (const s of activeSessions) {
+    if (!activeEditMap.has(s.entityId)) {
+      activeEditMap.set(s.entityId, {
+        name: s.editorName ?? "",
+        image: s.editorImage,
+      });
+    }
+  }
 
   const fieldsByVersionId = new Map<string, typeof fieldRows>();
   for (const field of fieldRows) {
@@ -237,6 +277,7 @@ const readEntitiesHandler = async function* ({
     priority: string | null;
     dueDate: string | null;
     sortOrder: string | null;
+    activeEditBy: { name: string; image: string | null } | null;
     fields: {
       id: string;
       propertyId: string;
@@ -272,6 +313,7 @@ const readEntitiesHandler = async function* ({
       priority: entity.priority,
       dueDate: entity.dueDate,
       sortOrder: entity.sortOrder,
+      activeEditBy: activeEditMap.get(entity.id) ?? null,
       fields: entityFields.map((field) => ({
         id: field.id,
         propertyId: field.propertyId,

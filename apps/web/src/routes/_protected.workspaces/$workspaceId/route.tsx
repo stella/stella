@@ -37,6 +37,13 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   notFoundComponent: () => {
     // Handles unmatched child routes (e.g. doubled
     // /workspaces/$id/workspaces/$id from stale router state).
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.trace(
+        "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
+        globalThis.location?.href,
+      );
+    }
     throw redirect({ to: "/workspaces" });
   },
   onError: (error) => {
@@ -131,11 +138,15 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/invoices",
     shouldThrow: false,
   });
+  const entityDetailMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/entities/$entityId",
+    shouldThrow: false,
+  });
 
   const hasSidePanel = useInspectorStore((s) => s.tabs.length > 0);
 
-  // Timesheets, analytics, and invoices have their own layout
-  if (timesheetsMatch || analyticsMatch || invoicesMatch) {
+  // Timesheets, analytics, invoices, and entity detail have their own layout
+  if (timesheetsMatch || analyticsMatch || invoicesMatch || entityDetailMatch) {
     return <Outlet />;
   }
 

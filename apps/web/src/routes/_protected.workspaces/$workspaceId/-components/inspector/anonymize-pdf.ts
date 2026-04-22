@@ -1,9 +1,9 @@
+import { PDF } from "@libpdf/core";
 import { loadNameDictionaries } from "@stll/anonymize-data";
 import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
-import type { CharSpan } from "@/lib/anonymize/pdf-coords";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
@@ -73,25 +73,8 @@ export const anonymizePdf = async ({
   const buffer = await s3Response.arrayBuffer();
   const pdfBytes = new Uint8Array(buffer);
 
-  const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
-  if (!GlobalWorkerOptions.workerSrc) {
-    GlobalWorkerOptions.workerSrc = (
-      await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
-    ).default;
-  }
-
-  const pdf = await getDocument({
-    data: pdfBytes.slice(),
-  }).promise;
-  let text: string;
-  let charSpans: CharSpan[];
-  try {
-    const result = await extractPDFText(pdf);
-    text = result.text;
-    charSpans = result.spans;
-  } finally {
-    await pdf.destroy();
-  }
+  const pdf = await PDF.load(pdfBytes);
+  const { text, spans: charSpans } = extractPDFText(pdf);
 
   const dictionaries = await loadNameDictionaries();
   const entities = await runPipeline({

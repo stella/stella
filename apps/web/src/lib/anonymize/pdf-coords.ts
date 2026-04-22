@@ -1,5 +1,4 @@
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import type { TextItem } from "pdfjs-dist/types/src/display/api";
+import type { PDF, PDFPage } from "@libpdf/core";
 
 /**
  * Bounding box for a text span in PDF user-space coordinates.
@@ -16,7 +15,7 @@ export type PDFBBox = {
 
 /**
  * Maps character offset ranges in extracted plaintext
- * to PDF page coordinates. Each entry covers one TextItem.
+ * to PDF page coordinates. Each entry covers one TextSpan.
  */
 export type CharSpan = {
   start: number;
@@ -32,98 +31,82 @@ type PDFTextExtractionResult = {
   pageCount: number;
 };
 
-const isTextItem = (item: { str?: string; type?: string }): item is TextItem =>
-  typeof item.str === "string" && !("type" in item);
+/** Derived from PDFPage.extractText() return type. */
+type PageTextResult = ReturnType<PDFPage["extractText"]>;
+type Span = PageTextResult["lines"][number]["spans"][number];
 
-/**
- * Extract font size from a pdfjs TextItem transform matrix.
- * The transform is [scaleX, skewY, skewX, scaleY, tx, ty].
- */
-const getFontSize = (transform: readonly number[]): number => {
-  const scaleX = transform.at(0) ?? 0;
-  const scaleY = transform.at(3) ?? 0;
-  return Math.abs(scaleY) || Math.abs(scaleX) || 12;
+const buildCssFont = (span: Span): string => {
+  const isBold = /bold/i.test(span.fontName);
+  const isItalic = /italic|oblique/i.test(span.fontName);
+  const weight = isBold ? "bold" : "normal";
+  const fontStyle = isItalic ? "italic" : "normal";
+  return `${fontStyle} ${weight} ${span.fontSize}px sans-serif`;
 };
 
 /**
- * Extract text from a PDF with character-offset to page-
- * coordinate mapping. The concatenated text is suitable for
- * feeding into the anonymisation pipeline; the spans array
- * maps pipeline entity offsets back to PDF coordinates.
+ * Extract text from a @libpdf/core PDF instance with
+ * character-offset to page-coordinate mapping. The concatenated
+ * text is suitable for the anonymisation pipeline; the spans
+ * array maps pipeline entity offsets back to PDF coordinates.
  */
-export const extractPDFText = async (
-  pdf: PDFDocumentProxy,
-): Promise<PDFTextExtractionResult> => {
+export const extractPDFText = (pdf: PDF): PDFTextExtractionResult => {
+  const pages: PageTextResult[] = pdf
+    .getPages()
+    .map((page) => page.extractText());
+  return buildResult(pages);
+};
+
+const buildResult = (pages: PageTextResult[]): PDFTextExtractionResult => {
   const spans: CharSpan[] = [];
   const textParts: string[] = [];
   let offset = 0;
 
-  const pageCount = pdf.numPages;
-
-  for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
-    const page = await pdf.getPage(pageIdx + 1);
-    const content = await page.getTextContent();
-
-    for (const item of content.items) {
-      if (!isTextItem(item)) {
-        continue;
-      }
-
-      if (item.str.length === 0) {
-        if (item.hasEOL) {
-          textParts.push("\n");
-          offset += 1;
-        }
-        continue;
-      }
-
-      if (offset > 0 && textParts.length > 0) {
-        const lastChar = textParts.at(-1);
-        if (lastChar !== "\n") {
-          textParts.push(" ");
-          offset += 1;
-        }
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, typescript/consistent-type-assertions -- pdfjs transform is typed as any[]
-      const transform = item.transform as number[];
-      const x = transform.at(4) ?? 0;
-      const y = transform.at(5) ?? 0;
-      const fontSize = getFontSize(transform);
-
-      const style = content.styles[item.fontName];
-      const family = style?.fontFamily ?? "sans-serif";
-      const isBold = /bold/i.test(item.fontName);
-      const isItalic = /italic|oblique/i.test(item.fontName);
-      const weight = isBold ? "bold" : "normal";
-      const fontStyle = isItalic ? "italic" : "normal";
-      const cssFont = `${fontStyle} ${weight} ${fontSize}px ${family}`;
-
-      spans.push({
-        start: offset,
-        end: offset + item.str.length,
-        text: item.str,
-        cssFont,
-        bbox: {
-          pageIndex: pageIdx,
-          x,
-          y,
-          width: item.width,
-          height: item.height || fontSize,
-          fontSize,
-        },
-      });
-
-      textParts.push(item.str);
-      offset += item.str.length;
-
-      if (item.hasEOL) {
-        textParts.push("\n");
-        offset += 1;
-      }
+  for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+    const page = pages[pageIdx];
+    if (!page) {
+      continue;
     }
 
-    if (pageIdx < pageCount - 1) {
+    for (const line of page.lines) {
+      for (const span of line.spans) {
+        if (span.text.length === 0) {
+          continue;
+        }
+
+        if (offset > 0 && textParts.length > 0) {
+          const lastChar = textParts.at(-1);
+          if (lastChar !== "\n") {
+            textParts.push(" ");
+            offset += 1;
+          }
+        }
+
+        spans.push({
+          start: offset,
+          end: offset + span.text.length,
+          text: span.text,
+          cssFont: buildCssFont(span),
+          bbox: {
+            pageIndex: pageIdx,
+            x: span.bbox.x,
+            y: span.bbox.y,
+            width: span.bbox.width,
+            height: span.bbox.height || span.fontSize,
+            fontSize: span.fontSize,
+          },
+        });
+
+        textParts.push(span.text);
+        offset += span.text.length;
+      }
+
+      // End of line
+      textParts.push("\n");
+      offset += 1;
+    }
+
+    // Page separator (except last page)
+    if (pageIdx < pages.length - 1 && !textParts.at(-1)?.endsWith("\n")) {
       textParts.push("\n");
       offset += 1;
     }
@@ -132,6 +115,6 @@ export const extractPDFText = async (
   return {
     text: textParts.join(""),
     spans,
-    pageCount,
+    pageCount: pages.length,
   };
 };

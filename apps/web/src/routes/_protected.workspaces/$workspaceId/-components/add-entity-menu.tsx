@@ -127,6 +127,7 @@ export const AddEntityMenu = ({
     <>
       <Menu onOpenChange={onOpenChange} open={open}>
         <MenuTrigger
+          nativeButton
           render={
             render ?? (
               <Button size="xs" variant="ghost">

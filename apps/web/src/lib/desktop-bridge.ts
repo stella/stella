@@ -35,7 +35,7 @@ type OpenDocxInDesktopInput = {
   linkedAccount: LinkedAccountSnapshot | null;
   propertyId: string;
   workspaceId: string;
-};
+} & ({ force?: never } | { force: true });
 
 type BridgeResponse = {
   message?: string;
@@ -53,32 +53,75 @@ const parseBridgeResponse = async (response: Response) => {
   }
 };
 
-const assertDesktopBridgeReady = async () => {
-  let response: Response;
-
+const checkBridgeHealth = async (timeoutMs: number): Promise<boolean> => {
   try {
-    response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
+    const response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
       method: "GET",
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
+    return response.ok;
   } catch {
-    throw new DesktopBridgeUnavailableError();
+    return false;
+  }
+};
+
+const isMacOS = () => navigator.userAgent.includes("Mac");
+
+/**
+ * Try to launch the desktop app via the stella:// deep link (macOS only),
+ * then poll the bridge health endpoint until it responds (or give up).
+ */
+const launchViaDeepLink = async (): Promise<boolean> => {
+  if (!isMacOS()) {
+    return false;
   }
 
-  if (!response.ok) {
-    throw new DesktopBridgeUnavailableError();
+  // Trigger the OS "open app" dialog
+  window.location.href = "stella://ping";
+
+  // Poll for up to ~6 seconds (the app needs time to start)
+  for (let i = 0; i < 6; i++) {
+    // eslint-disable-next-line no-restricted-syntax
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    if (await checkBridgeHealth(1000)) {
+      return true;
+    }
   }
+
+  return false;
+};
+
+const assertDesktopBridgeReady = async () => {
+  if (await checkBridgeHealth(3000)) {
+    return;
+  }
+
+  // Bridge not reachable — try deep link launch (macOS only)
+  if (await launchViaDeepLink()) {
+    return;
+  }
+
+  throw new DesktopBridgeUnavailableError();
 };
 
 const openRemoteDesktopSession = async ({
   entityId,
+  force,
   propertyId,
   workspaceId,
-}: Pick<OpenDocxInDesktopInput, "entityId" | "propertyId" | "workspaceId">) => {
+}: {
+  entityId: string;
+  force?: true | undefined;
+  propertyId: string;
+  workspaceId: string;
+}) => {
   const response = await api
     .entities({ workspaceId })
     ["desktop-edit-sessions"].open.post({
       entityId,
+      ...(force && { force }),
       propertyId,
     });
 
@@ -108,6 +151,7 @@ export const isDesktopBridgeReachable = async (): Promise<boolean> => {
 export const openDocxInDesktop = async ({
   apiBaseUrl,
   entityId,
+  force,
   linkedAccount,
   propertyId,
   workspaceId,
@@ -115,6 +159,7 @@ export const openDocxInDesktop = async ({
   await assertDesktopBridgeReady();
 
   const remoteSession = await openRemoteDesktopSession({
+    force,
     entityId,
     propertyId,
     workspaceId,

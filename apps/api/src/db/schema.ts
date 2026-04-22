@@ -589,10 +589,19 @@ export const entityVersions = p.pgTable(
     versionNumber: p.integer("version_number").notNull().default(1),
     /** Frozen human-readable reference (e.g. "2026/001/015.v3"). */
     stamp: p.varchar("stamp", { length: 128 }),
+    /** User-assigned workflow label (e.g. "Internal draft", "Final version"). */
+    label: p.varchar("label", { length: 128 }),
+    /** Free-text note describing this version. */
+    description: p.varchar("description", { length: 1024 }),
+    /** Word-level diff stats vs previous version (computed on finalization). */
+    diffWordsAdded: p.integer("diff_words_added"),
+    diffWordsRemoved: p.integer("diff_words_removed"),
     /** Globally unique verification code (no stl: prefix). */
     verificationCode: p.varchar("verification_code", {
       length: 16,
     }),
+    /** User who created this version (uploader, desktop editor, or restorer). */
+    createdBy: p.text("created_by"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [

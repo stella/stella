@@ -1,5 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useMatches,
+} from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -42,6 +47,26 @@ export const Route = createFileRoute(
   component: RouteComponent,
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => ({ page: search.page ?? 1 }),
+  beforeLoad: ({ params }) => {
+    // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
+    // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
+    const VALID_VIEW_ID =
+      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/i;
+    if (!VALID_VIEW_ID.test(params.viewId)) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.trace(
+          `[stella] beforeLoad rejected viewId="${params.viewId}" — redirecting. URL:`,
+          globalThis.location?.href,
+        );
+      }
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+        replace: true,
+      });
+    }
+  },
   loader: async ({ context, deps, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
@@ -212,6 +237,8 @@ function ViewShell({
   workspaceId,
 }: ViewShellProps) {
   const navigate = Route.useNavigate();
+  const matches = useMatches();
+  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/pdf"));
 
   const setPage = (newPage: number) => {
     // eslint-disable-next-line typescript/no-floating-promises
@@ -222,6 +249,12 @@ function ViewShell({
       }),
     });
   };
+
+  // File detail view: hide ViewSwitcher + pagination; breadcrumbs
+  // provide navigation back to the matter.
+  if (isOnPdfRoute) {
+    return <Outlet />;
+  }
 
   return (
     <>
@@ -236,7 +269,7 @@ function ViewShell({
           // eslint-disable-next-line typescript/no-misused-promises
           onViewChange={async (viewId) => {
             await navigate({
-              to: ".",
+              to: "/workspaces/$workspaceId/$viewId",
               params: { workspaceId, viewId },
               search: { page: undefined },
             });

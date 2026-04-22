@@ -36,7 +36,6 @@ export const useDevStore = create<State & Actions>()(
     }),
     {
       name: getStorageKey("dev"),
-      version: 2,
     },
   ),
 );

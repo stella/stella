@@ -192,6 +192,31 @@ function MyTodosPage() {
         <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-16">
           <ListTodoIcon className="size-10 opacity-40" />
           <p className="text-sm">{t("tasks.noTasksAssigned")}</p>
+          {workspaces?.workspaces && workspaces.workspaces.length > 0 && (
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button size="default">
+                    <PlusIcon />
+                    {t("tasks.newTask")}
+                  </Button>
+                }
+              />
+              <MenuPopup>
+                {workspaces.workspaces.map((ws) => (
+                  <MenuItem
+                    key={ws.id}
+                    // eslint-disable-next-line typescript/no-misused-promises
+                    onClick={async () => {
+                      await handleCreateTask(ws.id);
+                    }}
+                  >
+                    {ws.name}
+                  </MenuItem>
+                ))}
+              </MenuPopup>
+            </Menu>
+          )}
         </div>
       )}
 

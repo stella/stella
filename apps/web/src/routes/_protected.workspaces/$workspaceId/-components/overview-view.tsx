@@ -827,6 +827,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       priority: entity.priority,
       dueDate: entity.dueDate,
       sortOrder: null,
+      activeEditBy: null,
       fields,
     };
   }, [entity]);

@@ -1,26 +1,49 @@
-import { Activity, useEffect, useLayoutEffect, useRef } from "react";
+import { Activity, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
+import {
+  containsFiles,
+  getFiles,
+} from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import {
+  Navigate,
+  createFileRoute,
+  stripSearchParams,
+} from "@tanstack/react-router";
+import { UploadIcon } from "lucide-react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Accordion } from "@stella/ui/components/accordion";
+import { Button } from "@stella/ui/components/button";
 
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
+import { PDFPage } from "@/lib/pdf/pdf-page";
+import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { EntityField } from "@/lib/types";
 import {
-  EntityFileInfo,
   FieldInfo,
   skipFieldFilter,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
-import { AnonymizeSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-sidebar";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
+import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import {
+  entityVersionsKeys,
+  entityVersionsOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 export const Route = createFileRoute(
@@ -30,17 +53,19 @@ export const Route = createFileRoute(
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.
   validateSearch: v.object({
-    entity: v.string(),
-    field: v.string(),
+    entity: v.optional(v.string()),
+    field: v.optional(v.string()),
     justification: v.optional(v.string()),
     justificationPage: v.optional(
       v.pipe(v.number(), v.integer(), v.minValue(1)),
     ),
     pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    panel: v.optional(v.picklist(["versions"])),
   }),
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
   },
+  pendingComponent: () => <PDFSuspenseFallback />,
 });
 
 const AnonymizeScrollSync = () => {
@@ -88,11 +113,39 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const fieldId = Route.useSearch({ select: (s) => s.field });
+  const initialFieldId = Route.useSearch({ select: (s) => s.field });
   const entityId = Route.useSearch({ select: (s) => s.entity });
+
+  // Guard: redirect if required search params are missing (stale URL)
+  if (!entityId || !initialFieldId) {
+    return <Navigate to="/workspaces/$workspaceId" params={{ workspaceId }} />;
+  }
+
+  return (
+    <RouteComponentInner
+      entityId={entityId}
+      initialFieldId={initialFieldId}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+function RouteComponentInner({
+  workspaceId,
+  entityId,
+  initialFieldId,
+}: {
+  workspaceId: string;
+  entityId: string;
+  initialFieldId: string;
+}) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [activeFieldId, setActiveFieldId] = useState(initialFieldId);
+  const fieldId = activeFieldId;
+  const panel = Route.useSearch({ select: (s) => s.panel });
   useSyncJustifications([entityId]);
   const sidebar = useWorkspaceStore((s) => s.pdfViewer.sidebar);
+  const setPdfSidebar = useWorkspaceStore((s) => s.setPdfSidebar);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const justificationId = Route.useSearch({
     select: (s) => s.justification,
@@ -108,6 +161,12 @@ function RouteComponent() {
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
+  const closeAllInspectorTabs = useInspectorStore((s) => s.closeAll);
+
+  // Close the sidepeek inspector when the full PDF view mounts
+  useEffect(() => {
+    closeAllInspectorTabs();
+  }, [closeAllInspectorTabs]);
 
   useLayoutEffect(() => {
     if (!justificationId || justificationPage === undefined) {
@@ -129,48 +188,133 @@ function RouteComponent() {
     [resetPdfViewerState, setActiveJustification],
   );
 
-  const sidebarOpen = sidebar !== "none";
+  // Sync the `panel` search param to sidebar state on mount
+  useLayoutEffect(() => {
+    if (panel === "versions") {
+      setPdfSidebar("versions");
+    }
+  }, [panel, setPdfSidebar]);
+
+  // Compare mode state
+  const [compareState, setCompareState] = useState<{
+    pdfBuffer: ArrayBuffer;
+    docxBase64: string;
+    editsApplied: number;
+    wordsAdded: number;
+    wordsRemoved: number;
+    seq: number;
+  } | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const compareSeqRef = useRef(0);
+
+  const handleCompare = async (
+    baseVersionId: string,
+    targetVersionId: string,
+  ) => {
+    setIsComparing(true);
+    try {
+      const response = await api
+        .entities({ workspaceId })
+        .entity({ entityId })
+        .compare.post(
+          { baseVersionId, targetVersionId, entityId },
+          { fetch: { signal: AbortSignal.timeout(30_000) } },
+        );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      const { pdfBase64, docxBase64, editsApplied, wordsAdded, wordsRemoved } =
+        response.data;
+      const binary = atob(pdfBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.codePointAt(i) ?? 0;
+      }
+      compareSeqRef.current += 1;
+      setCompareState({
+        pdfBuffer: bytes.buffer,
+        docxBase64,
+        editsApplied,
+        wordsAdded,
+        wordsRemoved,
+        seq: compareSeqRef.current,
+      });
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  const showVersions = sidebar === "versions" || panel === "versions";
+  const sidebarOpen = sidebar !== "none" || panel === "versions";
 
   return (
     <div
       className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-x-hidden overflow-y-auto border-t"
       ref={scrollContainerRef}
     >
-      <PDFProvider
-        fieldId={fieldId}
-        initialScaleOffset={scaleOffset}
-        startPage={pageNumber}
-        fallback={{ suspense: <PDFSuspenseFallback /> }}
-      >
-        <AnonymizeScrollSync />
-        <Group orientation="horizontal">
-          <Panel>
-            <PdfViewer />
-          </Panel>
-          <Activity mode={sidebarOpen ? "visible" : "hidden"}>
-            <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
-              <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
-            </Separator>
-            <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
+      <Group orientation="horizontal">
+        {/* Left panel: version history list (versions mode only) */}
+        {showVersions && (
+          <>
+            <Panel defaultSize="14rem" maxSize="20rem" minSize="10rem">
               <div className="bg-background h-full overflow-y-auto">
-                {sidebar === "entity" && (
-                  <>
-                    <EntityFileInfo
-                      entityId={entity.entityId}
-                      fields={entity.fields}
-                      scrollContainerRef={scrollContainerRef}
-                    />
-                    <FieldInfoList entity={entity} workspaceId={workspaceId} />
-                  </>
-                )}
-                {sidebar === "anonymize" && (
-                  <AnonymizeSidebar fieldId={fieldId} />
-                )}
+                <VersionListConnected
+                  currentFieldId={fieldId}
+                  entityId={entityId}
+                  isComparing={isComparing}
+                  onClearCompare={() => setCompareState(null)}
+                  onCompare={(base, target) => {
+                    void handleCompare(base, target);
+                  }}
+                  onSwitchField={(fid) => {
+                    setActiveFieldId(fid);
+                    setCompareState(null);
+                  }}
+                  workspaceId={workspaceId}
+                />
               </div>
             </Panel>
-          </Activity>
-        </Group>
-      </PDFProvider>
+            <PanelSeparator />
+          </>
+        )}
+
+        {/* Center: PDF viewer or redline comparison */}
+        <Panel>
+          <VersionDropZone
+            disabled={!!compareState}
+            entityId={entityId}
+            workspaceId={workspaceId}
+          >
+            {compareState ? (
+              <RedlineOverlay
+                compareState={compareState}
+                onClose={() => setCompareState(null)}
+              />
+            ) : (
+              <PDFProvider
+                key={fieldId}
+                fieldId={fieldId}
+                initialScaleOffset={scaleOffset}
+                startPage={pageNumber}
+                fallback={{ suspense: <PDFSuspenseFallback /> }}
+              >
+                <AnonymizeScrollSync />
+                <PdfViewer />
+              </PDFProvider>
+            )}
+          </VersionDropZone>
+        </Panel>
+
+        {/* Right panel: entity metadata / anonymize */}
+        <Activity mode={sidebarOpen ? "visible" : "hidden"}>
+          <PanelSeparator />
+          <Panel defaultSize="28rem" maxSize="40rem" minSize="16rem">
+            <div className="bg-background h-full overflow-y-auto">
+              <FieldInfoList entity={entity} workspaceId={workspaceId} />
+            </div>
+          </Panel>
+        </Activity>
+      </Group>
     </div>
   );
 }
@@ -185,34 +329,10 @@ type FieldInfoListProps = {
 
 const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   const t = useTranslations();
-  const activePropertyId = useWorkspaceStore(
-    (s) => s.pdfViewer.activePropertyId,
-  );
-  const setPdfActivePropertyId = useWorkspaceStore(
-    (s) => s.setPdfActivePropertyId,
-  );
 
   const visibleFields = entity.fields.filter(
     (field) => !skipFieldFilter(field.content),
   );
-
-  useEffect(() => {
-    const nextPropertyId = visibleFields.at(0)?.propertyId ?? null;
-
-    if (!nextPropertyId) {
-      if (activePropertyId !== null) {
-        setPdfActivePropertyId(null);
-      }
-      return;
-    }
-
-    if (
-      activePropertyId === null ||
-      !visibleFields.some((field) => field.propertyId === activePropertyId)
-    ) {
-      setPdfActivePropertyId(nextPropertyId);
-    }
-  }, [activePropertyId, setPdfActivePropertyId, visibleFields]);
 
   if (visibleFields.length === 0) {
     return (
@@ -225,11 +345,7 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   return (
     <Accordion
       key={entity.entityId}
-      onValueChange={(nextValue) => {
-        const nextId = nextValue.at(0);
-        setPdfActivePropertyId(nextId ?? activePropertyId);
-      }}
-      value={activePropertyId ? [activePropertyId] : []}
+      value={visibleFields.map((f) => f.propertyId)}
     >
       {visibleFields.map((field) => (
         <FieldInfo
@@ -242,4 +358,234 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
       ))}
     </Accordion>
   );
+};
+
+// -- Shared panel separator --
+
+const PanelSeparator = () => (
+  <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
+    <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
+  </Separator>
+);
+
+// -- Version list (left panel, connected to route) --
+
+type VersionListConnectedProps = {
+  workspaceId: string;
+  entityId: string;
+  currentFieldId: string;
+  onCompare: (baseVersionId: string, targetVersionId: string) => void;
+  onClearCompare: () => void;
+  onSwitchField: (fieldId: string) => void;
+  isComparing: boolean;
+};
+
+const VersionListConnected = ({
+  workspaceId,
+  entityId,
+  currentFieldId,
+  onCompare,
+  onClearCompare,
+  onSwitchField,
+  isComparing,
+}: VersionListConnectedProps) => {
+  const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+
+  if (!data) {
+    return null;
+  }
+
+  return (
+    <VersionsSidebar
+      currentFieldId={currentFieldId}
+      currentVersionId={data.currentVersionId}
+      entityId={entityId}
+      isComparing={isComparing}
+      versions={data.versions}
+      workspaceId={workspaceId}
+      onClearCompare={onClearCompare}
+      onCompare={onCompare}
+      onSwitchVersion={(fid) => onSwitchField(fid)}
+    />
+  );
+};
+
+// -- Redline comparison overlay --
+
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+type RedlineOverlayProps = {
+  compareState: {
+    pdfBuffer: ArrayBuffer;
+    docxBase64: string;
+    editsApplied: number;
+    wordsAdded: number;
+    wordsRemoved: number;
+    seq: number;
+  };
+  onClose: () => void;
+};
+
+const RedlineOverlay = ({ compareState, onClose }: RedlineOverlayProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="bg-muted/30 flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5">
+        <span className="text-muted-foreground text-xs">
+          {t("fileDetail.redlinePreview")}
+        </span>
+        <span className="text-xs text-green-600">
+          +{compareState.wordsAdded} {t("fileDetail.wordsAdded")}
+        </span>
+        <span className="text-destructive text-xs">
+          −{compareState.wordsRemoved} {t("fileDetail.wordsRemoved")}
+        </span>
+        <span className="text-muted-foreground text-xs">
+          {compareState.editsApplied} {t("fileDetail.changesDetected")}
+        </span>
+        <div className="ms-auto flex items-center gap-1.5">
+          <Button
+            onClick={() => {
+              downloadBase64AsFile(
+                compareState.docxBase64,
+                "redline.docx",
+                DOCX_MIME,
+              );
+            }}
+            size="xs"
+            variant="outline"
+          >
+            {t("fileDetail.downloadRedline")}
+          </Button>
+          <Button onClick={onClose} size="xs" variant="ghost">
+            {t("common.close")}
+          </Button>
+        </div>
+      </div>
+      <div className="bg-muted min-h-0 flex-1 overflow-auto">
+        <PDFProvider
+          key={`redline-${String(compareState.seq)}`}
+          fieldId={`redline-${String(compareState.seq)}`}
+          startPage={1}
+        >
+          <PDFViewport
+            buffer={compareState.pdfBuffer}
+            className="space-y-2 px-2 pt-2 pb-4"
+            fileId={`redline-${String(compareState.seq)}`}
+            renderPage={(props) => <PDFPage {...props} />}
+          />
+        </PDFProvider>
+      </div>
+    </div>
+  );
+};
+
+// -- Version drop zone for uploading by drag-and-drop --
+
+const ACCEPTED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+]);
+
+type VersionDropZoneProps = React.PropsWithChildren<{
+  workspaceId: string;
+  entityId: string;
+  disabled?: boolean;
+}>;
+
+const VersionDropZone = ({
+  workspaceId,
+  entityId,
+  disabled,
+  children,
+}: VersionDropZoneProps) => {
+  const t = useTranslations();
+  const dropRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const isUploadingRef = useRef(isUploading);
+  isUploadingRef.current = isUploading;
+
+  useEffect(() => {
+    const el = dropRef.current;
+    if (!el || disabled) {
+      return undefined;
+    }
+    return dropTargetForExternal({
+      element: el,
+      canDrop: containsFiles,
+      onDragEnter: () => setIsDropTarget(true),
+      onDragLeave: () => setIsDropTarget(false),
+      // eslint-disable-next-line typescript/no-misused-promises
+      onDrop: async ({ source }) => {
+        setIsDropTarget(false);
+        if (isUploadingRef.current) {
+          return;
+        }
+        const files = getFiles({ source });
+        const file = files.find((f) => ACCEPTED_MIME_TYPES.has(f.type));
+        if (!file) {
+          return;
+        }
+        setIsUploading(true);
+        try {
+          const response = await api
+            .entities({ workspaceId })
+            ["upload-version"].post({
+              entityId,
+              file,
+              queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+            });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+          await queryClient.invalidateQueries({
+            queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+          });
+        } finally {
+          setIsUploading(false);
+        }
+      },
+    });
+  }, [disabled, entityId, queryClient, workspaceId]);
+
+  return (
+    <div className="relative flex h-full flex-col" ref={dropRef}>
+      {children}
+      {isDropTarget && (
+        <div className="border-foreground/20 bg-foreground/5 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed">
+          <div className="text-foreground/50 flex flex-col items-center gap-2">
+            <UploadIcon className="size-8" />
+            <span className="text-sm font-medium">
+              {t("fileDetail.dropToUploadVersion")}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const downloadBase64AsFile = (
+  base64: string,
+  fileName: string,
+  mimeType: string,
+) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.codePointAt(i) ?? 0;
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 };

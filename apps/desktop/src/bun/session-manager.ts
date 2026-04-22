@@ -27,6 +27,7 @@ type DesktopSession = PersistedDesktopSession & {
   checkpointInFlight: boolean;
   checkpointTimer: ReturnType<typeof setTimeout> | null;
   finalizeInFlight: boolean;
+  lockPollTimer: ReturnType<typeof setInterval> | null;
   retryNoticeShown: boolean;
   watcher: FSWatcher | null;
   wordLockSeen: boolean;
@@ -319,6 +320,7 @@ export class DesktopSessionManager {
         checkpointInFlight: false,
         checkpointTimer: null,
         finalizeInFlight: false,
+        lockPollTimer: null,
         retryNoticeShown: false,
         watcher: null,
         wordLockSeen: false,
@@ -476,6 +478,7 @@ export class DesktopSessionManager {
         lastLocalSha: localSha,
         pendingFinalize: false,
         propertyId: request.propertyId,
+        lockPollTimer: null,
         retryNoticeShown: false,
         sessionToken: remoteSession.sessionToken,
         status: "opening",
@@ -811,6 +814,7 @@ export class DesktopSessionManager {
       }
 
       session.wordLockSeen = true;
+      this.startLockPoll(session.id);
       return;
     }
 
@@ -819,6 +823,7 @@ export class DesktopSessionManager {
     }
 
     session.wordLockSeen = false;
+    this.stopLockPoll(session.id);
     this.scheduleAutoFinalize(session.id);
   }
 
@@ -864,6 +869,47 @@ export class DesktopSessionManager {
 
       this.finishSession(sessionId);
     }, AUTO_FINALIZE_DELAY_MS);
+  }
+
+  /**
+   * Poll for Word lock file removal. fs.watch is unreliable on macOS
+   * for detecting lock file deletion, so we poll every 2s as a fallback
+   * while Word has the file open.
+   */
+  private startLockPoll(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.lockPollTimer) {
+      return;
+    }
+
+    session.lockPollTimer = setInterval(() => {
+      void this.checkLockFileGone(sessionId);
+    }, 2000);
+  }
+
+  private stopLockPoll(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session?.lockPollTimer) {
+      return;
+    }
+
+    clearInterval(session.lockPollTimer);
+    session.lockPollTimer = null;
+  }
+
+  private async checkLockFileGone(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.wordLockSeen || session.pendingFinalize) {
+      this.stopLockPoll(sessionId);
+      return;
+    }
+
+    const hasLock = await this.hasWordLockFile(session);
+    if (!hasLock) {
+      session.wordLockSeen = false;
+      this.stopLockPoll(sessionId);
+      this.scheduleAutoFinalize(sessionId);
+    }
   }
 
   private async retryPendingWork() {
@@ -1137,6 +1183,7 @@ export class DesktopSessionManager {
       clearTimeout(session.autoFinalizeTimer);
       session.autoFinalizeTimer = null;
     }
+    this.stopLockPoll(session.id);
 
     session.lastError = message;
     session.pendingFinalize = false;
@@ -1209,6 +1256,7 @@ export class DesktopSessionManager {
     if (session.autoFinalizeTimer) {
       clearTimeout(session.autoFinalizeTimer);
     }
+    this.stopLockPoll(sessionId);
 
     session.watcher?.close();
     this.sessions.delete(sessionId);

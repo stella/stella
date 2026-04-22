@@ -72,7 +72,11 @@ export function getRouter() {
     Wrap: ({ children }) => (
       <AnalyticsProvider>
         <I18nProvider>
-          <HotkeysProvider>
+          <HotkeysProvider
+            defaultOptions={{
+              hotkey: { conflictBehavior: "allow" },
+            }}
+          >
             <ThemeProvider>
               <TooltipProvider>
                 <ToastProvider>{children}</ToastProvider>

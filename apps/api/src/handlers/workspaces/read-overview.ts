@@ -36,6 +36,7 @@ export const readOverviewHandler = async ({
             priority: true,
             dueDate: true,
             createdBy: true,
+            lastEditedBy: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -50,6 +51,9 @@ export const readOverviewHandler = async ({
               },
             },
             createdByUser: {
+              columns: { name: true, email: true, image: true },
+            },
+            lastEditedByUser: {
               columns: { name: true, email: true, image: true },
             },
           },
@@ -106,8 +110,9 @@ export const readOverviewHandler = async ({
       }
     }
 
-    const u = e.createdByUser;
-    const displayName = u ? u.name || u.email : null;
+    // Prefer last editor over original creator for the activity feed
+    const editor = e.lastEditedByUser ?? e.createdByUser;
+    const displayName = editor ? editor.name || editor.email : null;
 
     return {
       entityId: e.id,
@@ -124,7 +129,7 @@ export const readOverviewHandler = async ({
       createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt?.toISOString() ?? null,
       createdBy: displayName,
-      createdByImage: u?.image ?? null,
+      createdByImage: editor?.image ?? null,
     };
   });
 

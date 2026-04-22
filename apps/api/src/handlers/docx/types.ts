@@ -73,11 +73,17 @@ export type DocxEditSet = {
   author: RevisionAuthor;
 };
 
+export type DiffStats = {
+  wordsAdded: number;
+  wordsRemoved: number;
+};
+
 export type DiffResult = {
   edits: DocxEdit[];
   /** Paragraph indices from rewrites that didn't match any
    *  extracted paragraph (typo or stale index). */
   skippedRewrites: number[];
+  stats: DiffStats;
 };
 
 export type EditWithTrackingResult = {

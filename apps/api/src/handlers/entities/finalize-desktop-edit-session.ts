@@ -10,6 +10,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
 import {
   buildVersionStamp,
@@ -418,6 +419,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       return {
         entityId: editSession.entityId,
         outcome: "finalized",
+        versionId: nextVersionId,
         versionNumber: nextVersionNumber,
       } as const;
     });
@@ -451,6 +453,15 @@ export const finalizeDesktopEditSessionHandler = async ({
         captureError(error, {
           entityId: result.entityId,
         });
+      });
+
+      computeVersionDiffStats({
+        versionId: result.versionId,
+        entityId: result.entityId,
+        workspaceId: authorizedSession.value.workspaceId,
+        organizationId: authorizedSession.value.organizationId,
+      }).catch((error: unknown) => {
+        captureError(error, { versionId: result.versionId });
       });
     }
 
