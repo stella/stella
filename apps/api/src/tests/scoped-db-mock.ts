@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 
-import type { SafeDb, SafeDbRetryConfig, ScopedDb, Transaction } from "@/api/db";
+import type {
+  SafeDb,
+  SafeDbRetryConfig,
+  ScopedDb,
+  Transaction,
+} from "@/api/db";
 
 export const toSafeDbMock =
   (scopedDb: ScopedDb): SafeDb =>
@@ -8,7 +13,9 @@ export const toSafeDbMock =
     callback: (transaction: Transaction) => Promise<T>,
     _retry?: SafeDbRetryConfig,
   ) => {
-    const result = await Result.tryPromise(async () => await scopedDb(callback));
+    const result = await Result.tryPromise(
+      async () => await scopedDb(callback),
+    );
     return result;
   };
 
