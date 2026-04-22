@@ -2951,6 +2951,11 @@ export async function seed(organizationId?: string, userId?: string) {
       .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
   }
   if (allSeedContactIds.length > 0) {
+    // Delete any workspaces referencing seed contacts (including
+    // manually-created ones) to avoid FK constraint violations.
+    await db
+      .delete(workspaces)
+      .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`);
     await db
       .delete(contacts)
       .where(sql`${contacts.id} IN ${allSeedContactIds}`);
