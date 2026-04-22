@@ -181,6 +181,34 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/ui/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  "@stella/*",
+                  "@stella/*/**",
+                  "!@stella/ui",
+                  "!@stella/ui/**",
+                ],
+                message:
+                  "@stella/ui must stay workspace-pure; do not import other Stella workspaces from UI source.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "@tanstack/query/exhaustive-deps": "error",
@@ -202,6 +230,27 @@ export default defineConfig({
               {
                 group: ["@/api/*", "@/api/**/*"],
                 message: "Use '@stella/api/types' instead of '@/api/'.",
+              },
+              {
+                group: [
+                  "@stella/api",
+                  "@stella/api/**",
+                  "!@stella/api/types",
+                ],
+                message:
+                  "apps/web may only import the public '@stella/api/types' surface.",
+              },
+              {
+                group: [
+                  "@stella/desktop",
+                  "@stella/desktop/**",
+                  "@stella/docs",
+                  "@stella/docs/**",
+                  "@stella/landing",
+                  "@stella/landing/**",
+                ],
+                message:
+                  "apps/web must not import other app workspaces directly.",
               },
             ],
           },
