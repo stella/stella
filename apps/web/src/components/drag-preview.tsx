@@ -27,14 +27,15 @@ const cardStyle = {
   gap: 6,
   padding: "4px 10px",
   borderRadius: 6,
-  background: "var(--color-card, #fff)",
-  border: "1px solid var(--color-border, #e5e5e5)",
-  boxShadow: "0 2px 8px rgba(0,0,0,.12)",
+  background: "var(--color-card)",
+  border: "1px solid var(--color-border)",
+  boxShadow:
+    "0 2px 8px color-mix(in srgb, var(--color-foreground) 12%, transparent)",
   fontSize: 13,
   fontFamily: "system-ui, sans-serif",
   maxWidth: 220,
   whiteSpace: "nowrap" as const,
-  color: "var(--color-foreground, #111)",
+  color: "var(--color-foreground)",
 } as const;
 
 const ItemIcon = ({ data }: { data: DragPreviewData }) => {
@@ -71,15 +72,15 @@ const badgeStyle = {
   minWidth: 18,
   height: 18,
   borderRadius: 9,
-  background: "var(--color-primary, #2563eb)",
-  color: "var(--color-primary-foreground, #fff)",
+  background: "var(--color-primary)",
+  color: "var(--color-primary-foreground)",
   fontSize: 11,
   fontWeight: 600,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   padding: "0 5px",
-  border: "2px solid var(--color-card, #fff)",
+  border: "2px solid var(--color-card)",
 } as const;
 
 const MultiPreviewContent = ({

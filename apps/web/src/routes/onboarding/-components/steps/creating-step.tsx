@@ -25,7 +25,7 @@ export const CreatingStep = ({ currentPhase, progress }: CreatingStepProps) => {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-dvh items-center justify-center">
       <div className="flex w-full max-w-[400px] flex-col items-center text-center">
         <StellaWordmark
           className="text-foreground mb-10 h-7 w-auto transition-opacity duration-700"

@@ -118,7 +118,7 @@ export const Route = createFileRoute("/_protected")({
     };
   },
   component: ProtectedComponent,
-  pendingComponent: () => <DefaultPendingComponent className="h-screen" />,
+  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
 });
 
 function ProtectedComponent() {

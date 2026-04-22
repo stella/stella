@@ -37,19 +37,19 @@ const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   cancelled: "border-s-red-400",
 };
 
-/** CSS color values for year-view dots (not tailwind classes). */
+/** CSS color values for year-view dots — reference semantic option tokens. */
 export const KIND_DOT_COLORS: Record<string, string> = {
-  document: "#60a5fa",
-  folder: "#a3a3a3",
-  message: "#4ade80",
+  document: "var(--option-blue)",
+  folder: "var(--option-gray)",
+  message: "var(--option-green)",
 };
 
 export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
-  open: "#a3a3a3",
-  in_progress: "#3b82f6",
-  in_review: "#f59e0b",
-  done: "#22c55e",
-  cancelled: "#f87171",
+  open: "var(--option-gray)",
+  in_progress: "var(--option-blue)",
+  in_review: "var(--option-amber)",
+  done: "var(--option-emerald)",
+  cancelled: "var(--option-red)",
 };
 
 type CalendarEntityChipProps = {

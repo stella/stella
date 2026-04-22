@@ -4,7 +4,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 ---
 
 <Base title="Security — stella" description="How stella protects your data. Security controls, data handling, and compliance.">
-  <div class="flex min-h-screen flex-col">
+  <div class="flex min-h-dvh flex-col">
     <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
       <a href="/">
         <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
@@ -166,7 +166,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
             ].map((item) => (
               <a
                 href={`mailto:security@stll.app?subject=${encodeURIComponent(`Request: ${item.title}`)}`}
-                class="resource-card flex flex-col justify-between rounded-2xl p-7 no-underline transition-all duration-200"
+                class="resource-card flex flex-col justify-between rounded-2xl p-7 no-underline transition-[background-color,border-color,box-shadow,transform] duration-200"
                 style="background: var(--card); border: 1px solid var(--border); color: inherit"
               >
                 <div>

@@ -190,14 +190,14 @@ const OrganizationList = ({
   const singleOrg = organizations.length === 1 ? organizations[0] : null;
   const autoSelected = useRef(false);
   useEffect(() => {
-    if (singleOrg && !autoSelected.current && !selectOrganization.isPending) {
+    if (singleOrg && !autoSelected.current && !isSelectingOrganization) {
       autoSelected.current = true;
-      selectOrganization.mutate(singleOrg.id);
+      selectOrganization(singleOrg.id);
     }
-  }, [singleOrg, selectOrganization]);
+  }, [singleOrg, isSelectingOrganization, selectOrganization]);
 
   // Show skeleton while auto-selecting the single org
-  if (singleOrg && (selectOrganization.isPending || !autoSelected.current)) {
+  if (singleOrg && (isSelectingOrganization || !autoSelected.current)) {
     return (
       <Frame className="w-full max-w-sm">
         <FrameHeader>

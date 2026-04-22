@@ -41,9 +41,9 @@ export const Route = createRootRouteWithContext<{
   head: () => ({
     meta: [{ title: "stella" }],
   }),
-  pendingComponent: () => <DefaultPendingComponent className="h-screen" />,
+  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: (props) => (
-    <DefaultErrorComponent className="h-screen" {...props} />
+    <DefaultErrorComponent className="h-dvh" {...props} />
   ),
 });
 
@@ -53,7 +53,7 @@ function RootComponent() {
   return (
     <>
       <HeadContent />
-      <div className="flex h-screen w-full flex-col">
+      <div className="flex h-dvh w-full flex-col">
         <Outlet />
         {DevRoot ? (
           <Suspense fallback={null}>
