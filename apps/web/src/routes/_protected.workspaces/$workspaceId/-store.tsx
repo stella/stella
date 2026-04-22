@@ -20,7 +20,7 @@ type PdfViewerState = {
   activePropertyId: string | null;
   pendingAnonymizeEntityId: number | null;
   scaleOffset: number;
-  sidebar: "none" | "entity" | "anonymize";
+  sidebar: "none" | "entity" | "anonymize" | "versions";
 };
 
 type State = {

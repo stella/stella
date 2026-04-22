@@ -25,6 +25,7 @@ import {
 
 const openDesktopEditSessionBodySchema = t.Object({
   entityId: tUuid,
+  force: t.Optional(t.Boolean()),
   propertyId: tUuid,
 });
 
@@ -195,7 +196,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
 };
 
 const openDesktopEditSessionHandler = async function* ({
-  body: { entityId, propertyId },
+  body: { entityId, force, propertyId },
   organizationId,
   safeDb,
   userId,
@@ -203,6 +204,39 @@ const openDesktopEditSessionHandler = async function* ({
 }: OpenDesktopEditSessionHandlerProps) {
   const sessionToken = createDesktopEditSessionToken();
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
+
+  // Force-takeover: reassign one open session to the current user by
+  // updating createdBy + session token. The previous user's next
+  // checkpoint/finalize will get a 409 "taken over" response; their
+  // local copy is preserved. The new user resumes from the latest
+  // checkpoint. Uses SELECT + UPDATE-by-ID to avoid updating multiple
+  // sessions if duplicates exist.
+  if (force) {
+    yield* Result.await(
+      safeDb(async (tx) => {
+        const existing = await tx
+          .select({ id: desktopEditSessions.id })
+          .from(desktopEditSessions)
+          .where(
+            and(
+              eq(desktopEditSessions.entityId, entityId),
+              eq(desktopEditSessions.propertyId, propertyId),
+              eq(desktopEditSessions.workspaceId, workspaceId),
+              eq(desktopEditSessions.status, "open"),
+            ),
+          )
+          .limit(1);
+
+        const target = existing.at(0);
+        if (target) {
+          await tx
+            .update(desktopEditSessions)
+            .set({ createdBy: userId, sessionTokenHash })
+            .where(eq(desktopEditSessions.id, target.id));
+        }
+      }),
+    );
+  }
 
   const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
     await safeDb(async (tx) => {

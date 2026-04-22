@@ -13,7 +13,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 
 import { StellaMark } from "@/components/stella-mark";
-import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -46,9 +45,7 @@ export const PeekPdfViewer = ({
   mimeType,
   onPeekNavigate,
 }: PeekPdfViewerProps) => {
-  const { resolvedTheme } = useTheme();
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
-  const invertColors = resolvedTheme === "dark" && !isImageOrigin;
 
   const { data: file } = useSuspenseQuery(
     fileOptions({ workspaceId, fieldId }),
@@ -74,7 +71,7 @@ export const PeekPdfViewer = ({
       buffer={file.buffer}
       className="bg-muted relative space-y-2 px-2 pt-2"
       fileId={file.fileId}
-      invertColors={invertColors}
+      invertColors={isImageOrigin ? false : undefined}
       scaleOffset={scaleOffset}
       renderPage={(props) => (
         <PDFPage {...props} renderOverlay={renderPageOverlay} />

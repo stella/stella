@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   ArchiveIcon,
@@ -6,10 +7,12 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileOutputIcon,
+  HistoryIcon,
   LaptopIcon,
+  LockKeyholeOpenIcon,
+  LockOpenIcon,
   MessageSquareIcon,
   PencilIcon,
-  ScanEyeIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -29,6 +32,7 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
+  MenuSeparator,
   MenuTrigger,
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
@@ -40,10 +44,7 @@ import { env } from "@/env";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
-import {
-  DesktopBridgeUnavailableError,
-  openDocxInDesktop,
-} from "@/lib/desktop-bridge";
+import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
@@ -51,6 +52,7 @@ import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useDeleteEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getEntityName,
   getFirstFile,
@@ -87,6 +89,7 @@ export const RowActions = ({
   selectedEntities,
 }: RowActionsProps) => {
   const t = useTranslations();
+  const navigate = useNavigate();
   const deleteEntities = useDeleteEntities();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const file = getFirstFile(entity);
@@ -94,6 +97,24 @@ export const RowActions = ({
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const canOpenInDesktop = !isBulk && file?.mimeType === DOCX_MIME;
+  const isLockedByOther = !isBulk && entity.activeEditBy !== null;
+
+  const openVersionHistory = file
+    ? () => {
+        useWorkspaceStore.getState().setPdfViewerState({
+          sidebar: "versions",
+        });
+        void navigate({
+          to: "/workspaces/$workspaceId/$viewId/pdf",
+          params: { workspaceId, viewId: "all" },
+          search: {
+            entity: entity.entityId,
+            field: file.fieldId,
+            panel: "versions" as const,
+          },
+        });
+      }
+    : undefined;
 
   // Derive a default open handler when the caller doesn't
   // provide one. Tasks open in the inspector; displayable
@@ -153,21 +174,6 @@ export const RowActions = ({
     }
   };
 
-  const handleCheckAnonymise = () => {
-    if (!file || isBulk) {
-      return;
-    }
-    // Open the file in the PDF viewer; the user can
-    // then click the anonymise button in the toolbar.
-    useInspectorStore.getState().openPdf({
-      id: file.fieldId,
-      entityId: entity.entityId,
-      label: name,
-      mimeType: file.mimeType,
-      workspaceId,
-    });
-  };
-
   const handleOpenInDesktop = async () => {
     if (!file || file.mimeType !== DOCX_MIME) {
       return;
@@ -203,14 +209,67 @@ export const RowActions = ({
 
       toastManager.add({
         description: t("workspaces.files.desktopEdit.unavailableDescription"),
-        title:
-          error instanceof DesktopBridgeUnavailableError
-            ? t("workspaces.files.desktopEdit.unavailableTitle")
-            : error instanceof Error
-              ? error.message
-              : t("workspaces.files.desktopEdit.unavailableTitle"),
+        title: t("workspaces.files.desktopEdit.unavailableTitle"),
         type: "error",
       });
+    }
+  };
+
+  const handleTakeOverLock = async () => {
+    if (!file || file.mimeType !== DOCX_MIME) {
+      return;
+    }
+
+    try {
+      const linkedAccount = await getFreshLinkedAccount();
+
+      await openDocxInDesktop({
+        apiBaseUrl: env.VITE_API_URL,
+        entityId: file.entityId,
+        force: true,
+        linkedAccount,
+        propertyId: file.propertyId,
+        workspaceId,
+      });
+
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.openedDescription"),
+        title: t("workspaces.files.desktopEdit.openedTitle"),
+        type: "success",
+      });
+    } catch (error) {
+      if (error instanceof Error && isUnauthorizedError(error)) {
+        toastManager.add({
+          description: t(
+            "workspaces.files.desktopEdit.authRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        title: t("workspaces.files.desktopEdit.unavailableTitle"),
+        type: "error",
+      });
+    }
+  };
+
+  const handleReleaseLock = async () => {
+    if (!file) {
+      return;
+    }
+    const response = await api
+      .entities({ workspaceId })
+      ["desktop-edit-sessions"].release.post({
+        entityId: file.entityId,
+        propertyId: file.propertyId,
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+    if (response.error) {
+      toastManager.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };
 
@@ -301,10 +360,11 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
+        {/* --- View / Edit --- */}
         {resolvedOnOpen && (
           <MenuItem onClick={resolvedOnOpen}>
             <EyeIcon />
-            {t("common.open")}
+            {t("common.preview")}
           </MenuItem>
         )}
         {!isBulk && onRename && (
@@ -320,16 +380,38 @@ export const RowActions = ({
             {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
+        {isLockedByOther && (
+          // eslint-disable-next-line typescript/no-misused-promises
+          <MenuItem onClick={handleReleaseLock}>
+            <LockKeyholeOpenIcon />
+            {t("workspaces.files.desktopEdit.releaseLock")}
+          </MenuItem>
+        )}
+        {isLockedByOther && canOpenInDesktop && (
+          // eslint-disable-next-line typescript/no-misused-promises
+          <MenuItem onClick={handleTakeOverLock}>
+            <LockOpenIcon />
+            {t("workspaces.files.desktopEdit.takeOverLock")}
+          </MenuItem>
+        )}
+
+        <MenuSeparator />
+
+        {/* --- Features --- */}
+        {!isBulk && !isFolder && entity.kind !== "task" && file && (
+          <MenuItem onClick={openVersionHistory}>
+            <HistoryIcon />
+            {t("fileDetail.viewVersionHistory")}
+          </MenuItem>
+        )}
         <MenuItem onClick={handleChatAbout}>
           <MessageSquareIcon />
           {t("chat.chatAbout")}
         </MenuItem>
-        {!isBulk && file && isFileDisplayable(file) && (
-          <MenuItem onClick={handleCheckAnonymise}>
-            <ScanEyeIcon />
-            {t("anonymize.checkAnonymization")}
-          </MenuItem>
-        )}
+
+        <MenuSeparator />
+
+        {/* --- File operations --- */}
         {hasAnyFile && (
           // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={async () => await handleDownload()}>
@@ -356,6 +438,10 @@ export const RowActions = ({
           <CopyIcon />
           {t("common.duplicate")}
         </MenuItem>
+
+        <MenuSeparator />
+
+        {/* --- Destructive --- */}
         <AlertDialog>
           <AlertDialogTrigger
             render={<MenuItem closeOnClick={false} variant="destructive" />}

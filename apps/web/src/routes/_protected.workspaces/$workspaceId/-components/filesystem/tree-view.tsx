@@ -46,6 +46,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -970,7 +971,15 @@ const FilesystemRow = ({
           value={editValue}
         />
       ) : (
-        <span className="truncate">{name}</span>
+        <span className="flex items-center gap-1.5 truncate">
+          <span className="truncate">{name}</span>
+          {node.activeEditBy !== null && (
+            <ActiveEditBadge
+              image={node.activeEditBy.image}
+              name={node.activeEditBy.name}
+            />
+          )}
+        </span>
       )}
     </span>
   );

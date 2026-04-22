@@ -255,8 +255,7 @@ export const FieldInfo = ({
     content === undefined ||
     content === null ||
     property.content.type === "file" ||
-    skipFieldFilter(content) ||
-    property.tool.type !== "ai-model"
+    skipFieldFilter(content)
   ) {
     return null;
   }

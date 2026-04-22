@@ -3,8 +3,10 @@ import { rateLimit } from "elysia-rate-limit";
 
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import clipEndpoint from "@/api/handlers/entities/clip";
+import compareVersions from "@/api/handlers/entities/compare-versions";
 import createEntities from "@/api/handlers/entities/create";
 import deleteEntities from "@/api/handlers/entities/delete";
+import deleteVersion from "@/api/handlers/entities/delete-version";
 import downloadZip from "@/api/handlers/entities/download-zip";
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import moveEntity from "@/api/handlers/entities/move";
@@ -12,8 +14,15 @@ import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-se
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
+import readVersionById from "@/api/handlers/entities/read-version-by-id";
+import readVersions from "@/api/handlers/entities/read-versions";
+import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit-lock";
 import renameEntity from "@/api/handlers/entities/rename";
+import restoreVersion from "@/api/handlers/entities/restore-version";
+import updateVersionDescription from "@/api/handlers/entities/update-version-description";
+import updateVersionLabel from "@/api/handlers/entities/update-version-label";
 import uploadEntity from "@/api/handlers/entities/upload";
+import uploadVersion from "@/api/handlers/entities/upload-version";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -53,6 +62,10 @@ export const entitiesRoute = new Elysia({
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
     body: openDesktopEditSession.config.body,
   })
+  .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
+    body: releaseDesktopEditLock.config.body,
+    invalidateQuery: true,
+  })
   .post("/clip", clipEndpoint.handler, {
     ...clipEndpoint.config,
     invalidateQuery: true,
@@ -83,4 +96,37 @@ export const entitiesRoute = new Elysia({
     query: readEntitySummaries.config.query,
   })
   .get("/zip/:entityId", downloadZip.handler)
-  .get("/entity/:entityId", readEntityById.handler);
+  .get("/entity/:entityId", readEntityById.handler)
+  .get("/entity/:entityId/versions", readVersions.handler)
+  .get("/entity/:entityId/versions/:versionId", readVersionById.handler)
+  .post("/entity/:entityId/compare", compareVersions.handler, {
+    body: compareVersions.config.body,
+  })
+  .patch(
+    "/entity/:entityId/versions/:versionId/label",
+    updateVersionLabel.handler,
+    {
+      body: updateVersionLabel.config.body,
+      invalidateQuery: true,
+    },
+  )
+  .patch(
+    "/entity/:entityId/versions/:versionId/description",
+    updateVersionDescription.handler,
+    {
+      body: updateVersionDescription.config.body,
+      invalidateQuery: true,
+    },
+  )
+  .post(
+    "/entity/:entityId/versions/:versionId/restore",
+    restoreVersion.handler,
+    { invalidateQuery: true },
+  )
+  .delete("/entity/:entityId/versions/:versionId", deleteVersion.handler, {
+    invalidateQuery: true,
+  })
+  .post("/upload-version", uploadVersion.handler, {
+    body: uploadVersion.config.body,
+    invalidateQuery: true,
+  });

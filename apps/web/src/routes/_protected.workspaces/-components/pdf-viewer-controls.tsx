@@ -1,16 +1,11 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
-  ArrowBigLeftDashIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   FoldHorizontalIcon,
-  LayoutListIcon,
-  ScanEyeIcon,
-  SunMoonIcon,
   UnfoldHorizontalIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -20,35 +15,21 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
 
-import { useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
 
 export const PdfViewerControls = () => {
   const t = useTranslations();
-  const { field: fieldId, pdfPage: currentPage = 1 } = useSearch({
+  const { pdfPage: currentPage = 1 } = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => ({ field: s.field, pdfPage: s.pdfPage }),
-  });
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (p) => p.workspaceId,
+    select: (s) => ({ pdfPage: s.pdfPage }),
   });
 
-  const { data: isImageOrigin } = useQuery({
-    ...fileOptions({ workspaceId, fieldId }),
-    select: (file) => file.originalMimeType.startsWith("image/"),
-  });
-
-  const { resolvedTheme } = useTheme();
   const totalPages = useWorkspaceStore((s) => s.pdfPageCount);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
-  const sidebar = useWorkspaceStore((s) => s.pdfViewer.sidebar);
   const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
-  const setPdfSidebar = useWorkspaceStore((s) => s.setPdfSidebar);
   // TODO: invertPages toggle needs a small persisted store
   // or to be lifted to the route. For now, dark mode always
   // inverts (matching the viewer prop).
@@ -75,24 +56,6 @@ export const PdfViewerControls = () => {
 
   return (
     <div className="ms-auto flex items-center justify-between">
-      <Tooltip
-        content={t("workspaces.pdf.goBack")}
-        render={
-          <Button
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () =>
-              await navigate({
-                to: "/workspaces/$workspaceId",
-              })
-            }
-            size="icon"
-            variant="ghost"
-          />
-        }
-      >
-        <ArrowBigLeftDashIcon />
-      </Tooltip>
-      <Separator className="mx-1 h-4" orientation="vertical" />
       <Tooltip
         content={t("workspaces.pdf.zoomOut")}
         render={
@@ -203,46 +166,6 @@ export const PdfViewerControls = () => {
         <span>/</span>
         <span>{totalPages}</span>
       </div>
-      {resolvedTheme === "dark" && !isImageOrigin && (
-        <>
-          <Separator className="mx-1 h-4" orientation="vertical" />
-          <Tooltip
-            content={t("workspaces.pdf.adjustForDarkMode")}
-            render={<Button disabled size="icon" variant="ghost" />}
-          >
-            <SunMoonIcon />
-          </Tooltip>
-        </>
-      )}
-      <Separator className="mx-1 h-4" orientation="vertical" />
-      <Tooltip
-        content={t("workspaces.pdf.entitySidebar")}
-        render={
-          <Button
-            onClick={() =>
-              setPdfSidebar(sidebar === "entity" ? "none" : "entity")
-            }
-            size="icon"
-            variant={sidebar === "entity" ? "default" : "ghost"}
-          />
-        }
-      >
-        <LayoutListIcon />
-      </Tooltip>
-      <Tooltip
-        content={t("workspaces.pdf.anonymizeSidebar")}
-        render={
-          <Button
-            onClick={() =>
-              setPdfSidebar(sidebar === "anonymize" ? "none" : "anonymize")
-            }
-            size="icon"
-            variant={sidebar === "anonymize" ? "default" : "ghost"}
-          />
-        }
-      >
-        <ScanEyeIcon />
-      </Tooltip>
     </div>
   );
 };

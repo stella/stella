@@ -158,46 +158,45 @@ const OrganizationList = ({
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();
 
-  const { isPending: isSelectingOrganization, mutate: selectOrganization } =
-    useMutation({
-      mutationFn: async (organizationId: string) => {
-        const { error } = await authClient.organization.setActive({
-          organizationId,
-        });
+  const { isPending: isSelectPending, mutate: selectOrg } = useMutation({
+    mutationFn: async (organizationId: string) => {
+      const { error } = await authClient.organization.setActive({
+        organizationId,
+      });
 
-        if (error) {
-          toastManager.add({
-            title: error.message ?? t("errors.actionFailed"),
-            type: "error",
-          });
-          throw toAuthClientError(error);
-        }
-
-        await completeOrganizationFlow({
-          invalidateSession,
-          isOauthPostLogin,
-          navigate,
-          redirectTo,
-          status: "selected",
+      if (error) {
+        toastManager.add({
+          title: error.message ?? t("errors.actionFailed"),
+          type: "error",
         });
-      },
-      onError: (error) => {
-        analytics.captureError(error);
-      },
-    });
+        throw toAuthClientError(error);
+      }
+
+      await completeOrganizationFlow({
+        invalidateSession,
+        isOauthPostLogin,
+        navigate,
+        redirectTo,
+        status: "selected",
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   // Auto-select when there's only one organization
   const singleOrg = organizations.length === 1 ? organizations[0] : null;
   const autoSelected = useRef(false);
   useEffect(() => {
-    if (singleOrg && !autoSelected.current && !isSelectingOrganization) {
+    if (singleOrg && !autoSelected.current && !isSelectPending) {
       autoSelected.current = true;
-      selectOrganization(singleOrg.id);
+      selectOrg(singleOrg.id);
     }
-  }, [singleOrg, isSelectingOrganization, selectOrganization]);
+  }, [singleOrg, isSelectPending, selectOrg]);
 
   // Show skeleton while auto-selecting the single org
-  if (singleOrg && (isSelectingOrganization || !autoSelected.current)) {
+  if (singleOrg && (isSelectPending || !autoSelected.current)) {
     return (
       <Frame className="w-full max-w-sm">
         <FrameHeader>
@@ -221,9 +220,9 @@ const OrganizationList = ({
         {organizations.map((org) => (
           <button
             className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start transition-colors disabled:opacity-64"
-            disabled={isSelectingOrganization}
+            disabled={isSelectPending}
             key={org.id}
-            onClick={() => selectOrganization(org.id)}
+            onClick={() => selectOrg(org.id)}
             type="button"
           >
             <Avatar className="size-10">

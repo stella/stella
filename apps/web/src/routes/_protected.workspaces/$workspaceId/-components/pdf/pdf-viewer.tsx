@@ -5,7 +5,6 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
 import { StellaMark } from "@/components/stella-mark";
-import { useTheme } from "@/components/theme-provider";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -22,8 +21,8 @@ const FullscreenPdfViewer = () => {
   const workspaceId = routeApi.useParams({
     select: (p) => p.workspaceId,
   });
-  const fieldId = routeApi.useSearch({ select: (s) => s.field });
-  const entityId = routeApi.useSearch({ select: (s) => s.entity });
+  const fieldId = usePDFStore((s) => s.fieldId);
+  const entityId = routeApi.useSearch({ select: (s) => s.entity ?? "" });
   const pageNumber = routeApi.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
@@ -47,9 +46,6 @@ const FullscreenPdfViewer = () => {
       return field.content.mimeType.startsWith("image/");
     },
   });
-
-  const { resolvedTheme } = useTheme();
-  const invertColors = resolvedTheme === "dark" && !isImageOrigin;
 
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/pdf",
@@ -76,7 +72,7 @@ const FullscreenPdfViewer = () => {
         buffer={file.buffer}
         className="relative mt-2 h-full space-y-2 px-2"
         fileId={file.fileId}
-        invertColors={invertColors}
+        invertColors={isImageOrigin ? false : undefined}
         onPageChanged={handlePageChanged}
         onPageCountChanged={setPdfPageCount}
         page={pageNumber}

@@ -7,6 +7,7 @@ export default {
     name: "stella desktop",
     identifier: "legal.stella.desktop",
     version: "0.0.1",
+    urlSchemes: ["stella"],
   },
   runtime: {
     exitOnLastWindowClosed: false,

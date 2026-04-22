@@ -188,4 +188,16 @@ declare module "electrobun/bun" {
       title: string;
     }): void;
   };
+
+  type OpenUrlEvent = {
+    data: { url: string };
+  };
+
+  const Electrobun: {
+    events: {
+      on(eventName: "open-url", handler: (event: OpenUrlEvent) => void): void;
+    };
+  };
+
+  export default Electrobun;
 }

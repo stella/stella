@@ -18,7 +18,6 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   LoaderCircleIcon,
-  ScanEyeIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -33,7 +32,6 @@ import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { ClientTelemetryError } from "@/lib/errors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -41,10 +39,7 @@ import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
-import {
-  anonymizePdf,
-  clearAnonymization,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
+import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
@@ -82,44 +77,7 @@ const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 const PINCH_ZOOM_SENSITIVITY = 0.005;
 
-/** Must render under PDFProvider; uses the same store as peek overlays. */
-const PeekAnonymizeToggleButton = ({
-  fieldId,
-  pipelineRunning,
-  onStartPipeline,
-}: {
-  fieldId: string;
-  pipelineRunning: boolean;
-  onStartPipeline: () => void;
-}) => {
-  const t = useTranslations();
-  const hasAnon = usePDFStore((s) => s.fileAnonymization !== null);
-
-  return (
-    <Tooltip
-      content={t("anonymize.checkAnonymization")}
-      render={
-        <Button
-          disabled={pipelineRunning}
-          onClick={() => {
-            if (hasAnon) {
-              clearAnonymization(fieldId);
-            } else {
-              onStartPipeline();
-            }
-          }}
-          size="icon-xs"
-          variant={hasAnon ? "default" : "ghost"}
-        >
-          <ScanEyeIcon className="size-3.5" />
-        </Button>
-      }
-    />
-  );
-};
-
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
-  const analytics = useAnalytics();
   const t = useTranslations();
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
@@ -130,9 +88,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
   const closeAll = useInspectorStore((s) => s.closeAll);
-  const [anonymisingIds, setAnonymisingIds] = useState<Set<string>>(
-    () => new Set(),
-  );
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
@@ -443,38 +398,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     />
                   </div>
                   <PeekPrintButton />
-                  <PeekAnonymizeToggleButton
-                    fieldId={tab.id}
-                    pipelineRunning={anonymisingIds.has(tab.id)}
-                    onStartPipeline={() => {
-                      setAnonymisingIds((prev) => new Set(prev).add(tab.id));
-                      anonymizePdf({
-                        workspaceId,
-                        fieldId: tab.id,
-                        mimeType: tab.mimeType ?? null,
-                      })
-                        .catch((error: unknown) => {
-                          analytics.captureError(
-                            new ClientTelemetryError({
-                              area: "anonymize-pdf",
-                              message: "Anonymization failed",
-                              cause: error,
-                            }),
-                          );
-                          toastManager.add({
-                            title: t("errors.actionFailed"),
-                            type: "error",
-                          });
-                        })
-                        .finally(() => {
-                          setAnonymisingIds((prev) => {
-                            const next = new Set(prev);
-                            next.delete(tab.id);
-                            return next;
-                          });
-                        });
-                    }}
-                  />
                   <Tooltip
                     content={t("workspaces.pdf.openFullView")}
                     render={

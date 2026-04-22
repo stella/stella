@@ -586,17 +586,7 @@ export default function App() {
 
     window.addEventListener("stella:desktop-state-changed", handleStateChanged);
 
-    // Retry initial sync a few times in case the RPC bridge
-    // is still coming up when the webview mounts.
-    const trySync = async (retries: number) => {
-      await syncState();
-      if (!disposed && state === null && retries > 0) {
-        setTimeout(() => {
-          void trySync(retries - 1);
-        }, 500);
-      }
-    };
-    void trySync(3);
+    void syncState();
 
     return () => {
       disposed = true;

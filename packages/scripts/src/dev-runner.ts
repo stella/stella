@@ -144,7 +144,8 @@ const isDevMode = (value: string): value is DevMode =>
 const modeIncludesApi = (mode: DevMode) =>
   mode === "dev" || mode === "dev:api" || mode === "dev:desktop";
 
-const modeIncludesDesktop = (mode: DevMode) => mode === "dev:desktop";
+const modeIncludesDesktop = (mode: DevMode) =>
+  mode === "dev" || mode === "dev:desktop";
 
 const modeIncludesWeb = (mode: DevMode) =>
   mode === "dev" || mode === "dev:web" || mode === "dev:desktop";

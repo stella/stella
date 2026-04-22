@@ -18,6 +18,7 @@ import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
 import { Input } from "@stella/ui/components/input";
 import { ScrollArea } from "@stella/ui/components/scroll-area";
 
+import { useTheme } from "@/components/theme-provider";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
 import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-scale-offset";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
@@ -99,10 +100,12 @@ const PDFViewerContent = ({
   onPageChanged,
   onPageCountChanged,
   scaleOffset = 0,
-  invertColors = false,
+  invertColors,
   className,
   renderPage,
 }: PDFViewerContentProps) => {
+  const { resolvedTheme } = useTheme();
+  const shouldInvert = invertColors ?? resolvedTheme === "dark";
   const [attachmentLabels, scale, pages, setDocument] = usePDFStore(
     useShallow((s) => [s.attachmentLabels, s.scale, s.pages, s.setDocument]),
   );
@@ -155,7 +158,7 @@ const PDFViewerContent = ({
             "--scale-factor": effectiveScale,
             "--scale-round-x": `${roundY}px`,
             "--scale-round-y": `${roundY}px`,
-            ...(invertColors && {
+            ...(shouldInvert && {
               filter: "invert(1) hue-rotate(180deg)",
             }),
             // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion

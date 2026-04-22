@@ -15,6 +15,7 @@ declare module "electrobun" {
     app?: {
       identifier?: string;
       name?: string;
+      urlSchemes?: string[];
       version?: string;
     };
     build?: {

@@ -12,7 +12,11 @@ const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
 function AlertDialogTrigger(props: AlertDialogPrimitive.Trigger.Props) {
   return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
+    <AlertDialogPrimitive.Trigger
+      data-slot="alert-dialog-trigger"
+      nativeButton={false}
+      {...props}
+    />
   );
 }
 

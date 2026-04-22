@@ -452,6 +452,7 @@ type Messages = {
     "caseLaw": "Case Law";
     "category": "Category";
     "clauses": "Clauses";
+    "close": "Close";
     "columns": "Columns";
     "comingSoon": "Coming soon";
     "confirm": "Confirm";
@@ -501,6 +502,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
+    "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
     "properties": "Properties";
@@ -695,6 +697,45 @@ type Messages = {
     "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty";
     "title": "Feedback";
     "trigger": "Feedback";
+  };
+  "fileDetail": {
+    "base": "Base";
+    "cannotDeleteLastVersion": "Cannot delete the only remaining version";
+    "changesDetected": "changes detected";
+    "changesSince": "Changes since {version}";
+    "compare": "Compare";
+    "compareTo": "Compare to";
+    "compareWith": "Compare with…";
+    "confirmDeleteVersion": "This will permanently delete version {version}. This action cannot be undone.";
+    "current": "Current";
+    "deleteVersion": "Delete version";
+    "description": "Description";
+    "descriptionPlaceholder": "Add a note about this version...";
+    "downloadRedline": "Download redline";
+    "dropToUploadVersion": "Drop to upload as new version";
+    "generatingRedline": "Generating redline comparison...";
+    "inspectMode": "Inspect";
+    "label": "Label";
+    "labelPresets": {
+      "counterpartyReview": "Counterparty review";
+      "draft": "Internal draft";
+      "final": "Final version";
+      "signed": "Signed";
+    };
+    "makeCurrent": "Make current";
+    "noFileInVersion": "No file in this version";
+    "noLabel": "No label";
+    "redlinePreview": "Tracked changes";
+    "removeLabel": "Remove label";
+    "selectVersion": "Select a version";
+    "setLabel": "Set label";
+    "uploadDate": "Upload date";
+    "uploadedBy": "Uploaded by";
+    "version": "Version";
+    "versionHistory": "Version history";
+    "viewVersionHistory": "Version history";
+    "wordsAdded": "words added";
+    "wordsRemoved": "words removed";
   };
   "filters": {
     "contains": "contains";
@@ -1138,9 +1179,11 @@ type Messages = {
         "action": "Edit in desktop";
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.";
         "authRequiredTitle": "Your session expired";
-        "openedDescription": "Word will open the managed local copy. stella desktop keeps hidden checkpoints in sync, then creates one new revision when editing finishes.";
+        "openedDescription": "Word opens a local copy. When you finish editing, a new revision is created automatically.";
         "openedTitle": "Opened in stella desktop";
         "opening": "Opening...";
+        "releaseLock": "Release lock";
+        "takeOverLock": "Take over lock";
         "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.";
         "unavailableTitle": "stella desktop is not available.";
       };
