@@ -34,11 +34,25 @@ import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
+type DbSlot = {
+  acquire: () => Promise<void>;
+  release: () => void;
+};
+
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   scopedDb: ScopedDb;
   /** Per-cycle abort signal. Fires when the adapter's time budget is exhausted. */
   signal?: AbortSignal;
+  /**
+   * Optional concurrency limiter for DB-heavy operations.
+   * When provided, the pipeline acquires a slot before
+   * processing decisions (insert, index, citations) and
+   * releases it before the next page fetch. This lets
+   * external API fetches run in parallel across adapters
+   * while capping concurrent DB pressure.
+   */
+  dbSlot?: DbSlot;
 };
 
 type PipelineResult = {
@@ -407,6 +421,7 @@ export const runIngestionPipeline = async ({
   source,
   scopedDb,
   signal,
+  dbSlot,
 }: PipelineInput): Promise<PipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
@@ -475,83 +490,105 @@ export const runIngestionPipeline = async ({
 
     const page = pageResult.value;
 
-    for (const result of page.decisions) {
-      try {
-        const outcome = await processDecision(result, source.id, scopedDb);
-
-        if (outcome.inserted) {
-          inserted++;
-        } else {
-          skipped++;
-        }
-        consecutiveFailures = 0;
-        if (outcome.searchVectorFailed) {
-          searchVectorFailures++;
-        }
-        if (outcome.s3UploadFailed) {
-          s3UploadFailures++;
-        }
-      } catch (error) {
-        consecutiveFailures++;
-        const tag = errorTag(error);
-        const message = error instanceof Error ? error.message : String(error);
-
-        logger.error("case_law.ingestion.decision_failed", {
-          adapterKey: adapter.key,
-          caseNumber: result.caseNumber,
-          cursor: cursor ?? "",
-          "error.type": tag,
-          consecutiveFailures,
-        });
-        captureError(error, {
-          adapterKey: adapter.key,
-          caseNumber: result.caseNumber,
-          cursor: cursor ?? "",
-        });
-
-        // Persist failure for later analysis
-        try {
-          await scopedDb((tx) =>
-            tx.insert(caseLawIngestionFailures).values({
-              sourceId: source.id,
-              caseNumber: result.caseNumber,
-              language: result.language,
-              errorType: tag.slice(0, 128),
-              errorMessage: message.slice(0, 2048),
-              cursor,
-            }),
-          );
-        } catch (failureLogError) {
-          captureError(failureLogError, {
-            sourceId: source.id,
-            caseNumber: result.caseNumber,
-          });
-        }
-
-        skipped++;
-
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          haltReason =
-            `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
-            `last: [${tag}] ${message.slice(0, 200)}`;
-          break;
-        }
+    // Acquire DB slot before processing decisions (DB-heavy:
+    // insert, search index, citation extraction). Released
+    // before the next page fetch so external API calls don't
+    // hold the slot. try-finally ensures no slot leak on
+    // unexpected exceptions.
+    if (dbSlot) {
+      await dbSlot.acquire();
+      // If the cycle timed out while waiting for a slot,
+      // release immediately and break.
+      if (signal?.aborted) {
+        dbSlot.release();
+        haltReason = "Cycle timeout exceeded";
+        break;
       }
     }
+    try {
+      for (const result of page.decisions) {
+        try {
+          const outcome = await processDecision(result, source.id, scopedDb);
 
-    if (haltReason) {
-      logger.error("case_law.ingestion.adapter_halted", {
-        adapterKey: adapter.key,
-        cursor: cursor ?? "",
-        reason: haltReason,
-        inserted,
-        skipped,
-      });
-      break;
+          if (outcome.inserted) {
+            inserted++;
+          } else {
+            skipped++;
+          }
+          consecutiveFailures = 0;
+          if (outcome.searchVectorFailed) {
+            searchVectorFailures++;
+          }
+          if (outcome.s3UploadFailed) {
+            s3UploadFailures++;
+          }
+        } catch (error) {
+          consecutiveFailures++;
+          const tag = errorTag(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
+
+          logger.error("case_law.ingestion.decision_failed", {
+            adapterKey: adapter.key,
+            caseNumber: result.caseNumber,
+            cursor: cursor ?? "",
+            "error.type": tag,
+            consecutiveFailures,
+          });
+          captureError(error, {
+            adapterKey: adapter.key,
+            caseNumber: result.caseNumber,
+            cursor: cursor ?? "",
+          });
+
+          // Persist failure for later analysis
+          try {
+            await scopedDb((tx) =>
+              tx.insert(caseLawIngestionFailures).values({
+                sourceId: source.id,
+                caseNumber: result.caseNumber,
+                language: result.language,
+                errorType: tag.slice(0, 128),
+                errorMessage: message.slice(0, 2048),
+                cursor,
+              }),
+            );
+          } catch (failureLogError) {
+            captureError(failureLogError, {
+              sourceId: source.id,
+              caseNumber: result.caseNumber,
+            });
+          }
+
+          skipped++;
+
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            haltReason =
+              `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
+              `last: [${tag}] ${message.slice(0, 200)}`;
+            break;
+          }
+        }
+      }
+
+      if (haltReason) {
+        logger.error("case_law.ingestion.adapter_halted", {
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          reason: haltReason,
+          inserted,
+          skipped,
+        });
+        break;
+      }
+
+      cursor = page.nextCursor;
+      pagesProcessed++;
+    } finally {
+      if (dbSlot) {
+        dbSlot.release();
+      }
     }
-
-    cursor = page.nextCursor;
-    pagesProcessed++;
 
     // Stop when the adapter signals exhaustion: null cursor
     // or a cursor we've already visited (stagnation / ping-pong
