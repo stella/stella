@@ -7,14 +7,17 @@ import updateWorkspace from "./update-by-id";
 
 const createContext = ({
   body,
+  safeDb,
   scopedDb,
 }: {
   body: Parameters<typeof updateWorkspace.handler>[0]["body"];
+  safeDb: Parameters<typeof updateWorkspace.handler>[0]["safeDb"];
   scopedDb: Parameters<typeof updateWorkspace.handler>[0]["scopedDb"];
 }): Parameters<typeof updateWorkspace.handler>[0] =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides the fields used by the handler
   ({
     body,
+    safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
@@ -45,7 +48,7 @@ describe("updateWorkspace", () => {
       }),
     };
 
-    const { getCallCount, scopedDb } = createScopedDbMock({
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => clientSelect,
     });
 
@@ -54,6 +57,7 @@ describe("updateWorkspace", () => {
         body: {
           clientId: crypto.randomUUID(),
         },
+        safeDb,
         scopedDb,
       }),
     );

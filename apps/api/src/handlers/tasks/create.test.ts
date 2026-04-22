@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createTaskHandler } from "./create";
 
@@ -25,9 +26,11 @@ const resolvingScopedDb = () =>
 
 const createHandlerContext = ({
   body,
+  safeDb,
   scopedDb,
 }: {
   body: Parameters<typeof createTaskHandler>[0]["body"];
+  safeDb: Parameters<typeof createTaskHandler>[0]["safeDb"];
   scopedDb: Parameters<typeof createTaskHandler>[0]["scopedDb"];
 }): Parameters<typeof createTaskHandler>[0] =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only exercises the handler-owned fields accessed before/inside scopedDb
@@ -44,6 +47,7 @@ const createHandlerContext = ({
     },
     memberRole: { role: "owner" },
     body,
+    safeDb,
     scopedDb,
   }) as Parameters<typeof createTaskHandler>[0];
 
@@ -54,6 +58,7 @@ describe("createTaskHandler validation", () => {
     const result = await createTaskHandler(
       createHandlerContext({
         body: { name: "Test task", status: "bogus" },
+        safeDb: toSafeDbMock(scopedDb),
         scopedDb,
       }),
     );
@@ -70,6 +75,7 @@ describe("createTaskHandler validation", () => {
     const result = await createTaskHandler(
       createHandlerContext({
         body: { name: "Test task", priority: "critical" },
+        safeDb: toSafeDbMock(scopedDb),
         scopedDb,
       }),
     );
@@ -90,6 +96,7 @@ describe("createTaskHandler validation", () => {
           status: "bogus",
           priority: "critical",
         },
+        safeDb: toSafeDbMock(scopedDb),
         scopedDb,
       }),
     );
@@ -110,6 +117,7 @@ describe("createTaskHandler validation", () => {
           status: "in_progress",
           priority: "high",
         },
+        safeDb: toSafeDbMock(scopedDb),
         scopedDb,
       }),
     );
@@ -123,6 +131,7 @@ describe("createTaskHandler validation", () => {
     await createTaskHandler(
       createHandlerContext({
         body: { name: "Test task" },
+        safeDb: toSafeDbMock(scopedDb),
         scopedDb,
       }),
     );
@@ -145,6 +154,7 @@ describe("createTaskHandler validation", () => {
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test task", status: taskStatus },
+          safeDb: toSafeDbMock(scopedDb),
           scopedDb,
         }),
       );
@@ -162,6 +172,7 @@ describe("createTaskHandler validation", () => {
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test task", priority },
+          safeDb: toSafeDbMock(scopedDb),
           scopedDb,
         }),
       );
