@@ -24,7 +24,7 @@ export const OnboardingLayout = ({
   totalSteps,
   onBack,
 }: OnboardingLayoutProps) => (
-  <div className="flex min-h-screen">
+  <div className="flex min-h-dvh">
     {/* Left: form */}
     <div className="flex w-full flex-col px-8 pt-[15vh] md:w-1/2 md:px-16 lg:px-24">
       <div className="mx-auto w-full max-w-[440px]">

@@ -328,10 +328,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           date,
           color:
             entity.kind === "task" && entity.status
-              ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "#a3a3a3")
+              ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "var(--option-gray)")
               : (KIND_DOT_COLORS[entity.kind] ??
                 KIND_DOT_COLORS.document ??
-                "#a3a3a3"),
+                "var(--option-gray)"),
         });
       }
     }

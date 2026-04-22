@@ -11,7 +11,7 @@ import { controlCapabilities } from "../data/capabilities";
 
   <main>
     <!-- ——— Hero ——— -->
-    <section class="relative flex min-h-screen flex-col overflow-hidden">
+    <section class="relative flex min-h-dvh flex-col overflow-hidden">
       <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
         <div id="gradient-light" class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"></div>
         <div id="gradient-dark" class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
@@ -128,7 +128,7 @@ import { controlCapabilities } from "../data/capabilities";
             },
           ].map((tier) => (
             <div
-              class="pricing-card group flex flex-col rounded-2xl p-8 transition-all duration-200"
+              class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow] duration-200"
               style="background: var(--card); border: 1px solid var(--border); color: inherit"
             >
               <p class="text-xs font-medium uppercase tracking-[0.15em]" style="color: var(--muted-foreground)">{tier.name}</p>
