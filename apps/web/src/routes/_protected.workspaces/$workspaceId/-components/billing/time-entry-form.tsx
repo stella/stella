@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 import { Checkbox } from "@stella/ui/components/checkbox";
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Input } from "@stella/ui/components/input";
 import { Label } from "@stella/ui/components/label";
 import {
@@ -152,9 +153,8 @@ export const TimeEntryForm = ({
           <Label>{t("common.date")}</Label>
           <form.Field name="dateWorked">
             {(field) => (
-              <Input
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                type="date"
+              <DatePickerPopover
+                onChange={(v) => field.handleChange(v ?? "")}
                 value={field.state.value}
               />
             )}

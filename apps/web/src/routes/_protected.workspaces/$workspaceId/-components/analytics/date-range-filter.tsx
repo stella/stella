@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 
 import { formatDateISO } from "./utils";
 
@@ -75,17 +75,13 @@ export const DateRangeFilter = ({
         </Button>
       ))}
       <div className="flex items-center gap-1">
-        <Input
-          className="h-8 w-auto px-2 text-sm"
-          onChange={(e) => onDateFromChange(e.currentTarget.value)}
-          type="date"
+        <DatePickerPopover
+          onChange={(v) => onDateFromChange(v ?? "")}
           value={dateFrom}
         />
         <span className="text-muted-foreground">–</span>
-        <Input
-          className="h-8 w-auto px-2 text-sm"
-          onChange={(e) => onDateToChange(e.currentTarget.value)}
-          type="date"
+        <DatePickerPopover
+          onChange={(v) => onDateToChange(v ?? "")}
           value={dateTo}
         />
       </div>

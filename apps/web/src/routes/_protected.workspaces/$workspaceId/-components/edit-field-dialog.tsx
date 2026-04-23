@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stella/ui/components/button";
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import {
   Dialog,
   DialogClose,
@@ -260,13 +261,8 @@ export const EditFieldDialog = ({
                     children={(field) => (
                       <Field name={field.name}>
                         <FieldLabel>{t("common.date")}</FieldLabel>
-                        <Input
-                          onBlur={field.handleBlur}
-                          onChange={(e) =>
-                            field.handleChange(e.target.value || null)
-                          }
-                          placeholder="YYYY-MM-DD"
-                          type="date"
+                        <DatePickerPopover
+                          onChange={(val) => field.handleChange(val)}
                           value={
                             // SAFETY: guarded by fieldContent.type check
                             // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion

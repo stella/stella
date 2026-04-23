@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 import { Checkbox } from "@stella/ui/components/checkbox";
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
 import { Input } from "@stella/ui/components/input";
 import { Label } from "@stella/ui/components/label";
@@ -617,9 +618,8 @@ const CreateRateEntryForm = ({
           <Label>{t("billing.rates.effectiveFrom")}</Label>
           <form.Field name="effectiveFrom">
             {(field) => (
-              <Input
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                type="date"
+              <DatePickerPopover
+                onChange={(v) => field.handleChange(v ?? "")}
                 value={field.state.value}
               />
             )}
@@ -629,9 +629,8 @@ const CreateRateEntryForm = ({
           <Label>{t("billing.rates.effectiveTo")}</Label>
           <form.Field name="effectiveTo">
             {(field) => (
-              <Input
-                onChange={(e) => field.handleChange(e.currentTarget.value)}
-                type="date"
+              <DatePickerPopover
+                onChange={(v) => field.handleChange(v ?? "")}
                 value={field.state.value}
               />
             )}
