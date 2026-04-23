@@ -27,7 +27,7 @@ import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import type { EntityField } from "@/lib/types";
+import type { EntityField, EntityKind } from "@/lib/types";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { skipFieldFilter } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -320,6 +320,7 @@ function RouteComponentInner({
 type FieldInfoListProps = {
   workspaceId: string;
   entity: {
+    kind: EntityKind;
     entityId: string;
     fields: EntityField[];
   };
@@ -329,9 +330,16 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
-  const visibleFields = entity.fields.filter(
-    (field) => !skipFieldFilter(field.content),
-  );
+  // Sort by property order so fields don't jump around after edits
+  // (the API returns fields in non-deterministic order).
+  const propertyIndex = new Map(properties.map((p, i) => [p.id, i]));
+  const visibleFields = entity.fields
+    .filter((field) => !skipFieldFilter(field.content))
+    .toSorted(
+      (a, b) =>
+        (propertyIndex.get(a.propertyId) ?? Infinity) -
+        (propertyIndex.get(b.propertyId) ?? Infinity),
+    );
 
   if (visibleFields.length === 0) {
     return (
@@ -358,9 +366,11 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
             </span>
             <EditableField
               content={field.content}
+              entityKind={entity.kind}
               entityId={entity.entityId}
               property={property}
               propertyId={field.propertyId}
+              readonly={property.tool.type === "ai-model"}
               workspaceId={workspaceId}
             />
           </div>
