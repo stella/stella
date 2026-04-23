@@ -75,7 +75,7 @@ const SUSTAINED_FAILURE_THRESHOLD = 5;
  */
 const MAX_CONCURRENT_DB_WRITES = Math.max(
   1,
-  Number.parseInt(process.env.MAX_CONCURRENT_DB_WRITES ?? "3", 10) || 3,
+  Number.parseInt(process.env.MAX_CONCURRENT_DB_WRITES ?? "2", 10) || 2,
 );
 
 let activeDbSlots = 0;
@@ -312,6 +312,8 @@ const runOneCycle = async (
  */
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let consecutiveFailures = 0;
+  /** Separate counter for backoff; not reset by alert threshold. */
+  let backoffFailures = 0;
 
   while (true) {
     try {
@@ -319,11 +321,14 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
 
       if (status === "failed") {
         consecutiveFailures++;
+        backoffFailures++;
       } else {
         consecutiveFailures = 0;
+        backoffFailures = 0;
       }
     } catch (error) {
       consecutiveFailures++;
+      backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(msg)) {
         console.error(
@@ -339,12 +344,20 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         adapterKey,
         consecutiveFailures,
       });
-      // Reset to avoid flooding; will fire again after another N failures
+      // Reset alert counter to avoid flooding; backoffFailures
+      // stays high so the delay doesn't collapse.
       consecutiveFailures = 0;
     }
 
     writeHeartbeat();
-    await Bun.sleep(CYCLE_DELAY_MS);
+    // Exponential backoff: 5s, 10s, 20s, 40s, capped at 60s.
+    // Uses a separate counter from alert threshold so the
+    // delay doesn't reset every 5 failures.
+    const delayMs =
+      backoffFailures > 0
+        ? Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000)
+        : CYCLE_DELAY_MS;
+    await Bun.sleep(delayMs);
   }
 };
 
