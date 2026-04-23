@@ -32,7 +32,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth";
+import { authClient, revokeAuthSession } from "@/lib/auth";
+import type { SessionRevocationToken } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { parseUserAgent } from "@/lib/parse-user-agent";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -128,7 +129,7 @@ function Sessions() {
 }
 
 type RevokeSessionButtonProps = {
-  token: string;
+  token: SessionRevocationToken;
 };
 
 const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
@@ -137,8 +138,8 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
   const queryClient = useQueryClient();
 
   const revokeSession = useMutation({
-    mutationFn: async (sessionToken: string) => {
-      const result = await authClient.revokeSession({ token: sessionToken });
+    mutationFn: async (sessionToken: SessionRevocationToken) => {
+      const result = await revokeAuthSession({ token: sessionToken });
 
       if (result.error) {
         toastManager.add({

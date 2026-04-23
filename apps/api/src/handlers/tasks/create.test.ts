@@ -43,7 +43,6 @@ const createHandlerContext = ({
     session: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
       activeOrganizationId: "org_test123" as SafeId<"organization">,
-      token: "token",
     },
     memberRole: { role: "owner" },
     body,

@@ -103,13 +103,9 @@ function RouteComponent() {
     select: (p) => p.workspaceId,
   });
 
-  const authToken = Route.useRouteContext({
-    select: (ctx) => ctx.authToken,
-  });
-
   // Subscribe to workspace SSE events for real-time query
   // invalidation (replaces the Rivet sync actor for this workspace).
-  useWorkspaceSSE(workspaceId, authToken);
+  useWorkspaceSSE(workspaceId);
 
   // Clean up inspector tabs when the workspace changes so
   // stale IDs from the previous workspace don't cause

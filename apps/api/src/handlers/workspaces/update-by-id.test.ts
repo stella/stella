@@ -25,7 +25,6 @@ const createContext = ({
       activeOrganizationId:
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
         "org_test123" as SafeId<"organization">,
-      token: "token",
     },
     user: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value

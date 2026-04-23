@@ -528,61 +528,6 @@ export const resolveAccessibleWorkspaces = async (
   }));
 };
 
-/**
- * Validate a bearer token and return branded session data.
- *
- * Intended for boundary endpoints (e.g., SSE) that can't use
- * the Elysia auth macro because EventSource doesn't support
- * custom headers. Returns `null` if auth fails.
- */
-export const validateBearerAuth = async (
-  token: string,
-): Promise<{
-  userId: SafeId<"user">;
-  organizationId: SafeId<"organization">;
-  memberRole: MemberRole;
-  sessionToken: string;
-  accessibleWorkspaces: AccessibleWorkspace[];
-} | null> => {
-  const headers = { authorization: `Bearer ${token}` };
-  const { sessionResult, memberRoleResult } =
-    await getSessionAndMemberRole(headers);
-
-  if (Result.isError(sessionResult)) {
-    return null;
-  }
-
-  const session = sessionResult.value?.session;
-  const user = sessionResult.value?.user;
-  const rawOrgId = session?.activeOrganizationId;
-
-  if (!session || !user || !rawOrgId) {
-    return null;
-  }
-
-  if (Result.isError(memberRoleResult)) {
-    return null;
-  }
-
-  const memberRole = memberRoleResult.value;
-  const organizationId = toSafeId<"organization">(rawOrgId);
-  const userId = toSafeId<"user">(user.id);
-
-  const accessibleWorkspaces = await resolveAccessibleWorkspaces(
-    userId,
-    organizationId,
-    memberRole.role,
-  );
-
-  return {
-    userId,
-    organizationId,
-    memberRole: memberRole.role,
-    sessionToken: session.token,
-    accessibleWorkspaces,
-  };
-};
-
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     async resolve({ status, request }) {
@@ -650,7 +595,6 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         },
         session: {
           activeOrganizationId,
-          token: session.token,
         },
         accessibleWorkspaces,
         scopedDb,

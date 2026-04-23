@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { authClient } from "@/lib/auth";
+import { listAuthSessions } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 
 export const sessionsKeys = {
@@ -11,7 +11,7 @@ export const sessionsOptions = queryOptions({
   staleTime: 0,
   queryKey: sessionsKeys.all,
   queryFn: async () => {
-    const result = await authClient.listSessions();
+    const result = await listAuthSessions();
 
     if (result.error) {
       throw toAuthClientError(result.error);
