@@ -1061,9 +1061,21 @@ const FilesystemRow = ({
     return undefined;
   })();
 
-  const bulkEntities = isBulkSelected
-    ? getSelectedEntities(selectedIds)
-    : undefined;
+  // Capture bulk entities at context-menu-open time. Base UI's Menu
+  // steals focus on open, which can trigger a click event that clears
+  // selectedIds before RowActions re-renders. Using a ref preserves
+  // the selection snapshot from when the menu was triggered.
+  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
+  if (contextOpen && isBulkSelected) {
+    bulkEntitiesRef.current = getSelectedEntities(selectedIds);
+  } else if (!contextOpen) {
+    bulkEntitiesRef.current = undefined;
+  }
+  const bulkEntities = contextOpen
+    ? bulkEntitiesRef.current
+    : isBulkSelected
+      ? getSelectedEntities(selectedIds)
+      : undefined;
 
   const rowActionsNode = (
     <span className="flex justify-end">
