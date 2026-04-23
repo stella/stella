@@ -1,14 +1,8 @@
 import type { PropsWithChildren } from "react";
 
-import type {
-  EntityKind,
-  WorkspaceEntity,
-  WorkspaceProperty,
-  WorkspacePropertyOption,
-} from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
-import { EditFieldDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
-import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
@@ -51,32 +45,15 @@ const PropertyCell = ({
   }
 
   if (property.tool.type === "manual-input") {
-    const options =
-      property.content.type === "single-select" ||
-      property.content.type === "multi-select"
-        ? property.content.options
-        : [];
-
-    // Only show edit button for editable content types
-    const editableContent =
-      fieldContent?.type === "error" ||
-      fieldContent?.type === "unsupported" ||
-      fieldContent?.type === "clip"
-        ? undefined
-        : fieldContent;
-
     return (
-      <WithEditFieldButton
+      <EditableField
+        content={fieldContent}
         entityId={entity.entityId}
         entityKind={entity.kind}
-        fieldContent={editableContent}
-        options={options}
+        property={property}
         propertyId={property.id}
-        propertyType={property.content.type}
         workspaceId={property.workspaceId}
-      >
-        <CellResult field={field} property={property} />
-      </WithEditFieldButton>
+      />
     );
   }
 
@@ -171,78 +148,4 @@ const WithOpenEntityButton = ({
       {children}
     </div>
   );
-};
-
-type WithEditFieldButtonProps = {
-  entityId: string;
-  propertyId: string;
-  workspaceId: string;
-  propertyType: EditableFieldContent["type"];
-  entityKind: EntityKind;
-  options: WorkspacePropertyOption[];
-  fieldContent: EditableFieldContent | undefined;
-};
-
-const WithEditFieldButton = ({
-  entityId,
-  propertyId,
-  workspaceId,
-  propertyType,
-  entityKind,
-  options,
-  fieldContent,
-  children,
-}: PropsWithChildren<WithEditFieldButtonProps>) => {
-  const editableFieldContent =
-    fieldContent ?? getDefaultFieldContent(propertyType);
-
-  return (
-    <>
-      {children}
-      <EditFieldDialog
-        className="absolute end-2 bottom-2 hidden group-hover/cell-content:block"
-        entityId={entityId}
-        entityKind={entityKind}
-        fieldContent={editableFieldContent}
-        options={options}
-        propertyId={propertyId}
-        workspaceId={workspaceId}
-      />
-    </>
-  );
-};
-
-const getDefaultFieldContent = (
-  propertyType: EditableFieldContent["type"],
-): EditableFieldContent => {
-  if (propertyType === "text" || propertyType === "single-select") {
-    return {
-      version: 1,
-      type: propertyType,
-      value: "",
-    };
-  }
-
-  if (propertyType === "date") {
-    return {
-      version: 1,
-      type: "date",
-      value: null,
-    };
-  }
-
-  if (propertyType === "int") {
-    return {
-      version: 1,
-      type: "int",
-      value: 0,
-      currency: null,
-    };
-  }
-
-  return {
-    version: 1,
-    type: "multi-select",
-    value: [],
-  };
 };

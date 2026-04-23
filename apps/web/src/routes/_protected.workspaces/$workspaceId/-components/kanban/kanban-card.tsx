@@ -8,8 +8,8 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
-import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -235,7 +235,15 @@ export const KanbanCard = ({
           }
           return (
             <div className="text-muted-foreground text-xs" key={fieldId}>
-              <CellResult field={field} property={prop} />
+              <EditableField
+                content={field.content}
+                entityKind={entity.kind}
+                entityId={entity.entityId}
+                property={prop}
+                propertyId={fieldId}
+                readonly
+                workspaceId={workspaceId}
+              />
             </div>
           );
         })}

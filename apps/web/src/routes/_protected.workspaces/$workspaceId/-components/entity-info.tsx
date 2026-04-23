@@ -22,8 +22,8 @@ import {
   openDocxInDesktop,
 } from "@/lib/desktop-bridge";
 import { isUnauthorizedError } from "@/lib/errors";
-import type { EntityField } from "@/lib/types";
-import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
+import type { EntityField, EntityKind } from "@/lib/types";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
@@ -227,6 +227,7 @@ export const skipFieldFilter = (content: EntityField["content"]) =>
   content.type === "file";
 
 type FieldInfoProps = {
+  entityKind: EntityKind;
   workspaceId: string;
   propertyId: string;
   field: EntityField;
@@ -234,6 +235,7 @@ type FieldInfoProps = {
 };
 
 export const FieldInfo = ({
+  entityKind,
   workspaceId,
   propertyId,
   field,
@@ -270,12 +272,15 @@ export const FieldInfo = ({
       </AccordionTrigger>
       <AccordionPanel className="px-3 pb-2">
         <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-0.5 text-sm">
-            <h1 className="text-muted-foreground text-sm font-medium">
-              {t("workspaces.answer")}
-            </h1>
-            <CellResult field={{ ...field, entityId }} property={property} />
-          </div>
+          <EditableField
+            content={field?.content}
+            entityId={entityId}
+            entityKind={entityKind}
+            property={property}
+            propertyId={propertyId}
+            readonly={property.tool.type === "ai-model"}
+            workspaceId={workspaceId}
+          />
           {justification && (
             <div className="flex flex-col gap-0.5 text-sm">
               <h1 className="text-muted-foreground text-sm font-medium">

@@ -590,7 +590,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         })}
                       </div>
                       <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
-                        {total}h
+                        {total > 0 ? `${total}h` : ""}
                       </span>
                     </div>
                   );
@@ -604,7 +604,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium tabular-nums">
-                    {Math.round(totalHoursThisWeek * 10) / 10}h
+                    {totalHoursThisWeek > 0
+                      ? `${Math.round(totalHoursThisWeek * 10) / 10}h`
+                      : ""}
                   </span>
                   {prevWeekHours !== null &&
                     prevWeekHours > 0 &&

@@ -13,14 +13,19 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Input } from "@stella/ui/components/input";
+import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
+import type {
+  EntityKind,
+  WorkspaceFieldContent,
+  WorkspaceProperty,
+} from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import {
@@ -33,6 +38,7 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
 type EditableFieldProps = {
   workspaceId: string;
   entityId: string;
+  entityKind: EntityKind;
   propertyId: string;
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
@@ -42,6 +48,7 @@ type EditableFieldProps = {
 export const EditableField = ({
   workspaceId,
   entityId,
+  entityKind,
   propertyId,
   property,
   content,
@@ -68,6 +75,7 @@ export const EditableField = ({
     <InlineEditor
       content={content}
       entityId={entityId}
+      entityKind={entityKind}
       property={property}
       propertyId={propertyId}
       type={type}
@@ -116,8 +124,6 @@ const ReadOnlyValue = ({
   content: WorkspaceFieldContent | undefined;
   property: WorkspaceProperty;
 }) => {
-  const locale = useLocale();
-
   if (!content || content.type === "error" || content.type === "pending") {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
@@ -134,7 +140,7 @@ const ReadOnlyValue = ({
     }
     return (
       <span className="text-sm">
-        {new Date(content.value).toLocaleDateString(locale, {
+        {new Date(content.value).toLocaleDateString(undefined, {
           year: "numeric",
           month: "short",
           day: "numeric",
@@ -173,6 +179,7 @@ const ReadOnlyValue = ({
 type InlineEditorProps = {
   workspaceId: string;
   entityId: string;
+  entityKind: EntityKind;
   propertyId: string;
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
@@ -182,12 +189,13 @@ type InlineEditorProps = {
 const InlineEditor = ({
   workspaceId,
   entityId,
+  entityKind,
   propertyId,
   property,
   content,
   type,
 }: InlineEditorProps) => {
-  const locale = useLocale();
+  const t = useTranslations();
   const queryClient = useQueryClient();
   const startWorkflow = useStartWorkflow();
 
@@ -208,8 +216,18 @@ const InlineEditor = ({
       void queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
+      // Folders can't have AI-derived metadata
+      if (entityKind === "folder") {
+        return;
+      }
       // Trigger dependent AI columns after manual edit
       void startWorkflow({ entityIds: [entityId] });
+    },
+    onError: () => {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
     },
   });
 
@@ -227,11 +245,16 @@ const InlineEditor = ({
   }
 
   if (type === "date") {
+    const currentDate = content?.type === "date" ? content.value : null;
     return (
-      <InlineDateEditor
-        locale={locale}
-        onSave={(value) => save({ type: "date", version: 1, value })}
-        value={content?.type === "date" ? content.value : null}
+      <DatePickerPopover
+        onChange={(value) => {
+          // Skip no-op saves to avoid unnecessary API calls and AI workflow re-runs
+          if (value !== currentDate) {
+            save({ type: "date", version: 1, value });
+          }
+        }}
+        value={currentDate}
       />
     );
   }
@@ -334,17 +357,6 @@ const InlineTextEditor = ({
     />
   );
 };
-
-// -- Date inline editor --
-
-const InlineDateEditor = ({
-  value,
-  onSave,
-}: {
-  value: string | null;
-  locale: string;
-  onSave: (value: string | null) => void;
-}) => <DatePickerPopover onChange={onSave} value={value} />;
 
 // -- Int inline editor --
 
