@@ -20,7 +20,6 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Accordion } from "@stella/ui/components/accordion";
 import { Button } from "@stella/ui/components/button";
 
 import { api } from "@/lib/api";
@@ -29,10 +28,8 @@ import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { EntityField } from "@/lib/types";
-import {
-  FieldInfo,
-  skipFieldFilter,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
+import { skipFieldFilter } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {
   PDFSuspenseFallback,
@@ -44,6 +41,7 @@ import {
   entityVersionsKeys,
   entityVersionsOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 export const Route = createFileRoute(
@@ -329,6 +327,7 @@ type FieldInfoListProps = {
 
 const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   const t = useTranslations();
+  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
   const visibleFields = entity.fields.filter(
     (field) => !skipFieldFilter(field.content),
@@ -343,20 +342,31 @@ const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
   }
 
   return (
-    <Accordion
-      key={entity.entityId}
-      value={visibleFields.map((f) => f.propertyId)}
-    >
-      {visibleFields.map((field) => (
-        <FieldInfo
-          entityId={entity.entityId}
-          field={field}
-          key={field.id + field.propertyId}
-          propertyId={field.propertyId}
-          workspaceId={workspaceId}
-        />
-      ))}
-    </Accordion>
+    <div className="flex flex-col gap-px p-2">
+      {visibleFields.map((field) => {
+        const property = properties.find((p) => p.id === field.propertyId);
+        if (!property) {
+          return null;
+        }
+        return (
+          <div
+            className="flex flex-col gap-1 rounded-md px-2 py-2"
+            key={field.id + field.propertyId}
+          >
+            <span className="text-muted-foreground text-xs font-medium">
+              {property.name}
+            </span>
+            <EditableField
+              content={field.content}
+              entityId={entity.entityId}
+              property={property}
+              propertyId={field.propertyId}
+              workspaceId={workspaceId}
+            />
+          </div>
+        );
+      })}
+    </div>
   );
 };
 
