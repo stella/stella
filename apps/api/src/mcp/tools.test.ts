@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -22,6 +23,22 @@ const getAnalyticsMock = mock(() => ({
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
+type CreateOrgToolsMockInput = {
+  accessibleWorkspaceIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
+  scopedDb: McpRequestContext["scopedDb"];
+};
+const createOrgToolsMock = mock((_input: CreateOrgToolsMockInput) => ({
+  "search-across-matters": {
+    execute: searchAcrossMattersExecute,
+  },
+  "read-content-across-matters": {
+    execute: readContentAcrossMattersExecute,
+  },
+  "read-contact": {
+    execute: readContactExecute,
+  },
+}));
 const readEntityByIdHandlerMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
@@ -38,17 +55,7 @@ void mock.module("@/api/mcp/anonymization", () => ({
 }));
 
 void mock.module("@/api/handlers/chat/tools/org-tools", () => ({
-  createOrgTools: () => ({
-    "search-across-matters": {
-      execute: searchAcrossMattersExecute,
-    },
-    "read-content-across-matters": {
-      execute: readContentAcrossMattersExecute,
-    },
-    "read-contact": {
-      execute: readContactExecute,
-    },
-  }),
+  createOrgTools: createOrgToolsMock,
 }));
 
 void mock.module("@/api/handlers/entities/read-by-id", () => ({
@@ -676,6 +683,61 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     ]);
     expect(readEntityByIdHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("search_across_matters passes the MCP workspace allowlist to org tools", async () => {
+    searchAcrossMattersExecute.mockResolvedValue({
+      hits: [],
+      totalCount: 0,
+    });
+
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+    });
+    await handleMcpToolCall({
+      args: { query: "share purchase" },
+      context,
+      toolName: "search_across_matters",
+    });
+
+    const orgToolsInput = createOrgToolsMock.mock.calls.at(-1)?.[0];
+    expect(orgToolsInput?.accessibleWorkspaceIds).toEqual([
+      toSafeId<"workspace">("ws_1"),
+      toSafeId<"workspace">("ws_3"),
+    ]);
+    expect(orgToolsInput?.organizationId).toBe(
+      toSafeId<"organization">("org_1"),
+    );
+    expect(orgToolsInput?.scopedDb).toBe(context.scopedDb);
+  });
+
+  test("read_content_across_matters passes the MCP workspace allowlist to org tools", async () => {
+    readContentAcrossMattersExecute.mockResolvedValue({
+      charCount: 321,
+      name: "Share Purchase Agreement",
+      text: "Full document text",
+      truncated: false,
+      workspaceId: "ws_1",
+    });
+
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+    });
+    await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    const orgToolsInput = createOrgToolsMock.mock.calls.at(-1)?.[0];
+    expect(orgToolsInput?.accessibleWorkspaceIds).toEqual([
+      toSafeId<"workspace">("ws_1"),
+      toSafeId<"workspace">("ws_3"),
+    ]);
+    expect(orgToolsInput?.organizationId).toBe(
+      toSafeId<"organization">("org_1"),
+    );
+    expect(orgToolsInput?.scopedDb).toBe(context.scopedDb);
   });
 
   test("search anonymizes titles in anonymized mode", async () => {

@@ -14,13 +14,44 @@ export const parseEntityKind = (value: unknown): EntityKind => {
   return match;
 };
 
-export type SearchQuery = {
+type SearchQueryBase = {
   query: string;
   organizationId: SafeId<"organization">;
-  workspaceId?: string | undefined;
   kinds?: EntityKind[] | undefined;
   cursor?: string | undefined;
   limit: number;
+};
+
+export type SearchQuery = SearchQueryBase &
+  (
+    | {
+        /** Caller-visible workspace allowlist. Empty means no workspaces. */
+        workspaceIds: readonly SafeId<"workspace">[];
+        workspaceId?: SafeId<"workspace"> | undefined;
+      }
+    | {
+        /** Single workspace that has already been authorized for the caller. */
+        workspaceId: SafeId<"workspace">;
+        workspaceIds?: undefined;
+      }
+  );
+
+export const assertAuthorizedSearchScope = ({
+  workspaceId,
+  workspaceIds,
+}: {
+  workspaceId?: unknown;
+  workspaceIds?: unknown;
+}) => {
+  if (Array.isArray(workspaceIds)) {
+    return;
+  }
+
+  if (typeof workspaceId === "string" && workspaceId.length > 0) {
+    return;
+  }
+
+  panic("Search queries must include an authorized workspace scope");
 };
 
 export type SearchHit = {
@@ -54,7 +85,7 @@ export type SearchResult = {
 export type ContentSearchQuery = {
   query: string;
   organizationId: SafeId<"organization">;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
   limit: number;
 };
 

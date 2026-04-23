@@ -23,7 +23,11 @@ export const getChatTools = ({
   accessibleWorkspaceIds,
   workspaceId,
 }: GetChatToolsProps): ChatTools => {
-  const orgTools = createOrgTools({ organizationId, scopedDb });
+  const orgTools = createOrgTools({
+    accessibleWorkspaceIds,
+    organizationId,
+    scopedDb,
+  });
 
   if (!workspaceId) {
     return orgTools;
