@@ -19,11 +19,13 @@ const CONTENT_MAX_CHARS = 8000;
 // -----------------------------------------------------------------
 
 type OrgToolsContext = {
+  accessibleWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 };
 
 export const createOrgTools = ({
+  accessibleWorkspaceIds,
   organizationId,
   scopedDb,
 }: OrgToolsContext) => ({
@@ -56,6 +58,7 @@ export const createOrgTools = ({
       const result = await provider.search({
         query,
         organizationId,
+        workspaceIds: accessibleWorkspaceIds,
         limit,
       });
       return {
@@ -86,13 +89,21 @@ export const createOrgTools = ({
       }),
     ),
     execute: async ({ entityId }) => {
-      // extracted_content has RLS; use scopedDb which has
-      // all the user's workspace IDs.
+      if (accessibleWorkspaceIds.length === 0) {
+        throw new ChatToolError({
+          message: "No extracted content available for this entity.",
+        });
+      }
+
+      // extracted_content is indexed separately from entities and
+      // currently has no workspace RLS, so enforce the caller's
+      // workspace allowlist explicitly.
       const row = await scopedDb((tx) =>
         tx.query.extractedContent.findFirst({
           where: {
             entityId,
             organizationId: { eq: organizationId },
+            workspaceId: { in: accessibleWorkspaceIds },
           },
           with: {
             entity: {
@@ -122,6 +133,12 @@ export const createOrgTools = ({
         });
       }
 
+      if (!row.entity) {
+        throw new ChatToolError({
+          message: "No extracted content available for this entity.",
+        });
+      }
+
       const plaintext = await decryptContent(
         organizationId,
         row.ciphertext,
@@ -135,15 +152,15 @@ export const createOrgTools = ({
 
       return {
         entityId,
-        workspaceId: row.entity?.workspaceId ?? null,
-        name: row.entity?.name ?? null,
+        workspaceId: row.entity.workspaceId,
+        name: row.entity.name ?? null,
         charCount: row.charCount,
         sourceDocument: buildChatSourceDocument({
           entityId,
-          fields: row.entity?.currentVersion?.fields,
-          kind: row.entity?.kind,
-          name: row.entity?.name,
-          workspaceId: row.entity?.workspaceId ?? null,
+          fields: row.entity.currentVersion?.fields,
+          kind: row.entity.kind,
+          name: row.entity.name,
+          workspaceId: row.entity.workspaceId,
         }),
         truncated,
         text,

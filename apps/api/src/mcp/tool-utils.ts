@@ -176,6 +176,7 @@ export const buildCaseLawDecisionUrl = ({
 
 export const getOrgTools = (context: McpRequestContext) =>
   createOrgTools({
+    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
     organizationId: context.organizationId,
     scopedDb: context.scopedDb,
   });

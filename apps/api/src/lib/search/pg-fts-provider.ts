@@ -11,7 +11,10 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
-import { parseEntityKind } from "@/api/lib/search/types";
+import {
+  assertAuthorizedSearchScope,
+  parseEntityKind,
+} from "@/api/lib/search/types";
 import type {
   ContentSearchHit,
   ContentSearchQuery,
@@ -44,12 +47,20 @@ const mapHitRow = (row: RawRow): SearchHit => ({
 });
 
 const search = async (query: SearchQuery): Promise<SearchResult> => {
+  assertAuthorizedSearchScope(query);
+
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const wsFilter = query.workspaceId
-    ? sql`AND sd.workspace_id = ${query.workspaceId}`
-    : sql``;
+  const workspaceAccessFilter = query.workspaceIds
+    ? query.workspaceIds.length > 0
+      ? sql`AND sd.workspace_id = ANY(${query.workspaceIds}::uuid[])`
+      : sql`AND false`
+    : sql`AND sd.workspace_id = ${query.workspaceId}`;
+  const workspaceSelectionFilter =
+    query.workspaceIds && query.workspaceId
+      ? sql`AND sd.workspace_id = ${query.workspaceId}`
+      : sql``;
   const kindFilter =
     query.kinds && query.kinds.length > 0
       ? sql`AND sd.kind = ANY(${query.kinds})`
@@ -91,7 +102,8 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
-      ${wsFilter}
+      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       ${kindFilter}
       ${cursorFilter}
       AND sd.tsv @@ ${tsQuery}
@@ -103,19 +115,21 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     SELECT count(*)::int AS total
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${wsFilter}
+      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       ${kindFilter}
       AND sd.tsv @@ ${tsQuery}
   `;
 
-  // Facets use intentional cross-filtering: kind facet includes
-  // wsFilter (counts reflect workspace selection), workspace facet
-  // includes kindFilter (counts reflect kind selection).
+  // Facets use intentional cross-filtering: kind facet includes the
+  // selected workspace, workspace facet does not. Both facets still
+  // include the caller-visible workspace allowlist.
   const kindFacetQuery = sql`
     SELECT sd.kind AS value, count(*)::int AS count
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${wsFilter}
+      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -129,6 +143,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
+      ${workspaceAccessFilter}
       ${kindFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.workspace_id, w.name

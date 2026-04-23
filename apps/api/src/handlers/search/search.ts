@@ -6,6 +6,7 @@ import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const searchBodySchema = t.Object({
@@ -30,14 +31,18 @@ type SearchBodySchema = Static<typeof searchBodySchema>;
 type SearchHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  accessibleWorkspaceIds: SafeId<"workspace">[];
   body: SearchBodySchema;
 };
 
 export const searchHandler = async ({
   scopedDb,
   organizationId,
+  accessibleWorkspaceIds,
   body,
 }: SearchHandlerProps) => {
+  let workspaceId: SafeId<"workspace"> | undefined;
+
   // Validate workspace belongs to the caller's organization
   if (body.workspaceId) {
     const ws = await scopedDb((tx) =>
@@ -51,13 +56,15 @@ export const searchHandler = async ({
         message: "Workspace not found in organization",
       });
     }
+    workspaceId = brandPersistedWorkspaceId(ws.id);
   }
 
   const provider = getSearchProvider();
   return provider.search({
     query: body.query,
     organizationId,
-    workspaceId: body.workspaceId,
+    workspaceIds: accessibleWorkspaceIds,
+    workspaceId,
     kinds: body.kinds,
     cursor: body.cursor,
     limit: body.limit ?? LIMITS.searchPageSizeDefault,
