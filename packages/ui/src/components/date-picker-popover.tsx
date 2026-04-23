@@ -13,7 +13,7 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Calendar utilities (self-contained, no external deps)
+// Calendar utilities
 // ---------------------------------------------------------------------------
 
 type CalendarDay = {
@@ -24,23 +24,16 @@ type CalendarDay = {
 
 const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
 
-/**
- * Detect the first day of week for a locale via `Intl.Locale`.
- * Returns 0 = Monday .. 6 = Sunday (ISO week numbering).
- * Falls back to Monday when the API is unavailable.
- */
 const getFirstDayOfWeek = (locale: string): number => {
   try {
     const loc = new Intl.Locale(locale);
-    // getWeekInfo() returns { firstDay: 1–7 } where 1 = Mon, 7 = Sun
     const info =
       typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
     if (info) {
-      // Convert 1-7 (Mon=1, Sun=7) to 0-6 (Mon=0, Sun=6)
       return info.firstDay === 7 ? 6 : info.firstDay - 1;
     }
   } catch {
-    // Intl.Locale not supported; fall back to Monday
+    // fall back to Monday
   }
   return 0;
 };
@@ -53,9 +46,7 @@ const getMonthDays = (
   const today = toISODate(new Date());
   const days: CalendarDay[] = [];
   const first = new Date(Date.UTC(year, month, 1));
-  // Shift so that firstDow lands in column 0
-  const rawDow = first.getUTCDay(); // 0=Sun..6=Sat
-  // Convert rawDow to Mon=0..Sun=6 then offset by firstDow
+  const rawDow = first.getUTCDay();
   const mondayBased = (rawDow + 6) % 7;
   const startOffset = (mondayBased - firstDow + 7) % 7;
   const start = new Date(first);
@@ -79,16 +70,18 @@ const getWeekdayLabels = (locale: string, firstDow: number): string[] => {
     weekday: "short",
     timeZone: "UTC",
   });
-  // 2024-01-01 is a Monday (dow 0 in our system)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.UTC(2024, 0, 1 + ((i + firstDow) % 7)));
     return fmt.format(d);
   });
 };
 
-const getMonthLabels = (locale: string): string[] => {
+const getMonthLabels = (
+  locale: string,
+  format: "long" | "short" = "long",
+): string[] => {
   const fmt = new Intl.DateTimeFormat(locale, {
-    month: "long",
+    month: format,
     timeZone: "UTC",
   });
   return Array.from({ length: 12 }, (_, i) =>
@@ -96,7 +89,13 @@ const getMonthLabels = (locale: string): string[] => {
   );
 };
 
-/** Normalize a Date | string | null to YYYY-MM-DD or "". */
+const formatMonthYear = (locale: string, year: number, month: number): string =>
+  new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month, 1)));
+
 const normalizeDate = (v: string | Date | null | undefined): string => {
   if (v === null || v === undefined) {
     return "";
@@ -107,41 +106,39 @@ const normalizeDate = (v: string | Date | null | undefined): string => {
   return v.length >= 10 ? v.slice(0, 10) : v;
 };
 
-/** Add days to an ISO date string and return the new ISO string. */
 const addDays = (iso: string, n: number): string => {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return toISODate(d);
 };
 
-/** Compare ISO date strings. */
 const isBefore = (a: string, b: string): boolean => a < b;
 const isAfter = (a: string, b: string): boolean => a > b;
 
-// Year range for the year dropdown: 100 years back, 20 years forward
-const YEAR_RANGE_BACK = 100;
-const YEAR_RANGE_FORWARD = 20;
+/** Round down to the start of a decade (e.g. 2026 → 2020). */
+const decadeStart = (year: number): number => Math.floor(year / 10) * 10;
+
+const DECADE_SIZE = 12; // 10 years + 1 before + 1 after for context
 
 // ---------------------------------------------------------------------------
-// Component
+// Sub-views
+// ---------------------------------------------------------------------------
+
+type PickerView = "days" | "months" | "years";
+
+// ---------------------------------------------------------------------------
+// Main component
 // ---------------------------------------------------------------------------
 
 type DatePickerPopoverProps = {
   value: string | Date | null;
   onChange: (value: string | null) => void;
-  /** Locale string for formatting (e.g. "en", "cs"). Defaults to browser locale. */
   locale?: string;
-  /** Show overdue styling (red text). */
   isOverdue?: boolean;
-  /** Label for the clear button. Defaults to "Clear date". */
   clearLabel?: string;
-  /** Label shown when overdue. Only shown when isOverdue is true. */
   overdueLabel?: string;
-  /** Earliest selectable date (YYYY-MM-DD). Days before this are disabled. */
   minDate?: string;
-  /** Latest selectable date (YYYY-MM-DD). Days after this are disabled. */
   maxDate?: string;
-  /** Callback to disable specific dates. Return true to disable. */
   isDateDisabled?: (date: string) => boolean;
 };
 
@@ -158,7 +155,6 @@ function DatePickerPopover({
 }: DatePickerPopoverProps) {
   const locale = localeProp ?? navigator.language;
   const value = normalizeDate(rawValue);
-
   const firstDow = useMemo(() => getFirstDayOfWeek(locale), [locale]);
 
   const [viewYear, setViewYear] = useState(() => {
@@ -169,6 +165,8 @@ function DatePickerPopover({
     const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
     return d.getUTCMonth();
   });
+  const [view, setView] = useState<PickerView>("days");
+  const [decadeBase, setDecadeBase] = useState(() => decadeStart(viewYear));
 
   const days = useMemo(
     () => getMonthDays(viewYear, viewMonth, firstDow),
@@ -178,26 +176,9 @@ function DatePickerPopover({
     () => getWeekdayLabels(locale, firstDow),
     [locale, firstDow],
   );
-  const monthLabels = useMemo(() => getMonthLabels(locale), [locale]);
 
-  // Focused date for keyboard navigation (within the grid)
   const [focusedDate, setFocusedDate] = useState("");
   const gridRef = useRef<HTMLDivElement>(null);
-
-  const navigateMonth = useCallback((delta: number) => {
-    setViewMonth((m) => {
-      const next = m + delta;
-      if (next < 0) {
-        setViewYear((y) => y - 1);
-        return 11;
-      }
-      if (next > 11) {
-        setViewYear((y) => y + 1);
-        return 0;
-      }
-      return next;
-    });
-  }, []);
 
   const isDayDisabled = useCallback(
     (date: string): boolean => {
@@ -224,7 +205,6 @@ function DatePickerPopover({
       })
     : "\u2014";
 
-  // Format a date for screen reader labels
   const formatDayLabel = useCallback(
     (iso: string): string =>
       new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, {
@@ -256,39 +236,29 @@ function DatePickerPopover({
       } else if (e.key === "ArrowUp") {
         next = addDays(current, -7);
       } else if (e.key === "Home") {
-        // First day of current week
         const dow = (new Date(`${current}T00:00:00Z`).getUTCDay() + 6) % 7;
         const offset = (dow - firstDow + 7) % 7;
         next = addDays(current, -offset);
       } else if (e.key === "End") {
-        // Last day of current week
         const dow = (new Date(`${current}T00:00:00Z`).getUTCDay() + 6) % 7;
         const offset = (dow - firstDow + 7) % 7;
         next = addDays(current, 6 - offset);
       } else if (e.key === "PageUp") {
+        const d = new Date(`${current}T00:00:00Z`);
         if (e.shiftKey) {
-          // Previous year
-          const d = new Date(`${current}T00:00:00Z`);
           d.setUTCFullYear(d.getUTCFullYear() - 1);
-          next = toISODate(d);
         } else {
-          // Previous month
-          const d = new Date(`${current}T00:00:00Z`);
           d.setUTCMonth(d.getUTCMonth() - 1);
-          next = toISODate(d);
         }
+        next = toISODate(d);
       } else if (e.key === "PageDown") {
+        const d = new Date(`${current}T00:00:00Z`);
         if (e.shiftKey) {
-          // Next year
-          const d = new Date(`${current}T00:00:00Z`);
           d.setUTCFullYear(d.getUTCFullYear() + 1);
-          next = toISODate(d);
         } else {
-          // Next month
-          const d = new Date(`${current}T00:00:00Z`);
           d.setUTCMonth(d.getUTCMonth() + 1);
-          next = toISODate(d);
         }
+        next = toISODate(d);
       } else if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         if (!isDayDisabled(current)) {
@@ -302,7 +272,6 @@ function DatePickerPopover({
       e.preventDefault();
       if (next) {
         setFocusedDate(next);
-        // Adjust viewMonth/viewYear if focused date moves out of view
         const nextDate = new Date(`${next}T00:00:00Z`);
         const nextMonth = nextDate.getUTCMonth();
         const nextYear = nextDate.getUTCFullYear();
@@ -310,7 +279,6 @@ function DatePickerPopover({
           setViewMonth(nextMonth);
           setViewYear(nextYear);
         }
-        // Focus the button after render
         requestAnimationFrame(() => {
           const btn = gridRef.current?.querySelector<HTMLButtonElement>(
             `[data-date="${next}"]`,
@@ -331,13 +299,85 @@ function DatePickerPopover({
     ],
   );
 
-  // Year range for dropdown
-  const currentYear = new Date().getUTCFullYear();
-  const yearStart = currentYear - YEAR_RANGE_BACK;
-  const yearEnd = currentYear + YEAR_RANGE_FORWARD;
+  // -- Navigation handlers per view --
+
+  const handlePrev = () => {
+    if (view === "days") {
+      if (viewMonth === 0) {
+        setViewYear((y) => y - 1);
+        setViewMonth(11);
+      } else {
+        setViewMonth((m) => m - 1);
+      }
+    } else if (view === "months") {
+      setViewYear((y) => y - 1);
+    } else {
+      setDecadeBase((d) => d - 10);
+    }
+  };
+
+  const handleNext = () => {
+    if (view === "days") {
+      if (viewMonth === 11) {
+        setViewYear((y) => y + 1);
+        setViewMonth(0);
+      } else {
+        setViewMonth((m) => m + 1);
+      }
+    } else if (view === "months") {
+      setViewYear((y) => y + 1);
+    } else {
+      setDecadeBase((d) => d + 10);
+    }
+  };
+
+  // Header label per view
+  const headerLabel =
+    view === "days"
+      ? formatMonthYear(locale, viewYear, viewMonth)
+      : view === "months"
+        ? String(viewYear)
+        : `${decadeBase}\u2013${decadeBase + 9}`;
+
+  const handleHeaderClick = () => {
+    if (view === "days") {
+      setView("months");
+    } else if (view === "months") {
+      setDecadeBase(decadeStart(viewYear));
+      setView("years");
+    }
+    // In years view, clicking header does nothing (top level)
+  };
+
+  const handleMonthSelect = (month: number) => {
+    setViewMonth(month);
+    setView("days");
+  };
+
+  const handleYearSelect = (year: number) => {
+    setViewYear(year);
+    setDecadeBase(decadeStart(year));
+    setView("months");
+  };
+
+  // Current selection context for the sub-grids (null when no date selected)
+  const selectedYear = value
+    ? new Date(`${value}T00:00:00Z`).getUTCFullYear()
+    : null;
+  const selectedMonth = value
+    ? new Date(`${value}T00:00:00Z`).getUTCMonth()
+    : null;
+
+  // Reset view state when the popover closes so reopening always shows the day grid
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setView("days");
+      setDecadeBase(decadeStart(viewYear));
+    }
+  };
 
   return (
-    <Popover>
+    <Popover onOpenChange={handleOpenChange}>
       <PopoverTrigger
         render={
           <button
@@ -368,48 +408,44 @@ function DatePickerPopover({
         sideOffset={4}
       >
         <div className="w-60" role="dialog" aria-label="Date picker">
-          {/* Month/year navigation with dropdowns */}
+          {/* Shared header: [<] label [>] */}
           <div className="flex items-center justify-between gap-1 pb-1">
             <Button
-              aria-label="Previous month"
-              onClick={() => navigateMonth(-1)}
+              aria-label={
+                view === "days"
+                  ? "Previous month"
+                  : view === "months"
+                    ? "Previous year"
+                    : "Previous decade"
+              }
+              onClick={handlePrev}
               size="icon-xs"
               variant="ghost"
             >
               <ChevronLeftIcon />
             </Button>
-            <div className="flex items-center gap-1">
-              <select
-                aria-label="Month"
-                className="hover:text-foreground cursor-pointer bg-transparent text-xs font-medium outline-none"
-                onChange={(e) => setViewMonth(Number(e.target.value))}
-                value={viewMonth}
-              >
-                {monthLabels.map((label, i) => (
-                  <option key={label} value={i}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Year"
-                className="hover:text-foreground cursor-pointer bg-transparent text-xs font-medium outline-none"
-                onChange={(e) => setViewYear(Number(e.target.value))}
-                value={viewYear}
-              >
-                {Array.from({ length: yearEnd - yearStart + 1 }, (_, i) => {
-                  const y = yearStart + i;
-                  return (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            <button
+              className={cn(
+                "text-xs font-medium transition-colors",
+                view !== "years" &&
+                  "hover:bg-muted cursor-pointer rounded-md px-2 py-0.5",
+                view === "years" && "cursor-default",
+              )}
+              onClick={handleHeaderClick}
+              tabIndex={view === "years" ? -1 : 0}
+              type="button"
+            >
+              {headerLabel}
+            </button>
             <Button
-              aria-label="Next month"
-              onClick={() => navigateMonth(1)}
+              aria-label={
+                view === "days"
+                  ? "Next month"
+                  : view === "months"
+                    ? "Next year"
+                    : "Next decade"
+              }
+              onClick={handleNext}
               size="icon-xs"
               variant="ghost"
             >
@@ -417,77 +453,104 @@ function DatePickerPopover({
             </Button>
           </div>
 
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-0" role="row" aria-hidden="true">
-            {weekdays.map((wd) => (
-              <span
-                className="text-muted-foreground py-1 text-center text-[10px]"
-                key={wd}
+          {/* View: days */}
+          {view === "days" && (
+            <>
+              <div
+                className="grid grid-cols-7 gap-0"
+                role="row"
+                aria-hidden="true"
               >
-                {wd}
-              </span>
-            ))}
-          </div>
+                {weekdays.map((wd) => (
+                  <span
+                    className="text-muted-foreground py-1 text-center text-[10px]"
+                    key={wd}
+                  >
+                    {wd}
+                  </span>
+                ))}
+              </div>
 
-          {/* Day grid */}
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-          <div
-            aria-label={`${monthLabels[viewMonth]} ${viewYear}`}
-            className="grid grid-cols-7 gap-0"
-            onKeyDown={handleGridKeyDown}
-            ref={gridRef}
-            role="grid"
-          >
-            {days.map((day) => {
-              const isSelected = day.date === value;
-              const isFocused =
-                day.date === focusedDate ||
-                (!focusedDate && isSelected) ||
-                (!focusedDate && !value && day.isToday);
-              const disabled = isDayDisabled(day.date);
+              {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+              <div
+                aria-label={headerLabel}
+                className="grid grid-cols-7 gap-0"
+                onKeyDown={handleGridKeyDown}
+                ref={gridRef}
+                role="grid"
+              >
+                {days.map((day) => {
+                  const isSelected = day.date === value;
+                  const isFocused =
+                    day.date === focusedDate ||
+                    (!focusedDate && isSelected) ||
+                    (!focusedDate && !value && day.isToday);
+                  const disabled = isDayDisabled(day.date);
 
-              return (
-                <button
-                  aria-current={day.isToday ? "date" : undefined}
-                  aria-disabled={disabled || undefined}
-                  aria-label={formatDayLabel(day.date)}
-                  aria-selected={isSelected || undefined}
-                  className={cn(
-                    "flex size-8 items-center justify-center",
-                    "rounded-full text-xs transition-colors",
-                    "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
-                    disabled
-                      ? "text-muted-foreground/30 cursor-not-allowed"
-                      : "hover:bg-muted cursor-pointer",
-                    !day.isCurrentMonth &&
-                      !disabled &&
-                      "text-muted-foreground/40",
-                    day.isToday &&
-                      !isSelected &&
-                      !disabled &&
-                      "ring-foreground font-medium ring-1",
-                    isSelected &&
-                      "bg-primary text-primary-foreground hover:bg-primary/90",
-                  )}
-                  data-date={day.date}
-                  key={day.date}
-                  onClick={() => {
-                    if (!disabled) {
-                      onChange(day.date);
-                    }
-                  }}
-                  role="gridcell"
-                  tabIndex={isFocused ? 0 : -1}
-                  type="button"
-                >
-                  {Number.parseInt(day.date.slice(8), 10)}
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      aria-current={day.isToday ? "date" : undefined}
+                      aria-disabled={disabled || undefined}
+                      aria-label={formatDayLabel(day.date)}
+                      aria-selected={isSelected || undefined}
+                      className={cn(
+                        "flex size-8 items-center justify-center",
+                        "rounded-full text-xs transition-colors",
+                        "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
+                        disabled
+                          ? "text-muted-foreground/30 cursor-not-allowed"
+                          : "hover:bg-muted cursor-pointer",
+                        !day.isCurrentMonth &&
+                          !disabled &&
+                          "text-muted-foreground/40",
+                        day.isToday &&
+                          !isSelected &&
+                          !disabled &&
+                          "ring-foreground font-medium ring-1",
+                        isSelected &&
+                          "bg-primary text-primary-foreground hover:bg-primary/90",
+                      )}
+                      data-date={day.date}
+                      key={day.date}
+                      onClick={() => {
+                        if (!disabled) {
+                          onChange(day.date);
+                        }
+                      }}
+                      role="gridcell"
+                      tabIndex={isFocused ? 0 : -1}
+                      type="button"
+                    >
+                      {Number.parseInt(day.date.slice(8), 10)}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* View: months */}
+          {view === "months" && (
+            <MonthGrid
+              currentMonth={selectedMonth}
+              currentYear={selectedYear}
+              locale={locale}
+              onSelect={handleMonthSelect}
+              viewYear={viewYear}
+            />
+          )}
+
+          {/* View: years */}
+          {view === "years" && (
+            <YearGrid
+              currentYear={selectedYear}
+              decadeBase={decadeBase}
+              onSelect={handleYearSelect}
+            />
+          )}
 
           {/* Clear button */}
-          {value && (
+          {value && view === "days" && (
             <div className="mt-1 border-t pt-1">
               <Button
                 className="w-full"
@@ -507,3 +570,135 @@ function DatePickerPopover({
 
 export { DatePickerPopover };
 export type { DatePickerPopoverProps };
+
+// ---------------------------------------------------------------------------
+// Helper sub-view components (placed after the exported component per convention)
+// ---------------------------------------------------------------------------
+
+// -- Month picker grid (4×3) --
+
+const MONTHS_PER_ROW = 3;
+
+const MonthGrid = ({
+  locale,
+  viewYear,
+  currentMonth,
+  currentYear,
+  onSelect,
+}: {
+  locale: string;
+  viewYear: number;
+  currentMonth: number | null;
+  currentYear: number | null;
+  onSelect: (month: number) => void;
+}) => {
+  const labels = useMemo(() => getMonthLabels(locale, "short"), [locale]);
+  const now = new Date();
+  const todayMonth = now.getUTCMonth();
+  const todayYear = now.getUTCFullYear();
+
+  // Group months into rows of 3 for proper role="row" semantics
+  const rows: number[][] = [];
+  for (let r = 0; r < 12; r += MONTHS_PER_ROW) {
+    rows.push(Array.from({ length: MONTHS_PER_ROW }, (_, c) => r + c));
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-1 py-1" role="grid">
+      {rows.map((row) => (
+        <div className="contents" key={row[0]} role="row">
+          {row.map((i) => {
+            const isSelected =
+              currentMonth !== null &&
+              currentYear !== null &&
+              i === currentMonth &&
+              viewYear === currentYear;
+            const isNow = i === todayMonth && viewYear === todayYear;
+            return (
+              <button
+                aria-selected={isSelected || undefined}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-xs transition-colors",
+                  "hover:bg-muted cursor-pointer",
+                  "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
+                  isNow && !isSelected && "ring-foreground font-medium ring-1",
+                  isSelected &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                )}
+                key={i}
+                onClick={() => onSelect(i)}
+                role="gridcell"
+                type="button"
+              >
+                {labels[i]}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// -- Year picker grid (4×3, decade with context) --
+
+const YEARS_PER_ROW = 3;
+
+const YearGrid = ({
+  decadeBase,
+  currentYear,
+  onSelect,
+}: {
+  decadeBase: number;
+  currentYear: number | null;
+  onSelect: (year: number) => void;
+}) => {
+  const todayYear = new Date().getUTCFullYear();
+  // Show decade - 1 through decade + 10 (12 items)
+  const startYear = decadeBase - 1;
+
+  const rows: number[][] = [];
+  for (let r = 0; r < DECADE_SIZE; r += YEARS_PER_ROW) {
+    rows.push(
+      Array.from(
+        { length: Math.min(YEARS_PER_ROW, DECADE_SIZE - r) },
+        (_, c) => r + c,
+      ),
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-1 py-1" role="grid">
+      {rows.map((row) => (
+        <div className="contents" key={row[0]} role="row">
+          {row.map((i) => {
+            const year = startYear + i;
+            const isOutside = i === 0 || i === DECADE_SIZE - 1;
+            const isSelected = currentYear !== null && year === currentYear;
+            const isNow = year === todayYear;
+            return (
+              <button
+                aria-selected={isSelected || undefined}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-xs transition-colors",
+                  "hover:bg-muted cursor-pointer",
+                  "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
+                  isOutside && !isSelected && "text-muted-foreground/50",
+                  isNow && !isSelected && "ring-foreground font-medium ring-1",
+                  isSelected &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                )}
+                key={year}
+                onClick={() => onSelect(year)}
+                role="gridcell"
+                type="button"
+              >
+                {year}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
