@@ -621,11 +621,12 @@ Apache License
 
 -----------
 
-The following npm package may be included in this product:
+The following npm packages may be included in this product:
 
  - @vercel/oidc@3.1.0
+ - @vercel/oidc@3.2.0
 
-This package contains the following license:
+These packages each contain the following license:
 
 Apache License
                            Version 2.0, January 2004
@@ -14565,11 +14566,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -----------
 
-The following npm package may be included in this product:
+The following npm packages may be included in this product:
 
  - diff@8.0.4
+ - diff@9.0.0
 
-This package contains the following license:
+These packages each contain the following license:
 
 BSD 3-Clause License
 
@@ -17684,8 +17686,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 The following npm packages may be included in this product:
 
  - @ai-sdk/anthropic@3.0.69
+ - @ai-sdk/gateway@3.0.104
  - @ai-sdk/gateway@3.0.95
- - @ai-sdk/gateway@3.0.97
  - @ai-sdk/google-vertex@4.0.109
  - @ai-sdk/google@3.0.63
  - @ai-sdk/openai-compatible@2.0.41
@@ -17694,11 +17696,10 @@ The following npm packages may be included in this product:
  - @ai-sdk/react@3.0.160
  - @ai-sdk/valibot@2.0.24
  - @streamdown/cjk@1.0.3
- - @streamdown/code@1.1.1
  - @streamdown/math@1.0.2
  - @streamdown/mermaid@1.0.2
  - ai@6.0.158
- - ai@6.0.160
+ - ai@6.0.168
  - remend@1.3.0
  - streamdown@2.5.0
 
@@ -20649,7 +20650,7 @@ SOFTWARE.
 
 The following npm package may be included in this product:
 
- - bullmq@5.73.5
+ - bullmq@5.74.1
 
 This package contains the following license:
 
@@ -21895,8 +21896,8 @@ The following npm packages may be included in this product:
  - @astrojs/prism@4.0.1
  - @astrojs/react@5.0.3
  - @astrojs/sitemap@3.7.2
- - @astrojs/telemetry@3.3.0
- - astro@6.1.5
+ - @astrojs/telemetry@3.3.1
+ - astro@6.1.8
 
 These packages each contain the following license:
 
@@ -22525,7 +22526,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 The following npm package may be included in this product:
 
- - elysia-rate-limit@4.5.1
+ - elysia-rate-limit@4.6.0
 
 This package contains the following license:
 
@@ -23218,6 +23219,38 @@ This package contains the following license:
 MIT License
 
 Copyright (c) 2025 Espen Hovlandsdal <espen@hovlandsdal.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-----------
+
+The following npm package may be included in this product:
+
+ - fast-wrap-ansi@0.1.6
+
+This package contains the following license:
+
+MIT License
+
+Copyright (c) 2025 James Garbutt
+
+Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24070,8 +24103,8 @@ SOFTWARE.
 
 The following npm packages may be included in this product:
 
- - @clack/core@1.1.0
- - @clack/prompts@1.1.0
+ - @clack/core@1.2.0
+ - @clack/prompts@1.2.0
 
 These packages each contain the following license:
 
@@ -24607,6 +24640,7 @@ The following npm packages may be included in this product:
  - get-east-asian-width@1.5.0
  - is-docker@2.2.1
  - is-docker@3.0.0
+ - is-docker@4.0.0
  - is-inside-container@1.0.0
  - is-plain-obj@4.1.0
  - is-wsl@3.1.1
@@ -27083,6 +27117,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-----------
+
+The following npm packages may be included in this product:
+
+ - fast-string-truncated-width@1.2.1
+ - fast-string-width@1.1.0
+
+These packages each contain the following license:
+
+The MIT License (MIT)
+
+Copyright (c) 2024-present Fabio Spampinato
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 -----------
 
