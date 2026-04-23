@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { PluginOption } from "vite";
+import type { ConfigEnv, PluginOption, UserConfig } from "vite";
 
 import config from "./vite.config";
 
 describe("vite config", () => {
   test("includes the expected plugins", async () => {
-    const plugins = await collectNamedPlugins(config.plugins ?? []);
+    const resolvedConfig = resolveConfig("test");
+    const plugins = await collectNamedPlugins(resolvedConfig.plugins ?? []);
 
     expect(plugins.length).toBeGreaterThan(0);
 
@@ -14,6 +15,21 @@ describe("vite config", () => {
     expect(pluginNames).toContain("@rolldown/plugin-babel");
   });
 });
+
+const resolveConfig = (mode: string): UserConfig => {
+  if (typeof config !== "function") {
+    return config;
+  }
+
+  const env = {
+    command: "build",
+    isPreview: false,
+    isSsrBuild: false,
+    mode,
+  } satisfies ConfigEnv;
+
+  return config(env);
+};
 
 const collectNamedPlugins = async (
   options: PluginOption[],

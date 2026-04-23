@@ -1,10 +1,4 @@
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
-import {
-  buildPlaceholderMap,
-  DEFAULT_OPERATOR_CONFIG,
-  redactText,
-  resolveOperator,
-} from "@stll/anonymize-wasm";
 import type {
   Entity,
   OperatorConfig,
@@ -65,16 +59,25 @@ export const redactPdf = async (
   pdfText: string,
   spans: CharSpan[],
   entities: Entity[],
-  operatorConfig: OperatorConfig = DEFAULT_OPERATOR_CONFIG,
+  operatorConfig?: OperatorConfig,
 ): Promise<PdfRedactionResult> => {
+  const {
+    buildPlaceholderMap,
+    DEFAULT_OPERATOR_CONFIG,
+    redactText,
+    resolveOperator,
+  } = await import("@stll/anonymize-wasm");
+
+  const config = operatorConfig ?? DEFAULT_OPERATOR_CONFIG;
+
   if (entities.length === 0) {
     return {
       pdfBytes,
-      redaction: redactText(pdfText, [], operatorConfig),
+      redaction: redactText(pdfText, [], config),
     };
   }
 
-  const redaction = redactText(pdfText, entities, operatorConfig);
+  const redaction = redactText(pdfText, entities, config);
 
   // Build the same placeholder map that redactText uses
   // internally, keyed by "${label}\0${text}"
@@ -110,9 +113,8 @@ export const redactPdf = async (
       `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
 
     // Determine what text to overlay based on operator
-    const opType = resolveOperator(operatorConfig, entity.label);
-    const overlayText =
-      opType === "redact" ? operatorConfig.redactString : placeholder;
+    const opType = resolveOperator(config, entity.label);
+    const overlayText = opType === "redact" ? config.redactString : placeholder;
 
     // First bbox gets the text overlay; all get white boxes
     for (let i = 0; i < bboxes.length; i++) {

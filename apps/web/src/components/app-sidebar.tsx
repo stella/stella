@@ -1523,7 +1523,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                       {supportedLanguages.map((langCode) => (
                         <MenuRadioItem
                           key={langCode}
-                          onClick={() => setLang(langCode)}
+                          onClick={() => void setLang(langCode)}
                           value={langCode}
                         >
                           {LANG_ENDONYMS[langCode]}

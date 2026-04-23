@@ -1,9 +1,7 @@
-import { PDF } from "@libpdf/core";
-import { loadNameDictionaries } from "@stll/anonymize-data";
-import { DEFAULT_ENTITY_LABELS, runPipeline } from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
+import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
@@ -18,7 +16,10 @@ import type {
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
 
-const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
+const buildPipelineConfig = (
+  workspaceId: string,
+  labels: readonly string[],
+): PipelineConfig => ({
   threshold: 0.4,
   enableTriggerPhrases: true,
   enableRegex: true,
@@ -29,7 +30,7 @@ const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
   enableConfidenceBoost: false,
   enableCoreference: true,
   enableLegalForms: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
+  labels: [...labels],
   workspaceId,
 });
 
@@ -73,13 +74,22 @@ export const anonymizePdf = async ({
   const buffer = await s3Response.arrayBuffer();
   const pdfBytes = new Uint8Array(buffer);
 
+  const { PDF } = await import("@libpdf/core");
   const pdf = await PDF.load(pdfBytes);
   const { text, spans: charSpans } = extractPDFText(pdf);
 
+  const [{ loadNameDictionaries }, { runPipeline }] = await Promise.all([
+    import("@stll/anonymize-data"),
+    import("@stll/anonymize-wasm"),
+  ]);
   const dictionaries = await loadNameDictionaries();
+
   const entities = await runPipeline({
     fullText: text,
-    config: { ...buildPipelineConfig(workspaceId), dictionaries },
+    config: {
+      ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
+      dictionaries,
+    },
     gazetteerEntries: [],
   });
 
