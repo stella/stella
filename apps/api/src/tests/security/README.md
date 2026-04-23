@@ -33,6 +33,13 @@ Validates that the `SafeId<T>` branded type system enforces:
   interchangeable, preventing cross-tenant data access through
   type confusion.
 
+### `sse-auth-invariants.test.ts`
+
+Static analysis test that verifies SSE connections do not carry
+bearer/session credentials in URL query strings. EventSource must
+use cookie credentials, and SSE handlers must not authenticate
+from `query.token`.
+
 ## Why these tests matter
 
 The `SafeId` branded type and env validation schema are the

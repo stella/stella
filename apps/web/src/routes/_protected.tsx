@@ -106,7 +106,6 @@ export const Route = createFileRoute("/_protected")({
     );
 
     return {
-      authToken: context.session.token,
       user: {
         id: context.session.userId,
         activeOrganizationId: context.session.activeOrganizationId,

@@ -1,22 +1,15 @@
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 
-export const getFreshAuthToken = async () => {
+export const getFreshLinkedAccount = async () => {
   const result = await authClient.getSession();
 
   if (result.error) {
     throw toAuthClientError(result.error);
   }
 
-  const token = result.data.session.token;
-  return token.length > 0 ? token : null;
-};
-
-export const getFreshLinkedAccount = async () => {
-  const result = await authClient.getSession();
-
-  if (result.error) {
-    throw toAuthClientError(result.error);
+  if (!result.data) {
+    return null;
   }
 
   const { user } = result.data;

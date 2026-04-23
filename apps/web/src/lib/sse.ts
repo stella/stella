@@ -6,6 +6,12 @@ import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
+const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
+  withCredentials: true,
+} satisfies EventSourceInit;
+
+const getWorkspaceSSEUrl = (workspaceId: string) =>
+  `${env.VITE_API_URL}/v1/workspaces/${workspaceId}/events`;
 
 /**
  * Subscribe to workspace-scoped SSE events. On receiving an
@@ -15,7 +21,7 @@ const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
  * Auto-reconnects via the native EventSource reconnection
  * behaviour. Cleans up on unmount or when workspaceId changes.
  */
-export const useWorkspaceSSE = (workspaceId: string, authToken: string) => {
+export const useWorkspaceSSE = (workspaceId: string) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
 
@@ -28,8 +34,10 @@ export const useWorkspaceSSE = (workspaceId: string, authToken: string) => {
   analyticsRef.current = analytics;
 
   useEffect(() => {
-    const url = `${env.VITE_API_URL}/v1/workspaces/${workspaceId}/events?token=${encodeURIComponent(authToken)}`;
-    const source = new EventSource(url);
+    const source = new EventSource(
+      getWorkspaceSSEUrl(workspaceId),
+      WORKSPACE_SSE_EVENT_SOURCE_INIT,
+    );
 
     source.addEventListener("message", (event: MessageEvent) => {
       try {
@@ -64,5 +72,5 @@ export const useWorkspaceSSE = (workspaceId: string, authToken: string) => {
     return () => {
       source.close();
     };
-  }, [workspaceId, authToken]);
+  }, [workspaceId]);
 };
