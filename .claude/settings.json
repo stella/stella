@@ -16,5 +16,18 @@
         ".playwright/storage-state.json"
       ]
     }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/block-main-push.sh"
+          }
+        ]
+      }
+    ]
   }
 }
