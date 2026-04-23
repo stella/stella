@@ -9,12 +9,13 @@ import {
 } from "@/api/handlers/user-files/types";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const TEXT_PLAIN_MIME_TYPE = "text/plain" as const;
 export const TEXT_CSV_MIME_TYPE = "text/csv" as const;
 export const TEXT_MARKDOWN_MIME_TYPE = "text/markdown" as const;
+export const CHAT_MAX_FILE_BYTES = FILE_SIZE_LIMIT_BYTES.chatContextFile;
 
 const IMAGE_MIME_TYPES = new Set([
   "image/png",
@@ -70,6 +71,7 @@ export const validateChatFileParts = ({
     if (part.url.startsWith("data:")) {
       const dataUrlResult = validateDataUrl({
         expectedMimeType: part.mediaType,
+        maxBytes: CHAT_MAX_FILE_BYTES,
         url: part.url,
       });
 

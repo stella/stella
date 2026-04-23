@@ -4,13 +4,20 @@ import { Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { userFiles } from "@/api/db/schema";
-import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
+import {
+  CHAT_MAX_FILE_BYTES,
+  TEXT_PLAIN_MIME_TYPE,
+} from "@/api/handlers/chat/attachment-validation";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { createUserFileKey } from "@/api/handlers/files/utils";
 import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
+import {
+  isDataUrlSizeLimitError,
+  parseDataUrl,
+  toDataUrl,
+} from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -20,8 +27,6 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { extractText } from "../docx/extract-text";
 import type { ChatMessage } from "./types";
-
-const CHAT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 export type UserFileThreadAccess = {
   threadId: string;
@@ -290,24 +295,26 @@ type ParseMessageFileDataUrlProps = {
 const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
   const parseResult = parseDataUrl({
     expectedMimeType: part.mediaType,
+    maxBytes: CHAT_MAX_FILE_BYTES,
     url: part.url,
   });
 
   if (Result.isError(parseResult)) {
+    if (isDataUrlSizeLimitError(parseResult.error)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Chat attachment exceeds the ${FILE_SIZE_LIMITS.chatContextFile} size limit`,
+          cause: parseResult.error,
+        }),
+      );
+    }
+
     return Result.err(
       new HandlerError({
         status: 400,
         message: "Invalid chat attachment data URL",
         cause: parseResult.error,
-      }),
-    );
-  }
-
-  if (parseResult.value.bytes.byteLength > CHAT_MAX_FILE_BYTES) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: `Chat attachment exceeds the ${FILE_SIZE_LIMITS.chatContextFile} size limit`,
       }),
     );
   }

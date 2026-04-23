@@ -1,6 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+// eslint-disable-next-line no-restricted-imports -- MCP SDK tool schemas use zod.
 import { z } from "zod";
+
+import {
+  fetchAllowedUrl,
+  isAllowedDocUrl as isAllowedDocUrlForHosts,
+} from "./fetch-allowed-url";
 
 const SOURCES: Record<string, string> = {
   Elysia: "https://elysiajs.com/llms.txt",
@@ -27,7 +33,6 @@ const HOST_ALIASES: Record<string, string[]> = {
   "bun.sh": ["bun.com", "www.bun.com"],
 };
 
-const DOC_FETCH_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RESULTS = 3;
 const MAX_RESULTS_LIMIT = 10;
 const DEFAULT_MAX_CHUNKS = 3;
@@ -145,22 +150,16 @@ const extractInlineDescription = ({
     return "";
   }
 
-  const trailing = line
-    .slice(matchIndex + matchedText.length)
-    .trim();
+  const trailing = line.slice(matchIndex + matchedText.length).trim();
   if (trailing.startsWith(":")) {
     return trailing.slice(1).trim();
   }
 
-  return trailing
-    .replace(/^[-*]\s+/u, "")
-    .trim();
+  return trailing.replace(/^[-*]\s+/u, "").trim();
 };
 
 const getHeadingPath = (headings: string[]) =>
-  headings
-    .filter((heading) => heading.length > 0)
-    .join(" > ");
+  headings.filter((heading) => heading.length > 0).join(" > ");
 
 const scoreTextField = ({
   value,
@@ -271,15 +270,12 @@ const scoreDocEntry = ({
   const titleTokens = new Set(tokenize(title));
   const slugTokens = new Set(tokenize(slug));
   const exactTitle = title.toLowerCase() === normalizedQuery;
-  const exactSlug = slug
-    .replace(/[-_/]+/g, " ")
-    .toLowerCase() === normalizedQuery;
+  const exactSlug =
+    slug.replace(/[-_/]+/g, " ").toLowerCase() === normalizedQuery;
   const allTermsInTitle =
-    queryTerms.length > 0 &&
-    queryTerms.every((term) => titleTokens.has(term));
+    queryTerms.length > 0 && queryTerms.every((term) => titleTokens.has(term));
   const allTermsInSlug =
-    queryTerms.length > 0 &&
-    queryTerms.every((term) => slugTokens.has(term));
+    queryTerms.length > 0 && queryTerms.every((term) => slugTokens.has(term));
 
   if (exactTitle) {
     score += 40;
@@ -324,25 +320,11 @@ const validateSources = (sourceNames?: string[]) => {
   return entries;
 };
 
-const fetchAllowedUrl = async (url: string) => {
-  const host = new URL(url).hostname;
-  if (!ALLOWED_HOSTS.has(host)) {
-    throw new Error(`Blocked: ${host} is not a configured doc source`);
-  }
-
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(DOC_FETCH_TIMEOUT_MS),
-  });
-
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
-  }
-
-  return response.text();
-};
+const fetchConfiguredDocUrl = async (url: string) =>
+  await fetchAllowedUrl({ allowedHosts: ALLOWED_HOSTS, url });
 
 const isAllowedDocUrl = (url: string) =>
-  ALLOWED_HOSTS.has(new URL(url).hostname);
+  isAllowedDocUrlForHosts(url, ALLOWED_HOSTS);
 
 const parseIndexEntries = ({
   source,
@@ -510,11 +492,12 @@ server.tool(
   async ({ url }) => {
     try {
       return {
-        content: [{ type: "text" as const, text: await fetchAllowedUrl(url) }],
+        content: [
+          { type: "text" as const, text: await fetchConfiguredDocUrl(url) },
+        ],
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
+      const message = error instanceof Error ? error.message : "Unknown error";
       return {
         content: [
           {
@@ -534,12 +517,7 @@ server.tool(
   {
     query: z.string().min(2),
     sources: z.array(z.string()).optional(),
-    maxResults: z
-      .number()
-      .int()
-      .min(1)
-      .max(MAX_RESULTS_LIMIT)
-      .optional(),
+    maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
   },
   async ({ query, sources, maxResults }) => {
     try {
@@ -549,7 +527,7 @@ server.tool(
         selectedSources.map(async ({ name, indexUrl }) => ({
           name,
           indexUrl,
-          indexText: await fetchAllowedUrl(indexUrl),
+          indexText: await fetchConfiguredDocUrl(indexUrl),
         })),
       );
 
@@ -622,8 +600,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
+      const message = error instanceof Error ? error.message : "Unknown error";
       return {
         content: [
           {
@@ -643,16 +620,11 @@ server.tool(
   {
     url: z.string().url(),
     query: z.string().min(2),
-    maxChunks: z
-      .number()
-      .int()
-      .min(1)
-      .max(MAX_CHUNKS_LIMIT)
-      .optional(),
+    maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
   },
   async ({ url, query, maxChunks }) => {
     try {
-      const pageText = await fetchAllowedUrl(url);
+      const pageText = await fetchConfiguredDocUrl(url);
       const scoredChunks: DocChunk[] = [];
 
       for (const chunk of splitIntoChunks(pageText)) {
@@ -705,8 +677,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
+      const message = error instanceof Error ? error.message : "Unknown error";
       return {
         content: [
           {
