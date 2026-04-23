@@ -129,12 +129,13 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
 
 type DatePickerPopoverProps = Omit<
   DatePickerPopoverBaseProps,
-  "locale" | "clearLabel" | "overdueLabel"
+  "locale" | "clearLabel" | "todayLabel" | "overdueLabel"
 >;
 
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const locale = useLocale();
+
   return (
     <DatePickerPopoverBase
       {...props}

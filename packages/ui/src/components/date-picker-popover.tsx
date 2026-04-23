@@ -96,6 +96,15 @@ const formatMonthYear = (locale: string, year: number, month: number): string =>
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month, 1)));
 
+/** Derive a locale-correct "Today" label (e.g., "Dnes", "Heute", "Today"). */
+const deriveTodayLabel = (locale: string): string => {
+  const raw = new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(
+    0,
+    "day",
+  );
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+};
+
 const normalizeDate = (v: string | Date | null | undefined): string => {
   if (v === null || v === undefined) {
     return "";
@@ -136,6 +145,8 @@ type DatePickerPopoverProps = {
   locale?: string;
   isOverdue?: boolean;
   clearLabel?: string;
+  /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
+  todayLabel?: string;
   overdueLabel?: string;
   minDate?: string;
   maxDate?: string;
@@ -148,6 +159,7 @@ function DatePickerPopover({
   locale: localeProp,
   isOverdue = false,
   clearLabel = "Clear date",
+  todayLabel: todayLabelProp,
   overdueLabel,
   minDate,
   maxDate,
@@ -155,6 +167,7 @@ function DatePickerPopover({
 }: DatePickerPopoverProps) {
   const locale = localeProp ?? navigator.language;
   const value = normalizeDate(rawValue);
+  const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
   const firstDow = useMemo(() => getFirstDayOfWeek(locale), [locale]);
 
   const [viewYear, setViewYear] = useState(() => {
@@ -549,19 +562,32 @@ function DatePickerPopover({
             />
           )}
 
-          {/* Clear button */}
-          {value && view === "days" && (
-            <div className="mt-1 border-t pt-1">
+          {/* Bottom row: today + clear */}
+          <div className="mt-1 flex items-center gap-1 border-t pt-1">
+            <Button
+              className="flex-1"
+              onClick={() => {
+                const today = new Date();
+                setViewYear(today.getUTCFullYear());
+                setViewMonth(today.getUTCMonth());
+                setView("days");
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              {todayLabel}
+            </Button>
+            {value && (
               <Button
-                className="w-full"
+                className="flex-1"
                 onClick={() => onChange(null)}
                 size="xs"
                 variant="ghost"
               >
                 {clearLabel}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </PopoverPopup>
     </Popover>
@@ -630,6 +656,17 @@ const MonthGrid = ({
                 role="gridcell"
                 type="button"
               >
+                {!/^\d/.test(labels[i] ?? "") && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "me-1 text-[10px] tabular-nums opacity-50",
+                      !isSelected && "text-muted-foreground",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
+                )}
                 {labels[i]}
               </button>
             );
