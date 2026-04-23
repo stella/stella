@@ -22,6 +22,7 @@ import restoreVersion from "@/api/handlers/entities/restore-version";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
 import updateVersionLabel from "@/api/handlers/entities/update-version-label";
 import uploadEntity from "@/api/handlers/entities/upload";
+import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 import uploadVersion from "@/api/handlers/entities/upload-version";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -44,8 +45,7 @@ export const entitiesRoute = new Elysia({
       max: API_RATE_LIMITS.upload.max,
       generator: scopedGenerator("upload"),
       context: new InMemoryRateLimitContext(),
-      skip: (req) =>
-        !/\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
+      skip: (req) => !isUploadRateLimitedPath(new URL(req.url).pathname),
     }),
   )
   .guard({

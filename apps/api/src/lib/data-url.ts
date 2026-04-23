@@ -5,12 +5,16 @@ export class DataUrlError extends TaggedError("DataUrlError")<{
   cause?: unknown;
 }>() {}
 
+export const DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE =
+  "Data URL payload exceeds size limit";
+
 export const toDataUrl = (bytes: Uint8Array, mimeType: string) =>
   `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
 
 type ValidateDataUrlProps = {
-  url: string;
   expectedMimeType?: string | undefined;
+  maxBytes?: number | undefined;
+  url: string;
 };
 
 type ValidateDataUrlResult = Result<
@@ -22,8 +26,9 @@ type ValidateDataUrlResult = Result<
 >;
 
 export const validateDataUrl = ({
-  url,
   expectedMimeType,
+  maxBytes,
+  url,
 }: ValidateDataUrlProps): ValidateDataUrlResult => {
   const commaIndex = url.indexOf(",");
 
@@ -36,7 +41,7 @@ export const validateDataUrl = ({
   }
 
   const metadata = url.slice(5, commaIndex);
-  const payload = url.slice(commaIndex + 1);
+  const payloadStartIndex = commaIndex + 1;
   const metadataParts = metadata.split(";");
   const mimeType = metadataParts[0] ?? "";
 
@@ -47,6 +52,20 @@ export const validateDataUrl = ({
       }),
     );
   }
+
+  const payloadLength = url.length - payloadStartIndex;
+  if (
+    maxBytes !== undefined &&
+    payloadLength > getMaxBase64PayloadLength(maxBytes)
+  ) {
+    return Result.err(
+      new DataUrlError({
+        message: DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE,
+      }),
+    );
+  }
+
+  const payload = url.slice(payloadStartIndex);
 
   if (expectedMimeType && mimeType !== expectedMimeType) {
     return Result.err(
@@ -64,6 +83,7 @@ export const validateDataUrl = ({
 
 type ParseDataUrlProps = {
   expectedMimeType?: string | undefined;
+  maxBytes: number;
   url: string;
 };
 
@@ -76,11 +96,13 @@ type ParseDataUrlResult = Result<ParsedDataUrl, DataUrlError>;
 
 export const parseDataUrl = ({
   expectedMimeType,
+  maxBytes,
   url,
 }: ParseDataUrlProps): ParseDataUrlResult =>
   Result.gen(function* () {
     const validatedDataUrl = yield* validateDataUrl({
       expectedMimeType,
+      maxBytes,
       url,
     });
 
@@ -93,8 +115,22 @@ export const parseDataUrl = ({
         }),
     });
 
+    if (decodedPayload.byteLength > maxBytes) {
+      return Result.err(
+        new DataUrlError({
+          message: DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE,
+        }),
+      );
+    }
+
     return Result.ok({
       bytes: new Uint8Array(decodedPayload),
       mimeType: validatedDataUrl.mimeType,
     });
   });
+
+const getMaxBase64PayloadLength = (maxBytes: number) =>
+  Math.ceil(maxBytes / 3) * 4;
+
+export const isDataUrlSizeLimitError = (error: DataUrlError) =>
+  error.message === DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE;

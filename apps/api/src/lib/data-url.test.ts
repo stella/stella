@@ -11,6 +11,7 @@ describe("data URL helpers", () => {
     );
     const result = parseDataUrl({
       expectedMimeType: "text/plain",
+      maxBytes: 1024,
       url,
     });
 
@@ -74,5 +75,50 @@ describe("data URL helpers", () => {
     }
 
     expect(result.error.message).toBe("Data URLs must use base64 encoding");
+  });
+
+  test("rejects an encoded payload that cannot fit within maxBytes", () => {
+    const result = parseDataUrl({
+      maxBytes: 2,
+      url: "data:text/plain;base64,aaaaaaaa",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+
+    if (Result.isOk(result)) {
+      throw new Error("Expected oversized data URL");
+    }
+
+    expect(result.error.message).toBe("Data URL payload exceeds size limit");
+  });
+
+  test("reports invalid encoding before checking payload size", () => {
+    const result = parseDataUrl({
+      maxBytes: 2,
+      url: "data:text/plain,aaaaaaaa",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+
+    if (Result.isOk(result)) {
+      throw new Error("Expected invalid data URL");
+    }
+
+    expect(result.error.message).toBe("Data URLs must use base64 encoding");
+  });
+
+  test("rejects decoded payloads larger than maxBytes", () => {
+    const result = parseDataUrl({
+      maxBytes: 2,
+      url: "data:text/plain;base64,aaaa",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+
+    if (Result.isOk(result)) {
+      throw new Error("Expected oversized data URL");
+    }
+
+    expect(result.error.message).toBe("Data URL payload exceeds size limit");
   });
 });

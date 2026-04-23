@@ -59,6 +59,8 @@ export const LIMITS = {
   docxStampMaxBytes: 50 * 1024 * 1024,
 } as const;
 
+const CHAT_CONTEXT_FILE_MAX_MEGABYTES = 10;
+
 /**
  * File upload size limits.
  * Values use Elysia's human-readable format (e.g. "50m" = 50 MB).
@@ -69,7 +71,16 @@ export const FILE_SIZE_LIMITS = {
   /** Structured data imports (clause JSON). */
   dataImport: "10m",
   /** Chat context file attachments. */
-  chatContextFile: "10m",
+  chatContextFile: `${CHAT_CONTEXT_FILE_MAX_MEGABYTES}m`,
+} as const;
+
+/**
+ * File upload size limits in bytes for code paths that need to
+ * validate before a framework-level t.File() parser runs.
+ */
+export const FILE_SIZE_LIMIT_BYTES = {
+  /** Chat context file attachments. */
+  chatContextFile: CHAT_CONTEXT_FILE_MAX_MEGABYTES * 1024 * 1024,
 } as const;
 
 /**

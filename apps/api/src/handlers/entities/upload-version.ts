@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
+import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -25,10 +25,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   permissions: { entity: ["update"] },
-  body: t.Object({
-    entityId: t.String(),
-    file: t.File(),
-  }),
+  body: uploadVersionBodySchema,
 } satisfies HandlerConfig;
 
 export default createSafeHandler(
