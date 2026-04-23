@@ -1,6 +1,5 @@
 import { useId, useState } from "react";
 
-import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize-wasm";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -19,6 +18,7 @@ import {
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";

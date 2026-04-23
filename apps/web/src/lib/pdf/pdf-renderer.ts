@@ -1,14 +1,18 @@
 import { Result } from "better-result";
-import { RenderingCancelledException, TextLayer } from "pdfjs-dist";
-import type { PageViewport, PDFPageProxy } from "pdfjs-dist";
 
 import { EOC_CLASS_NAME } from "@/lib/pdf/consts";
 import type { RenderedPage } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
+import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
+import type { PageViewport, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
 
-const isRenderingCancelledError = (err: unknown): boolean =>
-  err instanceof RenderingCancelledException ||
+const isRenderingCancelledError = (
+  err: unknown,
+  RenderingCancelledException: unknown,
+): boolean =>
+  (typeof RenderingCancelledException === "function" &&
+    err instanceof RenderingCancelledException) ||
   (err instanceof Error && err.name === "AbortError");
 
 const createCanvasElement = (viewport: PageViewport): HTMLCanvasElement => {
@@ -65,9 +69,14 @@ export const renderPage = async (
   proxy: PDFPageProxy,
   viewport: PageViewport,
   signal: AbortSignal,
-): Promise<Result<RenderedPage, PDFViewerError>> =>
-  await Result.tryPromise({
+): Promise<Result<RenderedPage, PDFViewerError>> => {
+  let renderingCancelledException: unknown = null;
+
+  return await Result.tryPromise({
     try: async (): Promise<Result<RenderedPage, PDFViewerError>> => {
+      const { RenderingCancelledException, TextLayer } = await loadPdfjs();
+      renderingCancelledException = RenderingCancelledException;
+
       signal.throwIfAborted();
 
       if (proxy.destroyed) {
@@ -115,7 +124,7 @@ export const renderPage = async (
       return Result.ok({ canvas, textLayerDiv, viewport });
     },
     catch: (err) =>
-      isRenderingCancelledError(err)
+      isRenderingCancelledError(err, renderingCancelledException)
         ? new PDFViewerError({
             code: "CANCELLED",
             message: "Rendering cancelled",
@@ -128,3 +137,4 @@ export const renderPage = async (
             cause: err,
           }),
   }).then(Result.flatten);
+};

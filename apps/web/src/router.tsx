@@ -16,7 +16,7 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
-import { langMessages, useI18nStore } from "@/i18n/i18n-store";
+import { useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
 import { AnalyticsProvider } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
@@ -27,6 +27,12 @@ enableMapSet();
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const lang = useI18nStore((s) => s.lang);
+  const messages = useI18nStore((s) => s.messages);
+  const isLoaded = useI18nStore((s) => s.isLoaded);
+
+  if (!isLoaded) {
+    return <DefaultPendingComponent />;
+  }
 
   return (
     <IntlProvider
@@ -36,7 +42,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       // Messages type preserves English literal message values while
       // translated locale JSONs necessarily contain different strings.
       // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      messages={langMessages[lang] as Messages}
+      messages={messages as Messages}
       timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >
       {children}

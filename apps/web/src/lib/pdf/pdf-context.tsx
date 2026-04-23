@@ -4,10 +4,6 @@ import type { PropsWithChildren } from "react";
 import { panic } from "better-result";
 import type { Result } from "better-result";
 import { LRUCache } from "lru-cache";
-import { GlobalWorkerOptions } from "pdfjs-dist";
-import type { PageViewport, PDFPageProxy } from "pdfjs-dist";
-// eslint-disable-next-line import/default -- Vite ?url import returns the asset URL as default export
-import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createStore, useStore } from "zustand";
 
 import {
@@ -34,10 +30,9 @@ import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
+import type { PageViewport, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import type { ScrollAnchor } from "@/lib/pdf/utils";
 import { captureScrollAnchor } from "@/lib/pdf/utils";
-
-GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 // ── Types ──────────────────────────────────────────
 

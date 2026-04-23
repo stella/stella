@@ -3,18 +3,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
-import cs from "@/i18n/langs/cs.json";
-import de from "@/i18n/langs/de.json";
 import en from "@/i18n/langs/en.json";
-import es from "@/i18n/langs/es.json";
-import et from "@/i18n/langs/et.json";
-import fr from "@/i18n/langs/fr.json";
-import hu from "@/i18n/langs/hu.json";
-import lt from "@/i18n/langs/lt.json";
-import lv from "@/i18n/langs/lv.json";
 import type Messages from "@/i18n/langs/messages.gen";
-import pl from "@/i18n/langs/pl.json";
-import sk from "@/i18n/langs/sk.json";
 
 type LocalizedMessages<T> = {
   [K in keyof T]: T[K] extends string ? string : LocalizedMessages<T[K]>;
@@ -36,20 +26,23 @@ export const supportedLanguages = [
 
 export type SupportedLanguage = (typeof supportedLanguages)[number];
 type LocaleMessages = LocalizedMessages<Messages>;
+type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
 
-export const langMessages = {
-  en,
-  cs,
-  de,
-  es,
-  et,
-  fr,
-  hu,
-  lt,
-  lv,
-  pl,
-  sk,
-} as const satisfies Record<SupportedLanguage, LocaleMessages>;
+const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
+
+const messageLoaders: Record<SupportedLanguage, MessageLoader> = {
+  en: () => en,
+  cs: async () => (await import("@/i18n/langs/cs.json")).default,
+  de: async () => (await import("@/i18n/langs/de.json")).default,
+  es: async () => (await import("@/i18n/langs/es.json")).default,
+  et: async () => (await import("@/i18n/langs/et.json")).default,
+  fr: async () => (await import("@/i18n/langs/fr.json")).default,
+  hu: async () => (await import("@/i18n/langs/hu.json")).default,
+  lt: async () => (await import("@/i18n/langs/lt.json")).default,
+  lv: async () => (await import("@/i18n/langs/lv.json")).default,
+  pl: async () => (await import("@/i18n/langs/pl.json")).default,
+  sk: async () => (await import("@/i18n/langs/sk.json")).default,
+};
 
 export const LANG_ENDONYMS = {
   en: "English",
@@ -66,7 +59,7 @@ export const LANG_ENDONYMS = {
 } as const satisfies Record<SupportedLanguage, string>;
 
 const isSupportedLanguage = (value: string): value is SupportedLanguage =>
-  value in langMessages;
+  supportedLanguageSet.has(value);
 
 const detectLang = (): SupportedLanguage => {
   const languages =
@@ -85,54 +78,119 @@ const detectLang = (): SupportedLanguage => {
 };
 
 const defaultLanguage = detectLang();
+const defaultMessages = en;
 
 let translator = createTranslator({
-  locale: defaultLanguage,
-  messages: langMessages[defaultLanguage],
+  locale: "en",
+  messages: defaultMessages,
 });
 
 export const getTranslator = () => translator;
 
 type State = {
   lang: SupportedLanguage;
+  messages: LocaleMessages;
+  loadedLang: SupportedLanguage;
+  isLoaded: boolean;
 };
 
 type Actions = {
-  setLang: (lang: SupportedLanguage) => void;
+  setLang: (lang: SupportedLanguage) => Promise<void>;
+  loadMessages: (lang: SupportedLanguage) => Promise<void>;
+};
+
+let loadRequestId = 0;
+
+const setDocumentLanguage = (lang: SupportedLanguage): void => {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.documentElement.lang = lang;
+};
+
+const applyMessages = (
+  lang: SupportedLanguage,
+  messages: LocaleMessages,
+): void => {
+  translator = createTranslator({
+    locale: lang,
+    messages,
+  });
+  setDocumentLanguage(lang);
 };
 
 export const useI18nStore = create<State & Actions>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       lang: defaultLanguage,
-      setLang: (lang) => {
-        document.documentElement.lang = lang;
+      messages: defaultMessages,
+      loadedLang: "en",
+      isLoaded: defaultLanguage === "en",
 
-        translator = createTranslator({
-          locale: lang,
-          messages: langMessages[lang],
-        });
+      loadMessages: async (lang) => {
+        const state = get();
+        if (state.loadedLang === lang && state.isLoaded) {
+          set({ lang });
+          setDocumentLanguage(lang);
+          return;
+        }
 
-        set({ lang });
+        const requestId = (loadRequestId += 1);
+        set({ lang, isLoaded: false });
+
+        let messages: LocaleMessages;
+        try {
+          messages = await messageLoaders[lang]();
+        } catch {
+          if (requestId !== loadRequestId) {
+            return;
+          }
+
+          const fallback = get();
+          applyMessages(fallback.loadedLang, fallback.messages);
+          set({ lang: fallback.loadedLang, isLoaded: true });
+          return;
+        }
+
+        if (requestId !== loadRequestId) {
+          return;
+        }
+
+        applyMessages(lang, messages);
+        set({ lang, messages, loadedLang: lang, isLoaded: true });
+      },
+
+      setLang: async (lang) => {
+        await get().loadMessages(lang);
       },
     }),
     {
       name: getStorageKey("i18n"),
       version: 0,
-      migrate: () => {
-        /* no-op: reset persisted state on version bump */
-      },
+      partialize: (state) => ({ lang: state.lang }),
       onRehydrateStorage: () => (state) => {
-        if (!state) {
-          return;
+        if (state) {
+          void state.loadMessages(state.lang);
         }
-
-        document.documentElement.lang = state.lang;
-        translator = createTranslator({
-          locale: state.lang,
-          messages: langMessages[state.lang],
-        });
       },
     },
   ),
 );
+
+const waitForHydration = async (): Promise<void> => {
+  if (useI18nStore.persist.hasHydrated()) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    const unsubscribe = useI18nStore.persist.onFinishHydration(() => {
+      unsubscribe();
+      resolve();
+    });
+  });
+};
+
+export const initializeI18n = async (): Promise<void> => {
+  await waitForHydration();
+  await useI18nStore.getState().loadMessages(useI18nStore.getState().lang);
+};

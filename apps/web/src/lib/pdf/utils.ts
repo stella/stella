@@ -1,6 +1,5 @@
-import type { PageViewport } from "pdfjs-dist";
-
 import { PAGE_ID_ATTRIBUTE } from "@/lib/pdf/consts";
+import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { approximateFraction, floorToMultiple } from "@/lib/pdf/pdfjs-utils";
 
 export const getPageId = (instanceId: string, pageNumber: number): string =>

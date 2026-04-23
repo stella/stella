@@ -1,6 +1,4 @@
 import { Result } from "better-result";
-import { getDocument, PasswordResponses } from "pdfjs-dist";
-import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 
 import { DEFAULT_PDF_WIDTH } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
@@ -8,6 +6,8 @@ import type { PDFAttachment } from "@/lib/pdf/parse-attachments";
 import type { PageInfo } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
+import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
+import type { PDFDocumentProxy, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import { getPageId } from "@/lib/pdf/utils";
 
 export type PDFDocument = {
@@ -41,6 +41,8 @@ const isPasswordException = (
 
 const parsePasswordException = (
   error: unknown,
+  // eslint-disable-next-line typescript/no-explicit-any
+  PasswordResponses: any,
 ): { code: PDFViewerCode; message: string } | null => {
   if (!isPasswordException(error)) {
     return null;
@@ -48,6 +50,7 @@ const parsePasswordException = (
 
   return {
     code:
+      // eslint-disable-next-line typescript/no-unsafe-member-access
       error.code === PasswordResponses.INCORRECT_PASSWORD
         ? "INCORRECT_PASSWORD"
         : "PASSWORD_REQUIRED",
@@ -63,6 +66,7 @@ const loadPortfolioPages = async (
   attachmentDocuments: PDFDocumentProxy[];
   attachmentLabels: Map<string, string>;
 }> => {
+  const { getDocument } = await loadPdfjs();
   const documentPages: Promise<{
     id: string;
     proxy: PDFPageProxy;
@@ -112,16 +116,25 @@ export const loadPDF = async ({
   buffer,
   password,
 }: LoadPDFProps): Promise<Result<PDFDocument, PDFViewerError>> => {
-  const loadingTask = getDocument({
-    data: buffer.slice(0),
-    enableXfa: true,
-    ...(password && { password }),
-  });
+  let passwordResponses: unknown = null;
 
   const documentResult = await Result.tryPromise({
-    try: async () => await loadingTask.promise,
+    try: async () => {
+      const { getDocument, PasswordResponses } = await loadPdfjs();
+      passwordResponses = PasswordResponses;
+      const loadingTask = getDocument({
+        data: buffer.slice(0),
+        enableXfa: true,
+        ...(password && { password }),
+      });
+
+      return await loadingTask.promise;
+    },
     catch: (error) => {
-      const passwordException = parsePasswordException(error);
+      const passwordException = parsePasswordException(
+        error,
+        passwordResponses,
+      );
 
       if (passwordException) {
         return new PDFViewerError({

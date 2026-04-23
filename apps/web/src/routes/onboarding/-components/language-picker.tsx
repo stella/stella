@@ -37,7 +37,7 @@ export const LanguagePicker = () => {
             {supportedLanguages.map((code) => (
               <MenuRadioItem
                 key={code}
-                onClick={() => setLang(code)}
+                onClick={() => void setLang(code)}
                 value={code}
               >
                 {LANG_ENDONYMS[code]}

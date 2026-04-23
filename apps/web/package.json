@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "build:analyze": "vite build --mode analyze",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "typecheck": "tsgo --noEmit",
@@ -33,7 +34,6 @@
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
     "@streamdown/cjk": "^1.0.2",
-    "@streamdown/code": "^1.1.0",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@t3-oss/env-core": "catalog:",
@@ -59,7 +59,7 @@
     "@tiptap/extension-text": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/suggestion": "^3.22.3",
-    "ai": "^6.0.158",
+    "ai": "^6.0.166",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
@@ -98,6 +98,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
     "react-grab": "0.1.32",
+    "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "catalog:"
   }
 }

@@ -6,6 +6,7 @@ import { RouterProvider } from "@tanstack/react-router";
 
 import "@/fonts.css";
 import "@stella/ui/globals.css";
+import { initializeI18n } from "@/i18n/i18n-store";
 import { getRouter } from "@/router";
 
 const rootElement = document.querySelector("#app");
@@ -23,9 +24,13 @@ if (rootElement && !rootElement.innerHTML) {
     },
   });
 
-  root.render(
-    <StrictMode>
-      <RouterProvider router={getRouter()} />
-    </StrictMode>,
-  );
+  const router = getRouter();
+
+  void initializeI18n().finally(() => {
+    root.render(
+      <StrictMode>
+        <RouterProvider router={router} />
+      </StrictMode>,
+    );
+  });
 }

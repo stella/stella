@@ -17,7 +17,7 @@
     "@astrojs/sitemap": "^3.7.2",
     "@stella/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^6.1.5",
+    "astro": "^6.1.7",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:"
