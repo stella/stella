@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@stella/ui/components/alert-dialog";
 import { Button } from "@stella/ui/components/button";
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Dialog, DialogPopup } from "@stella/ui/components/dialog";
 import { Field, FieldError } from "@stella/ui/components/field";
 import { Form } from "@stella/ui/components/form";
@@ -728,10 +729,8 @@ const EditInvoiceForm = ({
           {(field) => (
             <Field name={field.name}>
               <Label>{t("billing.invoices.invoiceDate")}</Label>
-              <Input
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                type="date"
+              <DatePickerPopover
+                onChange={(val) => field.handleChange(val ?? "")}
                 value={field.state.value}
               />
               <FieldError />
@@ -742,10 +741,8 @@ const EditInvoiceForm = ({
           {(field) => (
             <Field name={field.name}>
               <Label>{t("billing.invoices.dueDate")}</Label>
-              <Input
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-                type="date"
+              <DatePickerPopover
+                onChange={(val) => field.handleChange(val ?? "")}
                 value={field.state.value}
               />
               <FieldError />

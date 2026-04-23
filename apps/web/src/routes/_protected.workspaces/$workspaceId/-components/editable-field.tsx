@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "use-intl";
 
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Input } from "@stella/ui/components/input";
 
 import { api } from "@/lib/api";
@@ -338,48 +339,12 @@ const InlineTextEditor = ({
 
 const InlineDateEditor = ({
   value,
-  locale,
   onSave,
 }: {
   value: string | null;
   locale: string;
   onSave: (value: string | null) => void;
-}) => {
-  const formatted = value
-    ? new Date(value).toLocaleDateString(locale, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        timeZone: "UTC",
-      })
-    : null;
-
-  return (
-    <div className="relative">
-      <Input
-        className="h-8 text-sm"
-        defaultValue={value ?? ""}
-        onBlur={(e) => {
-          const newValue = e.target.value || null;
-          if (newValue !== value) {
-            onSave(newValue);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.currentTarget.blur();
-          }
-        }}
-        type="date"
-      />
-      {formatted && (
-        <span className="text-muted-foreground pointer-events-none absolute end-8 top-1/2 -translate-y-1/2 text-xs">
-          {formatted}
-        </span>
-      )}
-    </div>
-  );
-};
+}) => <DatePickerPopover onChange={onSave} value={value} />;
 
 // -- Int inline editor --
 

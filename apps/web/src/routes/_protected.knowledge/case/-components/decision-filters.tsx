@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 import { Input } from "@stella/ui/components/input";
 import {
   Select,
@@ -133,18 +134,12 @@ export const DecisionFilters = ({
         />
       )}
 
-      <Input
-        className="max-w-40"
-        onChange={(e) => updateFilter("dateFrom", e.currentTarget.value)}
-        placeholder={t("caseLaw.filters.dateFrom")}
-        type="date"
+      <DatePickerPopover
+        onChange={(v) => updateFilter("dateFrom", v)}
         value={filters.dateFrom ?? ""}
       />
-      <Input
-        className="max-w-40"
-        onChange={(e) => updateFilter("dateTo", e.currentTarget.value)}
-        placeholder={t("caseLaw.filters.dateTo")}
-        type="date"
+      <DatePickerPopover
+        onChange={(v) => updateFilter("dateTo", v)}
         value={filters.dateTo ?? ""}
       />
     </div>

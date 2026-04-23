@@ -1,16 +1,10 @@
-import { useMemo, useState } from "react";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  PlusIcon,
-  XIcon,
-} from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
+import { DatePickerPopover as DatePickerPopoverBase } from "@stella/ui/components/date-picker-popover";
+import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@stella/ui/components/date-picker-popover";
 import {
   Popover,
   PopoverPopup,
@@ -27,18 +21,12 @@ import { cn } from "@stella/ui/lib/utils";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import {
-  formatMonthYearLabel,
-  getMonthDays,
-  getWeekdayLabels,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
-import {
   PRIORITY_COLORS,
   PRIORITY_ICONS,
   STATUS_COLORS,
   STATUS_ICONS,
   TASK_PRIORITIES,
   TASK_STATUSES,
-  toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
@@ -139,161 +127,21 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
 
 // -- Date picker --
 
-type DatePickerPopoverProps = {
-  value: string | Date | null;
-  onChange: (value: string | null) => void;
-  isOverdue?: boolean;
-};
+type DatePickerPopoverProps = Omit<
+  DatePickerPopoverBaseProps,
+  "locale" | "clearLabel" | "overdueLabel"
+>;
 
-export const DatePickerPopover = ({
-  value: rawValue,
-  onChange,
-  isOverdue = false,
-}: DatePickerPopoverProps) => {
+export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const locale = useLocale();
-
-  const value = toISODate(rawValue);
-  const [viewYear, setViewYear] = useState(() => {
-    const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
-    return d.getUTCFullYear();
-  });
-  const [viewMonth, setViewMonth] = useState(() => {
-    const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
-    return d.getUTCMonth();
-  });
-
-  const days = useMemo(
-    () => getMonthDays(viewYear, viewMonth),
-    [viewYear, viewMonth],
-  );
-  const weekdays = useMemo(() => getWeekdayLabels(locale), [locale]);
-
-  const monthLabel = formatMonthYearLabel(locale, viewYear, viewMonth);
-
-  const navigatePrev = () => {
-    if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
-      setViewMonth(11);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
-  };
-
-  const navigateNext = () => {
-    if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
-      setViewMonth(0);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
-  };
-
-  const displayLabel = value
-    ? new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : "\u2014";
-
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            className={cn(
-              "flex h-7 w-full items-center gap-1.5",
-              "rounded-md px-1.5 text-sm",
-              "hover:bg-muted transition-colors",
-              isOverdue
-                ? "text-red-500"
-                : value
-                  ? "text-foreground"
-                  : "text-muted-foreground",
-            )}
-            type="button"
-          />
-        }
-      >
-        <CalendarIcon className="size-3.5 shrink-0" />
-        <span>{displayLabel}</span>
-        {isOverdue && (
-          <span className="text-xs text-red-500">{t("overdue")}</span>
-        )}
-      </PopoverTrigger>
-      <PopoverPopup
-        className="*:data-[slot=popover-viewport]:p-2!"
-        side="bottom"
-      >
-        <div className="w-56">
-          {/* Month/year nav */}
-          <div className="flex items-center justify-between pb-1">
-            <Button onClick={navigatePrev} size="icon-xs" variant="ghost">
-              <ChevronLeftIcon />
-            </Button>
-            <span className="text-xs font-medium">{monthLabel}</span>
-            <Button onClick={navigateNext} size="icon-xs" variant="ghost">
-              <ChevronRightIcon />
-            </Button>
-          </div>
-
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-0">
-            {weekdays.map((wd) => (
-              <span
-                className="text-muted-foreground py-1 text-center text-[10px]"
-                key={wd}
-              >
-                {wd}
-              </span>
-            ))}
-          </div>
-
-          {/* Day grid */}
-          <div className="grid grid-cols-7 gap-0">
-            {days.map((day) => {
-              const isSelected = day.date === value;
-              return (
-                <button
-                  className={cn(
-                    "flex size-8 items-center justify-center",
-                    "rounded-full text-xs transition-colors",
-                    "hover:bg-muted",
-                    !day.isCurrentMonth && "text-muted-foreground/40",
-                    day.isToday &&
-                      !isSelected &&
-                      "ring-foreground font-medium ring-1",
-                    isSelected &&
-                      "bg-primary text-primary-foreground hover:bg-primary/90",
-                  )}
-                  key={day.date}
-                  onClick={() => onChange(day.date)}
-                  type="button"
-                >
-                  {Number.parseInt(day.date.slice(8), 10)}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Clear button */}
-          {value && (
-            <div className="mt-1 border-t pt-1">
-              <Button
-                className="w-full"
-                onClick={() => onChange(null)}
-                size="xs"
-                variant="ghost"
-              >
-                {t("clearDate")}
-              </Button>
-            </div>
-          )}
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <DatePickerPopoverBase
+      {...props}
+      clearLabel={t("clearDate")}
+      locale={locale}
+      overdueLabel={t("overdue")}
+    />
   );
 };
 
