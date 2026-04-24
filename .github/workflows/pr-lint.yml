@@ -17,7 +17,9 @@ concurrency:
     }}
   cancel-in-progress: true
 
-permissions: write-all
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   pr-lint:
