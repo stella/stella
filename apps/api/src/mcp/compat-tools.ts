@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
+import { LIMITS } from "@/api/lib/limits";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
@@ -291,7 +292,9 @@ export const COMPAT_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        query: stringProp("Search query"),
+        query: stringProp("Search query", {
+          maxLength: LIMITS.searchQueryMaxLength,
+        }),
       },
       required: ["query"],
     },
@@ -324,7 +327,9 @@ export const ANONYMIZED_COMPAT_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        query: stringProp("Search query"),
+        query: stringProp("Search query", {
+          maxLength: LIMITS.searchQueryMaxLength,
+        }),
       },
       required: ["query"],
     },
@@ -353,7 +358,9 @@ const handleCompatSearchTool: McpToolHandler = async ({
   context,
   mode,
 }) => {
-  const query = parseRequiredString(args, "query");
+  const query = parseRequiredString(args, "query", {
+    maxLength: LIMITS.searchQueryMaxLength,
+  });
   if (typeof query !== "string") {
     return query;
   }

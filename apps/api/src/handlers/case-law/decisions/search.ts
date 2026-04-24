@@ -31,7 +31,7 @@ export const searchDecisionsBodySchema = t.Object({
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(t.String({ maxLength: 21 })),
+  sourceId: t.Optional(t.String({ maxLength: 36 })),
   language: t.Optional(t.String({ maxLength: 8 })),
 });
 

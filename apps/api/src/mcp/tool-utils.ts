@@ -20,8 +20,15 @@ export const MCP_TOOL_EXECUTION_OPTIONS: ToolExecutionOptions = {
 
 const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/, "");
 
-export const stringProp = (description: string) =>
-  ({ type: "string", description }) as const;
+export const stringProp = (
+  description: string,
+  opts?: { maxLength?: number },
+) =>
+  ({
+    type: "string",
+    description,
+    ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
+  }) as const;
 
 export const intProp = (
   description: string,
@@ -71,10 +78,16 @@ export const toolThrownErrorToMcpResult = (
 export const parseRequiredString = (
   args: Record<string, unknown>,
   key: string,
+  opts?: { maxLength?: number },
 ): string | CallToolResult => {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
     return errorResult(`Missing required parameter: ${key}`);
+  }
+  if (opts?.maxLength !== undefined && value.length > opts.maxLength) {
+    return errorResult(
+      `Parameter ${key} exceeds maximum length of ${opts.maxLength}`,
+    );
   }
   return value;
 };
