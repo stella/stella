@@ -1,20 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
+import type { SanitizedFileName } from "./sanitize-filename";
 import { DOCX_EXT_RE, sanitizeFilename } from "./sanitize-filename";
 
 describe("sanitizeFilename", () => {
   test("replaces control and header-unsafe characters", () => {
-    expect(sanitizeFilename('evil\r\n"name?.pdf')).toBe("evil___name_.pdf");
+    expect<string>(sanitizeFilename('evil\r\n"name?.pdf')).toBe(
+      "evil___name_.pdf",
+    );
   });
 
   test("neutralizes path traversal segments", () => {
-    expect(sanitizeFilename("../contracts/../../secret.docx")).toBe(
+    expect<string>(sanitizeFilename("../contracts/../../secret.docx")).toBe(
       "___contracts_______secret.docx",
     );
   });
 
   test("replaces leading and trailing dots after sanitization", () => {
-    expect(sanitizeFilename("...draft...")).toBe("__.draft___");
+    expect<string>(sanitizeFilename("...draft...")).toBe("__.draft___");
+  });
+
+  test("returns a SanitizedFileName branded type", () => {
+    const result = sanitizeFilename("normal.pdf");
+    // Compile-time check: result is assignable to SanitizedFileName
+    const _branded: SanitizedFileName = result;
+    expect(typeof _branded).toBe("string");
   });
 });
 

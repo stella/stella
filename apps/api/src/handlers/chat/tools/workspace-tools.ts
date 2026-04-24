@@ -16,6 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -713,7 +714,7 @@ export const createWorkspaceTools = ({
           workspaceId,
         });
         const buffer = await markdownToDocx(markdown);
-        const fileName = `${name}.docx`;
+        const fileName = sanitizeFilename(`${name}.docx`);
 
         const result = await createEntityFromBuffer({
           scopedDb,
