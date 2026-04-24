@@ -136,6 +136,20 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   const strip = (s: string | undefined): string | undefined =>
     s ? stripDangerousChars(s) : undefined;
 
+  // Strip header fragments that the Cheerio extractor sometimes
+  // captures alongside the actual decision type value.
+  const DECISION_TYPE_NOISE =
+    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/gi;
+
+  const normalizeDecisionType = (
+    raw: string | undefined,
+  ): string | undefined => {
+    if (!raw) {return undefined;}
+    return (
+      raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
+    );
+  };
+
   // Recursively sanitize all strings in documentAst.
   // JSON.stringify escapes control chars to \uXXXX sequences
   // that the regex wouldn't match, so we walk the tree.
@@ -180,7 +194,7 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
       ? collapseSpacedLetters(strip(r.fulltext) ?? "")
       : undefined,
     ecli: strip(r.ecli),
-    decisionType: strip(r.decisionType),
+    decisionType: normalizeDecisionType(strip(r.decisionType)),
     sourceUrl: strip(r.sourceUrl),
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
