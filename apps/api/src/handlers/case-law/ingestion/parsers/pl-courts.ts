@@ -25,6 +25,7 @@ import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 type ParsePlDecisionInput = {
@@ -271,7 +272,7 @@ const walkInlines = (
 
     if (tag === "a") {
       const children = walkInlines($, $node, isAnon);
-      const href = $node.attr("href");
+      const href = sanitizeUrl($node.attr("href") ?? "");
       if (href && children.length > 0) {
         inlines.push({ type: "link", href, children });
       } else if (children.length > 0) {

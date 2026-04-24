@@ -5,6 +5,8 @@ import { useTranslations } from "use-intl";
 import { getDocumentAstMetadata } from "@stella/case-law/document-ast";
 import { Button } from "@stella/ui/components/button";
 
+import { sanitizeHref } from "@/lib/sanitize-href";
+
 /**
  * Countries with a single official court language.
  * Language field is redundant for these; hide it in the UI.
@@ -219,7 +221,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         </dl>
       )}
 
-      {decision.sourceUrl && (
+      {decision.sourceUrl && sanitizeHref(decision.sourceUrl) && (
         <div>
           <a
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
