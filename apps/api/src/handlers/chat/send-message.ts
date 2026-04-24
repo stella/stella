@@ -46,7 +46,7 @@ const MESSAGE_WINDOW = 20;
 const sendMessage = createSafeRootHandler(
   config,
   async function* ({
-    accessibleWorkspaces,
+    activeWorkspaceIds,
     body,
     orgAIConfig,
     request,
@@ -55,9 +55,7 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
-    const accessibleWorkspaceIds = accessibleWorkspaces
-      .filter((w) => w.status !== "deleting")
-      .map((workspace) => workspace.id);
+    const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,

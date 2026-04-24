@@ -44,6 +44,12 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     };
     scopedDb: ScopedDb;
     safeDb: SafeDb;
+    /**
+     * Excludes workspaces being deleted. Includes active and
+     * archived workspaces. Use for search, chat, MCP, and any
+     * query that should not surface content from sealed workspaces.
+     */
+    activeWorkspaceIds: SafeId<"workspace">[];
     accessibleWorkspaces: AccessibleWorkspace[];
     memberRole: {
       role: keyof typeof roles;
