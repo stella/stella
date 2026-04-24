@@ -11,7 +11,9 @@ export const searchRoute = new Elysia({ prefix: "/search" })
     async (ctx) =>
       await searchHandler({
         organizationId: ctx.session.activeOrganizationId,
-        accessibleWorkspaceIds: ctx.accessibleWorkspaces.map(({ id }) => id),
+        accessibleWorkspaceIds: ctx.accessibleWorkspaces
+          .filter((w) => w.status !== "deleting")
+          .map(({ id }) => id),
         body: ctx.body,
         scopedDb: ctx.scopedDb,
       }),

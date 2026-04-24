@@ -43,11 +43,15 @@ export const searchHandler = async ({
 }: SearchHandlerProps) => {
   let workspaceId: SafeId<"workspace"> | undefined;
 
-  // Validate workspace belongs to the caller's organization
+  // Validate workspace belongs to the caller's organization and is not being deleted
   if (body.workspaceId) {
     const ws = await scopedDb((tx) =>
       tx.query.workspaces.findFirst({
-        where: { id: body.workspaceId, organizationId: { eq: organizationId } },
+        where: {
+          id: body.workspaceId,
+          organizationId: { eq: organizationId },
+          status: { ne: "deleting" },
+        },
         columns: { id: true },
       }),
     );

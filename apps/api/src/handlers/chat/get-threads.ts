@@ -9,7 +9,13 @@ const config = {
 
 const getThreads = createSafeRootHandler(
   config,
-  async function* ({ safeDb, user }) {
+  async function* ({ accessibleWorkspaces, safeDb, user }) {
+    const deletingWorkspaceIds = new Set(
+      accessibleWorkspaces
+        .filter((w) => w.status === "deleting")
+        .map((w) => w.id),
+    );
+
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx.query.chatThreads.findMany({
@@ -58,6 +64,15 @@ const getThreads = createSafeRootHandler(
     >();
 
     for (const thread of rows) {
+      // Skip threads from workspaces being deleted so users
+      // don't see entries they can't open or manage.
+      if (
+        thread.workspaceId !== null &&
+        deletingWorkspaceIds.has(thread.workspaceId)
+      ) {
+        continue;
+      }
+
       if (thread.workspaceId === null) {
         global.push({
           id: thread.id,

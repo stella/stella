@@ -73,22 +73,23 @@ export const resolveMcpSessionContext = async (
     organizationId,
     memberRole,
   );
-  const accessibleWorkspaceIds = accessibleWorkspaces.map((workspace) =>
+  // RLS receives all IDs regardless of status (matches the Elysia
+  // auth path). Business-logic fields exclude deleting workspaces
+  // so MCP tools don't surface content from sealed workspaces.
+  const allWorkspaceIds = accessibleWorkspaces.map((workspace) =>
     brandPersistedWorkspaceId(workspace.id),
   );
+  const usableWorkspaceIds = accessibleWorkspaces
+    .filter((w) => w.status !== "deleting")
+    .map((workspace) => brandPersistedWorkspaceId(workspace.id));
 
   return {
-    accessibleWorkspaceIds,
-    accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+    accessibleWorkspaceIds: usableWorkspaceIds,
+    accessibleWorkspaceIdSet: new Set(usableWorkspaceIds),
     memberRole,
     organizationId,
-    safeDb: createSafeDb(db, accessibleWorkspaceIds, organizationId, userId),
-    scopedDb: createScopedDb(
-      db,
-      accessibleWorkspaceIds,
-      organizationId,
-      userId,
-    ),
+    safeDb: createSafeDb(db, allWorkspaceIds, organizationId, userId),
+    scopedDb: createScopedDb(db, allWorkspaceIds, organizationId, userId),
     userId,
   };
 };
