@@ -6,7 +6,7 @@ comments.
 
 ## Instructions
 
-1. **Verify not on the default branch**:
+1. **Verify you are on an isolated feature branch**:
 
    ```bash
    CURRENT=$(git branch --show-current)
@@ -19,7 +19,34 @@ comments.
    If on main, abort and ask the user which feature branch to
    use.
 
-2. **Rebase onto remote main**:
+   Check whether the current checkout is safe to use for PR prep:
+
+   ```bash
+   git status --short
+   ```
+
+   If the checkout is the user's shared root checkout, has
+   unrelated local changes, or the work spans multiple repos or
+   submodules, stop and move to clean worktree(s) before rebasing
+   or committing. Create the worktree from the current feature
+   branch and continue the rest of this skill there; do not
+   rewrite history in the dirty root checkout.
+
+2. **Bootstrap the worktree before trusting failures**:
+
+   Before running lint, typecheck, tests, or hooks, verify that
+   the worktree actually has the repo toolchain available
+   (`bun`, workspace dependencies, `turbo`, `oxlint`, project
+   bins, and env links if the repo expects them).
+
+   If the worktree is missing the toolchain, run the repo's
+   normal install/setup flow first, then rerun the same command.
+   Do not treat missing-bin or module-resolution failures as
+   product-code regressions. Keep setup-only churn such as
+   accidental lockfile changes out of the PR unless the task
+   explicitly requires them.
+
+3. **Rebase onto remote main**:
 
    ```bash
    git fetch origin main
@@ -29,7 +56,7 @@ comments.
    If conflicts arise, resolve them. After resolving, continue
    the rebase. If a conflict is ambiguous, ask the user.
 
-3. **Self-review against CLAUDE.md conventions**:
+4. **Self-review against CLAUDE.md conventions**:
 
    Get the full diff against main:
 
@@ -43,11 +70,11 @@ comments.
    violations directly; don't just list them. Commit fixes
    separately with `fix: address self-review findings`.
 
-4. **Run all quality checks**:
+5. **Run all quality checks**:
 
    ```bash
    bun run lint \
-     && bun run format --write \
+     && bun run format \
      && bun run typecheck \
      && bun run test
    ```
@@ -55,13 +82,13 @@ comments.
    If any check fails, fix the issue and re-run. Commit fixes
    with `fix: lint/format/type errors`.
 
-5. **Security audit**:
+6. **Security audit**:
 
    Run `/security-audit`. Fix any critical or high findings
    in files changed in this PR before opening it.
    Commit fixes with `fix: address security audit findings`.
 
-6. **Open the PR as draft**:
+7. **Open the PR as draft**:
 
    Push the branch and create the PR as a **draft**:
 
@@ -80,7 +107,7 @@ comments.
    architecture beyond what the diff shows. Write for the
    reviewing engineer.
 
-7. **Start rabbit round monitoring**:
+8. **Start rabbit round monitoring**:
 
    Once the draft PR is open, schedule rabbit round monitoring
    using `CronCreate` directly (do **not** use `/loop`, which
@@ -103,7 +130,7 @@ comments.
    to say. Only count a round as clean when all review bot
    check runs have completed.
 
-8. **Mark PR as ready**:
+9. **Mark PR as ready**:
 
    After the rabbit round monitoring stops (two consecutive
    clean checks), mark the PR as ready for review:
