@@ -25,8 +25,8 @@
     "forgetPassword": "Kasutage seda koodi oma parooli lähtestamiseks.",
     "heading": "Teie stella ühekordne kood",
     "ignore": "Kui te ei taotlenud seda koodi, võite selle e-kirja eirata.",
-    "preview": "Teie ühekordne kood: {otp}",
+    "preview": "Kasutage seda koodi oma identiteedi kinnitamiseks",
     "signIn": "Kasutage seda koodi oma stella kontole sisselogimiseks.",
-    "subject": "{otp} on teie stella kinnituskood"
+    "subject": "Teie stella kinnituskood"
   }
 }

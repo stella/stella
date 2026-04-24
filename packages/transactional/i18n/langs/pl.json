@@ -25,8 +25,8 @@
     "forgetPassword": "Użyj tego kodu, aby zresetować hasło.",
     "heading": "Twój jednorazowy kod stella",
     "ignore": "Jeśli nie prosiłeś o ten kod, możesz zignorować tę wiadomość.",
-    "preview": "Twój jednorazowy kod: {otp}",
+    "preview": "Użyj tego kodu, aby potwierdzić swoją tożsamość",
     "signIn": "Użyj tego kodu, aby zalogować się na swoje konto stella.",
-    "subject": "{otp} to Twój kod weryfikacyjny stella"
+    "subject": "Twój kod weryfikacyjny stella"
   }
 }

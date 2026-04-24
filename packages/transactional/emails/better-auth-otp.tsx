@@ -28,8 +28,8 @@ type Props = {
   lang: SupportedLang;
 };
 
-export const subject = (lang: SupportedLang, otp: string) =>
-  getTranslator(lang)("otp.subject", { otp });
+export const subject = (lang: SupportedLang) =>
+  getTranslator(lang)("otp.subject");
 
 export const Email = ({ otp, type, lang }: Props) => {
   const tr = getTranslator(lang);
@@ -37,7 +37,7 @@ export const Email = ({ otp, type, lang }: Props) => {
   return (
     <Html lang={lang}>
       <Head />
-      <Preview>{tr("otp.preview", { otp })}</Preview>
+      <Preview>{tr("otp.preview")}</Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
           <Section style={sharedStyles.wordmarkSection}>

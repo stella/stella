@@ -28,9 +28,9 @@ type Messages = {
     "forgetPassword": "Use this code to reset your password.";
     "heading": "Your stella one-time code";
     "ignore": "If you didn't request this code, you can ignore this email.";
-    "preview": "Your one-time code: {otp}";
+    "preview": "Use this code to verify your identity";
     "signIn": "Use this code to sign in to your stella account.";
-    "subject": "{otp} is your stella verification code";
+    "subject": "Your stella verification code";
   };
 };
 

@@ -25,8 +25,8 @@
     "forgetPassword": "Utilice este código para restablecer su contraseña.",
     "heading": "Su código de un solo uso de stella",
     "ignore": "Si no ha solicitado este código, puede ignorar este correo electrónico.",
-    "preview": "Su código de un solo uso: {otp}",
+    "preview": "Use este código para verificar su identidad",
     "signIn": "Utilice este código para iniciar sesión en su cuenta de stella.",
-    "subject": "{otp} es su código de verificación de stella"
+    "subject": "Su código de verificación de stella"
   }
 }

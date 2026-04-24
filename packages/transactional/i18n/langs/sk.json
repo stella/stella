@@ -25,8 +25,8 @@
     "forgetPassword": "Použite tento kód na obnovenie hesla.",
     "heading": "Váš jednorazový kód stella",
     "ignore": "Ak ste o tento kód nežiadali, tento e-mail môžete ignorovať.",
-    "preview": "Váš jednorazový kód: {otp}",
+    "preview": "Použite tento kód na overenie vašej identity",
     "signIn": "Použite tento kód na prihlásenie do svojho účtu stella.",
-    "subject": "{otp} — váš overovací kód stella"
+    "subject": "Váš overovací kód stella"
   }
 }

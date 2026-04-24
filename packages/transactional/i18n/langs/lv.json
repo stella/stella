@@ -25,8 +25,8 @@
     "forgetPassword": "Izmantojiet šo kodu, lai atiestatītu savu paroli.",
     "heading": "Jūsu stella vienreizējais kods",
     "ignore": "Ja neesat pieprasījis šo kodu, varat ignorēt šo e-pastu.",
-    "preview": "Jūsu vienreizējais kods: {otp}",
+    "preview": "Izmantojiet šo kodu savas identitātes apstiprināšanai",
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
-    "subject": "{otp} ir jūsu stella verifikācijas kods"
+    "subject": "Jūsu stella verifikācijas kods"
   }
 }

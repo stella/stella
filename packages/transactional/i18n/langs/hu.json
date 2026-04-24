@@ -25,8 +25,8 @@
     "forgetPassword": "Használja ezt a kódot a jelszava visszaállításához.",
     "heading": "Az Ön stella egyszer használatos kódja",
     "ignore": "Ha nem Ön kérte ezt a kódot, figyelmen kívül hagyhatja ezt az e-mailt.",
-    "preview": "Az Ön egyszer használatos kódja: {otp}",
+    "preview": "Használja ezt a kódot személyazonossága igazolásához",
     "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
-    "subject": "{otp} az Ön stella ellenőrző kódja"
+    "subject": "Az Ön stella ellenőrző kódja"
   }
 }
