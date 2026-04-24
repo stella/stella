@@ -55,9 +55,9 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
-    const accessibleWorkspaceIds = accessibleWorkspaces.map(
-      (workspace) => workspace.id,
-    );
+    const accessibleWorkspaceIds = accessibleWorkspaces
+      .filter((w) => w.status !== "deleting")
+      .map((workspace) => workspace.id);
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,

@@ -24,7 +24,9 @@ const getMessages = createSafeRootHandler(
     safeDb,
     user,
   }) {
-    const accessibleWorkspaceIds = accessibleWorkspaces.map(({ id }) => id);
+    const accessibleWorkspaceIds = accessibleWorkspaces
+      .filter((w) => w.status !== "deleting")
+      .map(({ id }) => id);
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,
       workspaceId,
