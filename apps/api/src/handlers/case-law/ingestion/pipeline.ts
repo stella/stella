@@ -519,6 +519,9 @@ export const runIngestionPipeline = async ({
         break;
       }
     }
+    const pageT0 = performance.now();
+    const insertedBefore = inserted;
+    const skippedBefore = skipped;
     try {
       for (const result of page.decisions) {
         try {
@@ -584,6 +587,20 @@ export const runIngestionPipeline = async ({
           }
         }
       }
+
+      const pageInserted = inserted - insertedBefore;
+      const pageSkipped = skipped - skippedBefore;
+      logger.info("case_law.ingestion.pipeline_page_done", {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+        nextCursor: page.nextCursor ?? "",
+        page: pagesProcessed + 1,
+        decisions: page.decisions.length,
+        inserted: pageInserted,
+        skipped: pageSkipped,
+        durationMs: Math.round(performance.now() - pageT0),
+        halted: haltReason !== null,
+      });
 
       if (haltReason) {
         logger.error("case_law.ingestion.adapter_halted", {

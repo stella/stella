@@ -21,11 +21,13 @@ import {
   isNullishNumber,
   isNullishString,
   isNullishValue,
+  isTimeoutError,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -53,6 +55,8 @@ const BASE_URL = "https://rozhodnuti.justice.cz/api";
  */
 const FINALDOC_CONCURRENCY = 5;
 const FINALDOC_BATCH_DELAY_MS = 200;
+const LIST_FETCH_RETRIES = 2;
+const LIST_FETCH_RETRY_DELAY_MS = 5000;
 
 /**
  * Map English decision type enums from the API to
@@ -520,6 +524,10 @@ export const czRegionalAdapter: SourceAdapter = {
   country: "CZE",
   language: "cs",
   minRequestIntervalMs: 200,
+  // rozhodnuti.justice.cz returns 100 items per page; each
+  // needs a finaldoc enrichment fetch. 30s default is too
+  // tight for large pages with slow upstream responses.
+  pageTimeoutMs: 100_000,
 
   // eslint-disable-next-line require-await -- interface requires Promise
   async getTotalCount(_signal) {
@@ -537,14 +545,77 @@ export const czRegionalAdapter: SourceAdapter = {
           : { date: defaultDate(), page: 0, emptyDays: 0 };
 
         const url = buildDayUrl(state.date, state.page);
+        const fetchT0 = performance.now();
 
-        const response = await fetch(url, {
-          signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          headers: {
-            Accept: "application/json",
-            "User-Agent": INGESTION_USER_AGENT,
-          },
-        });
+        // Retry on timeout / 5xx up to LIST_FETCH_RETRIES times.
+        let response: Response | undefined;
+        for (let attempt = 0; attempt <= LIST_FETCH_RETRIES; attempt++) {
+          if (signal?.aborted) {
+            throw new DOMException("Cycle aborted", "AbortError");
+          }
+
+          try {
+            response = await fetch(url, {
+              signal: signal
+                ? AbortSignal.any([
+                    signal,
+                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                  ])
+                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+              headers: {
+                Accept: "application/json",
+                "User-Agent": INGESTION_USER_AGENT,
+              },
+            });
+          } catch (fetchError) {
+            if (isTimeoutError(fetchError) && !signal?.aborted) {
+              if (attempt < LIST_FETCH_RETRIES) {
+                const delayMs = LIST_FETCH_RETRY_DELAY_MS * (attempt + 1);
+                logger.warn("case_law.ingestion.page_timeout_retry", {
+                  adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+                  page: state.page,
+                  date: state.date,
+                  retry: attempt + 1,
+                  maxRetries: LIST_FETCH_RETRIES,
+                  retryDelayMs: delayMs,
+                });
+                await Bun.sleep(delayMs);
+                continue;
+              }
+              logger.warn("case_law.ingestion.page_timeout_exhausted", {
+                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+                page: state.page,
+                date: state.date,
+                retries: LIST_FETCH_RETRIES,
+              });
+            }
+            throw fetchError;
+          }
+
+          if (response.ok || response.status < 500) {
+            break;
+          }
+
+          if (attempt < LIST_FETCH_RETRIES) {
+            logger.warn("case_law.ingestion.page_server_error_retry", {
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              page: state.page,
+              date: state.date,
+              httpStatus: response.status,
+              retry: attempt + 1,
+              maxRetries: LIST_FETCH_RETRIES,
+            });
+            await Bun.sleep(LIST_FETCH_RETRY_DELAY_MS);
+          }
+        }
+
+        if (!response) {
+          throw new AdapterFetchError({
+            message: `CZ Regional: no response after ${LIST_FETCH_RETRIES} retries`,
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            cursor,
+          });
+        }
 
         if (!response.ok) {
           // 404 means no data for this date; skip forward
@@ -630,6 +701,16 @@ export const czRegionalAdapter: SourceAdapter = {
             decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
           );
         }
+
+        const fetchMs = Math.round(performance.now() - fetchT0);
+        logger.info("case_law.ingestion.page_completed", {
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          page: state.page,
+          date: state.date,
+          decisions: decisions.length,
+          items: items.length,
+          totalMs: fetchMs,
+        });
 
         const totalPages = json.totalPages ?? 1;
 

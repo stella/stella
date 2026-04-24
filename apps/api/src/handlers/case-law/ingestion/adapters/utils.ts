@@ -103,6 +103,10 @@ export const parseCeDate = (dateStr: string): string | undefined => {
   return `${m[3]}-${month}-${day}`;
 };
 
+/** Check if an error is a per-request timeout (not a cycle/page abort). */
+export const isTimeoutError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "TimeoutError";
+
 /**
  * Catch handler for Result.tryPromise in adapters.
  * Re-throws AdapterFetchError as-is; wraps unknown
