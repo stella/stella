@@ -24,16 +24,26 @@ type ExportCsvHandlerProps = {
   query: ExportCsvQuerySchema;
 };
 
+const FORMULA_PREFIX_RE = /^[=+\-@\t\r]/;
+
 const escapeCSV = (value: string): string => {
-  if (
+  const needsQuote =
     value.includes(",") ||
     value.includes('"') ||
     value.includes("\n") ||
-    value.includes("\r")
-  ) {
-    return `"${value.replace(/"/g, '""')}"`;
+    value.includes("\r") ||
+    FORMULA_PREFIX_RE.test(value);
+
+  if (!needsQuote) {
+    return value;
   }
-  return value;
+
+  const escaped = value.replace(/"/g, '""');
+  // Neutralize formula prefixes so spreadsheets treat the cell as text
+  if (FORMULA_PREFIX_RE.test(value)) {
+    return `"\t${escaped}"`;
+  }
+  return `"${escaped}"`;
 };
 
 export const exportCsvHandler = async ({
