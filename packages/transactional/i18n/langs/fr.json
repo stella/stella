@@ -25,8 +25,8 @@
     "forgetPassword": "Utilisez ce code pour réinitialiser votre mot de passe.",
     "heading": "Votre code à usage unique stella",
     "ignore": "Si vous n'avez pas demandé ce code, vous pouvez ignorer cet e-mail.",
-    "preview": "Votre code à usage unique : {otp}",
+    "preview": "Utilisez ce code pour vérifier votre identité",
     "signIn": "Utilisez ce code pour vous connecter à votre compte stella.",
-    "subject": "{otp} est votre code de vérification stella"
+    "subject": "Votre code de vérification stella"
   }
 }

@@ -25,8 +25,8 @@
     "forgetPassword": "Naudokite šį kodą slaptažodžio atkūrimui.",
     "heading": "Jūsų vienkartinis stella kodas",
     "ignore": "Jei neprašėte šio kodo, galite nepaisyti šio el. laiško.",
-    "preview": "Jūsų vienkartinis kodas: {otp}",
+    "preview": "Naudokite šį kodą savo tapatybei patvirtinti",
     "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
-    "subject": "{otp} yra jūsų stella patvirtinimo kodas"
+    "subject": "Jūsų stella patvirtinimo kodas"
   }
 }
