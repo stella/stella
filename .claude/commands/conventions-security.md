@@ -77,12 +77,17 @@ operations (ZIP entries, Content-Disposition headers, S3 keys).
 The sanitizer strips path separators, traversal sequences, and
 dangerous characters.
 
-`sanitizeFilename` returns a branded `SanitizedFileName` type.
-Any function or DB write that accepts a filename for storage
-(`content.fileName`, `desktopEditSessions.fileName`,
-`templates.fileName`, `userFiles.fileName`) should declare its
-parameter as `SanitizedFileName`, not `string`. This makes missing
-sanitization a compile-time error instead of a runtime bug.
+### Cross-org user ID validation
+
+When a handler accepts a `userId` from user input (body, query, or
+params) and uses it in a query that returns user data (names, emails,
+images), validate org membership first using `validateOrgUserId` from
+`@/api/lib/branded-types`. The returned `ValidatedOrgUserId` proves
+the check happened at the type level, making cross-org user ID
+injection structurally impossible. For read paths that resolve
+userIds stored in the database (not from user input), scope the user
+query with an `innerJoin` on the `member` table filtered by
+`session.activeOrganizationId`.
 
 ### CI workflow permissions
 
