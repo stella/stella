@@ -7,6 +7,8 @@ import type { Block, DocumentAst, Inline } from "@stella/case-law/document-ast";
 import { parseDocumentAst } from "@stella/case-law/document-ast";
 import { cn } from "@stella/ui/lib/utils";
 
+import { sanitizeHref } from "@/lib/sanitize-href";
+
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
 import { buildSearchResults } from "./decision-search";
 import "./reader.css";
@@ -254,16 +256,25 @@ const renderInline = ({
   }
 
   if (node.type === "link") {
+    const safeHref = sanitizeHref(node.href);
+    if (safeHref) {
+      return (
+        <a
+          className="decoration-border underline underline-offset-2 hover:decoration-current"
+          href={safeHref}
+          key={key}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {renderInlineChildren({ children: node.children, context, offset })}
+        </a>
+      );
+    }
+    // Unsafe scheme: render children as plain text
     return (
-      <a
-        className="decoration-border underline underline-offset-2 hover:decoration-current"
-        href={node.href}
-        key={key}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
+      <Fragment key={key}>
         {renderInlineChildren({ children: node.children, context, offset })}
-      </a>
+      </Fragment>
     );
   }
 

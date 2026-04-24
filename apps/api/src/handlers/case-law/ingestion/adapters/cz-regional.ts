@@ -28,6 +28,7 @@ import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers
 import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -396,8 +397,8 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     country: "CZE",
     language: "cs",
     decisionDate: toOptionalValue(item.datumVydani),
-    sourceUrl: toOptionalValue(item.odkaz),
-    documentUrl: toOptionalValue(item.odkaz),
+    sourceUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
+    documentUrl: sanitizeUrl(toOptionalValue(item.odkaz) ?? ""),
     metadata: {
       caseNumber: item.jednaciCislo,
       ecli: toOptionalValue(item.ecli),

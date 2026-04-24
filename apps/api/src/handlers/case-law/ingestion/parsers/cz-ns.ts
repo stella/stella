@@ -20,6 +20,8 @@ import type {
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
 
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
+
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
@@ -264,7 +266,7 @@ const walkInlines = (
     }
 
     if (tag === "a") {
-      const href = $node.attr("href");
+      const href = sanitizeUrl($node.attr("href") ?? "");
       const children = walkInlines($, $node);
       if (href && children.length > 0) {
         inlines.push({ type: "link", href, children });

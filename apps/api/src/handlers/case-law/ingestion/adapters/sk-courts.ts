@@ -21,6 +21,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -294,9 +295,9 @@ const parseItemWithDetail = async (
     decisionType,
     fulltext,
     sourceUrl: item.guid
-      ? sourceUrlForDecision(item.guid, detail?.dokument?.url)
+      ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
       : undefined,
-    documentUrl: toOptionalValue(detail?.dokument?.url),
+    documentUrl: sanitizeUrl(toOptionalValue(detail?.dokument?.url) ?? ""),
     metadata: {
       caseNumber,
       ecli,
