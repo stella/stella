@@ -63,8 +63,6 @@ const renameEntityHandler = async function* ({
 
       // Also update the file field's fileName so the table
       // column (which reads content.fileName) stays in sync.
-      // Only file fields need sanitization (zip-slip prevention);
-      // the entity display name is kept as the user typed it.
       const fileField = await tx.query.entities
         .findFirst({
           where: { id: body.entityId },
