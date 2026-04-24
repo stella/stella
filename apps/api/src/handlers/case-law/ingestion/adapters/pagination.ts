@@ -17,9 +17,11 @@ import type {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
+  isTimeoutError,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { captureError } from "@/api/lib/analytics";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Options for page-number pagination (1-indexed or
@@ -93,7 +95,7 @@ type PagePaginationOptions<TResponse> = {
  * };
  * ```
  */
-/** Max retries for transient 5xx errors before skipping. */
+/** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
 const SERVER_ERROR_RETRY_DELAY_MS = 5000;
 
@@ -120,39 +122,78 @@ export const createPagePaginatedFetch = <TResponse>(
         }
 
         const { url, init } = opts.buildRequest(page);
+        const fetchT0 = performance.now();
 
-        // Retry on 5xx up to SERVER_ERROR_RETRIES times
+        // Retry on 5xx / timeout up to SERVER_ERROR_RETRIES times.
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
         let response: Response | undefined;
         for (let attempt = 0; attempt <= SERVER_ERROR_RETRIES; attempt++) {
+          // If the parent cycle signal is already aborted, don't
+          // retry — the pipeline will handle the cancellation.
+          if (signal?.aborted) {
+            throw new DOMException("Cycle aborted", "AbortError");
+          }
+
           const headers = new Headers(init?.headers);
           if (!headers.has("User-Agent")) {
             headers.set("User-Agent", INGESTION_USER_AGENT);
           }
-          response = await fetch(url, {
-            ...init,
-            headers,
-            signal: signal
-              ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
-              : AbortSignal.timeout(listTimeout),
-          });
+
+          try {
+            response = await fetch(url, {
+              ...init,
+              headers,
+              signal: signal
+                ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
+                : AbortSignal.timeout(listTimeout),
+            });
+          } catch (fetchError) {
+            // Timeout: retry with backoff unless exhausted.
+            // Abort from the parent cycle signal is not retried.
+            if (isTimeoutError(fetchError) && !signal?.aborted) {
+              if (attempt < SERVER_ERROR_RETRIES) {
+                const delayMs = SERVER_ERROR_RETRY_DELAY_MS * (attempt + 1);
+                logger.warn("case_law.ingestion.page_timeout_retry", {
+                  adapterKey: opts.adapterKey,
+                  page,
+                  timeoutMs: listTimeout,
+                  retry: attempt + 1,
+                  maxRetries: SERVER_ERROR_RETRIES,
+                  retryDelayMs: delayMs,
+                });
+                await Bun.sleep(delayMs);
+                continue;
+              }
+              // Exhausted retries: let the error propagate
+              logger.warn("case_law.ingestion.page_timeout_exhausted", {
+                adapterKey: opts.adapterKey,
+                page,
+                timeoutMs: listTimeout,
+                retries: SERVER_ERROR_RETRIES,
+              });
+            }
+            throw fetchError;
+          }
 
           if (response.ok || response.status < 500) {
             break;
           }
 
           if (attempt < SERVER_ERROR_RETRIES) {
-            // oxlint-disable-next-line no-console -- operational retry logging
-            console.warn(
-              `${opts.adapterKey}: page ${page} returned ${response.status}, retry ${attempt + 1}/${SERVER_ERROR_RETRIES}`,
-            );
+            logger.warn("case_law.ingestion.page_server_error_retry", {
+              adapterKey: opts.adapterKey,
+              page,
+              httpStatus: response.status,
+              retry: attempt + 1,
+              maxRetries: SERVER_ERROR_RETRIES,
+            });
             await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
           }
         }
 
         if (!response) {
           throw new AdapterFetchError({
-            message: `${opts.adapterKey}: no response`,
+            message: `${opts.adapterKey}: no response after ${SERVER_ERROR_RETRIES} retries`,
             adapterKey: opts.adapterKey,
             cursor,
           });
@@ -193,10 +234,14 @@ export const createPagePaginatedFetch = <TResponse>(
           // Some court APIs return HTML error pages with 200 status
           // (rate limits, maintenance). Retry once after a delay.
           if (parseError instanceof SyntaxError) {
-            // eslint-disable-next-line no-console -- operational retry logging
-            console.warn(
-              `${opts.adapterKey}: page ${page} returned unparseable response, retrying`,
-            );
+            const contentType =
+              response.headers.get("content-type") ?? "unknown";
+            logger.warn("case_law.ingestion.page_unparseable_retry", {
+              adapterKey: opts.adapterKey,
+              page,
+              contentType,
+              retryDelayMs: SERVER_ERROR_RETRY_DELAY_MS,
+            });
             await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
             const retryHeaders = new Headers(init?.headers);
             if (!retryHeaders.has("User-Agent")) {
@@ -217,14 +262,30 @@ export const createPagePaginatedFetch = <TResponse>(
                 httpStatus: retryResponse.status,
               });
             }
-            data = await opts.parseResponse(retryResponse);
+            try {
+              data = await opts.parseResponse(retryResponse);
+            } catch (retryParseError) {
+              const retryContentType =
+                retryResponse.headers.get("content-type") ?? "unknown";
+              const detail =
+                retryParseError instanceof SyntaxError
+                  ? `unparseable (content-type: ${retryContentType})`
+                  : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
+              throw new AdapterFetchError({
+                message: `${opts.adapterKey}: page ${page} retry ${detail}`,
+                adapterKey: opts.adapterKey,
+                cursor,
+              });
+            }
           } else {
             throw parseError;
           }
         }
+        const fetchMs = Math.round(performance.now() - fetchT0);
         const { items, total } = opts.extractItems(data);
         const decisions: IngestionResult[] = [];
 
+        let itemsSkipped = 0;
         for (const item of items) {
           try {
             const parsed = await opts.parseItem(item, signal);
@@ -237,11 +298,35 @@ export const createPagePaginatedFetch = <TResponse>(
             if (error instanceof DOMException) {
               throw error;
             }
+            itemsSkipped++;
             // Skip individual items that fail to parse;
             // don't abort the entire page.
             continue;
           }
         }
+
+        if (itemsSkipped > 0) {
+          logger.warn("case_law.ingestion.page_items_skipped", {
+            adapterKey: opts.adapterKey,
+            page,
+            skipped: itemsSkipped,
+            total: items.length,
+          });
+        }
+
+        const totalMs = Math.round(performance.now() - fetchT0);
+        logger.info("case_law.ingestion.page_completed", {
+          adapterKey: opts.adapterKey,
+          page,
+          decisions: decisions.length,
+          items: items.length,
+          skipped: itemsSkipped,
+          totalMs,
+          fetchMs,
+          ...(total !== undefined && total !== null
+            ? { sourceTotal: total }
+            : {}),
+        });
 
         const fetched = (page - firstPage + 1) * opts.pageSize;
         const hasMore =
