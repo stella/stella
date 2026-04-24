@@ -1,8 +1,8 @@
 import { Result } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
@@ -20,7 +20,7 @@ const readRateEntries = createSafeHandler(
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,
   },
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({ safeDb, workspaceId, session, params, query }) {
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -70,7 +70,13 @@ const readRateEntries = createSafeHandler(
               tx
                 .select({ id: user.id, image: user.image, name: user.name })
                 .from(user)
-                .where(inArray(user.id, [...userIds])),
+                .innerJoin(member, eq(user.id, member.userId))
+                .where(
+                  and(
+                    inArray(user.id, [...userIds]),
+                    eq(member.organizationId, session.activeOrganizationId),
+                  ),
+                ),
             ),
           )
         : [];

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { member } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
@@ -23,7 +24,7 @@ const createRateEntry = createSafeHandler(
     params: rateEntryParamsSchema,
     body: createRateEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, session, params, body }) {
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -37,6 +38,34 @@ const createRateEntry = createSafeHandler(
       return Result.err(
         new HandlerError({ status: 404, message: "Rate table not found" }),
       );
+    }
+
+    if (body.userId) {
+      const orgMembers = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, session.activeOrganizationId),
+                eq(member.userId, body.userId),
+              ),
+            )
+            .limit(1),
+        ),
+      );
+
+      const orgMember = orgMembers.at(0);
+
+      if (!orgMember) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this organization",
+          }),
+        );
+      }
     }
 
     if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
