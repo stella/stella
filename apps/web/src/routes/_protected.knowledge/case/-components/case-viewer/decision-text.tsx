@@ -270,11 +270,12 @@ const renderInline = ({
         </a>
       );
     }
-    // Unsafe scheme: render children as plain text
+
+    // Unsanitized href: render children as plain text
     return (
-      <Fragment key={key}>
+      <span key={key}>
         {renderInlineChildren({ children: node.children, context, offset })}
-      </Fragment>
+      </span>
     );
   }
 

@@ -154,6 +154,10 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
     (astMeta?.keywords?.length ?? 0) > 0 ||
     (astMeta?.statutes?.length ?? 0) > 0;
 
+  const sourceHref = decision.sourceUrl
+    ? sanitizeHref(humanizeSourceUrl(decision.sourceUrl))
+    : undefined;
+
   return (
     <div className="space-y-4">
       <h3 className="text-muted-foreground text-xs font-semibold uppercase">
@@ -221,11 +225,11 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         </dl>
       )}
 
-      {decision.sourceUrl && sanitizeHref(decision.sourceUrl) && (
+      {sourceHref && decision.sourceUrl && (
         <div>
           <a
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-            href={humanizeSourceUrl(decision.sourceUrl)}
+            href={sourceHref}
             rel="noopener noreferrer"
             target="_blank"
           >
