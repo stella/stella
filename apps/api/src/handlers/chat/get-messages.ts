@@ -18,15 +18,13 @@ const config = {
 const getMessages = createSafeRootHandler(
   config,
   async function* ({
-    accessibleWorkspaces,
+    activeWorkspaceIds,
     params: { threadId },
     query: { workspaceId },
     safeDb,
     user,
   }) {
-    const accessibleWorkspaceIds = accessibleWorkspaces
-      .filter((w) => w.status !== "deleting")
-      .map(({ id }) => id);
+    const accessibleWorkspaceIds = activeWorkspaceIds;
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,
       workspaceId,

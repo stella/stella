@@ -28,3 +28,60 @@ handling, or external APIs. Stella handles privileged legal data
   direct commits to main.
 - **Data retention** — when data is deleted, it is actually
   deleted (not soft-deleted indefinitely).
+
+## Structural Guardrails
+
+Prefer solutions that make security bugs **structurally impossible**
+(compile-time, lint-time) over ones that rely on developer discipline.
+
+### Workspace status filtering
+
+`resolveAccessibleWorkspaces` returns **all** workspaces (including
+`deleting`). The auth macro exposes two fields:
+
+- `activeWorkspaceIds` — excludes `deleting` workspaces (includes
+  active and archived). Use this for search, chat, MCP, and any
+  query that builds a workspace allowlist. This is the default;
+  reach for it first.
+- `accessibleWorkspaces` — includes all statuses. Only use in
+  `workspaceAccessMacro` (which needs the status to return
+  appropriate HTTP codes). Never pass these IDs as a search/query
+  allowlist.
+
+If you need workspace IDs for a new feature, use `activeWorkspaceIds`
+unless you have an explicit reason to include deleting workspaces
+and document that reason in a comment.
+
+### CSV and file exports
+
+Use `escapeCSV` from `@/api/lib/csv` for all CSV cell values. Never
+hand-roll CSV escaping; the shared utility handles both delimiter
+quoting and spreadsheet formula neutralization (=, +, -, @, tab, CR
+prefixes). This prevents CSV injection attacks where user-controlled
+values starting with formula characters execute in Excel/LibreOffice.
+
+### Multi-entry-point validation
+
+When business logic is reachable from multiple entry points (HTTP
+routes, MCP tools, chat tools, cron jobs), validation must live in
+the business logic function itself or in a shared schema, not only
+in the HTTP route schema. The MCP/chat path will bypass Elysia
+`t.Object` schemas. Prefer Valibot `v.parse()` at the handler
+boundary so constraints are enforced regardless of caller.
+
+### Filename sanitization
+
+All user-supplied filenames must pass through `sanitizeFilename`
+(`@/api/lib/sanitize-filename`) before storage or use in file
+operations (ZIP entries, Content-Disposition headers, S3 keys).
+The sanitizer strips path separators, traversal sequences, and
+dangerous characters.
+
+### CI workflow permissions
+
+GitHub Actions workflows must declare the **minimum** permissions
+needed. Never use `permissions: write-all`. For PR-triggered
+workflows, scope to `contents: read` + `pull-requests: write`.
+Pin third-party actions to commit SHAs, not mutable tags. For
+SBOM/provenance, use the shared `stella/.github` reusable
+workflows which handle pinning, checksums, and PR-based updates.

@@ -22,15 +22,13 @@ const config = {
 const deleteThread = createSafeRootHandler(
   config,
   async function* ({
-    accessibleWorkspaces,
+    activeWorkspaceIds,
     params,
     query: { workspaceId },
     safeDb,
     user,
   }) {
-    const accessibleWorkspaceIds = accessibleWorkspaces
-      .filter((w) => w.status !== "deleting")
-      .map(({ id }) => id);
+    const accessibleWorkspaceIds = activeWorkspaceIds;
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,
       workspaceId,

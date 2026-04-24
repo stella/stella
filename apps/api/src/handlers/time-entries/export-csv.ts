@@ -7,6 +7,7 @@ import { user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 
 export const exportCsvQuerySchema = t.Object({
@@ -22,28 +23,6 @@ type ExportCsvHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   query: ExportCsvQuerySchema;
-};
-
-const FORMULA_PREFIX_RE = /^[=+\-@\t\r]/;
-
-const escapeCSV = (value: string): string => {
-  const needsQuote =
-    value.includes(",") ||
-    value.includes('"') ||
-    value.includes("\n") ||
-    value.includes("\r") ||
-    FORMULA_PREFIX_RE.test(value);
-
-  if (!needsQuote) {
-    return value;
-  }
-
-  const escaped = value.replace(/"/g, '""');
-  // Neutralize formula prefixes so spreadsheets treat the cell as text
-  if (FORMULA_PREFIX_RE.test(value)) {
-    return `"\t${escaped}"`;
-  }
-  return `"${escaped}"`;
 };
 
 export const exportCsvHandler = async ({

@@ -589,6 +589,10 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         userId,
       );
 
+      const activeWorkspaceIds = accessibleWorkspaces
+        .filter((w) => w.status !== "deleting")
+        .map((w) => w.id);
+
       return {
         user: {
           id: toSafeId<"user">(user.id),
@@ -596,6 +600,18 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         session: {
           activeOrganizationId,
         },
+        /**
+         * Excludes workspaces being deleted. Includes active and
+         * archived workspaces. Use for search, chat, MCP, and any
+         * query that should not surface content from sealed workspaces.
+         */
+        activeWorkspaceIds,
+        /**
+         * All accessible workspaces with status. Only use in
+         * workspaceAccessMacro (which needs the status to return
+         * appropriate HTTP codes) — never pass these IDs as a
+         * search/query allowlist.
+         */
         accessibleWorkspaces,
         scopedDb,
         safeDb,
