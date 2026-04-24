@@ -1,0 +1,13 @@
+version: 1
+output_dir: provenance
+notice:
+  internal_scopes:
+    - "@stella"
+sbom:
+  exclude_regexes:
+    - '(^|/)dist(/.*)?$'
+projects:
+  - id: root
+    path: .
+    ecosystems:
+      - javascript
