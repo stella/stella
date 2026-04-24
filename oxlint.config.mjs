@@ -154,6 +154,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/security-guards.ts",
   ],
 
   overrides: [
@@ -256,6 +257,7 @@ export default defineConfig({
           },
         ],
         "require-router-select/require-router-select": "error",
+        "security-guards/no-unsanitized-href": "error",
         "sonarjs/jsx-no-leaked-render": "error",
         "sonarjs/no-hook-setter-in-body": "error",
       },
@@ -320,6 +322,7 @@ export default defineConfig({
           "error",
           { drizzleObjectName: ["db", "tx"] },
         ],
+        "security-guards/no-raw-filename-write": "error",
       },
     },
     {
@@ -351,6 +354,7 @@ export default defineConfig({
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
         "no-untyped-updates/no-untyped-updates": "error",
+        "security-guards/no-unscoped-user-query": "warn",
         "no-restricted-imports": [
           "error",
           {
@@ -403,6 +407,9 @@ export default defineConfig({
         "no-untyped-updates/no-untyped-updates": "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
+        "security-guards/no-raw-filename-write": "off",
+        "security-guards/no-unsanitized-href": "off",
+        "security-guards/no-unscoped-user-query": "off",
         "vitest/prefer-importing-vitest-globals": "off",
       },
     },

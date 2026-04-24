@@ -1,21 +1,13 @@
 /**
- * URL sanitization with branded type safety for the frontend.
+ * Sanitize a URL for use in `<a href>` attributes.
  *
- * Mirrors the backend `SafeHref` brand so that `<a href>` can
- * only receive validated URLs. Defined locally (not imported
- * cross-package) because branded types are structural; the
- * brand just needs to match at the rendering boundary.
- */
-
-export type SafeHref = string & { readonly __brand: "SafeHref" };
-
-/**
- * Validate that a URL uses a safe protocol (http/https).
- * Returns a branded `SafeHref` on success, `undefined` on failure.
+ * Rejects `javascript:`, `data:`, `vbscript:`, and other
+ * dangerous protocols. Returns `undefined` for unsafe URLs
+ * so the caller can fall back to plain text rendering.
  */
 export const sanitizeHref = (
   url: string | null | undefined,
-): SafeHref | undefined => {
+): string | undefined => {
   if (!url) {
     return undefined;
   }
@@ -23,6 +15,11 @@ export const sanitizeHref = (
   const trimmed = url.trim();
   if (!trimmed) {
     return undefined;
+  }
+
+  // Relative URLs and fragment-only links are safe
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) {
+    return trimmed;
   }
 
   if (!URL.canParse(trimmed)) {
@@ -34,12 +31,5 @@ export const sanitizeHref = (
     return undefined;
   }
 
-  // SAFETY: URL has been validated as http/https
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  return trimmed as SafeHref;
+  return trimmed;
 };
-
-/** Empty-string sentinel typed as `SafeHref` for fallback cases. */
-// SAFETY: empty string is trivially safe (renders as no-op href)
-// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-export const SAFE_HREF_EMPTY = "" as SafeHref;
