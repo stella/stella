@@ -107,6 +107,39 @@ const seedRules = async () => {
   console.log(`  ${upserted} rules upserted (${SEED_RULES.length} total)`);
 };
 
+// ── Temporal validation ────────────────────────────────
+
+/**
+ * A cited decision ID where temporal ordering has been verified: the
+ * citing decision is on or after the cited decision's date (or where
+ * date comparison is impossible because one date is missing).
+ * The only way to obtain this type is through `validateTemporalOrder`,
+ * making temporally impossible citations a compile error at the update site.
+ */
+type ValidCitedDecisionId = string & {
+  readonly __brand: "ValidCitedDecisionId";
+};
+
+const validateTemporalOrder = (
+  citingDate: string | null,
+  citedDate: string | null,
+  matchedId: string,
+): ValidCitedDecisionId | null => {
+  // If either date is unknown, allow the match (can't validate)
+  if (!citingDate || !citedDate) {
+    // SAFETY: branded-type constructor — date is missing so we can't disprove temporal order
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    return matchedId as ValidCitedDecisionId;
+  }
+  // ISO dates sort lexicographically; citing must be on or after cited
+  if (citingDate >= citedDate) {
+    // SAFETY: branded-type constructor — temporal order verified above
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    return matchedId as ValidCitedDecisionId;
+  }
+  return null;
+};
+
 // ── Step 2: Resolve citations ───────────────────────────
 
 type ResolveStats = {
@@ -116,6 +149,7 @@ type ResolveStats = {
   unresolved: number;
   ecliResolved: number;
   selfCitations: number;
+  temporalViolations: number;
 };
 
 const resolveCitations = async (): Promise<ResolveStats> => {
@@ -126,6 +160,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
     unresolved: 0,
     ecliResolved: 0,
     selfCitations: 0,
+    temporalViolations: 0,
   };
 
   // Count unresolved
@@ -139,19 +174,20 @@ const resolveCitations = async (): Promise<ResolveStats> => {
   console.log(`\nResolving ${count} citations...`);
 
   // Build a lookup index of case_number → decision_id
-  // (Only load id + case_number + ecli to keep memory manageable)
   console.log("  Building case number index...");
   const decisions = await db
     .select({
       id: caseLawDecisions.id,
       caseNumber: caseLawDecisions.caseNumber,
       ecli: caseLawDecisions.ecli,
+      decisionDate: caseLawDecisions.decisionDate,
     })
     .from(caseLawDecisions);
 
   // Index by normalized case number (lowercase, trimmed)
   const caseNumberIndex = new Map<string, string[]>();
   const ecliIndex = new Map<string, string>();
+  const dateIndex = new Map<string, string | null>();
 
   for (const d of decisions) {
     const key = d.caseNumber.toLowerCase().trim();
@@ -165,6 +201,8 @@ const resolveCitations = async (): Promise<ResolveStats> => {
     if (d.ecli) {
       ecliIndex.set(d.ecli.toLowerCase(), d.id);
     }
+
+    dateIndex.set(d.id, d.decisionDate);
   }
 
   console.log(
@@ -172,7 +210,8 @@ const resolveCitations = async (): Promise<ResolveStats> => {
       `${ecliIndex.size} ECLIs`,
   );
 
-  // Process in batches with offset tracking for dry-run
+  // Process in batches. Resolved rows drop out of the WHERE clause,
+  // so offset only advances by the count of rows that stay unresolved.
   let processed = 0;
   let offset = 0;
 
@@ -185,13 +224,14 @@ const resolveCitations = async (): Promise<ResolveStats> => {
       })
       .from(caseLawCitations)
       .where(isNull(caseLawCitations.citedDecisionId))
+      .orderBy(caseLawCitations.id)
       .limit(BATCH_SIZE)
-      .offset(DRY_RUN ? offset : 0);
+      .offset(offset);
 
     if (batch.length === 0) {
       break;
     }
-    offset += batch.length;
+    let batchResolved = 0;
 
     for (const row of batch) {
       const normalized = normalizeCitation(row.citationText);
@@ -230,19 +270,36 @@ const resolveCitations = async (): Promise<ResolveStats> => {
         continue;
       }
 
-      if (matchedId && !DRY_RUN) {
-        await db
-          .update(caseLawCitations)
-          .set({ citedDecisionId: matchedId })
-          .where(eq(caseLawCitations.id, row.id));
+      // Validate temporal ordering before accepting the match
+      let validId: ValidCitedDecisionId | null = null;
+      let isTemporalViolation = false;
+      if (matchedId) {
+        validId = validateTemporalOrder(
+          dateIndex.get(row.citingDecisionId) ?? null,
+          dateIndex.get(matchedId) ?? null,
+          matchedId,
+        );
+        if (!validId) {
+          isTemporalViolation = true;
+          stats.temporalViolations++;
+          matchedId = undefined;
+        }
       }
 
-      if (matchedId) {
+      if (validId && !DRY_RUN) {
+        await db
+          .update(caseLawCitations)
+          .set({ citedDecisionId: validId })
+          .where(eq(caseLawCitations.id, row.id));
+        batchResolved++;
+      }
+
+      if (validId) {
         stats.resolved++;
         if (ecliMatch) {
           stats.ecliResolved++;
         }
-      } else if (!isAmbiguous) {
+      } else if (!isAmbiguous && !isTemporalViolation) {
         stats.unresolved++;
       }
 
@@ -255,6 +312,10 @@ const resolveCitations = async (): Promise<ResolveStats> => {
         );
       }
     }
+
+    // Resolved rows dropped from the result set; only advance
+    // past rows that remain (unresolved, self, ambiguous, temporal).
+    offset += batch.length - batchResolved;
 
     if (REPORT_ONLY) {
       break;
