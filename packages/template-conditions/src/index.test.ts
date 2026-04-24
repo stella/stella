@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { evaluateCondition } from "./index";
+import { evaluateCondition, MAX_CONDITION_DEPTH } from "./index";
 import type { NamedCondition } from "./index";
 
 describe("evaluateCondition", () => {
@@ -188,6 +188,43 @@ describe("evaluateCondition", () => {
       { name: "b", expression: "a" },
     ];
     expect(evaluateCondition("a", {}, conditions)).toBe(false);
+  });
+
+  test("deep named condition chain returns false at depth limit", () => {
+    // Build a chain: c0 → c1 → c2 → ... → cN → data_field
+    const chainLength = MAX_CONDITION_DEPTH + 10;
+    const conditions: NamedCondition[] = [];
+    for (let i = 0; i < chainLength; i++) {
+      conditions.push({ name: `c${i}`, expression: `c${i + 1}` });
+    }
+    // Terminal condition resolves to a truthy data field
+    conditions.push({
+      name: `c${chainLength}`,
+      expression: "value",
+    });
+
+    // Should return false (depth exceeded) instead of
+    // overflowing the call stack
+    expect(
+      evaluateCondition("c0", { value: true }, conditions),
+    ).toBe(false);
+  });
+
+  test("named condition chain within depth limit resolves normally", () => {
+    // Build a chain shorter than the limit
+    const chainLength = 5;
+    const conditions: NamedCondition[] = [];
+    for (let i = 0; i < chainLength; i++) {
+      conditions.push({ name: `c${i}`, expression: `c${i + 1}` });
+    }
+    conditions.push({
+      name: `c${chainLength}`,
+      expression: "value",
+    });
+
+    expect(
+      evaluateCondition("c0", { value: true }, conditions),
+    ).toBe(true);
   });
 
   // ── Dotted paths ──────────────────────────────────────

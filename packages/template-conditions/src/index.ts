@@ -12,6 +12,13 @@ export type NamedCondition = {
   label?: string;
 };
 
+/**
+ * Maximum recursion depth for named condition resolution.
+ * Prevents stack overflow when a long chain of named
+ * conditions (A→B→C→...→Z) is evaluated without cycles.
+ */
+export const MAX_CONDITION_DEPTH = 50;
+
 // ── Path resolution ───────────────────────────────────────
 
 /** Narrow `unknown` to a string-keyed record. */
@@ -108,6 +115,7 @@ const resolveToken = (
   data: Record<string, unknown>,
   namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
+  _depth = 0,
 ): unknown => {
   if (token.type === "string") {
     return token.raw;
@@ -126,6 +134,9 @@ const resolveToken = (
     if (namedConditions) {
       const named = namedConditions.find((c) => c.name === token.raw);
       if (named) {
+        if (_depth >= MAX_CONDITION_DEPTH) {
+          return false;
+        }
         const resolved = new Set(_resolved);
         if (resolved.has(token.raw)) {
           return false;
@@ -136,6 +147,7 @@ const resolveToken = (
           data,
           namedConditions,
           resolved,
+          _depth + 1,
         );
       }
     }
@@ -235,6 +247,7 @@ const evaluateTokens = (
   data: Record<string, unknown>,
   namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
+  _depth = 0,
 ): boolean => {
   const atoms: Atom[] = [];
   const connectors: ("and" | "or")[] = [];
@@ -270,11 +283,22 @@ const evaluateTokens = (
 
     // Parenthesized sub-expression
     if (tok.type === "lparen") {
-      const closeIdx = findMatchingParen(tokens, i);
-      const inner = tokens.slice(i + 1, closeIdx);
-      const value = evaluateTokens(inner, data, namedConditions, _resolved);
-      atoms.push({ negated, value });
-      i = closeIdx + 1;
+      if (_depth >= MAX_CONDITION_DEPTH) {
+        atoms.push({ negated, value: false });
+        i = findMatchingParen(tokens, i) + 1;
+      } else {
+        const closeIdx = findMatchingParen(tokens, i);
+        const inner = tokens.slice(i + 1, closeIdx);
+        const value = evaluateTokens(
+          inner,
+          data,
+          namedConditions,
+          _resolved,
+          _depth + 1,
+        );
+        atoms.push({ negated, value });
+        i = closeIdx + 1;
+      }
     } else {
       // Regular atom: value, possibly followed by comparison
       const left = tok;
@@ -287,8 +311,20 @@ const evaluateTokens = (
         const right = at(i);
         if (right) {
           i++;
-          const lv = resolveToken(left, data, namedConditions, _resolved);
-          const rv = resolveToken(right, data, namedConditions, _resolved);
+          const lv = resolveToken(
+            left,
+            data,
+            namedConditions,
+            _resolved,
+            _depth,
+          );
+          const rv = resolveToken(
+            right,
+            data,
+            namedConditions,
+            _resolved,
+            _depth,
+          );
           atoms.push({
             negated,
             value: compare(lv, op, rv),
@@ -297,7 +333,13 @@ const evaluateTokens = (
           atoms.push({ negated, value: false });
         }
       } else {
-        const resolved = resolveToken(left, data, namedConditions, _resolved);
+        const resolved = resolveToken(
+          left,
+          data,
+          namedConditions,
+          _resolved,
+          _depth,
+        );
         atoms.push({
           negated,
           value: isTruthy(resolved),
@@ -359,11 +401,15 @@ export const evaluateCondition = (
   data: Record<string, unknown>,
   namedConditions?: readonly NamedCondition[],
   _resolved?: Set<string>,
+  _depth = 0,
 ): boolean => {
   if (namedConditions) {
     const trimmed = expression.trim();
     const named = namedConditions.find((c) => c.name === trimmed);
     if (named) {
+      if (_depth >= MAX_CONDITION_DEPTH) {
+        return false;
+      }
       const resolved = new Set(_resolved);
       if (resolved.has(trimmed)) {
         return false;
@@ -374,6 +420,7 @@ export const evaluateCondition = (
         data,
         namedConditions,
         resolved,
+        _depth + 1,
       );
     }
   }
@@ -383,5 +430,5 @@ export const evaluateCondition = (
     return false;
   }
 
-  return evaluateTokens(tokens, data, namedConditions, _resolved);
+  return evaluateTokens(tokens, data, namedConditions, _resolved, _depth);
 };
