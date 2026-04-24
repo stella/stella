@@ -23,6 +23,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -46,8 +47,10 @@ type UploadEntityHandlerProps = {
 type ResolveFileNameProps = {
   tx: Transaction;
   propertyId: string;
-  name: string;
+  name: SanitizedFileName;
 };
+
+const MAX_FILENAME_LENGTH = 255;
 
 const resolveFileName = async ({
   tx,
@@ -69,10 +72,19 @@ const resolveFileName = async ({
   );
 
   if (fieldsCount === 0) {
-    return { renamed: false, value: name };
+    return { renamed: false as const, value: name };
   }
 
-  return { renamed: true, value: `${base}_${fieldsCount}${ext}` };
+  // Reserve space for the suffix so truncation cannot eat it.
+  const suffix = `_${fieldsCount}`;
+  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
+  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
+
+  // SAFETY: name is already sanitized; the suffix is digits and underscore only
+  return {
+    renamed: true as const,
+    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
+  };
 };
 
 const uploadEntityHandler = async function* ({

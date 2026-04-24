@@ -19,6 +19,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -34,6 +35,7 @@ export default createSafeHandler(
     const organizationId = session.activeOrganizationId;
     const userId = user.id;
     const { entityId, file } = body;
+    const sanitizedName = sanitizeFilename(file.name);
 
     // Verify entity exists and get current version info
     const entity = yield* Result.await(
@@ -95,7 +97,7 @@ export default createSafeHandler(
     const scanResult = await scanFile({
       buffer: new Uint8Array(fileBuffer),
       declaredMimeType: file.type,
-      fileName: file.name,
+      fileName: sanitizedName,
     });
 
     if (Result.isError(scanResult)) {
@@ -134,7 +136,7 @@ export default createSafeHandler(
     const [, conversionResult] = await Promise.all([
       getS3().write(sourceKey, new Uint8Array(fileBuffer)),
       shouldConvert
-        ? convertToPdf(fileBuffer, file.name, file.type)
+        ? convertToPdf(fileBuffer, sanitizedName, file.type)
         : Promise.resolve(null),
     ]);
 
@@ -201,7 +203,7 @@ export default createSafeHandler(
             propertyId: fileField.propertyId,
             replacementContent: {
               encrypted: false,
-              fileName: file.name,
+              fileName: sanitizedName,
               id: fileId,
               mimeType: file.type,
               pdfFileId,

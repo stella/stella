@@ -77,6 +77,13 @@ operations (ZIP entries, Content-Disposition headers, S3 keys).
 The sanitizer strips path separators, traversal sequences, and
 dangerous characters.
 
+`sanitizeFilename` returns a branded `SanitizedFileName` type.
+Any function or DB write that accepts a filename for storage
+(`content.fileName`, `desktopEditSessions.fileName`,
+`templates.fileName`, `userFiles.fileName`) should declare its
+parameter as `SanitizedFileName`, not `string`. This makes missing
+sanitization a compile-time error instead of a runtime bug.
+
 ### CI workflow permissions
 
 GitHub Actions workflows must declare the **minimum** permissions
