@@ -78,7 +78,9 @@ export const STELLA_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        query: stringProp("Search query"),
+        query: stringProp("Search query", {
+          maxLength: LIMITS.searchQueryMaxLength,
+        }),
         limit: intProp("Max results to return", {
           min: 1,
           max: MAX_SEARCH_LIMIT,
@@ -98,24 +100,31 @@ export const STELLA_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        query: stringProp("Search query"),
+        query: stringProp("Search query", {
+          maxLength: LIMITS.searchQueryMaxLength,
+        }),
         limit: intProp("Max results to return", {
           min: 1,
           max: MAX_SEARCH_LIMIT,
         }),
         cursor: stringProp(
           "Opaque cursor from a previous search_case_law call",
+          { maxLength: 128 },
         ),
-        court: stringProp("Filter by court name"),
-        country: stringProp("Filter by country code"),
-        language: stringProp("Filter by language code"),
-        decision_type: stringProp("Filter by decision type"),
-        source_id: stringProp("Filter by source ID"),
+        court: stringProp("Filter by court name", { maxLength: 512 }),
+        country: stringProp("Filter by country code", { maxLength: 3 }),
+        language: stringProp("Filter by language code", { maxLength: 8 }),
+        decision_type: stringProp("Filter by decision type", {
+          maxLength: 128,
+        }),
+        source_id: stringProp("Filter by source ID", { maxLength: 36 }),
         date_from: stringProp(
           "Filter decisions from this ISO date (YYYY-MM-DD)",
+          { maxLength: 10 },
         ),
         date_to: stringProp(
           "Filter decisions up to this ISO date (YYYY-MM-DD)",
+          { maxLength: 10 },
         ),
       },
       required: ["query"],
@@ -293,7 +302,9 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   args,
   context,
 }) => {
-  const query = parseRequiredString(args, "query");
+  const query = parseRequiredString(args, "query", {
+    maxLength: LIMITS.searchQueryMaxLength,
+  });
   if (typeof query !== "string") {
     return query;
   }
@@ -317,9 +328,11 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
 const parseOptionalStringArg = ({
   args,
   key,
+  maxLength,
 }: {
   args: Record<string, unknown>;
   key: string;
+  maxLength?: number;
 }): string | undefined | ReturnType<typeof errorResult> => {
   const value = args[key];
   if (value === undefined) {
@@ -327,6 +340,11 @@ const parseOptionalStringArg = ({
   }
   if (typeof value !== "string") {
     return errorResult(`Invalid parameter: ${key}. Expected a string`);
+  }
+  if (maxLength !== undefined && value.length > maxLength) {
+    return errorResult(
+      `Parameter ${key} exceeds maximum length of ${maxLength}`,
+    );
   }
   return value;
 };
@@ -460,7 +478,9 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
 };
 
 const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
-  const query = parseRequiredString(args, "query");
+  const query = parseRequiredString(args, "query", {
+    maxLength: LIMITS.searchQueryMaxLength,
+  });
   if (typeof query !== "string") {
     return query;
   }
@@ -475,30 +495,51 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     return limit;
   }
 
-  const cursor = parseOptionalStringArg({ args, key: "cursor" });
+  const cursor = parseOptionalStringArg({
+    args,
+    key: "cursor",
+    maxLength: 128,
+  });
   if (isToolErrorResult(cursor)) {
     return cursor;
   }
-  const court = parseOptionalStringArg({ args, key: "court" });
+  const court = parseOptionalStringArg({
+    args,
+    key: "court",
+    maxLength: 512,
+  });
   if (isToolErrorResult(court)) {
     return court;
   }
-  const country = parseOptionalStringArg({ args, key: "country" });
+  const country = parseOptionalStringArg({
+    args,
+    key: "country",
+    maxLength: 3,
+  });
   if (isToolErrorResult(country)) {
     return country;
   }
-  const language = parseOptionalStringArg({ args, key: "language" });
+  const language = parseOptionalStringArg({
+    args,
+    key: "language",
+    maxLength: 8,
+  });
   if (isToolErrorResult(language)) {
     return language;
   }
   const decisionType = parseOptionalStringArg({
     args,
     key: "decision_type",
+    maxLength: 128,
   });
   if (isToolErrorResult(decisionType)) {
     return decisionType;
   }
-  const sourceId = parseOptionalStringArg({ args, key: "source_id" });
+  const sourceId = parseOptionalStringArg({
+    args,
+    key: "source_id",
+    maxLength: 36,
+  });
   if (isToolErrorResult(sourceId)) {
     return sourceId;
   }
