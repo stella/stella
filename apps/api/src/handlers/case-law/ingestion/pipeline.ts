@@ -144,7 +144,9 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   const normalizeDecisionType = (
     raw: string | undefined,
   ): string | undefined => {
-    if (!raw) {return undefined;}
+    if (!raw) {
+      return undefined;
+    }
     return (
       raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
     );
