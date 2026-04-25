@@ -82,16 +82,29 @@ let activeDbSlots = 0;
 const dbSlotQueue: (() => void)[] = [];
 
 // eslint-disable-next-line require-await -- returns Promise on queued path
-const acquireDbSlot = async (): Promise<void> => {
+const acquireDbSlot = async (signal?: AbortSignal): Promise<void> => {
+  if (signal?.aborted) {
+    throw new DOMException("DB slot acquisition aborted", "AbortError");
+  }
   if (activeDbSlots < MAX_CONCURRENT_DB_WRITES) {
     activeDbSlots++;
     return;
   }
-  return new Promise<void>((resolve) => {
-    dbSlotQueue.push(() => {
+  return new Promise<void>((resolve, reject) => {
+    const entry = () => {
+      signal?.removeEventListener("abort", onAbort);
       activeDbSlots++;
       resolve();
-    });
+    };
+    const onAbort = () => {
+      const idx = dbSlotQueue.indexOf(entry);
+      if (idx !== -1) {
+        dbSlotQueue.splice(idx, 1);
+      }
+      reject(new DOMException("DB slot acquisition aborted", "AbortError"));
+    };
+    dbSlotQueue.push(entry);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 };
 

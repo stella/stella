@@ -66,8 +66,14 @@ export const indexDecision = async (
 
   const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
 
-  await scopedDb((tx) =>
-    tx.execute(sql`
+  await scopedDb(async (tx) => {
+    // Raise statement timeout for the tsvector upsert. The
+    // default 5-minute timeout is too short for very long
+    // court decisions where to_tsvector + unaccent on
+    // megabyte-scale text is CPU-intensive. SET LOCAL scopes
+    // this to the current transaction only.
+    await tx.execute(sql`SET LOCAL statement_timeout = '15min'`);
+    await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
       language, regconfig, updated_at, tsv
@@ -87,8 +93,8 @@ export const indexDecision = async (
       regconfig = EXCLUDED.regconfig,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
-  `),
-  );
+  `);
+  });
 };
 
 /**

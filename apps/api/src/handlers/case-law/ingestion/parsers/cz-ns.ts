@@ -19,7 +19,6 @@ import type {
   Inline,
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
-
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
