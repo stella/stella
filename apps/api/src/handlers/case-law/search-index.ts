@@ -60,19 +60,22 @@ export const indexDecision = async (
 
   const fts = await resolveFtsConfig(decision.language);
 
+  // Cap the text fed into to_tsvector. The full searchable_text
+  // is stored for ts_headline snippets, but the tsvector only
+  // needs a bounded prefix. Court decisions rarely benefit from
+  // indexing every word past 200k chars, and unaccent + tsvector
+  // on megabyte-scale text is the main cause of statement
+  // timeouts and cycle overruns during ingestion.
+  const TSV_TEXT_LIMIT = 200_000;
+  const tsvInput = `${title} ${searchableText}`.slice(0, TSV_TEXT_LIMIT);
+
   const textExpr = fts.useUnaccent
-    ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
-    : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
+    ? sql`unaccent(${tsvInput})`
+    : sql`${tsvInput}`;
 
   const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
 
   await scopedDb(async (tx) => {
-    // Raise statement timeout for the tsvector upsert. The
-    // default 5-minute timeout is too short for very long
-    // court decisions where to_tsvector + unaccent on
-    // megabyte-scale text is CPU-intensive. SET LOCAL scopes
-    // this to the current transaction only.
-    await tx.execute(sql`SET LOCAL statement_timeout = '15min'`);
     await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
