@@ -27,7 +27,6 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
-import { indexDecision } from "@/api/handlers/case-law/search-index";
 import { captureError } from "@/api/lib/analytics";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -319,8 +318,6 @@ const processDecision = async (
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
-  let decisionId: string | undefined;
-
   await scopedDb(async (tx) => {
     if (existing) {
       await tx
@@ -365,7 +362,6 @@ const processDecision = async (
         );
       }
 
-      decisionId = existing.id;
       return;
     }
 
@@ -408,22 +404,14 @@ const processDecision = async (
         })),
       );
     }
-
-    decisionId = decisionRow.id;
   });
 
-  // Index into search table after transaction commits
-  let searchVectorFailed = false;
-  if (decisionId) {
-    try {
-      await indexDecision(decisionId, scopedDb);
-    } catch (error) {
-      captureError(error, { decisionId, sourceId });
-      searchVectorFailed = true;
-    }
-  }
+  // Search indexing (tsvector) is handled by a background
+  // backfill loop so the slow to_tsvector + unaccent computation
+  // doesn't block cursor advancement. New decisions become
+  // searchable within ~30s of insertion.
 
-  return { inserted: true, searchVectorFailed, s3UploadFailed };
+  return { inserted: true, searchVectorFailed: false, s3UploadFailed };
 };
 
 /**
