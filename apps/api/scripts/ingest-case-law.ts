@@ -22,6 +22,7 @@ import { db } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -65,6 +66,8 @@ const HEARTBEAT_PATH = "/tmp/ingestion.lock";
 const CYCLE_DELAY_MS = 5000;
 const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
+const SEARCH_INDEX_INTERVAL_MS = 10_000;
+const SEARCH_INDEX_BATCH_SIZE = 20;
 
 /**
  * Max adapters doing DB-heavy work (insert + search index +
@@ -424,4 +427,40 @@ const healthLoop = (async () => {
   }
 })();
 
-await Promise.all([...adapterLoops, healthLoop]);
+// Search index backfill loop: indexes decisions that were
+// inserted without a tsvector (the pipeline no longer computes
+// tsvectors inline). Runs at low priority outside the DB slot
+// semaphore; one decision at a time with a generous statement
+// timeout so long texts don't block other work.
+const searchIndexLoop = (async () => {
+  const scopedDb = createScopedDb(
+    db,
+    [],
+    toSafeId<"organization">(""),
+    scriptUserId,
+  );
+
+  while (true) {
+    await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+    try {
+      const indexed = await backfillSearchIndex(
+        scopedDb,
+        SEARCH_INDEX_BATCH_SIZE,
+      );
+      if (indexed > 0) {
+        console.log(`[search-index] Indexed ${indexed} decisions (backfill)`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (isTransientConnectionError(msg)) {
+        console.error(
+          `[search-index] DB connection error (will retry): ${msg}`,
+        );
+      } else {
+        console.error("[search-index] Backfill error:", error);
+      }
+    }
+  }
+})();
+
+await Promise.all([...adapterLoops, healthLoop, searchIndexLoop]);

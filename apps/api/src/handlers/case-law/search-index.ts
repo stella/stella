@@ -1,8 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
-import { caseLawSearchDocuments } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
+import { captureError } from "@/api/lib/analytics";
+import { logger } from "@/api/lib/observability/logger";
 
 import type { DecisionSection } from "./types";
 
@@ -60,22 +62,18 @@ export const indexDecision = async (
 
   const fts = await resolveFtsConfig(decision.language);
 
-  // Cap the text fed into to_tsvector. The full searchable_text
-  // is stored for ts_headline snippets, but the tsvector only
-  // needs a bounded prefix. Court decisions rarely benefit from
-  // indexing every word past 200k chars, and unaccent + tsvector
-  // on megabyte-scale text is the main cause of statement
-  // timeouts and cycle overruns during ingestion.
-  const TSV_TEXT_LIMIT = 200_000;
-  const tsvInput = `${title} ${searchableText}`.slice(0, TSV_TEXT_LIMIT);
-
   const textExpr = fts.useUnaccent
-    ? sql`unaccent(${tsvInput})`
-    : sql`${tsvInput}`;
+    ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
+    : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
 
   const tsvExpr = sql`to_tsvector('simple', ${textExpr})`;
 
   await scopedDb(async (tx) => {
+    // Raise statement timeout for the tsvector upsert.
+    // to_tsvector + unaccent on very long court decisions is
+    // CPU-intensive. SET LOCAL scopes this to the current
+    // transaction only; user-facing queries keep the default.
+    await tx.execute(sql`SET LOCAL statement_timeout = '15min'`);
     await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
@@ -98,6 +96,54 @@ export const indexDecision = async (
       tsv = EXCLUDED.tsv
   `);
   });
+};
+
+/**
+ * Index decisions that are missing from or stale in the search
+ * table. Runs as a background loop in the ingestion daemon so
+ * the tsvector computation doesn't block the insert path.
+ *
+ * Returns the number of decisions indexed in this batch.
+ */
+export const backfillSearchIndex = async (
+  scopedDb: ScopedDb,
+  batchSize: number,
+): Promise<number> => {
+  // Find decisions that are either missing from the search table
+  // or were updated after the search doc was last indexed.
+  // ASC order so the backlog clears in insertion order; avoids
+  // a "poison pill" where a consistently-failing decision at
+  // the top of DESC blocks the rest of the queue.
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .leftJoin(
+        caseLawSearchDocuments,
+        eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
+      )
+      .where(
+        sql`${caseLawSearchDocuments.decisionId} IS NULL
+         OR ${caseLawDecisions.updatedAt} > ${caseLawSearchDocuments.updatedAt}`,
+      )
+      .orderBy(sql`${caseLawDecisions.createdAt} ASC`)
+      .limit(batchSize),
+  );
+
+  let indexed = 0;
+  for (const row of rows) {
+    try {
+      await indexDecision(row.id, scopedDb);
+      indexed++;
+    } catch (error) {
+      captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
+      logger.error("case_law.search_index.backfill_failed", {
+        decisionId: row.id,
+      });
+    }
+  }
+
+  return indexed;
 };
 
 /**
