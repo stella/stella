@@ -332,7 +332,9 @@ export const skCourtsAdapter: SourceAdapter = {
   country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
-  pageTimeoutMs: 120_000,
+  // Each page fetches 25 items × (detail JSON + PDF download);
+  // 120s was too tight and caused consistent page-level timeouts.
+  pageTimeoutMs: 300_000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
