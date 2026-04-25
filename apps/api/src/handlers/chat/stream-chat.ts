@@ -149,6 +149,7 @@ export const hydrateMessages = async ({
 
         const hydratedPart = yield* Result.await(
           hydrateFilePart({
+            // eslint-disable-next-line security-guards/no-raw-filename-write -- DB read-back from user_files, already sanitized on upload
             fileName: file.fileName,
             mimeType: file.mimeType,
             s3Key: file.s3Key,

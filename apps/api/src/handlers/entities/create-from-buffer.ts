@@ -14,8 +14,8 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_FILENAME_LENGTH = 255;
 
@@ -26,20 +26,21 @@ const MAX_FILENAME_LENGTH = 255;
  */
 const sanitizeFilenamePreservingExtension = (name: string) => {
   const lastDot = name.lastIndexOf(".");
-  if (lastDot === -1) return sanitizeFilename(name);
+  if (lastDot === -1) {
+    return sanitizeFilename(name);
+  }
 
   const ext = name.slice(lastDot); // includes the dot
   const base = name.slice(0, lastDot);
   const sanitizedBase = sanitizeFilename(base);
   const maxBaseLength = MAX_FILENAME_LENGTH - ext.length;
 
-  if (maxBaseLength <= 0) return sanitizeFilename(name);
+  if (maxBaseLength <= 0) {
+    return sanitizeFilename(name);
+  }
 
-  return sanitizeFilename(
-    sanitizedBase.slice(0, maxBaseLength) + ext,
-  );
+  return sanitizeFilename(sanitizedBase.slice(0, maxBaseLength) + ext);
 };
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;

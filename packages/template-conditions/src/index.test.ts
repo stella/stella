@@ -205,9 +205,7 @@ describe("evaluateCondition", () => {
 
     // Should return false (depth exceeded) instead of
     // overflowing the call stack
-    expect(
-      evaluateCondition("c0", { value: true }, conditions),
-    ).toBe(false);
+    expect(evaluateCondition("c0", { value: true }, conditions)).toBe(false);
   });
 
   test("named condition chain within depth limit resolves normally", () => {
@@ -222,9 +220,7 @@ describe("evaluateCondition", () => {
       expression: "value",
     });
 
-    expect(
-      evaluateCondition("c0", { value: true }, conditions),
-    ).toBe(true);
+    expect(evaluateCondition("c0", { value: true }, conditions)).toBe(true);
   });
 
   // ── Dotted paths ──────────────────────────────────────

@@ -35,7 +35,7 @@ import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
 type DbSlot = {
-  acquire: () => Promise<void>;
+  acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
 };
 
@@ -512,13 +512,14 @@ export const runIngestionPipeline = async ({
     // hold the slot. try-finally ensures no slot leak on
     // unexpected exceptions.
     if (dbSlot) {
-      await dbSlot.acquire();
-      // If the cycle timed out while waiting for a slot,
-      // release immediately and break.
-      if (signal?.aborted) {
-        dbSlot.release();
-        haltReason = "Cycle timeout exceeded";
-        break;
+      try {
+        await dbSlot.acquire(signal);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          haltReason = "Cycle timeout exceeded";
+          break;
+        }
+        throw error;
       }
     }
     const pageT0 = performance.now();

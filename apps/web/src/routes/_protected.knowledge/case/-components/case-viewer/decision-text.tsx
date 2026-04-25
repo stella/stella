@@ -7,7 +7,7 @@ import type { Block, DocumentAst, Inline } from "@stella/case-law/document-ast";
 import { parseDocumentAst } from "@stella/case-law/document-ast";
 import { cn } from "@stella/ui/lib/utils";
 
-import { sanitizeHref } from "@/web/lib/sanitize-href";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
 import { buildSearchResults } from "./decision-search";
