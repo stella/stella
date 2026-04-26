@@ -46,6 +46,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
@@ -2989,7 +2990,9 @@ export async function seed(organizationId?: string, userId?: string) {
         bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
         billingAddress: "billingAddress" in c ? c.billingAddress : undefined,
         defaultHourlyRate:
-          "defaultHourlyRate" in c ? c.defaultHourlyRate : undefined,
+          "defaultHourlyRate" in c && c.defaultHourlyRate !== undefined
+            ? cents(c.defaultHourlyRate)
+            : undefined,
         currency: "currency" in c ? c.currency : undefined,
         paymentTermDays: "paymentTermDays" in c ? c.paymentTermDays : undefined,
         originatingAttorneyId: USER_ID,
@@ -3011,7 +3014,10 @@ export async function seed(organizationId?: string, userId?: string) {
         registrationNumber: c.registrationNumber,
         taxId: c.taxId,
         billingAddress: c.billingAddress,
-        defaultHourlyRate: c.defaultHourlyRate,
+        defaultHourlyRate:
+          c.defaultHourlyRate === null || c.defaultHourlyRate === undefined
+            ? c.defaultHourlyRate
+            : cents(c.defaultHourlyRate),
         currency: c.currency,
         paymentTermDays: c.paymentTermDays,
         emails: c.emails,
@@ -3424,7 +3430,7 @@ export async function seed(organizationId?: string, userId?: string) {
         workspaceId: toWs(re.workspaceId),
         rateTableId: re.rateTableId,
         userId: re.userId,
-        hourlyRate: re.hourlyRate,
+        hourlyRate: cents(re.hourlyRate),
         effectiveFrom: re.effectiveFrom,
       })
       .onConflictDoNothing();
@@ -3448,7 +3454,7 @@ export async function seed(organizationId?: string, userId?: string) {
         invoiceDate: inv.invoiceDate,
         dueDate: inv.dueDate,
         currency: inv.currency,
-        totalAmount: inv.totalAmount,
+        totalAmount: cents(inv.totalAmount),
       })
       .onConflictDoNothing();
   }
@@ -3474,7 +3480,7 @@ export async function seed(organizationId?: string, userId?: string) {
         timezoneId: "Europe/Prague",
         durationMinutes: te.durationMinutes,
         billedMinutes: te.billedMinutes,
-        rateAtEntry: te.rateAtEntry,
+        rateAtEntry: cents(te.rateAtEntry),
         currency: te.currency,
         narrative: te.narrative,
         billable: te.billable,
@@ -3499,7 +3505,7 @@ export async function seed(organizationId?: string, userId?: string) {
         userId: exp.userId,
         matterId: exp.matterId,
         dateIncurred: exp.dateIncurred,
-        amount: exp.amount,
+        amount: cents(exp.amount),
         currency: exp.currency,
         category: exp.category,
         description: exp.description,

@@ -11,6 +11,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 
 const timerStartBodySchema = t.Object({
   matterId: tUuid,
@@ -102,7 +103,7 @@ const timerStart = createSafeHandler(
             timezoneId: body.timezoneId,
             durationMinutes: 0,
             billedMinutes: 0,
-            rateAtEntry: body.rateAtEntry,
+            rateAtEntry: cents(body.rateAtEntry),
             currency: body.currency,
             narrative: body.narrative ?? "",
             source: TIME_ENTRY_SOURCE.TIMER,

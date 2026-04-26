@@ -14,6 +14,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 
 const createContactBodySchema = t.Object({
   id: tUuid,
@@ -90,7 +91,10 @@ const createContact = createSafeRootHandler(
             taxId: body.taxId,
             bankAccounts: body.bankAccounts,
             billingAddress: body.billingAddress,
-            defaultHourlyRate: body.defaultHourlyRate,
+            defaultHourlyRate:
+              body.defaultHourlyRate === undefined
+                ? body.defaultHourlyRate
+                : cents(body.defaultHourlyRate),
             currency: body.currency,
             paymentTermDays: body.paymentTermDays,
             originatingAttorneyId: body.originatingAttorneyId,

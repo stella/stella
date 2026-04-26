@@ -12,6 +12,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 
 const createInvoiceBodySchema = t.Object({
   invoiceNumber: t.String({ minLength: 1, maxLength: 64 }),
@@ -108,7 +109,7 @@ const createInvoice = createSafeHandler(
             dueDate: body.dueDate ?? null,
             reference: body.reference ?? null,
             currency: body.currency,
-            totalAmount,
+            totalAmount: cents(totalAmount),
             notes: body.notes ?? null,
             status: INVOICE_STATUS.DRAFT,
           })

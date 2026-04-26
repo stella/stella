@@ -13,6 +13,8 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
@@ -57,11 +59,71 @@ const updateContactById = createSafeRootHandler(
     body: updateContactBodySchema,
   },
   async function* ({ safeDb, session, params, body }) {
+    const { defaultHourlyRate, ...rest } = body;
+    const updates = {
+      ...pickDefined(rest, [
+        "type",
+        "prefix",
+        "firstName",
+        "middleName",
+        "lastName",
+        "suffix",
+        "organizationName",
+        "displayName",
+        "notes",
+        "emails",
+        "phones",
+        "addresses",
+        "tags",
+        "color",
+        "registrationNumber",
+        "taxId",
+        "bankAccounts",
+        "billingAddress",
+        "currency",
+        "paymentTermDays",
+        "originatingAttorneyId",
+        "responsibleAttorneyId",
+      ]),
+      ...(defaultHourlyRate === undefined
+        ? {}
+        : {
+            defaultHourlyRate:
+              defaultHourlyRate === null ? null : cents(defaultHourlyRate),
+          }),
+    };
+
+    if (Object.keys(updates).length === 0) {
+      const existingRows = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ id: contacts.id })
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.id, params.contactId),
+                eq(contacts.organizationId, session.activeOrganizationId),
+              ),
+            )
+            .limit(1),
+        ),
+      );
+      const existing = existingRows.at(0);
+
+      if (!existing) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Contact not found" }),
+        );
+      }
+
+      return Result.ok(existing);
+    }
+
     const updatedRows = yield* Result.await(
       safeDb((tx) =>
         tx
           .update(contacts)
-          .set(body)
+          .set(updates)
           .where(
             and(
               eq(contacts.id, params.contactId),

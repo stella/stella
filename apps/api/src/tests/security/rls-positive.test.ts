@@ -37,6 +37,7 @@ import {
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -256,7 +257,7 @@ describe("workspace UPDATE — correct scope", () => {
       query: (tx) =>
         tx
           .update(rateEntries)
-          .set({ hourlyRate: 250 })
+          .set({ hourlyRate: cents(250) })
           .where(eq(rateEntries.id, ids.rateEntryA1))
           .returning({ id: rateEntries.id }),
     },
@@ -656,7 +657,7 @@ describe("workspace INSERT — correct scope", () => {
           timezoneId: "UTC",
           durationMinutes: 30,
           billedMinutes: 30,
-          rateAtEntry: 100,
+          rateAtEntry: cents(100),
           currency: "USD",
           narrative: "positive insert",
         })
@@ -706,7 +707,7 @@ describe("workspace INSERT — correct scope", () => {
           id: crypto.randomUUID(),
           workspaceId: ids.wsA1,
           rateTableId: ids.rateTableA1,
-          hourlyRate: 150,
+          hourlyRate: cents(150),
           effectiveFrom: "2026-01-01",
         })
         .returning({ id: rateEntries.id });
@@ -725,7 +726,7 @@ describe("workspace INSERT — correct scope", () => {
           userId: ids.userA1,
           matterId: ids.entityA1,
           dateIncurred: "2025-06-01",
-          amount: 50,
+          amount: cents(50),
           currency: "USD",
           category: "filing_fee" as const,
           description: "positive insert",
@@ -1126,7 +1127,7 @@ describe("workspace DELETE — correct scope", () => {
         timezoneId: "UTC",
         durationMinutes: 15,
         billedMinutes: 15,
-        rateAtEntry: 100,
+        rateAtEntry: cents(100),
         currency: "USD",
         narrative: "to delete",
       });
@@ -1182,7 +1183,7 @@ describe("workspace DELETE — correct scope", () => {
         id: delId,
         workspaceId: ids.wsA1,
         rateTableId: ids.rateTableA1,
-        hourlyRate: 150,
+        hourlyRate: cents(150),
         effectiveFrom: "2026-06-01",
       });
       const rows = await tx
@@ -1203,7 +1204,7 @@ describe("workspace DELETE — correct scope", () => {
         userId: ids.userA1,
         matterId: ids.entityA1,
         dateIncurred: "2025-07-01",
-        amount: 25,
+        amount: cents(25),
         currency: "USD",
         category: "filing_fee" as const,
         description: "to delete",

@@ -7,6 +7,7 @@ import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateTimeEntryBodySchema = t.Object({
@@ -100,9 +101,11 @@ const updateTimeEntryById = createSafeHandler(
         "taskCode",
         "activityCode",
         "status",
-        "rateAtEntry",
         "currency",
       ]),
+      ...(body.rateAtEntry === undefined
+        ? {}
+        : { rateAtEntry: cents(body.rateAtEntry) }),
       ...(body.durationMinutes !== undefined
         ? { billedMinutes: roundToIncrement(body.durationMinutes) }
         : {}),

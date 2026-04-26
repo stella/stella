@@ -8,6 +8,7 @@ import { validateOrgUserId } from "@/api/lib/branded-types";
 import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 
 const createRateEntryBodySchema = t.Object({
   userId: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
@@ -130,7 +131,7 @@ const createRateEntry = createSafeHandler(
             workspaceId,
             rateTableId: params.rateTableId,
             userId: body.userId ?? null,
-            hourlyRate: body.hourlyRate,
+            hourlyRate: cents(body.hourlyRate),
             effectiveFrom: body.effectiveFrom,
             effectiveTo: body.effectiveTo ?? null,
           })

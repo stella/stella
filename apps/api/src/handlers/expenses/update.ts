@@ -8,6 +8,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateExpenseBodySchema = t.Object({
@@ -89,7 +90,6 @@ const updateExpense = createSafeHandler(
     const updates = {
       ...pickDefined(body, [
         "dateIncurred",
-        "amount",
         "currency",
         "category",
         "description",
@@ -99,6 +99,7 @@ const updateExpense = createSafeHandler(
         "matterId",
         "status",
       ]),
+      ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
       updatedAt: new Date(),
     };
 

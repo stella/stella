@@ -39,6 +39,8 @@ import type {
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CentsAmount } from "@/api/lib/money";
+import { unsafeCents } from "@/api/lib/money";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 /** Metadata stored on link entities created by the web clipper. */
@@ -73,6 +75,8 @@ const safeWorkspaceId = (name: string) =>
 
 const safeOrganizationId = (name: string) =>
   p.varchar(name, { length: 128 }).$type<SafeId<"organization">>();
+
+const centsColumn = (name: string) => p.integer(name).$type<CentsAmount>();
 
 const pUuid = p.uuid().$defaultFn(() => crypto.randomUUID());
 
@@ -172,7 +176,7 @@ export const contacts = p.pgTable(
     taxId: p.varchar("tax_id", { length: 64 }),
     bankAccounts: p.jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: p.jsonb("billing_address").$type<BillingAddress>(),
-    defaultHourlyRate: p.integer("default_hourly_rate"),
+    defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
 
@@ -912,7 +916,7 @@ export const timeEntries = p.pgTable(
     timezoneId: p.text("timezone_id").notNull(),
     durationMinutes: p.integer("duration_minutes").notNull(),
     billedMinutes: p.integer("billed_minutes").notNull(),
-    rateAtEntry: p.integer("rate_at_entry").notNull(),
+    rateAtEntry: centsColumn("rate_at_entry").notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
     narrative: p.text().notNull(),
     invoiceNarrative: p.text("invoice_narrative"),
@@ -1029,7 +1033,7 @@ export const rateEntries = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "cascade" }),
-    hourlyRate: p.integer("hourly_rate").notNull(),
+    hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
     effectiveTo: p.date("effective_to"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
@@ -1061,7 +1065,7 @@ export const expenses = p.pgTable(
       .notNull()
       .references(() => entities.id, { onDelete: "restrict" }),
     dateIncurred: p.date("date_incurred").notNull(),
-    amount: p.integer().notNull(),
+    amount: centsColumn("amount").notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
     category: expenseCategoryEnum().notNull(),
     description: p.text().notNull(),
@@ -1122,7 +1126,8 @@ export const invoices = p.pgTable(
     invoiceDate: p.date("invoice_date").notNull(),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),
-    totalAmount: p.integer("total_amount").notNull().default(0),
+    // SAFETY: literal zero is a valid minor-unit integer default.
+    totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
     paidAt: p.timestamp("paid_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
