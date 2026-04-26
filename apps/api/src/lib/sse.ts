@@ -1,7 +1,12 @@
 import Redis from "ioredis";
 
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 /** Keep-alive interval in milliseconds (20 seconds). */
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
@@ -16,11 +21,11 @@ type SSEEvent = {
 
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
-  organizationId: string;
+  organizationId: SafeId<"organization">;
 };
 
 /** Workspace ID → connected SSE streams on THIS instance. */
-const connections = new Map<string, Set<SSEConnection>>();
+const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 
 const encoder = new TextEncoder();
 
@@ -36,8 +41,8 @@ const formatKeepAlive = (): Uint8Array => encoder.encode(`:keep-alive\n\n`);
  * Returns a ReadableStream that stays open until the client disconnects.
  */
 export const subscribe = (
-  workspaceId: string,
-  organizationId: string,
+  workspaceId: SafeId<"workspace">,
+  organizationId: SafeId<"organization">,
   signal: AbortSignal,
 ): ReadableStream => {
   const stream = new ReadableStream({
@@ -73,7 +78,10 @@ export const subscribe = (
 // ── Local delivery ──────────────────────────────────────
 
 /** Push an SSE event to local connections for a workspace. */
-const broadcastLocal = (workspaceId: string, event: SSEEvent): void => {
+const broadcastLocal = (
+  workspaceId: SafeId<"workspace">,
+  event: SSEEvent,
+): void => {
   const set = connections.get(workspaceId);
   if (!set) {
     return;
@@ -96,7 +104,7 @@ const broadcastLocal = (workspaceId: string, event: SSEEvent): void => {
 
 /** Push an SSE event to local connections for an entire organization. */
 const broadcastLocalToOrganization = (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   event: SSEEvent,
 ): void => {
   const chunk = formatSSE(event);
@@ -179,9 +187,15 @@ const initRedis = async () => {
           return;
         }
         if (parsed.scope === "workspace") {
-          broadcastLocal(parsed.id, parsed.event);
+          broadcastLocal(
+            brandPersistedWorkspaceId(parsed.id),
+            parsed.event,
+          );
         } else if (parsed.scope === "organization") {
-          broadcastLocalToOrganization(parsed.id, parsed.event);
+          broadcastLocalToOrganization(
+            brandPersistedOrganizationId(parsed.id),
+            parsed.event,
+          );
         }
       } catch {
         logger.warn("sse.invalid_redis_message", { message });
@@ -201,7 +215,10 @@ void initRedis();
  * Every instance (including this one) receives the message on the
  * subscriber connection and delivers to its local SSE connections.
  */
-export const broadcast = (workspaceId: string, event: SSEEvent): void => {
+export const broadcast = (
+  workspaceId: SafeId<"workspace">,
+  event: SSEEvent,
+): void => {
   const payload: RedisPayload = {
     scope: "workspace",
     id: workspaceId,
@@ -218,7 +235,7 @@ export const broadcast = (workspaceId: string, event: SSEEvent): void => {
 };
 
 export const broadcastToOrganization = (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   event: SSEEvent,
 ): void => {
   const payload: RedisPayload = {

@@ -19,7 +19,7 @@ type CachedEntry = {
   expiresAt: number;
 };
 
-const cache = new Map<string, CachedEntry>();
+const cache = new Map<SafeId<"organization">, CachedEntry>();
 
 export const loadOrgAIConfig = async (
   organizationId: SafeId<"organization">,
@@ -62,6 +62,8 @@ export const loadOrgAIConfig = async (
 };
 
 /** Remove a cached entry so the next load fetches fresh. */
-export const invalidateOrgAIConfig = (organizationId: string): void => {
+export const invalidateOrgAIConfig = (
+  organizationId: SafeId<"organization">,
+): void => {
   cache.delete(organizationId);
 };

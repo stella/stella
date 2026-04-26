@@ -18,7 +18,7 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { getS3 } from "@/api/lib/s3";
 
 const buildVersionS3Key = (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   templateId: string,
   version: number,
 ) => `${organizationId}/templates/${templateId}/v${version}.docx`;

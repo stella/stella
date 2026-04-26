@@ -1,6 +1,7 @@
 import Elysia, { t } from "elysia";
 
 import { authMacro } from "@/api/lib/auth";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { broadcast, broadcastToOrganization } from "@/api/lib/sse";
 
 const queryKeySchema = t.Array(t.String({ minLength: 1 }), { minItems: 1 });
@@ -30,7 +31,7 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
 
       if (workspaceId) {
-        broadcast(workspaceId, event);
+        broadcast(brandPersistedWorkspaceId(workspaceId), event);
       } else {
         broadcastToOrganization(ctx.session.activeOrganizationId, event);
       }

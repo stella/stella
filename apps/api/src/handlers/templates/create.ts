@@ -50,8 +50,10 @@ type CreateTemplateProps = {
   };
 };
 
-const buildS3Key = (organizationId: string, templateId: string) =>
-  `${organizationId}/templates/${templateId}.docx`;
+const buildS3Key = (
+  organizationId: SafeId<"organization">,
+  templateId: string,
+) => `${organizationId}/templates/${templateId}.docx`;
 
 /** Accept a string (JSON body) or already-parsed object
  *  (FormData auto-parsed by Elysia). */

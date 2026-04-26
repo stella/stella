@@ -11,6 +11,7 @@
 import { hkdf } from "node:crypto";
 
 import { env } from "@/api/env";
+import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 const AES_KEY_BYTES = 32;
@@ -33,7 +34,7 @@ const getMasterKey = (): Buffer | null => {
  */
 const deriveOrgKey = async (
   masterKey: Buffer,
-  organizationId: string,
+  organizationId: SafeId<"organization">,
 ): Promise<Buffer> =>
   await new Promise((resolve, reject) => {
     hkdf(
@@ -63,7 +64,7 @@ export type EncryptedContent = {
  * no-op envelope (iv = 12 zero bytes, ciphertext = UTF-8).
  */
 export const encryptContent = async (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   plaintext: string,
 ): Promise<EncryptedContent> => {
   const masterKey = getMasterKey();
@@ -104,7 +105,7 @@ export const encryptContent = async (
  * absent, treats ciphertext as plaintext UTF-8.
  */
 export const decryptContent = async (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   ciphertext: Buffer,
   iv: Buffer,
 ): Promise<string> => {

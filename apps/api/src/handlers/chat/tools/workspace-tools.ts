@@ -95,11 +95,16 @@ const workspaceIdSchema = (allowedIds: readonly SafeId<"workspace">[]) =>
     ),
   );
 
+// This is a brand-minting validator: workspaceId is an untrusted
+// string from chat-tool input (LLM-generated), looked up in the
+// allowed-set Map and returned as SafeId<"workspace"> on success.
+// The bare-string parameter is intentional and required.
 const requireAllowedWorkspaceId = ({
   allowedIdsByValue,
   workspaceId,
 }: {
   allowedIdsByValue: Map<string, SafeId<"workspace">>;
+  // eslint-disable-next-line no-unbranded-ownership-id-param/no-unbranded-ownership-id-param
   workspaceId: string;
 }): SafeId<"workspace"> => {
   const allowedWorkspaceId = allowedIdsByValue.get(workspaceId);
