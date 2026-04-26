@@ -8,6 +8,7 @@ import type {
 } from "@stella/api/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
+import { DOCX_MIME } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type {
@@ -30,6 +31,11 @@ export const isFileDisplayable = (file: {
   }
 
   if (file.pdfFileId !== null) {
+    return true;
+  }
+
+  // DOCX files are rendered natively via Folio
+  if (file.mimeType === DOCX_MIME) {
     return true;
   }
 

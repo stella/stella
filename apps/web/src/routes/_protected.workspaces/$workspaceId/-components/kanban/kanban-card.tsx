@@ -316,6 +316,7 @@ export const KanbanCard = ({
               entityId: file.entityId,
               label: name,
               mimeType: file.mimeType,
+              pdfFileId: file.pdfFileId,
               workspaceId,
             })
           }
@@ -326,6 +327,7 @@ export const KanbanCard = ({
                 entityId: file.entityId,
                 label: name,
                 mimeType: file.mimeType,
+                pdfFileId: file.pdfFileId,
                 workspaceId,
               });
             }

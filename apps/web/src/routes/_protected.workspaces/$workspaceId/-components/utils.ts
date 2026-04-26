@@ -73,21 +73,18 @@ const namedColorsMap: Record<NamedColor, ColorVariants> = {
 export const emptyColor: ColorVariants = optionVar("empty");
 
 /** Resolve any OptionColor (named or hex) to CSS color variants. */
-export const resolveOptionColor = (
-  color: OptionColor,
-): ColorVariants => {
-  const named = namedColorsMap[color as NamedColor];
-  if (named) {
+export const resolveOptionColor = (color: OptionColor): ColorVariants => {
+  const named = (namedColorsMap as Record<string, ColorVariants | undefined>)[
+    color
+  ];
+  if (named !== undefined) {
     return named;
   }
   return hexVar(color);
 };
 
 /** Backward compat: keyed by named colors only. Use resolveOptionColor for hex support. */
-export const optionColorsMap = namedColorsMap as Record<
-  string,
-  ColorVariants
->;
+export const optionColorsMap = namedColorsMap as Record<string, ColorVariants>;
 
 /** The 16 named preset color keys. */
 export const optionColors: OptionColor[] = [...NAMED_COLORS];

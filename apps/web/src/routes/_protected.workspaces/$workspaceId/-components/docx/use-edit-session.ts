@@ -37,7 +37,7 @@ type UseEditSessionOptions = {
   onCancelled?: () => void;
 };
 
-const CHECKPOINT_DEBOUNCE_MS = 5_000;
+const CHECKPOINT_DEBOUNCE_MS = 5000;
 
 export const useEditSession = ({
   workspaceId,
@@ -66,7 +66,6 @@ export const useEditSession = ({
 
   const open = async (force?: boolean) => {
     setState({ status: "opening" });
-    const t0 = performance.now();
 
     const response = await api
       .entities({ workspaceId })
@@ -75,9 +74,6 @@ export const useEditSession = ({
         propertyId,
         ...(force && { force }),
       });
-
-    const tSession = performance.now();
-    console.info(`[folio] session open: ${Math.round(tSession - t0)}ms`);
 
     if (response.error) {
       setState({
@@ -100,8 +96,6 @@ export const useEditSession = ({
     }
 
     const buffer = await fileResponse.arrayBuffer();
-    const tFetch = performance.now();
-    console.info(`[folio] file fetch: ${Math.round(tFetch - tSession)}ms (${Math.round(buffer.byteLength / 1024)}KB)`);
 
     setState({
       status: "editing",
@@ -110,7 +104,6 @@ export const useEditSession = ({
       buffer,
       fileName,
     });
-    console.info(`[folio] total open→ready: ${Math.round(performance.now() - t0)}ms`);
   };
 
   const checkpoint = async (docxBuffer: ArrayBuffer) => {
@@ -123,12 +116,12 @@ export const useEditSession = ({
       type: DOCX_MIME,
     });
 
-    const response = await api
-      ["desktop-edit-sessions"]({ sessionId: session.sessionId })
-      .checkpoint.post({
-        file,
-        sessionToken: session.sessionToken,
-      });
+    const response = await api["desktop-edit-sessions"]({
+      sessionId: session.sessionId,
+    }).checkpoint.post({
+      file,
+      sessionToken: session.sessionToken,
+    });
 
     if (response.error) {
       // 409 = session taken over by another user
@@ -146,12 +139,9 @@ export const useEditSession = ({
     }
   };
 
-  const debouncedCheckpoint = useDebouncedCallback(
-    (buffer: ArrayBuffer) => {
-      void checkpoint(buffer);
-    },
-    CHECKPOINT_DEBOUNCE_MS,
-  );
+  const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
+    void checkpoint(buffer);
+  }, CHECKPOINT_DEBOUNCE_MS);
 
   const markDirtyAndCheckpoint = (buffer: ArrayBuffer) => {
     setIsDirty(true);
@@ -169,11 +159,11 @@ export const useEditSession = ({
 
     setState({ status: "saving" });
 
-    const response = await api
-      ["desktop-edit-sessions"]({ sessionId: session.sessionId })
-      .finalize.post({
-        sessionToken: session.sessionToken,
-      });
+    const response = await api["desktop-edit-sessions"]({
+      sessionId: session.sessionId,
+    }).finalize.post({
+      sessionToken: session.sessionToken,
+    });
 
     sessionRef.current = null;
     setIsDirty(false);
@@ -200,13 +190,11 @@ export const useEditSession = ({
 
     debouncedCheckpoint.cancel();
 
-    await api
-      .entities({ workspaceId })
-      ["desktop-edit-sessions"].release.post({
-        entityId,
-        propertyId,
-        queryKey: entitiesKeys.all(workspaceId),
-      });
+    await api.entities({ workspaceId })["desktop-edit-sessions"].release.post({
+      entityId,
+      propertyId,
+      queryKey: entitiesKeys.all(workspaceId),
+    });
 
     sessionRef.current = null;
     setIsDirty(false);

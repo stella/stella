@@ -47,6 +47,19 @@ export const isConvertibleMimeType = (mimeType: string): boolean =>
   mimeType in CONVERTIBLE_MIME_TYPES;
 
 /**
+ * MIME types that the frontend can render natively without
+ * Gotenberg conversion. Currently only DOCX (via Folio).
+ * Images intentionally remain converted to PDF.
+ */
+const NATIVELY_RENDERABLE_MIME_TYPES = {
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    null,
+} as const satisfies Record<string, null>;
+
+export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
+  mimeType in NATIVELY_RENDERABLE_MIME_TYPES;
+
+/**
  * Spreadsheet MIME types (.xls, .xlsx) that benefit from the
  * fit-to-page pre-processor. ODS uses ODF format (different ZIP
  * structure), so we skip it.

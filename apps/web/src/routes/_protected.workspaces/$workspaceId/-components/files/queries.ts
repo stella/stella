@@ -7,6 +7,7 @@ import type { QueryOptionsInput } from "@/lib/react-query";
 type FileByFieldIdKey = {
   workspaceId: string;
   fieldId: string;
+  purpose?: "display" | "native-display";
 };
 
 type FileData = {
@@ -17,11 +18,50 @@ type FileData = {
   buffer: ArrayBuffer;
 };
 
+type FileMetadata = Omit<FileData, "buffer">;
+
 const filesKeys = {
-  byFieldId: (key: FileByFieldIdKey) => ["files", key.workspaceId, key.fieldId],
+  byFieldId: (key: FileByFieldIdKey) => [
+    "files",
+    key.workspaceId,
+    key.fieldId,
+    key.purpose ?? "display",
+  ],
+  metadataByFieldId: (key: FileByFieldIdKey) => [
+    "files",
+    "metadata",
+    key.workspaceId,
+    key.fieldId,
+    key.purpose ?? "display",
+  ],
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
+
+export const fileMetadataOptions = (props: FileOptionsProps) =>
+  queryOptions({
+    queryKey: filesKeys.metadataByFieldId(props),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .files({ workspaceId: props.workspaceId })
+        .url({ fieldId: props.fieldId })
+        .get({
+          query: { purpose: props.purpose ?? "display" },
+          fetch: { signal },
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return {
+        fileId: response.data.fileId,
+        fileName: response.data.fileName,
+        mimeType: response.data.mimeType,
+        originalMimeType: response.data.originalMimeType,
+      } satisfies FileMetadata;
+    },
+  });
 
 export const fileOptions = (props: FileOptionsProps) =>
   queryOptions({
@@ -31,7 +71,7 @@ export const fileOptions = (props: FileOptionsProps) =>
         .files({ workspaceId: props.workspaceId })
         .url({ fieldId: props.fieldId })
         .get({
-          query: { purpose: "display" },
+          query: { purpose: props.purpose ?? "display" },
           fetch: { signal },
         });
 

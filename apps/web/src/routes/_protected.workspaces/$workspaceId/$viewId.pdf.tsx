@@ -1,4 +1,12 @@
-import { Activity, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Activity,
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import {
@@ -21,16 +29,17 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stella/ui/components/button";
-
+import "@stella/folio/editor.css";
 import { api } from "@/lib/api";
-import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { EntityField, EntityKind } from "@/lib/types";
+import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { skipFieldFilter } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
+import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {
   PDFSuspenseFallback,
@@ -44,6 +53,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+
+const ReadOnlyDocxViewer = lazy(async () => {
+  const m = await import("@stella/folio");
+  return { default: m.DocxEditor };
+});
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/pdf",
@@ -254,9 +268,10 @@ function RouteComponentInner({
     }
     return f.id === fieldId;
   });
-  const isDocxFile =
-    activeFileField?.content.type === "file" &&
-    activeFileField.content.mimeType === DOCX_MIME;
+  const activeFileContent =
+    activeFileField?.content.type === "file" ? activeFileField.content : null;
+  const isDocxFile = activeFileContent?.mimeType === DOCX_MIME;
+  const usesNativeDocxDisplay = isDocxFile;
   const filePropertyId = activeFileField?.propertyId;
 
   const showVersions = sidebar === "versions" || panel === "versions";
@@ -314,7 +329,7 @@ function RouteComponentInner({
             >
               {/* "Edit in browser" button for DOCX files */}
               {isDocxFile && !compareState && (
-                <div className="absolute top-2 right-2 z-10">
+                <div className="absolute end-2 top-2 z-10">
                   <Button
                     onClick={() => {
                       void navigate({
@@ -334,6 +349,13 @@ function RouteComponentInner({
                   compareState={compareState}
                   onClose={() => setCompareState(null)}
                 />
+              ) : usesNativeDocxDisplay ? (
+                <Suspense fallback={<PDFSuspenseFallback />}>
+                  <FullscreenDocxViewer
+                    fieldId={fieldId}
+                    workspaceId={workspaceId}
+                  />
+                </Suspense>
               ) : (
                 <PDFProvider
                   key={fieldId}
@@ -473,6 +495,29 @@ const VersionListConnected = ({
       onClearCompare={onClearCompare}
       onCompare={onCompare}
       onSwitchVersion={(fid) => onSwitchField(fid)}
+    />
+  );
+};
+
+// -- Fullscreen DOCX viewer (read-only Folio) --
+
+const FullscreenDocxViewer = ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const { data: file } = useSuspenseQuery(
+    fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+  );
+
+  return (
+    <ReadOnlyDocxViewer
+      className="h-full"
+      documentBuffer={file.buffer}
+      readOnly
+      showToolbar={false}
     />
   );
 };

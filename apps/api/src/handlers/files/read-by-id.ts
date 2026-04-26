@@ -4,6 +4,7 @@ import { status } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { isNativelyRenderableMimeType } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
@@ -11,7 +12,7 @@ import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { getS3, presignDownloadUrl } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-type FilePurpose = "download" | "display";
+type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
   scopedDb: ScopedDb;
@@ -93,8 +94,52 @@ export const readFileHandler = async ({
     };
   }
 
+  if (purpose === "native-display") {
+    if (!isNativelyRenderableMimeType(content.mimeType)) {
+      return status(400);
+    }
+
+    return {
+      fileId: content.id,
+      mimeType: content.mimeType,
+      originalMimeType: content.mimeType,
+      fileName: content.fileName,
+      encrypted: content.encrypted,
+      presignedUrl: getS3().presign(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: content.id,
+          mimeType: content.mimeType,
+        }),
+        { expiresIn: 900 },
+      ),
+      stampable: false,
+    };
+  }
+
   if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
-    return status(400);
+    if (!isNativelyRenderableMimeType(content.mimeType)) {
+      return status(400);
+    }
+
+    return {
+      fileId: content.id,
+      mimeType: content.mimeType,
+      originalMimeType: content.mimeType,
+      fileName: content.fileName,
+      encrypted: content.encrypted,
+      presignedUrl: getS3().presign(
+        createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: content.id,
+          mimeType: content.mimeType,
+        }),
+        { expiresIn: 900 },
+      ),
+      stampable: false,
+    };
   }
 
   const displayFileId = content.pdfFileId ?? content.id;

@@ -31,7 +31,7 @@ import { cn } from "@stella/ui/lib/utils";
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -330,6 +330,116 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         if (!mountedPdfIds.has(tab.id)) {
           return null;
         }
+        const isNativeDocxDisplay =
+          tab.mimeType === DOCX_MIME &&
+          (tab.pdfFileId === null || !tab.justificationFieldId);
+
+        const contextBar = (
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-between border-b px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
+            <div className="flex items-center overflow-hidden">
+              {editingTabId === tab.id ? (
+                <InlineEdit
+                  inputClassName="w-40 text-xs"
+                  onCancel={() => setEditingTabId(null)}
+                  onChange={setEditValue}
+                  onCommit={() => commitRename(tab)}
+                  value={editValue}
+                />
+              ) : (
+                <span
+                  className="truncate text-xs font-medium"
+                  onDoubleClick={() => startRename(tab)}
+                >
+                  {stripExtension(tab.label)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1 ps-4">
+              <div className="flex items-center rounded-md border p-0.5">
+                <PeekPdfControls
+                  canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                  onResetZoom={() => handleResetZoom(tab.id)}
+                  onZoomIn={() => handleZoom(tab.id, "in")}
+                  onZoomOut={() => handleZoom(tab.id, "out")}
+                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                />
+              </div>
+              {!isNativeDocxDisplay && <PeekPrintButton />}
+              <Tooltip
+                content={t("workspaces.pdf.openFullView")}
+                render={
+                  <Button
+                    onClick={() => {
+                      handleOpenFullView().catch(() => {
+                        /* fire-and-forget */
+                      });
+                    }}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <ExternalLinkIcon className="size-3.5" />
+                  </Button>
+                }
+              />
+              <Button
+                onClick={() => {
+                  clearAnonymization(tab.id);
+                  closeTab(tab.id);
+                }}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        );
+
+        const viewerContent = (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {!isNativeDocxDisplay && tab.justificationFieldId && (
+              <Suspense
+                fallback={
+                  <div
+                    className={cn(
+                      "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                      TOOLBAR_ROW_HEIGHT,
+                    )}
+                  >
+                    {t("common.loading")}...
+                  </div>
+                }
+              >
+                <JustificationBar
+                  activeTab={tab}
+                  fieldId={tab.justificationFieldId}
+                  isActiveTab={isActive}
+                  workspaceId={workspaceId}
+                />
+              </Suspense>
+            )}
+            <Suspense fallback={<PeekSuspenseFallback />}>
+              <PeekPdfViewer
+                activePropertyId={tab.propertyId ?? ""}
+                entityId={tab.entityId}
+                fieldId={tab.id}
+                filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
+                mimeType={tab.mimeType ?? undefined}
+                onPeekNavigate={closeAll}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                viewId={peekPdfViewId}
+                workspaceId={workspaceId}
+              />
+            </Suspense>
+          </div>
+        );
+
         return (
           <div
             className={cn(
@@ -339,130 +449,38 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             key={tab.id}
             ref={isActive ? pdfContentRef : undefined}
           >
-            <MeasuredPdfProvider
-              active={isActive}
-              fallback={{
-                suspense: <PeekSuspenseFallback />,
-                error: (
-                  <InspectorPdfErrorFallback
-                    onClose={() => {
-                      clearAnonymization(tab.id);
-                      closeTab(tab.id);
-                    }}
-                  />
-                ),
-              }}
-              fieldId={tab.id}
-              initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
-              onError={() => {
-                toastManager.add({
-                  title: t("errors.actionFailed"),
-                  type: "error",
-                });
-              }}
-            >
-              {/* Context bar: filename + controls */}
-              <div
-                className={cn(
-                  "flex shrink-0 items-center justify-between border-b px-3",
-                  TOOLBAR_ROW_HEIGHT,
-                )}
+            {isNativeDocxDisplay ? (
+              <>
+                {contextBar}
+                {viewerContent}
+              </>
+            ) : (
+              <MeasuredPdfProvider
+                active={isActive}
+                fallback={{
+                  suspense: <PeekSuspenseFallback />,
+                  error: (
+                    <InspectorPdfErrorFallback
+                      onClose={() => {
+                        clearAnonymization(tab.id);
+                        closeTab(tab.id);
+                      }}
+                    />
+                  ),
+                }}
+                fieldId={tab.id}
+                initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                onError={() => {
+                  toastManager.add({
+                    title: t("errors.actionFailed"),
+                    type: "error",
+                  });
+                }}
               >
-                <div className="flex items-center overflow-hidden">
-                  {editingTabId === tab.id ? (
-                    <InlineEdit
-                      inputClassName="w-40 text-xs"
-                      onCancel={() => setEditingTabId(null)}
-                      onChange={setEditValue}
-                      onCommit={() => commitRename(tab)}
-                      value={editValue}
-                    />
-                  ) : (
-                    <span
-                      className="truncate text-xs font-medium"
-                      onDoubleClick={() => startRename(tab)}
-                    >
-                      {stripExtension(tab.label)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1 ps-4">
-                  <div className="flex items-center rounded-md border p-0.5">
-                    <PeekPdfControls
-                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
-                      onResetZoom={() => handleResetZoom(tab.id)}
-                      onZoomIn={() => handleZoom(tab.id, "in")}
-                      onZoomOut={() => handleZoom(tab.id, "out")}
-                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                    />
-                  </div>
-                  <PeekPrintButton />
-                  <Tooltip
-                    content={t("workspaces.pdf.openFullView")}
-                    render={
-                      <Button
-                        onClick={() => {
-                          handleOpenFullView().catch(() => {
-                            /* fire-and-forget */
-                          });
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <ExternalLinkIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                  <Button
-                    onClick={() => {
-                      clearAnonymization(tab.id);
-                      closeTab(tab.id);
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    <XIcon className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                {tab.justificationFieldId && (
-                  <Suspense
-                    fallback={
-                      <div
-                        className={cn(
-                          "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                          TOOLBAR_ROW_HEIGHT,
-                        )}
-                      >
-                        {t("common.loading")}...
-                      </div>
-                    }
-                  >
-                    <JustificationBar
-                      activeTab={tab}
-                      fieldId={tab.justificationFieldId}
-                      isActiveTab={isActive}
-                      workspaceId={workspaceId}
-                    />
-                  </Suspense>
-                )}
-                <Suspense fallback={<PeekSuspenseFallback />}>
-                  <PeekPdfViewer
-                    activePropertyId={tab.propertyId ?? ""}
-                    entityId={tab.entityId}
-                    fieldId={tab.id}
-                    mimeType={tab.mimeType ?? undefined}
-                    onPeekNavigate={closeAll}
-                    scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                    viewId={peekPdfViewId}
-                    workspaceId={workspaceId}
-                  />
-                </Suspense>
-              </div>
-            </MeasuredPdfProvider>
+                {contextBar}
+                {viewerContent}
+              </MeasuredPdfProvider>
+            )}
           </div>
         );
       })}
@@ -795,6 +813,8 @@ const JustificationBar = ({
                 entityId: activeTab.entityId,
                 label: activeTab.label,
                 workspaceId: activeTab.workspaceId,
+                mimeType: activeTab.mimeType,
+                pdfFileId: activeTab.pdfFileId,
                 justificationFieldId: prevSlot.fieldId,
                 propertyId: prevSlot.property.id,
               })
@@ -816,6 +836,8 @@ const JustificationBar = ({
                 entityId: activeTab.entityId,
                 label: activeTab.label,
                 workspaceId: activeTab.workspaceId,
+                mimeType: activeTab.mimeType,
+                pdfFileId: activeTab.pdfFileId,
                 justificationFieldId: nextSlot.fieldId,
                 propertyId: nextSlot.property.id,
               })

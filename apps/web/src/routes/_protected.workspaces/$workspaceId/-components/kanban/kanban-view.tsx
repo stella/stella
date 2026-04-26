@@ -719,10 +719,14 @@ const TASK_STATUS_ORDER = [
 
 /** Map task status to kanban option colors. */
 const STATUS_OPTION_COLORS: Record<string, OptionColor> = {
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   open: "gray",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   in_progress: "blue",
   in_review: "amber",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   done: "green",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   cancelled: "red",
 };
 

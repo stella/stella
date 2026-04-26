@@ -196,7 +196,7 @@ const uploadEntityHandler = async function* ({
 
   const s3Keys = [sourceKey];
 
-  // Run S3 upload and Gotenberg conversion in parallel
+  // Keep a converted PDF derivative for AI workflows and bbox generation.
   const shouldConvert = !encrypted && isConvertibleMimeType(file.type);
 
   const [, conversionResult] = await Promise.all([

@@ -25,7 +25,7 @@ export const filesRoute = new Elysia({
       }),
     {
       query: t.Object({
-        purpose: t.UnionEnum(["download", "display"]),
+        purpose: t.UnionEnum(["download", "display", "native-display"]),
       }),
     },
   )
