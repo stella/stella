@@ -3,7 +3,7 @@ import { diffArrays } from "diff";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { diffParagraphs } from "@/api/handlers/docx/diff-paragraphs";
@@ -18,7 +18,7 @@ import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
@@ -83,7 +83,7 @@ const alignParagraphs = (
 
 const config = {
   permissions: { workspace: ["read"] },
-  params: t.Object({
+  params: workspaceParams({
     entityId: tSafeId("entity"),
   }),
   body: t.Object({
@@ -208,6 +208,13 @@ export default createSafeHandler(
         .select({ userName: user.name })
         .from(desktopEditSessions)
         .innerJoin(user, eq(desktopEditSessions.createdBy, user.id))
+        .innerJoin(
+          member,
+          and(
+            eq(member.userId, desktopEditSessions.createdBy),
+            eq(member.organizationId, organizationId),
+          ),
+        )
         .where(
           and(
             eq(desktopEditSessions.finalizedVersionId, targetVersionId),
