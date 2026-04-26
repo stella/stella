@@ -1,8 +1,8 @@
 # Open PR
 
 Prepare the current worktree branch for a pull request: rebase,
-self-review, quality checks, open the PR, then monitor review
-comments.
+self-review, quality checks, open a draft PR, then run one rabbit
+round.
 
 ## Instructions
 
@@ -107,20 +107,14 @@ comments.
    architecture beyond what the diff shows. Write for the
    reviewing engineer.
 
-8. **Start rabbit round monitoring**:
+8. **Run one rabbit round**:
 
-   Once the draft PR is open, schedule rabbit round monitoring
-   using `CronCreate` directly (do **not** use `/loop`, which
-   runs immediately — review bots need time to post):
+   Once the draft PR is open, invoke `/rabbit-round` once.
 
-   ```
-   CronCreate(cron: "*/7 * * * *", prompt: "/rabbit-round", recurring: true)
-   ```
-
-   **When to stop:** cancel the cron job (via `CronDelete`)
-   after two consecutive checks find nothing to act on (no
-   unresolved bot comments, no new review threads, CI green).
-   Do not let it run indefinitely.
+   Do not assume background scheduling tools exist. Do not create
+   cron jobs, loops, or recurring tasks from this skill. If another
+   round is needed, the user or caller can invoke `/rabbit-round`
+   again later.
 
    **Pending bots are not clean.** A round where review bot
    checks are still running or queued (e.g., CodeRabbit,
@@ -130,11 +124,7 @@ comments.
    to say. Only count a round as clean when all review bot
    check runs have completed.
 
-9. **Mark PR as ready**:
-
-   After the rabbit round monitoring stops (two consecutive
-   clean checks), mark the PR as ready for review:
-
-   ```bash
-   gh pr ready
-   ```
+   If `/rabbit-round` returns `pending_bots`, `needs_changes`, or
+   `failing_ci`, leave the PR as draft and report the status. If it
+   returns `clean`, `/rabbit-round` will mark a draft PR as ready for
+   review before returning.
