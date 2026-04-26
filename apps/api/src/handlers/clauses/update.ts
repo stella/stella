@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -180,18 +181,15 @@ const updateClauseHandler = async function* ({
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
   if (searchFieldsChanged) {
-    try {
-      await updateSearchVector(
-        safeDb,
-        clauseId,
-        body.title ?? existing.title,
-        body.description !== undefined
-          ? body.description
-          : existing.description,
-        body.body ?? existing.body,
-      );
-    } catch {
-      // Intentionally swallowed; see comment above.
+    const searchVectorResult = await updateSearchVector(
+      safeDb,
+      clauseId,
+      body.title ?? existing.title,
+      body.description !== undefined ? body.description : existing.description,
+      body.body ?? existing.body,
+    );
+    if (Result.isError(searchVectorResult)) {
+      captureError(searchVectorResult.error, { clauseId });
     }
   }
 
