@@ -1,0 +1,17 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for stella desktop",
+  "windows": ["main", "takeover-dialog"],
+  "permissions": [
+    "core:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "opener:default",
+    "clipboard-manager:allow-write-text",
+    "deep-link:default"
+  ]
+}

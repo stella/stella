@@ -182,7 +182,7 @@ export type WorkspaceEntity = {
   priority: string | null;
   dueDate: string | null;
   sortOrder: string | null;
-  activeEditBy: { name: string; image: string | null } | null;
+  activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
   fields: Record<string, WorkspaceField>;
 };
 

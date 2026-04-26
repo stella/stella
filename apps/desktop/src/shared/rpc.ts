@@ -94,62 +94,6 @@ export type OpenDocxResponse = {
   sessionId: string;
 };
 
-type EmptyRecord = Record<string, never>;
-
-type RequestSchema<TParams, TResponse> = {
-  params: TParams;
-  response: TResponse;
-};
-
-export type DesktopRPC = {
-  bun: {
-    requests: {
-      openEditRoot: RequestSchema<EmptyRecord, boolean>;
-      getState: RequestSchema<EmptyRecord, AppSnapshot>;
-      updateNotificationPreferences: RequestSchema<
-        {
-          notificationPreferences: DesktopNotificationPreferences;
-        },
-        AppSnapshot
-      >;
-      checkForUpdates: RequestSchema<EmptyRecord, AppSnapshot>;
-      downloadUpdate: RequestSchema<EmptyRecord, AppSnapshot>;
-      applyUpdate: RequestSchema<EmptyRecord, AppSnapshot>;
-      copyDiagnostics: RequestSchema<EmptyRecord, boolean>;
-      emailSupport: RequestSchema<EmptyRecord, boolean>;
-      revealSupportRoot: RequestSchema<EmptyRecord, boolean>;
-      openSessionFile: RequestSchema<{ sessionId: string }, boolean>;
-      revealSession: RequestSchema<{ sessionId: string }, boolean>;
-      finishSession: RequestSchema<{ sessionId: string }, boolean>;
-      retrySession: RequestSchema<{ sessionId: string }, boolean>;
-    };
-    messages: EmptyRecord;
-  };
-  webview: {
-    requests: EmptyRecord;
-    messages: {
-      activateTab: {
-        tab: "general" | "notifications" | "about";
-      };
-      stateChanged: {
-        snapshot: AppSnapshot;
-      };
-    };
-  };
-};
-
-type RequestClient<
-  TRequests extends Record<string, RequestSchema<unknown, unknown>>,
-> = {
-  [TKey in keyof TRequests]: (
-    params: TRequests[TKey]["params"],
-  ) => Promise<TRequests[TKey]["response"]>;
-};
-
-export type DesktopRpcClient = {
-  request: RequestClient<DesktopRPC["bun"]["requests"]>;
-};
-
 export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
   if (typeof value !== "object" || value === null) {
     return false;

@@ -7,6 +7,8 @@ import { desktopEditSessions } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
 import {
   authorizeDesktopEditSession,
+  computeTokenExpiresAt,
+  createDesktopEditSessionToken,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
@@ -15,6 +17,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
@@ -61,6 +64,14 @@ export const checkpointDesktopEditSessionHandler = async ({
     });
   }
 
+  if (authorizedSession.status === "token-expired") {
+    return status(401, {
+      code: "desktop_edit_session_token_expired",
+      message:
+        "Desktop edit session token has expired. Reopen the document from stella.",
+    });
+  }
+
   const fileName = sanitizeFilename(file.name);
   const buffer = await file.arrayBuffer();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
@@ -94,7 +105,7 @@ export const checkpointDesktopEditSessionHandler = async ({
           .map((finding) => finding.message)
       : null;
 
-  return await authorizedSession.value.scopedDb(async (tx) => {
+  const result = await authorizedSession.value.scopedDb(async (tx) => {
     const existingSessions = await tx
       .select({
         checkpointFileId: desktopEditSessions.checkpointFileId,
@@ -135,6 +146,13 @@ export const checkpointDesktopEditSessionHandler = async ({
     }
 
     if (existingSession.checkpointSha256Hex === sha256Hex) {
+      // Extend expiry even on noop to keep the session alive
+      const nextTokenExpiresAt = computeTokenExpiresAt();
+      await tx
+        .update(desktopEditSessions)
+        .set({ tokenExpiresAt: nextTokenExpiresAt })
+        .where(eq(desktopEditSessions.id, existingSession.id));
+
       return {
         checkpointedAt:
           existingSession.checkpointUpdatedAt?.toISOString() ??
@@ -154,6 +172,11 @@ export const checkpointDesktopEditSessionHandler = async ({
 
     const checkpointedAt = new Date();
 
+    // Rotate token on each successful checkpoint
+    const nextSessionToken = createDesktopEditSessionToken();
+    const nextSessionTokenHash = hashDesktopEditSessionToken(nextSessionToken);
+    const nextTokenExpiresAt = computeTokenExpiresAt();
+
     const updatedSessions = await tx
       .update(desktopEditSessions)
       .set({
@@ -162,6 +185,8 @@ export const checkpointDesktopEditSessionHandler = async ({
         checkpointSizeBytes: file.size,
         checkpointUpdatedAt: checkpointedAt,
         fileName,
+        sessionTokenHash: nextSessionTokenHash,
+        tokenExpiresAt: nextTokenExpiresAt,
       })
       .where(
         and(
@@ -209,6 +234,17 @@ export const checkpointDesktopEditSessionHandler = async ({
     return {
       checkpointedAt: checkpointedAt.toISOString(),
       noop: false,
+      rotatedSessionToken: nextSessionToken,
     };
   });
+
+  // Only broadcast when a real checkpoint was saved (not on noop/error)
+  if ("noop" in result && !result.noop) {
+    broadcast(authorizedSession.value.workspaceId, {
+      type: "invalidate-query",
+      data: ["entities", authorizedSession.value.workspaceId],
+    });
+  }
+
+  return result;
 };

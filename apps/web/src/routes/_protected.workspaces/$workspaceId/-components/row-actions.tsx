@@ -9,7 +9,6 @@ import {
   FileOutputIcon,
   HistoryIcon,
   LaptopIcon,
-  LockKeyholeOpenIcon,
   LockOpenIcon,
   MessageSquareIcon,
   PencilIcon,
@@ -96,8 +95,13 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
-  const canOpenInDesktop = !isBulk && file?.mimeType === DOCX_MIME;
-  const isLockedByOther = !isBulk && entity.activeEditBy !== null;
+  const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
+  const isLockedByMe =
+    isDocx && entity.activeEditBy !== null && entity.activeEditBy.isMe;
+  const isLockedByOther =
+    isDocx && entity.activeEditBy !== null && !entity.activeEditBy.isMe;
+  // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
+  const canOpenInDesktop = isDocx && !isLockedByOther;
 
   const openVersionHistory = file
     ? () => {
@@ -182,13 +186,16 @@ export const RowActions = ({
     try {
       const linkedAccount = await getFreshLinkedAccount();
 
-      await openDocxInDesktop({
+      const desktopInput = {
         apiBaseUrl: env.VITE_API_URL,
         entityId: file.entityId,
         linkedAccount,
         propertyId: file.propertyId,
         workspaceId,
-      });
+        ...(isLockedByMe ? { force: true as const } : {}),
+      };
+
+      await openDocxInDesktop(desktopInput);
 
       toastManager.add({
         description: t("workspaces.files.desktopEdit.openedDescription"),
@@ -215,61 +222,91 @@ export const RowActions = ({
     }
   };
 
-  const handleTakeOverLock = async () => {
+  const doForceTakeover = async () => {
     if (!file || file.mimeType !== DOCX_MIME) {
       return;
     }
 
-    try {
-      const linkedAccount = await getFreshLinkedAccount();
+    const linkedAccount = await getFreshLinkedAccount();
 
-      await openDocxInDesktop({
-        apiBaseUrl: env.VITE_API_URL,
-        entityId: file.entityId,
-        force: true,
-        linkedAccount,
-        propertyId: file.propertyId,
-        workspaceId,
-      });
+    await openDocxInDesktop({
+      apiBaseUrl: env.VITE_API_URL,
+      entityId: file.entityId,
+      force: true,
+      linkedAccount,
+      propertyId: file.propertyId,
+      workspaceId,
+    });
 
-      toastManager.add({
-        description: t("workspaces.files.desktopEdit.openedDescription"),
-        title: t("workspaces.files.desktopEdit.openedTitle"),
-        type: "success",
-      });
-    } catch (error) {
-      if (error instanceof Error && isUnauthorizedError(error)) {
-        toastManager.add({
-          description: t(
-            "workspaces.files.desktopEdit.authRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-          type: "error",
-        });
-        return;
-      }
-
-      toastManager.add({
-        description: t("workspaces.files.desktopEdit.unavailableDescription"),
-        title: t("workspaces.files.desktopEdit.unavailableTitle"),
-        type: "error",
-      });
-    }
+    toastManager.add({
+      description: t("workspaces.files.desktopEdit.openedDescription"),
+      title: t("workspaces.files.desktopEdit.openedTitle"),
+      type: "success",
+    });
   };
 
   const handleReleaseLock = async () => {
-    if (!file) {
+    if (!file || file.mimeType !== DOCX_MIME) {
       return;
     }
-    const response = await api
-      .entities({ workspaceId })
-      ["desktop-edit-sessions"].release.post({
-        entityId: file.entityId,
-        propertyId: file.propertyId,
-        queryKey: entitiesKeys.all(workspaceId),
+
+    const lockedByName = entity.activeEditBy?.name ?? "";
+
+    try {
+      const response = await api
+        .entities({ workspaceId })
+        ["desktop-edit-sessions"]["request-takeover"].post({
+          entityId: file.entityId,
+          propertyId: file.propertyId,
+        });
+
+      if (response.error) {
+        // No active session or other error — force release
+        await doForceTakeover();
+        return;
+      }
+
+      // Consent request sent — show waiting toast with 30s timeout
+      const toastId = toastManager.add({
+        title: t("workspaces.files.desktopEdit.takeoverWaiting"),
+        description: t(
+          "workspaces.files.desktopEdit.takeoverWaitingDescription",
+          { name: lockedByName },
+        ),
+        type: "loading",
       });
-    if (response.error) {
-      toastManager.add({ title: t("errors.actionFailed"), type: "error" });
+
+      // After 30 seconds, close the waiting toast and force-release.
+      // If the lock holder responds before the timeout, the SSE
+      // invalidate-query broadcast refetches the entity list and
+      // the "Release lock" option disappears; the loading toast
+      // becomes stale but harmless (force-release on an already-
+      // released lock is a no-op on the API side).
+      setTimeout(() => {
+        toastManager.close(toastId);
+        void doForceTakeover();
+      }, 30_000);
+    } catch {
+      try {
+        await doForceTakeover();
+      } catch (forceError) {
+        if (forceError instanceof Error && isUnauthorizedError(forceError)) {
+          toastManager.add({
+            description: t(
+              "workspaces.files.desktopEdit.authRequiredDescription",
+            ),
+            title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+            type: "error",
+          });
+          return;
+        }
+
+        toastManager.add({
+          description: t("workspaces.files.desktopEdit.unavailableDescription"),
+          title: t("workspaces.files.desktopEdit.unavailableTitle"),
+          type: "error",
+        });
+      }
     }
   };
 
@@ -383,15 +420,8 @@ export const RowActions = ({
         {isLockedByOther && (
           // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={handleReleaseLock}>
-            <LockKeyholeOpenIcon />
-            {t("workspaces.files.desktopEdit.releaseLock")}
-          </MenuItem>
-        )}
-        {isLockedByOther && canOpenInDesktop && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={handleTakeOverLock}>
             <LockOpenIcon />
-            {t("workspaces.files.desktopEdit.takeOverLock")}
+            {t("workspaces.files.desktopEdit.releaseLock")}
           </MenuItem>
         )}
 

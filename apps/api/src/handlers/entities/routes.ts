@@ -18,6 +18,7 @@ import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit-lock";
 import renameEntity from "@/api/handlers/entities/rename";
+import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
 import restoreVersion from "@/api/handlers/entities/restore-version";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
 import updateVersionLabel from "@/api/handlers/entities/update-version-label";
@@ -66,6 +67,13 @@ export const entitiesRoute = new Elysia({
     body: releaseDesktopEditLock.config.body,
     invalidateQuery: true,
   })
+  .post(
+    "/desktop-edit-sessions/request-takeover",
+    requestDesktopEditTakeover.handler,
+    {
+      body: requestDesktopEditTakeover.config.body,
+    },
+  )
   .post("/clip", clipEndpoint.handler, {
     ...clipEndpoint.config,
     invalidateQuery: true,
