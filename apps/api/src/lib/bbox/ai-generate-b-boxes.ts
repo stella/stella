@@ -3,7 +3,7 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
@@ -57,6 +57,7 @@ export const generateBBoxData = async ({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("pdf", orgAIConfig),
+        temperature: getTemperatureForRole("pdf"),
         system: BBOX_SYSTEM_PROMPT,
         messages: [
           {

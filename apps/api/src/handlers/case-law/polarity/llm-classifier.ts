@@ -13,7 +13,7 @@ import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
@@ -79,6 +79,7 @@ export const classifyWithLLM = async (
     try: async () => {
       const result = await generateText({
         model: getModelForRole("fast"),
+        temperature: getTemperatureForRole("fast"),
         system: SYSTEM_PROMPT,
         messages: [
           {

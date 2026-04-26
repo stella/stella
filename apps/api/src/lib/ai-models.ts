@@ -99,6 +99,28 @@ export const REGIONAL_PROVIDERS = new Set<AIProvider>(["google"]);
 export const supportsRegion = (provider: AIProvider): boolean =>
   REGIONAL_PROVIDERS.has(provider);
 
+/**
+ * Sampling temperature per logical role.
+ *
+ * Legal work prioritizes determinism over creativity:
+ *   fast/reasoning/pdf — extractive or analytical, set to 0
+ *     so the same input yields the same output
+ *   chat — conversational with tool use; 0.3 keeps responses
+ *     grounded but not robotic
+ *
+ * Provider defaults (1.0 for OpenAI/Anthropic) are too high
+ * for our use cases.
+ */
+const TEMPERATURE_PER_ROLE: Record<ModelRole, number> = {
+  fast: 0,
+  chat: 0.3,
+  reasoning: 0,
+  pdf: 0,
+};
+
+export const getTemperatureForRole = (role: ModelRole): number =>
+  TEMPERATURE_PER_ROLE[role];
+
 // -- Provider resolution ----------------------------------------
 
 type ModelFactory = (modelId: string) => LanguageModel;

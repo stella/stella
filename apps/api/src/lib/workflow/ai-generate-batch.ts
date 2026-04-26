@@ -3,7 +3,7 @@ import { generateText, Output } from "ai";
 import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
 
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -94,6 +94,7 @@ export const generateWorkflowData = async ({
     try: async () => {
       const result = await generateText({
         model: getModelForRole("pdf", orgAIConfig),
+        temperature: getTemperatureForRole("pdf"),
         messages: [{ role: "user", content: messageContent }],
         output: Output.object({ schema: valibotSchema(schema) }),
         system: WORKFLOW_SYSTEM_PROMPT,

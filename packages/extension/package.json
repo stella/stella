@@ -26,6 +26,6 @@
     "@wxt-dev/module-react": "^1.2.2",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "wxt": "^0.20.23"
+    "wxt": "^0.20.25"
   }
 }

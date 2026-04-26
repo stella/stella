@@ -1,4 +1,3 @@
-import { convert } from "@kreuzberg/html-to-markdown";
 import * as cheerio from "cheerio";
 
 import type {
@@ -7,6 +6,7 @@ import type {
   ChatMentionHref,
 } from "@/api/handlers/chat/types";
 import { CHAT_MENTION_HREF_PREFIXES } from "@/api/handlers/chat/types";
+import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { typedEntries } from "@/api/lib/object";
 
 const ALLOWED_TAGS = new Set([
@@ -203,7 +203,7 @@ export const normalizeChatMessageHtml = (
     sanitizedHtml,
     accessibleWorkspaceIds,
   );
-  const text = convert(parsedHtml).trim();
+  const text = htmlToMarkdown(parsedHtml).trim();
 
   return {
     mentions,

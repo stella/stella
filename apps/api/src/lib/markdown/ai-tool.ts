@@ -1,8 +1,8 @@
-import { convert } from "@kreuzberg/html-to-markdown";
 import * as cheerio from "cheerio";
 import { marked } from "marked";
 
 import type { PropertyCondition } from "@/api/db/schema-validators";
+import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 /**
  * Allowlist-based HTML sanitizer using cheerio.
@@ -132,7 +132,7 @@ const replaceMentionsWithAnchors = (html: string): string => {
 
 export const serializeAITool = (data: AITool): AITool => {
   const preprocessed = replaceMentionsWithAnchors(data.prompt);
-  const markdown = convert(preprocessed);
+  const markdown = htmlToMarkdown(preprocessed);
 
   return {
     ...data,
