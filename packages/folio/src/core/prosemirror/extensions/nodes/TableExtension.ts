@@ -662,19 +662,7 @@ function getTableContext(state: EditorState): TableContextInfo {
       cellNode = node;
       const rowNode = $from.node(d - 1);
       if (rowNode.type.name === "tableRow") {
-        let colIdx = 0;
-        let found = false;
-        // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-        rowNode.forEach((child, _offset, idx) => {
-          if (!found) {
-            if (idx === $from.index(d - 1)) {
-              columnIndex = colIdx;
-              found = true;
-            } else {
-              colIdx += Number(child.attrs["colspan"]) || 1;
-            }
-          }
-        });
+        columnIndex = getColumnIndex(rowNode, $from.index(d - 1));
       }
     } else if (node.type.name === "tableRow") {
       const tableNode = $from.node(d - 1);
@@ -758,6 +746,27 @@ function getTableContext(state: EditorState): TableContextInfo {
     ...(cellBackgroundColor !== undefined ? { cellBackgroundColor } : {}),
   };
 }
+
+const getColumnIndex = (rowNode: PMNode, targetIndex: number) => {
+  let columnIndex = 0;
+  let foundColumnIndex: number | undefined;
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  rowNode.forEach((child, _offset, index) => {
+    if (foundColumnIndex !== undefined) {
+      return;
+    }
+
+    if (index === targetIndex) {
+      foundColumnIndex = columnIndex;
+      return;
+    }
+
+    columnIndex += Number(child.attrs["colspan"]) || 1;
+  });
+
+  return foundColumnIndex;
+};
 
 // ============================================================================
 // TABLE NAVIGATION

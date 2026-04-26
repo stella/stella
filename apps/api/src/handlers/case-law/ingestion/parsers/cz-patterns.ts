@@ -18,4 +18,4 @@ export const CZ_JUDGE_NAME_RE =
  * senátu, soudce zpravodaj, samosoudce, v. r.
  */
 export const CZ_JUDGE_TITLE_RE =
-  /předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$/i;
+  /(?:předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)/i;

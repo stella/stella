@@ -23,10 +23,9 @@ export const openEntityInInspector = (
   entityId: string,
   label: string,
   workspaceId = "",
+  entity?: WorkspaceEntity,
 ) => {
-  const entities: WorkspaceEntity[] = [];
-  const entity = entities.find((e) => e.entityId === entityId);
-  if (!entity) {
+  if (entity === undefined) {
     return;
   }
 

@@ -158,13 +158,21 @@ export function computeTabStops(context: TabContext): TabStop[] {
     pos += defaultTabInterval;
 
     // Skip if there's already an explicit stop at this position
-    const hasExplicitStop = validExplicitStops.some(
-      (s) => Math.abs(s.pos - pos) < 20,
-    );
+    let hasExplicitStop = false;
+    for (const stop of validExplicitStops) {
+      if (Math.abs(stop.pos - pos) < 20) {
+        hasExplicitStop = true;
+        break;
+      }
+    }
     // Skip if there's a clear stop at this position
-    const hasClearStop = clearPositions.some(
-      (clearPos) => Math.abs(clearPos - pos) < 20,
-    );
+    let hasClearStop = false;
+    for (const clearPos of clearPositions) {
+      if (Math.abs(clearPos - pos) < 20) {
+        hasClearStop = true;
+        break;
+      }
+    }
     // Skip if at leftIndent (already added above)
     const isAtLeftIndent = leftIndent > 0 && Math.abs(pos - leftIndent) < 20;
 

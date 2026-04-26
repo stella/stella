@@ -286,6 +286,58 @@ const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
 // ── RTF inline parser ─────────────────────────────────────
 
+const RTF_CONTROL_WORDS = new Set([
+  "keepn",
+  "ltrpar",
+  "nowidctlpar",
+  "pard",
+  "qc",
+  "qj",
+  "ql",
+  "qr",
+  "tqc",
+  "tqdec",
+  "tqr",
+  "widctlpar",
+]);
+
+const RTF_NUMERIC_CONTROL_WORDS = new Set([
+  "cb",
+  "cf",
+  "f",
+  "fi",
+  "fs",
+  "highlight",
+  "lang",
+  "li",
+  "outlinelevel",
+  "ri",
+  "sa",
+  "sb",
+  "sl",
+  "slmult",
+  "tx",
+]);
+
+const RTF_CONTROL_WORD_RE = /\\([a-z]+)(-?\d*)\s?/gi;
+
+const stripIgnoredRtfControlWord = (
+  match: string,
+  word: string,
+  numericValue: string,
+) => {
+  const normalizedWord = word.toLowerCase();
+  if (RTF_CONTROL_WORDS.has(normalizedWord)) {
+    return "";
+  }
+
+  if (numericValue && RTF_NUMERIC_CONTROL_WORDS.has(normalizedWord)) {
+    return "";
+  }
+
+  return match;
+};
+
 /**
  * Strip RTF control words that are not semantically useful
  * for our purposes (font tables, Unicode escapes, etc.).
@@ -297,11 +349,8 @@ const stripRtfControls = (text: string): string =>
     // Remove \' hex escapes (e.g., \'e9 for é) — these are
     // already decoded in the hidden field value
     .replace(/\\'[0-9a-fA-F]{2}/g, "")
-    // Remove font/color/style control words we don't handle
-    .replace(
-      /\\(?:f\d+|fs\d+|cf\d+|cb\d+|highlight\d+|lang\d+|pard|ltrpar|qj|ql|qr|qc|ri\d+|li\d+|fi-?\d+|sl-?\d+|slmult\d+|widctlpar|nowidctlpar|tx\d+|tqr|tqc|tqdec|sb\d+|sa\d+|keepn|outlinelevel\d+)\s?/g,
-      "",
-    )
+    // Remove font/color/style control words we don't handle.
+    .replace(RTF_CONTROL_WORD_RE, stripIgnoredRtfControlWord)
     // Remove \{ and \} escaped braces
     .replace(/\\[{}]/g, "")
     // Remove remaining curly braces (RTF grouping)
@@ -368,7 +417,7 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
   // matching \pard (paragraph defaults). Uses [a-zA-Z]
   // instead of \w because RTF control words are alpha-only;
   // digits after \par are content (e.g., \par1. Soud...).
-  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/);
+  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/i);
 
   const lines: ParsedLine[] = [];
   for (const segment of segments) {
@@ -431,11 +480,19 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
  *   - Closing: "V Brně dne"
  */
 const splitAtParagraphBoundaries = (text: string): string[] => {
-  const parts = text.split(
-    /(?<=\.)(?=\d{1,3}\.\s)|(?=Odůvodnění\s*:)|(?=Poučení\s*:)|(?=V\s+\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d)/u,
-  );
-  return parts.length > 1 ? parts : [text];
+  let parts = [text];
+  for (const boundary of PARAGRAPH_BOUNDARY_PATTERNS) {
+    parts = parts.flatMap((part) => part.split(boundary));
+  }
+  return parts;
 };
+
+const PARAGRAPH_BOUNDARY_PATTERNS = [
+  /(?<=\.)(?=\d{1,3}\.\s)/u,
+  /(?=Odůvodnění\s*:)/u,
+  /(?=Poučení\s*:)/u,
+  /(?=V\s+\p{Lu}\p{Ll}+\s+(?:dne\s+)?\d)/u,
+] as const;
 
 /**
  * Extract lines from the HTML page.
@@ -574,10 +631,14 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
 
   let inRuling = false;
   let inOduvodneni = false;
+  const consumedLines = new Set<ParsedLine>();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines.at(i);
     if (!line) {
+      continue;
+    }
+    if (consumedLines.has(line)) {
       continue;
     }
     const { plainText, inlines } = line;
@@ -736,8 +797,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
             plainText: combinedText,
           });
           // Skip the consumed title line
-          skipToLine(lines, i, nextNonEmpty);
-          i = lines.indexOf(nextNonEmpty);
+          consumedLines.add(nextNonEmpty);
           continue;
         }
 
@@ -803,16 +863,4 @@ const findNextNonEmpty = (
     }
   }
   return undefined;
-};
-
-/**
- * No-op placeholder; the skip is handled by reassigning `i`
- * in the caller. Kept for clarity of intent.
- */
-const skipToLine = (
-  _lines: readonly ParsedLine[],
-  _current: number,
-  _target: ParsedLine,
-): void => {
-  // Intentionally empty; the caller sets `i` directly.
 };

@@ -557,7 +557,12 @@ export const blocksToPlainText = (blocks: readonly Block[]): string =>
 
 const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/;
 
-const DECISION_TYPE_WORDS = ["ROZSUDEK", "USNESENÍ", "NÁLEZ", "STANOVISKO"];
+const DECISION_TYPE_WORDS = new Set([
+  "ROZSUDEK",
+  "USNESENÍ",
+  "NÁLEZ",
+  "STANOVISKO",
+]);
 
 // Matches "Odůvodnění", "O d ů v o d n ě n í",
 // "Stručné odůvodnění (§ ...)", and spaced variants.
@@ -572,7 +577,7 @@ const isDecisionTitle = (plainText: string): boolean => {
   if (DECISION_TITLE_RE.test(trimmed)) {
     return true;
   }
-  return DECISION_TYPE_WORDS.includes(trimmed);
+  return DECISION_TYPE_WORDS.has(trimmed);
 };
 
 const isSectionHeading = (plainText: string): boolean => {

@@ -85,31 +85,50 @@ const fieldContent = {
   value: "positive-test",
 };
 
+type WorkspaceScopedTable = (typeof wsScopedTables)[number];
+type OrganizationScopedTable = (typeof orgScopedTables)[number];
+
+const addVisibleWorkspaceSelectTest = (table: WorkspaceScopedTable) => {
+  const tableName = getTableName(table);
+
+  test(`${tableName}: correct workspace IDs → rows visible`, async () => {
+    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    expect(c).toBeGreaterThan(0);
+  });
+};
+
+const addVisibleOrganizationSelectTest = (table: OrganizationScopedTable) => {
+  const tableName = getTableName(table);
+
+  test(`${tableName}: correct org ID → rows visible`, async () => {
+    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    expect(c).toBeGreaterThan(0);
+  });
+};
+
+const addAffectedMutationTest = (
+  { table, query }: MutationCase,
+  scopeLabel: "workspace" | "org",
+) => {
+  test(`UPDATE ${getTableName(table)} in own ${scopeLabel} → affected`, async () => {
+    const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
+    expect(rows).toHaveLength(1);
+  });
+};
+
 // ════════════════════════════════════════════════════════
 // SELECT: correct scope → rows visible
 // ════════════════════════════════════════════════════════
 
 describe("workspace SELECT — correct scope", () => {
   for (const table of wsScopedTables) {
-    const tableName = getTableName(table);
-    test(`${tableName}: correct workspace IDs → rows visible`, async () => {
-      const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
-        tx.$count(table),
-      );
-      expect(c).toBeGreaterThan(0);
-    });
+    addVisibleWorkspaceSelectTest(table);
   }
 });
 
 describe("organization SELECT — correct scope", () => {
   for (const table of orgScopedTables) {
-    const tableName = getTableName(table);
-    test(`${tableName}: correct org ID → rows visible`, async () => {
-      const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
-        tx.$count(table),
-      );
-      expect(c).toBeGreaterThan(0);
-    });
+    addVisibleOrganizationSelectTest(table);
   }
 });
 
@@ -292,11 +311,8 @@ describe("workspace UPDATE — correct scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`UPDATE ${getTableName(table)} in own workspace → affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(1);
-    });
+  for (const mutationCase of cases) {
+    addAffectedMutationTest(mutationCase, "workspace");
   }
 });
 
@@ -421,11 +437,8 @@ describe("organization UPDATE — correct scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`UPDATE ${getTableName(table)} in own org → affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(1);
-    });
+  for (const mutationCase of cases) {
+    addAffectedMutationTest(mutationCase, "org");
   }
 });
 

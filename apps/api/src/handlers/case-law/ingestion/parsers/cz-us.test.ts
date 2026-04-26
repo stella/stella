@@ -143,6 +143,24 @@ describe("parseUsDecisionHtml", () => {
       );
       expect(hasBoldBlock).toBe(true);
     });
+
+    test("strips uppercase RTF formatting control words", () => {
+      const html = `
+      <html><body>
+        <span id="lblDecisionForm">NÁLEZ</span>
+        <input id="docContentHidden" value="\\PARD\\FS24\\CF1 Ústavní soud rozhodl.\\PAR t a k t o :" />
+        <input id="docIdHidden" value="99999" />
+      </body></html>
+      `;
+
+      const { fulltext } = parseUsDecisionHtml(baseInput(html));
+
+      expect(fulltext).toContain("Ústavní soud rozhodl");
+      expect(fulltext).toContain("takto:");
+      expect(fulltext).not.toContain("\\FS24");
+      expect(fulltext).not.toContain("\\CF1");
+      expect(fulltext).not.toContain("\\PAR");
+    });
   });
 
   describe("hidden field metadata", () => {

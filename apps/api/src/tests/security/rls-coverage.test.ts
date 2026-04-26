@@ -32,12 +32,12 @@ afterAll(async () => {
 
 describe("policy coverage", () => {
   // Tables exempt from RLS
-  const EXEMPT: string[] = [
+  const EXEMPT = new Set([
     "search_documents", // TODO in schema
     "extracted_content", // TODO in schema
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
-  ];
+  ]);
 
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
@@ -46,7 +46,7 @@ describe("policy coverage", () => {
     const wsTables = scoped
       .filter((t) => t.scope === "workspace")
       .map((t) => t.table_name)
-      .filter((t) => !EXEMPT.includes(t));
+      .filter((t) => !EXEMPT.has(t));
 
     for (const table of wsTables) {
       const tablePolicies = policies.filter((p) => p.table_name === table);
@@ -78,7 +78,7 @@ describe("policy coverage", () => {
       .filter((t) => t.scope === "organization")
       .map((t) => t.table_name)
       .filter((t) => !wsTableNames.has(t))
-      .filter((t) => !EXEMPT.includes(t))
+      .filter((t) => !EXEMPT.has(t))
       // workspaces has custom policies, not org policies
       .filter((t) => t !== "workspaces");
 

@@ -1,4 +1,5 @@
 import { defineConfig } from "oxlint";
+
 import core from "./node_modules/ultracite/config/oxlint/core/index.mjs";
 import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
 
@@ -49,6 +50,26 @@ export default defineConfig({
     "no-nanoid/no-nanoid": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
+    "sonarjs/array-callback-without-return": "error",
+    "sonarjs/anchor-precedence": "error",
+    "sonarjs/code-eval": "error",
+    "sonarjs/confidential-information-logging": "error",
+    "sonarjs/cognitive-complexity": ["error", 30],
+    "sonarjs/existing-groups": "error",
+    "sonarjs/no-hardcoded-secrets": "error",
+    "sonarjs/no-collection-size-mischeck": "error",
+    "sonarjs/no-element-overwrite": "error",
+    "sonarjs/no-empty-collection": "error",
+    "sonarjs/no-exclusive-tests": "error",
+    "sonarjs/no-identical-conditions": "error",
+    "sonarjs/no-unthrown-error": "error",
+    "sonarjs/no-useless-increment": "error",
+    "sonarjs/non-existent-operator": "error",
+    "sonarjs/regex-complexity": ["error", { threshold: 30 }],
+    "sonarjs/slow-regex": "warn",
+    "sonarjs/stateful-regex": "error",
+    "sonarjs/updated-loop-counter": "error",
+
     // --- Disabled ultracite defaults ---
     "sort-keys": "off",
     "no-plusplus": "off",
@@ -56,6 +77,7 @@ export default defineConfig({
     "max-statements": "off",
     "prefer-destructuring": "off",
     "no-negated-condition": "off",
+    // Candidate strict rule, not enabled yet: current code has ~95 findings.
     "no-nested-ternary": "off",
     "no-use-before-define": "off",
     "no-useless-return": "off",
@@ -64,7 +86,7 @@ export default defineConfig({
     "max-classes-per-file": "off",
     "class-methods-use-this": "off",
     "no-unmodified-loop-condition": "off",
-    "no-loop-func": "off",
+    "no-loop-func": "error",
     complexity: "off",
     "func-style": "off",
     "func-names": "off",
@@ -86,13 +108,14 @@ export default defineConfig({
     "unicorn/prefer-response-static-json": "off",
     "unicorn/no-immediate-mutation": "off",
     "unicorn/prefer-ternary": "off",
-    "unicorn/no-array-reduce": "off",
+    "unicorn/no-array-reduce": "error",
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
     "oxc/no-map-spread": "error",
     "unicorn/no-await-expression-member": "off",
+    // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",
-    "unicorn/prefer-set-has": "off",
+    "unicorn/prefer-set-has": "error",
     "unicorn/prefer-spread": "off",
 
     "react_perf/jsx-no-new-function-as-prop": "off",
@@ -176,10 +199,47 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/strict-boolean-expressions": "off",
         "typescript/no-redundant-type-constituents": "off",
+        // Existing scripts are operational glue with argument parsing,
+        // process orchestration, and one-off reporting branches. Keep a
+        // looser legacy budget while new app/library code starts at 30.
+        "sonarjs/cognitive-complexity": ["error", 80],
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}", "packages/folio/src/**/*.{ts,tsx}"],
+      // Legacy DOCX/editor code has parser and layout state machines that need
+      // dedicated extraction passes. Keep the rule visible without blocking
+      // this guardrail rollout on a broad folio rewrite.
+      files: ["packages/folio/src/**/*.{ts,tsx}"],
+      rules: { "sonarjs/cognitive-complexity": ["error", 200] },
+    },
+    {
+      // Case-law ingestion parsers/adapters intentionally encode many source
+      // quirks. Tighten this after parser-specific refactors.
+      files: ["apps/api/src/handlers/case-law/ingestion/**/*.ts"],
+      rules: { "sonarjs/cognitive-complexity": ["error", 80] },
+    },
+    {
+      // DOCX handlers include document traversal and XML transformation
+      // routines. Tighten after splitting the largest transforms.
+      files: ["apps/api/src/handlers/docx/**/*.ts"],
+      rules: { "sonarjs/cognitive-complexity": ["error", 100] },
+    },
+    {
+      // PDF anonymization/redaction parsing is complex today; keep the global
+      // rule for the rest of web while this area gets a focused cleanup.
+      files: ["apps/web/src/lib/anonymize/**/*.ts"],
+      rules: { "sonarjs/cognitive-complexity": ["error", 80] },
+    },
+    {
+      files: ["packages/template-conditions/src/**/*.ts"],
+      rules: { "sonarjs/cognitive-complexity": ["error", 40] },
+    },
+    {
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/folio/src/**/*.{ts,tsx}",
+      ],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
@@ -238,11 +298,7 @@ export default defineConfig({
                 message: "Use '@stella/api/types' instead of '@/api/'.",
               },
               {
-                group: [
-                  "@stella/api",
-                  "@stella/api/**",
-                  "!@stella/api/types",
-                ],
+                group: ["@stella/api", "@stella/api/**", "!@stella/api/types"],
                 message:
                   "apps/web may only import the public '@stella/api/types' surface.",
               },
@@ -305,7 +361,11 @@ export default defineConfig({
     {
       // Eigenpal-inherited render/dialog components — inline colors need
       // a dedicated cleanup pass. Tracked as follow-up.
-      files: ["packages/folio/src/**/render/**", "packages/folio/src/**/dialogs/**", "packages/folio/src/**/edit/**"],
+      files: [
+        "packages/folio/src/**/render/**",
+        "packages/folio/src/**/dialogs/**",
+        "packages/folio/src/**/edit/**",
+      ],
       rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
     },
     {
@@ -664,7 +724,8 @@ export default defineConfig({
         "typescript/unbound-method": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-untyped-updates/no-untyped-updates": "off",
-        "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": "off",
+        "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param":
+          "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
         "security-guards/no-raw-filename-write": "off",

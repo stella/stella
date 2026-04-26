@@ -82,38 +82,78 @@ afterAll(async () => {
 
 const clauseBody: ClauseBody = [{ text: "test" }];
 
+type WorkspaceScopedTable = (typeof wsScopedTables)[number];
+type OrganizationScopedTable = (typeof orgScopedTables)[number];
+
+const addWrongWorkspaceSelectTests = (table: WorkspaceScopedTable) => {
+  const tableName = getTableName(table);
+
+  test(`${tableName}: wrong workspace IDs → zero rows`, async () => {
+    const c = await scopedQuery([ids.wsB1], ids.orgB, (tx) =>
+      tx.$count(table, eq(table.workspaceId, ids.wsA1)),
+    );
+    expect(c).toBe(0);
+  });
+
+  test(`${tableName}: empty workspace IDs → zero rows`, async () => {
+    const c = await scopedQuery([], ids.orgA, (tx) => tx.$count(table));
+    expect(c).toBe(0);
+  });
+};
+
+const addWrongOrganizationSelectTest = (table: OrganizationScopedTable) => {
+  const tableName = getTableName(table);
+
+  test(`${tableName}: wrong org ID → zero rows`, async () => {
+    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
+      tx.$count(table, eq(table.organizationId, ids.orgB)),
+    );
+    expect(c).toBe(0);
+  });
+};
+
+const addWrongWorkspaceInsertTest = ({ table, values }: InsertCase) => {
+  test(`INSERT ${getTableName(table)} with wrong workspace_id → policy violation`, async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () => values(tx)),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  });
+};
+
+const addWrongOrganizationInsertTest = ({ table, values }: InsertCase) => {
+  test(`INSERT ${getTableName(table)} with wrong org_id → policy violation`, async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () => values(tx)),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  });
+};
+
+const addZeroAffectedMutationTest = (
+  { table, query }: MutationCase,
+  action: "UPDATE" | "DELETE",
+  scopeLabel: "workspace" | "org",
+) => {
+  test(`${action} ${getTableName(table)} in other ${scopeLabel} → zero affected`, async () => {
+    const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
+    expect(rows).toHaveLength(0);
+  });
+};
+
 // ════════════════════════════════════════════════════════
 // SELECT: wrong scope → zero rows
 // ════════════════════════════════════════════════════════
 
 describe("workspace SELECT — wrong scope", () => {
   for (const table of wsScopedTables) {
-    const tableName = getTableName(table);
-
-    test(`${tableName}: wrong workspace IDs → zero rows`, async () => {
-      const c = await scopedQuery([ids.wsB1], ids.orgB, (tx) =>
-        tx.$count(table, eq(table.workspaceId, ids.wsA1)),
-      );
-      expect(c).toBe(0);
-    });
-
-    test(`${tableName}: empty workspace IDs → zero rows`, async () => {
-      const c = await scopedQuery([], ids.orgA, (tx) => tx.$count(table));
-      expect(c).toBe(0);
-    });
+    addWrongWorkspaceSelectTests(table);
   }
 });
 
 describe("organization SELECT — wrong scope", () => {
   for (const table of orgScopedTables) {
-    const tableName = getTableName(table);
-
-    test(`${tableName}: wrong org ID → zero rows`, async () => {
-      const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
-        tx.$count(table, eq(table.organizationId, ids.orgB)),
-      );
-      expect(c).toBe(0);
-    });
+    addWrongOrganizationSelectTest(table);
   }
 });
 
@@ -351,13 +391,8 @@ describe("workspace INSERT — wrong scope", () => {
     },
   ];
 
-  for (const { table, values } of cases) {
-    test(`INSERT ${getTableName(table)} with wrong workspace_id → policy violation`, async () => {
-      const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-        tryCatch(async () => values(tx)),
-      );
-      expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
-    });
+  for (const insertCase of cases) {
+    addWrongWorkspaceInsertTest(insertCase);
   }
 });
 
@@ -502,13 +537,8 @@ describe("organization INSERT — wrong scope", () => {
     },
   ];
 
-  for (const { table, values } of cases) {
-    test(`INSERT ${getTableName(table)} with wrong org_id → policy violation`, async () => {
-      const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-        tryCatch(async () => values(tx)),
-      );
-      expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
-    });
+  for (const insertCase of cases) {
+    addWrongOrganizationInsertTest(insertCase);
   }
 });
 
@@ -670,11 +700,8 @@ describe("workspace UPDATE — wrong scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`UPDATE ${getTableName(table)} in other workspace → zero affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(0);
-    });
+  for (const mutationCase of cases) {
+    addZeroAffectedMutationTest(mutationCase, "UPDATE", "workspace");
   }
 });
 
@@ -799,11 +826,8 @@ describe("organization UPDATE — wrong scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`UPDATE ${getTableName(table)} in other org → zero affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(0);
-    });
+  for (const mutationCase of cases) {
+    addZeroAffectedMutationTest(mutationCase, "UPDATE", "org");
   }
 });
 
@@ -943,11 +967,8 @@ describe("workspace DELETE — wrong scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`DELETE ${getTableName(table)} in other workspace → zero affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(0);
-    });
+  for (const mutationCase of cases) {
+    addZeroAffectedMutationTest(mutationCase, "DELETE", "workspace");
   }
 });
 
@@ -1059,11 +1080,8 @@ describe("organization DELETE — wrong scope", () => {
     },
   ];
 
-  for (const { table, query } of cases) {
-    test(`DELETE ${getTableName(table)} in other org → zero affected`, async () => {
-      const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
-      expect(rows).toHaveLength(0);
-    });
+  for (const mutationCase of cases) {
+    addZeroAffectedMutationTest(mutationCase, "DELETE", "org");
   }
 });
 
