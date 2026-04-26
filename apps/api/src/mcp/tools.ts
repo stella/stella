@@ -22,7 +22,7 @@ import { errorResult } from "@/api/mcp/tool-utils";
 const DEFAULT_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_DEFINITIONS,
   ...STELLA_TOOL_DEFINITIONS,
-] satisfies McpToolDefinition[];
+] as const satisfies readonly McpToolDefinition[];
 
 const toAnonymizedToolDefinition = (
   tool: McpToolDefinition,
@@ -64,16 +64,18 @@ const ANONYMIZED_STELLA_TOOL_DEFINITIONS = STELLA_TOOL_DEFINITIONS.flatMap(
     const anonymized = toAnonymizedToolDefinition(tool);
     return anonymized === null ? [] : [anonymized];
   },
-) satisfies McpToolDefinition[];
+) satisfies readonly McpToolDefinition[];
 
 const ANONYMIZED_TOOL_DEFINITIONS = [
   ...ANONYMIZED_COMPAT_TOOL_DEFINITIONS,
   ...ANONYMIZED_STELLA_TOOL_DEFINITIONS,
-] satisfies McpToolDefinition[];
+] as const satisfies readonly McpToolDefinition[];
 
 const MCP_TOOL_DEFINITION_MAPS = {
-  default: new Map(DEFAULT_TOOL_DEFINITIONS.map((tool) => [tool.name, tool])),
-  anonymized: new Map(
+  default: new Map<string, McpToolDefinition>(
+    DEFAULT_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
+  ),
+  anonymized: new Map<string, McpToolDefinition>(
     ANONYMIZED_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
   ),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;

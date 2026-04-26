@@ -34,7 +34,7 @@ type KnowledgeSection = {
     | "/knowledge/case";
 };
 
-export const knowledgeSections: KnowledgeSection[] = [
+export const knowledgeSections: readonly KnowledgeSection[] = [
   { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
   { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
   { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },

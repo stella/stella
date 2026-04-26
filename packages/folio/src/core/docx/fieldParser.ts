@@ -44,7 +44,7 @@ import type { XmlElement } from "./xmlParser";
 /**
  * All known field types from OOXML specification
  */
-export const KNOWN_FIELD_TYPES: FieldType[] = [
+export const KNOWN_FIELD_TYPES: readonly FieldType[] = [
   // Document information
   "PAGE",
   "NUMPAGES",

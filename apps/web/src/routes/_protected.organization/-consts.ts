@@ -1,6 +1,6 @@
 import type { Role } from "@/lib/auth";
 
-export const managementRoles: Role[] = ["owner", "admin"];
+export const managementRoles: readonly Role[] = ["owner", "admin"];
 
 export const getRoles = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
