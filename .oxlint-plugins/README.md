@@ -1,0 +1,45 @@
+# Custom oxlint plugins
+
+Project-specific lint rules that catch bugs the general TypeScript / oxlint
+ruleset cannot. Each rule encodes an architectural or security invariant of the
+Stella codebase. Open the source file for the full pattern logic and the safe /
+flagged examples it documents.
+
+Rules are wired up in the root `oxlint.config.mjs` and the per-app
+`.oxlintrc.json` files. Most plugins replace older `scripts/lint-*.sh` shell
+checks; the comment in the plugin source notes the predecessor when relevant.
+
+## Rules
+
+| Rule | Prevents | Required workaround |
+| --- | --- | --- |
+| [`no-body-ownership-ids`](./no-body-ownership-ids.ts) | Cross-tenant data access via `body.workspaceId` / `query.organizationId`. | Source ownership IDs from `validateWorkspaceAccess` (`SafeId`) or `ctx.session.activeOrganizationId`. |
+| [`no-unbranded-ownership-id-param`](./no-unbranded-ownership-id-param.ts) | Ownership IDs flowing through API parameters as plain strings after validation. | Annotate direct and destructured ownership IDs as `SafeId<"workspace">` / `SafeId<"organization">`, or source them from safe handler context. |
+| [`no-inline-style-colors`](./no-inline-style-colors.ts) | Hex / rgb / named colours hardcoded in `style={{…}}` props that break dark mode. | Use CSS variables (`var(--color-…)`) inside `style`, or a semantic Tailwind utility. |
+| [`no-nanoid`](./no-nanoid.ts) | Re-introducing the removed `nanoid` dependency. | `crypto.randomUUID()` for IDs; `crypto.getRandomValues()` for custom alphabets. |
+| [`no-physical-properties`](./no-physical-properties.ts) | Physical Tailwind utilities (`ml-`, `pr-`, `text-left`, `border-l`, `rounded-r`, `left-*`) that ignore RTL. | Logical equivalents: `ms-`, `pe-`, `text-start`, `border-s`, `rounded-e`, `start-*`. |
+| [`no-raw-colors`](./no-raw-colors.ts) | Palette Tailwind classes (`bg-stone-50`, `text-gray-900`, `bg-white`) that look unreadable in the opposite theme. | Semantic tokens: `bg-background`, `bg-muted`, `text-foreground`, … |
+| [`no-raw-route-query-client`](./no-raw-route-query-client.ts) | Direct `queryClient.ensureQueryData` / `prefetchQuery` inside `beforeLoad` / `loader`, which bypasses the project's suspense / preloading wrappers. | `ensureCriticalQueryData(...)` or `prefetchNonCriticalQuery(...)`. |
+| [`no-untyped-updates`](./no-untyped-updates.ts) | `Record<string, unknown>` partial-update objects leaking unknown keys into Drizzle `.set()`. | `pickDefined()` from `lib/pick-defined.ts` — returns `Partial<Pick<T, K>>` and catches typos at compile time. |
+| [`require-router-select`](./require-router-select.ts) | `useParams` / `useSearch` / `useRouteContext` (or `Route.useParams()` style) called without `select`, subscribing the component to the entire object and rerendering on every change. | Always pass `{ select: (x) => x.field }`. |
+| [`security-guards`](./security-guards.ts) | Three sub-rules — see below. | Per sub-rule. |
+
+### `security-guards` sub-rules
+
+| Sub-rule | Prevents | Required workaround |
+| --- | --- | --- |
+| `no-raw-filename-write` | Path traversal / control chars from `file.name`, `body.fileName`, `part.filename` reaching storage. | Wrap with `sanitizeFilename()` before assigning to a `fileName` property. |
+| `no-unsanitized-href` | `javascript:` XSS via `<a href={data.url}>` where `data.url` comes from external JSON. | Wrap with `sanitizeHref()` from `apps/web/src/lib/sanitize-href.ts` (returns `string \| undefined` — `undefined` when unsafe). For backend code that needs structural enforcement, see `sanitizeUrl()` in `apps/api/src/lib/sanitize-url.ts`, which returns the branded `SafeHref` type. |
+| `no-unscoped-user-query` | Imports of the `user` table from `auth-schema` without also importing `member` — a heuristic that the query may not be organization-scoped. The rule does not verify the actual join, so reviewers must still confirm that `user` is filtered through a `member` join in the query body. | Import `member` alongside `user`, then join on `organizationId` in the query. |
+
+## Adding a new rule
+
+1. Drop a new `*.ts` file in this directory exporting `{ meta, rules }` shaped
+   like the existing plugins.
+2. Register the plugin file in `oxlint.config.mjs` under `jsPlugins`. Then enable
+   the rule(s) using the `<plugin-name>/<rule-name>` form in the `rules` object
+   of `oxlint.config.mjs` or the relevant `.oxlintrc.json`.
+3. Add a row above describing what it prevents and the required workaround.
+4. The plugin file's leading comment should state the bug class, list the safe
+   patterns it allows, and list the patterns it flags. Existing files are good
+   templates.
