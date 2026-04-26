@@ -151,6 +151,7 @@ const FileCell = ({
                 label: fileName,
                 workspaceId,
                 mimeType,
+                pdfFileId,
                 propertyId,
               })
             }

@@ -6,9 +6,11 @@ import type { InvoiceStatus } from "@/routes/_protected.workspaces/$workspaceId/
 
 const INVOICE_STATUS_STYLES: Record<InvoiceStatus, string> = {
   draft: "bg-muted text-muted-foreground",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
   finalized: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   sent: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   paid: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
   void: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 

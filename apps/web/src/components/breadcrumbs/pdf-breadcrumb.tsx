@@ -3,7 +3,7 @@ import { Link, useParams, useSearch } from "@tanstack/react-router";
 
 import { BreadcrumbItem } from "@stella/ui/components/breadcrumb";
 
-import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 export const PdfBreadcrumb = () => {
   const workspaceId = useParams({
@@ -29,7 +29,7 @@ export const PdfBreadcrumb = () => {
     }),
   });
   const { data: fileName } = useQuery({
-    ...fileOptions({ workspaceId, fieldId }),
+    ...fileMetadataOptions({ workspaceId, fieldId }),
     select: (file) => file.fileName,
   });
 

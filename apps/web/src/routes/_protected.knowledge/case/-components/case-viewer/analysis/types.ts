@@ -33,6 +33,7 @@ const OPTION_VARS = [
 ] as const;
 
 const CORE_CATEGORY_VAR: Record<string, string> = {
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- CSS variable name, not a color value
   facts: "--option-blue",
   "procedural-history": "--option-amber",
   reasoning: "--option-violet",

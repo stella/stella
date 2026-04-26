@@ -121,12 +121,14 @@ const REGISTRY: Record<string, CountryRegistry> = {
       {
         slug: "cjeu",
         name: "Court of Justice",
+        // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- CSS variable name, not a color value
         color: "--option-blue",
         tier: 5,
       },
       {
         slug: "gc",
         name: "General Court",
+        // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- CSS variable name, not a color value
         color: "--option-blue",
         tier: 5,
       },

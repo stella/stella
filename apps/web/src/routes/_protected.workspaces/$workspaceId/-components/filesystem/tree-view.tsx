@@ -1033,6 +1033,7 @@ const FilesystemRow = ({
             entityId: e.entityId,
             label: getEntityName(e),
             mimeType: f.mimeType,
+            pdfFileId: f.pdfFileId,
             workspaceId,
           };
         })
@@ -1057,6 +1058,7 @@ const FilesystemRow = ({
           entityId: file.entityId,
           label: name,
           mimeType: file.mimeType,
+          pdfFileId: file.pdfFileId,
           workspaceId,
         });
     }

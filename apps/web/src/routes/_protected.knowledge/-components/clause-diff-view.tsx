@@ -9,8 +9,10 @@ type ClauseDiffViewProps = {
 const statusBorder: Record<ParagraphDiff["status"], string> = {
   equal: "",
   modified: "border-s-2 border-s-amber-400 ps-3",
-  added: "border-s-2 border-s-green-500 ps-3",
-  removed: "border-s-2 border-s-red-500 ps-3",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  added: "border-s-2 border-s-green-500 dark:border-s-green-400 ps-3",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  removed: "border-s-2 border-s-red-500 dark:border-s-red-400 ps-3",
 };
 
 export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (

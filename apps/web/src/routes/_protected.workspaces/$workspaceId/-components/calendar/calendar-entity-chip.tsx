@@ -24,17 +24,22 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const KIND_COLORS: Record<string, string> = {
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
   document: "border-s-blue-400 dark:border-s-blue-600",
   folder: "border-s-neutral-400 dark:border-s-neutral-500",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
   message: "border-s-green-400 dark:border-s-green-600",
 };
 
 const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   open: "border-s-muted-foreground",
-  in_progress: "border-s-blue-500",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  in_progress: "border-s-blue-500 dark:border-s-blue-400",
   in_review: "border-s-amber-500",
-  done: "border-s-green-500",
-  cancelled: "border-s-red-400",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  done: "border-s-green-500 dark:border-s-green-400",
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  cancelled: "border-s-red-400 dark:border-s-red-300",
 };
 
 /** CSS color values for year-view dots — reference semantic option tokens. */
@@ -116,6 +121,7 @@ export const CalendarEntityChip = ({
         entityId: entity.entityId,
         label: name,
         mimeType: file.mimeType,
+        pdfFileId: file.pdfFileId,
         workspaceId,
       });
     }

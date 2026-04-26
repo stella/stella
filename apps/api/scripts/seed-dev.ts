@@ -3187,7 +3187,8 @@ export async function seed(organizationId?: string, userId?: string) {
   //      - `fields` table (file field + status/date/notes)
   const IV_BYTES = 12;
   let fileCount = 0;
-  let pdfTwinCount = 0;
+  // eslint-disable-next-line -- kept for logging
+  const pdfTwinCount = 0;
   let extractedCount = 0;
 
   const allDocNames = Object.values(workspaceDocNames).flat();
@@ -3212,6 +3213,12 @@ export async function seed(organizationId?: string, userId?: string) {
 
       const title = fileName.replace(fileExtRe, "").replaceAll("_", " ");
 
+      // Set entity name from filename
+      await db
+        .update(entities)
+        .set({ name: fileName })
+        .where((await import("drizzle-orm")).eq(entities.id, entity.entityId));
+
       // Single source of truth for document content
       const docText = documentTexts[fileName];
 
@@ -3228,15 +3235,9 @@ export async function seed(organizationId?: string, userId?: string) {
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${ext}`;
       await getS3().write(s3Key, new Uint8Array(content));
 
-      // DOCX → PDF converted twin
-      let pdfFileId: string | null = null;
-      if (isDocx) {
-        pdfFileId = seedId(`${wsLabel}-pdf-twin-${j}`);
-        const pdfContent = createMockPdf(title, docText);
-        const pdfS3Key = `${ORG_ID}/${wsId}/${pdfFileId}.pdf`;
-        await getS3().write(pdfS3Key, new Uint8Array(pdfContent));
-        pdfTwinCount++;
-      }
+      // DOCX files are rendered natively via Folio — no PDF twin needed.
+      // Non-DOCX convertible types still get a PDF twin from Gotenberg.
+      const pdfFileId: string | null = null;
 
       // ── File field ──
       await db

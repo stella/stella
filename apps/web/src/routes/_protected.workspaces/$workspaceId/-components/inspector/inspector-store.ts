@@ -9,6 +9,7 @@ export type PdfTab = {
    *  navigation so the tab header always shows the file name. */
   label: string;
   mimeType?: string | undefined;
+  pdfFileId: string | null;
   /** The workspace this tab belongs to. Used to prevent
    *  cross-workspace state leaks in the chat panel. */
   workspaceId: string;
@@ -71,6 +72,9 @@ export const useInspectorStore = create<State & Actions>()(
           }
           if (tab.mimeType !== undefined) {
             existing.mimeType = tab.mimeType;
+          }
+          if (tab.pdfFileId !== undefined) {
+            existing.pdfFileId = tab.pdfFileId;
           }
         }
         state.activeId = tab.id;

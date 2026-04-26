@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -10,12 +17,15 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { DocxEditorRef } from "@stella/folio";
 import { Button } from "@stella/ui/components/button";
-
+import "@stella/folio/editor.css";
+import "./peek-docx.css";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { DOCX_MIME } from "@/lib/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -23,12 +33,26 @@ import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-compon
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
+const DocxEditor = lazy(async () => {
+  const m = await import("@stella/folio");
+  return { default: m.DocxEditor };
+});
+
+const DOCX_BASE_ZOOM = 0.5;
+const DOCX_MIN_ZOOM = 0.25;
+const DOCX_MAX_ZOOM = 2;
+const PINCH_SENSITIVITY = 0.005;
+
+const clampDocxZoom = (zoom: number) =>
+  Math.max(DOCX_MIN_ZOOM, Math.min(DOCX_MAX_ZOOM, zoom));
+
 type PeekPdfViewerProps = {
   workspaceId: string;
   viewId: string;
   fieldId: string;
   entityId: string;
   activePropertyId: string;
+  filePurpose?: "display" | "native-display" | undefined;
   scaleOffset: number;
   mimeType?: string | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
@@ -41,6 +65,7 @@ export const PeekPdfViewer = ({
   fieldId,
   entityId,
   activePropertyId,
+  filePurpose = "display",
   scaleOffset,
   mimeType,
   onPeekNavigate,
@@ -48,7 +73,7 @@ export const PeekPdfViewer = ({
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
 
   const { data: file } = useSuspenseQuery(
-    fileOptions({ workspaceId, fieldId }),
+    fileOptions({ workspaceId, fieldId, purpose: filePurpose }),
   );
 
   const renderPageOverlay = useCallback(
@@ -65,6 +90,14 @@ export const PeekPdfViewer = ({
     ),
     [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
+
+  if (file.mimeType === DOCX_MIME) {
+    return (
+      <Suspense fallback={<PeekSuspenseFallback />}>
+        <PeekDocxViewer buffer={file.buffer} scaleOffset={scaleOffset} />
+      </Suspense>
+    );
+  }
 
   return (
     <PDFViewport
@@ -230,6 +263,70 @@ export const PeekPrintButton = () => {
         </Button>
       }
     />
+  );
+};
+
+// ── DOCX peek viewer with zoom wiring ──────────────────
+
+const PeekDocxViewer = ({
+  buffer,
+  scaleOffset,
+}: {
+  buffer: ArrayBuffer;
+  scaleOffset: number;
+}) => {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const initialZoom = clampDocxZoom(DOCX_BASE_ZOOM + scaleOffset);
+
+  // Sync scaleOffset from inspector +/- buttons to Folio zoom
+  useEffect(() => {
+    editorRef.current?.setZoom(initialZoom);
+  }, [initialZoom]);
+
+  // Pinch-to-zoom (Cmd/Ctrl+wheel on Mac trackpad)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) {
+        return;
+      }
+      e.preventDefault();
+
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+
+      const currentZoom = editor.getZoom();
+      const delta = -e.deltaY * PINCH_SENSITIVITY;
+      const next = clampDocxZoom(currentZoom + delta);
+      editor.setZoom(Math.round(next * 100) / 100);
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="h-full overflow-auto">
+      <DocxEditor
+        ref={editorRef}
+        className="folio-peek h-full"
+        documentBuffer={buffer}
+        initialZoom={initialZoom}
+        loadingIndicator={null}
+        readOnly
+        showToolbar={false}
+        showZoomControl={false}
+      />
+    </div>
   );
 };
 

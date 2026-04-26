@@ -84,6 +84,10 @@ const PropertyCell = ({
       referencedFile?.content.type === "file"
         ? referencedFile.content.mimeType
         : firstFile?.mimeType;
+    const pdfFileId =
+      referencedFile?.content.type === "file"
+        ? referencedFile.content.pdfFileId
+        : firstFile?.pdfFileId;
 
     if (fileFieldId) {
       return (
@@ -93,6 +97,7 @@ const PropertyCell = ({
           justificationFieldId={field.id}
           label={fileName}
           mimeType={mimeType}
+          pdfFileId={pdfFileId}
           propertyId={property.id}
           workspaceId={property.workspaceId}
         >
@@ -111,6 +116,7 @@ type WithOpenEntityButtonProps = {
   justificationFieldId: string;
   label: string;
   mimeType?: string | undefined;
+  pdfFileId?: string | null | undefined;
   propertyId: string;
   workspaceId: string;
 };
@@ -123,6 +129,7 @@ const WithOpenEntityButton = ({
   justificationFieldId,
   label,
   mimeType,
+  pdfFileId,
   propertyId,
   workspaceId,
   children,
@@ -139,6 +146,7 @@ const WithOpenEntityButton = ({
           entityId,
           label,
           mimeType,
+          pdfFileId: pdfFileId ?? null,
           justificationFieldId,
           propertyId,
           workspaceId,

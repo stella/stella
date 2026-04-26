@@ -37,6 +37,7 @@ export const openEntityInInspector = (
         entityId,
         label,
         mimeType: field.content.mimeType,
+        pdfFileId: field.content.pdfFileId,
         workspaceId,
       });
       return;

@@ -8,17 +8,16 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import { CheckIcon, LoaderIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { DocxEditorRef } from "@stella/folio";
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
-
-import type { DocxEditorRef } from "@stella/folio";
 import "@stella/folio/editor.css";
-
 import { useEditSession } from "./use-edit-session";
 
-const DocxEditor = lazy(() =>
-  import("@stella/folio").then((m) => ({ default: m.DocxEditor })),
-);
+const DocxEditor = lazy(async () => {
+  const m = await import("@stella/folio");
+  return { default: m.DocxEditor };
+});
 
 type DocxBrowserEditorProps = {
   workspaceId: string;
@@ -119,9 +118,7 @@ export const DocxBrowserEditor = ({
     return (
       <div className="flex h-full items-center justify-center gap-2">
         <LoaderIcon className="text-muted-foreground size-5 animate-spin" />
-        <span className="text-muted-foreground text-sm">
-          Saving...
-        </span>
+        <span className="text-muted-foreground text-sm">Saving...</span>
       </div>
     );
   }
@@ -133,12 +130,8 @@ export const DocxBrowserEditor = ({
   return (
     <div className="flex h-full flex-col">
       {/* Editor toolbar actions */}
-      <div className="border-b px-3 py-1.5 flex items-center justify-end gap-2">
-        <Button
-          onClick={() => void cancel()}
-          size="sm"
-          variant="ghost"
-        >
+      <div className="flex items-center justify-end gap-2 border-b px-3 py-1.5">
+        <Button onClick={() => void cancel()} size="sm" variant="ghost">
           <XIcon />
           Discard
         </Button>

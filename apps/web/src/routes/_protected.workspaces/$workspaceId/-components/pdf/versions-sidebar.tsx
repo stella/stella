@@ -77,8 +77,10 @@ type LabelPreset = {
 
 const LABEL_PRESETS: LabelPreset[] = [
   { key: "draft", color: "bg-muted-foreground/40" },
-  { key: "counterpartyReview", color: "bg-blue-500" },
-  { key: "final", color: "bg-green-500" },
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  { key: "counterpartyReview", color: "bg-blue-500 dark:bg-blue-400" },
+  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
+  { key: "final", color: "bg-green-500 dark:bg-green-400" },
   { key: "signed", color: "bg-amber-500" },
 ];
 

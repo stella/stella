@@ -471,6 +471,8 @@ const CrossCalendarEntityCard = ({ entry }: { entry: CalendarEntity }) => {
         id: file.fieldId,
         entityId: entry.entity.entityId,
         label: name,
+        mimeType: file.mimeType,
+        pdfFileId: file.pdfFileId,
         workspaceId: entry.workspaceId,
       });
     }
