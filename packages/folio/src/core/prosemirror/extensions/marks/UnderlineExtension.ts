@@ -52,12 +52,12 @@ export const UnderlineExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleUnderline: () => toggleMark(ctx.schema.marks.underline!),
+        toggleUnderline: () => toggleMark(ctx.schema.marks["underline"]!),
         setUnderlineStyle: (style: string, color?: TextColorAttrs) =>
-          setMark(ctx.schema.marks.underline!, { style, color }),
+          setMark(ctx.schema.marks["underline"]!, { style, color }),
       },
       keyboardShortcuts: {
-        "Mod-u": toggleMark(ctx.schema.marks.underline!),
+        "Mod-u": toggleMark(ctx.schema.marks["underline"]!),
       },
     };
   },

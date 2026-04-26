@@ -29,7 +29,7 @@ export const HighlightExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      const color = mark.attrs.color as string;
+      const color = mark.attrs["color"] as string;
       // Resolve OOXML named highlight color (e.g., 'yellow' → '#FFFF00')
       const cssColor = resolveHighlightToCss(color);
       return ["mark", { style: `background-color: ${cssColor}` }, 0];
@@ -40,11 +40,11 @@ export const HighlightExtension = createMarkExtension({
       commands: {
         setHighlight: (color: string) => {
           if (!color || color === "none") {
-            return removeMark(ctx.schema.marks.highlight!);
+            return removeMark(ctx.schema.marks["highlight"]!);
           }
-          return setMark(ctx.schema.marks.highlight!, { color });
+          return setMark(ctx.schema.marks["highlight"]!, { color });
         },
-        clearHighlight: () => removeMark(ctx.schema.marks.highlight!),
+        clearHighlight: () => removeMark(ctx.schema.marks["highlight"]!),
       },
     };
   },

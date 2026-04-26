@@ -506,13 +506,13 @@ const useEntityDropTarget = (workspaceId: string | undefined) => {
 
     return dropTargetForElements({
       element,
-      canDrop: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
       onDragEnter: () => setIsDragOver(true),
       onDragLeave: () => setIsDragOver(false),
       onDrop: ({ source }) => {
         setIsDragOver(false);
 
-        const entities = source.data.entities;
+        const entities = source.data["entities"];
         if (!Array.isArray(entities)) {
           return;
         }

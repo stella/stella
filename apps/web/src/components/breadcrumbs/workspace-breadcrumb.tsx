@@ -136,7 +136,7 @@ export const WorkspaceBreadcrumb = ({
                   ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
                     (parsed as Record<string, unknown>)
                   : {};
-              config.clientFilter = workspace.client?.id ?? null;
+              config["clientFilter"] = workspace.client?.id ?? null;
               localStorage.setItem(
                 "matters_overview_config",
                 JSON.stringify(config),

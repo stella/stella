@@ -22,7 +22,7 @@ export const spawnWorker = async ({
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      PATH: process.env.PATH ?? "",
+      PATH: process.env["PATH"] ?? "",
       ...extraEnv,
     },
     timeout: timeoutMs,

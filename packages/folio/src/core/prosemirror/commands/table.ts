@@ -32,7 +32,7 @@ export function insertTable(
   rows: number,
   cols: number,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.insertTable!(rows, cols);
+  return cmds["insertTable"]!(rows, cols);
 }
 
 // Row operations
@@ -40,19 +40,19 @@ export function addRowAbove(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.addRowAbove!()(state, dispatch);
+  return cmds["addRowAbove"]!()(state, dispatch);
 }
 export function addRowBelow(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.addRowBelow!()(state, dispatch);
+  return cmds["addRowBelow"]!()(state, dispatch);
 }
 export function deleteRow(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.deleteRow!()(state, dispatch);
+  return cmds["deleteRow"]!()(state, dispatch);
 }
 
 // Column operations
@@ -60,19 +60,19 @@ export function addColumnLeft(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.addColumnLeft!()(state, dispatch);
+  return cmds["addColumnLeft"]!()(state, dispatch);
 }
 export function addColumnRight(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.addColumnRight!()(state, dispatch);
+  return cmds["addColumnRight"]!()(state, dispatch);
 }
 export function deleteColumn(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.deleteColumn!()(state, dispatch);
+  return cmds["deleteColumn"]!()(state, dispatch);
 }
 
 // Table deletion
@@ -80,7 +80,7 @@ export function deleteTable(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.deleteTable!()(state, dispatch);
+  return cmds["deleteTable"]!()(state, dispatch);
 }
 
 // Table selection
@@ -88,19 +88,19 @@ export function selectTable(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.selectTable!()(state, dispatch);
+  return cmds["selectTable"]!()(state, dispatch);
 }
 export function selectRow(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.selectRow!()(state, dispatch);
+  return cmds["selectRow"]!()(state, dispatch);
 }
 export function selectColumn(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.selectColumn!()(state, dispatch);
+  return cmds["selectColumn"]!()(state, dispatch);
 }
 
 // Merge/Split — delegated to prosemirror-tables via singleton extension manager
@@ -108,13 +108,13 @@ export function mergeCells(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.mergeCells!()(state, dispatch);
+  return cmds["mergeCells"]!()(state, dispatch);
 }
 export function splitCell(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.splitCell!()(state, dispatch);
+  return cmds["splitCell"]!()(state, dispatch);
 }
 
 // Per-cell border editing
@@ -123,7 +123,7 @@ export function setCellBorder(
   spec: { style: string; size?: number; color?: { rgb: string } } | null,
   clearOthers?: boolean,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellBorder!(side, spec, clearOthers);
+  return cmds["setCellBorder"]!(side, spec, clearOthers);
 }
 
 // Borders
@@ -131,41 +131,41 @@ export function setTableBorders(
   preset: BorderPreset,
   borderSpec?: { style: string; size: number; color: { rgb: string } },
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setTableBorders!(preset, borderSpec);
+  return cmds["setTableBorders"]!(preset, borderSpec);
 }
 export function removeTableBorders(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return cmds.removeTableBorders!()(state, dispatch);
+  return cmds["removeTableBorders"]!()(state, dispatch);
 }
 export function setAllTableBorders(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
   borderSpec?: { style: string; size: number; color: { rgb: string } },
 ): boolean {
-  return cmds.setAllTableBorders!(borderSpec)(state, dispatch);
+  return cmds["setAllTableBorders"]!(borderSpec)(state, dispatch);
 }
 export function setOutsideTableBorders(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
   borderSpec?: { style: string; size: number; color: { rgb: string } },
 ): boolean {
-  return cmds.setOutsideTableBorders!(borderSpec)(state, dispatch);
+  return cmds["setOutsideTableBorders"]!(borderSpec)(state, dispatch);
 }
 export function setInsideTableBorders(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
   borderSpec?: { style: string; size: number; color: { rgb: string } },
 ): boolean {
-  return cmds.setInsideTableBorders!(borderSpec)(state, dispatch);
+  return cmds["setInsideTableBorders"]!(borderSpec)(state, dispatch);
 }
 
 // Vertical alignment
 export function setCellVerticalAlign(
   align: "top" | "center" | "bottom",
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellVerticalAlign!(align);
+  return cmds["setCellVerticalAlign"]!(align);
 }
 
 // Cell margins
@@ -175,14 +175,14 @@ export function setCellMargins(margins: {
   left?: number;
   right?: number;
 }): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellMargins!(margins);
+  return cmds["setCellMargins"]!(margins);
 }
 
 // Text direction
 export function setCellTextDirection(
   direction: string | null,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellTextDirection!(direction);
+  return cmds["setCellTextDirection"]!(direction);
 }
 
 // No-wrap toggle
@@ -190,7 +190,7 @@ export function toggleNoWrap(): (
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ) => boolean {
-  return cmds.toggleNoWrap!();
+  return cmds["toggleNoWrap"]!();
 }
 
 // Row height
@@ -198,7 +198,7 @@ export function setRowHeight(
   height: number | null,
   rule?: "auto" | "atLeast" | "exact",
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setRowHeight!(height, rule);
+  return cmds["setRowHeight"]!(height, rule);
 }
 
 // Header row
@@ -206,7 +206,7 @@ export function toggleHeaderRow(): (
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ) => boolean {
-  return cmds.toggleHeaderRow!();
+  return cmds["toggleHeaderRow"]!();
 }
 
 // Column distribution
@@ -214,13 +214,13 @@ export function distributeColumns(): (
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ) => boolean {
-  return cmds.distributeColumns!();
+  return cmds["distributeColumns"]!();
 }
 export function autoFitContents(): (
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ) => boolean {
-  return cmds.autoFitContents!();
+  return cmds["autoFitContents"]!();
 }
 
 // Table properties
@@ -229,7 +229,7 @@ export function setTableProperties(props: {
   widthType?: string | null;
   justification?: "left" | "center" | "right" | null;
 }): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setTableProperties!(props);
+  return cmds["setTableProperties"]!(props);
 }
 
 // Table style gallery
@@ -239,22 +239,22 @@ export function applyTableStyle(styleData: {
   conditionals?: Record<string, unknown>;
   look?: Record<string, boolean>;
 }): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.applyTableStyle!(styleData);
+  return cmds["applyTableStyle"]!(styleData);
 }
 
 // Cell styling
 export function setCellFillColor(
   color: string | null,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellFillColor!(color);
+  return cmds["setCellFillColor"]!(color);
 }
 export function setTableBorderColor(
   color: string,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setTableBorderColor!(color);
+  return cmds["setTableBorderColor"]!(color);
 }
 export function setTableBorderWidth(
   size: number,
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setTableBorderWidth!(size);
+  return cmds["setTableBorderWidth"]!(size);
 }

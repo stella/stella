@@ -553,14 +553,14 @@ const MatterItem = ({
       }),
       dropTargetForElements({
         element: el,
-        canDrop: ({ source }) => source.data.type === MATTER_DRAG_TYPE,
+        canDrop: ({ source }) => source.data["type"] === MATTER_DRAG_TYPE,
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
           setIsDropTarget(false);
           // SAFETY: matterId is always a string; set by our own draggable getInitialData.
           // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          const draggedId = source.data.matterId as string;
+          const draggedId = source.data["matterId"] as string;
           if (draggedId !== ws.id) {
             onReorderRef.current?.(draggedId, ws.id);
           }

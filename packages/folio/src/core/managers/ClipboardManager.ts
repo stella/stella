@@ -99,7 +99,10 @@ export function extractFormattingFromElement(
 
   // Font family
   // SAFETY: split always returns at least one element
-  const fontFamily = style.fontFamily.replace(/["']/g, "").split(",")[0]!.trim();
+  const fontFamily = style.fontFamily
+    .replace(/["']/g, "")
+    .split(",")[0]!
+    .trim();
   if (fontFamily) {
     formatting.fontFamily = { ascii: fontFamily };
   }
@@ -240,10 +243,10 @@ export function createSelectionFromDOM(): ClipboardSelection | null {
   const endPara = findParagraphElement(range.endContainer);
 
   const startParagraphIndex = startPara
-    ? Number.parseInt(startPara.dataset.paragraphIndex || "0", 10)
+    ? Number.parseInt(startPara.dataset["paragraphIndex"] || "0", 10)
     : 0;
   const endParagraphIndex = endPara
-    ? Number.parseInt(endPara.dataset.paragraphIndex || "0", 10)
+    ? Number.parseInt(endPara.dataset["paragraphIndex"] || "0", 10)
     : 0;
 
   return {

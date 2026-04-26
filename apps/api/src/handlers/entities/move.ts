@@ -178,7 +178,7 @@ const checkIsDescendant = async (
     ) AS found
   `);
 
-  return Boolean(result.at(0)?.found);
+  return Boolean(result.at(0)?.["found"]);
 };
 
 const config = {

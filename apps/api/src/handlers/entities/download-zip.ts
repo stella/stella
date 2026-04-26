@@ -91,7 +91,7 @@ const downloadZipHandler = async function* ({
   );
 
   // Drizzle's execute() erases the generic to Record<string, any>
-  const descendantIds = descendantRows.map((r) => String(r.id));
+  const descendantIds = descendantRows.map((r) => String(r["id"]));
 
   if (descendantIds.length === 0) {
     return Result.err(

@@ -27,7 +27,10 @@ export const FontFamilyExtension = createMarkExtension({
         getAttrs: (value) => {
           const fontValue = value as string;
           // SAFETY: split always returns at least one element
-          const firstFont = fontValue.split(",")[0]!.trim().replace(/['"]/g, "");
+          const firstFont = fontValue
+            .split(",")[0]!
+            .trim()
+            .replace(/['"]/g, "");
           if (firstFont) {
             return { ascii: firstFont };
           }
@@ -49,11 +52,11 @@ export const FontFamilyExtension = createMarkExtension({
     return {
       commands: {
         setFontFamily: (fontName: string) =>
-          setMark(ctx.schema.marks.fontFamily!, {
+          setMark(ctx.schema.marks["fontFamily"]!, {
             ascii: fontName,
             hAnsi: fontName,
           }),
-        clearFontFamily: () => removeMark(ctx.schema.marks.fontFamily!),
+        clearFontFamily: () => removeMark(ctx.schema.marks["fontFamily"]!),
       },
     };
   },

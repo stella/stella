@@ -27,13 +27,13 @@ export const parseSpisZn = (value: string): SpisZn => {
     );
   }
 
-  const druhVeciGroup = match.groups.druhVeci;
+  const druhVeciGroup = match.groups["druhVeci"];
   if (!druhVeciGroup) {
     throw new InfoSoudParseError("Missing druhVeci in spisová značka");
   }
 
   const druhVeci = druhVeciGroup.toUpperCase();
-  const explicitCourtCode = match.groups.courtCode?.toUpperCase();
+  const explicitCourtCode = match.groups["courtCode"]?.toUpperCase();
   if (explicitCourtCode && !isCourtCode(explicitCourtCode)) {
     throw new InfoSoudParseError(
       `Invalid embedded court code in spisová značka: ${JSON.stringify(explicitCourtCode)}`,
@@ -44,11 +44,11 @@ export const parseSpisZn = (value: string): SpisZn => {
     explicitCourtCode ?? (NS_CASE_TYPES.has(druhVeci) ? "NS" : undefined);
 
   return {
-    bcVec: Number(match.groups.bcVec),
-    cisloSenatu: Number(match.groups.cisloSenatu),
+    bcVec: Number(match.groups["bcVec"]),
+    cisloSenatu: Number(match.groups["cisloSenatu"]),
     courtCode,
     druhVeci,
-    rocnik: Number(match.groups.rocnik),
+    rocnik: Number(match.groups["rocnik"]),
   };
 };
 
@@ -60,13 +60,13 @@ export const splitSpisZnAndCourtQuery = (
     return { spisZn: value.trim() };
   }
 
-  const spisZn = match.groups.spis;
+  const spisZn = match.groups["spis"];
   if (!spisZn) {
     return { spisZn: value.trim() };
   }
 
   return {
-    courtQuery: match.groups.tail?.trim(),
+    courtQuery: match.groups["tail"]?.trim(),
     spisZn: spisZn.trim(),
   };
 };
@@ -105,15 +105,15 @@ export const toInfoSoudRequestBody = (
   const courtType = classifyCourtCode(normalizedCode);
 
   if (courtType === "NS") {
-    requestBody.typOrganizace = "NEJVYSSI";
+    requestBody["typOrganizace"] = "NEJVYSSI";
     return requestBody;
   }
 
   if (courtType === "KS" || courtType === "MS" || courtType === "VS") {
-    requestBody.druhOrganizace = normalizedCode;
+    requestBody["druhOrganizace"] = normalizedCode;
     return requestBody;
   }
 
-  requestBody.okresniSoud = normalizedCode;
+  requestBody["okresniSoud"] = normalizedCode;
   return requestBody;
 };

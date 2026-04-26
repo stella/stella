@@ -325,9 +325,9 @@ function computeAnchorPositions(
   }
 
   const { doc: pmDoc, schema } = pmView.state;
-  const commentType = schema.marks.comment;
-  const insertionType = schema.marks.insertion;
-  const deletionType = schema.marks.deletion;
+  const commentType = schema.marks["comment"];
+  const insertionType = schema.marks["insertion"];
+  const deletionType = schema.marks["deletion"];
   if (!commentType && !insertionType && !deletionType) {
     return positions;
   }
@@ -344,12 +344,12 @@ function computeAnchorPositions(
     for (const mark of node.marks) {
       let key: string | null = null;
       if (commentType && mark.type === commentType) {
-        key = `comment-${mark.attrs.commentId}`;
+        key = `comment-${mark.attrs["commentId"]}`;
       } else if (
         (insertionType && mark.type === insertionType) ||
         (deletionType && mark.type === deletionType)
       ) {
-        key = `revision-${mark.attrs.revisionId}`;
+        key = `revision-${mark.attrs["revisionId"]}`;
       }
       if (!key || seen.has(key)) {
         continue;
@@ -633,7 +633,8 @@ function measureTableBlock(
 
   if (columnWidths.length === 0 && tableBlock.rows.length > 0) {
     // Determine total columns from first row's colSpans
-    const colCount = tableBlock.rows[0]!.cells.reduce( // SAFETY: rows.length > 0
+    const colCount = tableBlock.rows[0]!.cells.reduce(
+      // SAFETY: rows.length > 0
       (sum, cell) => sum + (cell.colSpan ?? 1),
       0,
     );
@@ -719,13 +720,18 @@ function measureTableBlock(
         const padLeft = cell.padding?.left ?? DEFAULT_CELL_PADDING_X;
         const padRight = cell.padding?.right ?? DEFAULT_CELL_PADDING_X;
         const cellContentWidth = Math.max(1, cellWidth - padLeft - padRight);
-        const cellMeasure: import("../core/layout-engine/types").TableCellMeasure = {
-          blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
-          width: cellWidth,
-          height: 0, // Calculated below
-        };
-        if (cell.colSpan !== undefined) { cellMeasure.colSpan = cell.colSpan; }
-        if (cell.rowSpan !== undefined) { cellMeasure.rowSpan = cell.rowSpan; }
+        const cellMeasure: import("../core/layout-engine/types").TableCellMeasure =
+          {
+            blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
+            width: cellWidth,
+            height: 0, // Calculated below
+          };
+        if (cell.colSpan !== undefined) {
+          cellMeasure.colSpan = cell.colSpan;
+        }
+        if (cell.rowSpan !== undefined) {
+          cellMeasure.rowSpan = cell.rowSpan;
+        }
         return cellMeasure;
       }),
       height: 0,
@@ -985,7 +991,9 @@ function measureBlock(
       const measureOpts: Parameters<typeof measureParagraph>[2] = {
         paragraphYOffset: cumulativeY ?? 0,
       };
-      if (floatingZones) { measureOpts.floatingZones = floatingZones; }
+      if (floatingZones) {
+        measureOpts.floatingZones = floatingZones;
+      }
       const result = measureParagraph(pBlock, contentWidth, measureOpts);
 
       if (!floatingZones || floatingZones.length === 0) {
@@ -1175,65 +1183,65 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
     const itemObj = item as Record<string, unknown>;
 
     // Handle Run type (from Document)
-    if (itemObj.type === "run" && Array.isArray(itemObj.content)) {
-      const formatting = itemObj.formatting as
+    if (itemObj["type"] === "run" && Array.isArray(itemObj["content"])) {
+      const formatting = itemObj["formatting"] as
         | Record<string, unknown>
         | undefined;
       const runFormatting: RunFormatting = {};
 
       if (formatting) {
-        if (formatting.bold) {
+        if (formatting["bold"]) {
           runFormatting.bold = true;
         }
-        if (formatting.italic) {
+        if (formatting["italic"]) {
           runFormatting.italic = true;
         }
-        if (formatting.underline) {
+        if (formatting["underline"]) {
           runFormatting.underline = true;
         }
-        if (formatting.strike) {
+        if (formatting["strike"]) {
           runFormatting.strike = true;
         }
-        if (formatting.color) {
-          const color = formatting.color as Record<string, unknown>;
-          if (color.val) {
-            runFormatting.color = `#${color.val}`;
-          } else if (color.rgb) {
-            runFormatting.color = `#${color.rgb}`;
+        if (formatting["color"]) {
+          const color = formatting["color"] as Record<string, unknown>;
+          if (color["val"]) {
+            runFormatting.color = `#${color["val"]}`;
+          } else if (color["rgb"]) {
+            runFormatting.color = `#${color["rgb"]}`;
           }
         }
-        if (formatting.fontSize) {
-          runFormatting.fontSize = (formatting.fontSize as number) / 2; // half-points to points
+        if (formatting["fontSize"]) {
+          runFormatting.fontSize = (formatting["fontSize"] as number) / 2; // half-points to points
         }
-        if (formatting.fontFamily) {
-          const ff = formatting.fontFamily as Record<string, unknown>;
-          runFormatting.fontFamily = (ff.ascii || ff.hAnsi) as string;
+        if (formatting["fontFamily"]) {
+          const ff = formatting["fontFamily"] as Record<string, unknown>;
+          runFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
         }
       }
 
       // Process run content
-      for (const runContent of itemObj.content as unknown[]) {
+      for (const runContent of itemObj["content"] as unknown[]) {
         const rc = runContent as Record<string, unknown>;
 
-        if (rc.type === "text" && typeof rc.text === "string") {
+        if (rc["type"] === "text" && typeof rc["text"] === "string") {
           runs.push({
             kind: "text",
-            text: rc.text,
+            text: rc["text"],
             ...runFormatting,
           });
-        } else if (rc.type === "tab") {
+        } else if (rc["type"] === "tab") {
           runs.push({
             kind: "tab",
             ...runFormatting,
           });
-        } else if (rc.type === "break") {
+        } else if (rc["type"] === "break") {
           runs.push({
             kind: "lineBreak",
           });
-        } else if (rc.type === "drawing" && rc.image) {
+        } else if (rc["type"] === "drawing" && rc["image"]) {
           // Handle images/drawings
-          const image = rc.image as Record<string, unknown>;
-          const size = image.size as
+          const image = rc["image"] as Record<string, unknown>;
+          const size = image["size"] as
             | { width: number; height: number }
             | undefined;
           // EMU to pixels: 1 inch = 914400 EMU, 1 inch = 96 pixels
@@ -1242,7 +1250,7 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
           const heightPx = size?.height ? emuToPx(size.height) : 100;
 
           // Check for position (floating/anchored images)
-          const position = image.position as
+          const position = image["position"] as
             | {
                 horizontal?: {
                   relativeTo?: string;
@@ -1258,15 +1266,15 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
             | undefined;
 
           // Check for behindDoc (full-page background images)
-          const wrap = image.wrap as { type?: string } | undefined;
+          const wrap = image["wrap"] as { type?: string } | undefined;
           const behindDoc = wrap?.type === "behind";
 
           runs.push({
             kind: "image",
-            src: (image.src as string) || "",
+            src: (image["src"] as string) || "",
             width: widthPx,
             height: heightPx,
-            alt: (image.alt as string) || undefined,
+            alt: (image["alt"] as string) || undefined,
             // Include position for floating images
             position: position
               ? {
@@ -1281,31 +1289,31 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
     }
 
     // Handle SimpleField (w:fldSimple) - PAGE, NUMPAGES, etc.
-    if (itemObj.type === "simpleField") {
-      const fieldType = itemObj.fieldType as string;
+    if (itemObj["type"] === "simpleField") {
+      const fieldType = itemObj["fieldType"] as string;
 
       // Extract formatting from content runs (same approach as ComplexField)
       const fieldFormatting: RunFormatting = {};
-      if (Array.isArray(itemObj.content) && itemObj.content.length > 0) {
-        const firstRun = itemObj.content[0] as Record<string, unknown>;
-        if (firstRun?.type === "run" && firstRun.formatting) {
-          const formatting = firstRun.formatting as Record<string, unknown>;
-          if (formatting.fontSize) {
-            fieldFormatting.fontSize = (formatting.fontSize as number) / 2;
+      if (Array.isArray(itemObj["content"]) && itemObj["content"].length > 0) {
+        const firstRun = itemObj["content"][0] as Record<string, unknown>;
+        if (firstRun?.["type"] === "run" && firstRun["formatting"]) {
+          const formatting = firstRun["formatting"] as Record<string, unknown>;
+          if (formatting["fontSize"]) {
+            fieldFormatting.fontSize = (formatting["fontSize"] as number) / 2;
           }
-          if (formatting.fontFamily) {
-            const ff = formatting.fontFamily as Record<string, unknown>;
-            fieldFormatting.fontFamily = (ff.ascii || ff.hAnsi) as string;
+          if (formatting["fontFamily"]) {
+            const ff = formatting["fontFamily"] as Record<string, unknown>;
+            fieldFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
           }
-          if (formatting.bold) {
+          if (formatting["bold"]) {
             fieldFormatting.bold = true;
           }
-          if (formatting.italic) {
+          if (formatting["italic"]) {
             fieldFormatting.italic = true;
           }
-          if (formatting.color) {
-            const c = formatting.color as Record<string, unknown>;
-            const val = (c.rgb || c.val) as string | undefined;
+          if (formatting["color"]) {
+            const c = formatting["color"] as Record<string, unknown>;
+            const val = (c["rgb"] || c["val"]) as string | undefined;
             if (val) {
               fieldFormatting.color = val.startsWith("#") ? val : `#${val}`;
             }
@@ -1327,10 +1335,10 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
           fallback: "1",
           ...fieldFormatting,
         });
-      } else if (Array.isArray(itemObj.content)) {
+      } else if (Array.isArray(itemObj["content"])) {
         // Use the display content for other fields
         const displayRuns = convertDocumentRunsToFlowRuns(
-          itemObj.content as unknown[],
+          itemObj["content"] as unknown[],
         );
         runs.push(...displayRuns);
       }
@@ -1338,34 +1346,34 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
     }
 
     // Handle ComplexField (fldChar sequence)
-    if (itemObj.type === "complexField") {
-      const fieldType = itemObj.fieldType as string;
+    if (itemObj["type"] === "complexField") {
+      const fieldType = itemObj["fieldType"] as string;
 
       // Extract formatting from fieldResult runs if available
       const fieldFormatting: RunFormatting = {};
       if (
-        Array.isArray(itemObj.fieldResult) &&
-        itemObj.fieldResult.length > 0
+        Array.isArray(itemObj["fieldResult"]) &&
+        itemObj["fieldResult"].length > 0
       ) {
-        const firstRun = itemObj.fieldResult[0] as Record<string, unknown>;
-        if (firstRun?.type === "run" && firstRun.formatting) {
-          const formatting = firstRun.formatting as Record<string, unknown>;
-          if (formatting.fontSize) {
-            fieldFormatting.fontSize = (formatting.fontSize as number) / 2;
+        const firstRun = itemObj["fieldResult"][0] as Record<string, unknown>;
+        if (firstRun?.["type"] === "run" && firstRun["formatting"]) {
+          const formatting = firstRun["formatting"] as Record<string, unknown>;
+          if (formatting["fontSize"]) {
+            fieldFormatting.fontSize = (formatting["fontSize"] as number) / 2;
           }
-          if (formatting.fontFamily) {
-            const ff = formatting.fontFamily as Record<string, unknown>;
-            fieldFormatting.fontFamily = (ff.ascii || ff.hAnsi) as string;
+          if (formatting["fontFamily"]) {
+            const ff = formatting["fontFamily"] as Record<string, unknown>;
+            fieldFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
           }
-          if (formatting.bold) {
+          if (formatting["bold"]) {
             fieldFormatting.bold = true;
           }
-          if (formatting.italic) {
+          if (formatting["italic"]) {
             fieldFormatting.italic = true;
           }
-          if (formatting.color) {
-            const c = formatting.color as Record<string, unknown>;
-            const val = (c.rgb || c.val) as string | undefined;
+          if (formatting["color"]) {
+            const c = formatting["color"] as Record<string, unknown>;
+            const val = (c["rgb"] || c["val"]) as string | undefined;
             if (val) {
               fieldFormatting.color = val.startsWith("#") ? val : `#${val}`;
             }
@@ -1387,19 +1395,19 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
           fallback: "1",
           ...fieldFormatting,
         });
-      } else if (Array.isArray(itemObj.fieldResult)) {
+      } else if (Array.isArray(itemObj["fieldResult"])) {
         // Use the fieldResult for other fields
         const displayRuns = convertDocumentRunsToFlowRuns(
-          itemObj.fieldResult as unknown[],
+          itemObj["fieldResult"] as unknown[],
         );
         runs.push(...displayRuns);
       }
     }
 
     // Handle Hyperlink
-    if (itemObj.type === "hyperlink" && Array.isArray(itemObj.children)) {
+    if (itemObj["type"] === "hyperlink" && Array.isArray(itemObj["children"])) {
       const childRuns = convertDocumentRunsToFlowRuns(
-        itemObj.children as unknown[],
+        itemObj["children"] as unknown[],
       );
       runs.push(...childRuns);
     }
@@ -1564,15 +1572,15 @@ function convertHeaderFooterToContent(
     const itemObj = item as unknown as Record<string, unknown>;
 
     // Check for Document Paragraph type
-    if (itemObj.type === "paragraph" && Array.isArray(itemObj.content)) {
-      const formatting = itemObj.formatting as
+    if (itemObj["type"] === "paragraph" && Array.isArray(itemObj["content"])) {
+      const formatting = itemObj["formatting"] as
         | Record<string, unknown>
         | undefined;
       const attrs: ParagraphAttrs = {};
 
       if (formatting) {
-        if (formatting.alignment) {
-          const align = formatting.alignment as string;
+        if (formatting["alignment"]) {
+          const align = formatting["alignment"] as string;
           if (align === "both") {
             attrs.alignment = "justify";
           } else if (["left", "center", "right", "justify"].includes(align)) {
@@ -1580,8 +1588,8 @@ function convertHeaderFooterToContent(
           }
         }
         // Convert paragraph borders (e.g., header bottom line, footer top line)
-        if (formatting.borders) {
-          const borders = formatting.borders as Record<string, unknown>;
+        if (formatting["borders"]) {
+          const borders = formatting["borders"] as Record<string, unknown>;
           const converted: ParagraphBorders = {};
           for (const side of [
             "top",
@@ -1614,25 +1622,30 @@ function convertHeaderFooterToContent(
         // Normal style) inlined during the PM->document round-trip, not intentional
         // header/footer formatting. The layout painter renders header/footer
         // paragraphs without inter-paragraph margins, so measurement must match.
-        if (formatting.lineSpacing !== undefined) {
+        if (formatting["lineSpacing"] !== undefined) {
           const spacingAttrs: ParagraphSpacing = {};
-          const rule = formatting.lineSpacingRule as string | undefined;
+          const rule = formatting["lineSpacingRule"] as string | undefined;
           if (rule === "exact" || rule === "atLeast") {
-            spacingAttrs.line = twipsToPixels(formatting.lineSpacing as number);
+            spacingAttrs.line = twipsToPixels(
+              formatting["lineSpacing"] as number,
+            );
             spacingAttrs.lineUnit = "px";
             spacingAttrs.lineRule = rule;
           } else {
             // Auto — line spacing is in 240ths of a line
-            spacingAttrs.line = (formatting.lineSpacing as number) / 240;
+            spacingAttrs.line = (formatting["lineSpacing"] as number) / 240;
             spacingAttrs.lineUnit = "multiplier";
             spacingAttrs.lineRule = "auto";
           }
           attrs.spacing = spacingAttrs;
         }
         // Convert tab stops (needed for center/right tab alignment in headers/footers)
-        if (Array.isArray(formatting.tabs) && formatting.tabs.length > 0) {
+        if (
+          Array.isArray(formatting["tabs"]) &&
+          formatting["tabs"].length > 0
+        ) {
           attrs.tabs = (
-            formatting.tabs as {
+            formatting["tabs"] as {
               position: number;
               alignment: string;
               leader?: string;
@@ -1662,7 +1675,9 @@ function convertHeaderFooterToContent(
         }
       }
 
-      const runs = convertDocumentRunsToFlowRuns(itemObj.content as unknown[]);
+      const runs = convertDocumentRunsToFlowRuns(
+        itemObj["content"] as unknown[],
+      );
 
       // Empty paragraphs (blank lines) should still measure — add empty text run
       if (runs.length === 0) {
@@ -1695,7 +1710,7 @@ function convertHeaderFooterToContent(
       (r) =>
         r.kind === "image" &&
         "position" in r &&
-        (r as Record<string, unknown>).position,
+        (r as Record<string, unknown>)["position"],
     );
     if (!hasFloating) {
       return block;
@@ -1705,7 +1720,7 @@ function convertHeaderFooterToContent(
         !(
           r.kind === "image" &&
           "position" in r &&
-          (r as Record<string, unknown>).position
+          (r as Record<string, unknown>)["position"]
         ),
     );
     // If only floating images remain, add an empty text run so the paragraph still measures
@@ -2028,10 +2043,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Step 1: Convert PM doc to flow blocks
           const stepStart = performance.now();
           const pageContentHeight = pageSize.h - margins.top - margins.bottom;
-          const flowOpts: import("../core/layout-bridge/toFlowBlocks").ToFlowBlocksOptions = {
-            pageContentHeight,
-          };
-          if (_theme !== undefined) { flowOpts.theme = _theme; }
+          const flowOpts: import("../core/layout-bridge/toFlowBlocks").ToFlowBlocksOptions =
+            {
+              pageContentHeight,
+            };
+          if (_theme !== undefined) {
+            flowOpts.theme = _theme;
+          }
           const newBlocks = toFlowBlocks(state.doc, flowOpts);
           const stepTime = performance.now() - stepStart;
           if (stepTime > 500) {
@@ -2160,8 +2178,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             margins: effectiveMargins,
             pageGap,
           };
-          if (columns !== undefined) { layoutOpts.columns = columns; }
-          if (bodyBreakType !== undefined) { layoutOpts.bodyBreakType = bodyBreakType; }
+          if (columns !== undefined) {
+            layoutOpts.columns = columns;
+          }
+          if (bodyBreakType !== undefined) {
+            layoutOpts.bodyBreakType = bodyBreakType;
+          }
 
           if (hasFootnotes) {
             // Pass 1: Layout without footnote space to determine page assignments
@@ -2401,8 +2423,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         for (const span of Array.from(spans)) {
           const spanEl = span as HTMLElement;
-          const pmStart = Number(spanEl.dataset.pmStart);
-          const pmEnd = Number(spanEl.dataset.pmEnd);
+          const pmStart = Number(spanEl.dataset["pmStart"]);
+          const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
           // Special handling for tab spans - use exclusive end to avoid boundary conflicts
           // Tab at [5,6) means position 6 belongs to the next run, not the tab
@@ -2411,7 +2433,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const spanRect = spanEl.getBoundingClientRect();
               const pageEl = spanEl.closest(".layout-page");
               const pageIndex = pageEl
-                ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1
+                ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
                 : 0;
               const lineEl = spanEl.closest(".layout-line");
               const lineHeight = lineEl
@@ -2451,7 +2473,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             // Find which page this span is on
             const pageEl = spanEl.closest(".layout-page");
             const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
               : 0;
 
             // Get line height from the line element or use default
@@ -2480,14 +2502,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             continue;
           }
 
-          const pmStart = Number(paragraph.dataset.pmStart);
-          const pmEnd = Number(paragraph.dataset.pmEnd);
+          const pmStart = Number(paragraph.dataset["pmStart"]);
+          const pmEnd = Number(paragraph.dataset["pmEnd"]);
 
           if (pmPos >= pmStart && pmPos <= pmEnd) {
             const runRect = emptyRun.getBoundingClientRect();
             const pageEl = paragraph.closest(".layout-page");
             const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
               : 0;
             const lineEl = emptyRun.closest(".layout-line");
             const lineHeight = lineEl
@@ -2546,7 +2568,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               pagesContainerRef.current.querySelectorAll(".layout-table-cell");
             for (const cellEl of Array.from(allCells)) {
               const htmlEl = cellEl as HTMLElement;
-              const pmStartAttr = htmlEl.dataset.pmStart;
+              const pmStartAttr = htmlEl.dataset["pmStart"];
               if (pmStartAttr !== undefined) {
                 const pmPos = Number(pmStartAttr);
                 for (const [start, end] of selectedRanges) {
@@ -2616,8 +2638,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
             for (const span of Array.from(spans)) {
               const spanEl = span as HTMLElement;
-              const pmStart = Number(spanEl.dataset.pmStart);
-              const pmEnd = Number(spanEl.dataset.pmEnd);
+              const pmStart = Number(spanEl.dataset["pmStart"]);
+              const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
               // Check if this span overlaps with selection
               if (pmEnd > from && pmStart < to) {
@@ -2626,7 +2648,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   const spanRect = spanEl.getBoundingClientRect();
                   const pageEl = spanEl.closest(".layout-page");
                   const pageIndex = pageEl
-                    ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1
+                    ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
                     : 0;
 
                   domRects.push({
@@ -2672,7 +2694,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   for (const rect of Array.from(clientRects)) {
                     const pageEl = spanEl.closest(".layout-page");
                     const pageIndex = pageEl
-                      ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1
+                      ? Number((pageEl as HTMLElement).dataset["pageNumber"]) -
+                        1
                       : 0;
 
                     domRects.push({
@@ -2935,7 +2958,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           "layout-page-floating-image",
         ];
         const isImageContainer = (el: HTMLElement) =>
-          !!el.dataset.pmStart &&
+          !!el.dataset["pmStart"] &&
           IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
 
         // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
@@ -3058,12 +3081,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           target.classList.add("dragging");
 
           const colIndex = Number.parseInt(
-            target.dataset.columnIndex ?? "0",
+            target.dataset["columnIndex"] ?? "0",
             10,
           );
           resizeColumnIndexRef.current = colIndex;
           resizeTablePmStartRef.current = Number.parseInt(
-            target.dataset.tablePmStart ?? "0",
+            target.dataset["tablePmStart"] ?? "0",
             10,
           );
 
@@ -3076,7 +3099,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             for (let d = $pos.depth; d >= 0; d--) {
               const node = $pos.node(d);
               if (node.type.name === "table") {
-                const widths = node.attrs.columnWidths as number[] | null;
+                const widths = node.attrs["columnWidths"] as number[] | null;
                 if (
                   widths &&
                   widths[colIndex] !== undefined &&
@@ -3104,13 +3127,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           isResizingRowRef.current = true;
           resizeStartYRef.current = e.clientY;
           resizeRowHandleRef.current = target;
-          resizeRowIsEdgeRef.current = target.dataset.isEdge === "bottom";
+          resizeRowIsEdgeRef.current = target.dataset["isEdge"] === "bottom";
           target.classList.add("dragging");
 
-          const rowIndex = Number.parseInt(target.dataset.rowIndex ?? "0", 10);
+          const rowIndex = Number.parseInt(
+            target.dataset["rowIndex"] ?? "0",
+            10,
+          );
           resizeRowIndexRef.current = rowIndex;
           resizeRowTablePmStartRef.current = Number.parseInt(
-            target.dataset.tablePmStart ?? "0",
+            target.dataset["tablePmStart"] ?? "0",
             10,
           );
 
@@ -3133,7 +3159,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   idx++;
                 });
                 if (rowNode) {
-                  const height = (rowNode as typeof node).attrs.height as
+                  const height = (rowNode as typeof node).attrs["height"] as
                     | number
                     | null;
                   if (height) {
@@ -3169,12 +3195,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           target.classList.add("dragging");
 
           const colIndex = Number.parseInt(
-            target.dataset.columnIndex ?? "0",
+            target.dataset["columnIndex"] ?? "0",
             10,
           );
           resizeRightEdgeColIndexRef.current = colIndex;
           resizeRightEdgePmStartRef.current = Number.parseInt(
-            target.dataset.tablePmStart ?? "0",
+            target.dataset["tablePmStart"] ?? "0",
             10,
           );
 
@@ -3187,7 +3213,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             for (let d = $pos.depth; d >= 0; d--) {
               const node = $pos.node(d);
               if (node.type.name === "table") {
-                const widths = node.attrs.columnWidths as number[] | null;
+                const widths = node.attrs["columnWidths"] as number[] | null;
                 if (widths && widths[colIndex] !== undefined) {
                   resizeRightEdgeOrigWidthRef.current = widths[colIndex];
                 }
@@ -3204,7 +3230,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           e.preventDefault();
           e.stopPropagation();
 
-          const pmStart = imageEl.dataset.pmStart;
+          const pmStart = imageEl.dataset["pmStart"];
           if (pmStart !== undefined) {
             const pos = Number.parseInt(pmStart, 10);
             hiddenPMRef.current.setNodeSelection(pos);
@@ -3475,7 +3501,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             if (node.type.name === "table") {
               const tablePos = $pos.before(d);
               const tr = view.state.tr;
-              const widths = [...(node.attrs.columnWidths as number[])];
+              const widths = [...(node.attrs["columnWidths"] as number[])];
               widths[colIdx] = newLeft;
               widths[colIdx + 1] = newRight;
 
@@ -3493,7 +3519,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 let cellColIdx = 0;
                 // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
                 row.forEach((cell) => {
-                  const colspan = (cell.attrs.colspan as number) || 1;
+                  const colspan = (cell.attrs["colspan"] as number) || 1;
                   if (cellColIdx === colIdx || cellColIdx === colIdx + 1) {
                     const newWidth = cellColIdx === colIdx ? newLeft : newRight;
                     tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
@@ -3584,7 +3610,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const tr = view.state.tr;
 
               // Update columnWidths — only change last column
-              const widths = [...(node.attrs.columnWidths as number[])];
+              const widths = [...(node.attrs["columnWidths"] as number[])];
               widths[colIdx] = newWidth;
 
               tr.setNodeMarkup(tablePos, undefined, {
@@ -3600,7 +3626,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 let cellColIdx = 0;
                 // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
                 row.forEach((cell) => {
-                  const colspan = (cell.attrs.colspan as number) || 1;
+                  const colspan = (cell.attrs["colspan"] as number) || 1;
                   if (cellColIdx === colIdx) {
                     tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
                       ...cell.attrs,
@@ -3727,7 +3753,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         /** Extract PM position from a cell element */
         const getCellPmPos = (el: HTMLElement | null): number =>
-          el ? Number(el.dataset.pmStart) || 0 : 0;
+          el ? Number(el.dataset["pmStart"]) || 0 : 0;
 
         // Show button centered on the hovered row (left edge hover)
         if (nearLeftEdge) {
@@ -3849,7 +3875,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                     return false;
                   }
                   if (node.type.name === "paragraph") {
-                    const bookmarks = node.attrs.bookmarks as
+                    const bookmarks = node.attrs["bookmarks"] as
                       | { id: number; name: string }[]
                       | undefined;
                     if (bookmarks?.some((b) => b.name === bookmarkName)) {
@@ -3874,8 +3900,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const displayText = anchorEl.textContent || "";
               const tooltip = anchorEl.getAttribute("title") || undefined;
               const anchorRect = anchorEl.getBoundingClientRect();
-              const clickData: Parameters<NonNullable<typeof onHyperlinkClick>>[0] = { href, displayText, anchorRect };
-              if (tooltip) { clickData.tooltip = tooltip; }
+              const clickData: Parameters<
+                NonNullable<typeof onHyperlinkClick>
+              >[0] = { href, displayText, anchorRect };
+              if (tooltip) {
+                clickData.tooltip = tooltip;
+              }
               onHyperlinkClick(clickData);
             }
           }
@@ -3892,7 +3922,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const pageEl = target.closest(
               "[data-page-number]",
             ) as HTMLElement | null;
-            const pageNum = pageEl ? Number(pageEl.dataset.pageNumber) : 1;
+            const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
             if (headerEl) {
               e.preventDefault();
               e.stopPropagation();
@@ -3934,13 +3964,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
                 // Find word start (go back until whitespace/punctuation)
                 let start = offset;
-                while (start > 0 && /\w/.test(text[start - 1]!)) { // SAFETY: start > 0
+                while (start > 0 && /\w/.test(text[start - 1]!)) {
+                  // SAFETY: start > 0
                   start--;
                 }
 
                 // Find word end (go forward until whitespace/punctuation)
                 let end = offset;
-                while (end < text.length && /\w/.test(text[end]!)) { // SAFETY: end < text.length
+                while (end < text.length && /\w/.test(text[end]!)) {
+                  // SAFETY: end < text.length
                   end++;
                 }
 
@@ -4118,10 +4150,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           const isFloating =
-            node.attrs.displayMode === "float" ||
-            (node.attrs.wrapType &&
+            node.attrs["displayMode"] === "float" ||
+            (node.attrs["wrapType"] &&
               ["square", "tight", "through"].includes(
-                node.attrs.wrapType as string,
+                node.attrs["wrapType"] as string,
               ));
 
           if (isFloating) {
@@ -4668,4 +4700,3 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 );
 
 export const PagedEditor = memo(PagedEditorComponent);
-

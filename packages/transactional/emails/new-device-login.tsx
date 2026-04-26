@@ -38,30 +38,30 @@ export const Email = ({
     <Html lang={lang}>
       <Head />
       <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
-      <Body style={styles.body}>
-        <Container style={styles.container}>
-          <Heading style={styles.heading}>
+      <Body style={styles["body"]}>
+        <Container style={styles["container"]}>
+          <Heading style={styles["heading"]}>
             {t("newDeviceLogin.heading")}
           </Heading>
-          <Text style={styles.text}>{t("newDeviceLogin.body")}</Text>
-          <Section style={styles.detailsSection}>
-            <Text style={styles.detailRow}>
+          <Text style={styles["text"]}>{t("newDeviceLogin.body")}</Text>
+          <Section style={styles["detailsSection"]}>
+            <Text style={styles["detailRow"]}>
               <strong>{t("newDeviceLogin.device")}:</strong> {device}
             </Text>
-            <Text style={styles.detailRow}>
+            <Text style={styles["detailRow"]}>
               <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
             </Text>
-            <Text style={styles.detailRow}>
+            <Text style={styles["detailRow"]}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          <Section style={styles.buttonSection}>
-            <Button href={sessionsUrl} style={styles.button}>
+          <Section style={styles["buttonSection"]}>
+            <Button href={sessionsUrl} style={styles["button"]}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
-          <Hr style={styles.hr} />
-          <Text style={styles.footer}>{t("newDeviceLogin.ignore")}</Text>
+          <Hr style={styles["hr"]} />
+          <Text style={styles["footer"]}>{t("newDeviceLogin.ignore")}</Text>
         </Container>
       </Body>
     </Html>

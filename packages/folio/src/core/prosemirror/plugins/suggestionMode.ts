@@ -57,7 +57,7 @@ function findAdjacentRevision(
     for (const node of [$pos.nodeBefore, $pos.nodeAfter]) {
       if (node?.isText) {
         const mark = node.marks.find(
-          (m) => m.type.name === markTypeName && m.attrs.author === author,
+          (m) => m.type.name === markTypeName && m.attrs["author"] === author,
         );
         if (mark) {
           return mark.attrs as MarkAttrs;
@@ -112,7 +112,8 @@ function markRangeAsDeleted(
       return;
     }
     const isOwnInsert = node.marks.some(
-      (m) => m.type === insertionType && m.attrs.author === pluginState.author,
+      (m) =>
+        m.type === insertionType && m.attrs["author"] === pluginState.author,
     );
     ranges.push({ from: start, to: end, isOwnInsert });
   });
@@ -151,7 +152,7 @@ function applySuggestionInsert(
   text: string,
   pluginState: SuggestionModeState,
 ): boolean {
-  const insertionType = view.state.schema.marks.insertion;
+  const insertionType = view.state.schema.marks["insertion"];
   if (!insertionType) {
     return false;
   }
@@ -168,7 +169,7 @@ function applySuggestionInsert(
     ) || makeMarkAttrs(pluginState);
 
   if (from !== to) {
-    const deletionType = view.state.schema.marks.deletion;
+    const deletionType = view.state.schema.marks["deletion"];
     if (deletionType) {
       markRangeAsDeleted(
         tr,
@@ -186,7 +187,7 @@ function applySuggestionInsert(
   tr.insertText(text, insertAt, insertAt);
 
   // Strip inherited deletion marks — new text must never be marked as deleted.
-  const deletionType = view.state.schema.marks.deletion;
+  const deletionType = view.state.schema.marks["deletion"];
   if (deletionType) {
     tr.removeMark(insertAt, insertAt + text.length, deletionType);
   }
@@ -220,8 +221,8 @@ function handleSuggestionDelete(
   }
 
   const { $from, $to, empty } = state.selection;
-  const insertionType = state.schema.marks.insertion;
-  const deletionType = state.schema.marks.deletion;
+  const insertionType = state.schema.marks["insertion"];
+  const deletionType = state.schema.marks["deletion"];
   if (!insertionType || !deletionType) {
     return false;
   }
@@ -269,7 +270,7 @@ function handleSuggestionDelete(
   }
 
   const hasOwnInsertion = nodeAfter.marks.some(
-    (m) => m.type === insertionType && m.attrs.author === pluginState.author,
+    (m) => m.type === insertionType && m.attrs["author"] === pluginState.author,
   );
   const hasDeletion = nodeAfter.marks.some((m) => m.type === deletionType);
 
@@ -396,7 +397,7 @@ export function createSuggestionModePlugin(
         return null;
       }
 
-      const insertionType = newState.schema.marks.insertion;
+      const insertionType = newState.schema.marks["insertion"];
       if (!insertionType) {
         return null;
       }
@@ -406,7 +407,7 @@ export function createSuggestionModePlugin(
       const tr = newState.tr;
       tr.setMeta(SUGGESTION_META, true);
 
-      const deletionType = newState.schema.marks.deletion;
+      const deletionType = newState.schema.marks["deletion"];
       for (const step of userTr.steps) {
         const stepMap = step.getMap();
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror StepMap.forEach

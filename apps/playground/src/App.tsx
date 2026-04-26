@@ -1,14 +1,20 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
 import { DocxEditor, createEmptyDocument } from "@stella/folio";
-import type { DocxEditorRef, EditorMode } from "@stella/folio";
+import type {
+  Document as FolioDocument,
+  DocxEditorRef,
+  EditorMode,
+} from "@stella/folio";
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
 import { PenLineIcon, EyeIcon } from "lucide-react";
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
-  const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
+  const [currentDocument, setCurrentDocument] = useState<FolioDocument | null>(
+    null,
+  );
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState<string>("Untitled.docx");
   const [status, setStatus] = useState<string>("");

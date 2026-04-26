@@ -108,21 +108,21 @@ type SparqlResponse = {
 
 const isSparqlBinding = (value: unknown): value is SparqlBinding =>
   isRecord(value) &&
-  typeof value.value === "string" &&
-  typeof value.type === "string";
+  typeof value["value"] === "string" &&
+  typeof value["type"] === "string";
 
 const isSparqlResult = (value: unknown): value is SparqlResult =>
   isRecord(value) &&
-  isSparqlBinding(value.ecli) &&
-  isSparqlBinding(value.date) &&
-  isSparqlBinding(value.celex) &&
-  isSparqlBinding(value.type);
+  isSparqlBinding(value["ecli"]) &&
+  isSparqlBinding(value["date"]) &&
+  isSparqlBinding(value["celex"]) &&
+  isSparqlBinding(value["type"]);
 
 const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   isRecord(value) &&
-  isRecord(value.results) &&
-  Array.isArray(value.results.bindings) &&
-  value.results.bindings.every(isSparqlResult);
+  isRecord(value["results"]) &&
+  Array.isArray(value["results"]["bindings"]) &&
+  value["results"]["bindings"].every(isSparqlResult);
 
 const SPARQL_LIMIT = 10_000;
 

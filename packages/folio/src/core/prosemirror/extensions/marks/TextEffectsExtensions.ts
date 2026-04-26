@@ -64,7 +64,8 @@ export const TextShadowExtension = createMarkExtension({
         "span",
         {
           class: "docx-text-shadow",
-          style: "text-shadow: 1px 1px 2px var(--doc-text-shadow, rgba(0,0,0,0.3))",
+          style:
+            "text-shadow: 1px 1px 2px var(--doc-text-shadow, rgba(0,0,0,0.3))",
         },
         0,
       ];
@@ -87,12 +88,12 @@ export const EmphasisMarkExtension = createMarkExtension({
         tag: "span.docx-emphasis-mark",
         getAttrs: (dom) => {
           const el = dom as HTMLElement;
-          return { type: el.dataset.emType || "dot" };
+          return { type: el.dataset["emType"] || "dot" };
         },
       },
     ],
     toDOM(mark) {
-      const emType = mark.attrs.type as string;
+      const emType = mark.attrs["type"] as string;
       // CSS text-emphasis for emphasis marks
       let emStyle = "filled dot";
       switch (emType) {

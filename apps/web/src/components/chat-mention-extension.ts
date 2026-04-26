@@ -34,32 +34,32 @@ export const ChatMention = MentionExtension.extend({
       ...this.parent?.(),
       category: {
         default: "entity",
-        parseHTML: (el: HTMLElement) => el.dataset.category ?? "entity",
+        parseHTML: (el: HTMLElement) => el.dataset["category"] ?? "entity",
         renderHTML: (attrs: Record<string, unknown>) => ({
-          "data-category": attrs.category,
+          "data-category": attrs["category"],
         }),
       },
       kind: {
         default: "document",
-        parseHTML: (el: HTMLElement) => el.dataset.kind ?? "document",
+        parseHTML: (el: HTMLElement) => el.dataset["kind"] ?? "document",
         renderHTML: (attrs: Record<string, unknown>) => ({
-          "data-kind": attrs.kind,
+          "data-kind": attrs["kind"],
         }),
       },
       mimeType: {
         default: null,
-        parseHTML: (el: HTMLElement) => el.dataset.mimeType,
+        parseHTML: (el: HTMLElement) => el.dataset["mimeType"],
         renderHTML: (attrs: Record<string, unknown>) =>
-          typeof attrs.mimeType === "string"
-            ? { "data-mime-type": attrs.mimeType }
+          typeof attrs["mimeType"] === "string"
+            ? { "data-mime-type": attrs["mimeType"] }
             : {},
       },
       sourceWorkspaceId: {
         default: null,
-        parseHTML: (el: HTMLElement) => el.dataset.sourceWorkspaceId,
+        parseHTML: (el: HTMLElement) => el.dataset["sourceWorkspaceId"],
         renderHTML: (attrs: Record<string, unknown>) =>
-          typeof attrs.sourceWorkspaceId === "string"
-            ? { "data-source-workspace-id": attrs.sourceWorkspaceId }
+          typeof attrs["sourceWorkspaceId"] === "string"
+            ? { "data-source-workspace-id": attrs["sourceWorkspaceId"] }
             : {},
       },
     };

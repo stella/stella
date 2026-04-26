@@ -82,8 +82,8 @@ export function useVisualLineNavigation({
       );
       for (const span of Array.from(spans)) {
         const spanEl = span as HTMLElement;
-        const pmStart = Number(spanEl.dataset.pmStart);
-        const pmEnd = Number(spanEl.dataset.pmEnd);
+        const pmStart = Number(spanEl.dataset["pmStart"]);
+        const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
         if (spanEl.classList.contains("layout-run-tab")) {
           if (pmPos >= pmStart && pmPos < pmEnd) {
@@ -118,8 +118,8 @@ export function useVisualLineNavigation({
         if (!paragraph) {
           continue;
         }
-        const pmStart = Number(paragraph.dataset.pmStart);
-        const pmEnd = Number(paragraph.dataset.pmEnd);
+        const pmStart = Number(paragraph.dataset["pmStart"]);
+        const pmEnd = Number(paragraph.dataset["pmEnd"]);
         if (pmPos >= pmStart && pmPos <= pmEnd) {
           return emptyRun.getBoundingClientRect().left;
         }
@@ -151,8 +151,8 @@ export function useVisualLineNavigation({
         );
         for (const span of Array.from(spans)) {
           const s = span as HTMLElement;
-          const start = Number(s.dataset.pmStart);
-          const end = Number(s.dataset.pmEnd);
+          const start = Number(s.dataset["pmStart"]);
+          const end = Number(s.dataset["pmEnd"]);
           if (pmPos >= start && pmPos <= end) {
             return lineEl;
           }
@@ -167,8 +167,8 @@ export function useVisualLineNavigation({
         if (!paragraph) {
           continue;
         }
-        const pStart = Number(paragraph.dataset.pmStart);
-        const pEnd = Number(paragraph.dataset.pmEnd);
+        const pStart = Number(paragraph.dataset["pmStart"]);
+        const pEnd = Number(paragraph.dataset["pmEnd"]);
         if (pmPos >= pStart && pmPos <= pEnd) {
           const firstLineOfParagraph = paragraph.querySelector(".layout-line");
           if (firstLineOfParagraph === lineEl) {
@@ -192,8 +192,8 @@ export function useVisualLineNavigation({
       if (spans.length === 0) {
         // Empty line - return paragraph content start
         const paragraph = lineEl.closest(".layout-paragraph") as HTMLElement;
-        if (paragraph?.dataset.pmStart) {
-          return Number(paragraph.dataset.pmStart) + 1;
+        if (paragraph?.dataset["pmStart"]) {
+          return Number(paragraph.dataset["pmStart"]) + 1;
         }
         return null;
       }
@@ -202,8 +202,8 @@ export function useVisualLineNavigation({
       for (const span of Array.from(spans)) {
         const spanEl = span as HTMLElement;
         const rect = spanEl.getBoundingClientRect();
-        const pmStart = Number(spanEl.dataset.pmStart);
-        const pmEnd = Number(spanEl.dataset.pmEnd);
+        const pmStart = Number(spanEl.dataset["pmStart"]);
+        const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
         if (spanEl.classList.contains("layout-run-tab")) {
           if (clientX >= rect.left && clientX <= rect.right) {
@@ -276,8 +276,8 @@ export function useVisualLineNavigation({
       }
       const rect = closestSpan.getBoundingClientRect();
       return clientX < rect.left
-        ? Number(closestSpan.dataset.pmStart)
-        : Number(closestSpan.dataset.pmEnd);
+        ? Number(closestSpan.dataset["pmStart"])
+        : Number(closestSpan.dataset["pmEnd"]);
     },
     [],
   );

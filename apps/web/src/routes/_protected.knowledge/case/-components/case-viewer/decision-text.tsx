@@ -358,8 +358,8 @@ const EditorialSupplement = ({
   rangesByPieceId: Record<string, SearchMatchRange[]>;
 }) => {
   const t = useTranslations();
-  const abstract = cleanSupplement(metadata.abstract);
-  const legalSentence = cleanSupplement(metadata.legalSentence);
+  const abstract = cleanSupplement(metadata["abstract"]);
+  const legalSentence = cleanSupplement(metadata["legalSentence"]);
 
   if (!abstract && !legalSentence) {
     return null;
@@ -675,8 +675,8 @@ export const DecisionText = ({
       // Skip placeholder boilerplate ("není k dispozici" etc.)
       // so the counter can't report matches in text the
       // supplement renderer hides.
-      const legalSentence = cleanSupplement(metadata.legalSentence);
-      const abstract = cleanSupplement(metadata.abstract);
+      const legalSentence = cleanSupplement(metadata["legalSentence"]);
+      const abstract = cleanSupplement(metadata["abstract"]);
 
       if (legalSentence) {
         pieces.push({

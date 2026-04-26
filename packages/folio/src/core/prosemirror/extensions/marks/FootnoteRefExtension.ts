@@ -23,8 +23,8 @@ export const FootnoteRefExtension = createMarkExtension({
         getAttrs: (dom) => {
           const element = dom as HTMLElement;
           return {
-            id: element.dataset.id || "",
-            noteType: element.dataset.noteType || "footnote",
+            id: element.dataset["id"] || "",
+            noteType: element.dataset["noteType"] || "footnote",
           };
         },
       },
@@ -54,7 +54,7 @@ export const FootnoteRefExtension = createMarkExtension({
             return true;
           }
 
-          const mark = schema.marks.footnoteRef!.create({
+          const mark = schema.marks["footnoteRef"]!.create({
             id: String(id),
             noteType,
           });
@@ -72,7 +72,7 @@ export const FootnoteRefExtension = createMarkExtension({
       }
 
       let tr = state.tr;
-      const markType = schema.marks.footnoteRef;
+      const markType = schema.marks["footnoteRef"];
 
       // Remove footnoteRef marks in selection range
       tr = tr.removeMark($from.pos, $to.pos, markType);

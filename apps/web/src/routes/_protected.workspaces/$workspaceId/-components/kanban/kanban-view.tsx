@@ -580,7 +580,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
         getAllowedAxis: () => "horizontal",
       }),
       monitorForElements({
-        canMonitor: ({ source }) => source.data.type === COLUMN_DRAG_TYPE,
+        canMonitor: ({ source }) => source.data["type"] === COLUMN_DRAG_TYPE,
         onDragStart: () => {
           lastPosition.current = null;
         },
@@ -590,8 +590,8 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
             return;
           }
           const edge = extractClosestEdge(target.data);
-          const targetValue = target.data.columnValue;
-          const sourceValue = source.data.columnValue;
+          const targetValue = target.data["columnValue"];
+          const sourceValue = source.data["columnValue"];
           if (
             edge &&
             typeof targetValue === "string" &&

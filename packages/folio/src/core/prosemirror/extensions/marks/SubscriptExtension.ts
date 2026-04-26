@@ -20,7 +20,7 @@ export const SubscriptExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleSubscript: () => toggleMark(ctx.schema.marks.subscript!),
+        toggleSubscript: () => toggleMark(ctx.schema.marks["subscript"]!),
       },
     };
   },

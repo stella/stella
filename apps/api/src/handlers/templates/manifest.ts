@@ -60,8 +60,8 @@ export const manifestHandler = async ({
 
   if (
     !("version" in parsed) ||
-    typeof parsed.version !== "number" ||
-    !Number.isFinite(parsed.version)
+    typeof parsed["version"] !== "number" ||
+    !Number.isFinite(parsed["version"])
   ) {
     return new Response(
       JSON.stringify({
@@ -71,7 +71,7 @@ export const manifestHandler = async ({
     );
   }
 
-  if (!("fields" in parsed) || !Array.isArray(parsed.fields)) {
+  if (!("fields" in parsed) || !Array.isArray(parsed["fields"])) {
     return new Response(
       JSON.stringify({
         error: "'manifest.fields' must be an array.",
@@ -80,7 +80,7 @@ export const manifestHandler = async ({
     );
   }
 
-  if (!("conditions" in parsed) || !Array.isArray(parsed.conditions)) {
+  if (!("conditions" in parsed) || !Array.isArray(parsed["conditions"])) {
     return new Response(
       JSON.stringify({
         error: "'manifest.conditions' must be an array.",
@@ -89,7 +89,7 @@ export const manifestHandler = async ({
     );
   }
 
-  const fields = parsed.fields;
+  const fields = parsed["fields"];
   if (!fields.every(isFieldMeta)) {
     return new Response(
       JSON.stringify({
@@ -101,7 +101,7 @@ export const manifestHandler = async ({
     );
   }
 
-  const conditions = parsed.conditions;
+  const conditions = parsed["conditions"];
   if (!conditions.every(isNamedCondition)) {
     return new Response(
       JSON.stringify({
@@ -114,7 +114,7 @@ export const manifestHandler = async ({
   }
 
   const manifest: TemplateManifest = {
-    version: parsed.version,
+    version: parsed["version"],
     fields,
     conditions,
   };

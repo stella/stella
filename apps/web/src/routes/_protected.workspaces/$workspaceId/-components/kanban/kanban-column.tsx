@@ -166,13 +166,13 @@ export const KanbanColumn = ({
       dropTargetForElements({
         element: el,
         canDrop: ({ source }) =>
-          source.data.type === ENTITY_DRAG_TYPE ||
-          source.data.type === COLUMN_DRAG_TYPE,
+          source.data["type"] === ENTITY_DRAG_TYPE ||
+          source.data["type"] === COLUMN_DRAG_TYPE,
         getData: ({ input, element, source }) => {
           const data: Record<string | symbol, unknown> = {
             columnValue,
           };
-          if (source.data.type === COLUMN_DRAG_TYPE) {
+          if (source.data["type"] === COLUMN_DRAG_TYPE) {
             return attachClosestEdge(data, {
               input,
               element,
@@ -182,18 +182,18 @@ export const KanbanColumn = ({
           return data;
         },
         onDragEnter: ({ source, self }) => {
-          if (source.data.type === ENTITY_DRAG_TYPE) {
+          if (source.data["type"] === ENTITY_DRAG_TYPE) {
             setIsEntityDragOver(true);
-          } else if (source.data.type === COLUMN_DRAG_TYPE) {
-            const sourceVal = source.data.columnValue;
+          } else if (source.data["type"] === COLUMN_DRAG_TYPE) {
+            const sourceVal = source.data["columnValue"];
             if (sourceVal !== columnValue) {
               setClosestColumnEdge(extractClosestEdge(self.data));
             }
           }
         },
         onDrag: ({ source, self }) => {
-          if (source.data.type === COLUMN_DRAG_TYPE) {
-            const sourceVal = source.data.columnValue;
+          if (source.data["type"] === COLUMN_DRAG_TYPE) {
+            const sourceVal = source.data["columnValue"];
             if (sourceVal === columnValue) {
               return;
             }
@@ -202,9 +202,9 @@ export const KanbanColumn = ({
           }
         },
         onDragLeave: ({ source }) => {
-          if (source.data.type === ENTITY_DRAG_TYPE) {
+          if (source.data["type"] === ENTITY_DRAG_TYPE) {
             setIsEntityDragOver(false);
-          } else if (source.data.type === COLUMN_DRAG_TYPE) {
+          } else if (source.data["type"] === COLUMN_DRAG_TYPE) {
             setClosestColumnEdge(null);
           }
         },
@@ -213,10 +213,10 @@ export const KanbanColumn = ({
           setClosestColumnEdge(null);
           // Column reorder is handled by the board-level
           // monitor (forgiving: works even if dropped in gap).
-          if (source.data.type === ENTITY_DRAG_TYPE) {
+          if (source.data["type"] === ENTITY_DRAG_TYPE) {
             // SAFETY: entityId is always a string; set by our own draggable getInitialData.
             // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            const entityId = source.data.entityId as string;
+            const entityId = source.data["entityId"] as string;
             onDropRef.current(entityId);
           }
         },

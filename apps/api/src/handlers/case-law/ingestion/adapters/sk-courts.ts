@@ -99,36 +99,38 @@ const isOptionalStringArray = (
 
 const isSkSud = (value: unknown): value is SkSud =>
   isRecord(value) &&
-  isNullishString(value.registreGuid) &&
-  isNullishString(value.nazov);
+  isNullishString(value["registreGuid"]) &&
+  isNullishString(value["nazov"]);
 
 const isSkSudca = (value: unknown): value is SkSudca =>
   isRecord(value) &&
-  isNullishString(value.registreGuid) &&
-  isNullishString(value.meno);
+  isNullishString(value["registreGuid"]) &&
+  isNullishString(value["meno"]);
 
 const isSkDokument = (
   value: unknown,
 ): value is SkDokument & { size?: number } =>
   isRecord(value) &&
-  isNullishString(value.name) &&
-  isNullishString(value.fileExtension) &&
-  isNullishString(value.url) &&
-  isOptionalNumber(value.size);
+  isNullishString(value["name"]) &&
+  isNullishString(value["fileExtension"]) &&
+  isNullishString(value["url"]) &&
+  isOptionalNumber(value["size"]);
 
 const isSkOdkazovanyPredpis = (value: unknown): value is SkOdkazovanyPredpis =>
-  isRecord(value) && isNullishString(value.nazov) && isNullishString(value.url);
+  isRecord(value) &&
+  isNullishString(value["nazov"]) &&
+  isNullishString(value["url"]);
 
 const isSkApiItem = (value: unknown): value is SkApiItem =>
   isRecord(value) &&
-  isNullishString(value.guid) &&
-  isNullishString(value.spisovaZnacka) &&
-  isNullishString(value.identifikacneCislo) &&
-  isNullishValue(value.sud, isSkSud) &&
-  isNullishValue(value.sudca, isSkSudca) &&
-  isNullishString(value.datumVydania) &&
-  isNullishString(value.formaRozhodnutia) &&
-  isOptionalStringArray(value.povaha);
+  isNullishString(value["guid"]) &&
+  isNullishString(value["spisovaZnacka"]) &&
+  isNullishString(value["identifikacneCislo"]) &&
+  isNullishValue(value["sud"], isSkSud) &&
+  isNullishValue(value["sudca"], isSkSudca) &&
+  isNullishString(value["datumVydania"]) &&
+  isNullishString(value["formaRozhodnutia"]) &&
+  isOptionalStringArray(value["povaha"]);
 
 const isSkApiItemRecord = (
   value: unknown,
@@ -141,18 +143,18 @@ const isSkDetailItem = (value: unknown): value is SkDetailItem => {
   }
 
   return (
-    isNullishString(value.ecli) &&
-    isOptionalStringArray(value.podOblast) &&
-    isNullishArrayOf(value.odkazovanePredpisy, isSkOdkazovanyPredpis) &&
-    isNullishValue(value.dokument, isSkDokument) &&
-    isNullishString(value.updateDate)
+    isNullishString(value["ecli"]) &&
+    isOptionalStringArray(value["podOblast"]) &&
+    isNullishArrayOf(value["odkazovanePredpisy"], isSkOdkazovanyPredpis) &&
+    isNullishValue(value["dokument"], isSkDokument) &&
+    isNullishString(value["updateDate"])
   );
 };
 
 const isSkApiResponse = (value: unknown): value is SkApiResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value.rozhodnutieList, isSkApiItem) &&
-  isOptionalNumber(value.numFound);
+  isNullishArrayOf(value["rozhodnutieList"], isSkApiItem) &&
+  isOptionalNumber(value["numFound"]);
 
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
 const parseSkDate = (raw: string | null | undefined): string | undefined => {

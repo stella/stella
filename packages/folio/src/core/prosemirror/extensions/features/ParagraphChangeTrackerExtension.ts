@@ -58,7 +58,7 @@ function collectAffectedParaIds(
 
   doc.nodesBetween(from, to, (node) => {
     if (node.type.name === "paragraph") {
-      const paraId = node.attrs.paraId as string | undefined | null;
+      const paraId = node.attrs["paraId"] as string | undefined | null;
       if (paraId) {
         ids.add(paraId);
       } else {
@@ -93,7 +93,7 @@ function collectAffectedParaIdsFromMarkLikeStep(
     for (let d = $p.depth; d >= 0; d--) {
       const n = $p.node(d);
       if (n.type.name === "paragraph") {
-        const paraId = n.attrs.paraId as string | undefined | null;
+        const paraId = n.attrs["paraId"] as string | undefined | null;
         if (paraId) {
           return { ids: new Set([paraId]), hasUntracked: false };
         }

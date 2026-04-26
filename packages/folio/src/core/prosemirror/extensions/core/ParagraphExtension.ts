@@ -39,14 +39,26 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
 
   const formatting: ParagraphFormatting = {
     ...(attrs.alignment !== undefined ? { alignment: attrs.alignment } : {}),
-    ...(attrs.spaceBefore !== undefined ? { spaceBefore: attrs.spaceBefore } : {}),
+    ...(attrs.spaceBefore !== undefined
+      ? { spaceBefore: attrs.spaceBefore }
+      : {}),
     ...(attrs.spaceAfter !== undefined ? { spaceAfter: attrs.spaceAfter } : {}),
-    ...(attrs.lineSpacing !== undefined ? { lineSpacing: attrs.lineSpacing } : {}),
-    ...(attrs.lineSpacingRule !== undefined ? { lineSpacingRule: attrs.lineSpacingRule } : {}),
+    ...(attrs.lineSpacing !== undefined
+      ? { lineSpacing: attrs.lineSpacing }
+      : {}),
+    ...(attrs.lineSpacingRule !== undefined
+      ? { lineSpacingRule: attrs.lineSpacingRule }
+      : {}),
     ...(indentLeft !== undefined && indentLeft !== null ? { indentLeft } : {}),
-    ...(attrs.indentRight !== undefined ? { indentRight: attrs.indentRight } : {}),
-    ...(attrs.indentFirstLine !== undefined ? { indentFirstLine: attrs.indentFirstLine } : {}),
-    ...(attrs.hangingIndent !== undefined ? { hangingIndent: attrs.hangingIndent } : {}),
+    ...(attrs.indentRight !== undefined
+      ? { indentRight: attrs.indentRight }
+      : {}),
+    ...(attrs.indentFirstLine !== undefined
+      ? { indentFirstLine: attrs.indentFirstLine }
+      : {}),
+    ...(attrs.hangingIndent !== undefined
+      ? { hangingIndent: attrs.hangingIndent }
+      : {}),
     ...(attrs.borders !== undefined ? { borders: attrs.borders } : {}),
     ...(attrs.shading !== undefined ? { shading: attrs.shading } : {}),
   };
@@ -332,11 +344,14 @@ const paragraphNodeSpec: NodeSpec = {
         const element = dom as HTMLElement;
 
         // Start with data-attribute values (from our own editor's copy/paste)
-        const paraId = element.dataset.paraId;
-        const alignment = element.dataset.alignment as ParagraphAlignment | undefined;
-        const styleId = element.dataset.styleId;
-        const sectionBreakType =
-          element.dataset.sectionBreak as NonNullable<ParagraphAttrs["sectionBreakType"]> | undefined;
+        const paraId = element.dataset["paraId"];
+        const alignment = element.dataset["alignment"] as
+          | ParagraphAlignment
+          | undefined;
+        const styleId = element.dataset["styleId"];
+        const sectionBreakType = element.dataset["sectionBreak"] as
+          | NonNullable<ParagraphAttrs["sectionBreakType"]>
+          | undefined;
         const attrs: ParagraphAttrs = {
           ...(paraId ? { paraId } : {}),
           ...(alignment ? { alignment } : {}),
@@ -354,7 +369,9 @@ const paragraphNodeSpec: NodeSpec = {
           ...styleAttrs,
           ...attrs,
           // For alignment, prefer data-attribute if present, otherwise use CSS
-          ...(mergedAlignment !== undefined ? { alignment: mergedAlignment } : {}),
+          ...(mergedAlignment !== undefined
+            ? { alignment: mergedAlignment }
+            : {}),
         };
       },
     },
@@ -386,11 +403,11 @@ const paragraphNodeSpec: NodeSpec = {
     const domAttrs: Record<string, string> = {};
 
     if (style) {
-      domAttrs.style = style;
+      domAttrs["style"] = style;
     }
 
     if (listClass) {
-      domAttrs.class = listClass;
+      domAttrs["class"] = listClass;
     }
 
     if (attrs.paraId) {
@@ -410,12 +427,13 @@ const paragraphNodeSpec: NodeSpec = {
     }
 
     if (attrs.bidi) {
-      domAttrs.dir = "rtl";
+      domAttrs["dir"] = "rtl";
     }
 
     if (attrs.sectionBreakType) {
       domAttrs["data-section-break"] = attrs.sectionBreakType;
-      domAttrs.class = `${domAttrs.class ? `${domAttrs.class} ` : ""}docx-section-break`;
+      domAttrs["class"] =
+        `${domAttrs["class"] ? `${domAttrs["class"]} ` : ""}docx-section-break`;
     }
 
     return ["p", domAttrs, 0];
@@ -521,7 +539,7 @@ function makeIncreaseIndent(amount: number = 720): Command {
     state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
       if (node.type.name === "paragraph" && !seen.has(pos)) {
         seen.add(pos);
-        const currentIndent = node.attrs.indentLeft || 0;
+        const currentIndent = node.attrs["indentLeft"] || 0;
         tr = tr.setNodeMarkup(pos, undefined, {
           ...node.attrs,
           indentLeft: currentIndent + amount,
@@ -548,7 +566,7 @@ function makeDecreaseIndent(amount: number = 720): Command {
     state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
       if (node.type.name === "paragraph" && !seen.has(pos)) {
         seen.add(pos);
-        const currentIndent = node.attrs.indentLeft || 0;
+        const currentIndent = node.attrs["indentLeft"] || 0;
         const newIndent = Math.max(0, currentIndent - amount);
         tr = tr.setNodeMarkup(pos, undefined, {
           ...node.attrs,
@@ -579,27 +597,29 @@ function makeApplyStyle(schema: Schema) {
       if (resolvedAttrs?.runFormatting) {
         const rpr = resolvedAttrs.runFormatting;
 
-        if (rpr.bold && schema.marks.bold) {
-          styleMarks.push(schema.marks.bold.create());
+        if (rpr.bold && schema.marks["bold"]) {
+          styleMarks.push(schema.marks["bold"].create());
         }
-        if (rpr.italic && schema.marks.italic) {
-          styleMarks.push(schema.marks.italic.create());
+        if (rpr.italic && schema.marks["italic"]) {
+          styleMarks.push(schema.marks["italic"].create());
         }
-        if (rpr.fontSize && schema.marks.fontSize) {
-          styleMarks.push(schema.marks.fontSize.create({ size: rpr.fontSize }));
-        }
-        if (rpr.fontFamily && schema.marks.fontFamily) {
+        if (rpr.fontSize && schema.marks["fontSize"]) {
           styleMarks.push(
-            schema.marks.fontFamily.create({
+            schema.marks["fontSize"].create({ size: rpr.fontSize }),
+          );
+        }
+        if (rpr.fontFamily && schema.marks["fontFamily"]) {
+          styleMarks.push(
+            schema.marks["fontFamily"].create({
               ascii: rpr.fontFamily.ascii,
               hAnsi: rpr.fontFamily.hAnsi,
               asciiTheme: rpr.fontFamily.asciiTheme,
             }),
           );
         }
-        if (rpr.color && !rpr.color.auto && schema.marks.textColor) {
+        if (rpr.color && !rpr.color.auto && schema.marks["textColor"]) {
           styleMarks.push(
-            schema.marks.textColor.create({
+            schema.marks["textColor"].create({
               rgb: rpr.color.rgb,
               themeColor: rpr.color.themeColor,
               themeTint: rpr.color.themeTint,
@@ -607,30 +627,36 @@ function makeApplyStyle(schema: Schema) {
             }),
           );
         }
-        if (rpr.underline && rpr.underline.style !== "none" && schema.marks.underline) {
+        if (
+          rpr.underline &&
+          rpr.underline.style !== "none" &&
+          schema.marks["underline"]
+        ) {
           styleMarks.push(
-            schema.marks.underline.create({
+            schema.marks["underline"].create({
               style: rpr.underline.style,
               color: rpr.underline.color,
             }),
           );
         }
-        if ((rpr.strike || rpr.doubleStrike) && schema.marks.strike) {
+        if ((rpr.strike || rpr.doubleStrike) && schema.marks["strike"]) {
           styleMarks.push(
-            schema.marks.strike.create({ double: rpr.doubleStrike || false }),
+            schema.marks["strike"].create({
+              double: rpr.doubleStrike || false,
+            }),
           );
         }
       }
 
       // Mark types that are controlled by style definitions
       const styleControlledMarks = [
-        schema.marks.bold,
-        schema.marks.italic,
-        schema.marks.fontSize,
-        schema.marks.fontFamily,
-        schema.marks.textColor,
-        schema.marks.underline,
-        schema.marks.strike,
+        schema.marks["bold"],
+        schema.marks["italic"],
+        schema.marks["fontSize"],
+        schema.marks["fontFamily"],
+        schema.marks["textColor"],
+        schema.marks["underline"],
+        schema.marks["strike"],
       ].filter(Boolean);
 
       state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
@@ -648,20 +674,20 @@ function makeApplyStyle(schema: Schema) {
             // This prevents old style properties (e.g. heading line spacing)
             // from persisting when switching to a different style.
             const ppr = resolvedAttrs.paragraphFormatting;
-            newAttrs.alignment = ppr?.alignment ?? null;
-            newAttrs.spaceBefore = ppr?.spaceBefore ?? null;
-            newAttrs.spaceAfter = ppr?.spaceAfter ?? null;
-            newAttrs.lineSpacing = ppr?.lineSpacing ?? null;
-            newAttrs.lineSpacingRule = ppr?.lineSpacingRule ?? null;
-            newAttrs.indentLeft = ppr?.indentLeft ?? null;
-            newAttrs.indentRight = ppr?.indentRight ?? null;
-            newAttrs.indentFirstLine = ppr?.indentFirstLine ?? null;
-            newAttrs.hangingIndent = ppr?.hangingIndent ?? null;
-            newAttrs.contextualSpacing = ppr?.contextualSpacing ?? null;
-            newAttrs.keepNext = ppr?.keepNext ?? null;
-            newAttrs.keepLines = ppr?.keepLines ?? null;
-            newAttrs.pageBreakBefore = ppr?.pageBreakBefore ?? null;
-            newAttrs.outlineLevel = ppr?.outlineLevel ?? null;
+            newAttrs["alignment"] = ppr?.alignment ?? null;
+            newAttrs["spaceBefore"] = ppr?.spaceBefore ?? null;
+            newAttrs["spaceAfter"] = ppr?.spaceAfter ?? null;
+            newAttrs["lineSpacing"] = ppr?.lineSpacing ?? null;
+            newAttrs["lineSpacingRule"] = ppr?.lineSpacingRule ?? null;
+            newAttrs["indentLeft"] = ppr?.indentLeft ?? null;
+            newAttrs["indentRight"] = ppr?.indentRight ?? null;
+            newAttrs["indentFirstLine"] = ppr?.indentFirstLine ?? null;
+            newAttrs["hangingIndent"] = ppr?.hangingIndent ?? null;
+            newAttrs["contextualSpacing"] = ppr?.contextualSpacing ?? null;
+            newAttrs["keepNext"] = ppr?.keepNext ?? null;
+            newAttrs["keepLines"] = ppr?.keepLines ?? null;
+            newAttrs["pageBreakBefore"] = ppr?.pageBreakBefore ?? null;
+            newAttrs["outlineLevel"] = ppr?.outlineLevel ?? null;
           }
 
           tr = tr.setNodeMarkup(pos, undefined, newAttrs);
@@ -708,7 +734,7 @@ export function getParagraphAlignment(
   if (paragraph.type.name !== "paragraph") {
     return null;
   }
-  return paragraph.attrs.alignment || null;
+  return paragraph.attrs["alignment"] || null;
 }
 
 export function getParagraphTabs(state: EditorState): TabStop[] | null {
@@ -718,7 +744,7 @@ export function getParagraphTabs(state: EditorState): TabStop[] | null {
   if (paragraph.type.name !== "paragraph") {
     return null;
   }
-  return paragraph.attrs.tabs || null;
+  return paragraph.attrs["tabs"] || null;
 }
 
 export function getStyleId(state: EditorState): string | null {
@@ -728,7 +754,7 @@ export function getStyleId(state: EditorState): string | null {
   if (paragraph.type.name !== "paragraph") {
     return null;
   }
-  return paragraph.attrs.styleId || null;
+  return paragraph.attrs["styleId"] || null;
 }
 
 export function getParagraphBidi(state: EditorState): boolean {
@@ -738,7 +764,7 @@ export function getParagraphBidi(state: EditorState): boolean {
   if (paragraph.type.name !== "paragraph") {
     return false;
   }
-  return !!paragraph.attrs.bidi;
+  return !!paragraph.attrs["bidi"];
 }
 
 // ============================================================================
@@ -820,7 +846,7 @@ export const ParagraphExtension = createNodeExtension({
               if (paragraphNode && paragraphNode.type.name === "paragraph") {
                 // Filter out any existing _Toc bookmarks to avoid duplicates on regeneration
                 const existingBookmarks =
-                  (paragraphNode.attrs.bookmarks as {
+                  (paragraphNode.attrs["bookmarks"] as {
                     id: number;
                     name: string;
                   }[]) || [];
@@ -849,7 +875,12 @@ export const ParagraphExtension = createNodeExtension({
               s.node(
                 "paragraph",
                 { styleId: "TOCHeading", alignment: "center" },
-                [s.text("Table of Contents", s.marks.bold ? [s.marks.bold.create()] : [])],
+                [
+                  s.text(
+                    "Table of Contents",
+                    s.marks["bold"] ? [s.marks["bold"].create()] : [],
+                  ),
+                ],
               ),
             );
 
@@ -857,10 +888,10 @@ export const ParagraphExtension = createNodeExtension({
             for (const entry of bookmarkEntries) {
               const indent = entry.level * 720; // 0.5 inch per level in twips
               const tocStyleId = `TOC${entry.level + 1}`; // TOC1, TOC2, etc.
-              if (!s.marks.hyperlink) {
+              if (!s.marks["hyperlink"]) {
                 continue;
               }
-              const linkMark = s.marks.hyperlink.create({
+              const linkMark = s.marks["hyperlink"].create({
                 href: `#${entry.name}`,
               });
 
@@ -889,7 +920,7 @@ export const ParagraphExtension = createNodeExtension({
             if (paragraph.type.name !== "paragraph") {
               return false;
             }
-            const currentBidi = paragraph.attrs.bidi || false;
+            const currentBidi = paragraph.attrs["bidi"] || false;
             return setParagraphAttr("bidi", currentBidi ? null : true)(
               state,
               dispatch,
@@ -911,7 +942,7 @@ export const ParagraphExtension = createNodeExtension({
             if (paragraph.type.name !== "paragraph") {
               return false;
             }
-            const currentTabs: TabStop[] = paragraph.attrs.tabs || [];
+            const currentTabs: TabStop[] = paragraph.attrs["tabs"] || [];
             const filtered = currentTabs.filter(
               (t: TabStop) => t.position !== position,
             );
@@ -929,7 +960,7 @@ export const ParagraphExtension = createNodeExtension({
             if (paragraph.type.name !== "paragraph") {
               return false;
             }
-            const currentTabs: TabStop[] = paragraph.attrs.tabs || [];
+            const currentTabs: TabStop[] = paragraph.attrs["tabs"] || [];
             const newTabs = currentTabs.filter(
               (t: TabStop) => t.position !== position,
             );

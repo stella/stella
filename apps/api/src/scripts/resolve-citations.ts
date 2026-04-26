@@ -488,9 +488,9 @@ const printReport = async () => {
   console.log("\nTop 15 most cited decisions:");
   for (const row of topCited) {
     console.log(
-      `  ${row.case_number} (${row.court}) — ` +
-        `${row.citation_count} citations ` +
-        `(+${row.positive} / ^${row.supportive} / ~${row.neutral} / -${row.negative})`,
+      `  ${row["case_number"]} (${row["court"]}) — ` +
+        `${row["citation_count"]} citations ` +
+        `(+${row["positive"]} / ^${row["supportive"]} / ~${row["neutral"]} / -${row["negative"]})`,
     );
   }
 
@@ -505,13 +505,13 @@ const printReport = async () => {
   `);
   console.log("\nTop 20 unresolved citations (not in our DB):");
   for (const row of unresolved) {
-    const norm = normalizeCitation(String(row.citation_text));
+    const norm = normalizeCitation(String(row["citation_text"]));
     const suffix = norm.caseNumber
       ? ` → "${norm.caseNumber}"`
       : norm.ecli
         ? ` → ECLI`
         : " → ???";
-    console.log(`  [${row.cnt}x] ${row.citation_text}${suffix}`);
+    console.log(`  [${row["cnt"]}x] ${row["citation_text"]}${suffix}`);
   }
 
   // Sample ambiguous citations (same case number, multiple decisions)
@@ -525,7 +525,9 @@ const printReport = async () => {
   `);
   console.log("\nTop 15 ambiguous case numbers (multiple decisions):");
   for (const row of ambiguous) {
-    console.log(`  "${row.case_number}" → ${row.decision_count} decisions`);
+    console.log(
+      `  "${row["case_number"]}" → ${row["decision_count"]} decisions`,
+    );
   }
 
   // Sample POSITIVE polarity with context (how the rule matched)
@@ -562,20 +564,20 @@ const printReport = async () => {
       );
       for (const row of examples) {
         // Extract ~100 chars around the citation in fulltext
-        const ft = String(row.fulltext ?? "");
-        const citPos = ft.indexOf(String(row.citation_text));
+        const ft = String(row["fulltext"] ?? "");
+        const citPos = ft.indexOf(String(row["citation_text"]));
         const start = Math.max(0, citPos - 80);
         const end = Math.min(
           ft.length,
-          citPos + String(row.citation_text).length + 80,
+          citPos + String(row["citation_text"]).length + 80,
         );
         const context =
           citPos !== -1
             ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
             : "(context not found in fulltext)";
 
-        console.log(`  ${row.citing_case} → ${row.cited_case}`);
-        console.log(`    rule: /${row.rule_pattern ?? "none"}/`);
+        console.log(`  ${row["citing_case"]} → ${row["cited_case"]}`);
+        console.log(`    rule: /${row["rule_pattern"] ?? "none"}/`);
         console.log(`    context: ${context}`);
         console.log();
       }
@@ -602,19 +604,19 @@ const printReport = async () => {
   if (unknownPol.length > 0) {
     console.log("\n=== UNKNOWN polarity (10 samples for manual review) ===");
     for (const row of unknownPol) {
-      const ft = String(row.fulltext ?? "");
-      const citPos = ft.indexOf(String(row.citation_text));
+      const ft = String(row["fulltext"] ?? "");
+      const citPos = ft.indexOf(String(row["citation_text"]));
       const start = Math.max(0, citPos - 100);
       const end = Math.min(
         ft.length,
-        citPos + String(row.citation_text).length + 100,
+        citPos + String(row["citation_text"]).length + 100,
       );
       const context =
         citPos !== -1
           ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
           : "(context not found)";
 
-      console.log(`  ${row.citing_case} → ${row.cited_case}`);
+      console.log(`  ${row["citing_case"]} → ${row["cited_case"]}`);
       console.log(`    context: ${context}`);
       console.log();
     }

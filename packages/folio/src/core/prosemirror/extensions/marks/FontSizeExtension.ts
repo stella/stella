@@ -35,7 +35,7 @@ export const FontSizeExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      const size = mark.attrs.size as number;
+      const size = mark.attrs["size"] as number;
       const pt = size / 2;
       const lineHeight = (pt * 1.15).toFixed(2);
       return [
@@ -49,8 +49,8 @@ export const FontSizeExtension = createMarkExtension({
     return {
       commands: {
         setFontSize: (size: number) =>
-          setMark(ctx.schema.marks.fontSize!, { size }),
-        clearFontSize: () => removeMark(ctx.schema.marks.fontSize!),
+          setMark(ctx.schema.marks["fontSize"]!, { size }),
+        clearFontSize: () => removeMark(ctx.schema.marks["fontSize"]!),
       },
     };
   },

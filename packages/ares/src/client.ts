@@ -36,14 +36,14 @@ const parseErrorBody = (value: unknown): AresErrorResponse => {
     return {};
   }
   const result: AresErrorResponse = {};
-  if (typeof value.kod === "string") {
-    result.kod = value.kod;
+  if (typeof value["kod"] === "string") {
+    result.kod = value["kod"];
   }
-  if (typeof value.subKod === "string") {
-    result.subKod = value.subKod;
+  if (typeof value["subKod"] === "string") {
+    result.subKod = value["subKod"];
   }
-  if (typeof value.popis === "string") {
-    result.popis = value.popis;
+  if (typeof value["popis"] === "string") {
+    result.popis = value["popis"];
   }
   return result;
 };

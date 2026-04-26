@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const DESKTOP_VIEW_PORT = Number(
-  process.env.STELLA_DESKTOP_VIEW_PORT ?? "5177",
+  process.env["STELLA_DESKTOP_VIEW_PORT"] ?? "5177",
 );
 
 export default defineConfig({

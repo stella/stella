@@ -103,12 +103,12 @@ export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
   const record = value as Record<string, unknown>;
 
   return (
-    typeof record.bridgePort === "number" &&
-    typeof record.runningSince === "string" &&
-    Array.isArray(record.sessions) &&
-    typeof record.notificationPreferences === "object" &&
-    record.notificationPreferences !== null &&
-    typeof record.update === "object" &&
-    record.update !== null
+    typeof record["bridgePort"] === "number" &&
+    typeof record["runningSince"] === "string" &&
+    Array.isArray(record["sessions"]) &&
+    typeof record["notificationPreferences"] === "object" &&
+    record["notificationPreferences"] !== null &&
+    typeof record["update"] === "object" &&
+    record["update"] !== null
   );
 };

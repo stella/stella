@@ -23,7 +23,7 @@ export const isClauseParagraph = (value: unknown): value is ClauseParagraph => {
   if (!isRecord(value)) {
     return false;
   }
-  return typeof value.text === "string";
+  return typeof value["text"] === "string";
 };
 
 export const isClauseBody = (value: unknown): value is ClauseBody =>

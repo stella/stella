@@ -37,10 +37,10 @@ export const BoldExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleBold: () => toggleMark(ctx.schema.marks.bold!),
+        toggleBold: () => toggleMark(ctx.schema.marks["bold"]!),
       },
       keyboardShortcuts: {
-        "Mod-b": toggleMark(ctx.schema.marks.bold!),
+        "Mod-b": toggleMark(ctx.schema.marks["bold"]!),
       },
     };
   },

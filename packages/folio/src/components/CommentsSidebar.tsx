@@ -313,9 +313,9 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         const commentEl = target.closest(
           "[data-comment-id]",
         ) as HTMLElement | null;
-        if (commentEl?.dataset.commentId) {
-          setExpandedCard(`comment-${commentEl.dataset.commentId}`);
-          onCommentClick?.(Number(commentEl.dataset.commentId));
+        if (commentEl?.dataset["commentId"]) {
+          setExpandedCard(`comment-${commentEl.dataset["commentId"]}`);
+          onCommentClick?.(Number(commentEl.dataset["commentId"]));
           return;
         }
       }

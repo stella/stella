@@ -35,7 +35,7 @@ export const TextColorExtension = createMarkExtension({
     toDOM(mark) {
       const attrs = mark.attrs as TextColorAttrs;
       const style = textToStyle({ color: attrs });
-      const cssString = style.color ? `color: ${style.color}` : "";
+      const cssString = style["color"] ? `color: ${style["color"]}` : "";
       return ["span", { style: cssString }, 0];
     },
   },
@@ -44,14 +44,14 @@ export const TextColorExtension = createMarkExtension({
       commands: {
         setTextColor: (attrs: TextColorAttrs) => {
           if (!attrs.rgb && !attrs.themeColor) {
-            return removeMark(ctx.schema.marks.textColor!);
+            return removeMark(ctx.schema.marks["textColor"]!);
           }
           return setMark(
-            ctx.schema.marks.textColor!,
+            ctx.schema.marks["textColor"]!,
             attrs as Record<string, unknown>,
           );
         },
-        clearTextColor: () => removeMark(ctx.schema.marks.textColor!),
+        clearTextColor: () => removeMark(ctx.schema.marks["textColor"]!),
       },
     };
   },

@@ -51,8 +51,8 @@ export const Email = ({ otp, type, lang }: Props) => {
           </Section>
           <Heading style={sharedStyles.heading}>{tr("otp.heading")}</Heading>
           <Text style={sharedStyles.text}>{tr(otpTypeKey[type])}</Text>
-          <Section style={styles.codeSection}>
-            <Text style={styles.code}>{otp}</Text>
+          <Section style={styles["codeSection"]}>
+            <Text style={styles["code"]}>{otp}</Text>
           </Section>
           <Text style={sharedStyles.muted}>{tr("otp.expires")}</Text>
           <Hr style={sharedStyles.hr} />

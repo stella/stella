@@ -40,18 +40,18 @@ export const SdtExtension = createNodeExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            sdtType: el.dataset.sdtType || "richText",
-            alias: el.dataset.alias || null,
-            tag: el.dataset.tag || null,
-            lock: el.dataset.lock || null,
-            placeholder: el.dataset.placeholder || null,
-            showingPlaceholder: el.dataset.showingPlaceholder === "true",
-            dateFormat: el.dataset.dateFormat || null,
-            listItems: el.dataset.listItems || null,
+            sdtType: el.dataset["sdtType"] || "richText",
+            alias: el.dataset["alias"] || null,
+            tag: el.dataset["tag"] || null,
+            lock: el.dataset["lock"] || null,
+            placeholder: el.dataset["placeholder"] || null,
+            showingPlaceholder: el.dataset["showingPlaceholder"] === "true",
+            dateFormat: el.dataset["dateFormat"] || null,
+            listItems: el.dataset["listItems"] || null,
             checked:
-              el.dataset.checked === "true"
+              el.dataset["checked"] === "true"
                 ? true
-                : el.dataset.checked === "false"
+                : el.dataset["checked"] === "false"
                   ? false
                   : null,
           };
@@ -61,41 +61,41 @@ export const SdtExtension = createNodeExtension({
     toDOM(node) {
       const attrs = node.attrs as Record<string, unknown>;
       const dataAttrs: Record<string, string> = {
-        class: `docx-sdt docx-sdt-${attrs.sdtType}`,
-        "data-sdt-type": String(attrs.sdtType),
+        class: `docx-sdt docx-sdt-${attrs["sdtType"]}`,
+        "data-sdt-type": String(attrs["sdtType"]),
       };
 
-      if (attrs.alias) {
-        dataAttrs["data-alias"] = String(attrs.alias);
+      if (attrs["alias"]) {
+        dataAttrs["data-alias"] = String(attrs["alias"]);
       }
-      if (attrs.tag) {
-        dataAttrs["data-tag"] = String(attrs.tag);
+      if (attrs["tag"]) {
+        dataAttrs["data-tag"] = String(attrs["tag"]);
       }
-      if (attrs.lock) {
-        dataAttrs["data-lock"] = String(attrs.lock);
+      if (attrs["lock"]) {
+        dataAttrs["data-lock"] = String(attrs["lock"]);
       }
-      if (attrs.placeholder) {
-        dataAttrs["data-placeholder"] = String(attrs.placeholder);
+      if (attrs["placeholder"]) {
+        dataAttrs["data-placeholder"] = String(attrs["placeholder"]);
       }
-      if (attrs.showingPlaceholder) {
+      if (attrs["showingPlaceholder"]) {
         dataAttrs["data-showing-placeholder"] = "true";
       }
-      if (attrs.dateFormat) {
-        dataAttrs["data-date-format"] = String(attrs.dateFormat);
+      if (attrs["dateFormat"]) {
+        dataAttrs["data-date-format"] = String(attrs["dateFormat"]);
       }
-      if (attrs.listItems) {
-        dataAttrs["data-list-items"] = String(attrs.listItems);
+      if (attrs["listItems"]) {
+        dataAttrs["data-list-items"] = String(attrs["listItems"]);
       }
-      if (attrs.checked !== null) {
-        dataAttrs["data-checked"] = String(attrs.checked);
+      if (attrs["checked"] !== null) {
+        dataAttrs["data-checked"] = String(attrs["checked"]);
       }
 
       // Checkbox renders with a checkbox-like indicator
-      if (attrs.sdtType === "checkbox") {
-        dataAttrs.style =
+      if (attrs["sdtType"] === "checkbox") {
+        dataAttrs["style"] =
           "border: 1px solid #ccc; border-radius: 3px; padding: 0 2px; display: inline;";
       } else {
-        dataAttrs.style =
+        dataAttrs["style"] =
           "border-bottom: 1px dashed #999; padding: 0 1px; display: inline;";
       }
 

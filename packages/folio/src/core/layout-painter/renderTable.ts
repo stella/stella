@@ -160,7 +160,9 @@ function extractCellFloatingImages(
         width: imgRun.width,
         height: imgRun.height,
         ...(imgRun.alt !== undefined ? { alt: imgRun.alt } : {}),
-        ...(imgRun.transform !== undefined ? { transform: imgRun.transform } : {}),
+        ...(imgRun.transform !== undefined
+          ? { transform: imgRun.transform }
+          : {}),
         x,
         y,
         side,
@@ -260,10 +262,10 @@ function renderCellContent(
       imgContainer.style.top = `${img.y}px`;
       imgContainer.style.pointerEvents = "auto";
       if (img.pmStart !== undefined) {
-        imgContainer.dataset.pmStart = String(img.pmStart);
+        imgContainer.dataset["pmStart"] = String(img.pmStart);
       }
       if (img.pmEnd !== undefined) {
-        imgContainer.dataset.pmEnd = String(img.pmEnd);
+        imgContainer.dataset["pmEnd"] = String(img.pmEnd);
       }
 
       const imgEl = doc.createElement("img");
@@ -380,13 +382,13 @@ function renderNestedTable(
   }
 
   // Store metadata
-  tableEl.dataset.blockId = String(block.id);
+  tableEl.dataset["blockId"] = String(block.id);
 
   if (block.pmStart !== undefined) {
-    tableEl.dataset.pmStart = String(block.pmStart);
+    tableEl.dataset["pmStart"] = String(block.pmStart);
   }
   if (block.pmEnd !== undefined) {
-    tableEl.dataset.pmEnd = String(block.pmEnd);
+    tableEl.dataset["pmEnd"] = String(block.pmEnd);
   }
 
   // Build row Y positions for rowSpan height calculation
@@ -552,10 +554,10 @@ function renderTableCell(
       "pmStart" in firstBlock &&
       firstBlock.pmStart !== undefined
     ) {
-      cellEl.dataset.pmStart = String(firstBlock.pmStart);
+      cellEl.dataset["pmStart"] = String(firstBlock.pmStart);
     }
     if (lastBlock && "pmEnd" in lastBlock && lastBlock.pmEnd !== undefined) {
-      cellEl.dataset.pmEnd = String(lastBlock.pmEnd);
+      cellEl.dataset["pmEnd"] = String(lastBlock.pmEnd);
     }
   }
 
@@ -603,7 +605,7 @@ function renderTableRow(
   rowEl.style.height = `${rowMeasure.height}px`;
 
   // Data attributes
-  rowEl.dataset.rowIndex = String(rowIndex);
+  rowEl.dataset["rowIndex"] = String(rowIndex);
 
   // Build set of columns occupied by spanning cells from previous rows
   const occupiedColumns = new Set<number>();
@@ -675,12 +677,12 @@ function renderTableRow(
       context,
       doc,
     );
-    cellEl.dataset.cellIndex = String(cellIndex);
-    cellEl.dataset.columnIndex = String(columnIndex);
+    cellEl.dataset["cellIndex"] = String(cellIndex);
+    cellEl.dataset["columnIndex"] = String(columnIndex);
 
     // Store rowSpan info for styling
     if (rowSpan > 1) {
-      cellEl.dataset.rowSpan = String(rowSpan);
+      cellEl.dataset["rowSpan"] = String(rowSpan);
     }
 
     rowEl.append(cellEl);
@@ -747,15 +749,15 @@ export function renderTableFragment(
   tableEl.style.overflow = "hidden";
 
   // Store metadata
-  tableEl.dataset.blockId = String(fragment.blockId);
-  tableEl.dataset.fromRow = String(fragment.fromRow);
-  tableEl.dataset.toRow = String(fragment.toRow);
+  tableEl.dataset["blockId"] = String(fragment.blockId);
+  tableEl.dataset["fromRow"] = String(fragment.fromRow);
+  tableEl.dataset["toRow"] = String(fragment.toRow);
 
   if (fragment.pmStart !== undefined) {
-    tableEl.dataset.pmStart = String(fragment.pmStart);
+    tableEl.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    tableEl.dataset.pmEnd = String(fragment.pmEnd);
+    tableEl.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   // Add column resize handles at each column boundary
@@ -771,10 +773,10 @@ export function renderTableFragment(
     handle.style.height = "100%";
     handle.style.cursor = "col-resize";
     handle.style.zIndex = "10";
-    handle.dataset.columnIndex = String(col);
-    handle.dataset.tableBlockId = String(fragment.blockId);
+    handle.dataset["columnIndex"] = String(col);
+    handle.dataset["tableBlockId"] = String(fragment.blockId);
     if (fragment.pmStart !== undefined) {
-      handle.dataset.tablePmStart = String(fragment.pmStart);
+      handle.dataset["tablePmStart"] = String(fragment.pmStart);
     }
     tableEl.append(handle);
   }
@@ -815,7 +817,7 @@ export function renderTableFragment(
         rowYPositions,
         hdrIdx === 0, // first header row draws top border
       );
-      rowEl.dataset.repeatedHeader = "true";
+      rowEl.dataset["repeatedHeader"] = "true";
       tableEl.append(rowEl);
       y += hdrRowMeasure.height;
     }
@@ -870,10 +872,10 @@ export function renderTableFragment(
       rowHandle.style.height = "6px";
       rowHandle.style.cursor = "row-resize";
       rowHandle.style.zIndex = "10";
-      rowHandle.dataset.rowIndex = String(rowIdx);
-      rowHandle.dataset.tableBlockId = String(fragment.blockId);
+      rowHandle.dataset["rowIndex"] = String(rowIdx);
+      rowHandle.dataset["tableBlockId"] = String(fragment.blockId);
       if (fragment.pmStart !== undefined) {
-        rowHandle.dataset.tablePmStart = String(fragment.pmStart);
+        rowHandle.dataset["tablePmStart"] = String(fragment.pmStart);
       }
       tableEl.append(rowHandle);
     }
@@ -890,11 +892,11 @@ export function renderTableFragment(
     bottomHandle.style.height = "6px";
     bottomHandle.style.cursor = "row-resize";
     bottomHandle.style.zIndex = "10";
-    bottomHandle.dataset.rowIndex = String(block.rows.length - 1);
-    bottomHandle.dataset.tableBlockId = String(fragment.blockId);
-    bottomHandle.dataset.isEdge = "bottom";
+    bottomHandle.dataset["rowIndex"] = String(block.rows.length - 1);
+    bottomHandle.dataset["tableBlockId"] = String(fragment.blockId);
+    bottomHandle.dataset["isEdge"] = "bottom";
     if (fragment.pmStart !== undefined) {
-      bottomHandle.dataset.tablePmStart = String(fragment.pmStart);
+      bottomHandle.dataset["tablePmStart"] = String(fragment.pmStart);
     }
     tableEl.append(bottomHandle);
   }
@@ -911,11 +913,13 @@ export function renderTableFragment(
     rightHandle.style.height = "100%";
     rightHandle.style.cursor = "col-resize";
     rightHandle.style.zIndex = "10";
-    rightHandle.dataset.columnIndex = String(measure.columnWidths.length - 1);
-    rightHandle.dataset.tableBlockId = String(fragment.blockId);
-    rightHandle.dataset.isEdge = "right";
+    rightHandle.dataset["columnIndex"] = String(
+      measure.columnWidths.length - 1,
+    );
+    rightHandle.dataset["tableBlockId"] = String(fragment.blockId);
+    rightHandle.dataset["isEdge"] = "right";
     if (fragment.pmStart !== undefined) {
-      rightHandle.dataset.tablePmStart = String(fragment.pmStart);
+      rightHandle.dataset["tablePmStart"] = String(fragment.pmStart);
     }
     tableEl.append(rightHandle);
   }

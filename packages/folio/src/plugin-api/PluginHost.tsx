@@ -616,7 +616,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(
         // Call original callback if any - use ref to avoid dependency issues
         const originalCallback = (
           childrenPropsRef.current as Record<string, unknown>
-        )?.onRenderedDomContextReady;
+        )?.["onRenderedDomContextReady"];
         if (typeof originalCallback === "function") {
           originalCallback(context);
         }
@@ -646,7 +646,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(
             // Call original callback if any - use ref to avoid dependency issues
             const originalCallback = (
               childrenPropsRef.current as Record<string, unknown>
-            )?.onEditorViewReady;
+            )?.["onEditorViewReady"];
             if (typeof originalCallback === "function") {
               originalCallback(view);
             }
@@ -789,4 +789,3 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(
 
 // Export the styles constant for external use
 export { PLUGIN_HOST_STYLES };
-

@@ -31,19 +31,19 @@ const REINDEX_BATCH_SIZE = 100;
 type RawRow = Record<string, unknown>;
 
 const mapHitRow = (row: RawRow): SearchHit => ({
-  entityId: String(row.entity_id),
-  workspaceId: String(row.workspace_id),
-  workspaceName: String(row.workspace_name),
-  kind: parseEntityKind(row.kind),
-  title: String(row.title),
+  entityId: String(row["entity_id"]),
+  workspaceId: String(row["workspace_id"]),
+  workspaceName: String(row["workspace_name"]),
+  kind: parseEntityKind(row["kind"]),
+  title: String(row["title"]),
   // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-  headline: row.headline
-    ? escapeAndHighlight(JSON.stringify(row.headline))
+  headline: row["headline"]
+    ? escapeAndHighlight(JSON.stringify(row["headline"]))
     : null,
   updatedAt:
-    row.updated_at instanceof Date
-      ? row.updated_at.toISOString()
-      : String(row.updated_at),
+    row["updated_at"] instanceof Date
+      ? row["updated_at"].toISOString()
+      : String(row["updated_at"]),
 });
 
 const search = async (query: SearchQuery): Promise<SearchResult> => {
@@ -165,21 +165,21 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const lastRaw = resultRows.at(-1);
   const nextCursor =
     hasMore && lastRaw
-      ? encodeCursor(Number(lastRaw.score), String(lastRaw.entity_id))
+      ? encodeCursor(Number(lastRaw["score"]), String(lastRaw["entity_id"]))
       : null;
 
   const hits: SearchHit[] = resultRows.map(mapHitRow);
-  const totalCount = Number(countResult.at(0)?.total) || 0;
+  const totalCount = Number(countResult.at(0)?.["total"]) || 0;
 
   const kindFacets: FacetBucket[] = kindResult.map((row: RawRow) => ({
-    value: String(row.value),
-    count: Number(row.count),
+    value: String(row["value"]),
+    count: Number(row["count"]),
   }));
 
   const workspaceFacets: FacetBucket[] = wsResult.map((row: RawRow) => ({
-    value: String(row.value),
-    label: String(row.label),
-    count: Number(row.count),
+    value: String(row["value"]),
+    label: String(row["label"]),
+    count: Number(row["count"]),
   }));
 
   return {
@@ -233,14 +233,14 @@ const searchContent = async (
   ]);
 
   const hits: ContentSearchHit[] = hitsResult.map((row: RawRow) => ({
-    entityId: String(row.entity_id),
-    kind: parseEntityKind(row.kind),
-    title: String(row.title),
+    entityId: String(row["entity_id"]),
+    kind: parseEntityKind(row["kind"]),
+    title: String(row["title"]),
     // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.passage from DB (any)
-    passage: row.passage ? JSON.stringify(row.passage) : "",
+    passage: row["passage"] ? JSON.stringify(row["passage"]) : "",
   }));
 
-  const totalCount = Number(countResult.at(0)?.total) || 0;
+  const totalCount = Number(countResult.at(0)?.["total"]) || 0;
 
   return { hits, totalCount };
 };

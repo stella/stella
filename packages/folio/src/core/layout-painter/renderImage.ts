@@ -73,13 +73,13 @@ export function renderImageFragment(
   }
 
   // Store metadata
-  containerEl.dataset.blockId = String(fragment.blockId);
+  containerEl.dataset["blockId"] = String(fragment.blockId);
 
   if (fragment.pmStart !== undefined) {
-    containerEl.dataset.pmStart = String(fragment.pmStart);
+    containerEl.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    containerEl.dataset.pmEnd = String(fragment.pmEnd);
+    containerEl.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   // Create the actual image element

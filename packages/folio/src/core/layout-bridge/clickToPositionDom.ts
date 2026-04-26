@@ -39,8 +39,8 @@ export function clickToPositionDom(
   const spanEl = elements.find(
     (el) =>
       el.tagName === "SPAN" &&
-      (el as HTMLElement).dataset.pmStart !== undefined &&
-      (el as HTMLElement).dataset.pmEnd !== undefined,
+      (el as HTMLElement).dataset["pmStart"] !== undefined &&
+      (el as HTMLElement).dataset["pmEnd"] !== undefined,
   ) as HTMLElement | null;
 
   if (spanEl) {
@@ -55,8 +55,8 @@ export function clickToPositionDom(
     const paragraph = emptyRun.closest(
       ".layout-paragraph",
     ) as HTMLElement | null;
-    if (paragraph && paragraph.dataset.pmStart) {
-      return Number(paragraph.dataset.pmStart);
+    if (paragraph && paragraph.dataset["pmStart"]) {
+      return Number(paragraph.dataset["pmStart"]);
     }
   }
 
@@ -66,16 +66,16 @@ export function clickToPositionDom(
   const paragraphEl = elements.find(
     (el) =>
       el.classList.contains("layout-paragraph") &&
-      (el as HTMLElement).dataset.pmStart !== undefined,
+      (el as HTMLElement).dataset["pmStart"] !== undefined,
   ) as HTMLElement | null;
-  if (paragraphEl && paragraphEl.dataset.pmStart) {
+  if (paragraphEl && paragraphEl.dataset["pmStart"]) {
     // Try to find the nearest span within this paragraph so clicks to the
     // right of text land at the end of the line, not the paragraph start.
     const nearestPos = findNearestSpanInElement(paragraphEl, clientX, clientY);
     if (nearestPos !== null) {
       return nearestPos;
     }
-    return Number(paragraphEl.dataset.pmStart);
+    return Number(paragraphEl.dataset["pmStart"]);
   }
 
   // Check if click is within a table cell. When clicking in empty space below
@@ -100,8 +100,8 @@ function findPositionInSpan(
   clientX: number,
   _clientY: number,
 ): number | null {
-  const pmStart = Number(spanEl.dataset.pmStart);
-  const pmEnd = Number(spanEl.dataset.pmEnd);
+  const pmStart = Number(spanEl.dataset["pmStart"]);
+  const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
   // Special handling for tab spans - they have a visual width but only contain NBSP
   // Clicking anywhere on a tab should position cursor at start or end based on click position
@@ -194,8 +194,8 @@ function findNearestSpanInElement(
     const paragraph = emptyRun.closest(
       ".layout-paragraph",
     ) as HTMLElement | null;
-    if (paragraph && paragraph.dataset.pmStart) {
-      return Number(paragraph.dataset.pmStart);
+    if (paragraph && paragraph.dataset["pmStart"]) {
+      return Number(paragraph.dataset["pmStart"]);
     }
   }
 
@@ -221,12 +221,12 @@ function findNearestSpanInElement(
     const paragraph = element.querySelector(
       ".layout-paragraph[data-pm-start]",
     ) as HTMLElement | null;
-    if (paragraph?.dataset.pmStart) {
-      return Number(paragraph.dataset.pmStart);
+    if (paragraph?.dataset["pmStart"]) {
+      return Number(paragraph.dataset["pmStart"]);
     }
     // Last resort: use the cell's own PM position
-    if (element.dataset.pmStart) {
-      return Number(element.dataset.pmStart);
+    if (element.dataset["pmStart"]) {
+      return Number(element.dataset["pmStart"]);
     }
     return null;
   }
@@ -239,8 +239,8 @@ function findNearestSpanInElement(
     const paragraph = closestLine.closest(
       ".layout-paragraph",
     ) as HTMLElement | null;
-    if (paragraph?.dataset.pmStart) {
-      return Number(paragraph.dataset.pmStart);
+    if (paragraph?.dataset["pmStart"]) {
+      return Number(paragraph.dataset["pmStart"]);
     }
     return null;
   }
@@ -270,9 +270,9 @@ function findNearestSpanInElement(
 
   const rect = closestSpan.getBoundingClientRect();
   if (clientX < rect.left) {
-    return Number(closestSpan.dataset.pmStart);
+    return Number(closestSpan.dataset["pmStart"]);
   }
-  return Number(closestSpan.dataset.pmEnd);
+  return Number(closestSpan.dataset["pmEnd"]);
 }
 
 /**
@@ -293,7 +293,7 @@ function findNearestSpan(
     const paragraphs = pageEl.querySelectorAll(".layout-paragraph");
     if (paragraphs.length > 0) {
       const firstP = paragraphs[0] as HTMLElement;
-      return Number(firstP.dataset.pmStart) || 0;
+      return Number(firstP.dataset["pmStart"]) || 0;
     }
     return null;
   }
@@ -328,8 +328,8 @@ function findNearestSpan(
     const paragraph = closestLine.closest(
       ".layout-paragraph",
     ) as HTMLElement | null;
-    if (paragraph?.dataset.pmStart) {
-      return Number(paragraph.dataset.pmStart);
+    if (paragraph?.dataset["pmStart"]) {
+      return Number(paragraph.dataset["pmStart"]);
     }
     return null;
   }
@@ -365,9 +365,9 @@ function findNearestSpan(
 
   // If click is to the left, return start; if right, return end
   if (clientX < rect.left) {
-    return Number(closestSpan.dataset.pmStart);
+    return Number(closestSpan.dataset["pmStart"]);
   }
-  return Number(closestSpan.dataset.pmEnd);
+  return Number(closestSpan.dataset["pmEnd"]);
 }
 
 /**
@@ -400,8 +400,8 @@ export function getSelectionRectsFromDom(
 
   for (const span of Array.from(spans)) {
     const spanEl = span as HTMLElement;
-    const pmStart = Number(spanEl.dataset.pmStart);
-    const pmEnd = Number(spanEl.dataset.pmEnd);
+    const pmStart = Number(spanEl.dataset["pmStart"]);
+    const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
     // Check if span overlaps with selection
     if (pmEnd <= from || pmStart >= to) {
@@ -437,7 +437,9 @@ export function getSelectionRectsFromDom(
 
     // Find page index
     const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
-    const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
+    const pageIndex = pageEl
+      ? Number(pageEl.dataset["pageNumber"] || 1) - 1
+      : 0;
 
     for (const clientRect of Array.from(clientRects)) {
       rects.push({
@@ -478,8 +480,8 @@ export function getCaretPositionFromDom(
 
   for (const span of Array.from(spans)) {
     const spanEl = span as HTMLElement;
-    const pmStart = Number(spanEl.dataset.pmStart);
-    const pmEnd = Number(spanEl.dataset.pmEnd);
+    const pmStart = Number(spanEl.dataset["pmStart"]);
+    const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
     // Special handling for tab spans - use exclusive end to avoid boundary conflicts
     // Tab at [5,6) means position 6 belongs to the next run, not the tab
@@ -488,7 +490,7 @@ export function getCaretPositionFromDom(
         const spanRect = spanEl.getBoundingClientRect();
         const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
         const pageIndex = pageEl
-          ? Number(pageEl.dataset.pageNumber || 1) - 1
+          ? Number(pageEl.dataset["pageNumber"] || 1) - 1
           : 0;
         const lineEl = spanEl.closest(".layout-line");
         const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
@@ -512,7 +514,7 @@ export function getCaretPositionFromDom(
         const spanRect = spanEl.getBoundingClientRect();
         const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
         const pageIndex = pageEl
-          ? Number(pageEl.dataset.pageNumber || 1) - 1
+          ? Number(pageEl.dataset["pageNumber"] || 1) - 1
           : 0;
         const lineEl = spanEl.closest(".layout-line");
         const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
@@ -539,7 +541,9 @@ export function getCaretPositionFromDom(
 
       const rangeRect = range.getBoundingClientRect();
       const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
-      const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
+      const pageIndex = pageEl
+        ? Number(pageEl.dataset["pageNumber"] || 1) - 1
+        : 0;
       const lineEl = spanEl.closest(".layout-line");
       const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
 
@@ -556,8 +560,8 @@ export function getCaretPositionFromDom(
   const paragraphs = container.querySelectorAll(".layout-paragraph");
   for (const p of Array.from(paragraphs)) {
     const pEl = p as HTMLElement;
-    const pStart = Number(pEl.dataset.pmStart);
-    const pEnd = Number(pEl.dataset.pmEnd);
+    const pStart = Number(pEl.dataset["pmStart"]);
+    const pEnd = Number(pEl.dataset["pmEnd"]);
 
     if (pmPos >= pStart && pmPos <= pEnd) {
       const emptyRun = pEl.querySelector(".layout-empty-run");
@@ -565,7 +569,9 @@ export function getCaretPositionFromDom(
       const rect = targetEl.getBoundingClientRect();
 
       const pageEl = pEl.closest(".layout-page") as HTMLElement | null;
-      const pageIndex = pageEl ? Number(pageEl.dataset.pageNumber || 1) - 1 : 0;
+      const pageIndex = pageEl
+        ? Number(pageEl.dataset["pageNumber"] || 1) - 1
+        : 0;
       const lineEl = targetEl.closest(".layout-line") || targetEl;
       const lineHeight = (lineEl as HTMLElement).offsetHeight || 16;
 

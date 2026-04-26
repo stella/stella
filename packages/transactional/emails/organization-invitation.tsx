@@ -62,8 +62,8 @@ export const Email = ({
               invitedByUsername,
             })}
           </Text>
-          <Section style={styles.buttonSection}>
-            <Button href={inviteLink} style={styles.button}>
+          <Section style={styles["buttonSection"]}>
+            <Button href={inviteLink} style={styles["button"]}>
               {t("invitation.accept")}
             </Button>
           </Section>

@@ -30,6 +30,7 @@
     "forceConsistentCasingInFileNames": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
     "exactOptionalPropertyTypes": true,
     "erasableSyntaxOnly": true
   }

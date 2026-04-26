@@ -22,7 +22,7 @@ export const CommentExtension = createMarkExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            commentId: Number.parseInt(el.dataset.commentId || "0", 10),
+            commentId: Number.parseInt(el.dataset["commentId"] || "0", 10),
           };
         },
       },
@@ -32,7 +32,7 @@ export const CommentExtension = createMarkExtension({
         "span",
         {
           class: "docx-comment",
-          "data-comment-id": String(mark.attrs.commentId),
+          "data-comment-id": String(mark.attrs["commentId"]),
           style:
             "background-color: var(--doc-comment-bg, rgba(255, 212, 0, 0.25)); border-bottom: 2px solid var(--doc-comment-border, rgba(255, 212, 0, 0.6));",
         },

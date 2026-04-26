@@ -180,106 +180,109 @@ const isOptionalStringArray = (
 
 const isSaosJudge = (value: unknown): value is SaosJudge =>
   isRecord(value) &&
-  typeof value.name === "string" &&
-  isNullishString(value.function) &&
+  typeof value["name"] === "string" &&
+  isNullishString(value["function"]) &&
   isNullishArrayOf(
-    value.specialRoles,
+    value["specialRoles"],
     (item): item is string => typeof item === "string",
   );
 
 const isSaosCourtCase = (value: unknown): value is SaosCourtCase =>
-  isRecord(value) && isNullishString(value.caseNumber);
+  isRecord(value) && isNullishString(value["caseNumber"]);
 
 const isSaosCourt = (value: unknown): value is SaosCourt =>
   isRecord(value) &&
-  isNullishNumber(value.id) &&
-  isNullishString(value.href) &&
-  isNullishString(value.code) &&
-  isNullishString(value.name) &&
-  isNullishString(value.type);
+  isNullishNumber(value["id"]) &&
+  isNullishString(value["href"]) &&
+  isNullishString(value["code"]) &&
+  isNullishString(value["name"]) &&
+  isNullishString(value["type"]);
 
 const isSaosDivision = (value: unknown): value is SaosDivision =>
   isRecord(value) &&
-  isNullishNumber(value.id) &&
-  isNullishString(value.href) &&
-  isNullishString(value.name) &&
-  isNullishString(value.code) &&
-  isNullishString(value.type) &&
-  isNullishValue(value.court, isSaosCourt);
+  isNullishNumber(value["id"]) &&
+  isNullishString(value["href"]) &&
+  isNullishString(value["name"]) &&
+  isNullishString(value["code"]) &&
+  isNullishString(value["type"]) &&
+  isNullishValue(value["court"], isSaosCourt);
 
 const isSaosSource = (value: unknown): value is SaosSource =>
   isRecord(value) &&
-  isNullishString(value.code) &&
-  isNullishString(value.judgmentUrl) &&
-  isNullishString(value.judgmentId) &&
-  isNullishString(value.publisher) &&
-  isNullishString(value.reviser) &&
-  isNullishString(value.publicationDate);
+  isNullishString(value["code"]) &&
+  isNullishString(value["judgmentUrl"]) &&
+  isNullishString(value["judgmentId"]) &&
+  isNullishString(value["publisher"]) &&
+  isNullishString(value["reviser"]) &&
+  isNullishString(value["publicationDate"]);
 
 const isSaosReferencedRegulation = (
   value: unknown,
 ): value is SaosReferencedRegulation =>
   isRecord(value) &&
-  isNullishString(value.journalTitle) &&
-  isNullishNumber(value.journalNo) &&
-  isNullishNumber(value.journalYear) &&
-  isNullishNumber(value.journalEntry) &&
-  isNullishString(value.text);
+  isNullishString(value["journalTitle"]) &&
+  isNullishNumber(value["journalNo"]) &&
+  isNullishNumber(value["journalYear"]) &&
+  isNullishNumber(value["journalEntry"]) &&
+  isNullishString(value["text"]);
 
 const isSaosReferencedCourtCase = (
   value: unknown,
 ): value is SaosReferencedCourtCase =>
   isRecord(value) &&
-  isNullishString(value.caseNumber) &&
+  isNullishString(value["caseNumber"]) &&
   isNullishArrayOf(
-    value.judgmentIds,
+    value["judgmentIds"],
     (item): item is number => typeof item === "number",
   ) &&
-  (value.generated === undefined ||
-    value.generated === null ||
-    typeof value.generated === "boolean");
+  (value["generated"] === undefined ||
+    value["generated"] === null ||
+    typeof value["generated"] === "boolean");
 
 const isSaosItem = (value: unknown): value is SaosItem =>
   isRecord(value) &&
-  isNullishNumber(value.id) &&
-  isNullishString(value.href) &&
-  isNullishString(value.courtType) &&
-  isNullishArrayOf(value.courtCases, isSaosCourtCase) &&
-  isNullishString(value.judgmentType) &&
-  isNullishString(value.judgmentDate) &&
-  isNullishArrayOf(value.judges, isSaosJudge) &&
-  isNullishString(value.textContent) &&
-  isOptionalStringArray(value.keywords) &&
-  isNullishValue(value.division, isSaosDivision) &&
-  isNullishValue(value.source, isSaosSource) &&
-  isNullishString(value.ecli) &&
-  isOptionalStringArray(value.courtReporters) &&
-  isNullishString(value.decision) &&
-  isNullishString(value.summary) &&
-  isOptionalStringArray(value.legalBases) &&
-  isNullishArrayOf(value.referencedRegulations, isSaosReferencedRegulation) &&
-  isNullishArrayOf(value.referencedCourtCases, isSaosReferencedCourtCase) &&
-  isNullishString(value.receiptDate) &&
-  isNullishString(value.meansOfAppeal) &&
-  isNullishString(value.judgmentResult) &&
-  isNullishArrayOf(value.lowerCourtJudgments, isSaosCourtCase) &&
-  (value.dissentingOpinions === undefined ||
-    value.dissentingOpinions === null ||
-    Array.isArray(value.dissentingOpinions));
+  isNullishNumber(value["id"]) &&
+  isNullishString(value["href"]) &&
+  isNullishString(value["courtType"]) &&
+  isNullishArrayOf(value["courtCases"], isSaosCourtCase) &&
+  isNullishString(value["judgmentType"]) &&
+  isNullishString(value["judgmentDate"]) &&
+  isNullishArrayOf(value["judges"], isSaosJudge) &&
+  isNullishString(value["textContent"]) &&
+  isOptionalStringArray(value["keywords"]) &&
+  isNullishValue(value["division"], isSaosDivision) &&
+  isNullishValue(value["source"], isSaosSource) &&
+  isNullishString(value["ecli"]) &&
+  isOptionalStringArray(value["courtReporters"]) &&
+  isNullishString(value["decision"]) &&
+  isNullishString(value["summary"]) &&
+  isOptionalStringArray(value["legalBases"]) &&
+  isNullishArrayOf(
+    value["referencedRegulations"],
+    isSaosReferencedRegulation,
+  ) &&
+  isNullishArrayOf(value["referencedCourtCases"], isSaosReferencedCourtCase) &&
+  isNullishString(value["receiptDate"]) &&
+  isNullishString(value["meansOfAppeal"]) &&
+  isNullishString(value["judgmentResult"]) &&
+  isNullishArrayOf(value["lowerCourtJudgments"], isSaosCourtCase) &&
+  (value["dissentingOpinions"] === undefined ||
+    value["dissentingOpinions"] === null ||
+    Array.isArray(value["dissentingOpinions"]));
 
 const isSaosDumpResponse = (value: unknown): value is SaosDumpResponse =>
-  isRecord(value) && isNullishArrayOf(value.items, isRecord);
+  isRecord(value) && isNullishArrayOf(value["items"], isRecord);
 
 const isSaosSearchResponse = (value: unknown): value is SaosSearchResponse =>
   isRecord(value) &&
   isNullishValue(
-    value.info,
+    value["info"],
     (info): info is NonNullable<SaosSearchResponse["info"]> =>
-      isRecord(info) && isNullishNumber(info.totalResults),
+      isRecord(info) && isNullishNumber(info["totalResults"]),
   );
 
 const isSaosDetailResponse = (value: unknown): value is SaosDetailResponse =>
-  isRecord(value) && isNullishValue(value.data, isSaosItem);
+  isRecord(value) && isNullishValue(value["data"], isSaosItem);
 
 const normalizeDecisionType = (
   raw: string | null | undefined,
@@ -418,8 +421,11 @@ const normalizeDissentingOpinions = (
   for (const opinion of opinions) {
     if (typeof opinion === "string") {
       result.push(opinion);
-    } else if (isRecord(opinion) && typeof opinion.textContent === "string") {
-      result.push(opinion.textContent);
+    } else if (
+      isRecord(opinion) &&
+      typeof opinion["textContent"] === "string"
+    ) {
+      result.push(opinion["textContent"]);
     }
     // Other shapes dropped; raw data preserved in sourceRaw for re-parsing.
   }

@@ -35,12 +35,12 @@ export const FieldExtension = createNodeExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            fieldType: el.dataset.fieldType || "UNKNOWN",
-            instruction: el.dataset.instruction || "",
+            fieldType: el.dataset["fieldType"] || "UNKNOWN",
+            instruction: el.dataset["instruction"] || "",
             displayText: el.textContent || "",
-            fieldKind: el.dataset.fieldKind || "simple",
-            fldLock: el.dataset.fldLock === "true",
-            dirty: el.dataset.dirty === "true",
+            fieldKind: el.dataset["fieldKind"] || "simple",
+            fldLock: el.dataset["fldLock"] === "true",
+            dirty: el.dataset["dirty"] === "true",
           };
         },
       },

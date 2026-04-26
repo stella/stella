@@ -93,7 +93,7 @@ export const TimeEntryRow = ({
             <span
               className={cn(
                 "shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]",
-                STATUS_STYLES[entry.status] ?? STATUS_STYLES.draft,
+                STATUS_STYLES[entry.status] ?? STATUS_STYLES["draft"],
               )}
             >
               {

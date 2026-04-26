@@ -68,7 +68,7 @@ const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/;
 
 const getApiPort = () => {
-  const rawPort = process.env.STELLA_API_PORT;
+  const rawPort = process.env["STELLA_API_PORT"];
   if (!rawPort) {
     return DEFAULT_API_PORT;
   }
@@ -129,11 +129,11 @@ const buildRequestLogAttributes = ({
   }
 
   if (reqCtx?.posthogDistinctId) {
-    attributes.posthogDistinctId = reqCtx.posthogDistinctId;
+    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
   }
 
   if (reqCtx?.sessionId) {
-    attributes.sessionId = reqCtx.sessionId;
+    attributes["sessionId"] = reqCtx.sessionId;
   }
 
   if (reqCtx?.organizationId) {

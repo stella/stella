@@ -124,78 +124,80 @@ const isOptionalStringList = (
 
 const isRisContentUrl = (value: unknown): value is RisContentUrl =>
   isRecord(value) &&
-  isNullishString(value.DataType) &&
-  isNullishString(value.Url);
+  isNullishString(value["DataType"]) &&
+  isNullishString(value["Url"]);
 
 const isRisEntscheidungstext = (
   value: unknown,
 ): value is RisEntscheidungstext =>
   isRecord(value) &&
-  isNullishString(value.Geschaeftszahl) &&
-  isNullishString(value.Dokumenttyp) &&
-  isNullishString(value.Gericht) &&
-  isNullishString(value.Entscheidungsart) &&
-  isNullishString(value.Entscheidungsdatum) &&
-  isNullishString(value.DokumentUrl);
+  isNullishString(value["Geschaeftszahl"]) &&
+  isNullishString(value["Dokumenttyp"]) &&
+  isNullishString(value["Gericht"]) &&
+  isNullishString(value["Entscheidungsart"]) &&
+  isNullishString(value["Entscheidungsdatum"]) &&
+  isNullishString(value["DokumentUrl"]);
 
 const isRisStringItems = (
   value: unknown,
 ): value is { item?: string | string[] | null } =>
-  isRecord(value) && isOptionalStringList(value.item);
+  isRecord(value) && isOptionalStringList(value["item"]);
 
 const isRisEntscheidungstextItems = (
   value: unknown,
 ): value is {
   item?: RisEntscheidungstext | RisEntscheidungstext[] | null;
 } =>
-  isRecord(value) && isNullishOneOrArrayOf(value.item, isRisEntscheidungstext);
+  isRecord(value) &&
+  isNullishOneOrArrayOf(value["item"], isRisEntscheidungstext);
 
 const isRisJustiz = (value: unknown): value is RisJustiz =>
   isRecord(value) &&
-  isNullishValue(value.Rechtsgebiete, isRisStringItems) &&
-  isNullishString(value.Gericht) &&
-  isNullishValue(value.Rechtssatznummern, isRisStringItems) &&
-  isNullishValue(value.Entscheidungstexte, isRisEntscheidungstextItems);
+  isNullishValue(value["Rechtsgebiete"], isRisStringItems) &&
+  isNullishString(value["Gericht"]) &&
+  isNullishValue(value["Rechtssatznummern"], isRisStringItems) &&
+  isNullishValue(value["Entscheidungstexte"], isRisEntscheidungstextItems);
 
 const isRisJudikatur = (value: unknown): value is RisJudikatur =>
   isRecord(value) &&
-  isNullishString(value.Dokumenttyp) &&
-  isNullishValue(value.Geschaeftszahl, isRisStringItems) &&
-  isNullishValue(value.Normen, isRisStringItems) &&
-  isNullishString(value.Entscheidungsdatum) &&
-  isNullishString(value.EuropeanCaseLawIdentifier) &&
-  isNullishValue(value.Justiz, isRisJustiz);
+  isNullishString(value["Dokumenttyp"]) &&
+  isNullishValue(value["Geschaeftszahl"], isRisStringItems) &&
+  isNullishValue(value["Normen"], isRisStringItems) &&
+  isNullishString(value["Entscheidungsdatum"]) &&
+  isNullishString(value["EuropeanCaseLawIdentifier"]) &&
+  isNullishValue(value["Justiz"], isRisJustiz);
 
 const isRisMetadaten = (value: unknown): value is RisMetadaten =>
   isRecord(value) &&
   isNullishValue(
-    value.Technisch,
+    value["Technisch"],
     (technical): technical is NonNullable<RisMetadaten["Technisch"]> =>
       isRecord(technical) &&
-      isNullishString(technical.ID) &&
-      isNullishString(technical.Applikation) &&
-      isNullishString(technical.Organ),
+      isNullishString(technical["ID"]) &&
+      isNullishString(technical["Applikation"]) &&
+      isNullishString(technical["Organ"]),
   ) &&
   isNullishValue(
-    value.Allgemein,
+    value["Allgemein"],
     (general): general is NonNullable<RisMetadaten["Allgemein"]> =>
       isRecord(general) &&
-      isNullishString(general.Veroeffentlicht) &&
-      isNullishString(general.Geaendert) &&
-      isNullishString(general.DokumentUrl),
+      isNullishString(general["Veroeffentlicht"]) &&
+      isNullishString(general["Geaendert"]) &&
+      isNullishString(general["DokumentUrl"]),
   ) &&
-  isNullishValue(value.Judikatur, isRisJudikatur);
+  isNullishValue(value["Judikatur"], isRisJudikatur);
 
 const isRisUrls = (
   value: unknown,
 ): value is { ContentUrl?: RisContentUrl[] | RisContentUrl | null } =>
-  isRecord(value) && isNullishOneOrArrayOf(value.ContentUrl, isRisContentUrl);
+  isRecord(value) &&
+  isNullishOneOrArrayOf(value["ContentUrl"], isRisContentUrl);
 
 const isRisContentReference = (
   value: unknown,
 ): value is {
   Urls?: { ContentUrl?: RisContentUrl[] | RisContentUrl | null } | null;
-} => isRecord(value) && isNullishValue(value.Urls, isRisUrls);
+} => isRecord(value) && isNullishValue(value["Urls"], isRisUrls);
 
 const isRisDokumentliste = (
   value: unknown,
@@ -207,7 +209,7 @@ const isRisDokumentliste = (
   } | null;
 } =>
   isRecord(value) &&
-  isNullishValue(value.ContentReference, isRisContentReference);
+  isNullishValue(value["ContentReference"], isRisContentReference);
 
 const isRisData = (
   value: unknown,
@@ -222,24 +224,24 @@ const isRisData = (
   } | null;
 } =>
   isRecord(value) &&
-  isNullishValue(value.Metadaten, isRisMetadaten) &&
-  isNullishValue(value.Dokumentliste, isRisDokumentliste);
+  isNullishValue(value["Metadaten"], isRisMetadaten) &&
+  isNullishValue(value["Dokumentliste"], isRisDokumentliste);
 
 const isRisDocumentReference = (
   value: unknown,
 ): value is RisDocumentReference =>
-  isRecord(value) && isNullishValue(value.Data, isRisData);
+  isRecord(value) && isNullishValue(value["Data"], isRisData);
 
 const isRisApiResponse = (value: unknown): value is RisApiResponse =>
   isRecord(value) &&
   isNullishValue(
-    value.OgdSearchResult,
+    value["OgdSearchResult"],
     (
       searchResult,
     ): searchResult is NonNullable<RisApiResponse["OgdSearchResult"]> =>
       isRecord(searchResult) &&
       isNullishValue(
-        searchResult.OgdDocumentResults,
+        searchResult["OgdDocumentResults"],
         (
           documentResults,
         ): documentResults is NonNullable<
@@ -247,7 +249,7 @@ const isRisApiResponse = (value: unknown): value is RisApiResponse =>
         > =>
           isRecord(documentResults) &&
           isNullishValue(
-            documentResults.Hits,
+            documentResults["Hits"],
             (
               hits,
             ): hits is NonNullable<
@@ -263,7 +265,7 @@ const isRisApiResponse = (value: unknown): value is RisApiResponse =>
               isNullishString(hits["#text"]),
           ) &&
           isNullishOneOrArrayOf(
-            documentResults.OgdDocumentReference,
+            documentResults["OgdDocumentReference"],
             isRisDocumentReference,
           ),
       ),

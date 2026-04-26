@@ -173,23 +173,23 @@ const isFinaldocText = (
   value: unknown,
 ): value is { text: string; anonStyle: string } =>
   isRecord(value) &&
-  typeof value.text === "string" &&
-  typeof value.anonStyle === "string";
+  typeof value["text"] === "string" &&
+  typeof value["anonStyle"] === "string";
 
 const isFinaldocParagraph = (value: unknown): value is FinaldocParagraph =>
   isRecord(value) &&
-  isArrayOf(value.texts, isFinaldocText) &&
-  typeof value.styleLocalId === "number" &&
+  isArrayOf(value["texts"], isFinaldocText) &&
+  typeof value["styleLocalId"] === "number" &&
   "tableCellInfo" in value;
 
 const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
   isRecord(value) &&
-  typeof value.localId === "number" &&
-  typeof value.alignment === "string" &&
-  typeof value.hasSpaceBefore === "boolean" &&
-  typeof value.hasSpaceAfter === "boolean" &&
-  typeof value.bold === "boolean" &&
-  typeof value.italic === "boolean";
+  typeof value["localId"] === "number" &&
+  typeof value["alignment"] === "string" &&
+  typeof value["hasSpaceBefore"] === "boolean" &&
+  typeof value["hasSpaceAfter"] === "boolean" &&
+  typeof value["bold"] === "boolean" &&
+  typeof value["italic"] === "boolean";
 
 /**
  * Metadata validation is intentionally lenient: the court API
@@ -202,39 +202,39 @@ const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
 const isCzRegionalMetadata = (
   value: unknown,
 ): value is NonNullable<CzRegionalFinaldoc["metadata"]> =>
-  isRecord(value) && isNullishString(value.type);
+  isRecord(value) && isNullishString(value["type"]);
 
 const isCzRegionalFinaldoc = (value: unknown): value is CzRegionalFinaldoc =>
   isRecord(value) &&
-  isNullishString(value.verdictText) &&
-  isNullishString(value.justificationText) &&
-  isNullishArrayOf(value.header, isFinaldocParagraph) &&
-  isNullishArrayOf(value.verdict, isFinaldocParagraph) &&
-  isNullishArrayOf(value.justification, isFinaldocParagraph) &&
-  isNullishArrayOf(value.information, isFinaldocParagraph) &&
-  isNullishArrayOf(value.styles, isFinaldocStyle) &&
-  isNullishValue(value.metadata, isCzRegionalMetadata);
+  isNullishString(value["verdictText"]) &&
+  isNullishString(value["justificationText"]) &&
+  isNullishArrayOf(value["header"], isFinaldocParagraph) &&
+  isNullishArrayOf(value["verdict"], isFinaldocParagraph) &&
+  isNullishArrayOf(value["justification"], isFinaldocParagraph) &&
+  isNullishArrayOf(value["information"], isFinaldocParagraph) &&
+  isNullishArrayOf(value["styles"], isFinaldocStyle) &&
+  isNullishValue(value["metadata"], isCzRegionalMetadata);
 
 const isCzRegionalApiItem = (value: unknown): value is CzRegionalApiItem =>
   isRecord(value) &&
-  isNullishString(value.jednaciCislo) &&
-  isNullishString(value.ecli) &&
-  isNullishString(value.soud) &&
-  isNullishString(value.autor) &&
-  isNullishString(value.predmetRizeni) &&
-  isNullishString(value.datumVydani) &&
-  isNullishString(value.datumZverejneni) &&
-  isOptionalStringArray(value.klicovaSlova) &&
-  isOptionalStringArray(value.zminenaUstanoveni) &&
-  isNullishString(value.odkaz);
+  isNullishString(value["jednaciCislo"]) &&
+  isNullishString(value["ecli"]) &&
+  isNullishString(value["soud"]) &&
+  isNullishString(value["autor"]) &&
+  isNullishString(value["predmetRizeni"]) &&
+  isNullishString(value["datumVydani"]) &&
+  isNullishString(value["datumZverejneni"]) &&
+  isOptionalStringArray(value["klicovaSlova"]) &&
+  isOptionalStringArray(value["zminenaUstanoveni"]) &&
+  isNullishString(value["odkaz"]);
 
 const isCzRegionalPageResponse = (
   value: unknown,
 ): value is CzRegionalPageResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value.items, isCzRegionalApiItem) &&
-  isNullishNumber(value.totalPages) &&
-  isNullishNumber(value.pageNumber);
+  isNullishArrayOf(value["items"], isCzRegionalApiItem) &&
+  isNullishNumber(value["totalPages"]) &&
+  isNullishNumber(value["pageNumber"]);
 
 /**
  * Fetch fulltext from the /api/finaldoc/{uuid} endpoint.

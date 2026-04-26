@@ -38,9 +38,7 @@ import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionM
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 // Import ProseMirror CSS
-// @ts-expect-error -- CSS side-effect import
 import "prosemirror-view/style/prosemirror.css";
-// @ts-expect-error -- CSS side-effect import
 import "../core/prosemirror/editor.css";
 
 // ============================================================================
@@ -532,4 +530,3 @@ const HiddenProseMirrorComponent = forwardRef<
 });
 
 export const HiddenProseMirror = memo(HiddenProseMirrorComponent);
-

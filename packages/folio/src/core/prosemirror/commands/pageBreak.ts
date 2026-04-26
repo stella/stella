@@ -12,8 +12,8 @@ import { TextSelection } from "prosemirror-state";
  */
 export const insertPageBreak: Command = (state, dispatch) => {
   const { schema } = state;
-  const pageBreakType = schema.nodes.pageBreak;
-  const paragraphType = schema.nodes.paragraph;
+  const pageBreakType = schema.nodes["pageBreak"];
+  const paragraphType = schema.nodes["paragraph"];
   if (!pageBreakType || !paragraphType) {
     return false;
   }

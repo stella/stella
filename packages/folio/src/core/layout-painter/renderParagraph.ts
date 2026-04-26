@@ -166,7 +166,7 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   if (run.commentIds && run.commentIds.length > 0) {
     element.style.backgroundColor = "rgba(255, 212, 0, 0.25)";
     element.style.borderBottom = "2px solid rgba(255, 212, 0, 0.6)";
-    element.dataset.commentId = String(run.commentIds[0]);
+    element.dataset["commentId"] = String(run.commentIds[0]);
   }
 
   // Tracked insertion styling — Word-style colored underline per author
@@ -179,22 +179,23 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     }
     element.style.textDecorationColor = authorColor;
     element.classList.add("docx-insertion");
-    element.dataset.tcAuthorIdx = String(authorIdx);
+    element.dataset["tcAuthorIdx"] = String(authorIdx);
     // Author tooltip
     const insertionParts = [
       run.changeAuthor,
       run.changeDate ? new Date(run.changeDate).toLocaleDateString() : "",
     ].filter(Boolean);
-    if (insertionParts.length > 0)
-      {element.title = `Inserted: ${insertionParts.join(", ")}`;}
+    if (insertionParts.length > 0) {
+      element.title = `Inserted: ${insertionParts.join(", ")}`;
+    }
     if (run.changeAuthor) {
-      element.dataset.changeAuthor = run.changeAuthor;
+      element.dataset["changeAuthor"] = run.changeAuthor;
     }
     if (run.changeDate) {
-      element.dataset.changeDate = run.changeDate;
+      element.dataset["changeDate"] = run.changeDate;
     }
     if (run.changeRevisionId !== null) {
-      element.dataset.revisionId = String(run.changeRevisionId);
+      element.dataset["revisionId"] = String(run.changeRevisionId);
     }
   }
 
@@ -208,22 +209,23 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     }
     element.style.textDecorationColor = authorColor;
     element.classList.add("docx-deletion");
-    element.dataset.tcAuthorIdx = String(authorIdx);
+    element.dataset["tcAuthorIdx"] = String(authorIdx);
     // Author tooltip
     const deletionParts = [
       run.changeAuthor,
       run.changeDate ? new Date(run.changeDate).toLocaleDateString() : "",
     ].filter(Boolean);
-    if (deletionParts.length > 0)
-      {element.title = `Deleted: ${deletionParts.join(", ")}`;}
+    if (deletionParts.length > 0) {
+      element.title = `Deleted: ${deletionParts.join(", ")}`;
+    }
     if (run.changeAuthor) {
-      element.dataset.changeAuthor = run.changeAuthor;
+      element.dataset["changeAuthor"] = run.changeAuthor;
     }
     if (run.changeDate) {
-      element.dataset.changeDate = run.changeDate;
+      element.dataset["changeDate"] = run.changeDate;
     }
     if (run.changeRevisionId !== null) {
-      element.dataset.revisionId = String(run.changeRevisionId);
+      element.dataset["revisionId"] = String(run.changeRevisionId);
     }
   }
 
@@ -251,10 +253,10 @@ function applyPmPositions(
   pmEnd?: number,
 ): void {
   if (pmStart !== undefined) {
-    element.dataset.pmStart = String(pmStart);
+    element.dataset["pmStart"] = String(pmStart);
   }
   if (pmEnd !== undefined) {
-    element.dataset.pmEnd = String(pmEnd);
+    element.dataset["pmEnd"] = String(pmEnd);
   }
 }
 
@@ -941,17 +943,17 @@ export function renderParagraphFragment(
   fragmentEl.style.position = "relative"; // For absolute positioning of floating images
 
   // Store block and fragment metadata
-  fragmentEl.dataset.blockId = String(fragment.blockId);
-  fragmentEl.dataset.fromLine = String(fragment.fromLine);
-  fragmentEl.dataset.toLine = String(fragment.toLine);
+  fragmentEl.dataset["blockId"] = String(fragment.blockId);
+  fragmentEl.dataset["fromLine"] = String(fragment.fromLine);
+  fragmentEl.dataset["toLine"] = String(fragment.toLine);
 
   applyPmPositions(fragmentEl, fragment.pmStart, fragment.pmEnd);
 
   if (fragment.continuesFromPrev) {
-    fragmentEl.dataset.continuesFromPrev = "true";
+    fragmentEl.dataset["continuesFromPrev"] = "true";
   }
   if (fragment.continuesOnNext) {
-    fragmentEl.dataset.continuesOnNext = "true";
+    fragmentEl.dataset["continuesOnNext"] = "true";
   }
 
   // Text wrapping around floating images is handled at measurement time via
@@ -967,7 +969,7 @@ export function renderParagraphFragment(
 
   // Apply paragraph-level styles
   if (block.attrs?.styleId) {
-    fragmentEl.dataset.styleId = block.attrs.styleId;
+    fragmentEl.dataset["styleId"] = block.attrs.styleId;
   }
 
   // Apply RTL direction
@@ -1186,7 +1188,9 @@ export function renderParagraphFragment(
       isLastLine,
       isFirstLine,
       paragraphEndsWithLineBreak,
-      ...(block.attrs?.tabs !== undefined ? { tabStops: block.attrs.tabs } : {}),
+      ...(block.attrs?.tabs !== undefined
+        ? { tabStops: block.attrs.tabs }
+        : {}),
       leftIndentPx: indentLeft,
       firstLineIndentPx: isFirstLine ? firstLineIndentPx : 0,
       context,

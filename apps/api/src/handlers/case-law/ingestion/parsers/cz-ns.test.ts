@@ -131,8 +131,8 @@ describe("extractNsMetadata", () => {
       "§ 237 o. s. ř.",
       "§ 241a odst. 1 o. s. ř.",
     ]);
-    expect(source.kategorieRozhodnuti).toBe("D");
-    expect(source.zverejnenoNaWebu).toBe("2025-04-01");
+    expect(source["kategorieRozhodnuti"]).toBe("D");
+    expect(source["zverejnenoNaWebu"]).toBe("2025-04-01");
   });
 
   test("converts Domino date format (MM/DD/YYYY -> YYYY-MM-DD)", () => {
@@ -422,7 +422,7 @@ describe("parseNsDecisionHtml", () => {
       expect(tableBlocks.length).toBeGreaterThan(0);
 
       // Source metadata should contain parsed ústavní stížnost
-      expect(sourceMetadata.ustavniStiznost).toBeDefined();
+      expect(sourceMetadata["ustavniStiznost"]).toBeDefined();
     });
   });
 

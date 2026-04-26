@@ -85,7 +85,7 @@ export const useConfigStore = create<ConfigState>()(
         if (!isRecord(persisted)) {
           return current;
         }
-        const prev = isRecord(persisted.matters) ? persisted.matters : {};
+        const prev = isRecord(persisted["matters"]) ? persisted["matters"] : {};
         return {
           ...current,
           matters: { ...DEFAULT_MATTERS, ...prev },

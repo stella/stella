@@ -64,10 +64,11 @@ export const ClauseImportDialog = ({
             // SAFETY: `"clauses" in parsed` narrows; Record cast
             // reads the key for Array.isArray and .length.
             /* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
-            Array.isArray((parsed as Record<string, unknown>).clauses)
+            Array.isArray((parsed as Record<string, unknown>)["clauses"])
           ) {
             setPreviewCount(
-              ((parsed as Record<string, unknown>).clauses as unknown[]).length,
+              ((parsed as Record<string, unknown>)["clauses"] as unknown[])
+                .length,
             );
             /* eslint-enable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
           } else {

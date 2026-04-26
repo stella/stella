@@ -41,25 +41,34 @@ export const ImageExtension = createNodeExtension({
           const element = dom as HTMLImageElement;
           const alt = element.getAttribute("alt");
           const title = element.getAttribute("title");
-          const cssFloat = element.dataset.cssFloat as NonNullable<ImageAttrs["cssFloat"]> | undefined;
-          const borderWidthRaw = element.dataset.borderWidth;
+          const cssFloat = element.dataset["cssFloat"] as
+            | NonNullable<ImageAttrs["cssFloat"]>
+            | undefined;
+          const borderWidthRaw = element.dataset["borderWidth"];
           return {
             src: element.getAttribute("src") || "",
             ...(alt ? { alt } : {}),
             ...(title ? { title } : {}),
             ...(element.width ? { width: element.width } : {}),
             ...(element.height ? { height: element.height } : {}),
-            ...(element.dataset.rid ? { rId: element.dataset.rid } : {}),
+            ...(element.dataset["rid"] ? { rId: element.dataset["rid"] } : {}),
             wrapType:
-              (element.dataset.wrapType as ImageAttrs["wrapType"]) || "inline",
+              (element.dataset["wrapType"] as ImageAttrs["wrapType"]) ||
+              "inline",
             displayMode:
-              (element.dataset.displayMode as ImageAttrs["displayMode"]) ||
+              (element.dataset["displayMode"] as ImageAttrs["displayMode"]) ||
               "inline",
             ...(cssFloat ? { cssFloat } : {}),
-            ...(element.dataset.transform ? { transform: element.dataset.transform } : {}),
+            ...(element.dataset["transform"]
+              ? { transform: element.dataset["transform"] }
+              : {}),
             ...(borderWidthRaw ? { borderWidth: Number(borderWidthRaw) } : {}),
-            ...(element.dataset.borderColor ? { borderColor: element.dataset.borderColor } : {}),
-            ...(element.dataset.borderStyle ? { borderStyle: element.dataset.borderStyle } : {}),
+            ...(element.dataset["borderColor"]
+              ? { borderColor: element.dataset["borderColor"] }
+              : {}),
+            ...(element.dataset["borderStyle"]
+              ? { borderStyle: element.dataset["borderStyle"] }
+              : {}),
           };
         },
       },
@@ -72,10 +81,10 @@ export const ImageExtension = createNodeExtension({
       };
 
       if (attrs.alt) {
-        domAttrs.alt = attrs.alt;
+        domAttrs["alt"] = attrs.alt;
       }
       if (attrs.title) {
-        domAttrs.title = attrs.title;
+        domAttrs["title"] = attrs.title;
       }
       if (attrs.rId) {
         domAttrs["data-rid"] = attrs.rId;
@@ -105,11 +114,11 @@ export const ImageExtension = createNodeExtension({
       const styles: string[] = [];
 
       if (attrs.width) {
-        domAttrs.width = String(attrs.width);
+        domAttrs["width"] = String(attrs.width);
         styles.push(`width: ${attrs.width}px`);
       }
       if (attrs.height) {
-        domAttrs.height = String(attrs.height);
+        domAttrs["height"] = String(attrs.height);
         styles.push(`height: ${attrs.height}px`);
       }
 
@@ -127,7 +136,8 @@ export const ImageExtension = createNodeExtension({
         attrs.cssFloat !== "none"
       ) {
         styles.push(`float: ${attrs.cssFloat}`);
-        domAttrs.class += ` docx-image-float docx-image-float-${attrs.cssFloat}`;
+        domAttrs["class"] +=
+          ` docx-image-float docx-image-float-${attrs.cssFloat}`;
 
         const marginTop = attrs.distTop ?? 0;
         const marginBottom = attrs.distBottom ?? 0;
@@ -147,7 +157,7 @@ export const ImageExtension = createNodeExtension({
         styles.push("display: block");
         styles.push("margin-left: auto");
         styles.push("margin-right: auto");
-        domAttrs.class += " docx-image-block";
+        domAttrs["class"] += " docx-image-block";
 
         const marginTop = attrs.distTop ?? 0;
         const marginBottom = attrs.distBottom ?? 0;
@@ -169,7 +179,7 @@ export const ImageExtension = createNodeExtension({
         styles.push(`border: ${attrs.borderWidth}px ${bStyle} ${bColor}`);
       }
 
-      domAttrs.style = styles.join("; ");
+      domAttrs["style"] = styles.join("; ");
 
       return ["img", domAttrs];
     },

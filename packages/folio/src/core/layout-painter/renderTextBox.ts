@@ -70,12 +70,12 @@ export function renderTextBoxFragment(
   containerEl.style.padding = `${margins.top}px ${margins.right}px ${margins.bottom}px ${margins.left}px`;
 
   // Store metadata
-  containerEl.dataset.blockId = String(fragment.blockId);
+  containerEl.dataset["blockId"] = String(fragment.blockId);
   if (fragment.pmStart !== undefined) {
-    containerEl.dataset.pmStart = String(fragment.pmStart);
+    containerEl.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    containerEl.dataset.pmEnd = String(fragment.pmEnd);
+    containerEl.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   // Render inner paragraph content using pre-measured data
@@ -96,7 +96,9 @@ export function renderTextBoxFragment(
       y: yOffset,
       width: innerWidth,
       height: paraMeasure.totalHeight,
-      ...(paraBlock.pmStart !== undefined ? { pmStart: paraBlock.pmStart } : {}),
+      ...(paraBlock.pmStart !== undefined
+        ? { pmStart: paraBlock.pmStart }
+        : {}),
       ...(paraBlock.pmEnd !== undefined ? { pmEnd: paraBlock.pmEnd } : {}),
       fromLine: 0,
       toLine: paraMeasure.lines.length,

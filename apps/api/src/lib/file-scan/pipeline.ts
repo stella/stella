@@ -31,5 +31,7 @@ export const mapMatchFinding = (m: Match): ScanFinding => ({
   rule: m.rule,
   severity: m.severity ? MATCH_SEVERITY_TO_VERDICT[m.severity] : "warn",
   message:
-    typeof m.meta?.description === "string" ? m.meta.description : m.rule,
+    typeof m.meta?.["description"] === "string"
+      ? m.meta["description"]
+      : m.rule,
 });

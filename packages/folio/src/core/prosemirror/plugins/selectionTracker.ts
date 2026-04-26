@@ -90,38 +90,38 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   const paragraphFormatting: ParagraphFormatting = {};
 
   if (paragraph.type.name === "paragraph") {
-    if (paragraph.attrs.alignment) {
-      paragraphFormatting.alignment = paragraph.attrs.alignment;
+    if (paragraph.attrs["alignment"]) {
+      paragraphFormatting.alignment = paragraph.attrs["alignment"];
     }
-    if (paragraph.attrs.lineSpacing) {
-      paragraphFormatting.lineSpacing = paragraph.attrs.lineSpacing;
-      paragraphFormatting.lineSpacingRule = paragraph.attrs.lineSpacingRule;
+    if (paragraph.attrs["lineSpacing"]) {
+      paragraphFormatting.lineSpacing = paragraph.attrs["lineSpacing"];
+      paragraphFormatting.lineSpacingRule = paragraph.attrs["lineSpacingRule"];
     }
-    if (paragraph.attrs.indentLeft) {
-      paragraphFormatting.indentLeft = paragraph.attrs.indentLeft;
+    if (paragraph.attrs["indentLeft"]) {
+      paragraphFormatting.indentLeft = paragraph.attrs["indentLeft"];
     }
-    if (paragraph.attrs.indentRight) {
-      paragraphFormatting.indentRight = paragraph.attrs.indentRight;
+    if (paragraph.attrs["indentRight"]) {
+      paragraphFormatting.indentRight = paragraph.attrs["indentRight"];
     }
-    if (paragraph.attrs.indentFirstLine) {
-      paragraphFormatting.indentFirstLine = paragraph.attrs.indentFirstLine;
+    if (paragraph.attrs["indentFirstLine"]) {
+      paragraphFormatting.indentFirstLine = paragraph.attrs["indentFirstLine"];
     }
-    if (paragraph.attrs.hangingIndent) {
-      paragraphFormatting.hangingIndent = paragraph.attrs.hangingIndent;
+    if (paragraph.attrs["hangingIndent"]) {
+      paragraphFormatting.hangingIndent = paragraph.attrs["hangingIndent"];
     }
-    if (paragraph.attrs.tabs) {
-      paragraphFormatting.tabs = paragraph.attrs.tabs;
+    if (paragraph.attrs["tabs"]) {
+      paragraphFormatting.tabs = paragraph.attrs["tabs"];
     }
-    if (paragraph.attrs.numPr) {
-      paragraphFormatting.numPr = paragraph.attrs.numPr;
+    if (paragraph.attrs["numPr"]) {
+      paragraphFormatting.numPr = paragraph.attrs["numPr"];
     }
-    if (paragraph.attrs.styleId) {
-      paragraphFormatting.styleId = paragraph.attrs.styleId;
+    if (paragraph.attrs["styleId"]) {
+      paragraphFormatting.styleId = paragraph.attrs["styleId"];
     }
   }
 
   // List detection
-  const numPr = paragraph.attrs?.numPr;
+  const numPr = paragraph.attrs?.["numPr"];
   const inList = !!numPr?.numId;
   const listType =
     numPr?.numId === 1 ? "bullet" : numPr?.numId ? "numbered" : undefined;
@@ -134,8 +134,8 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   let inDeletion = false;
 
   for (const mark of allMarks) {
-    if (mark.type.name === "comment" && mark.attrs.commentId) {
-      activeCommentIds.push(mark.attrs.commentId);
+    if (mark.type.name === "comment" && mark.attrs["commentId"]) {
+      activeCommentIds.push(mark.attrs["commentId"]);
     }
     if (mark.type.name === "insertion") {
       inInsertion = true;
@@ -182,12 +182,12 @@ function extractTextFormatting(state: EditorState): TextFormatting {
         break;
       case "underline":
         formatting.underline = {
-          style: mark.attrs.style || "single",
-          color: mark.attrs.color,
+          style: mark.attrs["style"] || "single",
+          color: mark.attrs["color"],
         };
         break;
       case "strike":
-        if (mark.attrs.double) {
+        if (mark.attrs["double"]) {
           formatting.doubleStrike = true;
         } else {
           formatting.strike = true;
@@ -195,23 +195,23 @@ function extractTextFormatting(state: EditorState): TextFormatting {
         break;
       case "textColor":
         formatting.color = {
-          rgb: mark.attrs.rgb,
-          themeColor: mark.attrs.themeColor,
-          themeTint: mark.attrs.themeTint,
-          themeShade: mark.attrs.themeShade,
+          rgb: mark.attrs["rgb"],
+          themeColor: mark.attrs["themeColor"],
+          themeTint: mark.attrs["themeTint"],
+          themeShade: mark.attrs["themeShade"],
         };
         break;
       case "highlight":
-        formatting.highlight = mark.attrs.color;
+        formatting.highlight = mark.attrs["color"];
         break;
       case "fontSize":
-        formatting.fontSize = mark.attrs.size;
+        formatting.fontSize = mark.attrs["size"];
         break;
       case "fontFamily":
         formatting.fontFamily = {
-          ascii: mark.attrs.ascii,
-          hAnsi: mark.attrs.hAnsi,
-          asciiTheme: mark.attrs.asciiTheme,
+          ascii: mark.attrs["ascii"],
+          hAnsi: mark.attrs["hAnsi"],
+          asciiTheme: mark.attrs["asciiTheme"],
         };
         break;
       case "superscript":

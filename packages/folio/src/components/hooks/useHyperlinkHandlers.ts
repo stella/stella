@@ -7,7 +7,10 @@ import {
   removeHyperlink,
   setHyperlink,
 } from "../../core/prosemirror";
-import type { HyperlinkData, UseHyperlinkDialogReturn } from "../dialogs/HyperlinkDialog";
+import type {
+  HyperlinkData,
+  UseHyperlinkDialogReturn,
+} from "../dialogs/HyperlinkDialog";
 import type { HyperlinkPopupData } from "../ui/HyperlinkPopup";
 
 // Toast stub — mirrors the one in DocxEditor.tsx.
@@ -17,7 +20,7 @@ const toast = (msg: string) => {
     return;
   } // debounce rapid calls (e.g., key repeat)
   const el = document.createElement("div");
-  el.dataset.folioToast = "";
+  el.dataset["folioToast"] = "";
   el.textContent = msg;
   Object.assign(el.style, {
     position: "fixed",
@@ -156,7 +159,7 @@ export const useHyperlinkHandlers = ({
       }
 
       // Find the full hyperlink mark range at current cursor position
-      const hlType = view.state.schema.marks.hyperlink;
+      const hlType = view.state.schema.marks["hyperlink"];
       if (!hlType) {
         return;
       }
@@ -181,7 +184,8 @@ export const useHyperlinkHandlers = ({
           const hlMark = node.isText
             ? node.marks.find(
                 (m) =>
-                  m.type === hlType && m.attrs.href === linkMark.attrs.href,
+                  m.type === hlType &&
+                  m.attrs["href"] === linkMark.attrs["href"],
               )
             : null;
 
@@ -213,7 +217,7 @@ export const useHyperlinkHandlers = ({
         const tr = view.state.tr;
         const newMark = hlType.create({
           href,
-          tooltip: linkMark.attrs.tooltip,
+          tooltip: linkMark.attrs["tooltip"],
         });
         const textNode = view.state.schema.text(displayText, [
           ...$from.marks().filter((m) => m.type !== hlType),
@@ -235,7 +239,7 @@ export const useHyperlinkHandlers = ({
       return;
     }
 
-    const hlType = view.state.schema.marks.hyperlink;
+    const hlType = view.state.schema.marks["hyperlink"];
     if (!hlType) {
       return;
     }
@@ -260,7 +264,8 @@ export const useHyperlinkHandlers = ({
         if (!linkMark && node.isText) {
           const m = node.marks.find(
             (mk) =>
-              mk.type === hlType && mk.attrs.href === hyperlinkPopupData.href,
+              mk.type === hlType &&
+              mk.attrs["href"] === hyperlinkPopupData.href,
           );
           if (m) {
             linkMark = m;
@@ -287,7 +292,8 @@ export const useHyperlinkHandlers = ({
       const hlMark = node.isText
         ? node.marks.find(
             // oxlint-disable-next-line typescript/no-non-null-assertion
-            (m) => m.type === hlType && m.attrs.href === linkMark!.attrs.href,
+            (m) =>
+              m.type === hlType && m.attrs["href"] === linkMark!.attrs["href"],
           )
         : null;
 

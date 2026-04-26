@@ -37,12 +37,12 @@ export const BidiShortcutExtension = createExtension({
 
               if (event.code === "ShiftLeft") {
                 event.preventDefault();
-                cmds.setLtr?.()(view.state, view.dispatch);
+                cmds["setLtr"]?.()(view.state, view.dispatch);
                 return true;
               }
               if (event.code === "ShiftRight") {
                 event.preventDefault();
-                cmds.setRtl?.()(view.state, view.dispatch);
+                cmds["setRtl"]?.()(view.state, view.dispatch);
                 return true;
               }
               return false;
