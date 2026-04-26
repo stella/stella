@@ -319,7 +319,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
     name: "fetch",
     scope: "stella:read",
   },
-] satisfies McpToolDefinition[];
+] as const satisfies readonly McpToolDefinition[];
 
 export const ANONYMIZED_COMPAT_TOOL_DEFINITIONS = [
   {
@@ -354,7 +354,7 @@ export const ANONYMIZED_COMPAT_TOOL_DEFINITIONS = [
     name: "fetch",
     scope: "stella:read_anonymized",
   },
-] satisfies McpToolDefinition[];
+] as const satisfies readonly McpToolDefinition[];
 
 const handleCompatSearchTool: McpToolHandler = async ({
   args,

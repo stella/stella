@@ -14,7 +14,7 @@ type SeedRule = {
   language: string;
 };
 
-export const SEED_RULES: SeedRule[] = [
+export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
   { pattern: "v\\s+souladu\\s+s", polarity: "positive", language: "cs" },
   { pattern: "odkazuje\\s+na", polarity: "positive", language: "cs" },

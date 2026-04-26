@@ -1,7 +1,7 @@
 /** PK\x03\x04 — local file header signature. */
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const;
 
-export const ZIP_BASED_MIMES = [
+export const ZIP_BASED_MIMES: readonly string[] = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-word.document.macroEnabled.12",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.template",

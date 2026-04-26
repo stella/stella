@@ -30,7 +30,7 @@ export type WorkspaceGroup = {
   workspaces: Workspace[];
 };
 
-export const ALL_COLUMNS: MattersColumnId[] = [
+export const ALL_COLUMNS: readonly MattersColumnId[] = [
   "client",
   "reference",
   "entityCount",

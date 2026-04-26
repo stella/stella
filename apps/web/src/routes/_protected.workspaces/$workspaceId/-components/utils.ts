@@ -18,7 +18,7 @@ export type ColorVariants = {
 };
 
 /** Named preset colors with CSS variable references. */
-const NAMED_COLORS = [
+const NAMED_COLORS = Object.freeze([
   "red",
   "orange",
   "amber",
@@ -35,7 +35,7 @@ const NAMED_COLORS = [
   "purple",
   "fuchsia",
   "gray",
-] as const;
+] as const);
 
 type NamedColor = (typeof NAMED_COLORS)[number];
 
@@ -87,7 +87,7 @@ export const resolveOptionColor = (color: OptionColor): ColorVariants => {
 export const optionColorsMap = namedColorsMap as Record<string, ColorVariants>;
 
 /** The 16 named preset color keys. */
-export const optionColors: OptionColor[] = [...NAMED_COLORS];
+export const optionColors: readonly OptionColor[] = NAMED_COLORS;
 
 export const downloadFile = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);

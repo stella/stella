@@ -178,7 +178,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     name: "read_contact",
     scope: "stella:read",
   },
-] satisfies McpToolDefinition[];
+] as const satisfies readonly McpToolDefinition[];
 
 const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
   const status = parseOptionalEnum({

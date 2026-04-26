@@ -6,7 +6,7 @@ import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
  * These views are created automatically on workspace creation
  * and cannot be deleted.
  */
-export const REQUIRED_VIEW_LAYOUTS: ViewLayoutType[] = [
+export const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = [
   "overview",
   "table",
   "filesystem",
