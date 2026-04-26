@@ -267,10 +267,7 @@ export class StyleResolver {
       }
     }
     if (style.rPr) {
-      const merged = this.mergeTextFormatting(
-        result.runFormatting,
-        style.rPr,
-      );
+      const merged = this.mergeTextFormatting(result.runFormatting, style.rPr);
       if (merged !== undefined) {
         result.runFormatting = merged;
       }

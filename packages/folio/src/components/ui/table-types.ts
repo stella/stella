@@ -172,7 +172,9 @@ const createEmptyRow = (
       type: "tableCell",
       content: [{ type: "paragraph" as const, content: [], formatting: {} }],
       formatting: (() => {
-        if (!templateCell.formatting) return {};
+        if (!templateCell.formatting) {
+          return {};
+        }
         const { vMerge: _vm, ...rest } = templateCell.formatting;
         return rest;
       })(),
@@ -372,8 +374,14 @@ export const splitCell = (
                       },
                     ],
               formatting: (() => {
-                if (!rowCell.formatting) return {};
-                const { gridSpan: _gs, vMerge: _vm, ...rest } = rowCell.formatting;
+                if (!rowCell.formatting) {
+                  return {};
+                }
+                const {
+                  gridSpan: _gs,
+                  vMerge: _vm,
+                  ...rest
+                } = rowCell.formatting;
                 return rest;
               })(),
             });
@@ -382,22 +390,21 @@ export const splitCell = (
           newCells.push({
             ...rowCell,
             formatting: (() => {
-              if (!rowCell.formatting) return {};
+              if (!rowCell.formatting) {
+                return {};
+              }
               const { vMerge: _vm, ...rest } = rowCell.formatting;
               return rest;
             })(),
           });
         } else if (rowCell.formatting?.vMerge === "continue") {
+          const { vMerge: _vm, ...restFormatting } = rowCell.formatting;
           newCells.push({
             type: "tableCell",
             content: [
               { type: "paragraph" as const, content: [], formatting: {} },
             ],
-            formatting: (() => {
-              if (!rowCell.formatting) return {};
-              const { vMerge: _vm, ...rest } = rowCell.formatting;
-              return rest;
-            })(),
+            formatting: restFormatting,
           });
         } else {
           newCells.push(rowCell);

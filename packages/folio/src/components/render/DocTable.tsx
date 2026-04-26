@@ -51,7 +51,9 @@ export type DocTableProps = {
   /** Additional inline styles */
   style?: CSSProperties | undefined;
   /** Render function for paragraph content */
-  renderParagraph?: ((paragraph: Paragraph, index: number) => ReactNode) | undefined;
+  renderParagraph?:
+    | ((paragraph: Paragraph, index: number) => ReactNode)
+    | undefined;
   /** Render function for nested tables */
   renderTable?: ((table: Table, index: number) => ReactNode) | undefined;
   /** Index for key generation */
@@ -792,4 +794,3 @@ export function getTableDimensions(table: Table): {
     columns: getTableColumnCount(table),
   };
 }
-

@@ -1608,9 +1608,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       preset.conditionals = {};
                       for (const cond of docStyle.tblStylePr) {
                         const entry: Record<string, unknown> = {};
-                        if (cond.tcPr?.shading?.fill) {
+                        if (cond.tcPr?.shading?.fill?.rgb) {
                           entry["backgroundColor"] =
-                            `#${cond.tcPr.shading.fill}`;
+                            `#${cond.tcPr.shading.fill.rgb}`;
                         }
                         if (cond.tcPr?.borders) {
                           const borders: Record<string, unknown> = {};

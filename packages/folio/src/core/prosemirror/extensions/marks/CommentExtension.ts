@@ -20,9 +20,8 @@ export const CommentExtension = createMarkExtension({
       {
         tag: "span.docx-comment",
         getAttrs(dom) {
-          const el = dom as HTMLElement;
           return {
-            commentId: Number.parseInt(el.dataset["commentId"] || "0", 10),
+            commentId: Number.parseInt(dom.dataset["commentId"] ?? "0", 10),
           };
         },
       },

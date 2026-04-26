@@ -53,7 +53,9 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     fontSize: run.fontSize ?? 12,
     ...(run.bold !== undefined ? { bold: run.bold } : {}),
     ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined ? { letterSpacing: run.letterSpacing } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
   };
 }
 

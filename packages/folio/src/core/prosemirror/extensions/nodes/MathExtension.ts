@@ -28,21 +28,19 @@ export const MathExtension = createNodeExtension({
       {
         tag: "span.docx-math",
         getAttrs(dom) {
-          const el = dom as HTMLElement;
           return {
-            display: el.dataset["display"] || "inline",
-            ommlXml: el.dataset["ommlXml"] || "",
-            plainText: el.textContent || "",
+            display: dom.dataset["display"] ?? "inline",
+            ommlXml: dom.dataset["ommlXml"] ?? "",
+            plainText: dom.textContent ?? "",
           };
         },
       },
     ],
     toDOM(node) {
-      const { display, ommlXml, plainText } = node.attrs as {
-        display: string;
-        ommlXml: string;
-        plainText: string;
-      };
+      // SAFETY: Math node attrs always match this shape per schema
+      const display = String(node.attrs["display"]);
+      const ommlXml = String(node.attrs["ommlXml"]);
+      const plainText = String(node.attrs["plainText"]);
 
       const text = plainText || "[equation]";
 

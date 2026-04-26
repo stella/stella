@@ -271,7 +271,7 @@ export function useSelectionOverlay(
     }
 
     // Import dynamically to avoid circular dependencies
-    import("../core/layout-bridge/selectionRects").then(
+    void import("../core/layout-bridge/selectionRects").then(
       ({ selectionToRects, getCaretPosition }) => {
         const { from, to } = pmSelection;
 
@@ -292,4 +292,3 @@ export function useSelectionOverlay(
 
   return { selectionRects, caretPosition };
 }
-

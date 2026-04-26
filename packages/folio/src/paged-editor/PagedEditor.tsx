@@ -1925,7 +1925,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const resizeStartXRef = useRef(0);
     const resizeColumnIndexRef = useRef(0);
     const resizeTablePmStartRef = useRef(0);
-    const resizeOrigWidthsRef = useRef<{ left: number; right: number }>({
+    const resizeOrigWidthsRef = useRef({
       left: 0,
       right: 0,
     });
@@ -3886,8 +3886,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   return undefined;
                 });
                 if (targetPos !== null) {
-                  scrollToPositionImpl(targetPos);
-                  hiddenPMRef.current.setSelection(targetPos + 1);
+                  const tp: number = targetPos;
+                  scrollToPositionImpl(tp);
+                  hiddenPMRef.current.setSelection(tp + 1);
                 }
               }
             }

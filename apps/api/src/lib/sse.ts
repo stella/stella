@@ -187,10 +187,7 @@ const initRedis = async () => {
           return;
         }
         if (parsed.scope === "workspace") {
-          broadcastLocal(
-            brandPersistedWorkspaceId(parsed.id),
-            parsed.event,
-          );
+          broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
         } else if (parsed.scope === "organization") {
           broadcastLocalToOrganization(
             brandPersistedOrganizationId(parsed.id),

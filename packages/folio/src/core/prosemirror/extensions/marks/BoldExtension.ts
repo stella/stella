@@ -17,7 +17,7 @@ export const BoldExtension = createMarkExtension({
         tag: "b",
         getAttrs(dom) {
           // Reject <b> with explicit non-bold font-weight (e.g. Google Docs structural wrapper)
-          const fw = (dom as HTMLElement).style?.fontWeight;
+          const fw = dom.style?.fontWeight;
           if (fw === "normal" || fw === "400") {
             return false;
           }
@@ -27,7 +27,7 @@ export const BoldExtension = createMarkExtension({
       {
         style: "font-weight",
         getAttrs: (value) =>
-          /^(bold(er)?|[5-9]\d{2})$/.test(value as string) ? null : false,
+          /^(bold(er)?|[5-9]\d{2})$/.test(value) ? null : false,
       },
     ],
     toDOM() {
@@ -35,12 +35,16 @@ export const BoldExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const boldType = ctx.schema.marks["bold"];
+    if (!boldType) {
+      throw new Error("Missing mark type: bold");
+    }
     return {
       commands: {
-        toggleBold: () => toggleMark(ctx.schema.marks["bold"]!),
+        toggleBold: () => toggleMark(boldType),
       },
       keyboardShortcuts: {
-        "Mod-b": toggleMark(ctx.schema.marks["bold"]!),
+        "Mod-b": toggleMark(boldType),
       },
     };
   },

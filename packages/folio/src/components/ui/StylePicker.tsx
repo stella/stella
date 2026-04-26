@@ -145,7 +145,9 @@ export function StylePicker({
   disabled = false,
 }: StylePickerProps) {
   const styleOptions = React.useMemo(() => {
-    if (!styles || styles.length === 0) {return DEFAULT_STYLES;}
+    if (!styles || styles.length === 0) {
+      return DEFAULT_STYLES;
+    }
     const docStyles = styles
       .filter((s) => s.type === "paragraph")
       .filter((s) => s.qFormat || (!s.hidden && !s.semiHidden))

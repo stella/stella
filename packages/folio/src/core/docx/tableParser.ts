@@ -507,7 +507,9 @@ export function parseFloatingTableProperties(
 
   const tblpXSpec = getAttribute(tblpPrElement, "w", "tblpXSpec");
   if (tblpXSpec) {
-    floating.tblpXSpec = tblpXSpec as NonNullable<FloatingTableProperties["tblpXSpec"]>;
+    floating.tblpXSpec = tblpXSpec as NonNullable<
+      FloatingTableProperties["tblpXSpec"]
+    >;
   }
 
   // Vertical position
@@ -518,7 +520,9 @@ export function parseFloatingTableProperties(
 
   const tblpYSpec = getAttribute(tblpPrElement, "w", "tblpYSpec");
   if (tblpYSpec) {
-    floating.tblpYSpec = tblpYSpec as NonNullable<FloatingTableProperties["tblpYSpec"]>;
+    floating.tblpYSpec = tblpYSpec as NonNullable<
+      FloatingTableProperties["tblpYSpec"]
+    >;
   }
 
   // Distance from text
@@ -1097,8 +1101,9 @@ export function parseTableCellProperties(
   if (textDirElement) {
     const textDir = getAttribute(textDirElement, "w", "val");
     if (textDir) {
-      formatting.textDirection =
-        textDir as NonNullable<TableCellFormatting["textDirection"]>;
+      formatting.textDirection = textDir as NonNullable<
+        TableCellFormatting["textDirection"]
+      >;
     }
   }
 
@@ -1248,7 +1253,10 @@ export function parseTableCell(
   if (formatting) {
     cell.formatting = formatting;
   }
-  const cellPropChanges = parseTableCellPropertyChanges(tcPrElement, formatting);
+  const cellPropChanges = parseTableCellPropertyChanges(
+    tcPrElement,
+    formatting,
+  );
   if (cellPropChanges !== undefined) {
     cell.propertyChanges = cellPropChanges;
   }

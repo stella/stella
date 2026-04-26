@@ -128,7 +128,9 @@ export const useHeaderFooterEditor = ({
     // (typically the final section properties)
     if (headers) {
       for (const sp of allSectionProps) {
-        if (!sp.headerReferences) {continue;}
+        if (!sp.headerReferences) {
+          continue;
+        }
         const defaultRef = sp.headerReferences.find(
           (r) => r.type === "default",
         );
@@ -140,7 +142,9 @@ export const useHeaderFooterEditor = ({
 
     if (footers) {
       for (const sp of allSectionProps) {
-        if (!sp.footerReferences) {continue;}
+        if (!sp.footerReferences) {
+          continue;
+        }
         const defaultRef = sp.footerReferences.find(
           (r) => r.type === "default",
         );
@@ -155,17 +159,13 @@ export const useHeaderFooterEditor = ({
       if (sp.titlePg) {
         titlePg = true;
         if (headers && sp.headerReferences) {
-          const firstRef = sp.headerReferences.find(
-            (r) => r.type === "first",
-          );
+          const firstRef = sp.headerReferences.find((r) => r.type === "first");
           if (firstRef?.rId) {
             firstHeader = headers.get(firstRef.rId) ?? null;
           }
         }
         if (footers && sp.footerReferences) {
-          const firstRef = sp.footerReferences.find(
-            (r) => r.type === "first",
-          );
+          const firstRef = sp.footerReferences.find((r) => r.type === "first");
           if (firstRef?.rId) {
             firstFooter = footers.get(firstRef.rId) ?? null;
           }
@@ -194,8 +194,12 @@ export const useHeaderFooterEditor = ({
 
     // When titlePg is not set but only 'first' headers exist, use them as default
     if (!titlePg) {
-      if (!header && firstHeader) {header = firstHeader;}
-      if (!footer && firstFooter) {footer = firstFooter;}
+      if (!header && firstHeader) {
+        header = firstHeader;
+      }
+      if (!footer && firstFooter) {
+        footer = firstFooter;
+      }
     }
 
     return {
@@ -213,7 +217,9 @@ export const useHeaderFooterEditor = ({
 
   const effectiveSectionProperties = useMemo(() => {
     const final = history.state?.package.document?.finalSectionProperties;
-    if (!hasTitlePg || final?.titlePg) {return final;}
+    if (!hasTitlePg || final?.titlePg) {
+      return final;
+    }
     return final ? { ...final, titlePg: true } : final;
   }, [history.state?.package.document?.finalSectionProperties, hasTitlePg]);
 

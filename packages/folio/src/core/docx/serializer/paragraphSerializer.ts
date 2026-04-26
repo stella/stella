@@ -1122,4 +1122,3 @@ export function isListParagraph(paragraph: Paragraph): boolean {
 export function getListLevel(paragraph: Paragraph): number {
   return paragraph.formatting?.numPr?.ilvl ?? -1;
 }
-

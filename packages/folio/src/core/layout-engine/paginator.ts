@@ -111,9 +111,7 @@ export function createPaginator(options: PaginatorOptions) {
       fragments: [],
       margins: { ...margins },
       size: { ...pageSize },
-      ...(footnoteHeight > 0
-        ? { footnoteReservedHeight: footnoteHeight }
-        : {}),
+      ...(footnoteHeight > 0 ? { footnoteReservedHeight: footnoteHeight } : {}),
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       ...(columns.count > 1 ? { columns: { ...columns } } : {}),
     };

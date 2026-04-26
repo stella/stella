@@ -20,23 +20,22 @@ export const FootnoteRefExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "sup.docx-footnote-ref",
-        getAttrs: (dom) => {
-          const element = dom as HTMLElement;
-          return {
-            id: element.dataset["id"] || "",
-            noteType: element.dataset["noteType"] || "footnote",
-          };
-        },
+        getAttrs: (dom) => ({
+          id: dom.dataset["id"] ?? "",
+          noteType: dom.dataset["noteType"] ?? "footnote",
+        }),
       },
     ],
     toDOM(mark) {
-      const attrs = mark.attrs as { id: string; noteType: string };
+      // SAFETY: FootnoteRef attrs always have id/noteType per schema
+      const id = String(mark.attrs["id"]);
+      const noteType = String(mark.attrs["noteType"]);
       return [
         "sup",
         {
-          class: `docx-${attrs.noteType}-ref`,
-          "data-id": attrs.id,
-          "data-note-type": attrs.noteType,
+          class: `docx-${noteType}-ref`,
+          "data-id": id,
+          "data-note-type": noteType,
         },
         0,
       ];
@@ -54,7 +53,11 @@ export const FootnoteRefExtension = createMarkExtension({
             return true;
           }
 
-          const mark = schema.marks["footnoteRef"]!.create({
+          const footnoteRefType = schema.marks["footnoteRef"];
+          if (!footnoteRefType) {
+            throw new Error("Missing mark type: footnoteRef");
+          }
+          const mark = footnoteRefType.create({
             id: String(id),
             noteType,
           });

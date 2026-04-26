@@ -712,4 +712,3 @@ export {
   resolveFillColor,
   resolveOutlineColor,
 };
-

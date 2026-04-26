@@ -2,6 +2,7 @@
  * Text Color Mark Extension
  */
 
+import type { ThemeColorSlot } from "../../../types/document";
 import { textToStyle } from "../../../utils/formatToStyle";
 import type { TextColorAttrs } from "../../schema/marks";
 import { createMarkExtension } from "../create";
@@ -22,36 +23,59 @@ export const TextColorExtension = createMarkExtension({
       {
         style: "color",
         getAttrs: (value) => {
-          const colorValue = value as string;
-          const hexMatch = colorValue.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/);
+          const hexMatch = /#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/.exec(value);
           if (hexMatch) {
             // SAFETY: capture group [1] always present when regex matches
-            return { rgb: hexMatch[1]!.toUpperCase() };
+            return { rgb: (hexMatch[1] ?? "").toUpperCase() };
           }
           return false;
         },
       },
     ],
     toDOM(mark) {
-      const attrs = mark.attrs as TextColorAttrs;
-      const style = textToStyle({ color: attrs });
-      const cssString = style["color"] ? `color: ${style["color"]}` : "";
+      // SAFETY: textColor mark attrs always match TextColorAttrs shape per schema;
+      // themeColor is a valid ThemeColorSlot string when present
+      const rgb =
+        typeof mark.attrs["rgb"] === "string" ? mark.attrs["rgb"] : undefined;
+      const themeColor =
+        typeof mark.attrs["themeColor"] === "string"
+          ? (mark.attrs["themeColor"] as ThemeColorSlot)
+          : undefined;
+      const themeTint =
+        typeof mark.attrs["themeTint"] === "string"
+          ? mark.attrs["themeTint"]
+          : undefined;
+      const themeShade =
+        typeof mark.attrs["themeShade"] === "string"
+          ? mark.attrs["themeShade"]
+          : undefined;
+      const colorAttrs: TextColorAttrs = {
+        ...(rgb !== undefined ? { rgb } : {}),
+        ...(themeColor !== undefined ? { themeColor } : {}),
+        ...(themeTint !== undefined ? { themeTint } : {}),
+        ...(themeShade !== undefined ? { themeShade } : {}),
+      };
+      const style = textToStyle({ color: colorAttrs });
+      const cssColor: unknown = style["color"];
+      const cssString =
+        typeof cssColor === "string" && cssColor ? `color: ${cssColor}` : "";
       return ["span", { style: cssString }, 0];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const textColorType = ctx.schema.marks["textColor"];
+    if (!textColorType) {
+      throw new Error("Missing mark type: textColor");
+    }
     return {
       commands: {
         setTextColor: (attrs: TextColorAttrs) => {
           if (!attrs.rgb && !attrs.themeColor) {
-            return removeMark(ctx.schema.marks["textColor"]!);
+            return removeMark(textColorType);
           }
-          return setMark(
-            ctx.schema.marks["textColor"]!,
-            attrs as Record<string, unknown>,
-          );
+          return setMark(textColorType, attrs as Record<string, unknown>);
         },
-        clearTextColor: () => removeMark(ctx.schema.marks["textColor"]!),
+        clearTextColor: () => removeMark(textColorType),
       },
     };
   },

@@ -423,13 +423,19 @@ function enrichParagraphTextBoxes(
             type: "shape",
             shapeType: "rect",
             size: textBox.size,
-            ...(textBox.position !== undefined ? { position: textBox.position } : {}),
+            ...(textBox.position !== undefined
+              ? { position: textBox.position }
+              : {}),
             ...(textBox.wrap !== undefined ? { wrap: textBox.wrap } : {}),
             ...(textBox.fill !== undefined ? { fill: textBox.fill } : {}),
-            ...(textBox.outline !== undefined ? { outline: textBox.outline } : {}),
+            ...(textBox.outline !== undefined
+              ? { outline: textBox.outline }
+              : {}),
             textBody: {
               content: textBox.content,
-              ...(textBox.margins !== undefined ? { margins: textBox.margins } : {}),
+              ...(textBox.margins !== undefined
+                ? { margins: textBox.margins }
+                : {}),
             },
           };
           if (textBox.id) {

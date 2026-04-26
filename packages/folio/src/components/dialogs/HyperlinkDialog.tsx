@@ -16,7 +16,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 
-import { Dialog, DialogPortal, DialogBackdrop, DialogPopup, DialogTitle, DialogClose } from "@stella/ui/components/dialog";
+import {
+  Dialog,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+  DialogClose,
+} from "@stella/ui/components/dialog";
 
 // ============================================================================
 // TYPES
@@ -321,7 +328,7 @@ export function HyperlinkDialog({
       <DialogPortal>
         <DialogBackdrop className="fixed inset-0 z-[10000] bg-black/50" />
         <DialogPopup
-          className="bg-popover fixed top-1/2 start-1/2 z-[10001] w-full max-w-[500px] min-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl"
+          className="bg-popover fixed start-1/2 top-1/2 z-[10001] w-full max-w-[500px] min-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl"
           onKeyDown={handleKeyDown}
         >
           {/* Header */}
@@ -650,7 +657,9 @@ export function useHyperlinkDialog(): UseHyperlinkDialogReturn {
     setState({
       isOpen: true,
       initialData: data,
-      ...(data.displayText !== undefined ? { selectedText: data.displayText } : {}),
+      ...(data.displayText !== undefined
+        ? { selectedText: data.displayText }
+        : {}),
       isEditing: true,
     });
   };

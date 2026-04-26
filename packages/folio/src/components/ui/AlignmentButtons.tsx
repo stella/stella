@@ -6,18 +6,19 @@
 import type { CSSProperties } from "react";
 
 import {
-  Popover,
-  PopoverClose,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stella/ui/components/popover";
-import {
   AlignCenterIcon,
   AlignJustifyIcon,
   AlignLeftIcon,
   AlignRightIcon,
   ChevronDownIcon,
 } from "lucide-react";
+
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stella/ui/components/popover";
 
 import type { ParagraphAlignment } from "../../core/types/document";
 import { cn } from "../../lib/utils";
@@ -64,8 +65,11 @@ export function AlignmentButtons({
   onChange,
   disabled = false,
 }: AlignmentButtonsProps) {
-  // SAFETY: OPTIONS is a non-empty constant array; [0] always exists
-  const current = OPTIONS.find((o) => o.value === value) ?? OPTIONS[0]!;
+  const defaultOption = OPTIONS[0];
+  if (!defaultOption) {
+    throw new Error("AlignmentButtons: OPTIONS is empty");
+  }
+  const current = OPTIONS.find((o) => o.value === value) ?? defaultOption;
 
   return (
     <Popover>

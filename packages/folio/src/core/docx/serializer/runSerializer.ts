@@ -1095,7 +1095,10 @@ export function createBreakRun(
     type: "run",
     ...(formatting !== undefined ? { formatting } : {}),
     content: [
-      { type: "break" as const, ...(breakType !== undefined ? { breakType } : {}) },
+      {
+        type: "break" as const,
+        ...(breakType !== undefined ? { breakType } : {}),
+      },
     ],
   };
 }
@@ -1110,4 +1113,3 @@ export function createTabRun(formatting?: TextFormatting): Run {
     content: [{ type: "tab" }],
   };
 }
-

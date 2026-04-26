@@ -17,25 +17,27 @@ export const FontSizeExtension = createMarkExtension({
       {
         style: "font-size",
         getAttrs: (value) => {
-          const sizeStr = value as string;
-          const pxMatch = sizeStr.match(/^([\d.]+)px$/);
+          const pxMatch = /^([\d.]+)px$/.exec(value);
           if (pxMatch) {
             // SAFETY: capture group [1] always present when regex matches
-            const px = Number.parseFloat(pxMatch[1]!);
+            const px = Number.parseFloat(pxMatch[1] ?? "0");
             const pt = px * 0.75;
             return { size: Math.round(pt * 2) };
           }
-          const ptMatch = sizeStr.match(/^([\d.]+)pt$/);
+          const ptMatch = /^([\d.]+)pt$/.exec(value);
           if (ptMatch) {
             // SAFETY: capture group [1] always present when regex matches
-            return { size: Math.round(Number.parseFloat(ptMatch[1]!) * 2) };
+            return {
+              size: Math.round(Number.parseFloat(ptMatch[1] ?? "0") * 2),
+            };
           }
           return false;
         },
       },
     ],
     toDOM(mark) {
-      const size = mark.attrs["size"] as number;
+      // SAFETY: mark.attrs.size is always a number per the attrs spec above
+      const size = Number(mark.attrs["size"]);
       const pt = size / 2;
       const lineHeight = (pt * 1.15).toFixed(2);
       return [
@@ -46,11 +48,14 @@ export const FontSizeExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const fontSizeType = ctx.schema.marks["fontSize"];
+    if (!fontSizeType) {
+      throw new Error("Missing mark type: fontSize");
+    }
     return {
       commands: {
-        setFontSize: (size: number) =>
-          setMark(ctx.schema.marks["fontSize"]!, { size }),
-        clearFontSize: () => removeMark(ctx.schema.marks["fontSize"]!),
+        setFontSize: (size: number) => setMark(fontSizeType, { size }),
+        clearFontSize: () => removeMark(fontSizeType),
       },
     };
   },

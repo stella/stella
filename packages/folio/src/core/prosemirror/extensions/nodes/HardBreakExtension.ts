@@ -18,7 +18,10 @@ export const HardBreakExtension = createNodeExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
-    const hardBreakType = ctx.schema.nodes["hardBreak"]!;
+    const hardBreakType = ctx.schema.nodes["hardBreak"];
+    if (!hardBreakType) {
+      throw new Error("Missing node type: hardBreak");
+    }
 
     return {
       keyboardShortcuts: {

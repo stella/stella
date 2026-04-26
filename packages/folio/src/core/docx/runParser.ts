@@ -111,7 +111,9 @@ function parseShadingProperties(
 
   const themeFill = getAttribute(shd, "w", "themeFill");
   if (themeFill) {
-    if (!props.fill) { props.fill = {}; }
+    if (!props.fill) {
+      props.fill = {};
+    }
     props.fill.themeColor = themeFill as NonNullable<ColorValue["themeColor"]>;
   }
 
@@ -293,13 +295,21 @@ export function parseRunProperties(
   if (rFonts) {
     const fontFamily: NonNullable<TextFormatting["fontFamily"]> = {};
     const ascii = getAttribute(rFonts, "w", "ascii");
-    if (ascii) { fontFamily.ascii = ascii; }
+    if (ascii) {
+      fontFamily.ascii = ascii;
+    }
     const hAnsi = getAttribute(rFonts, "w", "hAnsi");
-    if (hAnsi) { fontFamily.hAnsi = hAnsi; }
+    if (hAnsi) {
+      fontFamily.hAnsi = hAnsi;
+    }
     const eastAsia = getAttribute(rFonts, "w", "eastAsia");
-    if (eastAsia) { fontFamily.eastAsia = eastAsia; }
+    if (eastAsia) {
+      fontFamily.eastAsia = eastAsia;
+    }
     const csFont = getAttribute(rFonts, "w", "cs");
-    if (csFont) { fontFamily.cs = csFont; }
+    if (csFont) {
+      fontFamily.cs = csFont;
+    }
 
     // Theme font references
     const asciiTheme = getAttribute(rFonts, "w", "asciiTheme");
@@ -313,7 +323,9 @@ export function parseRunProperties(
       // Also resolve the actual font name for convenience
       if (theme && !fontFamily.ascii) {
         const resolved = resolveThemeFontRef(theme, asciiTheme);
-        if (resolved) { fontFamily.ascii = resolved; }
+        if (resolved) {
+          fontFamily.ascii = resolved;
+        }
       }
     }
 
@@ -322,7 +334,9 @@ export function parseRunProperties(
       fontFamily.hAnsiTheme = hAnsiTheme;
       if (theme && !fontFamily.hAnsi) {
         const resolved = resolveThemeFontRef(theme, hAnsiTheme);
-        if (resolved) { fontFamily.hAnsi = resolved; }
+        if (resolved) {
+          fontFamily.hAnsi = resolved;
+        }
       }
     }
 
@@ -331,7 +345,9 @@ export function parseRunProperties(
       fontFamily.eastAsiaTheme = eastAsiaTheme;
       if (theme && !fontFamily.eastAsia) {
         const resolved = resolveThemeFontRef(theme, eastAsiaTheme);
-        if (resolved) { fontFamily.eastAsia = resolved; }
+        if (resolved) {
+          fontFamily.eastAsia = resolved;
+        }
       }
     }
 
@@ -340,7 +356,9 @@ export function parseRunProperties(
       fontFamily.csTheme = csTheme;
       if (theme && !fontFamily.cs) {
         const resolved = resolveThemeFontRef(theme, csTheme);
-        if (resolved) { fontFamily.cs = resolved; }
+        if (resolved) {
+          fontFamily.cs = resolved;
+        }
       }
     }
 
@@ -397,7 +415,9 @@ export function parseRunProperties(
   if (em) {
     const val = getAttribute(em, "w", "val");
     if (val) {
-      formatting.emphasisMark = val as NonNullable<TextFormatting["emphasisMark"]>;
+      formatting.emphasisMark = val as NonNullable<
+        TextFormatting["emphasisMark"]
+      >;
     }
   }
 
@@ -462,8 +482,12 @@ function parsePropertyChangeInfo(
     id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
     author: author.length > 0 ? author : "Unknown",
   };
-  if (date.length > 0) { info.date = date; }
-  if (rsid.length > 0) { info.rsid = rsid; }
+  if (date.length > 0) {
+    info.date = date;
+  }
+  if (rsid.length > 0) {
+    info.rsid = rsid;
+  }
 
   return info;
 }
@@ -490,8 +514,12 @@ function parseRunPropertyChanges(
         theme,
         styles ?? undefined,
       );
-      if (previousFormatting) { change.previousFormatting = previousFormatting; }
-      if (currentFormatting) { change.currentFormatting = currentFormatting; }
+      if (previousFormatting) {
+        change.previousFormatting = previousFormatting;
+      }
+      if (currentFormatting) {
+        change.currentFormatting = currentFormatting;
+      }
       return change;
     })
     .filter((change) => change.previousFormatting || change.currentFormatting);
@@ -507,7 +535,9 @@ function parseTextContent(element: XmlElement): TextContent {
   const preserveSpace = getAttribute(element, "xml", "space") === "preserve";
 
   const content: TextContent = { type: "text", text };
-  if (preserveSpace) { content.preserveSpace = true; }
+  if (preserveSpace) {
+    content.preserveSpace = true;
+  }
   return content;
 }
 
@@ -605,8 +635,12 @@ function parseFieldChar(element: XmlElement): FieldCharContent {
   }
 
   const content: FieldCharContent = { type: "fieldChar", charType };
-  if (fldLock) { content.fldLock = true; }
-  if (dirty) { content.dirty = true; }
+  if (fldLock) {
+    content.fldLock = true;
+  }
+  if (dirty) {
+    content.dirty = true;
+  }
   return content;
 }
 
@@ -769,7 +803,9 @@ function parseRunContents(
             if (innerName === "drawing") {
               const innerDrawing = parseDrawingContent(innerChild, rels, media);
               // Only include drawings that have actual image data (skip shapes/connectors)
-              if (innerDrawing?.image?.src) {contents.push(innerDrawing);}
+              if (innerDrawing?.image?.src) {
+                contents.push(innerDrawing);
+              }
             }
           }
         }
@@ -822,15 +858,23 @@ export function parseRun(
   // Parse run properties (w:rPr)
   const rPr = findChild(node, "w", "rPr");
   if (rPr) {
-    const formattingResult = parseRunProperties(rPr, theme, styles ?? undefined);
-    if (formattingResult) { run.formatting = formattingResult; }
+    const formattingResult = parseRunProperties(
+      rPr,
+      theme,
+      styles ?? undefined,
+    );
+    if (formattingResult) {
+      run.formatting = formattingResult;
+    }
     const propertyChangesResult = parseRunPropertyChanges(
       rPr,
       theme,
       styles,
       run.formatting,
     );
-    if (propertyChangesResult) { run.propertyChanges = propertyChangesResult; }
+    if (propertyChangesResult) {
+      run.propertyChanges = propertyChangesResult;
+    }
   }
 
   // Parse run contents (text, tabs, breaks, images, etc.)

@@ -31,7 +31,9 @@ export function replaceTextInDocument(
 
   if (start.paragraphIndex === end.paragraphIndex) {
     const blockIndex = getBlockIndexForParagraph(body, start.paragraphIndex);
-    if (blockIndex === -1) {return newDoc;}
+    if (blockIndex === -1) {
+      return newDoc;
+    }
 
     const paragraph = body.content[blockIndex] as Paragraph;
     paragraph.content = deleteTextInParagraph(
@@ -93,7 +95,9 @@ function getBlockIndexForParagraph(
   for (let i = 0; i < body.content.length; i++) {
     // SAFETY: i < body.content.length in for loop
     if (body.content[i]!.type === "paragraph") {
-      if (pIdx === paragraphIndex) {return i;}
+      if (pIdx === paragraphIndex) {
+        return i;
+      }
       pIdx++;
     }
   }
@@ -105,13 +109,19 @@ function getParagraphText(paragraph: Paragraph): string {
   for (const item of paragraph.content) {
     if (item.type === "run") {
       for (const c of item.content) {
-        if (c.type === "text") {text += c.text;}
+        if (c.type === "text") {
+          text += c.text;
+        }
       }
     } else if (item.type === "hyperlink") {
       for (const child of item.children) {
-        if (child.type !== "run") {continue;}
+        if (child.type !== "run") {
+          continue;
+        }
         for (const c of child.content) {
-          if (c.type === "text") {text += c.text;}
+          if (c.type === "text") {
+            text += c.text;
+          }
         }
       }
     }
@@ -171,7 +181,9 @@ function insertTextAtOffset(
   text: string,
   formatting?: TextFormatting,
 ): ParagraphContent[] {
-  if (!text) {return paragraph.content;}
+  if (!text) {
+    return paragraph.content;
+  }
 
   let currentOffset = 0;
 
@@ -190,7 +202,9 @@ function insertTextAtOffset(
               const before = content.text.slice(0, relOffset);
               const after = content.text.slice(relOffset);
               const newContent: Run["content"] = [];
-              if (before) {newContent.push({ type: "text", text: before });}
+              if (before) {
+                newContent.push({ type: "text", text: before });
+              }
               const newRun: TextContent = { type: "text", text };
               item.content.splice(ci, 1, ...newContent);
               const insertRun: Run = {
@@ -199,13 +213,16 @@ function insertTextAtOffset(
                 formatting,
               };
               const afterItems: Run["content"] = [];
-              if (after)
-                {afterItems.push({ type: "text" as const, text: after });}
+              if (after) {
+                afterItems.push({ type: "text" as const, text: after });
+              }
               const remaining = item.content.splice(ci + newContent.length);
               const afterRun: Run = {
                 type: "run",
                 content: [...remaining, ...afterItems],
-                ...(item.formatting !== undefined ? { formatting: item.formatting } : {}),
+                ...(item.formatting !== undefined
+                  ? { formatting: item.formatting }
+                  : {}),
               };
               const idx = paragraph.content.indexOf(item);
               paragraph.content.splice(idx + 1, 0, insertRun);

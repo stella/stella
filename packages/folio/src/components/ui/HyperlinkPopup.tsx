@@ -14,7 +14,6 @@ import {
   TypeIcon,
   UnlinkIcon,
 } from "lucide-react";
-
 import { useTranslations } from "use-intl";
 
 export type HyperlinkPopupData = {
@@ -77,12 +76,12 @@ export function HyperlinkPopup({
         onClose();
       }
     };
-    const t = setTimeout(
+    const timer = setTimeout(
       () => document.addEventListener("mousedown", handle),
       0,
     );
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       document.removeEventListener("mousedown", handle);
     };
   }, [data, onClose]);

@@ -3,7 +3,6 @@
  */
 
 import { AlertCircleIcon, FileIcon } from "lucide-react";
-
 import { useTranslations } from "use-intl";
 
 export function DefaultLoadingIndicator() {

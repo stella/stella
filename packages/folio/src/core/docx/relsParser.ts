@@ -119,7 +119,7 @@ export function parseRelationships(relsXml: string): RelationshipMap {
 
     const relationship: Relationship = {
       id,
-      type: type as RelationshipType,
+      type,
       target,
     };
 

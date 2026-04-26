@@ -18,9 +18,13 @@ export const SubscriptExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const subscriptType = ctx.schema.marks["subscript"];
+    if (!subscriptType) {
+      throw new Error("Missing mark type: subscript");
+    }
     return {
       commands: {
-        toggleSubscript: () => toggleMark(ctx.schema.marks["subscript"]!),
+        toggleSubscript: () => toggleMark(subscriptType),
       },
     };
   },
