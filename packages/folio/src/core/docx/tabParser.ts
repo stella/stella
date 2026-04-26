@@ -469,9 +469,13 @@ export function getEffectiveTabStops(
 
   while (position < pageWidth) {
     // Only add if there's no explicit tab near this position
-    const hasExplicit = explicitTabs.some(
-      (t) => Math.abs(t.position - position) < 50, // 50 twips tolerance
-    );
+    let hasExplicit = false;
+    for (const tab of explicitTabs) {
+      if (Math.abs(tab.position - position) < 50) {
+        hasExplicit = true;
+        break;
+      }
+    }
 
     if (!hasExplicit) {
       result.push({

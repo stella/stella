@@ -476,13 +476,7 @@ export function clickToPositionInTableCell(
       blockId: cellBlock.id,
       x: 0,
       y: 0,
-      width: (() => {
-        let maxWidth = 100;
-        for (const line of cellMeasure.lines) {
-          maxWidth = Math.max(maxWidth, line.width);
-        }
-        return maxWidth;
-      })(),
+      width: getMaxLineWidth(cellMeasure.lines, 100),
       fromLine: 0,
       toLine: cellMeasure.lines.length,
       height: cellMeasure.totalHeight,
@@ -633,6 +627,17 @@ export function positionToX(
 
   return null;
 }
+
+const getMaxLineWidth = (
+  lines: readonly { width: number }[],
+  fallback: number,
+): number => {
+  let maxWidth = fallback;
+  for (const line of lines) {
+    maxWidth = Math.max(maxWidth, line.width);
+  }
+  return maxWidth;
+};
 
 /**
  * Get the bounding rect for a PM position (for caret rendering).

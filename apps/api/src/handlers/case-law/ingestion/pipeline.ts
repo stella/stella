@@ -552,16 +552,14 @@ export const runIngestionPipeline = async ({
 
           // Persist failure for later analysis
           try {
-            await scopedDb((tx) =>
-              tx.insert(caseLawIngestionFailures).values({
-                sourceId: source.id,
-                caseNumber: result.caseNumber,
-                language: result.language,
-                errorType: tag.slice(0, 128),
-                errorMessage: message.slice(0, 2048),
-                cursor,
-              }),
-            );
+            await logIngestionFailure(scopedDb, {
+              sourceId: source.id,
+              caseNumber: result.caseNumber,
+              language: result.language,
+              errorType: tag.slice(0, 128),
+              errorMessage: message.slice(0, 2048),
+              cursor,
+            });
           } catch (failureLogError) {
             captureError(failureLogError, {
               sourceId: source.id,
@@ -642,4 +640,11 @@ export const runIngestionPipeline = async ({
     nextCursor: cursor,
     haltReason,
   };
+};
+
+const logIngestionFailure = async (
+  scopedDb: ScopedDb,
+  failure: typeof caseLawIngestionFailures.$inferInsert,
+) => {
+  await scopedDb((tx) => tx.insert(caseLawIngestionFailures).values(failure));
 };

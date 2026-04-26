@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { atCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
+
+const { atCourtsAdapter } =
+  await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
+const { czNsAdapter } =
+  await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
+const { czRegionalAdapter } =
+  await import("@/api/handlers/case-law/ingestion/adapters/cz-regional");
+const { plCourtsAdapter } =
+  await import("@/api/handlers/case-law/ingestion/adapters/pl-courts");
+const { skCourtsAdapter } =
+  await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
 
 const originalFetch = globalThis.fetch;
 
@@ -51,6 +58,7 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  clearRootDbMocks();
 });
 
 describe("case-law adapter nullish optionals", () => {

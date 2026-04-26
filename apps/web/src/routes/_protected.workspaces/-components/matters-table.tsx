@@ -61,13 +61,15 @@ export const MattersTable = ({
   );
 
   const columnLabels = useSortLabels();
-  const visibleColumns = ALL_COLUMNS.filter((c) => !hiddenColumns.includes(c));
+  const hiddenColumnSet = new Set(hiddenColumns);
+  const visibleColumns = ALL_COLUMNS.filter((c) => !hiddenColumnSet.has(c));
+  const visibleColumnSet = new Set(visibleColumns);
   const columns = COLUMNS.filter((col) => {
     const colId = SORT_KEY_TO_COLUMN_ID[col.key];
     if (!colId) {
       return true;
     }
-    return visibleColumns.includes(colId);
+    return visibleColumnSet.has(colId);
   });
 
   return (
