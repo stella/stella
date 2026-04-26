@@ -4,14 +4,16 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteRateEntryBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("rateEntry"),
 });
 
-const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
+const rateEntryParamsSchema = workspaceParams({
+  rateTableId: tSafeId("rateTable"),
+});
 
 const deleteRateEntry = createSafeHandler(
   {
@@ -23,7 +25,10 @@ const deleteRateEntry = createSafeHandler(
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
-          where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: params.rateTableId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),
@@ -38,7 +43,10 @@ const deleteRateEntry = createSafeHandler(
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateEntries.findFirst({
-          where: { id: body.id, rateTableId: params.rateTableId },
+          where: {
+            id: { eq: body.id },
+            rateTableId: { eq: params.rateTableId },
+          },
           columns: { id: true },
         }),
       ),

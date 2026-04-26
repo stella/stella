@@ -4,6 +4,7 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
@@ -466,13 +467,13 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   args,
   context,
 }) => {
-  const entityId = parseRequiredString(args, "entity_id");
-  if (typeof entityId !== "string") {
-    return entityId;
+  const rawEntityId = parseRequiredString(args, "entity_id");
+  if (typeof rawEntityId !== "string") {
+    return rawEntityId;
   }
 
   return await invokeAiTool({
-    args: { entityId },
+    args: { entityId: toSafeId<"entity">(rawEntityId) },
     tool: getOrgTools(context)["read-content-across-matters"],
   });
 };
@@ -609,7 +610,10 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
     return decisionId;
   }
 
-  const result = await readDecisionHandler(decisionId, context.scopedDb);
+  const result = await readDecisionHandler(
+    toSafeId<"caseLawDecision">(decisionId),
+    context.scopedDb,
+  );
   const resultMessage = getResultMessage(result);
   if (resultMessage) {
     return errorResult(resultMessage);
@@ -650,13 +654,13 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
 };
 
 const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
-  const contactId = parseRequiredString(args, "contact_id");
-  if (typeof contactId !== "string") {
-    return contactId;
+  const rawContactId = parseRequiredString(args, "contact_id");
+  if (typeof rawContactId !== "string") {
+    return rawContactId;
   }
 
   return await invokeAiTool({
-    args: { contactId },
+    args: { contactId: toSafeId<"contact">(rawContactId) },
     tool: getOrgTools(context)["read-contact"],
   });
 };

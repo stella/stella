@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -17,7 +17,7 @@ const updateInvoiceBodySchema = t.Object({
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
+const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const updateInvoice = createSafeHandler(
   {

@@ -23,6 +23,9 @@ import {
 } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
@@ -35,7 +38,7 @@ import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
-  sessionId: t.String({ format: "uuid" }),
+  sessionId: tSafeId("desktopEditSession"),
 });
 
 export const finalizeDesktopEditSessionBodySchema = t.Object({
@@ -44,7 +47,7 @@ export const finalizeDesktopEditSessionBodySchema = t.Object({
 
 type FinalizeDesktopEditSessionHandlerProps = {
   body: Static<typeof finalizeDesktopEditSessionBodySchema>;
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 /**
@@ -369,8 +372,8 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
 
       const storedBytes = new Uint8Array(checkpointBuffer);
-      const nextVersionId = crypto.randomUUID();
-      const sourceFileId = crypto.randomUUID();
+      const nextVersionId = createSafeId<"entityVersion">();
+      const sourceFileId = Bun.randomUUIDv7();
       const sourceKey = createFileKey({
         fileId: sourceFileId,
         mimeType: DOCX_MIME_TYPE,
@@ -407,7 +410,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       }
 
       if (conversionResult && Result.isOk(conversionResult)) {
-        pdfFileId = crypto.randomUUID();
+        pdfFileId = Bun.randomUUIDv7();
         const pdfKey = createFileKey({
           fileId: pdfFileId,
           mimeType: PDF_MIME_TYPE,

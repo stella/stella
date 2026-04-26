@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteRateTableBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("rateTable"),
 });
 
 const deleteRateTable = createSafeHandler(
@@ -20,7 +20,7 @@ const deleteRateTable = createSafeHandler(
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
-          where: { id: body.id, workspaceId: { eq: workspaceId } },
+          where: { id: { eq: body.id }, workspaceId: { eq: workspaceId } },
           columns: { id: true, isDefault: true },
         }),
       ),

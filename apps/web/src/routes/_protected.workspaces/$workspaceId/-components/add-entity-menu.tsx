@@ -87,7 +87,7 @@ export const AddEntityMenu = ({
             title: t("success.folderCreated"),
             type: "success",
           });
-          if (data?.entityId) {
+          if (data?.entityId !== undefined) {
             onFolderCreated?.(data.entityId);
           }
         },

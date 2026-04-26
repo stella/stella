@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";
@@ -209,7 +210,7 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
  * Returns the S3 object key.
  */
 const uploadSourceRaw = async (
-  sourceId: string,
+  sourceId: SafeId<"caseLawSource">,
   data: Uint8Array | string,
   contentType: string,
 ): Promise<string> => {
@@ -227,7 +228,7 @@ const uploadSourceRaw = async (
  */
 const processDecision = async (
   input: IngestionResult,
-  sourceId: string,
+  sourceId: SafeId<"caseLawSource">,
   scopedDb: ScopedDb,
 ): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
@@ -235,7 +236,7 @@ const processDecision = async (
   const existing = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: {
-        sourceId,
+        sourceId: { eq: sourceId },
         caseNumber: result.caseNumber,
         language: result.language,
       },

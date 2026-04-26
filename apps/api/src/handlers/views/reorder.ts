@@ -5,14 +5,14 @@ import { t } from "elysia";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { view: ["update"] },
   body: t.Object({
-    viewIds: t.Array(tUuid, { minItems: 1 }),
+    viewIds: t.Array(tSafeId("workspaceView"), { minItems: 1 }),
   }),
 } satisfies HandlerConfig;
 

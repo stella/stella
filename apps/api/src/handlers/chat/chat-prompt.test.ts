@@ -112,7 +112,7 @@ describe("chat prompt builders", () => {
   test("appends the active-file prompt only when the entity exists", () => {
     const basePrompt = "Base prompt";
     const activeFile = {
-      entityId: "entity_active",
+      entityId: toSafeId<"entity">("entity_active"),
       fileName: "Open file.pdf",
     };
 

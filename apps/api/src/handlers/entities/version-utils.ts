@@ -7,15 +7,15 @@ import {
 
 type RevisionField = {
   content: FieldContent;
-  propertyId: string;
+  propertyId: SafeId<"property">;
 };
 
 type RevisionFileContent = Extract<FieldContent, { type: "file" }>;
 
 type CloneRevisionFieldsInput = {
   currentFields: RevisionField[];
-  entityVersionId: string;
-  propertyId: string;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
   replacementContent: RevisionFileContent;
   workspaceId: SafeId<"workspace">;
 };

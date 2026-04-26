@@ -5,15 +5,17 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const splitEntryBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("timeEntry"),
   splits: t.Array(
     t.Object({
-      matterId: tUuid,
+      matterId: tSafeId("entity"),
       percentage: t.Integer({ minimum: 1, maximum: 100 }),
     }),
     { minItems: 2, maxItems: 10 },
@@ -44,7 +46,7 @@ const splitEntry = createSafeHandler(
       safeDb((tx) =>
         tx.query.timeEntries.findFirst({
           where: {
-            id: body.id,
+            id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
         }),
@@ -85,7 +87,10 @@ const splitEntry = createSafeHandler(
       const matter = yield* Result.await(
         safeDb((tx) =>
           tx.query.entities.findFirst({
-            where: { id: split.matterId, workspaceId: { eq: workspaceId } },
+            where: {
+              id: { eq: split.matterId },
+              workspaceId: { eq: workspaceId },
+            },
             columns: { id: true },
           }),
         ),
@@ -101,9 +106,9 @@ const splitEntry = createSafeHandler(
       }
     }
 
-    const splitGroupId = crypto.randomUUID();
+    const splitGroupId = createSafeId<"timeEntry">();
     const now = new Date();
-    const newEntryIds: string[] = [];
+    const newEntryIds: SafeId<"timeEntry">[] = [];
 
     // Pre-compute durations, assigning remainder to last split
     // to preserve total duration exactly.

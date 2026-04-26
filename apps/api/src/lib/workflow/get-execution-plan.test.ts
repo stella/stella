@@ -1,6 +1,7 @@
 import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildDependencyGraph,
   buildLevelBatches,
@@ -38,12 +39,14 @@ const createProperty = (
   id: string,
   overrides: Partial<ExecutionPlanProperty> = {},
 ): ExecutionPlanProperty => ({
-  id,
+  id: toSafeId<"property">(id),
   status: "stale",
   content: textContent,
   tool: aiModelTool,
   ...overrides,
 });
+
+const propertyId = (value: string) => toSafeId<"property">(value);
 
 describe("buildDependencyGraph", () => {
   test("builds graph with no edges", () => {
@@ -176,10 +179,10 @@ describe("buildLevelBatches", () => {
     const batches = buildLevelBatches(["B", "C"], propertiesById, graph);
 
     expect(batches.length).toBe(1);
-    expect(batches[0]?.inputs).toEqual(["A"]);
+    expect(batches[0]?.inputs).toEqual([propertyId("A")]);
     expect(batches[0]?.properties.map((p) => p.id).toSorted()).toEqual([
-      "B",
-      "C",
+      propertyId("B"),
+      propertyId("C"),
     ]);
   });
 
@@ -266,7 +269,7 @@ describe("buildLevelBatches", () => {
     const batches = buildLevelBatches(["A", "B"], propertiesById, graph);
 
     expect(batches.length).toBe(1);
-    expect(batches[0]?.properties.map((p) => p.id)).toEqual(["B"]);
+    expect(batches[0]?.properties.map((p) => p.id)).toEqual([propertyId("B")]);
   });
 
   test("creates separate batches for different dependency signatures", () => {
@@ -365,8 +368,10 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(1);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0]?.[0]?.inputs).toEqual(["A"]);
-    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual(["B"]);
+    expect(plan[0]?.[0]?.inputs).toEqual([propertyId("A")]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual([
+      propertyId("B"),
+    ]);
   });
 
   test("returns two levels for chain A -> B -> C", () => {
@@ -383,10 +388,14 @@ describe("getPropertyExecutionPlan", () => {
     const plan = getPropertyExecutionPlan({ properties, dependencies });
 
     expect(plan).toHaveLength(2);
-    expect(plan[0]?.[0]?.inputs).toEqual(["A"]);
-    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual(["B"]);
-    expect(plan[1]?.[0]?.inputs).toEqual(["B"]);
-    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual(["C"]);
+    expect(plan[0]?.[0]?.inputs).toEqual([propertyId("A")]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual([
+      propertyId("B"),
+    ]);
+    expect(plan[1]?.[0]?.inputs).toEqual([propertyId("B")]);
+    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual([
+      propertyId("C"),
+    ]);
   });
 
   test("groups properties with same dependency signature in diamond structure", () => {
@@ -408,14 +417,19 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(2);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0]?.[0]?.inputs.toSorted()).toEqual(["A"]);
+    expect(plan[0]?.[0]?.inputs.toSorted()).toEqual([propertyId("A")]);
     expect(plan[0]?.[0]?.properties.map((p) => p.id).toSorted()).toEqual([
-      "B",
-      "C",
+      propertyId("B"),
+      propertyId("C"),
     ]);
     expect(plan[1]).toHaveLength(1);
-    expect(plan[1]?.[0]?.inputs.toSorted()).toEqual(["B", "C"]);
-    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual(["D"]);
+    expect(plan[1]?.[0]?.inputs.toSorted()).toEqual([
+      propertyId("B"),
+      propertyId("C"),
+    ]);
+    expect(plan[1]?.[0]?.properties.map((p) => p.id)).toEqual([
+      propertyId("D"),
+    ]);
   });
 
   test("returns empty plan for cycle and self-dependency (same behavior)", () => {
@@ -455,7 +469,9 @@ describe("getPropertyExecutionPlan", () => {
 
     expect(plan).toHaveLength(1);
     expect(plan[0]).toHaveLength(1);
-    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual(["B"]);
+    expect(plan[0]?.[0]?.properties.map((p) => p.id)).toEqual([
+      propertyId("B"),
+    ]);
   });
 
   test("returns empty plan when all AI properties are fresh", () => {

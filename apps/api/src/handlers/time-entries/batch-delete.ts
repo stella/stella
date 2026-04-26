@@ -4,10 +4,10 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 const batchDeleteBodySchema = t.Object({
-  ids: t.Array(tUuid, { minItems: 1, maxItems: 200 }),
+  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
 });
 
 const batchDelete = createSafeHandler(

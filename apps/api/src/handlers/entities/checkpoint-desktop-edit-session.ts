@@ -5,6 +5,8 @@ import type { Static } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
   computeTokenExpiresAt,
@@ -21,7 +23,7 @@ import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
-  sessionId: t.String({ format: "uuid" }),
+  sessionId: tSafeId("desktopEditSession"),
 });
 
 export const checkpointDesktopEditSessionBodySchema = t.Object({
@@ -33,7 +35,7 @@ export const checkpointDesktopEditSessionBodySchema = t.Object({
 
 type CheckpointDesktopEditSessionHandlerProps = {
   body: Static<typeof checkpointDesktopEditSessionBodySchema>;
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 export const checkpointDesktopEditSessionHandler = async ({

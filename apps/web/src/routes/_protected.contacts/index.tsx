@@ -53,6 +53,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { pageTitle } from "@/lib/page-title";
+import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
 import {
   useCreateContact,
@@ -348,7 +349,7 @@ const CreateContactDialog = () => {
           : undefined;
 
       await createContact.mutateAsync({
-        id: crypto.randomUUID(),
+        id: toSafeId<"contact">(crypto.randomUUID()),
         type: parsedValue.type,
         displayName: parsedValue.displayName,
         ...(firstName && { firstName }),

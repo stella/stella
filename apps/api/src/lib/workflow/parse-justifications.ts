@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as slimdom from "slimdom";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 
 const isElementNode = (node: slimdom.Node): node is slimdom.Element =>
@@ -9,7 +10,7 @@ const isElementNode = (node: slimdom.Node): node is slimdom.Element =>
 export type JustificationFilenames = {
   original: string;
   simplified: string;
-  fileFieldId: string;
+  fileFieldId: SafeId<"field">;
 }[];
 
 type ParseJustificationXmlProps = {
@@ -20,7 +21,7 @@ type ParseJustificationXmlProps = {
 type ParsedJustificationXml = {
   htmlVersion: number;
   htmlContent: string;
-  fileFieldIds: string[];
+  fileFieldIds: SafeId<"field">[];
 };
 
 /**
@@ -44,7 +45,7 @@ export const parseJustificationXml = ({
       const justificationElements = document.getElementsByTagName("j");
 
       const htmlParts: string[] = [];
-      const fileFieldIdSet = new Set<string>();
+      const fileFieldIdSet = new Set<SafeId<"field">>();
 
       for (const justificationElement of justificationElements) {
         const filename = justificationElement.getAttribute("f");

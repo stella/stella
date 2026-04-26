@@ -10,8 +10,9 @@ import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -19,18 +20,18 @@ import { getS3 } from "@/api/lib/s3";
 
 const buildVersionS3Key = (
   organizationId: SafeId<"organization">,
-  templateId: string,
+  templateId: SafeId<"template">,
   version: number,
 ) => `${organizationId}/templates/${templateId}/v${version}.docx`;
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
-  categoryId: t.Optional(t.Nullable(tUuid)),
+  categoryId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
   manifest: t.Optional(t.String()),
 });
 
 const updateTemplateParamsSchema = t.Object({
-  templateId: tUuid,
+  templateId: tSafeId("template"),
 });
 
 type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
@@ -39,7 +40,7 @@ type UpdateTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  templateId: string;
+  templateId: SafeId<"template">;
   body: UpdateTemplateBody;
 };
 
@@ -64,7 +65,10 @@ const updateTemplateHandler = async function* ({
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.templates.findFirst({
-        where: { id: templateId, organizationId: { eq: organizationId } },
+        where: {
+          id: { eq: templateId },
+          organizationId: { eq: organizationId },
+        },
         columns: {
           id: true,
           s3Key: true,
@@ -85,7 +89,10 @@ const updateTemplateHandler = async function* ({
     const category = yield* Result.await(
       safeDb((tx) =>
         tx.query.templateCategories.findFirst({
-          where: { id: categoryId, organizationId: { eq: organizationId } },
+          where: {
+            id: { eq: categoryId },
+            organizationId: { eq: organizationId },
+          },
           columns: { id: true },
         }),
       ),
@@ -99,7 +106,7 @@ const updateTemplateHandler = async function* ({
 
   const updates: Partial<{
     name: string;
-    categoryId: string | null;
+    categoryId: SafeId<"templateCategory"> | null;
     manifest: TemplateManifest;
     fieldCount: number;
     sizeBytes: number;
@@ -181,7 +188,7 @@ const updateTemplateHandler = async function* ({
           });
 
         await tx.insert(templateVersions).values({
-          id: crypto.randomUUID(),
+          id: createSafeId<"templateVersion">(),
           organizationId,
           templateId,
           version: newVersion,

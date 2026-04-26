@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { clauseVariants } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,13 +34,13 @@ type UpdateVariantBody = Static<typeof updateVariantBodySchema>;
 
 const verifyClauseOwnership = async (
   safeDb: SafeDb,
-  clauseId: string,
+  clauseId: SafeId<"clause">,
   organizationId: SafeId<"organization">,
 ) => {
   const result = await safeDb((tx) =>
     tx.query.clauses.findFirst({
       where: {
-        id: clauseId,
+        id: { eq: clauseId },
         organizationId: { eq: organizationId },
       },
       columns: { id: true },
@@ -54,7 +55,7 @@ const verifyClauseOwnership = async (
 type ListVariantsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
+  clauseId: SafeId<"clause">;
 };
 
 export const listVariantsHandler = async function* ({
@@ -82,7 +83,7 @@ export const listVariantsHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseVariants.findMany({
         where: {
-          clauseId,
+          clauseId: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: {
@@ -107,7 +108,7 @@ export const listVariantsHandler = async function* ({
 type CreateVariantProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
+  clauseId: SafeId<"clause">;
   body: CreateVariantBody;
 };
 
@@ -153,7 +154,7 @@ export const createVariantHandler = async function* ({
       tx
         .insert(clauseVariants)
         .values({
-          id: crypto.randomUUID(),
+          id: createSafeId<"clauseVariant">(),
           organizationId,
           clauseId,
           label: body.label,
@@ -176,8 +177,8 @@ export const createVariantHandler = async function* ({
 type UpdateVariantProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
-  variantId: string;
+  clauseId: SafeId<"clause">;
+  variantId: SafeId<"clauseVariant">;
   body: UpdateVariantBody;
 };
 
@@ -208,8 +209,8 @@ export const updateVariantHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseVariants.findFirst({
         where: {
-          id: variantId,
-          clauseId,
+          id: { eq: variantId },
+          clauseId: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },
@@ -256,8 +257,8 @@ export const updateVariantHandler = async function* ({
 type DeleteVariantProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
-  variantId: string;
+  clauseId: SafeId<"clause">;
+  variantId: SafeId<"clauseVariant">;
 };
 
 export const deleteVariantHandler = async function* ({
@@ -286,8 +287,8 @@ export const deleteVariantHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseVariants.findFirst({
         where: {
-          id: variantId,
-          clauseId,
+          id: { eq: variantId },
+          clauseId: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },

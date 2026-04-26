@@ -12,7 +12,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
@@ -30,7 +30,7 @@ const fillByIdQuerySchema = t.Object({
 });
 
 const fillByIdParamsSchema = t.Object({
-  templateId: tUuid,
+  templateId: tSafeId("template"),
 });
 
 const PDF_MIME_TYPE = "application/pdf";
@@ -40,7 +40,7 @@ type FillByIdProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  templateId: string;
+  templateId: SafeId<"template">;
   body: { values: string };
   query: { format?: "docx" | "pdf" };
 };
@@ -57,7 +57,10 @@ const fillByIdHandler = async function* ({
   const template = yield* Result.await(
     safeDb((tx) =>
       tx.query.templates.findFirst({
-        where: { id: templateId, organizationId: { eq: organizationId } },
+        where: {
+          id: { eq: templateId },
+          organizationId: { eq: organizationId },
+        },
         columns: {
           s3Key: true,
           fileName: true,

@@ -18,6 +18,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const updateAIConfigBody = t.Object({
@@ -188,7 +189,7 @@ const updateAIConfig = createSafeRootHandler(
         tx
           .insert(organizationSettings)
           .values({
-            id: crypto.randomUUID(),
+            id: createSafeId<"organizationSettings">(),
             organizationId: session.activeOrganizationId,
             aiConfigEncrypted: newCiphertext,
             aiConfigIv: newIv,

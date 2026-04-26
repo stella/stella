@@ -11,12 +11,12 @@ import { presignDownloadUrl } from "@/api/lib/s3";
 
 const verifyTemplateOwnership = async (
   scopedDb: ScopedDb,
-  templateId: string,
+  templateId: SafeId<"template">,
   organizationId: SafeId<"organization">,
 ) => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
+      where: { id: { eq: templateId }, organizationId: { eq: organizationId } },
       columns: { id: true },
     }),
   );
@@ -29,7 +29,7 @@ const verifyTemplateOwnership = async (
 type ListVersionsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
 };
 
 export const listTemplateVersionsHandler = async ({
@@ -71,8 +71,8 @@ export const listTemplateVersionsHandler = async ({
 type GetVersionProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
-  versionId: string;
+  templateId: SafeId<"template">;
+  versionId: SafeId<"templateVersion">;
 };
 
 export const getTemplateVersionHandler = async ({
@@ -83,7 +83,7 @@ export const getTemplateVersionHandler = async ({
 }: GetVersionProps) => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
-      where: { id: templateId, organizationId: { eq: organizationId } },
+      where: { id: { eq: templateId }, organizationId: { eq: organizationId } },
       columns: { id: true, fileName: true },
     }),
   );
@@ -96,7 +96,7 @@ export const getTemplateVersionHandler = async ({
 
   const version = await scopedDb((tx) =>
     tx.query.templateVersions.findFirst({
-      where: { id: versionId, templateId },
+      where: { id: { eq: versionId }, templateId: { eq: templateId } },
       columns: {
         id: true,
         version: true,

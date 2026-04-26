@@ -37,7 +37,7 @@ import type {
   NamedCondition,
   TemplateManifest,
 } from "@/api/handlers/docx/types";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
@@ -2187,7 +2187,8 @@ export async function seedTemplates(
   authorIds: readonly string[] = ALL_TEST_USER_IDS,
 ): Promise<void> {
   const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
-  const scopedSeedId = (label: string) => seedId(`${ORG_ID}:${label}`);
+  const scopedSeedId = <T extends SafeIdType = never>(label: string) =>
+    seedId<T>(`${ORG_ID}:${label}`);
 
   console.log("  Templates & clauses:");
 
@@ -2342,7 +2343,7 @@ export async function seedTemplates(
     const clauseId = scopedSeedId(link.clauseLabel);
 
     // Find variant ID if specified
-    let clauseVariantId: string | undefined;
+    let clauseVariantId: SafeId<"clauseVariant"> | undefined;
     if (link.variantLabel) {
       const clause = CLAUSES.find((c) => c.label === link.clauseLabel);
       if (clause?.variants) {

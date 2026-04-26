@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 export const taskKeys = {
   all: (workspaceId: string) => ["tasks", workspaceId] as const,
@@ -10,7 +11,9 @@ export const taskKeys = {
 };
 
 const getTaskEndpoint = (workspaceId: string, taskId: string) =>
-  api.tasks({ workspaceId })({ taskId });
+  api.tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+    taskId: toSafeId<"entity">(taskId),
+  });
 
 type TaskDetailAssignee = {
   user: {

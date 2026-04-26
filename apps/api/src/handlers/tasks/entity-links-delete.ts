@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { entityLinks } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteEntityLinkBodySchema = t.Object({
-  linkId: tUuid,
+  linkId: tSafeId("entityLink"),
 });
 
 const deleteEntityLink = createSafeHandler(
@@ -21,7 +21,7 @@ const deleteEntityLink = createSafeHandler(
       safeDb((tx) =>
         tx.query.entityLinks.findFirst({
           where: {
-            id: body.linkId,
+            id: { eq: body.linkId },
             workspaceId: { eq: workspaceId },
           },
           with: {

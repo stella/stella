@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateTableBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("rateTable"),
   name: t.Optional(tDefaultVarchar),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   isDefault: t.Optional(t.Boolean()),
@@ -24,7 +24,7 @@ const updateRateTable = createSafeHandler(
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
-          where: { id: body.id, workspaceId: { eq: workspaceId } },
+          where: { id: { eq: body.id }, workspaceId: { eq: workspaceId } },
           columns: { id: true },
         }),
       ),

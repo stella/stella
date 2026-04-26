@@ -3,15 +3,15 @@ import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { workspace: ["update"] },
   body: t.Object({
-    entityIds: t.Optional(t.Array(tUuid)),
-    entityIdsOrder: t.Optional(t.Array(tUuid)),
+    entityIds: t.Optional(t.Array(tSafeId("entity"))),
+    entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),
   }),
 } satisfies HandlerConfig;
 

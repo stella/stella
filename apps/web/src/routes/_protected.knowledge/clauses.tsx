@@ -8,6 +8,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import { ClauseDetailView } from "@/routes/_protected.knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/_protected.knowledge/-components/clause-list";
@@ -139,7 +141,7 @@ function RouteComponent() {
 
     try {
       const query: {
-        categoryId?: string;
+        categoryId?: SafeId<"clauseCategory">;
         uncategorized?: boolean;
         q?: string;
         cursor: string;
@@ -149,7 +151,7 @@ function RouteComponent() {
       if (selectedCategory === "uncategorized") {
         query.uncategorized = true;
       } else if (selectedCategory) {
-        query.categoryId = selectedCategory;
+        query.categoryId = toSafeId<"clauseCategory">(selectedCategory);
       }
 
       if (searchQuery) {

@@ -23,7 +23,7 @@ import {
   permissionMacro,
   workspaceAccessMacro,
 } from "@/api/lib/auth";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 /**
  * Global-read routes: any authenticated user can read.
@@ -45,7 +45,7 @@ const globalCaseLawRoute = new Elysia({
     "/decisions/:decisionId",
     async (ctx) =>
       await readDecisionHandler(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tUuid }) },
+    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
   )
   .post(
     "/decisions/search",
@@ -57,7 +57,7 @@ const globalCaseLawRoute = new Elysia({
   .get(
     "/decisions/:decisionId/analysis",
     async (ctx) => await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tUuid }) },
+    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
   )
   .get(
     "/decisions/:decisionId/analysis/debug",
@@ -65,7 +65,7 @@ const globalCaseLawRoute = new Elysia({
       const { decisionId } = ctx.params;
       const decision = await ctx.scopedDb((tx) =>
         tx.query.caseLawDecisions.findFirst({
-          where: { id: decisionId },
+          where: { id: { eq: decisionId } },
           columns: {
             id: true,
             language: true,
@@ -115,7 +115,7 @@ const globalCaseLawRoute = new Elysia({
         userMessage,
       };
     },
-    { params: t.Object({ decisionId: tUuid }) },
+    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
   );
 
 /**
@@ -160,7 +160,10 @@ const caseLawMatterLinksRoute = new Elysia({
       }),
     {
       permissions: { entity: ["delete"] },
-      params: t.Object({ workspaceId: tUuid, linkId: tUuid }),
+      params: t.Object({
+        workspaceId: tSafeId("workspace"),
+        linkId: tSafeId("caseLawMatterLink"),
+      }),
     },
   );
 

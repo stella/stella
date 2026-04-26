@@ -6,7 +6,7 @@ import { user } from "@/api/db/auth-schema";
 import { desktopEditSessions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { pushSessionEvent } from "./desktop-edit-session-events";
@@ -14,8 +14,8 @@ import { pushSessionEvent } from "./desktop-edit-session-events";
 const config = {
   permissions: { entity: ["update"] },
   body: t.Object({
-    entityId: tUuid,
-    propertyId: tUuid,
+    entityId: tSafeId("entity"),
+    propertyId: tSafeId("property"),
   }),
 } satisfies HandlerConfig;
 

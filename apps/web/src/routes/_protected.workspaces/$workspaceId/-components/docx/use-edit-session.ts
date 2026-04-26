@@ -12,6 +12,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type EditSessionState =
@@ -68,10 +69,10 @@ export const useEditSession = ({
     setState({ status: "opening" });
 
     const response = await api
-      .entities({ workspaceId })
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["desktop-edit-sessions"].open.post({
-        entityId,
-        propertyId,
+        entityId: toSafeId<"entity">(entityId),
+        propertyId: toSafeId<"property">(propertyId),
         ...(force && { force }),
       });
 
@@ -190,11 +191,13 @@ export const useEditSession = ({
 
     debouncedCheckpoint.cancel();
 
-    await api.entities({ workspaceId })["desktop-edit-sessions"].release.post({
-      entityId,
-      propertyId,
-      queryKey: entitiesKeys.all(workspaceId),
-    });
+    await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      ["desktop-edit-sessions"].release.post({
+        entityId: toSafeId<"entity">(entityId),
+        propertyId: toSafeId<"property">(propertyId),
+        queryKey: entitiesKeys.all(workspaceId),
+      });
 
     sessionRef.current = null;
     setIsDirty(false);

@@ -4,12 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { workspaceContacts } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { workspace: ["update"] },
-  params: workspaceParams({ workspaceContactId: tUuid }),
+  params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
 } satisfies HandlerConfig;
 
 const deleteWorkspaceContact = createSafeHandler(

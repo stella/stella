@@ -103,18 +103,28 @@ export const entitiesRoute = new Elysia({
   .get("/summaries", readEntitySummaries.handler, {
     query: readEntitySummaries.config.query,
   })
-  .get("/zip/:entityId", downloadZip.handler)
-  .get("/entity/:entityId", readEntityById.handler)
-  .get("/entity/:entityId/versions", readVersions.handler)
-  .get("/entity/:entityId/versions/:versionId", readVersionById.handler)
+  .get("/zip/:entityId", downloadZip.handler, {
+    params: downloadZip.config.params,
+  })
+  .get("/entity/:entityId", readEntityById.handler, {
+    params: readEntityById.config.params,
+  })
+  .get("/entity/:entityId/versions", readVersions.handler, {
+    params: readVersions.config.params,
+  })
+  .get("/entity/:entityId/versions/:versionId", readVersionById.handler, {
+    params: readVersionById.config.params,
+  })
   .post("/entity/:entityId/compare", compareVersions.handler, {
     body: compareVersions.config.body,
+    params: compareVersions.config.params,
   })
   .patch(
     "/entity/:entityId/versions/:versionId/label",
     updateVersionLabel.handler,
     {
       body: updateVersionLabel.config.body,
+      params: updateVersionLabel.config.params,
       invalidateQuery: true,
     },
   )
@@ -123,16 +133,18 @@ export const entitiesRoute = new Elysia({
     updateVersionDescription.handler,
     {
       body: updateVersionDescription.config.body,
+      params: updateVersionDescription.config.params,
       invalidateQuery: true,
     },
   )
   .post(
     "/entity/:entityId/versions/:versionId/restore",
     restoreVersion.handler,
-    { invalidateQuery: true },
+    { invalidateQuery: true, params: restoreVersion.config.params },
   )
   .delete("/entity/:entityId/versions/:versionId", deleteVersion.handler, {
     invalidateQuery: true,
+    params: deleteVersion.config.params,
   })
   .post("/upload-version", uploadVersion.handler, {
     body: uploadVersion.config.body,

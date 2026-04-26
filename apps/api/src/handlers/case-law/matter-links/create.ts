@@ -5,11 +5,11 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { caseLawMatterLinks } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 export const createMatterLinkBodySchema = t.Object({
-  decisionId: tUuid,
+  decisionId: tSafeId("caseLawDecision"),
   note: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
@@ -30,7 +30,7 @@ export const createMatterLinkHandler = async ({
 }: CreateMatterLinkProps) => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: { id: body.decisionId },
+      where: { id: { eq: body.decisionId } },
       columns: { id: true },
     }),
   );

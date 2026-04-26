@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { billingCodesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
 
 type CreateBillingCodeVars = {
@@ -20,7 +21,7 @@ export const useCreateBillingCode = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateBillingCodeVars) => {
       const response = await api["billing-codes"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).put({
         queryKey: billingCodesKeys.all(workspaceId),
         ...body,
@@ -53,10 +54,11 @@ export const useUpdateBillingCode = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateBillingCodeVars) => {
       const response = await api["billing-codes"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).patch({
         queryKey: billingCodesKeys.all(workspaceId),
         ...body,
+        id: toSafeId<"billingCode">(body.id),
       });
 
       if (response.error) {
@@ -82,10 +84,10 @@ export const useDeleteBillingCode = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteBillingCodeVars) => {
       const response = await api["billing-codes"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).delete({
         queryKey: billingCodesKeys.all(workspaceId),
-        id,
+        id: toSafeId<"billingCode">(id),
       });
 
       if (response.error) {

@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
@@ -12,7 +12,7 @@ import {
 } from "./categories";
 
 const updateTemplateCategoryParamsSchema = t.Object({
-  categoryId: tUuid,
+  categoryId: tSafeId("templateCategory"),
 });
 
 const config = {

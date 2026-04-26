@@ -14,6 +14,8 @@ import {
   SheetTrigger,
 } from "@stella/ui/components/sheet";
 
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import { MetadataPanel } from "@/routes/_protected.knowledge/case/-components/case-viewer/metadata-panel";
 import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
 
@@ -21,9 +23,9 @@ import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/dec
  * Extract the ID from a composite URL param.
  * Format: "case-slug--id" or just "id" (legacy).
  */
-const extractId = (param: string): string => {
+const extractId = (param: string): SafeId<"caseLawDecision"> => {
   const sep = param.lastIndexOf("--");
-  return sep !== -1 ? param.slice(sep + 2) : param;
+  return toSafeId<"caseLawDecision">(sep !== -1 ? param.slice(sep + 2) : param);
 };
 
 const DecisionMetadataSheetInner = ({ decisionId }: { decisionId: string }) => {

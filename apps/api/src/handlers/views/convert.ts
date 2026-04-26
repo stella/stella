@@ -6,7 +6,7 @@ import { workspaceViews } from "@/api/db/schema";
 import { convertLayout } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
@@ -21,7 +21,7 @@ const VIEW_LAYOUT_TYPES = [
 
 const config = {
   permissions: { view: ["update"] },
-  params: workspaceParams({ viewId: tUuid }),
+  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: t.Object({
     targetType: t.UnionEnum(VIEW_LAYOUT_TYPES),
   }),
@@ -39,7 +39,7 @@ const convertView = createSafeHandler(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
           where: {
-            id: viewId,
+            id: { eq: viewId },
             workspaceId: { eq: workspaceId },
           },
         }),

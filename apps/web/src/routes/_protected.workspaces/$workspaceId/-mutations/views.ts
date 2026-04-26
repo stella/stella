@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, ViewLayoutType } from "@/lib/types";
 import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -18,7 +19,9 @@ export const useCreateView = (workspaceId: string) => {
 
   return useMutation({
     mutationFn: async (body: CreateViewVars) => {
-      const response = await api.views({ workspaceId }).put(body);
+      const response = await api
+        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -49,8 +52,8 @@ export const useUpdateView = (workspaceId: string) => {
   return useMutation({
     mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
       const response = await api
-        .views({ workspaceId })
-        .view({ viewId })
+        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .post(body);
       if (response.error) {
         throw toAPIError(response.error);
@@ -81,8 +84,8 @@ export const useConvertView = (workspaceId: string) => {
   return useMutation({
     mutationFn: async ({ viewId, targetType }: ConvertViewVars) => {
       const response = await api
-        .views({ workspaceId })
-        .view({ viewId })
+        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .convert.post({ targetType });
       if (response.error) {
         throw toAPIError(response.error);
@@ -112,8 +115,10 @@ export const useReorderViews = (workspaceId: string) => {
   return useMutation({
     mutationFn: async ({ viewIds }: ReorderViewsVars) => {
       const response = await api
-        .views({ workspaceId })
-        .reorder.post({ viewIds });
+        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reorder.post({
+          viewIds: viewIds.map((viewId) => toSafeId<"workspaceView">(viewId)),
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -142,8 +147,8 @@ export const useDeleteView = (workspaceId: string) => {
   return useMutation({
     mutationFn: async ({ viewId }: DeleteViewVars) => {
       const response = await api
-        .views({ workspaceId })
-        .view({ viewId })
+        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .delete();
       if (response.error) {
         throw toAPIError(response.error);

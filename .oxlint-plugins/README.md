@@ -14,9 +14,10 @@ checks; the comment in the plugin source notes the predecessor when relevant.
 | Rule | Prevents | Required workaround |
 | --- | --- | --- |
 | [`no-body-ownership-ids`](./no-body-ownership-ids.ts) | Cross-tenant data access via `body.workspaceId` / `query.organizationId`. | Source ownership IDs from `validateWorkspaceAccess` (`SafeId`) or `ctx.session.activeOrganizationId`. |
+| [`no-crypto-random-uuid`](./no-crypto-random-uuid.ts) | Backend code using Web Crypto UUID generation instead of the Bun-native UUID generator. | `Bun.randomUUIDv7()` in Bun-runtime code. |
 | [`no-unbranded-ownership-id-param`](./no-unbranded-ownership-id-param.ts) | Ownership IDs flowing through API parameters as plain strings after validation. | Annotate direct and destructured ownership IDs as `SafeId<"workspace">` / `SafeId<"organization">`, or source them from safe handler context. |
 | [`no-inline-style-colors`](./no-inline-style-colors.ts) | Hex / rgb / named colours hardcoded in `style={{…}}` props that break dark mode. | Use CSS variables (`var(--color-…)`) inside `style`, or a semantic Tailwind utility. |
-| [`no-nanoid`](./no-nanoid.ts) | Re-introducing the removed `nanoid` dependency. | `crypto.randomUUID()` for IDs; `crypto.getRandomValues()` for custom alphabets. |
+| [`no-nanoid`](./no-nanoid.ts) | Re-introducing the removed `nanoid` dependency. | `Bun.randomUUIDv7()` for IDs; `crypto.getRandomValues()` for custom alphabets. |
 | [`no-physical-properties`](./no-physical-properties.ts) | Physical Tailwind utilities (`ml-`, `pr-`, `text-left`, `border-l`, `rounded-r`, `left-*`) that ignore RTL. | Logical equivalents: `ms-`, `pe-`, `text-start`, `border-s`, `rounded-e`, `start-*`. |
 | [`no-raw-colors`](./no-raw-colors.ts) | Palette Tailwind classes (`bg-stone-50`, `text-gray-900`, `bg-white`) that look unreadable in the opposite theme. | Semantic tokens: `bg-background`, `bg-muted`, `text-foreground`, … |
 | [`no-raw-route-query-client`](./no-raw-route-query-client.ts) | Direct `queryClient.ensureQueryData` / `prefetchQuery` inside `beforeLoad` / `loader`, which bypasses the project's suspense / preloading wrappers. | `ensureCriticalQueryData(...)` or `prefetchNonCriticalQuery(...)`. |

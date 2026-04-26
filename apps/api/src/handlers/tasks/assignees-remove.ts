@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const removeAssigneeBodySchema = t.Object({
-  taskId: tUuid,
+  taskId: tSafeId("entity"),
   userId: t.String({ minLength: 1 }),
 });
 
@@ -22,9 +22,9 @@ const removeAssignee = createSafeHandler(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: body.taskId,
+            id: { eq: body.taskId },
             workspaceId: { eq: workspaceId },
-            kind: "task",
+            kind: { eq: "task" },
           },
           columns: { id: true },
         }),

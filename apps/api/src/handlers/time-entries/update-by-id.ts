@@ -5,20 +5,20 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateTimeEntryBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("timeEntry"),
   dateWorked: t.Optional(t.String({ format: "date" })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
   narrative: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   noCharge: t.Optional(t.Boolean()),
-  matterId: t.Optional(tUuid),
+  matterId: t.Optional(tSafeId("entity")),
   taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   status: t.Optional(
@@ -41,7 +41,7 @@ const updateTimeEntryById = createSafeHandler(
       safeDb((tx) =>
         tx.query.timeEntries.findFirst({
           where: {
-            id: body.id,
+            id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
           columns: {
@@ -73,7 +73,10 @@ const updateTimeEntryById = createSafeHandler(
       const matter = yield* Result.await(
         safeDb((tx) =>
           tx.query.entities.findFirst({
-            where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+            where: {
+              id: { eq: body.matterId },
+              workspaceId: { eq: workspaceId },
+            },
             columns: { id: true },
           }),
         ),

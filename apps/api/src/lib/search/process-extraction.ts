@@ -13,6 +13,7 @@ import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { getS3 } from "@/api/lib/s3";
@@ -55,9 +56,11 @@ const pickExtractionSource = (
  * indexes the entity at the end, even when extraction is
  * skipped, so callers don't need a separate indexEntity call.
  */
-export const processExtraction = async (entityId: string): Promise<void> => {
+export const processExtraction = async (
+  entityId: SafeId<"entity">,
+): Promise<void> => {
   const entity = await db.query.entities.findFirst({
-    where: { id: entityId },
+    where: { id: { eq: entityId } },
     columns: { id: true, workspaceId: true },
     with: {
       workspace: {

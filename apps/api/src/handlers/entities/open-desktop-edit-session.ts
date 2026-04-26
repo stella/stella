@@ -7,8 +7,9 @@ import type { SafeDb, Transaction } from "@/api/db";
 import { desktopEditSessions, entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   computeTokenExpiresAt,
   createDesktopEditSessionToken,
@@ -26,9 +27,9 @@ import {
 } from "./desktop-edit-session-utils";
 
 const openDesktopEditSessionBodySchema = t.Object({
-  entityId: tUuid,
+  entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
-  propertyId: tUuid,
+  propertyId: tSafeId("property"),
 });
 
 type OpenDesktopEditSessionResponse = {
@@ -37,7 +38,7 @@ type OpenDesktopEditSessionResponse = {
   fileName: string;
   lastCheckpointAt: string | null;
   resumedFromCheckpoint: boolean;
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
   sessionToken: string;
   tookOverExistingSession: boolean;
 };
@@ -51,11 +52,11 @@ type OpenDesktopEditSessionHandlerProps = {
 };
 
 type ExistingOpenDesktopEditSession = {
-  baseVersionId: string;
-  checkpointFileId: string;
+  baseVersionId: SafeId<"entityVersion">;
+  checkpointFileId: SafeId<"userFile">;
   checkpointUpdatedAt: Date | null;
   fileName: string;
-  id: string;
+  id: SafeId<"desktopEditSession">;
 };
 
 const readExistingOpenDesktopEditSession = async ({
@@ -65,8 +66,8 @@ const readExistingOpenDesktopEditSession = async ({
   userId,
   workspaceId,
 }: {
-  entityId: string;
-  propertyId: string;
+  entityId: SafeId<"entity">;
+  propertyId: SafeId<"property">;
   tx: Transaction;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -106,7 +107,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
 }: {
   existingSession: ExistingOpenDesktopEditSession;
   organizationId: SafeId<"organization">;
-  propertyId: string;
+  propertyId: SafeId<"property">;
   sessionToken: string;
   sessionTokenHash: string;
   tx: Transaction;
@@ -289,8 +290,8 @@ const openDesktopEditSessionHandler = async function* ({
         } as const;
       }
 
-      const sessionId = crypto.randomUUID();
-      const checkpointFileId = crypto.randomUUID();
+      const sessionId = createSafeId<"desktopEditSession">();
+      const checkpointFileId = createSafeId<"userFile">();
 
       await tx.insert(desktopEditSessions).values({
         baseVersionId: currentTarget.baseVersionId,

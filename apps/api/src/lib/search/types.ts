@@ -104,7 +104,7 @@ export type ContentSearchResult = {
 export type SearchProvider = {
   search: (query: SearchQuery) => Promise<SearchResult>;
   searchContent: (query: ContentSearchQuery) => Promise<ContentSearchResult>;
-  indexEntity: (entityId: string) => Promise<void>;
-  removeEntity: (entityId: string) => Promise<void>;
+  indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
+  removeEntity: (entityId: SafeId<"entity">) => Promise<void>;
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;
 };

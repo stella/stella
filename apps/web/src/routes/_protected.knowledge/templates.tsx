@@ -20,6 +20,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
@@ -44,14 +45,15 @@ import {
 } from "@/routes/_protected.knowledge/-queries";
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
-type ListResponse = Awaited<ReturnType<typeof api.templates.get>>;
-
-type ListData = Exclude<
-  NonNullable<Extract<ListResponse, { data: unknown }>["data"]>,
-  Response
->;
-
-type TemplateItem = ListData["templates"][number];
+type TemplateItem = {
+  id: string;
+  name: string;
+  fileName: string;
+  fieldCount: number;
+  sizeBytes: number;
+  categoryId: string | null;
+  createdAt: Date;
+};
 
 type DetailResponse = Awaited<
   ReturnType<ReturnType<typeof api.templates>["get"]>
@@ -491,7 +493,7 @@ const TemplateDetail = ({
     renameCancelledRef.current = true;
     renameDispatch({ type: "savingStart" });
     const response = await api
-      .templates({ templateId: template.id })
+      .templates({ templateId: toSafeId<"template">(template.id) })
       .post({ name: trimmed });
 
     if (response.error) {
@@ -595,7 +597,7 @@ const TemplateDetail = ({
     };
 
     const response = await api
-      .templates({ templateId: template.id })
+      .templates({ templateId: toSafeId<"template">(template.id) })
       .post({ manifest: JSON.stringify(manifest) });
 
     if (response.error) {

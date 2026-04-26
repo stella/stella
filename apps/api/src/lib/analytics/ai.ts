@@ -208,7 +208,7 @@ export const createAIAnalyticsCallbacks = ({
       input: captureContent ? serializeMessages(messages) : undefined,
       modelId: model.modelId,
       provider: normalizeProvider(model.provider),
-      spanId: crypto.randomUUID(),
+      spanId: Bun.randomUUIDv7(),
       startedAt: performance.now(),
     });
   };
@@ -226,7 +226,7 @@ export const createAIAnalyticsCallbacks = ({
         input: undefined,
         modelId: model.modelId,
         provider: normalizeProvider(model.provider),
-        spanId: crypto.randomUUID(),
+        spanId: Bun.randomUUIDv7(),
         startedAt: performance.now(),
       } satisfies AnalyticsStepState);
 
@@ -274,7 +274,7 @@ export const createAIAnalyticsCallbacks = ({
       properties: {
         $ai_trace_id: config.traceId,
         ...(config.sessionId ? { $ai_session_id: config.sessionId } : {}),
-        $ai_span_id: crypto.randomUUID(),
+        $ai_span_id: Bun.randomUUIDv7(),
         $ai_span_name: event.toolCall.toolName,
         ...(parentStep ? { $ai_parent_id: parentStep.spanId } : {}),
         $ai_latency: event.durationMs / ONE_SECOND_MS,
@@ -326,7 +326,7 @@ export const createAIAnalyticsCallbacks = ({
         ...buildBaseProperties({
           config,
           captureContent,
-          spanId: activeStep?.spanId ?? crypto.randomUUID(),
+          spanId: activeStep?.spanId ?? Bun.randomUUIDv7(),
         }),
         $ai_is_error: true,
         $ai_error: getErrorPayload({ error, captureContent }),

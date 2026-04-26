@@ -3,14 +3,14 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { getTemplateVersionHandler } from "./versions";
 
 const getTemplateVersionParamsSchema = t.Object({
-  templateId: tUuid,
-  versionId: tUuid,
+  templateId: tSafeId("template"),
+  versionId: tSafeId("templateVersion"),
 });
 
 const config = {

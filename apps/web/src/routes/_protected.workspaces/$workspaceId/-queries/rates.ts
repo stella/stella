@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 export const ratesKeys = {
   all: (workspaceId: string) => ["rates", workspaceId],
@@ -24,7 +25,7 @@ export const rateTablesOptions = (workspaceId: string) =>
     queryKey: ratesKeys.tables(workspaceId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .rates({ workspaceId })
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
 
       if (response.error) {
@@ -40,7 +41,9 @@ export const rateEntriesOptions = (workspaceId: string, rateTableId: string) =>
     queryKey: ratesKeys.entries(workspaceId, rateTableId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .rates({ workspaceId })({ rateTableId })
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          rateTableId: toSafeId<"rateTable">(rateTableId),
+        })
         .entries.get({ fetch: { signal } });
 
       if (response.error) {
@@ -60,10 +63,12 @@ export const resolvedRateOptions = (
   queryOptions({
     queryKey: ratesKeys.resolve(workspaceId, userId, date),
     queryFn: async ({ signal }) => {
-      const response = await api.rates({ workspaceId }).resolve.get({
-        query: { userId, date },
-        fetch: { signal },
-      });
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .resolve.get({
+          query: { userId: toSafeId<"user">(userId), date },
+          fetch: { signal },
+        });
 
       if (response.error) {
         throw toAPIError(response.error);

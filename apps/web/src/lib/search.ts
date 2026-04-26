@@ -4,6 +4,7 @@ import type { EntityKind } from "@stella/api/types";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 type SearchParams = {
   query: string;
@@ -25,7 +26,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
         {
           query: params.query,
           ...(params.workspaceId !== undefined && {
-            workspaceId: params.workspaceId,
+            workspaceId: toSafeId<"workspace">(params.workspaceId),
           }),
           ...(params.kinds !== undefined && { kinds: params.kinds }),
           ...(pageParam !== undefined && { cursor: pageParam }),

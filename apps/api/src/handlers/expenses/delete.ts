@@ -5,11 +5,11 @@ import { t } from "elysia";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteExpenseBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("expense"),
 });
 
 const config = {
@@ -24,7 +24,7 @@ const deleteExpense = createSafeHandler(
       safeDb((tx) =>
         tx.query.expenses.findFirst({
           where: {
-            id: body.id,
+            id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
           columns: {

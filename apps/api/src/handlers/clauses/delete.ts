@@ -7,17 +7,17 @@ import { clauses } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteClauseParamsSchema = t.Object({
-  clauseId: tUuid,
+  clauseId: tSafeId("clause"),
 });
 
 type DeleteClauseProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
+  clauseId: SafeId<"clause">;
 };
 
 const deleteClauseHandler = async function* ({
@@ -29,7 +29,7 @@ const deleteClauseHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauses.findFirst({
         where: {
-          id: clauseId,
+          id: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },

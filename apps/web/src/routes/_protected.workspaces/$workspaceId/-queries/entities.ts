@@ -5,6 +5,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewFilterCondition,
   WorkspaceEntity,
@@ -42,7 +43,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
     queryKey: entitiesKeys.page(key),
     queryFn: async ({ signal }) => {
       const response = await api
-        .entities({ workspaceId: key.workspaceId })
+        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         .query.post(
           {
             filters: key.filters,
@@ -64,16 +65,19 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
         const fields: Record<string, WorkspaceField> = {};
         for (const field of rawFields) {
           fields[field.propertyId] = {
-            id: field.id,
-            entityId: field.entityId,
+            id: toSafeId<"field">(field.id),
+            entityId: toSafeId<"entity">(field.entityId),
             content: field.content,
           };
         }
         return {
-          entityId: entity.entityId,
+          entityId: toSafeId<"entity">(entity.entityId),
           kind: entity.kind,
           name: entity.name,
-          parentId: entity.parentId,
+          parentId:
+            entity.parentId === null
+              ? null
+              : toSafeId<"entity">(entity.parentId),
           createdAt: entity.createdAt,
           createdBy: entity.createdBy,
           createdByImage: entity.createdByImage,
@@ -103,8 +107,8 @@ export const entityOptions = (workspaceId: string, entityId: string) =>
     queryKey: [...entitiesKeys.all(workspaceId), entityId],
     queryFn: async ({ signal }) => {
       const response = await api
-        .entities({ workspaceId })
-        .entity({ entityId })
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
         .get({ fetch: { signal } });
 
       if (response.error) {
@@ -120,7 +124,7 @@ export const entitySummariesOptions = (workspaceId: string) =>
     queryKey: entitiesKeys.summaries(workspaceId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .entities({ workspaceId })
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .summaries.get({ fetch: { signal } });
 
       if (response.error) {

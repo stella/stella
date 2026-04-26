@@ -11,7 +11,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
@@ -19,7 +19,7 @@ import type { ChatTools } from "./tools/chat-tools";
 
 const rawMessageSchema = t.Object(
   {
-    id: t.String(),
+    id: tSafeId("chatMessage"),
     role: t.Union([
       t.Literal("system"),
       t.Literal("user"),
@@ -37,13 +37,13 @@ export const userContextSchema = t.Object({
 });
 
 export const activeFileSchema = t.Object({
-  entityId: tUuid,
+  entityId: tSafeId("entity"),
   fileName: t.String(),
 });
 
 export const sendMessageBodySchema = t.Object({
-  threadId: tUuid,
-  workspaceId: t.Optional(tUuid),
+  threadId: tSafeId("chatThread"),
+  workspaceId: t.Optional(tSafeId("workspace")),
   message: rawMessageSchema,
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
@@ -56,7 +56,7 @@ export type IncomingActiveFile = Static<typeof activeFileSchema>;
 type ValidateMessageInput = {
   message: RawIncomingMessage;
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   tools: ChatTools;
   userId: SafeId<"user">;
 };

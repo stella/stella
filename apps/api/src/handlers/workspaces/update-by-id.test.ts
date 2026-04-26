@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -54,7 +55,7 @@ describe("updateWorkspace", () => {
     const result = await updateWorkspace.handler(
       createContext({
         body: {
-          clientId: crypto.randomUUID(),
+          clientId: toSafeId<"contact">(Bun.randomUUIDv7()),
         },
         safeDb,
         scopedDb,

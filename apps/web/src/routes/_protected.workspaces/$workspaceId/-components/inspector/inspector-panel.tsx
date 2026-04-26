@@ -35,7 +35,7 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
-import type { WorkspaceProperty } from "@/lib/types";
+import { toSafeId } from "@/lib/safe-id";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -625,14 +625,7 @@ const JustificationBar = ({
         }
         return { fieldId: f.id, property: prop };
       })
-      .filter(
-        (
-          s,
-        ): s is {
-          fieldId: string;
-          property: WorkspaceProperty;
-        } => s !== null,
-      );
+      .filter((s) => s !== null);
   }, [entity, justification, properties]);
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
@@ -668,9 +661,9 @@ const JustificationBar = ({
     void (async () => {
       try {
         const response = await api
-          .workspaces({ workspaceId })
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
           ["bounding-boxes"].post({
-            justificationId,
+            justificationId: toSafeId<"justification">(justificationId),
             queryKey: workspaceKeys.justifications(workspaceId),
           });
 

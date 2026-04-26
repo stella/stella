@@ -26,7 +26,7 @@ export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
     tx.query.entities.findMany({
       where: {
         id: { in: entityIds },
-        kind: "task",
+        kind: { eq: "task" },
         status: { ne: TASK_STATUS.CANCELLED },
       },
       columns: {

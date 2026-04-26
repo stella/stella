@@ -56,7 +56,7 @@ describe("deleteContactById", () => {
 
     const result = await deleteContactById.handler(
       createContext({
-        contactId: crypto.randomUUID(),
+        contactId: Bun.randomUUIDv7(),
         safeDb,
         scopedDb,
       }),
@@ -91,7 +91,7 @@ describe("deleteContactById", () => {
 
     const result = await deleteContactById.handler(
       createContext({
-        contactId: crypto.randomUUID(),
+        contactId: Bun.randomUUIDv7(),
         safeDb,
         scopedDb,
       }),

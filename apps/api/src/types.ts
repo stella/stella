@@ -5,6 +5,9 @@ import type * as ViewSchemas from "@/api/lib/views-schema";
 
 export type API = typeof api;
 
+export { toSafeId } from "@/api/lib/branded-types";
+export type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+
 export type PropertyTable = typeof properties.$inferSelect;
 export type PropertyContent = SchemaValidators.PropertyContent;
 export type PropertyContentType = SchemaValidators.PropertyContentType;

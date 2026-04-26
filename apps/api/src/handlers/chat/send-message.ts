@@ -33,6 +33,7 @@ import { uploadMessageFiles } from "@/api/handlers/chat/upload-files";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -184,9 +185,9 @@ const sendMessage = createSafeRootHandler(
 export default sendMessage;
 
 type ThreadRecord = {
-  id: string;
+  id: SafeId<"chatThread">;
   messages: {
-    id: string;
+    id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
     content: ChatMessageContent;
   }[];
@@ -194,7 +195,7 @@ type ThreadRecord = {
 
 type LoadThreadProps = {
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   title: string;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -271,7 +272,7 @@ const loadThread = async ({
 type UploadMessageFilesWithRollbackProps = {
   message: ChatMessage;
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   threadState: LoadThreadResult;
   userId: SafeId<"user">;
 };
@@ -370,7 +371,7 @@ const prepareChatContext = async ({
 type InsertMessagesProps = {
   messages: ChatMessage[];
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -389,7 +390,7 @@ const insertMessages = async ({
   const insertResult = await safeDb(async (tx) => {
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
-        id: persistedMessage.id,
+        id: toSafeId<"chatMessage">(persistedMessage.id),
         threadId,
         workspaceId,
         userId,
@@ -411,7 +412,7 @@ const insertMessages = async ({
 
 type PersistMessageProps = {
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
@@ -445,7 +446,12 @@ const persistMessage = async ({
             data: persistencePlan.message.parts,
           },
         })
-        .where(eq(chatMessages.id, persistencePlan.messageId));
+        .where(
+          eq(
+            chatMessages.id,
+            toSafeId<"chatMessage">(persistencePlan.messageId),
+          ),
+        );
       await tx
         .update(chatThreads)
         .set({ updatedAt: new Date() })
@@ -464,7 +470,14 @@ const persistMessage = async ({
       safeDb((tx) =>
         tx
           .delete(chatMessages)
-          .where(and(eq(chatMessages.id, persistencePlan.deleteMessageId))),
+          .where(
+            and(
+              eq(
+                chatMessages.id,
+                toSafeId<"chatMessage">(persistencePlan.deleteMessageId),
+              ),
+            ),
+          ),
       ),
     );
 

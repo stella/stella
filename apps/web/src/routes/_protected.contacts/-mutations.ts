@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
 
 type BankAccount = {
   iban?: string;
@@ -22,7 +23,7 @@ type BillingAddress = {
 };
 
 type CreateContactVars = {
-  id: string;
+  id: SafeId<"contact">;
   type: "person" | "organization";
   displayName: string;
   firstName?: string;
@@ -64,7 +65,7 @@ export const useCreateContact = () => {
 };
 
 type UpdateContactVars = {
-  contactId: string;
+  contactId: SafeId<"contact">;
   displayName?: string;
   type?: "person" | "organization";
   firstName?: string | null;

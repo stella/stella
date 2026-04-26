@@ -4,8 +4,9 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templateCategories } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -14,13 +15,13 @@ import { pickDefined } from "@/api/lib/pick-defined";
 export const createTemplateCategoryBodySchema = t.Object({
   name: tDefaultVarchar,
   description: t.Optional(t.String({ maxLength: 2000 })),
-  parentId: t.Optional(tUuid),
+  parentId: t.Optional(tSafeId("templateCategory")),
 });
 
 export const updateTemplateCategoryBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  parentId: t.Optional(t.Nullable(tUuid)),
+  parentId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
   sortOrder: t.Optional(t.Integer({ minimum: 0 })),
 });
 
@@ -75,7 +76,7 @@ export const createTemplateCategoryHandler = async ({
     const parent = await scopedDb((tx) =>
       tx.query.templateCategories.findFirst({
         where: {
-          id: body.parentId,
+          id: { eq: body.parentId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },
@@ -110,7 +111,7 @@ export const createTemplateCategoryHandler = async ({
     const [inserted] = await tx
       .insert(templateCategories)
       .values({
-        id: crypto.randomUUID(),
+        id: createSafeId<"templateCategory">(),
         organizationId,
         parentId: body.parentId ?? null,
         name: body.name,
@@ -134,7 +135,7 @@ export const createTemplateCategoryHandler = async ({
 type UpdateProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  categoryId: string;
+  categoryId: SafeId<"templateCategory">;
   body: UpdateBody;
 };
 
@@ -146,7 +147,7 @@ export const updateTemplateCategoryHandler = async ({
 }: UpdateProps) => {
   const existing = await scopedDb((tx) =>
     tx.query.templateCategories.findFirst({
-      where: { id: categoryId, organizationId: { eq: organizationId } },
+      where: { id: { eq: categoryId }, organizationId: { eq: organizationId } },
       columns: { id: true },
     }),
   );
@@ -165,7 +166,7 @@ export const updateTemplateCategoryHandler = async ({
 
     const parent = await scopedDb((tx) =>
       tx.query.templateCategories.findFirst({
-        where: { id: parentId, organizationId: { eq: organizationId } },
+        where: { id: { eq: parentId }, organizationId: { eq: organizationId } },
         columns: { id: true, parentId: true },
       }),
     );
@@ -178,7 +179,7 @@ export const updateTemplateCategoryHandler = async ({
 
     // Walk the ancestor chain to detect cycles
     const visited = new Set([categoryId]);
-    let checkId: string | null = parentId;
+    let checkId: SafeId<"templateCategory"> | null = parentId;
     while (checkId) {
       if (visited.has(checkId)) {
         return status(400, {
@@ -186,16 +187,17 @@ export const updateTemplateCategoryHandler = async ({
         });
       }
       visited.add(checkId);
-      const currentId: string = checkId;
-      const ancestor: { parentId: string | null } | undefined = await scopedDb(
-        (tx) =>
-          tx.query.templateCategories.findFirst({
-            where: {
-              id: currentId,
-              organizationId: { eq: organizationId },
-            },
-            columns: { parentId: true },
-          }),
+      const currentId: SafeId<"templateCategory"> = checkId;
+      const ancestor:
+        | { parentId: SafeId<"templateCategory"> | null }
+        | undefined = await scopedDb((tx) =>
+        tx.query.templateCategories.findFirst({
+          where: {
+            id: { eq: currentId },
+            organizationId: { eq: organizationId },
+          },
+          columns: { parentId: true },
+        }),
       );
       checkId = ancestor?.parentId ?? null;
     }
@@ -234,7 +236,7 @@ export const updateTemplateCategoryHandler = async ({
 type DeleteProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  categoryId: string;
+  categoryId: SafeId<"templateCategory">;
 };
 
 export const deleteTemplateCategoryHandler = async ({
@@ -244,7 +246,7 @@ export const deleteTemplateCategoryHandler = async ({
 }: DeleteProps) => {
   const existing = await scopedDb((tx) =>
     tx.query.templateCategories.findFirst({
-      where: { id: categoryId, organizationId: { eq: organizationId } },
+      where: { id: { eq: categoryId }, organizationId: { eq: organizationId } },
       columns: { id: true, parentId: true },
     }),
   );

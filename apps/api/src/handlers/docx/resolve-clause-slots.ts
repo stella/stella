@@ -29,7 +29,7 @@ const VERSION_NUM_RE = /^v(\d+)$/;
  * in fill diagnostics.
  */
 export const resolveClauseSlots = async (
-  templateId: string,
+  templateId: SafeId<"template">,
   slots: ClauseSlot[],
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
@@ -44,7 +44,7 @@ export const resolveClauseSlots = async (
     const link = await scopedDb((tx) =>
       tx.query.templateClauses.findFirst({
         where: {
-          templateId,
+          templateId: { eq: templateId },
           slotName: slot.name,
           organizationId: { eq: organizationId },
         },
@@ -84,8 +84,8 @@ type VersionRow = {
 };
 
 const resolveVersion = async (
-  clauseId: string,
-  pinnedVersionId: string | null,
+  clauseId: SafeId<"clause">,
+  pinnedVersionId: SafeId<"clauseVersion"> | null,
   modifier: string | undefined,
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
@@ -95,7 +95,7 @@ const resolveVersion = async (
     const clause = await scopedDb((tx) =>
       tx.query.clauses.findFirst({
         where: {
-          id: clauseId,
+          id: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { currentVersion: true },
@@ -109,7 +109,7 @@ const resolveVersion = async (
     return scopedDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {
-          clauseId,
+          clauseId: { eq: clauseId },
           version: clause.currentVersion,
           organizationId: { eq: organizationId },
         },
@@ -125,7 +125,7 @@ const resolveVersion = async (
     return scopedDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {
-          clauseId,
+          clauseId: { eq: clauseId },
           version,
           organizationId: { eq: organizationId },
         },
@@ -139,7 +139,7 @@ const resolveVersion = async (
     return scopedDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {
-          id: pinnedVersionId,
+          id: { eq: pinnedVersionId },
           organizationId: { eq: organizationId },
         },
         columns: { body: true },
@@ -151,7 +151,7 @@ const resolveVersion = async (
   const clause = await scopedDb((tx) =>
     tx.query.clauses.findFirst({
       where: {
-        id: clauseId,
+        id: { eq: clauseId },
         organizationId: { eq: organizationId },
       },
       columns: { currentVersion: true },
@@ -165,7 +165,7 @@ const resolveVersion = async (
   return scopedDb((tx) =>
     tx.query.clauseVersions.findFirst({
       where: {
-        clauseId,
+        clauseId: { eq: clauseId },
         version: clause.currentVersion,
         organizationId: { eq: organizationId },
       },

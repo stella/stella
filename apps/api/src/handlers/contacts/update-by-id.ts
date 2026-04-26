@@ -11,7 +11,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -49,7 +49,7 @@ const updateContactBodySchema = t.Object({
 });
 
 const updateContactParamsSchema = t.Object({
-  contactId: tUuid,
+  contactId: tSafeId("contact"),
 });
 
 const updateContactById = createSafeRootHandler(

@@ -35,6 +35,7 @@ import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import { toSafeId } from "@/lib/safe-id";
 import type { EntityField, EntityKind } from "@/lib/types";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
@@ -228,10 +229,14 @@ function RouteComponentInner({
     setIsComparing(true);
     try {
       const response = await api
-        .entities({ workspaceId })
-        .entity({ entityId })
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
         .compare.post(
-          { baseVersionId, targetVersionId, entityId },
+          {
+            baseVersionId: toSafeId<"entityVersion">(baseVersionId),
+            targetVersionId: toSafeId<"entityVersion">(targetVersionId),
+            entityId: toSafeId<"entity">(entityId),
+          },
           { fetch: { signal: AbortSignal.timeout(30_000) } },
         );
       if (response.error) {
@@ -647,9 +652,9 @@ const VersionDropZone = ({
         setIsUploading(true);
         try {
           const response = await api
-            .entities({ workspaceId })
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             ["upload-version"].post({
-              entityId,
+              entityId: toSafeId<"entity">(entityId),
               file,
               queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
             });

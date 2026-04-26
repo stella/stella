@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 export const listDecisionsQuerySchema = t.Object({
@@ -20,7 +21,7 @@ export const listDecisionsQuerySchema = t.Object({
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(t.String({ maxLength: 21 })),
+  sourceId: t.Optional(tSafeId("caseLawSource")),
   language: t.Optional(t.String({ maxLength: 8 })),
 });
 

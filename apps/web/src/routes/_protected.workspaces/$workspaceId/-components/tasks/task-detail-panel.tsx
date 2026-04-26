@@ -14,6 +14,7 @@ import { cn } from "@stella/ui/lib/utils";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   isTaskPriority,
@@ -81,10 +82,13 @@ export const TaskDetailPanel = ({
       priority?: string;
       dueDate?: string | null;
     }) => {
-      const response = await api.tasks({ workspaceId }).patch({
-        queryKey: entitiesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          ...body,
+          taskId: toSafeId<"entity">(body.taskId),
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -121,9 +125,9 @@ export const TaskDetailPanel = ({
         );
         if (!alreadyAssigned) {
           api
-            .tasks({ workspaceId })
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .assignees.post({
-              taskId,
+              taskId: toSafeId<"entity">(taskId),
               userId,
               queryKey: entitiesKeys.all(workspaceId),
             })

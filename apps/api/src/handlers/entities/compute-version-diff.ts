@@ -26,15 +26,15 @@ export const computeVersionDiffStats = async ({
   workspaceId,
   organizationId,
 }: {
-  versionId: string;
-  entityId: string;
+  versionId: SafeId<"entityVersion">;
+  entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
 }): Promise<void> => {
   // Get the new version's number
   const newVersion = await db.query.entityVersions.findFirst({
     where: {
-      id: versionId,
+      id: { eq: versionId },
       workspaceId: { eq: workspaceId },
     },
     columns: { versionNumber: true },
@@ -66,11 +66,11 @@ export const computeVersionDiffStats = async ({
   // Get DOCX file fields for both versions
   const [newFields, prevFields] = await Promise.all([
     db.query.fields.findMany({
-      where: { entityVersionId: versionId },
+      where: { entityVersionId: { eq: versionId } },
       columns: { content: true },
     }),
     db.query.fields.findMany({
-      where: { entityVersionId: prevVersionId },
+      where: { entityVersionId: { eq: prevVersionId } },
       columns: { content: true },
     }),
   ]);

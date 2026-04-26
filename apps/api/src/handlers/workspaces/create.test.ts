@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -44,7 +45,7 @@ describe("createWorkspaces", () => {
       from: () => ({
         where: () => ({
           for: () => ({
-            limit: async () => [{ id: crypto.randomUUID() }],
+            limit: async () => [{ id: Bun.randomUUIDv7() }],
           }),
         }),
       }),
@@ -79,8 +80,8 @@ describe("createWorkspaces", () => {
     const result = await createWorkspaces.handler(
       createContext({
         body: {
-          id: crypto.randomUUID(),
-          clientId: crypto.randomUUID(),
+          id: toSafeId<"workspace">(Bun.randomUUIDv7()),
+          clientId: toSafeId<"contact">(Bun.randomUUIDv7()),
           memberUserIds: [validTeamMemberId, "user_outside_org"],
           name: "Litigation intake",
           filePropertyName: "Documents",

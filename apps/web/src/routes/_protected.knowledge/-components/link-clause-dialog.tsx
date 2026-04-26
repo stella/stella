@@ -19,6 +19,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import {
   clauseCategoriesOptions,
   clausesOptions,
@@ -87,14 +89,16 @@ export const LinkClauseDialog = ({
     setLinking(true);
 
     const body: {
-      clauseId: string;
+      clauseId: SafeId<"clause">;
       slotName?: string;
-    } = { clauseId: selectedClauseId };
+    } = { clauseId: toSafeId<"clause">(selectedClauseId) };
     if (slotName.trim()) {
       body.slotName = slotName.trim();
     }
 
-    const response = await api.templates({ templateId }).clauses.put(body);
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses.put(body);
 
     setLinking(false);
 

@@ -45,6 +45,7 @@ import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -255,10 +256,10 @@ export const RowActions = ({
 
     try {
       const response = await api
-        .entities({ workspaceId })
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["desktop-edit-sessions"]["request-takeover"].post({
-          entityId: file.entityId,
-          propertyId: file.propertyId,
+          entityId: toSafeId<"entity">(file.entityId),
+          propertyId: toSafeId<"property">(file.propertyId),
         });
 
       if (response.error) {
@@ -332,10 +333,12 @@ export const RowActions = ({
     for (const e of targets) {
       const result = await Result.tryPromise(
         async () =>
-          await api.entities({ workspaceId }).duplicate.post({
-            queryKey: entitiesKeys.all(workspaceId),
-            entityId: e.entityId,
-          }),
+          await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .duplicate.post({
+              queryKey: entitiesKeys.all(workspaceId),
+              entityId: toSafeId<"entity">(e.entityId),
+            }),
       );
       if (Result.isError(result) || result.value.error) {
         failed = true;

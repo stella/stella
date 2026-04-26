@@ -22,7 +22,7 @@ import addWorkspaceMember from "@/api/handlers/workspaces/workspace-members-add"
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import removeWorkspaceMember from "@/api/handlers/workspaces/workspace-members-remove";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -43,6 +43,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .group(
     "/:workspaceId",
     {
+      params: t.Object({ workspaceId: tSafeId("workspace") }),
       validateWorkspaceAccess: true,
     },
     (app) =>
@@ -74,7 +75,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             }),
           {
             body: t.Object({
-              entityIds: t.Array(tUuid, {
+              entityIds: t.Array(tSafeId("entity"), {
                 minItems: 1,
                 maxItems: LIMITS.entitiesPageSizeMax,
               }),

@@ -1,25 +1,24 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readVersionByIdParamsSchema = workspaceParams({
-  entityId: t.String(),
-  versionId: t.String(),
+  entityId: tSafeId("entity"),
+  versionId: tSafeId("entityVersion"),
 });
 
 type ReadVersionByIdHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  entityId: string;
-  versionId: string;
+  entityId: SafeId<"entity">;
+  versionId: SafeId<"entityVersion">;
 };
 
 const readVersionByIdHandler = async function* ({
@@ -33,7 +32,7 @@ const readVersionByIdHandler = async function* ({
     safeDb((tx) =>
       tx.query.entities.findFirst({
         where: {
-          id: entityId,
+          id: { eq: entityId },
           workspaceId: { eq: workspaceId },
         },
         columns: { id: true },
@@ -80,7 +79,7 @@ const readVersionByIdHandler = async function* ({
   const versionFields = yield* Result.await(
     safeDb((tx) =>
       tx.query.fields.findMany({
-        where: { entityVersionId: versionId },
+        where: { entityVersionId: { eq: versionId } },
         columns: {
           id: true,
           propertyId: true,

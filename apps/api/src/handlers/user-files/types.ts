@@ -1,3 +1,6 @@
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+
 export const USER_FILE_URL_PREFIX = "stella://file::" as const;
 
 export type UserFileUrl = `${typeof USER_FILE_URL_PREFIX}${string}`;
@@ -8,16 +11,16 @@ export type UserFileViews = {
   trackedChanges?: string;
 };
 
-export const toUserFileUrl = (id: string): UserFileUrl =>
+export const toUserFileUrl = (id: SafeId<"userFile">): UserFileUrl =>
   `${USER_FILE_URL_PREFIX}${id}`;
 
-export const parseUserFileId = (url: string): string | null => {
+export const parseUserFileId = (url: string): SafeId<"userFile"> | null => {
   if (!url.startsWith(USER_FILE_URL_PREFIX)) {
     return null;
   }
 
   const id = url.slice(USER_FILE_URL_PREFIX.length);
-  return id.length > 0 ? id : null;
+  return id.length > 0 ? toSafeId<"userFile">(id) : null;
 };
 
 export const isUserFileUrl = (url: string): url is UserFileUrl =>

@@ -9,6 +9,7 @@ import {
 } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { LIMITS } from "@/api/lib/limits";
@@ -62,7 +63,7 @@ class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
 
 export type CreateEntityFromBufferResult = Result<
   {
-    entityId: string;
+    entityId: SafeId<"entity">;
     fileName: string;
   },
   EntityLimitError | MissingFilePropertyError
@@ -85,7 +86,7 @@ export const createEntityFromBuffer = async ({
   mimeType,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
-  const fileId = crypto.randomUUID();
+  const fileId = Bun.randomUUIDv7();
   const s3Key = createFileKey({
     organizationId,
     workspaceId,
@@ -119,8 +120,8 @@ export const createEntityFromBuffer = async ({
 
   let pdfFileId: string | null = null;
 
-  const entityId = crypto.randomUUID();
-  const entityVersionId = crypto.randomUUID();
+  const entityId = createSafeId<"entity">();
+  const entityVersionId = createSafeId<"entityVersion">();
 
   try {
     // Upload source file and convert to PDF in parallel.
@@ -134,7 +135,7 @@ export const createEntityFromBuffer = async ({
     ]);
 
     if (pdfResult && Result.isOk(pdfResult)) {
-      pdfFileId = crypto.randomUUID();
+      pdfFileId = Bun.randomUUIDv7();
       const pdfKey = createFileKey({
         organizationId,
         workspaceId,

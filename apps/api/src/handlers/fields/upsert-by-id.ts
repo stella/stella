@@ -6,7 +6,7 @@ import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -15,8 +15,8 @@ const config = {
     entity: ["create", "update"],
   },
   body: t.Object({
-    propertyId: tUuid,
-    entityId: tUuid,
+    propertyId: tSafeId("property"),
+    entityId: tSafeId("entity"),
     content: t.Union([
       t.Object({
         version: t.Literal(1),
@@ -55,7 +55,10 @@ const upsertField = createSafeHandler(
       safeDb((tx) =>
         tx.query.properties.findFirst({
           columns: { id: true, content: true },
-          where: { id: body.propertyId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: body.propertyId },
+            workspaceId: { eq: workspaceId },
+          },
         }),
       ),
     );
@@ -82,7 +85,10 @@ const upsertField = createSafeHandler(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           columns: { id: true, currentVersionId: true },
-          where: { id: body.entityId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: body.entityId },
+            workspaceId: { eq: workspaceId },
+          },
         }),
       ),
     );

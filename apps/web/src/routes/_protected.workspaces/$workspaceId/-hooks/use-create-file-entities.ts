@@ -13,6 +13,7 @@ import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
@@ -51,15 +52,17 @@ const uploadSingleFile = async (
   propertyId: string,
   signal: AbortSignal,
 ): Promise<UploadResult> => {
-  const response = await api.entities({ workspaceId }).upload.post(
-    {
-      queryKey: entitiesKeys.all(workspaceId),
-      file,
-      name: file.name,
-      propertyId,
-    },
-    { fetch: { signal } },
-  );
+  const response = await api
+    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .upload.post(
+      {
+        queryKey: entitiesKeys.all(workspaceId),
+        file,
+        name: file.name,
+        propertyId: toSafeId<"property">(propertyId),
+      },
+      { fetch: { signal } },
+    );
 
   if (response.error) {
     const error = toAPIError(response.error);

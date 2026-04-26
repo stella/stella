@@ -1,20 +1,19 @@
 import { Result } from "better-result";
 import { and, desc, eq, ne } from "drizzle-orm";
-import { t } from "elysia";
 
 import { entities, entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const paramsSchema = workspaceParams({
-  entityId: t.String(),
-  versionId: t.String(),
+  entityId: tSafeId("entity"),
+  versionId: tSafeId("entityVersion"),
 });
 
 const config = {
@@ -45,8 +44,8 @@ export default createSafeHandler(
       safeDb((tx) =>
         tx.query.entityVersions.findFirst({
           where: {
-            id: params.versionId,
-            entityId: params.entityId,
+            id: { eq: params.versionId },
+            entityId: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true, versionNumber: true },
@@ -92,7 +91,7 @@ export default createSafeHandler(
     const versionFields = yield* Result.await(
       safeDb((tx) =>
         tx.query.fields.findMany({
-          where: { entityVersionId: params.versionId },
+          where: { entityVersionId: { eq: params.versionId } },
           columns: { content: true },
         }),
       ),
@@ -117,7 +116,10 @@ export default createSafeHandler(
     const entity = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          where: { id: params.entityId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: params.entityId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { currentVersionId: true },
         }),
       ),

@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { expensesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
 
 type ExpenseCategory =
@@ -32,10 +33,13 @@ export const useCreateExpense = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateExpenseVars) => {
-      const response = await api.expenses({ workspaceId }).put({
-        queryKey: expensesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({
+          queryKey: expensesKeys.all(workspaceId),
+          ...body,
+          matterId: toSafeId<"entity">(body.matterId),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -69,10 +73,17 @@ export const useUpdateExpense = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateExpenseVars) => {
-      const response = await api.expenses({ workspaceId }).patch({
-        queryKey: expensesKeys.all(workspaceId),
-        ...body,
-      });
+      const { id, matterId, ...restBody } = body;
+      const response = await api
+        .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: expensesKeys.all(workspaceId),
+          ...restBody,
+          id: toSafeId<"expense">(id),
+          ...(matterId !== undefined && {
+            matterId: toSafeId<"entity">(matterId),
+          }),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -96,10 +107,12 @@ export const useDeleteExpense = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteExpenseVars) => {
-      const response = await api.expenses({ workspaceId }).delete({
-        queryKey: expensesKeys.all(workspaceId),
-        id,
-      });
+      const response = await api
+        .expenses({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .delete({
+          queryKey: expensesKeys.all(workspaceId),
+          id: toSafeId<"expense">(id),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);

@@ -4,13 +4,13 @@ import { and, eq } from "drizzle-orm";
 import { properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { property: ["delete"] },
-  params: workspaceParams({ propertyId: tUuid }),
+  params: workspaceParams({ propertyId: tSafeId("property") }),
 } satisfies HandlerConfig;
 
 const deleteProperty = createSafeHandler(
@@ -21,7 +21,7 @@ const deleteProperty = createSafeHandler(
         tx.query.properties.findFirst({
           columns: { content: true, system: true },
           where: {
-            id: propertyId,
+            id: { eq: propertyId },
             workspaceId: { eq: workspaceId },
           },
         }),

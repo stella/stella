@@ -89,11 +89,14 @@ describe("branded types", () => {
       expect(bad).toBeDefined();
     });
 
-    test("PK columns remain plain string (not branded)", () => {
+    test("PK columns are branded by table domain", () => {
       type WorkspaceSelect = InferSelectModel<typeof workspaces>;
       type PkType = WorkspaceSelect["id"];
-      const check: PkType = "plain-string";
-      expect(check).toBe("plain-string");
+      const check: PkType = toSafeId<"workspace">("workspace_test");
+      expect(check).toBe(toSafeId<"workspace">("workspace_test"));
+      // @ts-expect-error - plain string not assignable
+      const bad: PkType = "plain-string";
+      expect(bad).toBeDefined();
     });
 
     test("multiple tables share consistent branded types", () => {

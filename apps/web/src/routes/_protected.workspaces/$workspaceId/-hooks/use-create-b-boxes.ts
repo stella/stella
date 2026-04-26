@@ -9,6 +9,7 @@ import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
@@ -46,10 +47,10 @@ export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
       inflightRef.current.add(justification.id);
 
       const response = await api
-        .workspaces({ workspaceId })
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["bounding-boxes"].post({
           queryKey: workspaceKeys.justifications(workspaceId),
-          justificationId: justification.id,
+          justificationId: toSafeId<"justification">(justification.id),
         });
 
       if (response.error) {

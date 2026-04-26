@@ -12,7 +12,7 @@ import { validateAst } from "@/api/handlers/case-law/ingestion/parsers/validate-
 const makeBlock = (
   overrides: Partial<ParagraphBlock> & { plainText: string },
 ): ParagraphBlock => {
-  const uid = crypto.randomUUID().slice(0, 8);
+  const uid = Bun.randomUUIDv7().slice(0, 8);
   return {
     id: `b-${uid}`,
     anchorId: `p-${uid}`,
@@ -23,7 +23,7 @@ const makeBlock = (
 };
 
 const makeHeading = (text: string, level: 1 | 2 | 3 = 2): HeadingBlock => {
-  const uid = crypto.randomUUID().slice(0, 8);
+  const uid = Bun.randomUUIDv7().slice(0, 8);
   return {
     id: `bh-${uid}`,
     anchorId: `h-${uid}`,

@@ -2,14 +2,15 @@ import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import type { SafeId } from "@/api/lib/branded-types";
 
 export const readDecisionHandler = async (
-  decisionId: string,
+  decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ) => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: { id: decisionId },
+      where: { id: { eq: decisionId } },
       columns: {
         id: true,
         caseNumber: true,
@@ -64,7 +65,7 @@ export const readDecisionHandler = async (
   if (!hasUsableAst(decision.documentAst)) {
     const fallback = await scopedDb((tx) =>
       tx.query.caseLawDecisions.findFirst({
-        where: { id: decisionId },
+        where: { id: { eq: decisionId } },
         columns: { fulltext: true },
       }),
     );

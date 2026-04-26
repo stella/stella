@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
+import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -60,6 +61,8 @@ const getFetchableEntityMap = async ({
     return new Map<string, FetchableEntity>();
   }
 
+  const safeEntityIds = entityIds.map((id) => toSafeId<"entity">(id));
+
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
@@ -85,7 +88,7 @@ const getFetchableEntityMap = async ({
       .where(
         and(
           eq(extractedContent.organizationId, context.organizationId),
-          inArray(extractedContent.entityId, entityIds),
+          inArray(extractedContent.entityId, safeEntityIds),
         ),
       ),
   );
@@ -418,10 +421,11 @@ const handleCompatFetchTool: McpToolHandler = async ({
   context,
   mode,
 }) => {
-  const entityId = parseRequiredString(args, "id");
-  if (typeof entityId !== "string") {
-    return entityId;
+  const rawEntityId = parseRequiredString(args, "id");
+  if (typeof rawEntityId !== "string") {
+    return rawEntityId;
   }
+  const entityId = toSafeId<"entity">(rawEntityId);
 
   const executeReadContentAcrossMatters =
     getOrgTools(context)["read-content-across-matters"].execute;
@@ -446,7 +450,7 @@ const handleCompatFetchTool: McpToolHandler = async ({
     return errorResult(result.error);
   }
 
-  const fetchPayload = getCompatFetchPayload({ entityId, result });
+  const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });
   if (!fetchPayload) {
     return errorResult("Document content is unavailable");
   }
@@ -475,7 +479,7 @@ const handleCompatFetchTool: McpToolHandler = async ({
     );
     if (fileField) {
       url = buildDocumentUrl({
-        entityId,
+        entityId: rawEntityId,
         fieldId: fileField.id,
         workspaceId: fetchPayload.workspaceId,
       });
@@ -506,7 +510,7 @@ const handleCompatFetchTool: McpToolHandler = async ({
   }
 
   return textResult({
-    id: entityId,
+    id: rawEntityId,
     title: fetchPayload.title,
     text: fetchPayload.text,
     url,

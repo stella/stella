@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -13,6 +14,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const CONTENT_MAX_CHARS = 8000;
+
+const safeIdSchema = <T extends "entity" | "contact" | "clause">(
+  description: string,
+) =>
+  v.pipe(
+    v.string(),
+    v.uuid(),
+    v.transform((id) => toSafeId<T>(id)),
+    v.description(description),
+  );
 
 // -----------------------------------------------------------------
 // Org-level tools (always available)
@@ -82,10 +93,7 @@ export const createOrgTools = ({
       "document outside the current matter.",
     inputSchema: valibotSchema(
       v.strictObject({
-        entityId: v.pipe(
-          v.string(),
-          v.description("The entity ID whose content to read"),
-        ),
+        entityId: safeIdSchema<"entity">("The entity ID whose content to read"),
       }),
     ),
     execute: async ({ entityId }) => {
@@ -101,7 +109,7 @@ export const createOrgTools = ({
       const row = await scopedDb((tx) =>
         tx.query.extractedContent.findFirst({
           where: {
-            entityId,
+            entityId: { eq: entityId },
             organizationId: { eq: organizationId },
             workspaceId: { in: accessibleWorkspaceIds },
           },
@@ -172,14 +180,14 @@ export const createOrgTools = ({
     description: "Get details about a contact (person or organization).",
     inputSchema: valibotSchema(
       v.strictObject({
-        contactId: v.pipe(v.string(), v.description("The contact ID to read")),
+        contactId: safeIdSchema<"contact">("The contact ID to read"),
       }),
     ),
     execute: async ({ contactId }) => {
       const contact = await scopedDb((tx) =>
         tx.query.contacts.findFirst({
           where: {
-            id: contactId,
+            id: { eq: contactId },
             organizationId: { eq: organizationId },
           },
           columns: {
@@ -256,14 +264,14 @@ export const createOrgTools = ({
     description: "Read a legal clause including its full text body.",
     inputSchema: valibotSchema(
       v.strictObject({
-        clauseId: v.pipe(v.string(), v.description("The clause ID to read")),
+        clauseId: safeIdSchema<"clause">("The clause ID to read"),
       }),
     ),
     execute: async ({ clauseId }) => {
       const clause = await scopedDb((tx) =>
         tx.query.clauses.findFirst({
           where: {
-            id: clauseId,
+            id: { eq: clauseId },
             organizationId: { eq: organizationId },
           },
           columns: {

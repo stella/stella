@@ -7,8 +7,9 @@ import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -19,7 +20,7 @@ import type { ClauseBody } from "./types";
 
 const updateClauseBodySchema = t.Object({
   title: t.Optional(tDefaultVarchar),
-  categoryId: t.Optional(t.Nullable(tUuid)),
+  categoryId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
   language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   body: t.Optional(clauseBodySchema),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
@@ -28,7 +29,7 @@ const updateClauseBodySchema = t.Object({
 });
 
 const updateClauseParamsSchema = t.Object({
-  clauseId: tUuid,
+  clauseId: tSafeId("clause"),
 });
 
 type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
@@ -36,7 +37,7 @@ type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
 type UpdateClauseProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
+  clauseId: SafeId<"clause">;
   body: UpdateClauseBody;
 };
 
@@ -50,7 +51,7 @@ const updateClauseHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauses.findFirst({
         where: {
-          id: clauseId,
+          id: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: {
@@ -76,7 +77,7 @@ const updateClauseHandler = async function* ({
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: categoryId,
+            id: { eq: categoryId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
@@ -93,7 +94,7 @@ const updateClauseHandler = async function* ({
 
   const updates: Partial<{
     title: string;
-    categoryId: string | null;
+    categoryId: SafeId<"clauseCategory"> | null;
     language: string | null;
     body: ClauseBody;
     description: string | null;
@@ -157,7 +158,7 @@ const updateClauseHandler = async function* ({
 
       if (newVersion !== null && body.body !== undefined) {
         await tx.insert(clauseVersions).values({
-          id: crypto.randomUUID(),
+          id: createSafeId<"clauseVersion">(),
           organizationId,
           clauseId,
           version: newVersion,

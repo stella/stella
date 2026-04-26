@@ -4,6 +4,8 @@ import { t } from "elysia";
 
 import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const DEFAULT_LIMIT = 50;
@@ -18,7 +20,7 @@ const readContactsQuerySchema = t.Object({
 
 type DecodedCursor = {
   displayName: string;
-  id: string;
+  id: SafeId<"contact">;
 };
 
 const decodeCursor = (cursor: string): DecodedCursor | null => {
@@ -28,7 +30,7 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
     if (!displayName || !id) {
       return null;
     }
-    return { displayName, id };
+    return { displayName, id: toSafeId<"contact">(id) };
   } catch {
     return null;
   }

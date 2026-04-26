@@ -16,7 +16,7 @@ type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
   scopedDb: ScopedDb;
-  fieldId: string;
+  fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   purpose: FilePurpose;
@@ -26,7 +26,7 @@ const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 
 const fileFieldQuery = async (
   scopedDb: ScopedDb,
-  fieldId: string,
+  fieldId: SafeId<"field">,
   workspaceId: SafeId<"workspace">,
 ) =>
   await scopedDb((tx) =>
@@ -167,7 +167,7 @@ export const readFileHandler = async ({
 
 type StampedDownloadHandlerProps = {
   scopedDb: ScopedDb;
-  fieldId: string;
+  fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 };

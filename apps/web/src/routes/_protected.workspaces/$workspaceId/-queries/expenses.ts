@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 type ExpenseCategory =
   | "filing_fee"
@@ -38,10 +39,20 @@ export const expensesOptions = (
   queryOptions({
     queryKey: expensesKeys.list(workspaceId, filters),
     queryFn: async ({ signal }) => {
-      const response = await api.expenses({ workspaceId }).get({
-        query: filters,
-        fetch: { signal },
-      });
+      const { matterId, ...restFilters } = filters;
+      const response = await api
+        .expenses({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        })
+        .get({
+          query: {
+            ...restFilters,
+            ...(matterId !== undefined && {
+              matterId: toSafeId<"entity">(matterId),
+            }),
+          },
+          fetch: { signal },
+        });
 
       if (response.error) {
         throw toAPIError(response.error);

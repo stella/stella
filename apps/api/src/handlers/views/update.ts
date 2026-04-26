@@ -12,7 +12,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   tDefaultVarchar,
-  tUuid,
+  tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,7 +22,7 @@ import { viewLayoutSchema } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["update"] },
-  params: workspaceParams({ viewId: tUuid }),
+  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: t.Object({
     name: t.Optional(tDefaultVarchar),
     layout: t.Optional(t.Any()),
@@ -36,7 +36,7 @@ const updateView = createSafeHandler(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
           where: {
-            id: viewId,
+            id: { eq: viewId },
             workspaceId: { eq: workspaceId },
           },
         }),

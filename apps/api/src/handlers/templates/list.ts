@@ -7,19 +7,21 @@ import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const UNCATEGORIZED = "uncategorized" as const;
 
 const listTemplatesQuerySchema = t.Object({
-  categoryId: t.Optional(t.Union([tUuid, t.Literal(UNCATEGORIZED)])),
+  categoryId: t.Optional(
+    t.Union([tSafeId("templateCategory"), t.Literal(UNCATEGORIZED)]),
+  ),
 });
 
 type ListTemplatesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  query: { categoryId?: string };
+  query: { categoryId?: SafeId<"templateCategory"> | typeof UNCATEGORIZED };
 };
 
 const listTemplatesHandler = async function* ({

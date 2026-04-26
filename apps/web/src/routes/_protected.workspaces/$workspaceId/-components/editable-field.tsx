@@ -21,6 +21,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   EntityKind,
   WorkspaceFieldContent,
@@ -201,12 +202,14 @@ const InlineEditor = ({
 
   const upsertField = useMutation({
     mutationFn: async (newContent: EditableFieldContent) => {
-      const response = await api.fields({ workspaceId }).post({
-        queryKey: entitiesKeys.all(workspaceId),
-        propertyId,
-        entityId,
-        content: newContent,
-      });
+      const response = await api
+        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .post({
+          queryKey: entitiesKeys.all(workspaceId),
+          propertyId: toSafeId<"property">(propertyId),
+          entityId: toSafeId<"entity">(entityId),
+          content: newContent,
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }

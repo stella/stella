@@ -231,6 +231,7 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          maxLength: 500,
         },
       },
       required: ["query"],
@@ -248,6 +249,7 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          maxLength: 500,
         },
         limit: {
           type: "integer",
@@ -258,34 +260,42 @@ describe("OpenAI-compatible MCP tools", () => {
         cursor: {
           type: "string",
           description: "Opaque cursor from a previous search_case_law call",
+          maxLength: 128,
         },
         court: {
           type: "string",
           description: "Filter by court name",
+          maxLength: 512,
         },
         country: {
           type: "string",
           description: "Filter by country code",
+          maxLength: 3,
         },
         language: {
           type: "string",
           description: "Filter by language code",
+          maxLength: 8,
         },
         decision_type: {
           type: "string",
           description: "Filter by decision type",
+          maxLength: 128,
         },
         source_id: {
           type: "string",
           description: "Filter by source ID",
+          maxLength: 36,
         },
         date_from: {
           type: "string",
           description: "Filter decisions from this ISO date (YYYY-MM-DD)",
+          maxLength: 10,
         },
         date_to: {
           type: "string",
           description: "Filter decisions up to this ISO date (YYYY-MM-DD)",
+          maxLength: 10,
         },
       },
       required: ["query"],

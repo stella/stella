@@ -2,12 +2,12 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 import { createVariantBodySchema, createVariantHandler } from "./variants";
 
 const createVariantParamsSchema = t.Object({
-  clauseId: tUuid,
+  clauseId: tSafeId("clause"),
 });
 
 const config = {

@@ -12,6 +12,7 @@ import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-d
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { captureError } from "@/api/lib/analytics";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +22,14 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CONTENT_MAX_CHARS = 8000;
+
+const safeIdSchema = <T extends "entity" | "property">(description: string) =>
+  v.pipe(
+    v.string(),
+    v.uuid(),
+    v.transform((id) => toSafeId<T>(id)),
+    v.description(description),
+  );
 
 // -----------------------------------------------------------------
 // Matter tools (workspace-scoped, explicit workspaceId)
@@ -196,10 +205,7 @@ export const createWorkspaceTools = ({
             ),
           ),
           parentId: v.optional(
-            v.pipe(
-              v.string(),
-              v.description("List contents of a specific folder"),
-            ),
+            safeIdSchema<"entity">("List contents of a specific folder"),
           ),
           limit: v.optional(
             v.pipe(
@@ -224,7 +230,7 @@ export const createWorkspaceTools = ({
               where: {
                 workspaceId: { eq: allowedWorkspaceId },
                 ...(kind ? { kind } : {}),
-                ...(parentId ? { parentId } : {}),
+                ...(parentId ? { parentId: { eq: parentId } } : {}),
               },
               orderBy: { createdAt: "asc" },
               limit,
@@ -288,7 +294,7 @@ export const createWorkspaceTools = ({
       inputSchema: valibotSchema(
         v.strictObject({
           workspaceId: wsSchema,
-          entityId: v.pipe(v.string(), v.description("The entity ID to read")),
+          entityId: safeIdSchema<"entity">("The entity ID to read"),
         }),
       ),
       execute: async ({ workspaceId, entityId }) => {
@@ -299,7 +305,7 @@ export const createWorkspaceTools = ({
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
             where: {
-              id: entityId,
+              id: { eq: entityId },
               workspaceId: { eq: allowedWorkspaceId },
             },
             columns: {
@@ -378,9 +384,8 @@ export const createWorkspaceTools = ({
       inputSchema: valibotSchema(
         v.strictObject({
           workspaceId: wsSchema,
-          entityId: v.pipe(
-            v.string(),
-            v.description("The entity ID whose content to read"),
+          entityId: safeIdSchema<"entity">(
+            "The entity ID whose content to read",
           ),
         }),
       ),
@@ -392,7 +397,7 @@ export const createWorkspaceTools = ({
         const row = await scopedDb((tx) =>
           tx.query.extractedContent.findFirst({
             where: {
-              entityId,
+              entityId: { eq: entityId },
               organizationId: { eq: organizationId },
             },
             with: {
@@ -473,13 +478,9 @@ export const createWorkspaceTools = ({
       inputSchema: valibotSchema(
         v.strictObject({
           workspaceId: wsSchema,
-          entityId: v.pipe(
-            v.string(),
-            v.description("The entity ID to update"),
-          ),
-          propertyId: v.pipe(
-            v.string(),
-            v.description("The property ID (from read-entity)"),
+          entityId: safeIdSchema<"entity">("The entity ID to update"),
+          propertyId: safeIdSchema<"property">(
+            "The property ID (from read-entity)",
           ),
           value: v.pipe(
             v.union([v.string(), v.number(), v.array(v.string()), v.null_()]),
@@ -517,7 +518,7 @@ export const createWorkspaceTools = ({
           tx.query.properties.findFirst({
             columns: { id: true, content: true },
             where: {
-              id: propertyId,
+              id: { eq: propertyId },
               workspaceId: { eq: allowedWorkspaceId },
             },
           }),
@@ -631,7 +632,7 @@ export const createWorkspaceTools = ({
           tx.query.entities.findFirst({
             columns: { id: true, currentVersionId: true },
             where: {
-              id: entityId,
+              id: { eq: entityId },
               workspaceId: { eq: allowedWorkspaceId },
             },
           }),

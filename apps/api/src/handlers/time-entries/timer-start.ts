@@ -8,13 +8,13 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 
 const timerStartBodySchema = t.Object({
-  matterId: tUuid,
+  matterId: tSafeId("entity"),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   rateAtEntry: t.Integer({ minimum: 0 }),
   currency: t.String({ minLength: 3, maxLength: 3 }),
@@ -55,7 +55,10 @@ const timerStart = createSafeHandler(
     const matter = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: body.matterId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),

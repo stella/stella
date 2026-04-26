@@ -9,14 +9,14 @@ import {
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
   body: t.Object({
-    entityId: tUuid,
-    propertyId: tUuid,
+    entityId: tSafeId("entity"),
+    propertyId: tSafeId("property"),
   }),
 } satisfies HandlerConfig;
 

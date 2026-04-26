@@ -38,7 +38,8 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CentsAmount } from "@/api/lib/money";
 import { unsafeCents } from "@/api/lib/money";
 import type { ViewLayout } from "@/api/lib/views-schema";
@@ -76,9 +77,16 @@ const safeWorkspaceId = (name: string) =>
 const safeOrganizationId = (name: string) =>
   p.varchar(name, { length: 128 }).$type<SafeId<"organization">>();
 
+const safeUuid = <T extends SafeIdType>(name: string) =>
+  p.uuid(name).$type<SafeId<T>>();
+
 const centsColumn = (name: string) => p.integer(name).$type<CentsAmount>();
 
-const pUuid = p.uuid().$defaultFn(() => crypto.randomUUID());
+const pUuid = <T extends SafeIdType>() =>
+  p
+    .uuid()
+    .$defaultFn(createSafeId<T>)
+    .$type<SafeId<T>>();
 
 export const propertyStatusEnum = p.pgEnum("property_status", [
   "uninitialized",
@@ -141,7 +149,7 @@ export const TIME_ENTRY_SOURCE = {
 export const contacts = p.pgTable(
   "contacts",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"contact">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -222,16 +230,14 @@ export type ContactType = (typeof contacts.type)["enumValues"][number];
 export const contactRelationships = p.pgTable(
   "contact_relationships",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"contactRelationship">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    personId: p
-      .uuid("person_id")
+    personId: safeUuid<"contact">("person_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
-    relatedContactId: p
-      .uuid("related_contact_id")
+    relatedContactId: safeUuid<"contact">("related_contact_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     relationshipType: p
@@ -264,14 +270,13 @@ export const contactRelationships = p.pgTable(
 export const workspaces = p.pgTable(
   "workspaces",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"workspace">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
-    clientId: p
-      .uuid("client_id")
+    clientId: safeUuid<"contact">("client_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "restrict" }),
     billingReference: p.varchar("billing_reference", {
@@ -319,7 +324,7 @@ export const workspaces = p.pgTable(
 export const workspaceMembers = p.pgTable(
   "workspace_members",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"workspaceMember">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -341,15 +346,14 @@ export const workspaceMembers = p.pgTable(
 export const workspaceContacts = p.pgTable(
   "workspace_contacts",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"workspaceContact">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    contactId: p
-      .uuid("contact_id")
+    contactId: safeUuid<"contact">("contact_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     role: p
@@ -389,7 +393,7 @@ export const workspaceContacts = p.pgTable(
 export const properties = p.pgTable(
   "properties",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"property">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -411,10 +415,12 @@ export const properties = p.pgTable(
 export const propertyDependencies = p.pgTable(
   "property_dependencies",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"propertyDependency">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
-    propertyId: p.uuid("property_id").notNull(),
-    dependsOnPropertyId: p.uuid("depends_on_property_id").notNull(),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    dependsOnPropertyId: safeUuid<"property">(
+      "depends_on_property_id",
+    ).notNull(),
     condition: p.jsonb().$type<PropertyCondition>(),
   },
   (table) => [
@@ -453,14 +459,17 @@ export const propertyDependencies = p.pgTable(
 export const entities = p.pgTable(
   "entities",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"entity">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     kind: entityKindEnum().notNull().default("document"),
-    parentId: p.uuid("parent_id").references((): AnyPgColumn => entities.id, {
-      onDelete: "set null",
-    }),
+    parentId: safeUuid<"entity">("parent_id").references(
+      (): AnyPgColumn => entities.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     name: p.text("name"),
     createdBy: p
       .text("created_by")
@@ -468,11 +477,11 @@ export const entities = p.pgTable(
     lastEditedBy: p
       .text("last_edited_by")
       .references(() => user.id, { onDelete: "set null" }),
-    currentVersionId: p
-      .uuid("current_version_id")
-      .references((): AnyPgColumn => entityVersions.id, {
-        onDelete: "restrict",
-      }),
+    currentVersionId: safeUuid<"entityVersion">(
+      "current_version_id",
+    ).references((): AnyPgColumn => entityVersions.id, {
+      onDelete: "restrict",
+    }),
     /** Sequential document number within the workspace (null for folders). */
     docSequence: p.integer("doc_sequence"),
     status: p.varchar({ length: 32 }),
@@ -515,12 +524,11 @@ export const entities = p.pgTable(
 export const taskAssignees = p.pgTable(
   "task_assignees",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"taskAssignee">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    entityId: p
-      .uuid("entity_id")
+    entityId: safeUuid<"entity">("entity_id")
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
     userId: p
@@ -544,16 +552,14 @@ export const taskAssignees = p.pgTable(
 export const entityLinks = p.pgTable(
   "entity_links",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"entityLink">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    sourceEntityId: p
-      .uuid("source_entity_id")
+    sourceEntityId: safeUuid<"entity">("source_entity_id")
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
-    targetEntityId: p
-      .uuid("target_entity_id")
+    targetEntityId: safeUuid<"entity">("target_entity_id")
       .notNull()
       .references(() => entities.id, { onDelete: "cascade" }),
     linkType: p
@@ -587,9 +593,9 @@ export const entityLinks = p.pgTable(
 export const entityVersions = p.pgTable(
   "entity_versions",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"entityVersion">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
-    entityId: p.uuid("entity_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
     versionNumber: p.integer("version_number").notNull().default(1),
     /** Frozen human-readable reference (e.g. "2026/001/015.v3"). */
     stamp: p.varchar("stamp", { length: 128 }),
@@ -637,26 +643,25 @@ export const desktopEditSessionStatusEnum = p.pgEnum(
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"desktopEditSession">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    entityId: p.uuid("entity_id").notNull(),
-    propertyId: p.uuid("property_id").notNull(),
-    baseVersionId: p
-      .uuid("base_version_id")
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    baseVersionId: safeUuid<"entityVersion">("base_version_id")
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
-    finalizedVersionId: p
-      .uuid("finalized_version_id")
-      .references(() => entityVersions.id, { onDelete: "set null" }),
+    finalizedVersionId: safeUuid<"entityVersion">(
+      "finalized_version_id",
+    ).references(() => entityVersions.id, { onDelete: "set null" }),
     createdBy: p
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     status: desktopEditSessionStatusEnum().notNull().default("open"),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
-    checkpointFileId: p.uuid("checkpoint_file_id").notNull(),
+    checkpointFileId: safeUuid<"userFile">("checkpoint_file_id").notNull(),
     checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
     checkpointSizeBytes: p.integer("checkpoint_size_bytes"),
     checkpointScanWarnings: p
@@ -710,14 +715,13 @@ export const desktopEditSessions = p.pgTable(
 export const fields = p.pgTable(
   "fields",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"field">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
-    propertyId: p.uuid("property_id").notNull(),
-    entityVersionId: p
-      .uuid("entity_version_id")
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id")
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
-    fileId: p.uuid("file_id"),
+    fileId: safeUuid<"userFile">("file_id"),
     content: p.jsonb().$type<FieldContent>().notNull(),
   },
   (table) => [
@@ -739,13 +743,16 @@ export const fields = p.pgTable(
 export const justifications = p.pgTable(
   "justifications",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"justification">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
-    fieldId: p.uuid("field_id").notNull(),
+    fieldId: safeUuid<"field">("field_id").notNull(),
     htmlVersion: p.numeric("html_version", { mode: "number" }).notNull(),
     htmlContent: p.text("html_content").notNull(),
     boundingBoxes: p.jsonb("bounding_boxes").$type<BoundingBoxes>(),
-    fileFieldIds: p.uuid("file_field_ids").array().notNull().default([]),
+    fileFieldIds: safeUuid<"field">("file_field_ids")
+      .array()
+      .notNull()
+      .default([]),
   },
   (table) => [
     p.uniqueIndex("justifications_field_id_key").on(table.fieldId),
@@ -763,15 +770,16 @@ export const justifications = p.pgTable(
 export const templates = p.pgTable(
   "templates",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"template">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    categoryId: p
-      .uuid("category_id")
-      .references((): AnyPgColumn => templateCategories.id, {
+    categoryId: safeUuid<"templateCategory">("category_id").references(
+      (): AnyPgColumn => templateCategories.id,
+      {
         onDelete: "set null",
-      }),
+      },
+    ),
     name: p.varchar({ length: 256 }).notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
@@ -805,9 +813,9 @@ export const templates = p.pgTable(
 export const templateVersions = p.pgTable(
   "template_versions",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"templateVersion">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    templateId: p.uuid("template_id").notNull(),
+    templateId: safeUuid<"template">("template_id").notNull(),
     version: p.integer().notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
     manifest: p.jsonb().$type<TemplateManifest>(),
@@ -840,8 +848,7 @@ export const templateVersions = p.pgTable(
 export const searchDocuments = p.pgTable(
   "search_documents",
   {
-    entityId: p
-      .uuid("entity_id")
+    entityId: safeUuid<"entity">("entity_id")
       .primaryKey()
       .references(() => entities.id, { onDelete: "cascade" }),
     organizationId: safeOrganizationId("organization_id")
@@ -870,7 +877,7 @@ export const searchDocuments = p.pgTable(
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
-    entityId: p.uuid("entity_id").primaryKey(),
+    entityId: safeUuid<"entity">("entity_id").primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -898,7 +905,7 @@ export const extractedContent = p.pgTable(
 export const timeEntries = p.pgTable(
   "time_entries",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"timeEntry">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -908,8 +915,7 @@ export const timeEntries = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    matterId: p
-      .uuid("matter_id")
+    matterId: safeUuid<"entity">("matter_id")
       .notNull()
       .references(() => entities.id, { onDelete: "restrict" }),
     dateWorked: p.date("date_worked").notNull(),
@@ -926,10 +932,10 @@ export const timeEntries = p.pgTable(
     source: timeEntrySourceEnum().notNull().default("manual"),
     taskCode: p.varchar("task_code", { length: 20 }),
     activityCode: p.varchar("activity_code", { length: 20 }),
-    invoiceId: p
-      .uuid("invoice_id")
-      .references(() => invoices.id, { onDelete: "set null" }),
-    splitGroupId: p.uuid("split_group_id"),
+    invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
+      onDelete: "set null",
+    }),
+    splitGroupId: safeUuid<"timeEntry">("split_group_id"),
     timerStartedAt: p.timestamp("timer_started_at", {
       withTimezone: true,
     }),
@@ -968,7 +974,7 @@ export const billingCodeTypeEnum = p.pgEnum("billing_code_type", [
 export const billingCodes = p.pgTable(
   "billing_codes",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"billingCode">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -996,7 +1002,7 @@ export const billingCodes = p.pgTable(
 export const rateTables = p.pgTable(
   "rate_tables",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"rateTable">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -1006,7 +1012,7 @@ export const rateTables = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
     isDefault: p.boolean("is_default").notNull().default(false),
-    clientId: p.uuid("client_id"),
+    clientId: safeUuid<"contact">("client_id"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1022,12 +1028,11 @@ export const rateTables = p.pgTable(
 export const rateEntries = p.pgTable(
   "rate_entries",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"rateEntry">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    rateTableId: p
-      .uuid("rate_table_id")
+    rateTableId: safeUuid<"rateTable">("rate_table_id")
       .notNull()
       .references(() => rateTables.id, { onDelete: "cascade" }),
     userId: p
@@ -1050,7 +1055,7 @@ export const rateEntries = p.pgTable(
 export const expenses = p.pgTable(
   "expenses",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"expense">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -1060,8 +1065,7 @@ export const expenses = p.pgTable(
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
-    matterId: p
-      .uuid("matter_id")
+    matterId: safeUuid<"entity">("matter_id")
       .notNull()
       .references(() => entities.id, { onDelete: "restrict" }),
     dateIncurred: p.date("date_incurred").notNull(),
@@ -1073,10 +1077,10 @@ export const expenses = p.pgTable(
     billable: p.boolean().notNull().default(true),
     markup: p.integer().notNull().default(0),
     status: timeEntryStatusEnum().notNull().default("draft"),
-    invoiceId: p
-      .uuid("invoice_id")
-      .references(() => invoices.id, { onDelete: "set null" }),
-    receiptFileId: p.uuid("receipt_file_id"),
+    invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
+      onDelete: "set null",
+    }),
+    receiptFileId: safeUuid<"userFile">("receipt_file_id"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
   },
@@ -1113,7 +1117,7 @@ export const INVOICE_STATUS = {
 export const invoices = p.pgTable(
   "invoices",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"invoice">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -1145,7 +1149,7 @@ export const invoices = p.pgTable(
 export const matterCounters = p.pgTable(
   "matter_counters",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"matterCounter">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -1163,7 +1167,7 @@ export const matterCounters = p.pgTable(
 export const documentCounters = p.pgTable(
   "document_counters",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"documentCounter">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -1178,7 +1182,7 @@ export const documentCounters = p.pgTable(
 export const organizationSettings = p.pgTable(
   "organization_settings",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"organizationSettings">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .unique()
@@ -1207,15 +1211,16 @@ export const organizationSettings = p.pgTable(
 export const clauseCategories = p.pgTable(
   "clause_categories",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"clauseCategory">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    parentId: p
-      .uuid("parent_id")
-      .references((): AnyPgColumn => clauseCategories.id, {
+    parentId: safeUuid<"clauseCategory">("parent_id").references(
+      (): AnyPgColumn => clauseCategories.id,
+      {
         onDelete: "set null",
-      }),
+      },
+    ),
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     sortOrder: p.integer("sort_order").notNull().default(0),
@@ -1234,13 +1239,16 @@ export const clauseCategories = p.pgTable(
 export const clauses = p.pgTable(
   "clauses",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"clause">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    categoryId: p.uuid("category_id").references(() => clauseCategories.id, {
-      onDelete: "set null",
-    }),
+    categoryId: safeUuid<"clauseCategory">("category_id").references(
+      () => clauseCategories.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     title: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     usageNotes: p.text("usage_notes"),
@@ -1273,9 +1281,9 @@ export const clauses = p.pgTable(
 export const clauseVariants = p.pgTable(
   "clause_variants",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"clauseVariant">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    clauseId: p.uuid("clause_id").notNull(),
+    clauseId: safeUuid<"clause">("clause_id").notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     body: p.jsonb().$type<ClauseBody>().notNull(),
     sortOrder: p.integer("sort_order").notNull().default(0),
@@ -1298,9 +1306,9 @@ export const clauseVariants = p.pgTable(
 export const clauseVersions = p.pgTable(
   "clause_versions",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"clauseVersion">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    clauseId: p.uuid("clause_id").notNull(),
+    clauseId: safeUuid<"clause">("clause_id").notNull(),
     version: p.integer().notNull(),
     body: p.jsonb().$type<ClauseBody>().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
@@ -1323,15 +1331,16 @@ export const clauseVersions = p.pgTable(
 export const templateCategories = p.pgTable(
   "template_categories",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"templateCategory">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    parentId: p
-      .uuid("parent_id")
-      .references((): AnyPgColumn => templateCategories.id, {
+    parentId: safeUuid<"templateCategory">("parent_id").references(
+      (): AnyPgColumn => templateCategories.id,
+      {
         onDelete: "set null",
-      }),
+      },
+    ),
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     sortOrder: p.integer("sort_order").notNull().default(0),
@@ -1350,22 +1359,24 @@ export const templateCategories = p.pgTable(
 export const templateClauses = p.pgTable(
   "template_clauses",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"templateClause">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    templateId: p.uuid("template_id").notNull(),
-    clauseId: p
-      .uuid("clause_id")
-      .references(() => clauses.id, { onDelete: "set null" }),
-    clauseVariantId: p
-      .uuid("clause_variant_id")
-      .references(() => clauseVariants.id, {
+    templateId: safeUuid<"template">("template_id").notNull(),
+    clauseId: safeUuid<"clause">("clause_id").references(() => clauses.id, {
+      onDelete: "set null",
+    }),
+    clauseVariantId: safeUuid<"clauseVariant">("clause_variant_id").references(
+      () => clauseVariants.id,
+      {
         onDelete: "set null",
-      }),
-    clauseVersionId: p
-      .uuid("clause_version_id")
-      .references(() => clauseVersions.id, {
+      },
+    ),
+    clauseVersionId: safeUuid<"clauseVersion">("clause_version_id").references(
+      () => clauseVersions.id,
+      {
         onDelete: "set null",
-      }),
+      },
+    ),
     slotName: p.varchar("slot_name", { length: 128 }),
     sortOrder: p.integer("sort_order").notNull().default(0),
     insertedAt: p.timestamp("inserted_at").notNull().defaultNow(),
@@ -1393,13 +1404,14 @@ export const templateClauses = p.pgTable(
 export const templateFills = p.pgTable(
   "template_fills",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"templateFill">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    templateId: p
-      .uuid("template_id")
-      .references(() => templates.id, { onDelete: "set null" }),
+    templateId: safeUuid<"template">("template_id").references(
+      () => templates.id,
+      { onDelete: "set null" },
+    ),
     userId: p
       .text("user_id")
       .notNull()
@@ -1434,7 +1446,7 @@ export const templateFills = p.pgTable(
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"caseLawSource">().primaryKey(),
     adapterKey: p.varchar("adapter_key", { length: 64 }).notNull(),
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
@@ -1454,9 +1466,8 @@ export const caseLawSources = p.pgTable(
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
-    id: pUuid.primaryKey(),
-    sourceId: p
-      .uuid("source_id")
+    id: pUuid<"caseLawDecision">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
@@ -1527,24 +1538,23 @@ export const caseLawDecisions = p.pgTable(
 export const caseLawCitations = p.pgTable(
   "case_law_citations",
   {
-    id: pUuid.primaryKey(),
-    citingDecisionId: p
-      .uuid("citing_decision_id")
+    id: pUuid<"caseLawCitation">().primaryKey(),
+    citingDecisionId: safeUuid<"caseLawDecision">("citing_decision_id")
       .notNull()
       .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
-    citedDecisionId: p
-      .uuid("cited_decision_id")
-      .references(() => caseLawDecisions.id, {
-        onDelete: "set null",
-      }),
+    citedDecisionId: safeUuid<"caseLawDecision">(
+      "cited_decision_id",
+    ).references(() => caseLawDecisions.id, {
+      onDelete: "set null",
+    }),
     citationText: p.varchar("citation_text", { length: 512 }).notNull(),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
-    polarityRuleId: p
-      .uuid("polarity_rule_id")
-      .references(() => caseLawPolarityRules.id, {
-        onDelete: "set null",
-      }),
+    polarityRuleId: safeUuid<"caseLawPolarityRule">(
+      "polarity_rule_id",
+    ).references(() => caseLawPolarityRules.id, {
+      onDelete: "set null",
+    }),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1567,7 +1577,7 @@ export const caseLawCitations = p.pgTable(
 export const caseLawPolarityRules = p.pgTable(
   "case_law_polarity_rules",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"caseLawPolarityRule">().primaryKey(),
     pattern: p.varchar("pattern", { length: 512 }).notNull(),
     polarity: p.varchar("polarity", { length: 16 }).notNull(),
     language: p.varchar("language", { length: 8 }).notNull(),
@@ -1605,9 +1615,8 @@ export const caseLawPolarityRules = p.pgTable(
 export const caseLawMatterLinks = p.pgTable(
   "case_law_matter_links",
   {
-    id: pUuid.primaryKey(),
-    decisionId: p
-      .uuid("decision_id")
+    id: pUuid<"caseLawMatterLink">().primaryKey(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
       .notNull()
       .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id")
@@ -1636,7 +1645,7 @@ export const caseLawMatterLinks = p.pgTable(
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"caseLawCourtWeight">().primaryKey(),
     country: p.varchar({ length: 3 }).notNull(),
     courtPattern: p.varchar("court_pattern", { length: 512 }).notNull(),
     tier: p.integer().notNull(),
@@ -1661,8 +1670,7 @@ export const caseLawFtsConfigs = p.pgTable("case_law_fts_configs", {
 export const caseLawSearchDocuments = p.pgTable(
   "case_law_search_documents",
   {
-    decisionId: p
-      .uuid("decision_id")
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
       .primaryKey()
       .references(() => caseLawDecisions.id, {
         onDelete: "cascade",
@@ -1684,9 +1692,8 @@ export const caseLawSearchDocuments = p.pgTable(
 export const caseLawIngestionEvents = p.pgTable(
   "case_law_ingestion_events",
   {
-    id: pUuid.primaryKey(),
-    sourceId: p
-      .uuid("source_id")
+    id: pUuid<"caseLawIngestionEvent">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     status: p.varchar({ length: 16 }).notNull().$type<"completed" | "failed">(),
@@ -1713,9 +1720,8 @@ export const caseLawIngestionEvents = p.pgTable(
 export const caseLawIngestionFailures = p.pgTable(
   "case_law_ingestion_failures",
   {
-    id: pUuid.primaryKey(),
-    sourceId: p
-      .uuid("source_id")
+    id: pUuid<"caseLawIngestionFailure">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
@@ -1737,7 +1743,7 @@ export const caseLawIngestionFailures = p.pgTable(
 export const chatThreads = p.pgTable(
   "chat_threads",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"chatThread">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
       {
@@ -1768,9 +1774,8 @@ export const chatThreads = p.pgTable(
 export const chatMessages = p.pgTable(
   "chat_messages",
   {
-    id: pUuid.primaryKey(),
-    threadId: p
-      .uuid("thread_id")
+    id: pUuid<"chatMessage">().primaryKey(),
+    threadId: safeUuid<"chatThread">("thread_id")
       .notNull()
       .references(() => chatThreads.id, {
         onDelete: "cascade",
@@ -1805,7 +1810,7 @@ export const chatMessages = p.pgTable(
 export const userFiles = p.pgTable(
   "user_files",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"userFile">().primaryKey(),
     userId: p
       .text("user_id")
       .notNull()
@@ -1815,8 +1820,7 @@ export const userFiles = p.pgTable(
     sizeBytes: p.integer("size_bytes").notNull(),
     sha256Hex: p.varchar("sha256_hex", { length: 64 }).notNull(),
     s3Key: p.text("s3_key").notNull(),
-    threadId: p
-      .uuid("thread_id")
+    threadId: safeUuid<"chatThread">("thread_id")
       .notNull()
       .references(() => chatThreads.id, {
         onDelete: "restrict",
@@ -1845,7 +1849,7 @@ export const userFiles = p.pgTable(
 export const workspaceViews = p.pgTable(
   "workspace_views",
   {
-    id: pUuid.primaryKey(),
+    id: pUuid<"workspaceView">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),

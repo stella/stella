@@ -21,9 +21,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 const MAX_TOOL_STEPS = 8;
 
 type StoredUserFile = {
-  id: string;
+  id: SafeId<"userFile">;
   userId: string;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   fileName: string;
   mimeType: string;
   s3Key: string;
@@ -35,7 +35,7 @@ type StreamChatProps = {
   onFinish: (messages: ChatMessage[]) => Promise<void>;
   orgAIConfig: OrgAIConfig | null;
   system: string;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   tools: ChatTools;
 };
 
@@ -180,12 +180,12 @@ const readUserFilesByIds = async ({
   safeDb,
   userId,
 }: ReadUserFilesByIdsProps): Promise<
-  Result<Map<string, StoredUserFile>, SafeDbError>
+  Result<Map<SafeId<"userFile">, StoredUserFile>, SafeDbError>
 > => {
   const ids = collectMessageUserFileIds(messages);
 
   if (ids.length === 0) {
-    return Result.ok(new Map<string, StoredUserFile>());
+    return Result.ok(new Map<SafeId<"userFile">, StoredUserFile>());
   }
 
   const rowsResult = await safeDb((tx) =>
@@ -208,8 +208,10 @@ const readUserFilesByIds = async ({
   return rowsResult.map((rows) => new Map(rows.map((row) => [row.id, row])));
 };
 
-const collectMessageUserFileIds = (messages: readonly ChatMessage[]) => {
-  const ids = new Set<string>();
+const collectMessageUserFileIds = (
+  messages: readonly ChatMessage[],
+): SafeId<"userFile">[] => {
+  const ids = new Set<SafeId<"userFile">>();
 
   for (const message of messages) {
     for (const part of message.parts) {

@@ -1,19 +1,20 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const readEntityByIdParamsSchema = workspaceParams({ entityId: t.String() });
+const readEntityByIdParamsSchema = workspaceParams({
+  entityId: tSafeId("entity"),
+});
 
 type ReadEntityByIdHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  entityId: string;
+  entityId: SafeId<"entity">;
 };
 
 export const readEntityByIdHandler = async function* ({
@@ -25,7 +26,7 @@ export const readEntityByIdHandler = async function* ({
     safeDb((tx) =>
       tx.query.entities.findFirst({
         where: {
-          id: entityId,
+          id: { eq: entityId },
           workspaceId: {
             eq: workspaceId,
           },
@@ -60,7 +61,7 @@ export const readEntityByIdHandler = async function* ({
     safeDb((tx) =>
       tx.query.fields.findMany({
         where: {
-          entityVersionId: currentVersionId,
+          entityVersionId: { eq: currentVersionId },
         },
         columns: {
           id: true,

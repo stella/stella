@@ -25,6 +25,7 @@ import {
 } from "@/api/db/schema";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+import type { SafeId } from "@/api/lib/branded-types";
 
 const BATCH_SIZE = 500;
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -116,14 +117,14 @@ const seedRules = async () => {
  * The only way to obtain this type is through `validateTemporalOrder`,
  * making temporally impossible citations a compile error at the update site.
  */
-type ValidCitedDecisionId = string & {
+type ValidCitedDecisionId = SafeId<"caseLawDecision"> & {
   readonly __brand: "ValidCitedDecisionId";
 };
 
 const validateTemporalOrder = (
   citingDate: string | null,
   citedDate: string | null,
-  matchedId: string,
+  matchedId: SafeId<"caseLawDecision">,
 ): ValidCitedDecisionId | null => {
   // If either date is unknown, allow the match (can't validate)
   if (!citingDate || !citedDate) {
@@ -185,9 +186,9 @@ const resolveCitations = async (): Promise<ResolveStats> => {
     .from(caseLawDecisions);
 
   // Index by normalized case number (lowercase, trimmed)
-  const caseNumberIndex = new Map<string, string[]>();
-  const ecliIndex = new Map<string, string>();
-  const dateIndex = new Map<string, string | null>();
+  const caseNumberIndex = new Map<string, SafeId<"caseLawDecision">[]>();
+  const ecliIndex = new Map<string, SafeId<"caseLawDecision">>();
+  const dateIndex = new Map<SafeId<"caseLawDecision">, string | null>();
 
   for (const d of decisions) {
     const key = d.caseNumber.toLowerCase().trim();
@@ -236,7 +237,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
     for (const row of batch) {
       const normalized = normalizeCitation(row.citationText);
 
-      let matchedId: string | undefined;
+      let matchedId: SafeId<"caseLawDecision"> | undefined;
       let isAmbiguous = false;
 
       // Try ECLI first (unique)

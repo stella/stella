@@ -27,17 +27,17 @@ export type FieldContentForAI = Exclude<
 >;
 
 export type AIResult = {
-  fieldId: string;
-  propertyId: string;
+  fieldId: SafeId<"field">;
+  propertyId: SafeId<"property">;
   content: Exclude<FieldContentForAI, { type: "file" }>;
 };
 
 export type AIJustification = {
-  fieldId: string;
-  justificationId: string;
+  fieldId: SafeId<"field">;
+  justificationId: SafeId<"justification">;
   htmlVersion: number;
   htmlContent: string;
-  fileFieldIds: string[];
+  fileFieldIds: SafeId<"field">[];
 };
 
 export type GenerateBatchProps = {
@@ -46,7 +46,7 @@ export type GenerateBatchProps = {
   workspaceId: SafeId<"workspace">;
   scopedDb: ScopedDb;
   batch: PropertyBatch;
-  entityVersionId: string;
+  entityVersionId: SafeId<"entityVersion">;
   orgAIConfig?: OrgAIConfig | null;
 };
 
@@ -54,8 +54,8 @@ export type GenerateBatchResult = Result<
   {
     aiResults: AIResult[];
     aiJustifications: AIJustification[];
-    skippedPropertyIds: string[];
-    unsupportedPropertyIds: string[];
+    skippedPropertyIds: SafeId<"property">[];
+    unsupportedPropertyIds: SafeId<"property">[];
   },
   WorkflowValidationError | WorkflowIntegrationError
 >;
@@ -82,7 +82,7 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
 };
 
 export type TextInput = {
-  propertyId: string;
+  propertyId: SafeId<"property">;
   value: string;
 };
 
@@ -91,7 +91,7 @@ type PreparedBatchInput = {
   inputFieldsForAI: FieldContentForAI[];
   resolvedFiles: ResolvedFile[];
   textInputs: TextInput[];
-  skippedPropertyIds: string[];
+  skippedPropertyIds: SafeId<"property">[];
 };
 
 type PrepareBatchInputResult = Result<
@@ -100,14 +100,14 @@ type PrepareBatchInputResult = Result<
 >;
 
 type InputFieldRow = {
-  id: string;
-  propertyId: string;
+  id: SafeId<"field">;
+  propertyId: SafeId<"property">;
   content: FieldContent;
 };
 
 type FetchInputFieldsForBatchProps = {
-  entityVersionId: string;
-  inputPropertyIds: string[];
+  entityVersionId: SafeId<"entityVersion">;
+  inputPropertyIds: SafeId<"property">[];
   scopedDb: ScopedDb;
 };
 
@@ -138,7 +138,7 @@ export const fetchInputFieldsForBatch = async ({
 };
 
 export type ResolvedFile = {
-  fileFieldId: string;
+  fileFieldId: SafeId<"field">;
   fileId: string;
   mimeType: string;
   sha256Hex: string;
@@ -150,7 +150,7 @@ export const prepareBatchInput = (
   inputFields: InputFieldRow[],
   batch: PropertyBatch,
 ): PrepareBatchInputResult => {
-  const skippedPropertyIds: string[] = [];
+  const skippedPropertyIds: SafeId<"property">[] = [];
 
   // Filter properties based on dependency conditions
   const inputProperties = batch.properties.filter((property) => {
@@ -180,7 +180,7 @@ export const prepareBatchInput = (
   const inputFieldsForAI: FieldContentForAI[] = [];
   const resolvedFiles: ResolvedFile[] = [];
   const textInputs: TextInput[] = [];
-  const pushTextInput = (propertyId: string, value: string) => {
+  const pushTextInput = (propertyId: SafeId<"property">, value: string) => {
     textInputs.push({
       propertyId,
       value,

@@ -4,13 +4,13 @@ import { t } from "elysia";
 
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 
 const createTimeEntryBodySchema = t.Object({
-  matterId: tUuid,
+  matterId: tSafeId("entity"),
   dateWorked: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   durationMinutes: t.Integer({ minimum: 1 }),
@@ -58,7 +58,10 @@ const createTimeEntry = createSafeHandler(
     const matter = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: body.matterId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),

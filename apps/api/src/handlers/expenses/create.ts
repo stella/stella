@@ -6,13 +6,13 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 
 const createExpenseBodySchema = t.Object({
-  matterId: tUuid,
+  matterId: tSafeId("entity"),
   dateIncurred: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
   amount: t.Integer({ minimum: 1 }),
@@ -63,7 +63,10 @@ const createExpense = createSafeHandler(
     const matter = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: body.matterId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),

@@ -5,6 +5,7 @@
     "lib": ["ESNext"],
     "module": "ESNext",
     "paths": {
+      "@stella/ares": ["../../packages/ares/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",

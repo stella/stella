@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { workspaceContacts } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const readContactByIdParamsSchema = t.Object({
-  contactId: tUuid,
+  contactId: tSafeId("contact"),
 });
 
 const readContactById = createSafeRootHandler(
@@ -22,7 +22,7 @@ const readContactById = createSafeRootHandler(
       safeDb((tx) =>
         tx.query.contacts.findFirst({
           where: {
-            id: params.contactId,
+            id: { eq: params.contactId },
             organizationId: { eq: session.activeOrganizationId },
           },
           with: {
@@ -47,7 +47,7 @@ const readContactById = createSafeRootHandler(
       safeDb((tx) =>
         tx.query.workspaces.findMany({
           where: {
-            clientId: params.contactId,
+            clientId: { eq: params.contactId },
             organizationId: { eq: session.activeOrganizationId },
             status: "active",
           },

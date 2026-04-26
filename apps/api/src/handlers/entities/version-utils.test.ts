@@ -46,10 +46,13 @@ describe("buildVersionStamp", () => {
 describe("cloneFieldsForRevision", () => {
   test("replaces only the targeted file property and preserves other fields", () => {
     const workspaceId = toSafeId<"workspace">("ws_test123");
+    const filePropertyId = toSafeId<"property">("prop_file");
+    const textPropertyId = toSafeId<"property">("prop_text");
+    const nextVersionId = toSafeId<"entityVersion">("version_next");
     const replacementFile = {
       encrypted: false,
       fileName: "agreement.docx",
-      id: crypto.randomUUID(),
+      id: Bun.randomUUIDv7(),
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       pdfFileId: null,
@@ -65,7 +68,7 @@ describe("cloneFieldsForRevision", () => {
           content: {
             encrypted: false,
             fileName: "old.docx",
-            id: crypto.randomUUID(),
+            id: Bun.randomUUIDv7(),
             mimeType:
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             pdfFileId: null,
@@ -74,7 +77,7 @@ describe("cloneFieldsForRevision", () => {
             type: "file",
             version: 1,
           },
-          propertyId: "prop_file",
+          propertyId: filePropertyId,
         },
         {
           content: {
@@ -82,11 +85,11 @@ describe("cloneFieldsForRevision", () => {
             value: "Keep me",
             version: 1,
           },
-          propertyId: "prop_text",
+          propertyId: textPropertyId,
         },
       ],
-      entityVersionId: "version_next",
-      propertyId: "prop_file",
+      entityVersionId: nextVersionId,
+      propertyId: filePropertyId,
       replacementContent: replacementFile,
       workspaceId,
     });
@@ -94,8 +97,8 @@ describe("cloneFieldsForRevision", () => {
     expect(cloned).toEqual([
       {
         content: replacementFile,
-        entityVersionId: "version_next",
-        propertyId: "prop_file",
+        entityVersionId: nextVersionId,
+        propertyId: filePropertyId,
         workspaceId,
       },
       {
@@ -104,8 +107,8 @@ describe("cloneFieldsForRevision", () => {
           value: "Keep me",
           version: 1,
         },
-        entityVersionId: "version_next",
-        propertyId: "prop_text",
+        entityVersionId: nextVersionId,
+        propertyId: textPropertyId,
         workspaceId,
       },
     ]);

@@ -131,7 +131,7 @@ function MyTodosPage() {
     }
 
     const entityId = response.data?.entityId;
-    if (!entityId) {
+    if (entityId === undefined) {
       return;
     }
 

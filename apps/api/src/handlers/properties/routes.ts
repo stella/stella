@@ -25,9 +25,11 @@ export const propertiesRoute = new Elysia({
     app
       .post("/", updateProperty.handler, {
         body: updateProperty.config.body,
+        params: updateProperty.config.params,
         invalidateQuery: true,
       })
       .delete("/", deleteProperty.handler, {
+        params: deleteProperty.config.params,
         invalidateQuery: true,
       }),
   );

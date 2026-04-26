@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
@@ -41,8 +42,16 @@ export const timeEntriesOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.list(workspaceId, filters),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({ workspaceId }).get({
-        query: filters,
+      const { matterId, ...restFilters } = filters;
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).get({
+        query: {
+          ...restFilters,
+          ...(matterId !== undefined && {
+            matterId: toSafeId<"entity">(matterId),
+          }),
+        },
         fetch: { signal },
       });
 
@@ -59,7 +68,9 @@ export const activeTimerOptions = (workspaceId: string) =>
     staleTime: 0,
     queryKey: timeEntriesKeys.activeTimer(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api["time-entries"]({ workspaceId }).get({
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).get({
         query: {
           source: "timer",
           status: "draft",

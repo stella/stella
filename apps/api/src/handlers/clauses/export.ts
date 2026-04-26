@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -35,7 +36,8 @@ const exportHandler = async function* ({
     const idList = query.ids
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((id) => toSafeId<"clause">(id));
     if (idList.length > 0) {
       conditions.push(inArray(clauses.id, idList));
     }
@@ -72,13 +74,15 @@ const exportHandler = async function* ({
 
   const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
 
-  const buildPath = (catId: string | null): string[] | null => {
+  const buildPath = (
+    catId: SafeId<"clauseCategory"> | null,
+  ): string[] | null => {
     if (!catId) {
       return null;
     }
     const path: string[] = [];
-    let current = catId;
-    const visited = new Set<string>();
+    let current: SafeId<"clauseCategory"> | null = catId;
+    const visited = new Set<SafeId<"clauseCategory">>();
     while (current) {
       if (visited.has(current)) {
         break;
@@ -89,7 +93,7 @@ const exportHandler = async function* ({
         break;
       }
       path.unshift(cat.name);
-      current = cat.parentId ?? "";
+      current = cat.parentId;
     }
     return path.length > 0 ? path : null;
   };

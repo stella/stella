@@ -9,14 +9,14 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const renameEntityBodySchema = t.Object({
-  entityId: tUuid,
+  entityId: tSafeId("entity"),
   name: t.String({
     minLength: 1,
     maxLength: LIMITS.entityNameMaxLength,
@@ -40,7 +40,7 @@ const renameEntityHandler = async function* ({
     safeDb((tx) =>
       tx.query.entities.findFirst({
         where: {
-          id: body.entityId,
+          id: { eq: body.entityId },
           workspaceId: { eq: workspaceId },
         },
         columns: { id: true },
@@ -65,7 +65,7 @@ const renameEntityHandler = async function* ({
       // column (which reads content.fileName) stays in sync.
       const fileField = await tx.query.entities
         .findFirst({
-          where: { id: body.entityId },
+          where: { id: { eq: body.entityId } },
           columns: { id: true },
           with: {
             currentVersion: {

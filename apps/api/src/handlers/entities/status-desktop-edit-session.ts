@@ -1,5 +1,7 @@
 import { status, t } from "elysia";
 
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
   DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
@@ -7,7 +9,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 
 export const statusDesktopEditSessionParamsSchema = t.Object({
-  sessionId: t.String({ format: "uuid" }),
+  sessionId: tSafeId("desktopEditSession"),
 });
 
 export const statusDesktopEditSessionQuerySchema = t.Object({
@@ -16,7 +18,7 @@ export const statusDesktopEditSessionQuerySchema = t.Object({
 
 type StatusDesktopEditSessionHandlerProps = {
   query: { sessionToken: string };
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 export const statusDesktopEditSessionHandler = async ({

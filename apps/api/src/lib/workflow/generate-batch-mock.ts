@@ -2,6 +2,7 @@ import { faker } from "@faker-js/faker";
 import { matchError, Result } from "better-result";
 import { sleep } from "bun";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
   WorkflowIntegrationError,
@@ -93,7 +94,7 @@ export const generateBatchMock = async ({
 
     for (const property of inputProperties) {
       const content = property.content;
-      const fieldId = crypto.randomUUID();
+      const fieldId = createSafeId<"field">();
 
       const justificationXml = createMockJustifications(filenames);
       const justification = yield* parseJustificationXml({
@@ -102,7 +103,7 @@ export const generateBatchMock = async ({
       });
 
       if (justification) {
-        const justificationId = crypto.randomUUID();
+        const justificationId = createSafeId<"justification">();
         aiJustifications.push({
           fieldId,
           justificationId,

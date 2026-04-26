@@ -18,8 +18,9 @@ import type {
 import { isFieldMeta, isNamedCondition } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -30,7 +31,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   name: tDefaultVarchar,
-  categoryId: t.Optional(tUuid),
+  categoryId: t.Optional(tSafeId("templateCategory")),
   // Elysia auto-parses JSON strings from FormData, so the
   // manifest may arrive as a string or an already-parsed
   // object depending on transport. Accept any and validate
@@ -45,14 +46,14 @@ type CreateTemplateProps = {
   body: {
     file: File;
     name: string;
-    categoryId?: string;
+    categoryId?: SafeId<"templateCategory">;
     manifest?: unknown;
   };
 };
 
 const buildS3Key = (
   organizationId: SafeId<"organization">,
-  templateId: string,
+  templateId: SafeId<"template">,
 ) => `${organizationId}/templates/${templateId}.docx`;
 
 /** Accept a string (JSON body) or already-parsed object
@@ -110,7 +111,10 @@ const createTemplateHandler = async function* ({
     const category = yield* Result.await(
       safeDb((tx) =>
         tx.query.templateCategories.findFirst({
-          where: { id: categoryId, organizationId: { eq: organizationId } },
+          where: {
+            id: { eq: categoryId },
+            organizationId: { eq: organizationId },
+          },
           columns: { id: true },
         }),
       ),
@@ -171,12 +175,12 @@ const createTemplateHandler = async function* ({
   const docxWithManifest = await writeManifest(buffer, manifest);
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
-  const templateId = crypto.randomUUID();
+  const templateId = createSafeId<"template">();
   const s3Key = buildS3Key(organizationId, templateId);
 
   await getS3().write(s3Key, new Uint8Array(docxWithManifest));
 
-  const versionId = crypto.randomUUID();
+  const versionId = createSafeId<"templateVersion">();
 
   // Advisory lock + count + insert in one transaction to
   // prevent TOCTOU on the template limit.

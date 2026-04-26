@@ -36,6 +36,7 @@ import { caseLawDecisions } from "@/api/db/schema";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
@@ -47,7 +48,7 @@ const SENTINEL_STALE_MS = 5 * 60 * 1000;
  * when done; clears the sentinel on failure.
  */
 const runGeneration = async (
-  decisionId: string,
+  decisionId: SafeId<"caseLawDecision">,
   ast: DocumentAst,
   decision: {
     court: string;
@@ -78,7 +79,7 @@ ${decisionText}`;
       decision_id: decisionId,
     },
     sessionId: decisionId,
-    traceId: crypto.randomUUID(),
+    traceId: Bun.randomUUIDv7(),
   });
 
   try {
@@ -117,13 +118,13 @@ ${decisionText}`;
 
     for await (const raw of result.elementStream) {
       headings.push({
-        id: crypto.randomUUID(),
+        id: Bun.randomUUIDv7(),
         label: raw.label,
         category: raw.category,
         startAnchorId: raw.startAnchorId,
         endAnchorId: raw.endAnchorId,
         annotations: raw.annotations.map((a) => ({
-          id: crypto.randomUUID(),
+          id: Bun.randomUUIDv7(),
           summary: a.summary,
           startAnchorId: a.startAnchorId,
           endAnchorId: a.endAnchorId,
@@ -169,7 +170,7 @@ ${decisionText}`;
 };
 
 export const generateAnalysis = async (
-  decisionId: string,
+  decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<{
   status: "done" | "error" | "generating";
@@ -178,7 +179,7 @@ export const generateAnalysis = async (
 }> => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: { id: decisionId },
+      where: { id: { eq: decisionId } },
       columns: {
         id: true,
         language: true,

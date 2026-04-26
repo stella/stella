@@ -27,12 +27,13 @@ import {
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 
 type ClassifyResult = {
   polarity: Polarity;
-  ruleId: string | null;
+  ruleId: SafeId<"caseLawPolarityRule"> | null;
   source: "regex" | "llm" | "fallback";
 };
 
@@ -197,7 +198,7 @@ const trackSurfaceForm = async (
  * Persist a classification result to the citations table.
  */
 export const persistPolarity = async (
-  citationId: string,
+  citationId: SafeId<"caseLawCitation">,
   result: ClassifyResult,
   scopedDb: ScopedDb,
 ) => {

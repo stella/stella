@@ -43,8 +43,8 @@ export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
   "Desktop editing moved to another device. This local copy is preserved.";
 
 export const createDesktopEditSessionToken = () =>
-  crypto.randomUUID().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH) +
-  crypto.randomUUID().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH);
+  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH) +
+  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH);
 
 export const hashDesktopEditSessionToken = (sessionToken: string) =>
   new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
@@ -53,7 +53,7 @@ export const authorizeDesktopEditSession = async ({
   sessionId,
   sessionToken,
 }: {
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
   sessionToken: string;
 }): Promise<DesktopEditSessionAuthorizationResult> => {
   const tokenHash = hashDesktopEditSessionToken(sessionToken);

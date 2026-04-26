@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const readTaskByIdParamsSchema = workspaceParams({ taskId: tUuid });
+const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
 const readTaskById = createSafeHandler(
   {
@@ -16,9 +16,9 @@ const readTaskById = createSafeHandler(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: params.taskId,
+            id: { eq: params.taskId },
             workspaceId: { eq: workspaceId },
-            kind: "task",
+            kind: { eq: "task" },
           },
           with: {
             assignees: {
@@ -33,7 +33,7 @@ const readTaskById = createSafeHandler(
               },
             },
             children: {
-              where: { kind: "task" },
+              where: { kind: { eq: "task" } },
               columns: {
                 id: true,
                 name: true,

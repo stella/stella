@@ -30,7 +30,7 @@ function CaseLawIndex() {
     });
 
   // SAFETY: Both list and search branches return the same Decision shape.
-  const decisions = useMemo(
+  const decisions = useMemo<Decision[]>(
     () =>
       // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
