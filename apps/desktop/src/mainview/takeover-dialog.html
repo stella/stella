@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Takeover Request</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: #1c1c1e;
+        color: #f5f5f7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .dialog {
+        width: 100%;
+        max-width: 380px;
+        padding: 28px 24px 20px;
+        text-align: center;
+      }
+      .avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #3a3a3c;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #a1a1a6;
+        border: 2px solid #48484a;
+      }
+      .title {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.4;
+        margin-bottom: 6px;
+      }
+      .requester {
+        color: #0a84ff;
+      }
+      .subtitle {
+        font-size: 13px;
+        color: #8e8e93;
+        line-height: 1.4;
+        margin-bottom: 24px;
+      }
+      .file-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #2c2c2e;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 12px;
+        color: #a1a1a6;
+        margin-bottom: 24px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        flex: 1;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      button:hover {
+        opacity: 0.85;
+      }
+      button:active {
+        opacity: 0.7;
+      }
+      .deny {
+        background: #2c2c2e;
+        color: #f5f5f7;
+        border: 1px solid #3a3a3c;
+      }
+      .allow {
+        background: #0a84ff;
+        color: #fff;
+      }
+      @media (prefers-color-scheme: light) {
+        body {
+          background: #f2f2f7;
+          color: #1c1c1e;
+        }
+        .avatar {
+          background: #e5e5ea;
+          border-color: #d1d1d6;
+          color: #636366;
+        }
+        .file-name {
+          background: #e5e5ea;
+          color: #636366;
+        }
+        .deny {
+          background: #e5e5ea;
+          color: #1c1c1e;
+          border-color: #d1d1d6;
+        }
+        .subtitle {
+          color: #636366;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dialog">
+      <div class="avatar" id="avatar">??</div>
+      <div class="title">
+        <span class="requester" id="requester">Someone</span> wants to take over
+        editing
+      </div>
+      <div class="subtitle">
+        They'll continue from your latest saved checkpoint.
+      </div>
+      <div class="file-name" id="fileName">document.docx</div>
+      <div class="actions">
+        <button class="deny" id="denyBtn">Deny</button>
+        <button class="allow" id="allowBtn">Allow</button>
+      </div>
+    </div>
+    <script>
+      // Read params from URL hash (set by Rust when opening the window)
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const requester = params.get("requester") || "Someone";
+      const fileName = params.get("fileName") || "document.docx";
+      const initials = requester
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+
+      document.getElementById("avatar").textContent = initials;
+      document.getElementById("requester").textContent = requester;
+      document.getElementById("fileName").textContent = fileName;
+
+      function respond(approved) {
+        if (window.__TAURI_INTERNALS__) {
+          window.__TAURI_INTERNALS__.invoke("takeover_dialog_respond", {
+            approved: approved,
+          });
+        }
+      }
+
+      document.getElementById("denyBtn").addEventListener("click", function () {
+        respond(false);
+      });
+      document
+        .getElementById("allowBtn")
+        .addEventListener("click", function () {
+          respond(true);
+        });
+    </script>
+  </body>
+</html>

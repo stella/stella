@@ -1,0 +1,110 @@
+import { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
+import { t } from "elysia";
+
+import { user } from "@/api/db/auth-schema";
+import { desktopEditSessions } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tUuid } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+import { pushSessionEvent } from "./desktop-edit-session-events";
+
+const config = {
+  permissions: { entity: ["update"] },
+  body: t.Object({
+    entityId: tUuid,
+    propertyId: tUuid,
+  }),
+} satisfies HandlerConfig;
+
+export default createSafeHandler(
+  config,
+  async function* ({ body, safeDb, user: currentUser, workspaceId }) {
+    const result = yield* Result.await(
+      safeDb(async (tx) => {
+        const sessions = await tx
+          .select({
+            id: desktopEditSessions.id,
+            createdBy: desktopEditSessions.createdBy,
+          })
+          .from(desktopEditSessions)
+          .where(
+            and(
+              eq(desktopEditSessions.entityId, body.entityId),
+              eq(desktopEditSessions.propertyId, body.propertyId),
+              eq(desktopEditSessions.workspaceId, workspaceId),
+              eq(desktopEditSessions.status, "open"),
+            ),
+          )
+          .limit(1)
+          .for("update");
+
+        const session = sessions.at(0);
+        if (!session) {
+          return { status: "no_session" as const };
+        }
+
+        if (session.createdBy === currentUser.id) {
+          return { status: "own_session" as const };
+        }
+
+        const now = new Date();
+        await tx
+          .update(desktopEditSessions)
+          .set({
+            takeoverRequestedBy: currentUser.id,
+            takeoverRequestedAt: now,
+          })
+          .where(eq(desktopEditSessions.id, session.id));
+
+        // Get the requesting user's name for the notification
+        const requestingUser = await tx
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, currentUser.id))
+          .limit(1);
+
+        const requestedByName = requestingUser.at(0)?.name ?? currentUser.id;
+
+        return {
+          status: "requested" as const,
+          sessionId: session.id,
+          requestedByName,
+          requestedAt: now.toISOString(),
+        };
+      }),
+    );
+
+    if (result.status === "no_session") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "No active desktop edit session found.",
+        }),
+      );
+    }
+
+    if (result.status === "own_session") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot request takeover of your own session.",
+        }),
+      );
+    }
+
+    // Push SSE event after transaction commits to avoid notifying
+    // before the DB state is visible.
+    pushSessionEvent(result.sessionId, {
+      type: "takeover-requested",
+      data: {
+        requestedBy: result.requestedByName,
+        requestedAt: result.requestedAt,
+      },
+    });
+
+    return Result.ok({ status: "requested" });
+  },
+);

@@ -1,0 +1,61 @@
+[package]
+name = "stella-desktop"
+version = "0.0.1"
+edition = "2021"
+description = "stella desktop — managed Word editing for stella"
+license = "AGPL-3.0"
+
+[lib]
+name = "stella_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "stella-desktop"
+path = "src/main.rs"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+needless_raw_string_hashes = "deny"
+print_stdout = "warn"
+print_stderr = "warn"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "s"
+strip = true
+incremental = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "webview-data-url"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+futures-util = "0.3"
+hex = "0.4"
+keyring = "3"
+opener = "0.7"
+notify = "7"
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sys-locale = "0.3"
+sha2 = "0.10"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }

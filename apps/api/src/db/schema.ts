@@ -660,6 +660,11 @@ export const desktopEditSessions = p.pgTable(
       .$type<string[] | null>(),
     checkpointUpdatedAt: p.timestamp("checkpoint_updated_at"),
     sessionTokenHash: p.varchar("session_token_hash", { length: 64 }).notNull(),
+    tokenExpiresAt: p.timestamp("token_expires_at").notNull(),
+    takeoverRequestedBy: p
+      .text("takeover_requested_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    takeoverRequestedAt: p.timestamp("takeover_requested_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

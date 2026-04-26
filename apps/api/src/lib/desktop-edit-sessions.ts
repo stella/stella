@@ -23,8 +23,17 @@ type DesktopEditSessionAuthorizationResult =
       status: "missing";
     }
   | {
+      status: "token-expired";
+    }
+  | {
       status: "token-mismatch";
     };
+
+/** Session tokens expire after 24 hours. Each checkpoint extends by this amount. */
+export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const computeTokenExpiresAt = () =>
+  new Date(Date.now() + SESSION_TOKEN_TTL_MS);
 
 const SESSION_TOKEN_PART_LENGTH = 32;
 
@@ -53,7 +62,9 @@ export const authorizeDesktopEditSession = async ({
     .select({
       createdBy: desktopEditSessions.createdBy,
       organizationId: workspaces.organizationId,
+      sessionStatus: desktopEditSessions.status,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
+      tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
       workspaceId: desktopEditSessions.workspaceId,
     })
     .from(desktopEditSessions)
@@ -62,7 +73,7 @@ export const authorizeDesktopEditSession = async ({
     .limit(1);
 
   const session = rows.at(0);
-  if (!session) {
+  if (!session || session.sessionStatus !== "open") {
     return {
       status: "missing",
     };
@@ -71,6 +82,12 @@ export const authorizeDesktopEditSession = async ({
   if (session.sessionTokenHash !== tokenHash) {
     return {
       status: "token-mismatch",
+    };
+  }
+
+  if (session.tokenExpiresAt < new Date()) {
+    return {
+      status: "token-expired",
     };
   }
 

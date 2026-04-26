@@ -92,6 +92,7 @@ type ViewSort = {
 type ReadEntitiesHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  currentUserId: string;
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
   page: number;
@@ -101,6 +102,7 @@ type ReadEntitiesHandlerProps = {
 const readEntitiesHandler = async function* ({
   safeDb,
   workspaceId,
+  currentUserId,
   filters,
   sorts,
   page,
@@ -207,6 +209,7 @@ const readEntitiesHandler = async function* ({
       tx
         .select({
           entityId: desktopEditSessions.entityId,
+          createdBy: desktopEditSessions.createdBy,
           editorName: sessionEditor.name,
           editorImage: sessionEditor.image,
         })
@@ -220,7 +223,8 @@ const readEntitiesHandler = async function* ({
             inArray(desktopEditSessions.entityId, pageIds),
             eq(desktopEditSessions.status, "open"),
           ),
-        ),
+        )
+        .orderBy(desktopEditSessions.createdAt),
     ),
   ]);
 
@@ -238,13 +242,14 @@ const readEntitiesHandler = async function* ({
   // user, but take the first match).
   const activeEditMap = new Map<
     string,
-    { name: string; image: string | null }
+    { name: string; image: string | null; isMe: boolean }
   >();
   for (const s of activeSessions) {
     if (!activeEditMap.has(s.entityId)) {
       activeEditMap.set(s.entityId, {
         name: s.editorName ?? "",
         image: s.editorImage,
+        isMe: s.createdBy === currentUserId,
       });
     }
   }
@@ -277,7 +282,7 @@ const readEntitiesHandler = async function* ({
     priority: string | null;
     dueDate: string | null;
     sortOrder: string | null;
-    activeEditBy: { name: string; image: string | null } | null;
+    activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
     fields: {
       id: string;
       propertyId: string;
@@ -338,10 +343,11 @@ const config = {
 
 const readEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, user: currentUser }) {
     return yield* readEntitiesHandler({
       safeDb,
       workspaceId,
+      currentUserId: currentUser.id,
       filters: body.filters ?? [],
       sorts: body.sorts ?? [],
       page: body.page ?? 1,

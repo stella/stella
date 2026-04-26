@@ -68,6 +68,14 @@ export const finalizeDesktopEditSessionHandler = async ({
     });
   }
 
+  if (authorizedSession.status === "token-expired") {
+    return status(401, {
+      code: "desktop_edit_session_token_expired",
+      message:
+        "Desktop edit session token has expired. Reopen the document from stella.",
+    });
+  }
+
   const uploadedKeys: string[] = [];
   let checkpointKeyToDelete: string | null = null;
   let shouldRollbackUploadedKeys = true;

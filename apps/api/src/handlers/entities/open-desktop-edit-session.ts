@@ -10,11 +10,13 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUuid } from "@/api/lib/custom-schema";
 import {
+  computeTokenExpiresAt,
   createDesktopEditSessionToken,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { broadcast } from "@/api/lib/sse";
 
 import {
   presignDocxDownloadFromFileId,
@@ -132,6 +134,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     .update(desktopEditSessions)
     .set({
       sessionTokenHash,
+      tokenExpiresAt: computeTokenExpiresAt(),
     })
     .where(
       and(
@@ -231,7 +234,13 @@ const openDesktopEditSessionHandler = async function* ({
         if (target) {
           await tx
             .update(desktopEditSessions)
-            .set({ createdBy: userId, sessionTokenHash })
+            .set({
+              createdBy: userId,
+              sessionTokenHash,
+              tokenExpiresAt: computeTokenExpiresAt(),
+              takeoverRequestedBy: null,
+              takeoverRequestedAt: null,
+            })
             .where(eq(desktopEditSessions.id, target.id));
         }
       }),
@@ -292,6 +301,7 @@ const openDesktopEditSessionHandler = async function* ({
         id: sessionId,
         propertyId,
         sessionTokenHash,
+        tokenExpiresAt: computeTokenExpiresAt(),
         workspaceId,
       });
 
@@ -376,13 +386,20 @@ const config = {
 const openDesktopEditSession = createSafeHandler(
   config,
   async function* ({ body, safeDb, session, user, workspaceId }) {
-    return yield* openDesktopEditSessionHandler({
+    const result = yield* openDesktopEditSessionHandler({
       body,
       organizationId: session.activeOrganizationId,
       safeDb,
       userId: user.id,
       workspaceId,
     });
+
+    broadcast(workspaceId, {
+      type: "invalidate-query",
+      data: ["entities", workspaceId],
+    });
+
+    return result;
   },
 );
 

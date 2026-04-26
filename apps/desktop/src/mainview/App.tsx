@@ -1,6 +1,8 @@
 import { startTransition, useEffect, useState } from "react";
 
-import { Electroview } from "electrobun/view";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stella/ui/components/avatar";
 import { Button } from "@stella/ui/components/button";
@@ -17,18 +19,9 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
-  DesktopRPC,
-  DesktopRpcClient,
   LinkedAccountSnapshot,
 } from "../shared/rpc";
 import stellaFavicon from "./stella-favicon.svg";
-
-const ACTIVATE_TAB_EVENT = "stella:desktop-activate-tab";
-type ActivateTabMessage = DesktopRPC["webview"]["messages"]["activateTab"];
-
-const APP_BUILD_LABEL = import.meta.env.DEV
-  ? "Development build"
-  : "Preview build";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -54,52 +47,12 @@ const PREFERENCES_TABS = ["general", "notifications", "about"] as const;
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
-const NOTIFICATION_PREFERENCE_ITEMS = [
-  {
-    description: "Document opened, resumed, or latest draft recovered.",
-    key: "documentReady",
-    label: "Document ready",
-  },
-  {
-    description: "Checkpoint, finalize, or handoff needs attention.",
-    key: "syncIssues",
-    label: "Sync issues",
-  },
-  {
-    description: "A clean stella revision was created after finishing.",
-    key: "revisionCreated",
-    label: "Revision created",
-  },
-] satisfies readonly {
-  description: string;
-  key: NotificationPreferenceKey;
-  label: string;
-}[];
+const NOTIFICATION_PREFERENCE_KEYS = [
+  "documentReady",
+  "syncIssues",
+  "revisionCreated",
+] as const satisfies readonly NotificationPreferenceKey[];
 
-const rpc = Electroview.defineRPC<DesktopRPC>({
-  handlers: {
-    messages: {
-      activateTab: ({ tab }: ActivateTabMessage) => {
-        window.dispatchEvent(
-          new CustomEvent<PreferencesTab>(ACTIVATE_TAB_EVENT, {
-            detail: tab,
-          }),
-        );
-      },
-      stateChanged: ({ snapshot }: { snapshot: AppSnapshot }) => {
-        window.dispatchEvent(
-          new CustomEvent<AppSnapshot>("stella:desktop-state-changed", {
-            detail: snapshot,
-          }),
-        );
-      },
-    },
-    requests: {},
-  },
-});
-
-const electroview = new Electroview<DesktopRPC>({ rpc });
-const desktopRpc: DesktopRpcClient = electroview.rpc;
 const isMacDesktop = navigator.userAgent.includes("Mac");
 
 const isPreferencesTab = (value: string | null): value is PreferencesTab =>
@@ -109,73 +62,6 @@ const getInitialTab = (): PreferencesTab => {
   const tab = window.location.hash.replace(/^#/, "");
   return isPreferencesTab(tab) ? tab : "general";
 };
-
-const formatTimestamp = (value: string | null) => {
-  if (!value) {
-    return "Not available yet";
-  }
-
-  return new Date(value).toLocaleString([], {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-};
-
-const getUpdateStatusTone = (status: DesktopUpdateSnapshot["status"]) => {
-  switch (status) {
-    case "idle":
-      return "border-border bg-muted text-muted-foreground";
-    case "available":
-      return "border-success/20 bg-success/10 text-success-foreground";
-    case "ready":
-      return "border-success/20 bg-success/10 text-success-foreground";
-    case "checking":
-      return "border-info/20 bg-info/10 text-info-foreground";
-    case "downloading":
-      return "border-info/20 bg-info/10 text-info-foreground";
-    case "applying":
-      return "border-info/20 bg-info/10 text-info-foreground";
-    case "error":
-      return "border-destructive/20 bg-destructive/10 text-destructive-foreground";
-    case "disabled":
-      return "border-border bg-muted text-muted-foreground";
-    case "up_to_date":
-      return "border-border bg-muted text-foreground";
-    default:
-      return "border-border bg-muted text-muted-foreground";
-  }
-};
-
-const getUpdateActionLabel = (update: DesktopUpdateSnapshot) => {
-  if (update.updateReady) {
-    return "Restart to update";
-  }
-
-  if (update.updateAvailable) {
-    return update.status === "downloading"
-      ? "Downloading..."
-      : "Download update";
-  }
-
-  if (update.status === "checking") {
-    return "Checking...";
-  }
-
-  if (update.status === "applying") {
-    return "Restarting...";
-  }
-
-  return "Check now";
-};
-
-const isUpdateActionDisabled = (update: DesktopUpdateSnapshot) =>
-  update.status === "checking" ||
-  update.status === "downloading" ||
-  update.status === "applying" ||
-  (update.status === "disabled" && !update.updateReady);
-
-const getAccountLabel = (linkedAccount: LinkedAccountSnapshot | null) =>
-  linkedAccount?.name?.trim() || linkedAccount?.email || "No linked account";
 
 const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
   if (!linkedAccount) {
@@ -308,49 +194,100 @@ const PanelGroup = ({
   </section>
 );
 
+const AutoStartToggle = () => {
+  const t = useTranslations("settings");
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    invoke<boolean>("is_autostart_enabled")
+      .then(setEnabled)
+      .catch(() => setEnabled(null));
+  }, []);
+
+  if (enabled === null) {
+    return null;
+  }
+
+  return (
+    <div className="px-4 py-3">
+      <Label className="items-start gap-3" htmlFor="autostart-toggle">
+        <Checkbox
+          checked={enabled}
+          className="mt-0.5"
+          id="autostart-toggle"
+          onCheckedChange={(checked) => {
+            setEnabled(checked);
+            void invoke<boolean>("set_autostart", { enabled: checked });
+          }}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">{t("startOnLogin")}</span>
+          <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
+            {t("startOnLoginDescription")}
+          </span>
+        </span>
+      </Label>
+    </div>
+  );
+};
+
 const GeneralPane = ({
   linkedAccount,
 }: {
   linkedAccount: LinkedAccountSnapshot | null;
-}) => (
-  <div className="space-y-4">
-    <PanelGroup>
-      <div className="flex items-center gap-3 px-4 py-4">
-        <Avatar className="size-10 border">
-          <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
-            {getAccountLabel(linkedAccount)}
-          </p>
-          <p className="text-muted-foreground truncate text-sm">
-            {linkedAccount?.email ??
-              "Open a document from stella to link this device."}
-          </p>
+}) => {
+  const t = useTranslations("settings");
+
+  return (
+    <div className="space-y-4">
+      <PanelGroup>
+        <div className="flex items-center gap-3 px-4 py-4">
+          <Avatar className="size-10 border">
+            <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
+              {linkedAccount?.name?.trim() ||
+                linkedAccount?.email ||
+                t("stellaDesktop")}
+            </p>
+            <p className="text-muted-foreground truncate text-sm">
+              {linkedAccount?.email ?? t("linkDevice")}
+            </p>
+          </div>
+          <span
+            className={cn(
+              "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              linkedAccount
+                ? "border-success/20 bg-success/10 text-success-foreground"
+                : "bg-muted text-muted-foreground border-border",
+            )}
+          >
+            {linkedAccount ? t("connected") : t("notConnected")}
+          </span>
         </div>
-        <span
-          className={cn(
-            "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            linkedAccount
-              ? "border-success/20 bg-success/10 text-success-foreground"
-              : "bg-muted text-muted-foreground border-border",
-          )}
-        >
-          {linkedAccount ? "Connected" : "Not connected"}
-        </span>
-      </div>
-      {linkedAccount ? (
-        <>
-          <Separator />
-          <SettingRow
-            label="Last verified"
-            value={formatTimestamp(linkedAccount.verifiedAt)}
-          />
-        </>
-      ) : null}
-    </PanelGroup>
-  </div>
-);
+        {linkedAccount ? (
+          <>
+            <Separator />
+            <SettingRow
+              label={t("lastVerified")}
+              value={
+                linkedAccount.verifiedAt
+                  ? new Date(linkedAccount.verifiedAt).toLocaleString([], {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  : t("notAvailableYet")
+              }
+            />
+          </>
+        ) : null}
+        <Separator />
+        <AutoStartToggle />
+      </PanelGroup>
+    </div>
+  );
+};
 
 const NotificationsPane = ({
   notificationPreferences,
@@ -363,149 +300,106 @@ const NotificationsPane = ({
     checked: boolean,
   ) => void;
   ready: boolean;
-}) => (
-  <div className="space-y-4">
-    <PanelGroup>
-      {NOTIFICATION_PREFERENCE_ITEMS.map((item, index) => (
-        <div key={item.key}>
-          {index > 0 ? <Separator /> : null}
-          <NotificationRow
-            checked={notificationPreferences[item.key]}
-            description={item.description}
-            disabled={!ready}
-            label={item.label}
-            onCheckedChange={(checked) => {
-              onPreferenceChange(item.key, checked);
-            }}
-            preferenceKey={item.key}
-          />
-        </div>
-      ))}
-    </PanelGroup>
-  </div>
-);
+}) => {
+  const t = useTranslations("settings");
+
+  const items = NOTIFICATION_PREFERENCE_KEYS.map((key) => {
+    const first = key[0] ?? "";
+    const labelKey =
+      `notification${first.toUpperCase()}${key.slice(1)}` as const;
+    const descKey = `${labelKey}Description` as const;
+    return { key, label: t(labelKey), description: t(descKey) };
+  });
+
+  return (
+    <div className="space-y-4">
+      <PanelGroup>
+        {items.map((item, index) => (
+          <div key={item.key}>
+            {index > 0 ? <Separator /> : null}
+            <NotificationRow
+              checked={notificationPreferences[item.key]}
+              description={item.description}
+              disabled={!ready}
+              label={item.label}
+              onCheckedChange={(checked) => {
+                onPreferenceChange(item.key, checked);
+              }}
+              preferenceKey={item.key}
+            />
+          </div>
+        ))}
+      </PanelGroup>
+    </div>
+  );
+};
 
 const AboutPane = ({
   onCopyDiagnostics,
   onEmailSupport,
   onRevealSupportRoot,
-  onUpdateAction,
   update,
 }: {
   onCopyDiagnostics: () => void;
   onEmailSupport: () => void;
   onRevealSupportRoot: () => void;
-  onUpdateAction: () => void;
   update: DesktopUpdateSnapshot;
-}) => (
-  <div className="space-y-4">
-    <PanelGroup>
-      <div className="flex items-start gap-3 px-4 py-4">
-        <img
-          alt="stella app icon"
-          className="h-12 w-12 shrink-0 rounded-2xl border object-cover"
-          src={stellaFavicon}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">stella desktop</p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-            Managed Word editing for stella.
-          </p>
+}) => {
+  const t = useTranslations("settings");
+
+  const versionLabel =
+    update.currentVersion ??
+    (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"));
+
+  return (
+    <div className="space-y-4">
+      <PanelGroup>
+        <div className="flex flex-col items-center px-4 pt-6 pb-2">
+          <img
+            alt="stella"
+            className="size-16 shrink-0 rounded-2xl"
+            src={stellaFavicon}
+          />
+          <p className="mt-3 text-sm font-semibold">{t("stellaDesktop")}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs">{versionLabel}</p>
         </div>
-      </div>
-      <Separator />
-      <div className="flex items-center justify-between gap-3 px-4 py-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">
-            {update.currentVersion ?? APP_BUILD_LABEL}
-          </p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-            stella labs, s.r.o.
-          </p>
+      </PanelGroup>
+
+      <PanelGroup title={t("support")}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <p className="text-sm">hello@stll.app</p>
+          <Button onClick={onEmailSupport} size="sm" variant="outline">
+            {t("email")}
+          </Button>
         </div>
-        <Button
-          disabled={isUpdateActionDisabled(update)}
-          onClick={onUpdateAction}
-          size="sm"
-          variant="outline"
-        >
-          {getUpdateActionLabel(update)}
-        </Button>
-      </div>
-      {update.status !== "disabled" ? (
-        <>
-          <Separator />
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <p className="text-sm font-medium">Update status</p>
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                getUpdateStatusTone(update.status),
-              )}
-            >
-              {update.status === "up_to_date"
-                ? "Up to date"
-                : update.status === "ready"
-                  ? "Ready to install"
-                  : update.status === "available"
-                    ? "Update available"
-                    : update.status === "downloading"
-                      ? "Downloading"
-                      : update.status === "checking"
-                        ? "Checking"
-                        : update.status === "applying"
-                          ? "Installing"
-                          : update.status === "error"
-                            ? "Needs attention"
-                            : "Idle"}
-            </span>
-          </div>
-        </>
-      ) : null}
-      <Separator />
-      <div className="px-4 py-3">
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {update.statusMessage}
-        </p>
-      </div>
-      {!update.baseUrl ? (
-        <>
-          <Separator />
-          <div className="px-4 py-3">
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Updates will appear here once the release feed is configured.
-            </p>
-          </div>
-        </>
-      ) : null}
-      <Separator />
-      <div className="flex items-center justify-between gap-3 px-4 py-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">Support</p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-            hello@stll.app
-          </p>
+        <Separator />
+        <div className="flex items-center gap-2 px-4 py-3">
+          <Button
+            className="flex-1"
+            onClick={onCopyDiagnostics}
+            size="sm"
+            variant="outline"
+          >
+            {t("copyDiagnostics")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={onRevealSupportRoot}
+            size="sm"
+            variant="ghost"
+          >
+            {t("revealAppData")}
+          </Button>
         </div>
-        <Button onClick={onEmailSupport} size="sm" variant="outline">
-          Email support
-        </Button>
-      </div>
-      <Separator />
-      <div className="flex flex-wrap gap-2 px-4 py-4">
-        <Button onClick={onCopyDiagnostics} size="sm" variant="outline">
-          Copy diagnostics
-        </Button>
-        <Button onClick={onRevealSupportRoot} size="sm" variant="ghost">
-          Reveal app data
-        </Button>
-      </div>
-    </PanelGroup>
-  </div>
-);
+      </PanelGroup>
+    </div>
+  );
+};
 
 export default function App() {
   useSystemTheme();
 
+  const t = useTranslations("settings");
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
@@ -520,49 +414,50 @@ export default function App() {
     );
   }, [activeTab]);
 
+  // Listen for tab activation from Rust backend
   useEffect(() => {
-    const handleActivateTab = (event: Event) => {
-      if (!(event instanceof CustomEvent)) {
-        return;
+    let cleanup: (() => void) | undefined;
+
+    void listen<{ tab: string }>("activate-tab", (event) => {
+      const nextTab = event.payload.tab;
+      if (isPreferencesTab(nextTab)) {
+        setActiveTab(nextTab);
       }
+    }).then((unlisten) => {
+      cleanup = unlisten;
+    });
 
-      const nextTab = typeof event.detail === "string" ? event.detail : null;
-      if (!isPreferencesTab(nextTab)) {
-        return;
-      }
-
-      setActiveTab(nextTab);
-    };
-
-    window.addEventListener(ACTIVATE_TAB_EVENT, handleActivateTab);
     return () => {
-      window.removeEventListener(ACTIVATE_TAB_EVENT, handleActivateTab);
+      cleanup?.();
     };
   }, []);
 
+  // Listen for state changes from Rust backend + initial fetch
   useEffect(() => {
     let disposed = false;
+    let cleanup: (() => void) | undefined;
 
-    const handleStateChanged = (event: Event) => {
-      if (!(event instanceof CustomEvent)) {
+    void listen<AppSnapshot>("state-changed", (event) => {
+      if (disposed) {
         return;
       }
 
-      const detail: unknown = event.detail;
+      const detail = event.payload;
       if (!isAppSnapshot(detail)) {
         return;
       }
 
-      const nextState = detail;
       startTransition(() => {
         setError(null);
-        setState(nextState);
+        setState(detail);
       });
-    };
+    }).then((unlisten) => {
+      cleanup = unlisten;
+    });
 
     const syncState = async () => {
       try {
-        const nextState = await desktopRpc.request.getState({});
+        const nextState = await invoke<AppSnapshot>("get_state");
         if (disposed) {
           return;
         }
@@ -579,23 +474,18 @@ export default function App() {
         setError(
           fetchError instanceof Error
             ? fetchError.message
-            : "stella desktop could not read its current state.",
+            : t("errorReadState"),
         );
       }
     };
-
-    window.addEventListener("stella:desktop-state-changed", handleStateChanged);
 
     void syncState();
 
     return () => {
       disposed = true;
-      window.removeEventListener(
-        "stella:desktop-state-changed",
-        handleStateChanged,
-      );
+      cleanup?.();
     };
-  }, []);
+  }, [t]);
 
   const notificationPreferences =
     state?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
@@ -627,9 +517,10 @@ export default function App() {
     });
 
     try {
-      const nextState = await desktopRpc.request.updateNotificationPreferences({
-        notificationPreferences: nextPreferences,
-      });
+      const nextState = await invoke<AppSnapshot>(
+        "update_notification_preferences",
+        { prefs: nextPreferences },
+      );
 
       startTransition(() => {
         setError(null);
@@ -648,68 +539,47 @@ export default function App() {
         setError(
           updateError instanceof Error
             ? updateError.message
-            : "stella desktop could not update notification settings.",
+            : t("errorUpdatePreferences"),
         );
       });
     }
   };
 
-  const handleUpdateAction = async () => {
-    try {
-      const nextState = update.updateReady
-        ? await desktopRpc.request.applyUpdate({})
-        : update.updateAvailable
-          ? await desktopRpc.request.downloadUpdate({})
-          : await desktopRpc.request.checkForUpdates({});
-
-      startTransition(() => {
-        setError(null);
-        setState(nextState);
-      });
-    } catch (updateError) {
-      setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "stella desktop could not complete the update action.",
-      );
-    }
-  };
-
   const handleCopyDiagnostics = async () => {
     try {
-      await desktopRpc.request.copyDiagnostics({});
+      await invoke<boolean>("copy_diagnostics");
       setError(null);
     } catch (copyError) {
       setError(
         copyError instanceof Error
           ? copyError.message
-          : "stella desktop could not copy diagnostics.",
+          : t("errorCopyDiagnostics"),
       );
     }
   };
 
   const handleEmailSupport = async () => {
     try {
-      await desktopRpc.request.emailSupport({});
+      await invoke<boolean>("email_support");
       setError(null);
     } catch (emailError) {
       setError(
         emailError instanceof Error
           ? emailError.message
-          : "stella desktop could not open your mail app.",
+          : t("errorEmailSupport"),
       );
     }
   };
 
   const handleRevealSupportRoot = async () => {
     try {
-      await desktopRpc.request.revealSupportRoot({});
+      await invoke<boolean>("reveal_support_root");
       setError(null);
     } catch (revealError) {
       setError(
         revealError instanceof Error
           ? revealError.message
-          : "stella desktop could not reveal app data.",
+          : t("errorRevealAppData"),
       );
     }
   };
@@ -724,9 +594,9 @@ export default function App() {
       >
         <header className="pb-2">
           <p className="text-muted-foreground text-[11px] font-medium tracking-[0.14em] uppercase">
-            stella desktop
+            {t("stellaDesktop")}
           </p>
-          <h1 className="mt-1 text-xl font-semibold">Settings</h1>
+          <h1 className="mt-1 text-xl font-semibold">{t("title")}</h1>
         </header>
 
         <Tabs
@@ -742,13 +612,13 @@ export default function App() {
           <div className="px-1">
             <TabsList variant="underline">
               <TabsTab className="h-8 px-2 text-sm" value="general">
-                General
+                {t("general")}
               </TabsTab>
               <TabsTab className="h-8 px-2 text-sm" value="notifications">
-                Notifications
+                {t("notifications")}
               </TabsTab>
               <TabsTab className="h-8 px-2 text-sm" value="about">
-                About
+                {t("about")}
               </TabsTab>
             </TabsList>
           </div>
@@ -790,9 +660,6 @@ export default function App() {
                     }}
                     onRevealSupportRoot={() => {
                       void handleRevealSupportRoot();
-                    }}
-                    onUpdateAction={() => {
-                      void handleUpdateAction();
                     }}
                     update={update}
                   />

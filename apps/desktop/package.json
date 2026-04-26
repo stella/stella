@@ -1,14 +1,13 @@
 {
   "name": "@stella/desktop",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && electrobun build",
+    "build": "cargo tauri build",
     "build:view": "vite build",
-    "clean": "git clean -xdf .cache .turbo dist node_modules",
-    "dev": "bun run scripts/dev.ts",
-    "dev:app": "bun run build:view && electrobun dev --watch",
+    "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
+    "dev": "cargo tauri dev",
     "dev:view": "vite --host 127.0.0.1 --strictPort",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware apps/desktop",
@@ -18,14 +17,19 @@
   },
   "dependencies": {
     "@stella/ui": "workspace:*",
-    "electrobun": "1.16.0",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-autostart": "^2.2.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
+    "@tauri-apps/plugin-notification": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.0",
     "react": "catalog:react19",
-    "react-dom": "catalog:react19"
+    "react-dom": "catalog:react19",
+    "use-intl": "catalog:"
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@types/bun": "catalog:",
+    "@tauri-apps/cli": "^2.10.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "^6.0.0",
