@@ -1,3 +1,4 @@
+import { db } from "@/api/db/root";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -38,7 +39,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL =
   "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie";
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 type SkSud = {
   registreGuid?: string | null;
@@ -247,15 +248,31 @@ const parseItemWithDetail = async (
 
   const detail = item.guid ? await fetchDetail(item.guid, signal) : null;
 
-  // Fetch PDF bytes for parsing
-  const pdfBytes = detail?.dokument?.url
-    ? await fetchPdfBytes(detail.dokument.url, signal)
-    : undefined;
-
   // Hash only the list-endpoint payload so the
   // change-detection key stays stable regardless of
   // transient detail-fetch failures.
   const rawJson = JSON.stringify(item);
+  const rawHash = hashContent(rawJson);
+
+  // Skip the expensive PDF download when the decision
+  // already exists with the same source hash. Uses the
+  // indexed (sourceId, caseNumber, language) unique
+  // constraint for lookup. The pipeline will also dedup,
+  // but checking here avoids the 5-30s PDF download per
+  // already-ingested decision during re-scans.
+  const existing = await db.query.caseLawDecisions.findFirst({
+    where: {
+      caseNumber: item.spisovaZnacka,
+      language: "sk",
+      sourceHash: rawHash,
+    },
+    columns: { id: true },
+  });
+
+  const pdfBytes =
+    !existing && detail?.dokument?.url
+      ? await fetchPdfBytes(detail.dokument.url, signal)
+      : undefined;
 
   const caseNumber = item.spisovaZnacka;
   const decisionDate = parseSkDate(item.datumVydania);
@@ -317,7 +334,7 @@ const parseItemWithDetail = async (
       documentSize: detail?.dokument?.size,
       updateDate: toOptionalValue(detail?.updateDate),
     },
-    rawHash: hashContent(rawJson),
+    rawHash,
     parserVersion: PARSER_VERSION,
     documentAst,
     sourceRaw: JSON.stringify({ listItem: item, detail }),
@@ -334,7 +351,7 @@ export const skCourtsAdapter: SourceAdapter = {
   minRequestIntervalMs: 300,
   // Each page fetches 25 items × (detail JSON + PDF download);
   // 120s was too tight and caused consistent page-level timeouts.
-  pageTimeoutMs: 300_000,
+  pageTimeoutMs: 180_000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
