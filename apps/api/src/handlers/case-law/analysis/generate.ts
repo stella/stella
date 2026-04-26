@@ -33,7 +33,7 @@ import type { ScopedDb } from "@/api/db";
 // eslint-disable-next-line no-restricted-imports
 import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 
@@ -84,6 +84,7 @@ ${decisionText}`;
   try {
     const result = streamText({
       model,
+      temperature: getTemperatureForRole("fast"),
       output: Output.array({
         element: valibotSchema(analysisHeadingSchema),
       }),

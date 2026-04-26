@@ -15,6 +15,13 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum",
   "@stll/text-search-wasm",
   "@typescript/native-preview",
+  "@typescript/native-preview-darwin-arm64",
+  "@typescript/native-preview-darwin-x64",
+  "@typescript/native-preview-linux-arm",
+  "@typescript/native-preview-linux-arm64",
+  "@typescript/native-preview-linux-x64",
+  "@typescript/native-preview-win32-arm64",
+  "@typescript/native-preview-win32-x64",
 ]
 
 [install.scopes]

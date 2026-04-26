@@ -25,11 +25,10 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@react-email/preview-server": "5.2.10",
     "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "react-email": "5.2.10",
+    "react-email": "^6.0.0",
     "typescript": "catalog:"
   }
 }

@@ -14,7 +14,7 @@ import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -64,6 +64,7 @@ export const streamChat = async ({
       const result = streamText({
         abortSignal,
         model: getModelForRole("chat", orgAIConfig),
+        temperature: getTemperatureForRole("chat"),
         system,
         tools,
         stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],

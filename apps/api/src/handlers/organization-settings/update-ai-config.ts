@@ -9,7 +9,11 @@ import {
   encryptAIConfig,
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
-import { getModelForRole, supportsRegion } from "@/api/lib/ai-models";
+import {
+  getModelForRole,
+  getTemperatureForRole,
+  supportsRegion,
+} from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -234,6 +238,7 @@ const validateProviderKey = async (
       const model = getModelForRole("fast", tempConfig);
       return await generateText({
         model,
+        temperature: getTemperatureForRole("fast"),
         prompt: "Say OK",
         maxOutputTokens: 3,
         abortSignal: AbortSignal.timeout(10_000),
