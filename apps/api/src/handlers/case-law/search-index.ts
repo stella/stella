@@ -8,6 +8,8 @@ import { logger } from "@/api/lib/observability/logger";
 
 import type { DecisionSection } from "./types";
 
+const SEARCH_INDEX_CONCURRENCY = 4;
+
 const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
 ): string => sections?.map((s) => s.text).join(" ") ?? "";
@@ -130,16 +132,25 @@ export const backfillSearchIndex = async (
       .limit(batchSize),
   );
 
-  let indexed = 0;
-  for (const row of rows) {
+  const indexRow = async (row: { id: string }): Promise<number> => {
     try {
       await indexDecision(row.id, scopedDb);
-      indexed++;
+      return 1;
     } catch (error) {
       captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
       logger.error("case_law.search_index.backfill_failed", {
         decisionId: row.id,
       });
+      return 0;
+    }
+  };
+
+  let indexed = 0;
+  for (let i = 0; i < rows.length; i += SEARCH_INDEX_CONCURRENCY) {
+    const chunk = rows.slice(i, i + SEARCH_INDEX_CONCURRENCY);
+    const results = await Promise.all(chunk.map(indexRow));
+    for (const result of results) {
+      indexed += result;
     }
   }
 

@@ -476,10 +476,13 @@ export function clickToPositionInTableCell(
       blockId: cellBlock.id,
       x: 0,
       y: 0,
-      width: cellMeasure.lines.reduce(
-        (max, line) => Math.max(max, line.width),
-        100,
-      ),
+      width: (() => {
+        let maxWidth = 100;
+        for (const line of cellMeasure.lines) {
+          maxWidth = Math.max(maxWidth, line.width);
+        }
+        return maxWidth;
+      })(),
       fromLine: 0,
       toLine: cellMeasure.lines.length,
       height: cellMeasure.totalHeight,

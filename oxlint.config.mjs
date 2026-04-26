@@ -89,6 +89,7 @@ export default defineConfig({
     "unicorn/no-array-reduce": "off",
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
+    "oxc/no-map-spread": "error",
     "unicorn/no-await-expression-member": "off",
     "unicorn/no-nested-ternary": "off",
     "unicorn/prefer-set-has": "off",

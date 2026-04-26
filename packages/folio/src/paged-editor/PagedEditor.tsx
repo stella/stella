@@ -746,13 +746,13 @@ function measureTableBlock(
     for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
       const cell = row.cells[cellIdx]!; // SAFETY: cellIdx < row.cells.length
       const sourceCell = sourceRowCells?.[cellIdx];
-      cell.height = cell.blocks.reduce((h, m) => {
+      cell.height = 0;
+      for (const measure of cell.blocks) {
         // Get height from any measure type (paragraph or table)
-        if ("totalHeight" in m) {
-          return h + m.totalHeight;
+        if ("totalHeight" in measure) {
+          cell.height += measure.totalHeight;
         }
-        return h;
-      }, 0);
+      }
       const padTop = sourceCell?.padding?.top ?? DEFAULT_CELL_PADDING_Y;
       const padBottom = sourceCell?.padding?.bottom ?? DEFAULT_CELL_PADDING_Y;
       cell.height += padTop + padBottom;
@@ -1731,12 +1731,12 @@ function convertHeaderFooterToContent(
   });
 
   const measures = measureBlocks(blocksForMeasure, contentWidth);
-  const totalHeight = measures.reduce((h, m) => {
-    if (m.kind === "paragraph") {
-      return h + m.totalHeight;
+  let totalHeight = 0;
+  for (const measure of measures) {
+    if (measure.kind === "paragraph") {
+      totalHeight += measure.totalHeight;
     }
-    return h;
-  }, 0);
+  }
   const { visualTop, visualBottom } = calculateHeaderFooterVisualBounds(
     blocks,
     measures,
@@ -2729,7 +2729,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   to,
                 );
                 const adjustedRects = rects.map((rect) => ({
-                  ...rect,
+                  height: rect.height,
+                  pageIndex: rect.pageIndex,
+                  width: rect.width,
                   x: rect.x + pageOffsetX,
                   y: rect.y + pageOffsetY,
                 }));

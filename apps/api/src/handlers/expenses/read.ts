@@ -76,6 +76,7 @@ const readExpenses = createSafeHandler(
             markup: expenses.markup,
             status: expenses.status,
             createdAt: expenses.createdAt,
+            updatedAt: expenses.updatedAt,
           })
           .from(expenses)
           .where(and(...conditions))
@@ -109,9 +110,21 @@ const readExpenses = createSafeHandler(
 
     return Result.ok(
       rows.map((row) => ({
-        ...row,
+        id: row.id,
+        userId: row.userId,
+        matterId: row.matterId,
+        dateIncurred: row.dateIncurred,
+        amount: row.amount,
+        currency: row.currency,
+        category: row.category,
+        description: row.description,
+        invoiceDescription: row.invoiceDescription,
+        billable: row.billable,
+        markup: row.markup,
+        status: row.status,
         userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
         createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
     );
   },

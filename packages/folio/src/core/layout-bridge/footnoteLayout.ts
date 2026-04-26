@@ -235,12 +235,12 @@ export function convertFootnoteToContent(
     }
   }
 
-  const totalHeight = measures.reduce((h, m) => {
-    if (m.kind === "paragraph") {
-      return h + m.totalHeight;
+  let totalHeight = 0;
+  for (const measure of measures) {
+    if (measure.kind === "paragraph") {
+      totalHeight += measure.totalHeight;
     }
-    return h;
-  }, 0);
+  }
 
   return {
     id: footnote.id,

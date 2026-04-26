@@ -648,7 +648,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   // Build menu items with disabled states
-  const menuItems = (items || DEFAULT_MENU_ITEMS).map((item) => {
+  const menuItems = (items ?? DEFAULT_MENU_ITEMS).map((item) => {
     const disabled = (() => {
       if (item.disabled !== undefined) {
         return item.disabled;
@@ -666,7 +666,18 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       }
     })();
 
-    return { ...item, disabled };
+    const menuItem: TextContextMenuItem = {
+      action: item.action,
+      disabled,
+      label: item.label,
+    };
+    if (item.shortcut !== undefined) {
+      menuItem.shortcut = item.shortcut;
+    }
+    if (item.dividerAfter !== undefined) {
+      menuItem.dividerAfter = item.dividerAfter;
+    }
+    return menuItem;
   });
 
   // Filter out separators for keyboard navigation

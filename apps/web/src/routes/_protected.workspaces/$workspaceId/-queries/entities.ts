@@ -59,19 +59,34 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
 
       const { entities: rawEntities, ...rest } = response.data;
 
-      const entities: WorkspaceEntity[] = rawEntities.map(
-        ({ fields: rawFields, ...entity }) => {
-          const fields: Record<string, WorkspaceField> = {};
-          for (const field of rawFields) {
-            fields[field.propertyId] = {
-              id: field.id,
-              entityId: field.entityId,
-              content: field.content,
-            };
-          }
-          return { ...entity, fields };
-        },
-      );
+      const entities: WorkspaceEntity[] = rawEntities.map((entity) => {
+        const { fields: rawFields } = entity;
+        const fields: Record<string, WorkspaceField> = {};
+        for (const field of rawFields) {
+          fields[field.propertyId] = {
+            id: field.id,
+            entityId: field.entityId,
+            content: field.content,
+          };
+        }
+        return {
+          entityId: entity.entityId,
+          kind: entity.kind,
+          name: entity.name,
+          parentId: entity.parentId,
+          createdAt: entity.createdAt,
+          createdBy: entity.createdBy,
+          createdByImage: entity.createdByImage,
+          updatedAt: entity.updatedAt,
+          version: entity.version,
+          status: entity.status,
+          priority: entity.priority,
+          dueDate: entity.dueDate,
+          sortOrder: entity.sortOrder,
+          activeEditBy: entity.activeEditBy,
+          fields,
+        };
+      });
 
       return { ...rest, entities };
     },

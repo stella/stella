@@ -63,7 +63,10 @@ const readRateTables = createSafeHandler(
 
     return Result.ok(
       tables.map((table) => ({
-        ...table,
+        id: table.id,
+        name: table.name,
+        currency: table.currency,
+        isDefault: table.isDefault,
         entryCount: entryCounts.get(table.id) ?? 0,
         createdAt: table.createdAt.toISOString(),
         updatedAt: table.updatedAt.toISOString(),

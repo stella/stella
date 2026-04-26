@@ -33,11 +33,14 @@ export const yaraScanner: Scanner = {
 
       const severity =
         (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
-      return {
+      const match: Match = {
         rule: m.ruleIdentifier,
         severity,
-        ...(isRecord(meta) && { meta }),
       };
+      if (isRecord(meta)) {
+        match.meta = meta;
+      }
+      return match;
     });
   },
 };

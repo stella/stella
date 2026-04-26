@@ -63,10 +63,10 @@ const wrapInlineCode = (text: string): string => {
   if (text === "") {
     return "``";
   }
-  const longestRun = (text.match(/`+/g) ?? []).reduce(
-    (max, run) => Math.max(max, run.length),
-    0,
-  );
+  let longestRun = 0;
+  for (const run of text.match(/`+/g) ?? []) {
+    longestRun = Math.max(longestRun, run.length);
+  }
   const fence = "`".repeat(longestRun + 1);
   const padded =
     text.startsWith("`") || text.endsWith("`") ? ` ${text} ` : text;
@@ -212,7 +212,7 @@ const renderTable = (el: Element): string => {
   }
   const colCount = Math.max(...rows.map((r) => r.length));
   const padded = rows.map((row) => {
-    const copy = [...row];
+    const copy = Array.from(row);
     while (copy.length < colCount) {
       copy.push("");
     }

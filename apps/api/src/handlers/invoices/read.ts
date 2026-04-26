@@ -33,6 +33,7 @@ const readInvoices = createSafeHandler(
             currency: true,
             totalAmount: true,
             createdAt: true,
+            updatedAt: true,
           },
           orderBy: (inv, { asc }) => asc(inv.createdAt),
           limit,
@@ -49,8 +50,16 @@ const readInvoices = createSafeHandler(
 
     return Result.ok({
       rows: rows.map((row) => ({
-        ...row,
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        reference: row.reference,
+        status: row.status,
+        invoiceDate: row.invoiceDate,
+        dueDate: row.dueDate,
+        currency: row.currency,
+        totalAmount: row.totalAmount,
         createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
       })),
       total,
     });

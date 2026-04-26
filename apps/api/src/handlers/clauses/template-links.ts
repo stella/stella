@@ -104,7 +104,16 @@ export const listTemplateClausesHandler = async ({
 
   return {
     links: links.map((link) => ({
-      ...link,
+      id: link.id,
+      clauseId: link.clauseId,
+      clauseVariantId: link.clauseVariantId,
+      clauseVersionId: link.clauseVersionId,
+      slotName: link.slotName,
+      sortOrder: link.sortOrder,
+      insertedAt: link.insertedAt,
+      clause: link.clause,
+      clauseVersion: link.clauseVersion,
+      clauseVariant: link.clauseVariant,
       isOutdated:
         link.clause !== null &&
         link.clauseVersion !== null &&

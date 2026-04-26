@@ -103,7 +103,7 @@ const resolveExtraColumns = (
   properties: WorkspaceProperty[],
   metadataLabels: Record<string, string>,
 ): ExtraColumn[] => {
-  const ids = [...[...METADATA_IDS], ...properties.map((p) => p.id)].filter(
+  const ids = [...METADATA_IDS, ...properties.map((p) => p.id)].filter(
     (id) => !hiddenProperties.includes(id),
   );
 

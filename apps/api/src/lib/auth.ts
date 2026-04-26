@@ -523,8 +523,8 @@ export const resolveAccessibleWorkspaces = async (
     );
 
   return accessibleWorkspaces.map((workspace) => ({
-    ...workspace,
     id: toSafeId<"workspace">(workspace.id),
+    status: workspace.status,
   }));
 };
 

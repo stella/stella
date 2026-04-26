@@ -68,10 +68,10 @@ const ensureCommentsRel = (relsXml: string): string => {
 
   // Find the highest rId to generate a new unique one
   const idMatches = [...relsXml.matchAll(/rId(\d+)/g)];
-  const maxId = idMatches.reduce(
-    (max, m) => Math.max(max, Number.parseInt(m[1] ?? "0", 10)),
-    0,
-  );
+  let maxId = 0;
+  for (const match of idMatches) {
+    maxId = Math.max(maxId, Number.parseInt(match[1] ?? "0", 10));
+  }
   const newId = `rId${maxId + 1}`;
 
   return relsXml.replace(
